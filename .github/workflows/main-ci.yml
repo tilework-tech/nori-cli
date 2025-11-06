@@ -1,9 +1,7 @@
-name: Rust CI
+name: Main CI
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
 
 env:
