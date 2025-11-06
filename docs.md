@@ -32,5 +32,9 @@ Path: @/.worktrees/rust-hello-world
 - Rust 1.91.0 is the minimum required toolchain - defined by rust-toolchain.toml if present or system default
 - target/ build artifacts are local to the worktree and gitignored
 - The package can be compiled with `cargo build` or run directly with `cargo run`
+- CI/CD: GitHub Actions workflow at @/.github/workflows/rust-ci.yml runs automated checks on PRs and pushes to main:
+  - cargo fmt --check (formatting)
+  - cargo clippy -- -D warnings (linting, treats warnings as errors)
+  - cargo test --verbose (test suite)
 
 Created and maintained by Nori.
