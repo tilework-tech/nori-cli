@@ -9,8 +9,9 @@ pub struct MockBackend;
 impl AgentBackend for MockBackend {
     async fn spawn_process(&self, _prompt: String) -> Result<Child> {
         // Use printf with \n to output JSONL (newline-delimited JSON)
+        // Using actual Claude CLI event format
         let child = Command::new("printf")
-            .arg("{\"type\":\"agent_message\",\"content\":\"Hello from mock\"}\n{\"type\":\"agent_message\",\"content\":\"This is a test\"}\n")
+            .arg("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Hello from mock\"}]}}\n{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"This is a test\"}]}}\n")
             .stdout(std::process::Stdio::piped())
             .spawn()?;
 

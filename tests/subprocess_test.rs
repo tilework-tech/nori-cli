@@ -1,5 +1,6 @@
-use nori_cli::backends::AgentBackend;
 use nori_cli::backends::mock::MockBackend;
+use nori_cli::backends::AgentBackend;
+use nori_cli::conversation::{parse_jsonl_event, ConversationEvent};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[tokio::test]
@@ -27,23 +28,23 @@ async fn test_mock_backend_spawns_process() {
 }
 
 #[tokio::test]
-async fn test_parse_agent_message_events() {
+async fn test_parse_assistant_message_events() {
     let backend = MockBackend;
     let mut child = backend.spawn_process("test".to_string()).await.unwrap();
 
     let stdout = child.stdout.take().unwrap();
     let mut reader = BufReader::new(stdout).lines();
 
-    let mut messages = Vec::new();
+    let mut events = Vec::new();
     while let Some(line) = reader.next_line().await.unwrap() {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-            if json.get("type").and_then(|v| v.as_str()) == Some("agent_message") {
-                if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
-                    messages.push(content.to_string());
-                }
-            }
+        if let Some(event) = parse_jsonl_event(&line) {
+            events.push(event);
         }
     }
 
-    assert!(!messages.is_empty());
+    assert!(!events.is_empty());
+    assert!(matches!(
+        events[0],
+        ConversationEvent::AssistantMessage { .. }
+    ));
 }
