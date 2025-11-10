@@ -4,8 +4,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScree
 use crossterm::ExecutableCommand;
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
-use nori_cli::backends::mock::MockBackend;
-use nori_cli::backends::AgentBackend;
+use nori_cli::backends::{claude::ClaudeBackend, codex::CodexBackend, AgentBackend};
 use nori_cli::ui;
 use ratatui::DefaultTerminal;
 use std::io::stdout;
@@ -134,10 +133,12 @@ fn handle_key_simple(mode: AppMode, key: KeyEvent) -> Option<Message> {
     }
 }
 
-fn get_backend(_model: &Model) -> Box<dyn AgentBackend + Send> {
-    // For now, just use MockBackend
-    // Will be replaced with actual backends
-    Box::new(MockBackend)
+fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
+    match model.selected_agent_index {
+        Some(0) => Box::new(ClaudeBackend::new()),
+        Some(1) => Box::new(CodexBackend::new()),
+        _ => Box::new(ClaudeBackend::new()), // Default
+    }
 }
 
 async fn spawn_and_stream(
