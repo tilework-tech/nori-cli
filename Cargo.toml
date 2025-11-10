@@ -12,5 +12,5 @@ tokio-util = "0.7"
 futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tui-textarea = "0.6"
+tui-textarea = "0.7"
 async-trait = "0.1"
