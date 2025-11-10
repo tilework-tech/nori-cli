@@ -20,7 +20,8 @@ pub enum Message {
     ExitInputMode,
 
     // Input handling
-    SubmitInput(String),
+    KeyPress(crossterm::event::KeyEvent),
+    SubmitInput,
 
     // Streaming
     StreamChunk(String),
@@ -113,10 +114,16 @@ impl Model {
                 }
             }
 
-            Message::SubmitInput(_prompt) => {
+            Message::KeyPress(key) => {
+                if self.current_mode == AppMode::Input {
+                    self.textarea.input(key);
+                }
+            }
+
+            Message::SubmitInput => {
                 if self.current_mode == AppMode::Input {
                     self.current_mode = AppMode::Streaming;
-                    self.response_text.clear();
+                    // Don't clear response_text - we want to append
                 }
             }
 

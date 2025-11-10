@@ -12,7 +12,7 @@ fn test_state_transitions() {
     assert_eq!(model.current_mode, AppMode::Input);
 
     // Submit input -> should transition to Streaming mode
-    model.update(Message::SubmitInput("test prompt".to_string()));
+    model.update(Message::SubmitInput);
     assert_eq!(model.current_mode, AppMode::Streaming);
 
     // Stream completes -> should return to Selection mode
