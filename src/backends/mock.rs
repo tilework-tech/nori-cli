@@ -1,20 +1,31 @@
 use super::AgentBackend;
-use async_trait::async_trait;
-use color_eyre::Result;
-use tokio::process::{Child, Command};
+use crate::conversation::ConversationEvent;
+use async_stream::stream;
+use futures::stream::Stream;
+use std::pin::Pin;
 
 pub struct MockBackend;
 
-#[async_trait]
 impl AgentBackend for MockBackend {
-    async fn spawn_process(&self, _prompt: String) -> Result<Child> {
-        // Use printf with \n to output JSONL (newline-delimited JSON)
-        let child = Command::new("printf")
-            .arg("{\"type\":\"agent_message\",\"content\":\"Hello from mock\"}\n{\"type\":\"agent_message\",\"content\":\"This is a test\"}\n")
-            .stdout(std::process::Stdio::piped())
-            .spawn()?;
+    fn spawn_stream(
+        &self,
+        _prompt: String,
+    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
+        let stream = stream! {
+            // Mock stream: yield predefined events
+            yield ConversationEvent::AssistantMessage {
+                text: "Hello from mock".to_string(),
+            };
+            yield ConversationEvent::AssistantMessage {
+                text: "This is a test".to_string(),
+            };
+            yield ConversationEvent::ResultSummary {
+                success: true,
+                details: "Mock completed".to_string(),
+            };
+        };
 
-        Ok(child)
+        Box::pin(stream)
     }
 
     fn name(&self) -> &str {

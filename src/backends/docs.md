@@ -41,8 +41,9 @@ pub trait AgentBackend {
 
 **Mock Backend** (@/src/backends/mock.rs):
 - Uses `printf` shell command to output hardcoded JSONL without requiring agent CLI installation
-- Outputs two test events: `{"type":"agent_message","content":"Hello from mock"}` and `{"type":"agent_message","content":"This is a test"}`
-- Used exclusively in @/tests/subprocess_test.rs to verify JSONL parsing logic
+- Outputs two test events in actual Claude CLI format: `{"type":"assistant","message":{"content":[{"type":"text","text":"Hello from mock"}]}}`
+- Format matches real Claude CLI output structure with nested message.content array of text blocks
+- Used exclusively in @/tests/subprocess_test.rs and @/tests/conversation_rendering_test.rs to verify JSONL parsing logic
 - Demonstrates the minimal contract: any process that outputs newline-delimited JSON to stdout works
 
 **Instantiation Pattern** (@/src/main.rs:144-150):
@@ -71,10 +72,11 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 
 **JSONL Event Contract**:
 - Backends must output newline-delimited JSON where each line has a "type" field
-- @/src/main.rs:152-234 parses stdout line-by-line and dispatches on event type
-- Known types: "agent_message" (requires "content" field), "file_change" (requires "path" field), "command_execution" (requires "command" field)
-- Unknown types are displayed as raw JSON for debugging
-- Parse failures are silently ignored - line is skipped
+- @/src/main.rs parses stdout line-by-line via @/src/conversation.rs:parse_jsonl_event()
+- Known types: "assistant" (nested message.content array), "system" (subtype and details), "result" (success/failure indication)
+- Assistant messages follow Claude CLI format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
+- Unknown types are wrapped in ConversationEvent::UnknownEvent with raw JSON for debugging
+- Parse failures (malformed JSON) return None from parse_jsonl_event() - line is skipped
 
 **Process Lifecycle**:
 - Child processes are spawned via tokio::process::Command, which returns a tokio::process::Child
@@ -86,7 +88,7 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 **Error Paths**:
 - spawn_process() returns Result<Child> - spawn failure (CLI not found, permission denied) propagates to caller
 - @/src/main.rs:spawn_and_stream() returns Result<()> and sends errors via mpsc channel as Message::Error
-- stderr output is captured and sent as Message::StreamChunk("[stderr] ...") for visibility
+- stderr output is captured and wrapped in ConversationEvent::StderrOutput, sent as Message::StreamEvent for visibility with red styling
 
 **Testing Strategy**:
 - MockBackend allows testing entire JSONL parsing pipeline without external dependencies

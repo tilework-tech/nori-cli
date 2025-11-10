@@ -18,9 +18,10 @@ Core application modules implementing the TUI's architecture: application state 
 
 **Module Structure** (@/src/lib.rs):
 ```rust
-pub mod app;      // Model, Message, and update logic
-pub mod backends; // AgentBackend trait and implementations
-pub mod ui;       // Rendering functions for each mode
+pub mod app;          // Model, Message, and update logic
+pub mod backends;     // AgentBackend trait and implementations
+pub mod conversation; // JSONL parsing and event rendering
+pub mod ui;           // Rendering functions for each mode
 ```
 
 **Entry Point** (@/src/main.rs):
@@ -28,20 +29,25 @@ pub mod ui;       // Rendering functions for each mode
 - `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
-- `spawn_and_stream()`: Spawns subprocess, reads stdout/stderr concurrently, parses JSONL, sends StreamChunk messages
+- `spawn_and_stream()`: Spawns subprocess, reads stdout/stderr concurrently, parses JSONL into ConversationEvent, sends StreamEvent messages
 
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum representing three UI states (Selection, Input, Streaming)
-- `Message`: Enum of all possible events that trigger state changes
-- `Model`: Struct holding all application state (current_mode, list_state, textarea, response_text, etc.)
+- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for parsed backend events
+- `Model`: Struct holding all application state (current_mode, list_state, textarea, response_events, etc.)
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Dispatches to mode-specific render functions based on model.current_mode
 - `render_selection()`: Draws agent list with ListState for navigation, shows error popup if present
 - `render_input()`: Draws TextArea widget for multi-line prompt entry
-- `render_streaming()`: Displays accumulated response_text, changes title color to red if error occurred
+- `render_streaming()`: Maps response_events to styled Lines via conversation::render_event(), changes title color to red if error occurred
 - `centered_rect()`: Helper for creating centered popup areas using Layout constraints
+
+**Conversation Event Handling** (@/src/conversation.rs):
+- `ConversationEvent` enum: Structured representation of backend JSONL events (AssistantMessage, SystemEvent, ResultSummary, StderrOutput, UnknownEvent)
+- `parse_jsonl_event()`: Parses raw JSONL strings into ConversationEvent - handles Claude CLI event format with nested message.content arrays
+- `render_event()`: Converts ConversationEvent into styled ratatui Lines with appropriate colors and prefixes for each type
 
 **Backend Abstraction** (@/src/backends.rs):
 - `AgentBackend` trait: Async `spawn_process(prompt) -> Result<Child>` and `name() -> &str`
@@ -56,9 +62,10 @@ User Input (keyboard)
   → render() on next tick
 
 Subprocess Output (JSONL)
-  → spawn_and_stream task → Message::StreamChunk (via mpsc channel)
-  → run_app loop → Model::update()
-  → render() on next tick
+  → spawn_and_stream task → parse_jsonl_event() → ConversationEvent
+  → Message::StreamEvent (via mpsc channel)
+  → run_app loop → Model::update() → accumulates in response_events
+  → render() maps events via render_event() to styled Lines
 ```
 
 ### Things to Know
@@ -78,8 +85,23 @@ Subprocess Output (JSONL)
 **State Machine Invariants**:
 - Selection mode: list_state always has Some(index) selected, never None
 - Input mode: selected_agent_index is always Some after transitioning from Selection
-- Streaming mode: response_text accumulates and is never cleared (grows indefinitely for now)
+- Streaming mode: response_events accumulates and is never cleared (grows indefinitely for now)
 - textarea is reset on StreamComplete to clear prompt for next submission
+
+**Conversation Event Parsing** (@/src/conversation.rs):
+- Parsing based on actual Claude CLI output format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
+- Assistant messages extract all text blocks from content array and join with newlines
+- System events check for `subtype` field and optional `cwd` or `session_id` details
+- Result events check `subtype` for "success" vs other values to determine success boolean
+- Stderr output wrapped in StderrOutput variant for consistent styling
+- Malformed JSON or unparseable events return None from parse_jsonl_event()
+
+**Event Rendering Styles** (@/src/conversation.rs):
+- AssistantMessage: Plain white text, no prefix
+- SystemEvent: `[system]` prefix in dim dark gray, subtype and details in dark gray
+- ResultSummary: `[done]` prefix in bold green (success) or bold red (failure)
+- StderrOutput: Red text, no prefix
+- UnknownEvent: `[unknown]` prefix in yellow with raw JSON for debugging
 
 **Error Display Strategy** (@/src/ui.rs:119-151):
 - Errors don't transition mode - Model stays in Streaming so stderr output remains visible

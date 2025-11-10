@@ -1,7 +1,10 @@
 use super::AgentBackend;
-use async_trait::async_trait;
-use color_eyre::Result;
-use tokio::process::{Child, Command};
+use crate::conversation::ConversationEvent;
+use async_stream::stream;
+use futures::stream::Stream;
+use std::pin::Pin;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 
 pub struct CodexBackend {
     pub thread_id: Option<String>,
@@ -19,29 +22,78 @@ impl CodexBackend {
     }
 }
 
-#[async_trait]
 impl AgentBackend for CodexBackend {
-    async fn spawn_process(&self, prompt: String) -> Result<Child> {
-        let mut cmd = Command::new("codex");
+    fn spawn_stream(
+        &self,
+        prompt: String,
+    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
+        let thread_id = self.thread_id.clone();
 
-        // Use exec for headless mode
-        cmd.arg("exec");
+        let stream = stream! {
+            // Spawn Codex process
+            let mut cmd = Command::new("codex");
+            cmd.arg("exec");
 
-        // Add session resumption if we have a thread ID
-        if let Some(ref thread_id) = self.thread_id {
-            cmd.arg("resume").arg(thread_id);
-        }
+            if let Some(ref tid) = thread_id {
+                cmd.arg("resume").arg(tid);
+            }
 
-        // Always use JSON output
-        cmd.arg("--json");
+            cmd.arg("--json");
+            cmd.arg(prompt)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
 
-        // Add the prompt
-        cmd.arg(prompt)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+            let mut child = match cmd.spawn() {
+                Ok(c) => c,
+                Err(e) => {
+                    yield ConversationEvent::UnknownEvent {
+                        raw: format!("Failed to spawn codex: {}", e),
+                    };
+                    return;
+                }
+            };
 
-        let child = cmd.spawn()?;
-        Ok(child)
+            // Stream stdout - TODO: Codex might have different JSON format
+            // For now, just stream raw lines as unknown events
+            if let Some(stdout) = child.stdout.take() {
+                let mut reader = BufReader::new(stdout).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    // Codex-specific parsing would go here
+                    yield ConversationEvent::UnknownEvent { raw: line };
+                }
+            }
+
+            // Stream stderr events
+            if let Some(stderr) = child.stderr.take() {
+                let mut reader = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    yield ConversationEvent::StderrOutput { line };
+                }
+            }
+
+            // Wait for process to complete
+            match child.wait().await {
+                Ok(status) if status.success() => {
+                    yield ConversationEvent::ResultSummary {
+                        success: true,
+                        details: "Completed".to_string(),
+                    };
+                }
+                Ok(status) => {
+                    yield ConversationEvent::ResultSummary {
+                        success: false,
+                        details: format!("Process exited with status: {}", status),
+                    };
+                }
+                Err(e) => {
+                    yield ConversationEvent::UnknownEvent {
+                        raw: format!("Failed to wait for process: {}", e),
+                    };
+                }
+            }
+        };
+
+        Box::pin(stream)
     }
 
     fn name(&self) -> &str {

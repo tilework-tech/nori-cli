@@ -1,4 +1,5 @@
 use nori_cli::app::{AppMode, Message, Model};
+use nori_cli::conversation::ConversationEvent;
 
 #[test]
 fn test_state_transitions() {
@@ -26,17 +27,15 @@ fn test_state_transitions() {
     assert_eq!(model.current_mode, AppMode::Selection);
 }
 
-#[test]
-fn test_stream_chunk_accumulation() {
-    let mut model = Model::default();
-
-    model.update(Message::StreamChunk("Hello ".to_string()));
-    model.update(Message::StreamChunk("World".to_string()));
-
-    assert_eq!(model.response_text.len(), 2);
-    assert_eq!(model.response_text[0], "Hello ");
-    assert_eq!(model.response_text[1], "World");
-}
+// This test is now obsolete - replaced by test_stream_event_accumulation
+// Keeping as comment for reference
+// #[test]
+// fn test_stream_chunk_accumulation() {
+//     let mut model = Model::default();
+//     model.update(Message::StreamChunk("Hello ".to_string()));
+//     model.update(Message::StreamChunk("World".to_string()));
+//     assert_eq!(model.response_text.len(), 2);
+// }
 
 #[test]
 fn test_post_stream_state_handling() {
@@ -49,8 +48,11 @@ fn test_post_stream_state_handling() {
     model.update(Message::SubmitInput);
     assert_eq!(model.current_mode, AppMode::Streaming);
 
-    // Simulate receiving stream chunks
-    model.update(Message::StreamChunk("test response".to_string()));
+    // Simulate receiving stream events
+    let event = ConversationEvent::AssistantMessage {
+        text: "test response".to_string(),
+    };
+    model.update(Message::StreamEvent(event));
 
     // Stream completes - should return to Selection
     model.update(Message::StreamComplete);
@@ -64,4 +66,30 @@ fn test_post_stream_state_handling() {
     // Verify we can select again
     model.update(Message::SelectItem);
     assert_eq!(model.current_mode, AppMode::Input);
+}
+
+#[test]
+fn test_stream_event_accumulation() {
+    let mut model = Model::default();
+
+    let event1 = ConversationEvent::AssistantMessage {
+        text: "Hello".to_string(),
+    };
+    let event2 = ConversationEvent::SystemEvent {
+        subtype: "init".to_string(),
+        details: None,
+    };
+
+    model.update(Message::StreamEvent(event1.clone()));
+    model.update(Message::StreamEvent(event2.clone()));
+
+    assert_eq!(model.response_events.len(), 2);
+    assert!(matches!(
+        model.response_events[0],
+        ConversationEvent::AssistantMessage { .. }
+    ));
+    assert!(matches!(
+        model.response_events[1],
+        ConversationEvent::SystemEvent { .. }
+    ));
 }
