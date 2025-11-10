@@ -143,7 +143,3 @@ The test suite uses mock backends (subprocess with `printf`) to avoid requiring 
 **TUI freezes:**
 - Press `Esc` to return to selection
 - If unresponsive, `Ctrl+C` to force quit
-
-## License
-
-MIT
