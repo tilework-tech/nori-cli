@@ -119,10 +119,11 @@ fn handle_key_simple(mode: AppMode, key: KeyEvent) -> Option<Message> {
             _ => None,
         },
         AppMode::Input => {
-            if key.code == KeyCode::Esc {
-                Some(Message::ExitInputMode)
-            } else if key.code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::CONTROL) {
+            // Check Alt+Enter for submit (Ctrl+Enter doesn't work reliably across platforms)
+            if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Enter {
                 Some(Message::SubmitInput)
+            } else if key.code == KeyCode::Esc {
+                Some(Message::ExitInputMode)
             } else {
                 // Send key event to be handled by textarea
                 Some(Message::KeyPress(key))

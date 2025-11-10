@@ -98,7 +98,7 @@ fn render_input(model: &mut Model, frame: &mut Frame) {
     frame.render_widget(&model.textarea, inner_area);
 
     // Instructions
-    let instructions = Paragraph::new("Ctrl+Enter to submit, Esc to go back")
+    let instructions = Paragraph::new("Alt+Enter to submit, Esc to go back")
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[2]);

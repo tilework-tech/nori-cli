@@ -63,7 +63,7 @@ cargo run
 
 **Input Mode** (entering prompt):
 - Type your prompt (supports multi-line)
-- `Ctrl+Enter`: Submit prompt to agent
+- `Alt+Enter`: Submit prompt to agent (note: Ctrl+Enter doesn't work reliably across terminals)
 - `Esc`: Go back to selection
 
 **Streaming Mode** (viewing response):
