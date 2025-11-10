@@ -161,10 +161,7 @@ async fn spawn_and_stream(
                 match event_type {
                     "agent_message" => {
                         if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
-                            tx.send(Message::StreamChunk(format!(
-                                "[agent_message] {}",
-                                content
-                            )))?;
+                            tx.send(Message::StreamChunk(format!("[agent_message] {}", content)))?;
                         }
                     }
                     "file_change" => {
