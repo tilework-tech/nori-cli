@@ -116,10 +116,15 @@ fn render_streaming(model: &Model, frame: &mut Frame) {
         ])
         .split(area);
 
-    // Title
-    let title = Paragraph::new("Streaming Response...")
+    // Title - change color if there's an error
+    let (title_text, title_color) = if model.error_message.is_some() {
+        ("Error - See details below", Color::Red)
+    } else {
+        ("Streaming Response...", Color::Green)
+    };
+    let title = Paragraph::new(title_text)
         .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::Green));
+        .style(Style::default().fg(title_color));
     frame.render_widget(title, chunks[0]);
 
     // Response text
@@ -129,10 +134,20 @@ fn render_streaming(model: &Model, frame: &mut Frame) {
         .wrap(Wrap { trim: false });
     frame.render_widget(response, chunks[1]);
 
-    // Instructions
-    let instructions = Paragraph::new("Receiving response... (Esc to cancel)")
+    // Instructions - show error message if present
+    let instruction_text = if let Some(ref error) = model.error_message {
+        format!("ERROR: {}", error)
+    } else {
+        "Receiving response... (Esc to go back, q to quit)".to_string()
+    };
+    let instructions = Paragraph::new(instruction_text)
         .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::Gray));
+        .style(Style::default().fg(if model.error_message.is_some() {
+            Color::Red
+        } else {
+            Color::Gray
+        }))
+        .wrap(Wrap { trim: true });
     frame.render_widget(instructions, chunks[2]);
 }
 

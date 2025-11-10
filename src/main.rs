@@ -50,8 +50,9 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         // Update local mode tracking
                         match &msg {
                             Message::SelectItem => current_mode = AppMode::Input,
-                            Message::ExitInputMode | Message::StreamComplete | Message::Error(_) => current_mode = AppMode::Selection,
+                            Message::ExitInputMode | Message::StreamComplete => current_mode = AppMode::Selection,
                             Message::SubmitInput => current_mode = AppMode::Streaming,
+                            // Error stays in Streaming mode so user can see stderr
                             _ => {}
                         }
                     }
@@ -218,8 +219,9 @@ async fn spawn_and_stream(
     }
 
     if !status.success() {
+        // Send error with helpful message
         tx.send(Message::Error(format!(
-            "Process exited with status: {}",
+            "Process exited with status: {}\n\nCheck the response output above for error details.\nPress 'q' to quit or Esc to go back.",
             status
         )))?;
     } else {

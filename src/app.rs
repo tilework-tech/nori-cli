@@ -133,11 +133,13 @@ impl Model {
 
             Message::StreamComplete => {
                 self.current_mode = AppMode::Selection;
+                self.error_message = None; // Clear any errors when going back
             }
 
             Message::Error(error) => {
                 self.error_message = Some(error);
-                self.current_mode = AppMode::Selection;
+                // Stay in Streaming mode so user can see the stderr output
+                // They can press Esc to go back to Selection
             }
 
             Message::Quit => {
