@@ -4,11 +4,23 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConversationEvent {
-    AssistantMessage { text: String },
-    SystemEvent { subtype: String, details: Option<String> },
-    ResultSummary { success: bool, details: String },
-    StderrOutput { line: String },
-    UnknownEvent { raw: String },
+    AssistantMessage {
+        text: String,
+    },
+    SystemEvent {
+        subtype: String,
+        details: Option<String>,
+    },
+    ResultSummary {
+        success: bool,
+        details: String,
+    },
+    StderrOutput {
+        line: String,
+    },
+    UnknownEvent {
+        raw: String,
+    },
 }
 
 pub fn parse_jsonl_event(line: &str) -> Option<ConversationEvent> {
@@ -35,12 +47,14 @@ pub fn parse_jsonl_event(line: &str) -> Option<ConversationEvent> {
             Some(ConversationEvent::AssistantMessage { text })
         }
         "system" => {
-            let subtype = json.get("subtype")
+            let subtype = json
+                .get("subtype")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown")
                 .to_string();
 
-            let details = json.get("cwd")
+            let details = json
+                .get("cwd")
                 .or_else(|| json.get("session_id"))
                 .and_then(|v| v.as_str())
                 .map(String::from);
@@ -51,29 +65,30 @@ pub fn parse_jsonl_event(line: &str) -> Option<ConversationEvent> {
             let subtype = json.get("subtype").and_then(|v| v.as_str());
             let success = subtype == Some("success");
 
-            let details = json.get("result")
+            let details = json
+                .get("result")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Completed")
                 .to_string();
 
             Some(ConversationEvent::ResultSummary { success, details })
         }
-        _ => {
-            Some(ConversationEvent::UnknownEvent { raw: line.to_string() })
-        }
+        _ => Some(ConversationEvent::UnknownEvent {
+            raw: line.to_string(),
+        }),
     }
 }
 
 pub fn render_event(event: &ConversationEvent) -> Line<'static> {
     match event {
-        ConversationEvent::AssistantMessage { text } => {
-            Line::from(text.clone())
-        }
+        ConversationEvent::AssistantMessage { text } => Line::from(text.clone()),
         ConversationEvent::SystemEvent { subtype, details } => {
             let mut spans = vec![
                 Span::styled(
                     "[system] ",
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM),
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::DIM),
                 ),
                 Span::raw(subtype.clone()),
             ];
@@ -90,7 +105,9 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
         }
         ConversationEvent::ResultSummary { success, details } => {
             let prefix_style = if *success {
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             };
@@ -101,16 +118,11 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
             ])
         }
         ConversationEvent::StderrOutput { line } => {
-            Line::from(Span::styled(
-                line.clone(),
-                Style::default().fg(Color::Red),
-            ))
+            Line::from(Span::styled(line.clone(), Style::default().fg(Color::Red)))
         }
-        ConversationEvent::UnknownEvent { raw } => {
-            Line::from(Span::styled(
-                format!("[unknown] {}", raw),
-                Style::default().fg(Color::Yellow),
-            ))
-        }
+        ConversationEvent::UnknownEvent { raw } => Line::from(Span::styled(
+            format!("[unknown] {}", raw),
+            Style::default().fg(Color::Yellow),
+        )),
     }
 }

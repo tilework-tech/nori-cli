@@ -1,8 +1,9 @@
-use nori_cli::conversation::{parse_jsonl_event, render_event, ConversationEvent};
+use nori_cli::conversation::{ConversationEvent, parse_jsonl_event, render_event};
 
 #[test]
 fn test_parse_assistant_message_event() {
-    let jsonl = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hello world"}]}}"#;
+    let jsonl =
+        r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hello world"}]}}"#;
     let event = parse_jsonl_event(jsonl).unwrap();
 
     match event {

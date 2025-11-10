@@ -1,6 +1,6 @@
-use nori_cli::backends::mock::MockBackend;
 use nori_cli::backends::AgentBackend;
-use nori_cli::conversation::{parse_jsonl_event, ConversationEvent};
+use nori_cli::backends::mock::MockBackend;
+use nori_cli::conversation::{ConversationEvent, parse_jsonl_event};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[tokio::test]

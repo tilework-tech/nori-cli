@@ -7,7 +7,7 @@ use crossterm::terminal::{
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
 use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
-use nori_cli::conversation::{parse_jsonl_event, ConversationEvent};
+use nori_cli::conversation::{ConversationEvent, parse_jsonl_event};
 use nori_cli::ui;
 use ratatui::DefaultTerminal;
 use std::io::stdout;
