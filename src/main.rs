@@ -158,8 +158,8 @@ async fn spawn_and_stream(
 
     // Read stdout in a separate task
     let stdout_tx = tx.clone();
-    let stdout_handle = if let Some(stdout) = child.stdout.take() {
-        Some(tokio::spawn(async move {
+    let stdout_handle = child.stdout.take().map(|stdout| {
+        tokio::spawn(async move {
             let mut reader = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = reader.next_line().await {
                 // Parse JSON and extract content
@@ -195,23 +195,19 @@ async fn spawn_and_stream(
                     }
                 }
             }
-        }))
-    } else {
-        None
-    };
+        })
+    });
 
     // Read stderr to capture error messages
     let stderr_tx = tx.clone();
-    let stderr_handle = if let Some(stderr) = child.stderr.take() {
-        Some(tokio::spawn(async move {
+    let stderr_handle = child.stderr.take().map(|stderr| {
+        tokio::spawn(async move {
             let mut reader = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = reader.next_line().await {
                 let _ = stderr_tx.send(Message::StreamChunk(format!("[stderr] {}", line)));
             }
-        }))
-    } else {
-        None
-    };
+        })
+    });
 
     // Wait for child to complete
     let status = child.wait().await?;
