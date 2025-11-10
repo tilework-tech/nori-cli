@@ -1,4 +1,4 @@
-use nori_cli::conversation::{parse_jsonl_event, ConversationEvent};
+use nori_cli::conversation::{parse_jsonl_event, render_event, ConversationEvent};
 
 #[test]
 fn test_parse_assistant_message_event() {
@@ -59,4 +59,53 @@ fn test_parse_unknown_type() {
         }
         _ => panic!("Expected UnknownEvent variant"),
     }
+}
+
+#[test]
+fn test_render_assistant_message_as_plain_text() {
+    let event = ConversationEvent::AssistantMessage {
+        text: "Test content".to_string(),
+    };
+    let line = render_event(&event);
+
+    // Verify line contains the text (Line to String conversion for testing)
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("Test content"));
+}
+
+#[test]
+fn test_render_system_event_with_prefix() {
+    let event = ConversationEvent::SystemEvent {
+        subtype: "init".to_string(),
+        details: Some("session started".to_string()),
+    };
+    let line = render_event(&event);
+
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("[system]"));
+    assert!(line_text.contains("init"));
+}
+
+#[test]
+fn test_render_result_summary() {
+    let event = ConversationEvent::ResultSummary {
+        success: true,
+        details: "Completed".to_string(),
+    };
+    let line = render_event(&event);
+
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("[done]"));
+    assert!(line_text.contains("Completed"));
+}
+
+#[test]
+fn test_render_stderr_output() {
+    let event = ConversationEvent::StderrOutput {
+        line: "Error message".to_string(),
+    };
+    let line = render_event(&event);
+
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("Error message"));
 }
