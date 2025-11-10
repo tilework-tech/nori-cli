@@ -101,10 +101,10 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
 }
 
 fn handle_event_simple(mode: AppMode, event: Event) -> Option<Message> {
-    if let Event::Key(key) = event {
-        if key.kind == KeyEventKind::Press {
-            return handle_key_simple(mode, key);
-        }
+    if let Event::Key(key) = event
+        && key.kind == KeyEventKind::Press
+    {
+        return handle_key_simple(mode, key);
     }
     None
 }
@@ -155,31 +155,31 @@ async fn spawn_and_stream(
 
         while let Some(line) = reader.next_line().await? {
             // Parse JSON and extract content
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                if let Some(event_type) = json.get("type").and_then(|v| v.as_str()) {
-                    match event_type {
-                        "agent_message" => {
-                            if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
-                                tx.send(Message::StreamChunk(format!(
-                                    "[agent_message] {}",
-                                    content
-                                )))?;
-                            }
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line)
+                && let Some(event_type) = json.get("type").and_then(|v| v.as_str())
+            {
+                match event_type {
+                    "agent_message" => {
+                        if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
+                            tx.send(Message::StreamChunk(format!(
+                                "[agent_message] {}",
+                                content
+                            )))?;
                         }
-                        "file_change" => {
-                            if let Some(path) = json.get("path").and_then(|v| v.as_str()) {
-                                tx.send(Message::StreamChunk(format!("[file_change] {}", path)))?;
-                            }
+                    }
+                    "file_change" => {
+                        if let Some(path) = json.get("path").and_then(|v| v.as_str()) {
+                            tx.send(Message::StreamChunk(format!("[file_change] {}", path)))?;
                         }
-                        "command_execution" => {
-                            if let Some(cmd) = json.get("command").and_then(|v| v.as_str()) {
-                                tx.send(Message::StreamChunk(format!("[command] {}", cmd)))?;
-                            }
+                    }
+                    "command_execution" => {
+                        if let Some(cmd) = json.get("command").and_then(|v| v.as_str()) {
+                            tx.send(Message::StreamChunk(format!("[command] {}", cmd)))?;
                         }
-                        _ => {
-                            // Show other event types
-                            tx.send(Message::StreamChunk(format!("[{}] {:?}", event_type, json)))?;
-                        }
+                    }
+                    _ => {
+                        // Show other event types
+                        tx.send(Message::StreamChunk(format!("[{}] {:?}", event_type, json)))?;
                     }
                 }
             }

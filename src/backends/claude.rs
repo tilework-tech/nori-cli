@@ -7,6 +7,12 @@ pub struct ClaudeBackend {
     pub session_id: Option<String>,
 }
 
+impl Default for ClaudeBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClaudeBackend {
     pub fn new() -> Self {
         Self { session_id: None }

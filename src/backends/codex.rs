@@ -7,6 +7,12 @@ pub struct CodexBackend {
     pub thread_id: Option<String>,
 }
 
+impl Default for CodexBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CodexBackend {
     pub fn new() -> Self {
         Self { thread_id: None }
