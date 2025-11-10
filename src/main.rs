@@ -1,7 +1,3 @@
-mod app;
-mod ui;
-mod backends;
-
 use color_eyre::Result;
 
 fn main() -> Result<()> {
