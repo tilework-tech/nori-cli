@@ -109,3 +109,43 @@ fn test_render_stderr_output() {
     let line_text = format!("{:?}", line);
     assert!(line_text.contains("Error message"));
 }
+
+#[test]
+fn test_parse_assistant_message_with_multiple_text_blocks() {
+    let jsonl = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"First"},{"type":"text","text":"Second"}]}}"#;
+    let event = parse_jsonl_event(jsonl).unwrap();
+
+    match event {
+        ConversationEvent::AssistantMessage { text } => {
+            // Multiple text blocks should be concatenated with newline
+            assert!(text.contains("First"));
+            assert!(text.contains("Second"));
+        }
+        _ => panic!("Expected AssistantMessage variant"),
+    }
+}
+
+#[test]
+fn test_parse_empty_content_array() {
+    let jsonl = r#"{"type":"assistant","message":{"content":[]}}"#;
+    let event = parse_jsonl_event(jsonl).unwrap();
+
+    match event {
+        ConversationEvent::AssistantMessage { text } => {
+            assert_eq!(text, "");
+        }
+        _ => panic!("Expected AssistantMessage variant"),
+    }
+}
+
+#[test]
+fn test_render_multiline_assistant_message() {
+    let event = ConversationEvent::AssistantMessage {
+        text: "Line 1\nLine 2\nLine 3".to_string(),
+    };
+    let line = render_event(&event);
+
+    // Should not panic - Paragraph widget handles newlines
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("Line 1"));
+}
