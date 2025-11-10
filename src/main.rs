@@ -1,11 +1,11 @@
 use color_eyre::Result;
 use crossterm::event::{self, Event};
 use ratatui::{
+    DefaultTerminal, Frame,
     layout::Alignment,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    DefaultTerminal, Frame,
 };
 
 fn render(frame: &mut Frame) {
