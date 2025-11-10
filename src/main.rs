@@ -46,15 +46,15 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
             tokio::select! {
                 Some(Ok(event)) = reader.next() => {
                     if let Some(msg) = handle_event_simple(current_mode, event) {
-                        let _ = event_tx.send(msg.clone());
-                        // Update local mode tracking
+                        // Update local mode tracking based on the message we're sending
                         match &msg {
                             Message::SelectItem => current_mode = AppMode::Input,
                             Message::ExitInputMode | Message::StreamComplete => current_mode = AppMode::Selection,
                             Message::SubmitInput => current_mode = AppMode::Streaming,
-                            // Error stays in Streaming mode so user can see stderr
+                            Message::Error(_) => {}, // Stay in current mode (should be Streaming)
                             _ => {}
                         }
+                        let _ = event_tx.send(msg);
                     }
                 }
             }

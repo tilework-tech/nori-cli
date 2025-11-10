@@ -134,6 +134,7 @@ impl Model {
             Message::StreamComplete => {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None; // Clear any errors when going back
+                self.textarea = TextArea::default(); // Reset textarea for next input
             }
 
             Message::Error(error) => {
