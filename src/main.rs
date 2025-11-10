@@ -37,6 +37,9 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     let mut model = Model::default();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
+    // Create mode channel for syncing state with event handler
+    let (mode_tx, mut mode_rx) = mpsc::unbounded_channel::<AppMode>();
+
     // Spawn event handling task
     let event_tx = tx.clone();
     tokio::spawn(async move {
@@ -44,16 +47,12 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
         let mut current_mode = AppMode::Selection;
         loop {
             tokio::select! {
+                // Receive mode updates from main loop (single source of truth)
+                Some(mode) = mode_rx.recv() => {
+                    current_mode = mode;
+                }
                 Some(Ok(event)) = reader.next() => {
                     if let Some(msg) = handle_event_simple(current_mode, event) {
-                        // Update local mode tracking based on the message we're sending
-                        match &msg {
-                            Message::SelectItem => current_mode = AppMode::Input,
-                            Message::ExitInputMode | Message::StreamComplete => current_mode = AppMode::Selection,
-                            Message::SubmitInput => current_mode = AppMode::Streaming,
-                            Message::Error(_) => {}, // Stay in current mode (should be Streaming)
-                            _ => {}
-                        }
                         let _ = event_tx.send(msg);
                     }
                 }
@@ -78,6 +77,8 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                             let backend = get_backend(&model);
                             let stream_tx = tx.clone();
                             model.update(msg);
+                            // Send updated mode to event handler
+                            let _ = mode_tx.send(model.current_mode);
 
                             tokio::spawn(async move {
                                 if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
@@ -87,7 +88,11 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                             });
                         }
                     }
-                    _ => model.update(msg),
+                    _ => {
+                        model.update(msg);
+                        // Send updated mode to event handler after every state change
+                        let _ = mode_tx.send(model.current_mode);
+                    }
                 }
             }
 
