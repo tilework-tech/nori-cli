@@ -26,7 +26,8 @@ impl AgentBackend for ClaudeBackend {
         cmd.arg("--print")
             .arg("--output-format")
             .arg("stream-json")
-            .arg("--include-partial-messages");
+            .arg("--include-partial-messages")
+            .arg("--verbose"); // Required when using stream-json with --print
 
         // Add session resumption if we have a session ID
         if let Some(ref session_id) = self.session_id {
