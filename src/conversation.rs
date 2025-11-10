@@ -34,13 +34,13 @@ pub fn parse_jsonl_event(line: &str) -> Option<ConversationEvent> {
 
             let mut text = String::new();
             for item in content_array {
-                if let Some("text") = item.get("type").and_then(|v| v.as_str()) {
-                    if let Some(t) = item.get("text").and_then(|v| v.as_str()) {
-                        if !text.is_empty() {
-                            text.push('\n');
-                        }
-                        text.push_str(t);
+                if let Some("text") = item.get("type").and_then(|v| v.as_str())
+                    && let Some(t) = item.get("text").and_then(|v| v.as_str())
+                {
+                    if !text.is_empty() {
+                        text.push('\n');
                     }
+                    text.push_str(t);
                 }
             }
 
