@@ -1,16 +1,18 @@
 use color_eyre::Result;
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::ExecutableCommand;
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
-use nori_cli::backends::{claude::ClaudeBackend, codex::CodexBackend, AgentBackend};
+use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::ui;
 use ratatui::DefaultTerminal;
 use std::io::stdout;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
-use tokio::time::{interval, Duration};
+use tokio::time::{Duration, interval};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -158,7 +160,10 @@ async fn spawn_and_stream(
                     match event_type {
                         "agent_message" => {
                             if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
-                                tx.send(Message::StreamChunk(format!("[agent_message] {}", content)))?;
+                                tx.send(Message::StreamChunk(format!(
+                                    "[agent_message] {}",
+                                    content
+                                )))?;
                             }
                         }
                         "file_change" => {
@@ -184,7 +189,10 @@ async fn spawn_and_stream(
     // Wait for child to complete
     let status = child.wait().await?;
     if !status.success() {
-        tx.send(Message::Error(format!("Process exited with status: {}", status)))?;
+        tx.send(Message::Error(format!(
+            "Process exited with status: {}",
+            status
+        )))?;
     } else {
         tx.send(Message::StreamComplete)?;
     }

@@ -1,9 +1,9 @@
 use crate::app::{AppMode, Model};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
@@ -41,7 +41,11 @@ fn render_selection(model: &mut Model, frame: &mut Frame) {
 
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title("Agents"))
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol(">> ");
 
     frame.render_stateful_widget(list, chunks[1], &mut model.list_state);
@@ -88,9 +92,7 @@ fn render_input(model: &mut Model, frame: &mut Frame) {
     frame.render_widget(title, chunks[0]);
 
     // Text input
-    let input_block = Block::default()
-        .borders(Borders::ALL)
-        .title("Prompt");
+    let input_block = Block::default().borders(Borders::ALL).title("Prompt");
     let inner_area = input_block.inner(chunks[1]);
     frame.render_widget(input_block, chunks[1]);
     frame.render_widget(&model.textarea, inner_area);

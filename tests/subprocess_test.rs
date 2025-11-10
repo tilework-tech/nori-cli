@@ -1,11 +1,14 @@
-use nori_cli::backends::mock::MockBackend;
 use nori_cli::backends::AgentBackend;
+use nori_cli::backends::mock::MockBackend;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[tokio::test]
 async fn test_mock_backend_spawns_process() {
     let backend = MockBackend;
-    let mut child = backend.spawn_process("test prompt".to_string()).await.unwrap();
+    let mut child = backend
+        .spawn_process("test prompt".to_string())
+        .await
+        .unwrap();
 
     // Read stdout
     let stdout = child.stdout.take().unwrap();
