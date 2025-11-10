@@ -1,3 +1,4 @@
+use crate::conversation::ConversationEvent;
 use ratatui::widgets::ListState;
 use tui_textarea::TextArea;
 
@@ -24,7 +25,7 @@ pub enum Message {
     SubmitInput,
 
     // Streaming
-    StreamChunk(String),
+    StreamEvent(ConversationEvent),
     StreamComplete,
 
     // Error handling
@@ -40,7 +41,7 @@ pub struct Model {
     pub list_state: ListState,
     pub agents: Vec<String>,
     pub textarea: TextArea<'static>,
-    pub response_text: Vec<String>,
+    pub response_events: Vec<ConversationEvent>,
     pub selected_agent_index: Option<usize>,
     pub session_id: Option<String>,
     pub error_message: Option<String>,
@@ -56,7 +57,7 @@ impl Default for Model {
             list_state,
             agents: vec!["Claude Code".to_string(), "GPT Codex".to_string()],
             textarea: TextArea::default(),
-            response_text: Vec::new(),
+            response_events: Vec::new(),
             selected_agent_index: None,
             session_id: None,
             error_message: None,
@@ -127,8 +128,8 @@ impl Model {
                 }
             }
 
-            Message::StreamChunk(text) => {
-                self.response_text.push(text);
+            Message::StreamEvent(event) => {
+                self.response_events.push(event);
             }
 
             Message::StreamComplete => {

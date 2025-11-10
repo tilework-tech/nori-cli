@@ -7,6 +7,7 @@ use crossterm::terminal::{
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
 use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
+use nori_cli::conversation::{parse_jsonl_event, ConversationEvent};
 use nori_cli::ui;
 use ratatui::DefaultTerminal;
 use std::io::stdout;
@@ -167,37 +168,8 @@ async fn spawn_and_stream(
         tokio::spawn(async move {
             let mut reader = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = reader.next_line().await {
-                // Parse JSON and extract content
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line)
-                    && let Some(event_type) = json.get("type").and_then(|v| v.as_str())
-                {
-                    match event_type {
-                        "agent_message" => {
-                            if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
-                                let _ = stdout_tx.send(Message::StreamChunk(format!(
-                                    "[agent_message] {}",
-                                    content
-                                )));
-                            }
-                        }
-                        "file_change" => {
-                            if let Some(path) = json.get("path").and_then(|v| v.as_str()) {
-                                let _ = stdout_tx
-                                    .send(Message::StreamChunk(format!("[file_change] {}", path)));
-                            }
-                        }
-                        "command_execution" => {
-                            if let Some(cmd) = json.get("command").and_then(|v| v.as_str()) {
-                                let _ = stdout_tx
-                                    .send(Message::StreamChunk(format!("[command] {}", cmd)));
-                            }
-                        }
-                        _ => {
-                            // Show other event types
-                            let _ = stdout_tx
-                                .send(Message::StreamChunk(format!("[{}] {:?}", event_type, json)));
-                        }
-                    }
+                if let Some(event) = parse_jsonl_event(&line) {
+                    let _ = stdout_tx.send(Message::StreamEvent(event));
                 }
             }
         })
@@ -209,7 +181,8 @@ async fn spawn_and_stream(
         tokio::spawn(async move {
             let mut reader = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = reader.next_line().await {
-                let _ = stderr_tx.send(Message::StreamChunk(format!("[stderr] {}", line)));
+                let event = ConversationEvent::StderrOutput { line };
+                let _ = stderr_tx.send(Message::StreamEvent(event));
             }
         })
     });
