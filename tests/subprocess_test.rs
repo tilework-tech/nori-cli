@@ -1,6 +1,6 @@
 use futures::StreamExt;
-use nori_cli::backends::mock::MockBackend;
 use nori_cli::backends::AgentBackend;
+use nori_cli::backends::mock::MockBackend;
 use nori_cli::conversation::ConversationEvent;
 
 #[tokio::test]
