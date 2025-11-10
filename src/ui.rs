@@ -1,8 +1,10 @@
 use crate::app::{AppMode, Model};
+use crate::conversation::render_event;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    text::{Line, Text},
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
 };
 
@@ -127,9 +129,15 @@ fn render_streaming(model: &Model, frame: &mut Frame) {
         .style(Style::default().fg(title_color));
     frame.render_widget(title, chunks[0]);
 
-    // Response text
-    let response_content = model.response_text.join("\n");
-    let response = Paragraph::new(response_content)
+    // Response text - render events as styled lines
+    let lines: Vec<Line> = model
+        .response_events
+        .iter()
+        .map(|event| render_event(event))
+        .collect();
+
+    let text = Text::from(lines);
+    let response = Paragraph::new(text)
         .block(Block::default().borders(Borders::ALL).title("Response"))
         .wrap(Wrap { trim: false });
     frame.render_widget(response, chunks[1]);
