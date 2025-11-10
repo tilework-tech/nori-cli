@@ -7,11 +7,9 @@ use crossterm::terminal::{
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
 use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
-use nori_cli::conversation::{ConversationEvent, parse_jsonl_event};
 use nori_cli::ui;
 use ratatui::DefaultTerminal;
 use std::io::stdout;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
@@ -160,53 +158,16 @@ async fn spawn_and_stream(
     prompt: String,
     tx: mpsc::UnboundedSender<Message>,
 ) -> Result<()> {
-    let mut child = backend.spawn_process(prompt).await?;
+    // Get stream from backend
+    let mut stream = backend.spawn_stream(prompt);
 
-    // Read stdout in a separate task
-    let stdout_tx = tx.clone();
-    let stdout_handle = child.stdout.take().map(|stdout| {
-        tokio::spawn(async move {
-            let mut reader = BufReader::new(stdout).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                if let Some(event) = parse_jsonl_event(&line) {
-                    let _ = stdout_tx.send(Message::StreamEvent(event));
-                }
-            }
-        })
-    });
-
-    // Read stderr to capture error messages
-    let stderr_tx = tx.clone();
-    let stderr_handle = child.stderr.take().map(|stderr| {
-        tokio::spawn(async move {
-            let mut reader = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                let event = ConversationEvent::StderrOutput { line };
-                let _ = stderr_tx.send(Message::StreamEvent(event));
-            }
-        })
-    });
-
-    // Wait for child to complete
-    let status = child.wait().await?;
-
-    // Wait for stdout/stderr tasks to finish
-    if let Some(h) = stdout_handle {
-        let _ = h.await;
-    }
-    if let Some(h) = stderr_handle {
-        let _ = h.await;
+    // Consume stream and send events to UI
+    while let Some(event) = stream.next().await {
+        let _ = tx.send(Message::StreamEvent(event));
     }
 
-    if !status.success() {
-        // Send error with helpful message
-        tx.send(Message::Error(format!(
-            "Process exited with status: {}\n\nCheck the response output above for error details.\nPress 'q' to quit or Esc to go back.",
-            status
-        )))?;
-    } else {
-        tx.send(Message::StreamComplete)?;
-    }
+    // Signal completion
+    tx.send(Message::StreamComplete)?;
 
     Ok(())
 }

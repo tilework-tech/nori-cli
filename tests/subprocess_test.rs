@@ -1,50 +1,40 @@
-use nori_cli::backends::AgentBackend;
+use futures::StreamExt;
 use nori_cli::backends::mock::MockBackend;
-use nori_cli::conversation::{ConversationEvent, parse_jsonl_event};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use nori_cli::backends::AgentBackend;
+use nori_cli::conversation::ConversationEvent;
 
 #[tokio::test]
-async fn test_mock_backend_spawns_process() {
+async fn test_mock_backend_streams_events() {
     let backend = MockBackend;
-    let mut child = backend
-        .spawn_process("test prompt".to_string())
-        .await
-        .unwrap();
-
-    // Read stdout
-    let stdout = child.stdout.take().unwrap();
-    let mut reader = BufReader::new(stdout).lines();
-
-    let mut lines = Vec::new();
-    while let Some(line) = reader.next_line().await.unwrap() {
-        lines.push(line);
-    }
-
-    // MockBackend should output JSONL
-    assert!(!lines.is_empty());
-
-    // First line should be parseable JSON
-    let _: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
-}
-
-#[tokio::test]
-async fn test_parse_assistant_message_events() {
-    let backend = MockBackend;
-    let mut child = backend.spawn_process("test".to_string()).await.unwrap();
-
-    let stdout = child.stdout.take().unwrap();
-    let mut reader = BufReader::new(stdout).lines();
+    let mut stream = backend.spawn_stream("test prompt".to_string());
 
     let mut events = Vec::new();
-    while let Some(line) = reader.next_line().await.unwrap() {
-        if let Some(event) = parse_jsonl_event(&line) {
-            events.push(event);
-        }
+    while let Some(event) = stream.next().await {
+        events.push(event);
     }
 
+    // MockBackend should yield at least some events
     assert!(!events.is_empty());
+
+    // First events should be assistant messages
     assert!(matches!(
         events[0],
         ConversationEvent::AssistantMessage { .. }
     ));
+}
+
+#[tokio::test]
+async fn test_mock_backend_completes() {
+    let backend = MockBackend;
+    let mut stream = backend.spawn_stream("test".to_string());
+
+    let mut has_result = false;
+    while let Some(event) = stream.next().await {
+        if matches!(event, ConversationEvent::ResultSummary { .. }) {
+            has_result = true;
+        }
+    }
+
+    // Stream should end with a result summary
+    assert!(has_result);
 }
