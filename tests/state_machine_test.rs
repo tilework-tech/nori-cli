@@ -37,3 +37,31 @@ fn test_stream_chunk_accumulation() {
     assert_eq!(model.response_text[0], "Hello ");
     assert_eq!(model.response_text[1], "World");
 }
+
+#[test]
+fn test_post_stream_state_handling() {
+    let mut model = Model::default();
+
+    // Simulate complete user flow
+    model.update(Message::SelectItem);
+    assert_eq!(model.current_mode, AppMode::Input);
+
+    model.update(Message::SubmitInput);
+    assert_eq!(model.current_mode, AppMode::Streaming);
+
+    // Simulate receiving stream chunks
+    model.update(Message::StreamChunk("test response".to_string()));
+
+    // Stream completes - should return to Selection
+    model.update(Message::StreamComplete);
+    assert_eq!(model.current_mode, AppMode::Selection);
+
+    // Verify we can interact again - this verifies the state machine
+    // The actual bug is in the event handler, not the Model
+    model.update(Message::NextItem);
+    assert_eq!(model.current_mode, AppMode::Selection);
+
+    // Verify we can select again
+    model.update(Message::SelectItem);
+    assert_eq!(model.current_mode, AppMode::Input);
+}
