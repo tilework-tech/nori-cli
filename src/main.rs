@@ -20,21 +20,21 @@ async fn main() -> Result<()> {
     // Get starting cursor position before creating viewport
     let viewport_start_row = crossterm::cursor::position()?.1;
 
-    // Setup terminal with inline viewport (8 lines at bottom for input/instructions)
+    // Setup terminal with inline viewport (14 lines at bottom for input/autocomplete/instructions)
     enable_raw_mode()?;
     let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: Viewport::Inline(8),
+        viewport: Viewport::Inline(14),
     });
 
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
-    // Use absolute positioning to place cursor below the 8-line viewport
-    // The viewport shows: 3 lines (title) + 4 lines (input) + 1 line (instructions) = 8 lines
+    // Use absolute positioning to place cursor below the 14-line viewport
+    // The viewport shows: 3 lines (title) + 4 lines (input) + up to 6 lines (autocomplete) + 1 line (instructions) = 14 lines
     disable_raw_mode()?;
     ratatui::restore();
-    // Move to column 0, row = viewport_start + 8 lines
-    execute!(std::io::stdout(), MoveTo(0, viewport_start_row + 8))?;
+    // Move to column 0, row = viewport_start + 14 lines
+    execute!(std::io::stdout(), MoveTo(0, viewport_start_row + 14))?;
 
     result
 }

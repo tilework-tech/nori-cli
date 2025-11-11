@@ -30,11 +30,13 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     // Adjust layout based on whether autocomplete is visible
     let constraints = if model.show_autocomplete {
+        // Calculate height needed for autocomplete (2 commands + borders = 4 lines)
+        let autocomplete_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
         vec![
-            Constraint::Length(3), // Title
-            Constraint::Length(4), // Input
-            Constraint::Min(3),    // Autocomplete (takes remaining space, min 3)
-            Constraint::Length(1), // Instructions (pushed to bottom)
+            Constraint::Length(3),                // Title
+            Constraint::Length(4),                // Input
+            Constraint::Length(autocomplete_height), // Autocomplete
+            Constraint::Length(1),                // Instructions
         ]
     } else {
         vec![
