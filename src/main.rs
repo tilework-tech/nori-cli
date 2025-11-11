@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::execute;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
@@ -31,8 +31,8 @@ async fn main() -> Result<()> {
 
     // Move cursor to column 0 and clear any remaining artifacts
     // This ensures the shell prompt appears cleanly below the TUI
-    use crossterm::terminal::Clear;
     use crossterm::cursor::MoveToColumn;
+    use crossterm::terminal::Clear;
     execute!(
         std::io::stdout(),
         MoveToColumn(0),
