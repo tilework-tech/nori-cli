@@ -17,11 +17,11 @@ A terminal user interface (TUI) application that routes user prompts to differen
 ### Core Implementation
 
 **Entry Point**: @/src/main.rs contains the async main loop that:
-1. Initializes terminal with `ratatui::init()` and enables raw mode for immediate key capture
+1. Initializes terminal with `ratatui::init_with_options()` using Viewport::Inline(8) and enables raw mode for immediate key capture
 2. Spawns an async event handling task that continuously reads keyboard events via crossterm's EventStream
 3. Runs a tokio::select! loop that handles both incoming messages (from event handler and subprocess) and periodic rendering at ~30 fps
 4. Delegates subprocess spawning to backend implementations when user submits a prompt
-5. Restores terminal on shutdown via `ratatui::restore()` and `LeaveAlternateScreen`
+5. Restores terminal on shutdown: moves cursor to next line, disables raw mode, calls `ratatui::restore()` - cursor positioning ensures shell prompt appears below TUI content instead of in the middle
 
 **Architecture Pattern**: The Elm Architecture (TEA)
 - Model (@/src/app.rs): Application state including overlay visibility (`show_agent_router`), selected agent, textarea content, and full conversation history in `response_events`
@@ -67,7 +67,8 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 ### Things to Know
 
 **Key Invariants**:
-- Terminal must be restored (raw mode disabled, alternate screen exited) on any exit path to avoid broken terminal state
+- Terminal must be restored in correct order (cursor positioning -> disable raw mode -> ratatui::restore()) on any exit path to avoid broken terminal state or mispositioned cursor
+- Cursor must be moved to next line before disabling raw mode when using Viewport::Inline(8) to ensure shell prompt appears cleanly below TUI content
 - Event handler task receives mode updates via channel to prevent race conditions when converting events to messages
 - Conversation history (`response_events`) accumulates indefinitely - includes both UserMessage and assistant responses, never cleared
 - Navigation and text input are mutually exclusive based on `show_agent_router` flag - overlay blocks input, chat blocks navigation
