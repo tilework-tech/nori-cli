@@ -89,17 +89,24 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 1. User selects backend in agent router (via Alt+A)
 2. User submits prompt (via Alt+Enter)
 3. @/src/main.rs checks if backend command is available using `is_available(backend.command_name())`
-4. If not available: ShowInstallPrompt message sent with backend name and install URL
-5. Install prompt overlay appears (@/src/ui.rs:render_install_prompt_overlay)
-6. User can navigate options (Open Installation Page / Cancel) with arrow keys
-7. Enter on "Open Installation Page" opens URL in default browser via `opener` crate
-8. Enter on "Cancel" or Esc closes prompt and returns to selection mode
+4. If not available: ShowInstallPrompt message sent with backend name, install URL, and optional install_cmd
+5. Install prompt fullscreen overlay appears (@/src/ui.rs:render_install_prompt_fullscreen)
+6. User sees 2-3 options depending on whether install_cmd exists:
+   - With install_cmd: "Run Installation", "Open Installation Page", "Cancel"
+   - Without install_cmd: "Open Installation Page", "Cancel"
+7. User can navigate options with arrow keys (up/down or j/k vim-style)
+8. Enter on "Run Installation" executes install_cmd in background and shows progress
+9. Enter on "Open Installation Page" opens URL in default browser via `opener` crate
+10. Enter on "Cancel" or Esc closes prompt and returns to selection mode
 
 **State Management** (@/src/app.rs):
-- Model tracks `show_install_prompt`, `install_prompt_backend`, `install_prompt_url`, `install_prompt_choice`
-- InstallChoice enum: OpenInstallPage | Cancel (toggled via NavigateInstallChoice message)
-- Message handlers: ShowInstallPrompt, NavigateInstallChoice, ConfirmInstall, CancelInstall
-- ConfirmInstall calls `opener::open(url)` if OpenInstallPage selected
+- Model tracks `show_install_prompt`, `install_prompt_backend`, `install_prompt_url`, `install_prompt_cmd`, `install_prompt_choice`
+- InstallChoice enum: RunInstallation | OpenInstallPage | Cancel
+- Navigation: NavigateInstallChoiceNext (down arrow) and NavigateInstallChoicePrevious (up arrow) for directional cycling
+- Context-aware cycling: When install_cmd exists, all 3 options are available; otherwise only OpenInstallPage and Cancel
+- Default selection: RunInstallation when install_cmd exists, OpenInstallPage otherwise
+- Message handlers: ShowInstallPrompt, NavigateInstallChoiceNext, NavigateInstallChoicePrevious, ConfirmInstall, CancelInstall
+- ConfirmInstall: Runs installation command if RunInstallation selected, opens URL if OpenInstallPage selected, closes prompt if Cancel
 
 **Visual Indication** (@/src/ui.rs):
 - Model.backend_availability vec tracks installation status for each agent

@@ -15,8 +15,31 @@ pub enum AppMode {
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum InstallChoice {
     #[default]
+    RunInstallation,
     OpenInstallPage,
     Cancel,
+}
+
+impl InstallChoice {
+    pub fn next(&self, has_install_cmd: bool) -> Self {
+        use InstallChoice::*;
+        match (self, has_install_cmd) {
+            (RunInstallation, _) => OpenInstallPage,
+            (OpenInstallPage, _) => Cancel,
+            (Cancel, true) => RunInstallation,
+            (Cancel, false) => OpenInstallPage,
+        }
+    }
+
+    pub fn previous(&self, has_install_cmd: bool) -> Self {
+        use InstallChoice::*;
+        match (self, has_install_cmd) {
+            (RunInstallation, _) => Cancel,
+            (OpenInstallPage, true) => RunInstallation,
+            (OpenInstallPage, false) => Cancel,
+            (Cancel, _) => OpenInstallPage,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +79,8 @@ pub enum Message {
         install_cmd: Option<Vec<String>>,
     },
     NavigateInstallChoice,
+    NavigateInstallChoiceNext,
+    NavigateInstallChoicePrevious,
     ConfirmInstall,
     CancelInstall,
     InstallationComplete {
@@ -240,15 +265,39 @@ impl Model {
                 self.show_install_prompt = true;
                 self.install_prompt_backend = Some(backend);
                 self.install_prompt_url = Some(url);
+                let has_install_cmd = install_cmd.as_ref().map(|v| !v.is_empty()).unwrap_or(false);
                 self.install_prompt_cmd = install_cmd;
-                self.install_prompt_choice = InstallChoice::default();
+                self.install_prompt_choice = if has_install_cmd {
+                    InstallChoice::RunInstallation
+                } else {
+                    InstallChoice::OpenInstallPage
+                };
             }
 
             Message::NavigateInstallChoice => {
                 self.install_prompt_choice = match self.install_prompt_choice {
+                    InstallChoice::RunInstallation => InstallChoice::OpenInstallPage,
                     InstallChoice::OpenInstallPage => InstallChoice::Cancel,
-                    InstallChoice::Cancel => InstallChoice::OpenInstallPage,
+                    InstallChoice::Cancel => InstallChoice::RunInstallation,
                 };
+            }
+
+            Message::NavigateInstallChoiceNext => {
+                let has_install_cmd = self
+                    .install_prompt_cmd
+                    .as_ref()
+                    .map(|v| !v.is_empty())
+                    .unwrap_or(false);
+                self.install_prompt_choice = self.install_prompt_choice.next(has_install_cmd);
+            }
+
+            Message::NavigateInstallChoicePrevious => {
+                let has_install_cmd = self
+                    .install_prompt_cmd
+                    .as_ref()
+                    .map(|v| !v.is_empty())
+                    .unwrap_or(false);
+                self.install_prompt_choice = self.install_prompt_choice.previous(has_install_cmd);
             }
 
             Message::ConfirmInstall => {

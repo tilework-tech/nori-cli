@@ -185,7 +185,7 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
         .constraints([
             Constraint::Length(2), // Title
             Constraint::Min(2),    // Message (flexible)
-            Constraint::Length(3), // Options
+            Constraint::Length(5), // Options (3 items + 2 borders)
             Constraint::Length(1), // Instructions
         ])
         .split(area);
@@ -222,23 +222,24 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
         .wrap(ratatui::widgets::Wrap { trim: false });
     frame.render_widget(message, chunks[1]);
 
-    // Options as a list
-    let first_option = if has_install_cmd {
-        "Run Installation"
+    // Options as a list - show all 3 options when install_cmd exists
+    let options: Vec<(&str, InstallChoice)> = if has_install_cmd {
+        vec![
+            ("Run Installation", InstallChoice::RunInstallation),
+            ("Open Installation Page", InstallChoice::OpenInstallPage),
+            ("Cancel", InstallChoice::Cancel),
+        ]
     } else {
-        "Open Installation Page"
+        vec![
+            ("Open Installation Page", InstallChoice::OpenInstallPage),
+            ("Cancel", InstallChoice::Cancel),
+        ]
     };
-
-    let options = [first_option, "Cancel"];
 
     let items: Vec<ListItem> = options
         .iter()
-        .enumerate()
-        .map(|(i, option)| {
-            let is_selected = matches!(
-                (i, model.install_prompt_choice),
-                (0, InstallChoice::OpenInstallPage) | (1, InstallChoice::Cancel)
-            );
+        .map(|(label, choice)| {
+            let is_selected = model.install_prompt_choice == *choice;
 
             let style = if is_selected {
                 Style::default()
@@ -249,7 +250,7 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
             };
 
             let prefix = if is_selected { ">> " } else { "   " };
-            ListItem::new(format!("{}{}", prefix, option)).style(style)
+            ListItem::new(format!("{}{}", prefix, label)).style(style)
         })
         .collect();
 
