@@ -1,15 +1,12 @@
 use color_eyre::Result;
-use crossterm::ExecutableCommand;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
 use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
+use nori_cli::conversation::render_event;
 use nori_cli::ui;
-use ratatui::DefaultTerminal;
-use std::io::stdout;
+use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
@@ -17,16 +14,16 @@ use tokio::time::{Duration, interval};
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
-    // Setup terminal
+    // Setup terminal with inline viewport (8 lines at bottom for input/instructions)
     enable_raw_mode()?;
-    stdout().execute(EnterAlternateScreen)?;
-    let mut terminal = ratatui::init();
+    let mut terminal = ratatui::init_with_options(TerminalOptions {
+        viewport: Viewport::Inline(8),
+    });
 
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
     disable_raw_mode()?;
-    stdout().execute(LeaveAlternateScreen)?;
     ratatui::restore();
 
     result
@@ -74,6 +71,18 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
             Some(msg) = rx.recv() => {
                 match &msg {
                     Message::Quit => break,
+                    Message::StreamEvent(event) => {
+                        // Render event to scrollback using insert_before
+                        let line = render_event(event);
+                        terminal.insert_before(1, |buf| {
+                            use ratatui::widgets::{Paragraph, Widget};
+                            Paragraph::new(line.clone()).render(buf.area, buf);
+                        })?;
+
+                        model.update(msg);
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                    }
                     Message::SubmitInput => {
                         // Extract prompt from textarea
                         let prompt = model.textarea.lines().join("\n");

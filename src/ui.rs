@@ -1,11 +1,9 @@
 use crate::app::Model;
-use crate::conversation::render_event;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Text},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
@@ -27,9 +25,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Title
-            Constraint::Min(10),   // Messages
             Constraint::Length(4), // Input
-            Constraint::Length(2), // Instructions
+            Constraint::Length(1), // Instructions
         ])
         .split(area);
 
@@ -45,30 +42,16 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .style(Style::default().fg(Color::Cyan));
     frame.render_widget(title, chunks[0]);
 
-    // Messages - render conversation history
-    let lines: Vec<Line> = model
-        .response_events
-        .iter()
-        .map(|event| render_event(event))
-        .collect();
-
-    let text = Text::from(lines);
-    let messages = Paragraph::new(text)
-        .block(Block::default().borders(Borders::ALL).title("Conversation"))
-        .wrap(Wrap { trim: false });
-    frame.render_widget(messages, chunks[1]);
-
-    // Input - textarea at bottom
+    // Input - textarea (messages scroll in terminal scrollback above viewport)
     let input_block = Block::default().borders(Borders::ALL).title("Prompt");
-    let inner_area = input_block.inner(chunks[2]);
-    frame.render_widget(input_block, chunks[2]);
+    let inner_area = input_block.inner(chunks[1]);
+    frame.render_widget(input_block, chunks[1]);
     frame.render_widget(&model.textarea, inner_area);
 
     // Instructions
-    let instructions = Paragraph::new("Alt+Enter to send, Alt+A for agent router, q to quit")
-        .block(Block::default().borders(Borders::ALL))
+    let instructions = Paragraph::new("Alt+Enter: send | Alt+A: agent router | q: quit")
         .style(Style::default().fg(Color::Gray));
-    frame.render_widget(instructions, chunks[3]);
+    frame.render_widget(instructions, chunks[2]);
 }
 
 fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect) {
