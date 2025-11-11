@@ -263,9 +263,28 @@ impl Model {
             }
 
             Message::ClearTextarea => {
-                self.textarea = TextArea::default();
-                self.last_ctrl_c_time = Some(std::time::Instant::now());
-                self.error_message = Some("Press Ctrl-C again to exit".to_string());
+                const CTRL_C_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+                let now = std::time::Instant::now();
+
+                match self.last_ctrl_c_time {
+                    None => {
+                        // First Ctrl-C: clear textarea and show hint
+                        self.textarea = TextArea::default();
+                        self.last_ctrl_c_time = Some(now);
+                        self.error_message = Some("Press Ctrl-C again to exit".to_string());
+                    }
+                    Some(last_time) if now.duration_since(last_time) < CTRL_C_TIMEOUT => {
+                        // Second Ctrl-C within timeout: clear timestamp to signal quit
+                        self.last_ctrl_c_time = None;
+                        self.error_message = None;
+                    }
+                    Some(_) => {
+                        // Ctrl-C after timeout expired: treat as first press
+                        self.textarea = TextArea::default();
+                        self.last_ctrl_c_time = Some(now);
+                        self.error_message = Some("Press Ctrl-C again to exit".to_string());
+                    }
+                }
             }
 
             Message::Quit => {
