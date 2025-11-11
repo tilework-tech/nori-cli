@@ -84,3 +84,15 @@ fn test_render_user_message() {
     assert!(line_text.contains("[user]"));
     assert!(line_text.contains("What is the weather?"));
 }
+
+#[test]
+fn test_render_status_message() {
+    let event = ConversationEvent::StatusMessage {
+        text: "Debug logs are now enabled".to_string(),
+    };
+    let line = render_event(&event);
+
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("[status]"));
+    assert!(line_text.contains("Debug logs are now enabled"));
+}

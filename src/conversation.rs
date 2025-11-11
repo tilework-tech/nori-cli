@@ -24,6 +24,9 @@ pub enum ConversationEvent {
     UnknownEvent {
         raw: String,
     },
+    StatusMessage {
+        text: String,
+    },
 }
 
 pub fn render_event(event: &ConversationEvent) -> Line<'static> {
@@ -83,5 +86,14 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
             format!("[unknown] {}", raw),
             Style::default().fg(Color::Yellow),
         )),
+        ConversationEvent::StatusMessage { text } => Line::from(vec![
+            Span::styled(
+                "[status] ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(text.clone()),
+        ]),
     }
 }
