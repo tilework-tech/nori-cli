@@ -164,7 +164,11 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                             let _ = tx.send(Message::Quit);
                                         }
                                         // Clear textarea after successful command
-                                        model.textarea = tui_textarea::TextArea::default();
+                                        model.textarea = {
+                                            let mut textarea = tui_textarea::TextArea::default();
+                                            textarea.set_cursor_line_style(ratatui::style::Style::default());
+                                            textarea
+                                        };
                                     }
                                     Err(err) => {
                                         // Command execution failed - show error
