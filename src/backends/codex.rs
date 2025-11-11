@@ -45,6 +45,13 @@ impl AgentBackend for CodexBackend {
 
             let mut child = match cmd.spawn() {
                 Ok(c) => c,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    yield ConversationEvent::SystemEvent {
+                        subtype: "error".to_string(),
+                        details: Some("Codex CLI is not installed. Install from https://developers.openai.com/codex/cli/".to_string()),
+                    };
+                    return;
+                }
                 Err(e) => {
                     yield ConversationEvent::UnknownEvent {
                         raw: format!("Failed to spawn codex: {}", e),

@@ -105,6 +105,13 @@ impl AgentBackend for ClaudeBackend {
 
             let mut child = match cmd.spawn() {
                 Ok(c) => c,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    yield ConversationEvent::SystemEvent {
+                        subtype: "error".to_string(),
+                        details: Some("Claude CLI is not installed. Install from https://code.claude.com".to_string()),
+                    };
+                    return;
+                }
                 Err(e) => {
                     yield ConversationEvent::UnknownEvent {
                         raw: format!("Failed to spawn claude: {}", e),
