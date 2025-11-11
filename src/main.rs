@@ -321,7 +321,6 @@ fn handle_event_simple(
     None
 }
 
-
 fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
     match model.selected_agent_index {
         Some(0) => Box::new(ClaudeBackend::new()),

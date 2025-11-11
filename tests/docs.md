@@ -4,13 +4,14 @@ Path: @/tests
 
 ### Overview
 
-Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), and subprocess JSONL streaming. Uses unit tests for Model::update() and conversation module logic, plus integration tests with MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
+Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), subprocess JSONL streaming, and keyboard input handling. Uses unit tests for Model::update() and conversation module logic, plus integration tests with MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
 
 ### How it fits into the larger codebase
 
-- Imports public API from @/src/lib.rs (app, backends, conversation modules)
+- Imports public API from @/src/lib.rs (app, backends, conversation, input modules)
 - Tests state transitions in isolation via @/src/app.rs:Model::update() without spawning processes
 - Tests JSONL parsing and rendering via @/src/conversation.rs functions with example Claude CLI events
+- Tests keyboard input routing via @/src/input.rs:handle_key_simple() with various application states
 - Tests subprocess integration via @/src/backends/mock.rs:MockBackend which outputs actual Claude CLI JSONL format
 - Run via `cargo test` in CI workflows (@/.github/workflows/pr-ci.yml and @/.github/workflows/main-ci.yml)
 - No tests for @/src/main.rs event loop or @/src/ui.rs rendering functions - these require terminal environment
@@ -66,6 +67,26 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Sends CancelStream message
   - Asserts textarea still empty (not restored to original content)
 
+**Shift+Enter Input Tests** (@/tests/shift_enter_test.rs):
+- `test_plain_enter_returns_submit_message()`: Verifies plain Enter (no modifiers) triggers submission
+  - Creates KeyEvent with Enter and no modifiers
+  - Calls handle_key_simple in Input mode with no overlays
+  - Asserts result is Some(Message::SubmitInput)
+- `test_shift_enter_returns_keypress_message()`: Verifies Shift+Enter passes through as KeyPress for newline insertion
+  - Creates KeyEvent with Enter and Shift modifier
+  - Calls handle_key_simple in Input mode with no overlays
+  - Asserts result is Message::KeyPress containing the Shift+Enter event
+  - Textarea receives KeyPress and inserts newline internally
+- `test_shift_enter_during_streaming_is_ignored()`: Verifies Shift+Enter ignored during streaming
+  - Creates KeyEvent with Shift+Enter
+  - Calls handle_key_simple in Streaming mode
+  - Asserts result is None (all input except Esc blocked during streaming)
+- `test_shift_enter_with_overlay_open_selects_item()`: Verifies overlay navigation takes precedence over input
+  - Creates KeyEvent with Shift+Enter
+  - Calls handle_key_simple with show_overlay=true
+  - Asserts result is Some(Message::SelectItem)
+  - Any Enter key (including Shift+Enter) selects overlay item when overlay is open
+
 **State Machine Tests** (@/tests/state_machine_test.rs):
 - `test_state_transitions()`: Verifies overlay and mode transitions
   - SelectItem closes agent router overlay (sets `show_agent_router` to false)
@@ -113,6 +134,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 
 **Test Isolation Strategy**:
 - State machine tests use Model directly, calling update() without any async runtime or subprocess spawning
+- Input handling tests use handle_key_simple directly, passing KeyEvent structs and asserting Message output
 - Conversation rendering tests are pure unit tests - pass JSONL strings to parse_jsonl_event() and verify ConversationEvent output
 - Subprocess tests use MockBackend to avoid external dependencies on claude/codex CLIs
 - No integration tests with real backends because they require API authentication
@@ -161,9 +183,17 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies textarea stays clear throughout streaming, completion, and cancellation
 - Tests ensure textarea is never restored after cancellation (matches modern chat UX expectations)
 
+**Shift+Enter Test Coverage** (@/tests/shift_enter_test.rs):
+- Comprehensive tests for Shift+Enter keyboard input handling (4 tests total)
+- Verifies plain Enter triggers submission (returns SubmitInput message)
+- Verifies Shift+Enter passes through as KeyPress to textarea for newline insertion
+- Verifies all input blocked during streaming except Esc
+- Verifies overlay precedence: Enter (including Shift+Enter) selects overlay item when overlay open
+- Tests isolation: Uses handle_key_simple directly without full event loop integration
+
 **Coverage Gaps**:
-- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut and Ctrl-C priority detection
-- No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) - would require terminal buffer assertions
+- No tests for @/src/main.rs event handling (handle_event_simple) - would require simulating crossterm events including Alt+A global shortcut
+- No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay, render_install_prompt_overlay) - would require terminal buffer assertions
 - No tests for overlay interaction blocking (navigation disabled in chat, input disabled in overlay) - requires event handler integration
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds
 - No tests for session resumption - session_id/thread_id fields are never populated

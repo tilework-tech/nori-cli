@@ -9,7 +9,8 @@ fn test_plain_enter_returns_submit_message() {
     let show_overlay = false;
     let show_install_prompt = false;
 
-    let result = nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
+    let result =
+        nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
     assert_eq!(result, Some(Message::SubmitInput));
 }
 
@@ -22,7 +23,8 @@ fn test_shift_enter_returns_keypress_message() {
     let show_overlay = false;
     let show_install_prompt = false;
 
-    let result = nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
+    let result =
+        nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
 
     // Currently this will fail because Shift+Enter is treated as SubmitInput
     // After implementation, it should return KeyPress
@@ -31,7 +33,10 @@ fn test_shift_enter_returns_keypress_message() {
             assert_eq!(k.code, KeyCode::Enter);
             assert!(k.modifiers.contains(KeyModifiers::SHIFT));
         }
-        _ => panic!("Expected KeyPress message with Shift+Enter, got {:?}", result),
+        _ => panic!(
+            "Expected KeyPress message with Shift+Enter, got {:?}",
+            result
+        ),
     }
 }
 
@@ -43,7 +48,8 @@ fn test_shift_enter_during_streaming_is_ignored() {
     let show_overlay = false;
     let show_install_prompt = false;
 
-    let result = nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
+    let result =
+        nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
     assert_eq!(result, None);
 }
 
@@ -56,6 +62,7 @@ fn test_shift_enter_with_overlay_open_selects_item() {
     let show_overlay = true;
     let show_install_prompt = false;
 
-    let result = nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
+    let result =
+        nori_cli::input::handle_key_simple(mode, show_overlay, show_install_prompt, None, key);
     assert_eq!(result, Some(Message::SelectItem));
 }

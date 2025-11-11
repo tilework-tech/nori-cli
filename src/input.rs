@@ -1,5 +1,5 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::app::{AppMode, Message};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn handle_key_simple(
     mode: AppMode,
@@ -10,11 +10,7 @@ pub fn handle_key_simple(
 ) -> Option<Message> {
     // Check for Ctrl-C FIRST (even with overlays/install prompt open)
     // This ensures double Ctrl-C always works to exit
-    if key.code == KeyCode::Char('c')
-        && key
-            .modifiers
-            .contains(KeyModifiers::CONTROL)
-    {
+    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
         return Some(Message::ClearTextarea);
     }
 

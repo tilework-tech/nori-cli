@@ -21,30 +21,40 @@ Core application modules implementing the TUI's architecture: application state 
 pub mod app;          // Model, Message, and update logic
 pub mod backends;     // AgentBackend trait and implementations
 pub mod conversation; // JSONL parsing and event rendering
+pub mod input;        // Keyboard input handling and message routing
 pub mod ui;           // Rendering functions for each mode
 ```
 
 **Entry Point** (@/src/main.rs):
 - `main()`: Sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
 - `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task
-- `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
+- `handle_event_simple()`: Converts crossterm events to Message, delegates key events to input::handle_key_simple()
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
 - `wrap_text_to_width()`: Manual text wrapping function that splits Text into multiple Lines fitting within terminal width - required because `insert_before()` only handles single-line insertion and Ratatui's `Paragraph::wrap()` only applies during render phase
 
+**Input Handling** (@/src/input.rs):
+- `handle_key_simple()`: Routes keyboard events to appropriate Message based on application state (mode, overlays, install prompts)
+- **Priority order**: Ctrl-C → install prompt → agent router overlay → streaming mode → chat input
+- **Explicit Shift+Enter handling**: Checks for Shift+Enter BEFORE plain Enter, passes KeyPress to textarea for newline insertion
+- **Plain Enter submission**: Only triggers SubmitInput when Enter pressed with no modifiers
+- Extracted from main.rs for testability and clarity
+
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
-- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
+- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input (including Shift+Enter newlines)
+- `Message` derives PartialEq for test assertions
 - `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
-- SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
+- SubmitInput handler (@/src/main.rs): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 - ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
 
 **UI Rendering** (@/src/ui.rs):
-- `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
-- `render_chat()`: Four-section vertical layout - Title bar showing selected agent, Messages area with full conversation history, Input textarea at bottom, and Instructions footer
+- `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true, then install prompt overlay if needed
+- `render_chat()`: Four-section vertical layout - Title bar showing selected agent, Messages area with full conversation history, Input textarea at bottom, and Instructions footer showing "Enter: submit | Shift+Enter: newline | /switch-model: agents | /exit: quit"
 - `render_agent_router_overlay()`: Renders agent list inside centered rectangle (60% width, 40% height) using Clear widget to blank underlying content
+- `render_install_prompt_overlay()`: Renders install prompt inside centered rectangle (70% width, 30% height) using Clear widget
 - `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
 
 **Conversation Event Handling** (@/src/conversation.rs):
@@ -155,19 +165,21 @@ Cancellation Path
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
 
-**Key Event Handling**:
+**Key Event Handling** (@/src/input.rs):
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
-- textarea.input() handles cursor movement, text editing, newlines internally
-- Ctrl-C is checked FIRST in handle_key_simple (@/src/main.rs:320-326) - takes priority over all other key handling including overlays and install prompts
-- Alt+A globally toggles agent router overlay - handled before mode-specific logic in @/src/main.rs:117-121
+- textarea.input() handles cursor movement, text editing, and accepts Enter with Shift modifier for newline insertion
+- **Shift+Enter newline**: Explicitly checked BEFORE plain Enter - passes KeyPress(Shift+Enter) to textarea which inserts newline
+- **Enter submission**: Only plain Enter with no modifiers triggers SubmitInput
+- Ctrl-C is checked FIRST in handle_key_simple - takes priority over all other key handling including overlays and install prompts
+- Alt+A globally toggles agent router overlay - handled in @/src/main.rs before delegation to input module
 - 'q' quits from Selection/Streaming modes but types 'q' character when in Input mode
-- Alt+Enter submits because Ctrl+Enter doesn't work reliably across terminal emulators
 - Esc during streaming sends CancelStream message to interrupt the stream
 - Esc closes agent router overlay when open via ExitInputMode message
+- **Overlay precedence**: When overlay is open, Enter (including Shift+Enter) selects item - overlay navigation takes priority over chat input
 
-**Ctrl-C Keyboard Interrupt Mechanism** (@/src/app.rs:265-288, @/src/main.rs:120-134, @/src/main.rs:320-326):
+**Ctrl-C Keyboard Interrupt Mechanism** (@/src/app.rs, @/src/main.rs, @/src/input.rs):
 - Two-stage interrupt pattern: first Ctrl-C clears textarea and shows hint, second Ctrl-C within 2 seconds exits application
-- **Priority**: Ctrl-C detection happens FIRST in handle_key_simple, before all other key checks (overlays, install prompts, mode-specific handling)
+- **Priority**: Ctrl-C detection happens FIRST in handle_key_simple (@/src/input.rs:13-19), before all other key checks (overlays, install prompts, mode-specific handling)
 - **State tracking**: Model.last_ctrl_c_time stores Option<Instant> - None initially, Some(time) after first press, None again after second press
 - **Timeout logic**: Lives in Model::update() ClearTextarea handler - compares current time to last_ctrl_c_time using 2-second const
 - **State sync**: Main loop syncs last_ctrl_c_time to event handler via ctrl_c_rx channel after every state change
@@ -204,5 +216,13 @@ Cancellation Path
 - **Prevents message loss**: Without scrollback rendering, user's text disappears from textarea on submit but never appears in conversation history above TUI - only stored in response_events vector but not visible to user
 - **Follows existing pattern**: UserMessage rendering uses exact same pipeline as StreamEvent rendering (lines 88-112) - both call render_event(), wrap_text_to_width(), and terminal.insert_before() in identical sequence
 - **Slash command handling**: Slash commands bypass user message rendering entirely - they are not stored as conversation events and should not appear in chat history
+
+**Shift+Enter Newline Implementation** (@/src/input.rs:51-60):
+- Explicit check order: Shift+Enter handled BEFORE plain Enter to ensure correct routing
+- **Why explicit checks**: Previous implicit implementation checked `modifiers.is_empty()` which technically supported Shift+Enter but made behavior unclear from code
+- **Textarea compatibility**: tui-textarea widget natively handles Shift+Enter for newlines when passed via KeyPress message
+- **Overlay precedence**: When overlay is open (lines 32-40), Enter check happens BEFORE chat input section, so Shift+Enter selects overlay item
+- **Streaming mode**: Shift+Enter returns None during streaming (line 44-48) along with all other input except Esc
+- **UX discoverability**: Footer instructions updated to show "Shift+Enter: newline" so users know feature exists
 
 Created and maintained by Nori.
