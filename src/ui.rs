@@ -37,8 +37,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(input_height), // Dynamic input height
-            Constraint::Length(1), // Agent info
-            Constraint::Length(1), // Instructions
+            Constraint::Length(1),            // Agent info
+            Constraint::Length(1),            // Instructions
         ])
         .split(area);
 
@@ -259,7 +259,7 @@ pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u
                 1 // Empty line still takes one row
             } else {
                 // Calculate how many visual rows this line needs
-                (line_width + inner_width as usize - 1) / inner_width as usize
+                line_width.div_ceil(inner_width as usize)
             }
         })
         .sum();
