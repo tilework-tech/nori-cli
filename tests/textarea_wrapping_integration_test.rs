@@ -17,7 +17,10 @@ fn test_textarea_wraps_long_input() {
 
     // The textarea should have multiple lines after wrapping
     let lines = model.textarea.lines();
-    assert!(lines.len() > 1, "Long line should be wrapped into multiple lines");
+    assert!(
+        lines.len() > 1,
+        "Long line should be wrapped into multiple lines"
+    );
 
     // Each line should be <= wrap width
     for line in lines {

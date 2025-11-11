@@ -19,11 +19,19 @@ fn test_long_line_wraps_at_word_boundary() {
 
     // Should wrap into multiple lines
     let lines: Vec<&str> = wrapped.lines().collect();
-    assert!(lines.len() > 1, "Text should be wrapped into multiple lines");
+    assert!(
+        lines.len() > 1,
+        "Text should be wrapped into multiple lines"
+    );
 
     // Each line should be <= width
     for line in &lines {
-        assert!(line.len() <= width, "Line '{}' exceeds width {}", line, width);
+        assert!(
+            line.len() <= width,
+            "Line '{}' exceeds width {}",
+            line,
+            width
+        );
     }
 }
 
