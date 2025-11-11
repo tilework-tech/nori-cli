@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use crossterm::cursor::MoveTo;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -29,13 +30,10 @@ async fn main() -> Result<()> {
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
-    // The viewport shows: 3 lines (title) + 4 lines (input) + 1 line (instructions) = 8 lines
     ratatui::restore();
     disable_raw_mode()?;
 
-    // Move cursor to column 0 and clear any remaining artifacts
-    // This ensures the shell prompt appears cleanly below the TUI
-    use crossterm::cursor::MoveToColumn;
+    // Move cursor below the viewport and clear any remaining artifacts
     use crossterm::terminal::Clear;
     execute!(
         std::io::stdout(),
