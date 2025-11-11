@@ -33,11 +33,12 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
     match event {
         ConversationEvent::UserMessage { text } => Line::from(vec![
             Span::styled(
-                "[user] ",
+                "[user]",
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
+            Span::raw(" "),
             Span::raw(text.clone()),
         ]),
         ConversationEvent::AssistantMessage { text } => Line::from(text.clone()),
@@ -99,13 +100,13 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
 }
 
 /// Determines if an event should be rendered based on debug mode
-/// SystemEvent and UnknownEvent are debug events (hidden when show_debug is false)
+/// SystemEvent, UnknownEvent, and ResultSummary are debug events (hidden when show_debug is false)
 /// All other events are always visible
 pub fn should_render_event(event: &ConversationEvent, show_debug: bool) -> bool {
     match event {
-        ConversationEvent::SystemEvent { .. } | ConversationEvent::UnknownEvent { .. } => {
-            show_debug
-        }
+        ConversationEvent::SystemEvent { .. }
+        | ConversationEvent::UnknownEvent { .. }
+        | ConversationEvent::ResultSummary { .. } => show_debug,
         _ => true,
     }
 }
