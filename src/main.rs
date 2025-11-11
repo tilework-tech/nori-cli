@@ -6,7 +6,7 @@ use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
-use nori_cli::conversation::render_event;
+use nori_cli::conversation::{render_event, ConversationEvent};
 use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use tokio::sync::mpsc;
@@ -137,7 +137,25 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                 let _ = overlay_tx.send(model.show_agent_router);
                                 let _ = install_prompt_tx.send(model.show_install_prompt);
                             } else {
-                                // Regular prompt - check if backend is available before spawning
+                                // Regular prompt - render user message to scrollback first
+                                let user_event = ConversationEvent::UserMessage {
+                                    text: prompt.clone(),
+                                };
+                                let line = render_event(&user_event);
+                                let width = terminal.size()?.width.saturating_sub(2) as usize;
+
+                                use ratatui::text::Text;
+                                let text = Text::from(line.clone());
+                                let wrapped_lines = wrap_text_to_width(&text, width);
+
+                                for wrapped_line in wrapped_lines {
+                                    terminal.insert_before(1, |buf| {
+                                        use ratatui::widgets::{Paragraph, Widget};
+                                        Paragraph::new(wrapped_line.clone()).render(buf.area, buf);
+                                    })?;
+                                }
+
+                                // Check if backend is available before spawning
                                 let backend = get_backend(&model);
                                 if !backends::is_available(backend.command_name()) {
                                     // Backend not available - show install prompt
