@@ -182,5 +182,8 @@ fn test_cancel_stream_during_streaming() {
 
     // Verify cancellation event was added to history
     let last_event = model.response_events.last();
-    assert!(matches!(last_event, Some(ConversationEvent::StreamCancelled)));
+    assert!(matches!(
+        last_event,
+        Some(ConversationEvent::StreamCancelled)
+    ));
 }
