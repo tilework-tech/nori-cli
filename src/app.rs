@@ -128,9 +128,8 @@ impl Model {
                 // Capture user message and transition to streaming mode
                 let user_text = self.textarea.lines().join("\n");
                 if !user_text.trim().is_empty() {
-                    self.response_events.push(ConversationEvent::UserMessage {
-                        text: user_text,
-                    });
+                    self.response_events
+                        .push(ConversationEvent::UserMessage { text: user_text });
                     self.current_mode = AppMode::Streaming;
                 }
             }

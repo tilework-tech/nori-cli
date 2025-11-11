@@ -26,10 +26,10 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),      // Title
-            Constraint::Min(10),         // Messages
-            Constraint::Length(4),       // Input
-            Constraint::Length(2),       // Instructions
+            Constraint::Length(3), // Title
+            Constraint::Min(10),   // Messages
+            Constraint::Length(4), // Input
+            Constraint::Length(2), // Instructions
         ])
         .split(area);
 
