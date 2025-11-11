@@ -159,4 +159,12 @@ impl AgentBackend for ClaudeBackend {
     fn name(&self) -> &str {
         "Claude Code"
     }
+
+    fn command_name(&self) -> &str {
+        "claude"
+    }
+
+    fn install_url(&self) -> &str {
+        "https://code.claude.com"
+    }
 }

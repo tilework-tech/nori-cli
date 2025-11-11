@@ -10,6 +10,8 @@ pub trait AgentBackend {
     fn spawn_stream(&self, prompt: String)
     -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
     fn name(&self) -> &str;
+    fn command_name(&self) -> &str;
+    fn install_url(&self) -> &str;
 }
 
 /// Check if a command is available in PATH

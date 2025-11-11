@@ -99,4 +99,12 @@ impl AgentBackend for CodexBackend {
     fn name(&self) -> &str {
         "GPT Codex"
     }
+
+    fn command_name(&self) -> &str {
+        "codex"
+    }
+
+    fn install_url(&self) -> &str {
+        "https://developers.openai.com/codex/cli/"
+    }
 }
