@@ -112,6 +112,15 @@ impl AgentBackend for CodexBackend {
     }
 
     fn install_url(&self) -> &str {
-        "https://developers.openai.com/codex/cli/"
+        ""  // Codex is installed via npm, not URL
+    }
+
+    fn install_command(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "npm".to_string(),
+            "install".to_string(),
+            "-g".to_string(),
+            "@openai/codex".to_string(),
+        ])
     }
 }

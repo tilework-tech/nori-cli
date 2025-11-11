@@ -174,4 +174,8 @@ impl AgentBackend for ClaudeBackend {
     fn install_url(&self) -> &str {
         "https://code.claude.com"
     }
+
+    fn install_command(&self) -> Option<Vec<String>> {
+        None  // Claude is installed via download, not command
+    }
 }

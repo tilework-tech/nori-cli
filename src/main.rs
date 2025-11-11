@@ -2,7 +2,7 @@ use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
-use nori_cli::app::{AppMode, Message, Model};
+use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::conversation::render_event;
 use nori_cli::ui;
@@ -101,6 +101,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                 let _ = tx.send(Message::ShowInstallPrompt {
                                     backend: backend.name().to_string(),
                                     url: backend.install_url().to_string(),
+                                    install_cmd: backend.install_command(),
                                 });
                             } else {
                                 // Backend available - spawn subprocess
@@ -119,6 +120,61 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                 });
                             }
                         }
+                    }
+                    Message::ConfirmInstall => {
+                        // Run installation if install command is available
+                        if let (Some(install_cmd), install_choice) = (
+                            &model.install_prompt_cmd,
+                            model.install_prompt_choice
+                        ) {
+                            if install_choice == InstallChoice::OpenInstallPage {
+                                if !install_cmd.is_empty() {
+                                    // Run the installation command
+                                    let cmd = install_cmd.clone();
+                                    let install_tx = tx.clone();
+                                    tokio::spawn(async move {
+                                        let result = tokio::process::Command::new(&cmd[0])
+                                            .args(&cmd[1..])
+                                            .output()
+                                            .await;
+
+                                        match result {
+                                            Ok(output) if output.status.success() => {
+                                                let _ = install_tx.send(Message::InstallationComplete {
+                                                    success: true,
+                                                    message: "Installation completed successfully".to_string(),
+                                                });
+                                            }
+                                            Ok(output) => {
+                                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                                let _ = install_tx.send(Message::InstallationComplete {
+                                                    success: false,
+                                                    message: format!("Installation failed: {}", stderr),
+                                                });
+                                            }
+                                            Err(e) => {
+                                                let _ = install_tx.send(Message::InstallationComplete {
+                                                    success: false,
+                                                    message: format!("Failed to run installation: {}", e),
+                                                });
+                                            }
+                                        }
+                                    });
+                                } else if let Some(url) = &model.install_prompt_url {
+                                    // Fallback to opening URL if no install command
+                                    let _ = opener::open(url);
+                                    model.update(msg);
+                                }
+                            } else {
+                                model.update(msg);
+                            }
+                        } else {
+                            model.update(msg);
+                        }
+
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
                     }
                     _ => {
                         model.update(msg);

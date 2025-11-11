@@ -12,6 +12,12 @@ pub trait AgentBackend {
     fn name(&self) -> &str;
     fn command_name(&self) -> &str;
     fn install_url(&self) -> &str;
+
+    /// Returns the command to install this backend, if available
+    /// Format: [command, arg1, arg2, ...]
+    fn install_command(&self) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// Check if a command is available in PATH

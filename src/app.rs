@@ -1,3 +1,4 @@
+use crate::backends;
 use crate::conversation::ConversationEvent;
 use ratatui::widgets::ListState;
 use tui_textarea::TextArea;
@@ -10,7 +11,7 @@ pub enum AppMode {
     Streaming,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InstallChoice {
     OpenInstallPage,
     Cancel,
@@ -45,10 +46,11 @@ pub enum Message {
     Error(String),
 
     // Install prompt
-    ShowInstallPrompt { backend: String, url: String },
+    ShowInstallPrompt { backend: String, url: String, install_cmd: Option<Vec<String>> },
     NavigateInstallChoice,
     ConfirmInstall,
     CancelInstall,
+    InstallationComplete { success: bool, message: String },
 
     // Control
     Quit,
@@ -69,13 +71,12 @@ pub struct Model {
     pub show_install_prompt: bool,
     pub install_prompt_backend: Option<String>,
     pub install_prompt_url: Option<String>,
+    pub install_prompt_cmd: Option<Vec<String>>,
     pub install_prompt_choice: InstallChoice,
 }
 
 impl Default for Model {
     fn default() -> Self {
-        use crate::backends;
-
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
@@ -96,6 +97,7 @@ impl Default for Model {
             show_install_prompt: false,
             install_prompt_backend: None,
             install_prompt_url: None,
+            install_prompt_cmd: None,
             install_prompt_choice: InstallChoice::default(),
         }
     }
@@ -188,10 +190,11 @@ impl Model {
                 self.show_agent_router = !self.show_agent_router;
             }
 
-            Message::ShowInstallPrompt { backend, url } => {
+            Message::ShowInstallPrompt { backend, url, install_cmd } => {
                 self.show_install_prompt = true;
                 self.install_prompt_backend = Some(backend);
                 self.install_prompt_url = Some(url);
+                self.install_prompt_cmd = install_cmd;
                 self.install_prompt_choice = InstallChoice::default();
             }
 
@@ -203,22 +206,32 @@ impl Model {
             }
 
             Message::ConfirmInstall => {
-                if let InstallChoice::OpenInstallPage = self.install_prompt_choice {
-                    if let Some(ref url) = self.install_prompt_url {
-                        // Attempt to open the URL in browser
-                        let _ = opener::open(url);
-                    }
-                }
-                // Close the prompt either way
-                self.show_install_prompt = false;
-                self.install_prompt_backend = None;
-                self.install_prompt_url = None;
+                // Don't close prompt here - it will be closed after installation completes
+                // This message just triggers the installation process
             }
 
             Message::CancelInstall => {
                 self.show_install_prompt = false;
                 self.install_prompt_backend = None;
                 self.install_prompt_url = None;
+                self.install_prompt_cmd = None;
+            }
+
+            Message::InstallationComplete { success, message } => {
+                self.show_install_prompt = false;
+                self.install_prompt_backend = None;
+                self.install_prompt_url = None;
+                self.install_prompt_cmd = None;
+
+                if success {
+                    // Re-check backend availability
+                    self.backend_availability = vec![
+                        backends::is_available("claude"),
+                        backends::is_available("codex"),
+                    ];
+                } else {
+                    self.error_message = Some(message);
+                }
             }
 
             Message::Quit => {

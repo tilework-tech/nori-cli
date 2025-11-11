@@ -137,18 +137,33 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
 
     // Message
     let backend_name = model.install_prompt_backend.as_deref().unwrap_or("Backend");
-    let message_text = format!(
-        "{} is not installed on your system.\n\nWould you like to open the installation page?",
-        backend_name
-    );
+    let has_install_cmd = model.install_prompt_cmd.as_ref().map(|v| !v.is_empty()).unwrap_or(false);
+
+    let message_text = if has_install_cmd {
+        format!(
+            "{} is not installed on your system.\n\nWould you like to install it now?",
+            backend_name
+        )
+    } else {
+        format!(
+            "{} is not installed on your system.\n\nWould you like to open the installation page?",
+            backend_name
+        )
+    };
     let message = Paragraph::new(message_text)
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::White));
     frame.render_widget(message, chunks[1]);
 
     // Options as a list
+    let first_option = if has_install_cmd {
+        "Run Installation"
+    } else {
+        "Open Installation Page"
+    };
+
     let options = vec![
-        "Open Installation Page",
+        first_option,
         "Cancel",
     ];
 
