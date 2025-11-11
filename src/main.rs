@@ -316,7 +316,10 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 
 /// Wrap text to fit within the specified width, preserving styling from spans.
 /// Returns a vector of Lines, each fitting within the width constraint.
-fn wrap_text_to_width(text: &ratatui::text::Text, width: usize) -> Vec<ratatui::text::Line<'static>> {
+fn wrap_text_to_width(
+    text: &ratatui::text::Text,
+    width: usize,
+) -> Vec<ratatui::text::Line<'static>> {
     use ratatui::text::{Line, Span};
     use unicode_width::UnicodeWidthStr;
 
@@ -325,7 +328,9 @@ fn wrap_text_to_width(text: &ratatui::text::Text, width: usize) -> Vec<ratatui::
     // If width is too small, just return the original line
     if width < 10 {
         for line in &text.lines {
-            let owned_spans: Vec<Span> = line.spans.iter()
+            let owned_spans: Vec<Span> = line
+                .spans
+                .iter()
                 .map(|s| Span::styled(s.content.to_string(), s.style))
                 .collect();
             wrapped_lines.push(Line::from(owned_spans));
