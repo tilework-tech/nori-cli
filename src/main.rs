@@ -4,6 +4,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
 use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
+use nori_cli::commands::{CommandRegistry, parse_slash_command};
 use nori_cli::conversation::render_event;
 use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
@@ -32,6 +33,9 @@ async fn main() -> Result<()> {
 async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     let mut model = Model::default();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+
+    // Create command registry
+    let command_registry = CommandRegistry::default();
 
     // Create channels for syncing state with event handler
     let (mode_tx, mut mode_rx) = mpsc::unbounded_channel::<AppMode>();
@@ -87,20 +91,43 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         // Extract prompt from textarea
                         let prompt = model.textarea.lines().join("\n");
                         if !prompt.trim().is_empty() {
-                            // Spawn subprocess
-                            let backend = get_backend(&model);
-                            let stream_tx = tx.clone();
-                            model.update(msg);
-                            // Send updated mode and overlay state to event handler
-                            let _ = mode_tx.send(model.current_mode);
-                            let _ = overlay_tx.send(model.show_agent_router);
-
-                            tokio::spawn(async move {
-                                if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
-                                    // Error already sent via channel
-                                    eprintln!("Streaming error: {}", e);
+                            // Check if this is a slash command
+                            if let Some(command_name) = parse_slash_command(&prompt) {
+                                // Execute slash command
+                                match command_registry.execute(&command_name, &mut model) {
+                                    Ok(()) => {
+                                        // Command executed successfully
+                                        // Special handling for exit command
+                                        if command_name == "exit" {
+                                            let _ = tx.send(Message::Quit);
+                                        }
+                                        // Clear textarea after successful command
+                                        model.textarea = tui_textarea::TextArea::default();
+                                    }
+                                    Err(err) => {
+                                        // Command execution failed - show error
+                                        let _ = tx.send(Message::Error(format!("{}\nAvailable commands: /exit, /switch-model", err)));
+                                    }
                                 }
-                            });
+                                // Send updated mode and overlay state to event handler
+                                let _ = mode_tx.send(model.current_mode);
+                                let _ = overlay_tx.send(model.show_agent_router);
+                            } else {
+                                // Regular prompt - spawn backend subprocess
+                                let backend = get_backend(&model);
+                                let stream_tx = tx.clone();
+                                model.update(msg);
+                                // Send updated mode and overlay state to event handler
+                                let _ = mode_tx.send(model.current_mode);
+                                let _ = overlay_tx.send(model.show_agent_router);
+
+                                tokio::spawn(async move {
+                                    if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
+                                        // Error already sent via channel
+                                        eprintln!("Streaming error: {}", e);
+                                    }
+                                });
+                            }
                         }
                     }
                     _ => {
@@ -132,11 +159,6 @@ fn handle_event_simple(mode: AppMode, show_overlay: bool, event: Event) -> Optio
 }
 
 fn handle_key_simple(mode: AppMode, show_overlay: bool, key: KeyEvent) -> Option<Message> {
-    // Global Alt+A shortcut to toggle agent router
-    if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('a') {
-        return Some(Message::ToggleAgentRouter);
-    }
-
     // If overlay is open, handle navigation
     if show_overlay {
         return match key.code {
@@ -144,7 +166,6 @@ fn handle_key_simple(mode: AppMode, show_overlay: bool, key: KeyEvent) -> Option
             KeyCode::Down | KeyCode::Char('j') => Some(Message::NextItem),
             KeyCode::Enter => Some(Message::SelectItem),
             KeyCode::Esc => Some(Message::ExitInputMode),
-            KeyCode::Char('q') => Some(Message::Quit),
             _ => None,
         };
     }
@@ -163,14 +184,7 @@ fn handle_key_simple(mode: AppMode, show_overlay: bool, key: KeyEvent) -> Option
         return Some(Message::SubmitInput);
     }
 
-    // Allow 'q' to quit (but not while typing in input)
-    if key.code == KeyCode::Char('q') && key.modifiers.is_empty() {
-        // Only quit if we're not actively typing (this is a design choice)
-        // For now, let 'q' pass through to the textarea
-        return Some(Message::KeyPress(key));
-    }
-
-    // Send all other key events to textarea
+    // Send all key events to textarea
     Some(Message::KeyPress(key))
 }
 
