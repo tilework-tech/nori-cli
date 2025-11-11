@@ -4,7 +4,7 @@ Path: @/tests
 
 ### Overview
 
-Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), and subprocess JSONL streaming. Uses unit tests for Model::update() and conversation module logic, plus integration tests with MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
+Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), subprocess JSONL streaming, and UI dynamic height calculation. Uses unit tests for Model::update(), conversation module logic, and calculate_textarea_height() function. Integration tests use MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
 
 ### How it fits into the larger codebase
 
@@ -37,6 +37,17 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Asserts textarea cleared again
   - Asserts new timestamp is set (more recent than old one)
   - Asserts hint shown again (behaves as first press)
+
+**Dynamic Textarea Height Tests** (@/tests/dynamic_textarea_height_test.rs):
+- `test_empty_textarea_height()`: Verifies empty textarea returns minimum height of 3
+- `test_single_short_line_height()`: Verifies single short line (5 chars) returns minimum height of 3
+- `test_single_wrapping_line_height()`: Verifies long line (100 chars at width 50) correctly calculates wrapped visual rows
+  - 100 chars at inner width 48 (50 - 2 borders) = 3 visual rows
+  - 3 content rows + 2 borders = 5 total height
+- `test_multiple_lines_height()`: Verifies multiple logical lines sum correctly (3 lines + 2 borders = 5)
+- `test_no_maximum_height()`: Verifies height grows unbounded - 20 lines returns height 22
+- `test_unicode_width_handling()`: Verifies emoji/unicode width calculated correctly using unicode-width crate
+- `test_very_small_width()`: Verifies graceful handling of edge case where available width < border width
 
 **Textarea Clearing Tests** (@/tests/textarea_clearing_test.rs):
 - `test_textarea_clears_immediately_on_submit()`: Verifies textarea is cleared immediately when SubmitInput message is processed
@@ -160,6 +171,15 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies edge cases: empty input, whitespace-only input
 - Verifies textarea stays clear throughout streaming, completion, and cancellation
 - Tests ensure textarea is never restored after cancellation (matches modern chat UX expectations)
+
+**Dynamic Textarea Height Test Coverage** (@/tests/dynamic_textarea_height_test.rs):
+- Comprehensive tests for height calculation logic (7 tests total)
+- Verifies minimum height for empty and short content
+- Verifies line wrapping calculation for long single lines
+- Verifies multi-line height accumulation
+- Verifies unbounded growth (no maximum height enforcement)
+- Verifies unicode/emoji width handling using unicode-width crate
+- Verifies edge case handling for very small terminal widths
 
 **Coverage Gaps**:
 - No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut and Ctrl-C priority detection

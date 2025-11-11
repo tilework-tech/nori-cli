@@ -43,7 +43,8 @@ pub mod ui;           // Rendering functions for each mode
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
-- `render_chat()`: Four-section vertical layout - Title bar showing selected agent, Messages area with full conversation history, Input textarea at bottom, and Instructions footer
+- `render_chat()`: Three-section vertical layout - Input textarea at top with dynamic height (calculated per frame), Agent info line below input, Instructions footer at bottom. Uses `calculate_textarea_height()` to determine textarea constraint each render.
+- `calculate_textarea_height()`: Calculates visual height needed for textarea content including line wrapping. Returns minimum 3 (1 content line + 2 borders) for empty/short content. No maximum height - grows indefinitely with content. Uses unicode-width for accurate character width calculation.
 - `render_agent_router_overlay()`: Renders agent list inside centered rectangle (60% width, 40% height) using Clear widget to blank underlying content
 - `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
 
@@ -154,6 +155,7 @@ Cancellation Path
 - Render interval is 33ms (~30 fps) regardless of event frequency
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
+- Textarea height is recalculated on every render frame - calculation is fast enough (O(n) where n = number of lines) that caching is unnecessary
 
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
@@ -184,6 +186,15 @@ Cancellation Path
 - Child process cleanup happens via Drop trait implementation on the stream
 - StreamCancelled event provides visual feedback in conversation history
 - No explicit process killing - relies on Drop semantics and closed handles
+
+**Dynamic Textarea Height Calculation** (@/src/ui.rs:239-270):
+- `calculate_textarea_height()` computes visual rows needed for textarea content based on line wrapping
+- **Algorithm**: Iterates through logical lines, calculating visual rows per line by dividing character width by available width (terminal width minus 2-char border). Sums all visual rows and adds border overhead.
+- **Minimum height**: Returns 3 (1 content line + 2 borders) for empty textarea or single short line
+- **No maximum**: Height grows unbounded with content - a 20-line prompt results in height 22 (20 + 2 borders)
+- **Unicode handling**: Uses unicode-width crate's `UnicodeWidthStr::width()` for accurate character width (handles emoji, multi-byte UTF-8)
+- **Edge cases**: Empty lines count as 1 row. Available width <= border width returns minimum height gracefully.
+- **Dependency**: Requires unicode-width = "0.2" and tui-textarea crate
 
 **Text Wrapping for Scrollback** (@/src/main.rs:339-443):
 - `wrap_text_to_width()` performs manual text wrapping before inserting into scrollback buffer
