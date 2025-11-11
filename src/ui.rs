@@ -51,6 +51,10 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
+    // Calculate dynamic textarea height
+    let available_width = area.width.saturating_sub(2); // Account for borders
+    let textarea_height = calculate_textarea_height(&model.textarea, available_width);
+
     // Adjust layout based on whether autocomplete is visible
     let constraints = if model.show_autocomplete {
         // Calculate height needed for autocomplete (2 commands + borders = 4 lines)
@@ -58,16 +62,16 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
             (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
         vec![
             Constraint::Length(3),                   // Title
-            Constraint::Length(4),                   // Input
+            Constraint::Length(textarea_height),     // Input (dynamic)
             Constraint::Length(autocomplete_height), // Autocomplete
             Constraint::Length(1),                   // Instructions
         ]
     } else {
         vec![
-            Constraint::Length(3), // Title
-            Constraint::Length(4), // Input
-            Constraint::Length(1), // Agent info
-            Constraint::Length(1), // Instructions
+            Constraint::Length(3),               // Title
+            Constraint::Length(textarea_height), // Input (dynamic)
+            Constraint::Length(1),               // Agent info
+            Constraint::Length(1),               // Instructions
         ]
     };
 
