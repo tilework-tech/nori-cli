@@ -7,10 +7,14 @@ use ratatui::{
 };
 use tui_textarea::TextArea;
 
-pub fn calculate_textarea_height(_textarea: &TextArea, _available_width: u16) -> u16 {
+pub fn calculate_textarea_height(textarea: &TextArea, _available_width: u16) -> u16 {
     const MIN_HEIGHT: u16 = 3;
     const BORDER_HEIGHT: u16 = 2;
-    MIN_HEIGHT + BORDER_HEIGHT
+
+    let line_count = textarea.lines().len() as u16;
+    let height = line_count.max(MIN_HEIGHT);
+
+    height + BORDER_HEIGHT
 }
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
