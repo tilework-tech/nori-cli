@@ -56,6 +56,7 @@ pub enum Message {
     },
 
     // Control
+    ClearTextarea,
     Quit,
 }
 
@@ -77,6 +78,7 @@ pub struct Model {
     pub install_prompt_cmd: Option<Vec<String>>,
     pub install_prompt_choice: InstallChoice,
     pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
+    pub last_ctrl_c_time: Option<std::time::Instant>,
 }
 
 impl Default for Model {
@@ -104,6 +106,7 @@ impl Default for Model {
             install_prompt_cmd: None,
             install_prompt_choice: InstallChoice::default(),
             current_stream_token: None,
+            last_ctrl_c_time: None,
         }
     }
 }
@@ -161,6 +164,10 @@ impl Model {
                 // Only handle text input when overlay is NOT open
                 if !self.show_agent_router {
                     self.textarea.input(key);
+                    // Clear Ctrl-C timer when user types (resets the double-press window)
+                    self.last_ctrl_c_time = None;
+                    // Clear any error/hint messages when user starts typing
+                    self.error_message = None;
                 }
             }
 
@@ -256,6 +263,31 @@ impl Model {
                     ];
                 } else {
                     self.error_message = Some(message);
+                }
+            }
+
+            Message::ClearTextarea => {
+                const CTRL_C_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+                let now = std::time::Instant::now();
+
+                match self.last_ctrl_c_time {
+                    None => {
+                        // First Ctrl-C: clear textarea and show hint
+                        self.textarea = TextArea::default();
+                        self.last_ctrl_c_time = Some(now);
+                        self.error_message = Some("Press Ctrl-C again to exit".to_string());
+                    }
+                    Some(last_time) if now.duration_since(last_time) < CTRL_C_TIMEOUT => {
+                        // Second Ctrl-C within timeout: clear timestamp to signal quit
+                        self.last_ctrl_c_time = None;
+                        self.error_message = None;
+                    }
+                    Some(_) => {
+                        // Ctrl-C after timeout expired: treat as first press
+                        self.textarea = TextArea::default();
+                        self.last_ctrl_c_time = Some(now);
+                        self.error_message = Some("Press Ctrl-C again to exit".to_string());
+                    }
                 }
             }
 

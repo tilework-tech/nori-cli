@@ -55,9 +55,20 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     frame.render_widget(input_block, chunks[1]);
     frame.render_widget(&model.textarea, inner_area);
 
-    // Instructions
-    let instructions = Paragraph::new("Enter: send | /switch-model: agents | /exit: quit")
-        .style(Style::default().fg(Color::Gray));
+    // Instructions - show error/hint message if present, otherwise show default instructions
+    let instructions_text = if let Some(ref msg) = model.error_message {
+        msg.clone()
+    } else {
+        "Enter: send | /switch-model: agents | /exit: quit".to_string()
+    };
+
+    let instructions_style = if model.error_message.is_some() {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+
+    let instructions = Paragraph::new(instructions_text).style(instructions_style);
     frame.render_widget(instructions, chunks[2]);
 }
 
