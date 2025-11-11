@@ -30,10 +30,13 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
+    // Calculate dynamic height for textarea based on content
+    let input_height = calculate_textarea_height(&model.textarea, area.width);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4), // Input
+            Constraint::Length(input_height), // Dynamic input height
             Constraint::Length(1), // Agent info
             Constraint::Length(1), // Instructions
         ])
