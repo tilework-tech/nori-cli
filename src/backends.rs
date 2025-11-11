@@ -11,3 +11,8 @@ pub trait AgentBackend {
     -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
     fn name(&self) -> &str;
 }
+
+/// Check if a command is available in PATH
+pub fn is_available(command: &str) -> bool {
+    which::which(command).is_ok()
+}
