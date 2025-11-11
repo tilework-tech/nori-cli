@@ -91,7 +91,12 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .map(|s| s.as_str())
         .unwrap_or("No agent selected");
 
-    let agent_info = Paragraph::new(format!("Agent: {}", selected_agent))
+    let debug_indicator = if model.show_debug_events {
+        " [DEBUG]"
+    } else {
+        ""
+    };
+    let agent_info = Paragraph::new(format!("Agent: {}{}", selected_agent, debug_indicator))
         .style(Style::default().fg(Color::Cyan));
     frame.render_widget(agent_info, chunks[1]);
 
