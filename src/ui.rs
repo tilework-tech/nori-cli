@@ -96,7 +96,16 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     } else {
         ""
     };
-    let agent_info = Paragraph::new(format!("Agent: {}{}", selected_agent, debug_indicator))
+
+    // Show loading animation during streaming
+    let loading_indicator = if model.current_mode == crate::app::AppMode::Streaming {
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        format!(" {}", frames[model.loading_frame % frames.len()])
+    } else {
+        String::new()
+    };
+
+    let agent_info = Paragraph::new(format!("Agent: {}{}{}", selected_agent, debug_indicator, loading_indicator))
         .style(Style::default().fg(Color::Cyan));
     frame.render_widget(agent_info, chunks[1]);
 

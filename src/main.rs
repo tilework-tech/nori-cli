@@ -333,6 +333,10 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
 
             // Render
             _ = render_interval.tick() => {
+                // Increment loading frame for animation
+                if model.current_mode == AppMode::Streaming {
+                    model.loading_frame = model.loading_frame.wrapping_add(1);
+                }
                 terminal.draw(|frame| ui::render(&mut model, frame))?;
             }
         }
