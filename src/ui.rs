@@ -5,6 +5,13 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+use tui_textarea::TextArea;
+
+pub fn calculate_textarea_height(_textarea: &TextArea, _available_width: u16) -> u16 {
+    const MIN_HEIGHT: u16 = 3;
+    const BORDER_HEIGHT: u16 = 2;
+    MIN_HEIGHT + BORDER_HEIGHT
+}
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
     // Install prompt takes priority (blocking action)
