@@ -48,15 +48,17 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 ```
 
 **Subprocess Integration**:
-- Backend trait (@/src/backends.rs) defines `spawn_process()` for launching agent CLIs
+- Backend trait (@/src/backends.rs) defines `spawn_stream()` for launching agent CLIs and streaming events
 - Implementations spawn processes with stdout/stderr piped (@/src/backends/claude.rs, @/src/backends/codex.rs)
-- Main loop in @/src/main.rs:spawn_and_stream() reads JSONL output via BufReader and parses events
-- Events are sent through mpsc channel as Message::StreamChunk to update UI in real-time
+- Main loop in @/src/main.rs:spawn_and_stream() uses tokio::select! to multiplex stream consumption with cancellation
+- CancellationToken from tokio-util enables cooperative cancellation - when token fires, stream is dropped
+- Events are sent through mpsc channel as Message::StreamEvent to update UI in real-time
 - Both stdout (for JSON events) and stderr (for error messages) are captured concurrently
 
 **Dependencies** (@/Cargo.toml):
 - ratatui 0.29.0: TUI framework
 - tokio (full features): Async runtime for subprocess management and concurrent I/O
+- tokio-util: Provides CancellationToken for cooperative cancellation
 - crossterm 0.28.1 (event-stream feature): Terminal manipulation and async event handling
 - tui-textarea 0.7: Multi-line text input widget
 - serde + serde_json: JSONL parsing
@@ -72,9 +74,12 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 
 **Subprocess Lifecycle**:
 - Child processes are spawned when user submits prompt via tokio::spawn
+- CancellationToken created and stored in Model when stream starts
 - stdout/stderr are read line-by-line in separate tokio tasks to avoid blocking
-- Process wait() happens in the spawn_and_stream task, followed by StreamComplete or Error message
-- Currently no process cancellation - pressing Esc during streaming only changes UI mode, doesn't kill subprocess
+- spawn_and_stream uses tokio::select! to multiplex stream consumption with cancellation signal
+- Pressing Esc during streaming triggers CancelStream message which calls token.cancel()
+- When cancel fires, stream is dropped, closing file handles and triggering child process cleanup via Drop
+- Process wait() happens naturally when stream completes or is cancelled
 
 **JSONL Event Parsing** (@/src/main.rs:152-234):
 - Each line of stdout must be valid JSON with a "type" field
@@ -98,8 +103,8 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - Session resumption fields exist (session_id, thread_id) but are not persisted between runs
 - Terminal scrolling handles long conversations - no custom scroll implementation yet
 - Ctrl+Enter keybinding doesn't work reliably across terminals, so Alt+Enter is used for submit
-- Process cancellation not implemented - subprocess continues running even if user presses Esc
 - Conversation history grows indefinitely in memory - no pagination or pruning
+- Stream cancellation relies on Drop semantics - no explicit process.kill() called
 
 **UI/UX Design Decisions**:
 - Chat view always visible to maintain context across interactions

@@ -10,6 +10,7 @@ impl AgentBackend for MockBackend {
     fn spawn_stream(
         &self,
         _prompt: String,
+        _cancel_token: tokio_util::sync::CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
         let stream = stream! {
             // Mock stream: yield predefined events

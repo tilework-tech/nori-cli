@@ -26,6 +26,7 @@ impl AgentBackend for CodexBackend {
     fn spawn_stream(
         &self,
         prompt: String,
+        _cancel_token: tokio_util::sync::CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
         let thread_id = self.thread_id.clone();
 

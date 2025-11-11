@@ -7,8 +7,11 @@ use futures::stream::Stream;
 use std::pin::Pin;
 
 pub trait AgentBackend {
-    fn spawn_stream(&self, prompt: String)
-    -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
+    fn spawn_stream(
+        &self,
+        prompt: String,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
     fn name(&self) -> &str;
     fn command_name(&self) -> &str;
     fn install_url(&self) -> &str;
