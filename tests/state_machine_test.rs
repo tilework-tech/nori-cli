@@ -105,3 +105,23 @@ fn test_toggle_agent_router_overlay() {
     model.update(Message::ToggleAgentRouter);
     assert!(!model.show_agent_router);
 }
+
+#[test]
+fn test_submit_input_adds_user_message_to_history() {
+    let mut model = Model::default();
+
+    // Transition to Input mode first
+    model.update(Message::SelectItem);
+    assert_eq!(model.current_mode, AppMode::Input);
+
+    model.textarea.insert_str("Hello agent");
+
+    model.update(Message::SubmitInput);
+
+    // Verify response_events contains UserMessage
+    assert_eq!(model.response_events.len(), 1);
+    match &model.response_events[0] {
+        ConversationEvent::UserMessage { text } => assert_eq!(text, "Hello agent"),
+        _ => panic!("Expected UserMessage"),
+    }
+}

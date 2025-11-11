@@ -126,8 +126,14 @@ impl Model {
 
             Message::SubmitInput => {
                 if self.current_mode == AppMode::Input {
+                    // Capture user message before transitioning
+                    let user_text = self.textarea.lines().join("\n");
+                    if !user_text.trim().is_empty() {
+                        self.response_events.push(ConversationEvent::UserMessage {
+                            text: user_text,
+                        });
+                    }
                     self.current_mode = AppMode::Streaming;
-                    // Don't clear response_text - we want to append
                 }
             }
 
@@ -139,6 +145,7 @@ impl Model {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None; // Clear any errors when going back
                 self.textarea = TextArea::default(); // Reset textarea for next input
+                // Note: We do NOT clear response_events to preserve chat history
             }
 
             Message::Error(error) => {
