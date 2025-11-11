@@ -237,8 +237,8 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         match model.install_prompt_choice {
                             InstallChoice::RunInstallation => {
                                 // Run the installation command
-                                if let Some(install_cmd) = &model.install_prompt_cmd {
-                                    if !install_cmd.is_empty() {
+                                if let Some(install_cmd) = &model.install_prompt_cmd
+                                    && !install_cmd.is_empty() {
                                         let cmd = install_cmd.clone();
                                         let install_tx = tx.clone();
                                         tokio::spawn(async move {
@@ -270,7 +270,6 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                             }
                                         });
                                     }
-                                }
                             }
                             InstallChoice::OpenInstallPage => {
                                 // Open the installation page in browser
