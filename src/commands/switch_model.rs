@@ -1,5 +1,5 @@
-use crate::app::Model;
 use super::CommandHandler;
+use crate::app::Model;
 
 /// Command that opens the agent router modal for switching models
 pub struct SwitchModelCommand;

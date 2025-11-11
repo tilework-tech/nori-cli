@@ -11,9 +11,8 @@ pub use switch_model::SwitchModelCommand;
 /// Returns Some(command_name) if input starts with "/", None otherwise
 pub fn parse_slash_command(input: &str) -> Option<String> {
     let trimmed = input.trim();
-    if trimmed.starts_with('/') {
+    if let Some(command) = trimmed.strip_prefix('/') {
         // Extract command name after the "/"
-        let command = &trimmed[1..]; // Remove leading "/"
         let command = command.trim(); // Trim any whitespace after "/"
         if command.is_empty() {
             None

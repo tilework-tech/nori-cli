@@ -25,14 +25,20 @@ fn test_registry_returns_error_for_unknown_command() {
 
     // Assert: Returns error for unknown command
     assert!(result.is_err(), "unknown command should return error");
-    assert!(result.unwrap_err().contains("Unknown command"), "error should mention unknown command");
+    assert!(
+        result.unwrap_err().contains("Unknown command"),
+        "error should mention unknown command"
+    );
 }
 
 #[test]
 fn test_switch_model_command_opens_agent_router() {
     // Arrange: Create a model with agent router closed
     let mut model = Model::default();
-    assert_eq!(model.show_agent_router, false, "agent router should start closed");
+    assert_eq!(
+        model.show_agent_router, false,
+        "agent router should start closed"
+    );
 
     let registry = CommandRegistry::default();
 
@@ -40,8 +46,14 @@ fn test_switch_model_command_opens_agent_router() {
     let result = registry.execute("switch-model", &mut model);
 
     // Assert: Agent router is now open
-    assert!(result.is_ok(), "switch-model command should execute successfully");
-    assert_eq!(model.show_agent_router, true, "agent router should be open after switch-model");
+    assert!(
+        result.is_ok(),
+        "switch-model command should execute successfully"
+    );
+    assert_eq!(
+        model.show_agent_router, true,
+        "agent router should be open after switch-model"
+    );
 }
 
 // Tests for command parsing
@@ -52,7 +64,11 @@ fn test_parse_slash_command_with_exit() {
     let result = parse_slash_command("/exit");
 
     // Assert: Returns command name "exit"
-    assert_eq!(result, Some("exit".to_string()), "/exit should parse to 'exit'");
+    assert_eq!(
+        result,
+        Some("exit".to_string()),
+        "/exit should parse to 'exit'"
+    );
 }
 
 #[test]
@@ -61,7 +77,11 @@ fn test_parse_slash_command_with_switch_model() {
     let result = parse_slash_command("/switch-model");
 
     // Assert: Returns command name "switch-model"
-    assert_eq!(result, Some("switch-model".to_string()), "/switch-model should parse to 'switch-model'");
+    assert_eq!(
+        result,
+        Some("switch-model".to_string()),
+        "/switch-model should parse to 'switch-model'"
+    );
 }
 
 #[test]
@@ -88,5 +108,9 @@ fn test_parse_slash_command_with_trailing_whitespace() {
     let result = parse_slash_command("/exit   ");
 
     // Assert: Returns "exit" (whitespace trimmed)
-    assert_eq!(result, Some("exit".to_string()), "/exit with trailing whitespace should parse to 'exit'");
+    assert_eq!(
+        result,
+        Some("exit".to_string()),
+        "/exit with trailing whitespace should parse to 'exit'"
+    );
 }

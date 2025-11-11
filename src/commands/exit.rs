@@ -1,5 +1,5 @@
-use crate::app::Model;
 use super::CommandHandler;
+use crate::app::Model;
 
 /// Command that exits the application
 pub struct ExitCommand;
