@@ -88,10 +88,22 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                     Message::StreamEvent(event) => {
                         // Render event to scrollback using insert_before
                         let line = render_event(event);
-                        terminal.insert_before(1, |buf| {
-                            use ratatui::widgets::{Paragraph, Widget};
-                            Paragraph::new(line.clone()).render(buf.area, buf);
-                        })?;
+
+                        // Get terminal width for wrapping (full width, insert_before handles its own area)
+                        let width = terminal.size()?.width.saturating_sub(2) as usize; // Account for potential borders
+
+                        // Convert Line to wrapped lines based on terminal width
+                        use ratatui::text::Text;
+                        let text = Text::from(line.clone());
+                        let wrapped_lines = wrap_text_to_width(&text, width);
+
+                        // Insert each wrapped line separately (insert_before only handles one line at a time)
+                        for wrapped_line in wrapped_lines {
+                            terminal.insert_before(1, |buf| {
+                                use ratatui::widgets::{Paragraph, Widget};
+                                Paragraph::new(wrapped_line.clone()).render(buf.area, buf);
+                            })?;
+                        }
 
                         model.update(msg);
                         let _ = mode_tx.send(model.current_mode);
@@ -304,6 +316,113 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
         Some(1) => Box::new(CodexBackend::new()),
         _ => Box::new(ClaudeBackend::new()), // Default
     }
+}
+
+/// Wrap text to fit within the specified width, preserving styling from spans.
+/// Returns a vector of Lines, each fitting within the width constraint.
+fn wrap_text_to_width(
+    text: &ratatui::text::Text,
+    width: usize,
+) -> Vec<ratatui::text::Line<'static>> {
+    use ratatui::text::{Line, Span};
+    use unicode_width::UnicodeWidthStr;
+
+    let mut wrapped_lines = Vec::new();
+
+    // If width is too small, just return the original line
+    if width < 10 {
+        for line in &text.lines {
+            let owned_spans: Vec<Span> = line
+                .spans
+                .iter()
+                .map(|s| Span::styled(s.content.to_string(), s.style))
+                .collect();
+            wrapped_lines.push(Line::from(owned_spans));
+        }
+        return wrapped_lines;
+    }
+
+    for line in &text.lines {
+        let mut current_line_spans = Vec::new();
+        let mut current_width = 0;
+
+        for span in &line.spans {
+            let span_text = span.content.as_ref();
+
+            // Split span text by words to wrap properly
+            let words: Vec<&str> = span_text.split_whitespace().collect();
+
+            for (i, word) in words.iter().enumerate() {
+                let word_width = word.width();
+                let space_width = if i < words.len() - 1 { 1 } else { 0 };
+
+                // If this word would exceed width, start new line
+                if current_width + word_width > width && current_width > 0 {
+                    wrapped_lines.push(Line::from(current_line_spans.clone()));
+                    current_line_spans.clear();
+                    current_width = 0;
+                }
+
+                // If word itself is too long (longer than width), split it character by character
+                if word_width > width {
+                    let mut remaining = word.to_string();
+                    while !remaining.is_empty() {
+                        let mut chunk = String::new();
+                        let mut chunk_width = 0;
+
+                        for ch in remaining.chars() {
+                            let ch_width = ch.to_string().width();
+                            if chunk_width + ch_width > width && !chunk.is_empty() {
+                                break;
+                            }
+                            chunk.push(ch);
+                            chunk_width += ch_width;
+                        }
+
+                        if !chunk.is_empty() {
+                            if current_width > 0 {
+                                wrapped_lines.push(Line::from(current_line_spans.clone()));
+                                current_line_spans.clear();
+                            }
+                            current_line_spans.push(Span::styled(chunk.clone(), span.style));
+                            wrapped_lines.push(Line::from(current_line_spans.clone()));
+                            current_line_spans.clear();
+                            current_width = 0;
+
+                            remaining = remaining[chunk.len()..].to_string();
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    // Add the word normally
+                    let word_str = if space_width > 0 {
+                        format!("{} ", word)
+                    } else {
+                        word.to_string()
+                    };
+
+                    current_line_spans.push(Span::styled(word_str, span.style));
+                    current_width += word_width + space_width;
+                }
+            }
+        }
+
+        // Add remaining spans as a line
+        if !current_line_spans.is_empty() {
+            wrapped_lines.push(Line::from(current_line_spans));
+        } else if wrapped_lines.is_empty() {
+            // Empty line - preserve it
+            wrapped_lines.push(Line::from(""));
+        }
+    }
+
+    // If no lines were created, return at least one empty line
+    if wrapped_lines.is_empty() {
+        wrapped_lines.push(Line::from(""));
+    }
+
+    wrapped_lines
 }
 
 async fn spawn_and_stream(
