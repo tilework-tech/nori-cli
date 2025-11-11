@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
@@ -179,12 +179,12 @@ fn handle_key_simple(mode: AppMode, show_overlay: bool, key: KeyEvent) -> Option
     }
 
     // Otherwise, handle chat input
-    // Check Alt+Enter for submit
-    if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Enter {
+    // Check Enter for submit
+    if key.code == KeyCode::Enter && key.modifiers.is_empty() {
         return Some(Message::SubmitInput);
     }
 
-    // Send all key events to textarea
+    // Send all other key events to textarea
     Some(Message::KeyPress(key))
 }
 

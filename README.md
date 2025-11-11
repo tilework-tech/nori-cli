@@ -57,8 +57,8 @@ cargo run
 ### Navigation
 
 **Input Mode** (entering prompt):
-- Type your prompt (supports multi-line)
-- `Alt+Enter`: Submit prompt to agent (note: Ctrl+Enter doesn't work reliably across terminals)
+- Type your prompt (multi-line not supported - use Enter to submit)
+- `Enter`: Submit prompt to agent
 - Type slash commands for special actions (see below)
 
 **Agent Router Overlay** (when open):

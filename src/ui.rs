@@ -49,7 +49,7 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     frame.render_widget(&model.textarea, inner_area);
 
     // Instructions
-    let instructions = Paragraph::new("Alt+Enter: send | /switch-model: agents | /exit: quit")
+    let instructions = Paragraph::new("Enter: send | /switch-model: agents | /exit: quit")
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[2]);
 }
