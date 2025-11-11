@@ -312,7 +312,26 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
                     }
                     Message::CancelStream => {
+                        let events_before = model.response_events.len();
                         model.update(msg);
+
+                        // Render the StatusMessage that was added by the cancel
+                        for event in &model.response_events[events_before..] {
+                            if matches!(event, ConversationEvent::StatusMessage { .. }) {
+                                let line = render_event(event);
+                                let width = terminal.size()?.width.saturating_sub(2) as usize;
+                                use ratatui::text::Text;
+                                let text = Text::from(line.clone());
+                                let wrapped_lines = wrap_text_to_width(&text, width);
+                                for wrapped_line in wrapped_lines {
+                                    terminal.insert_before(1, |buf| {
+                                        use ratatui::widgets::{Paragraph, Widget};
+                                        Paragraph::new(wrapped_line.clone()).render(buf.area, buf);
+                                    })?;
+                                }
+                            }
+                        }
+
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
