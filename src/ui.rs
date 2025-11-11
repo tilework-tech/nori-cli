@@ -23,6 +23,11 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
         frame.render_widget(Clear, area);
         render_install_prompt_overlay(model, frame, area);
     }
+
+    // Conditionally render autocomplete dropdown
+    if model.show_autocomplete {
+        render_autocomplete_dropdown(model, frame);
+    }
 }
 
 fn render_chat(model: &mut Model, frame: &mut Frame) {
@@ -230,4 +235,58 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
+    // Calculate position: below the prompt textarea (title=3 + input=4 = 7)
+    let frame_area = frame.area();
+    let prompt_bottom = 7;
+
+    if prompt_bottom >= frame_area.height {
+        return; // Not enough space
+    }
+
+    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16)
+        .min(8)
+        .max(1)
+        + 2; // +2 for borders
+    let dropdown_width = 50.min(frame_area.width.saturating_sub(4));
+
+    let dropdown_area = Rect {
+        x: 2,
+        y: prompt_bottom,
+        width: dropdown_width,
+        height: dropdown_height,
+    };
+
+    // Clear background
+    frame.render_widget(Clear, dropdown_area);
+
+    // Build list items
+    let items: Vec<ListItem> = model
+        .autocomplete_filtered_commands
+        .iter()
+        .map(|cmd| ListItem::new(format!("/{}", cmd)))
+        .collect();
+
+    // Create highlighted list
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Commands")
+                .style(Style::default().bg(Color::Black)),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
+
+    // Create stateful widget with current selection
+    let mut list_state = ratatui::widgets::ListState::default();
+    list_state.select(Some(model.autocomplete_selected_index));
+
+    frame.render_stateful_widget(list, dropdown_area, &mut list_state);
 }
