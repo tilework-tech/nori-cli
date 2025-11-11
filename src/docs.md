@@ -30,6 +30,7 @@ pub mod ui;           // Rendering functions for each mode
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
+- `wrap_text_to_width()`: Manual text wrapping function that splits Text into multiple Lines fitting within terminal width - required because `insert_before()` only handles single-line insertion and Ratatui's `Paragraph::wrap()` only applies during render phase
 
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
@@ -69,7 +70,9 @@ Subprocess Output (JSONL)
   → spawn_and_stream task → tokio::select! on cancel_token.cancelled() vs stream.next()
   → parse_jsonl_event() → ConversationEvent (if stream continues)
   → Message::StreamEvent (via mpsc channel)
-  → run_app loop → Model::update() → accumulates in response_events
+  → run_app loop → render_event() converts to styled Line → wrap_text_to_width() splits into multiple Lines
+  → terminal.insert_before() called once per wrapped line → scrollback buffer accumulates all lines
+  → Model::update() → accumulates in response_events
   → render_chat() maps all events via render_event() to styled Lines
 
 Cancellation Path
@@ -145,5 +148,17 @@ Cancellation Path
 - Child process cleanup happens via Drop trait implementation on the stream
 - StreamCancelled event provides visual feedback in conversation history
 - No explicit process killing - relies on Drop semantics and closed handles
+
+**Text Wrapping for Scrollback** (@/src/main.rs:317-417):
+- `wrap_text_to_width()` performs manual text wrapping before inserting into scrollback buffer
+- **Why manual wrapping is required**: `insert_before()` captures only one line at a time, but Ratatui's `Paragraph::wrap()` applies during render phase after capture - this causes long lines to be truncated or overflow instead of wrapping
+- **Algorithm**: Word-level wrapping with character-level fallback for extremely long words (JSON strings, URLs)
+  - Splits text at word boundaries when possible to preserve readability
+  - For words exceeding terminal width, falls back to character-by-character splitting
+  - Preserves span styling across wrapped lines by creating new Spans with same style
+  - Uses unicode-width crate for accurate width calculation (handles multi-byte UTF-8 characters)
+- **Integration**: On StreamEvent, gets terminal width (minus 2 for borders), converts rendered Line to Text, wraps via `wrap_text_to_width()`, then calls `insert_before()` separately for each wrapped line
+- **Edge cases**: Returns original line if width < 10, preserves empty lines, ensures at least one line is always returned
+- **Dependency**: Added unicode-width = "0.2" to Cargo.toml for UnicodeWidthStr trait
 
 Created and maintained by Nori.
