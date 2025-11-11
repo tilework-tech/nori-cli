@@ -139,25 +139,13 @@ impl AgentBackend for ClaudeBackend {
                 }
             }
 
-            // Wait for process to complete and yield result
-            match child.wait().await {
-                Ok(status) if status.success() => {
-                    yield ConversationEvent::ResultSummary {
-                        success: true,
-                        details: "Completed".to_string(),
-                    };
-                }
-                Ok(status) => {
-                    yield ConversationEvent::ResultSummary {
-                        success: false,
-                        details: format!("Process exited with status: {}", status),
-                    };
-                }
-                Err(e) => {
-                    yield ConversationEvent::UnknownEvent {
-                        raw: format!("Failed to wait for process: {}", e),
-                    };
-                }
+            // Wait for process to complete
+            // Note: We don't emit a ResultSummary here because the "result" event
+            // from the JSONL stream already contains the final result
+            if let Err(e) = child.wait().await {
+                yield ConversationEvent::UnknownEvent {
+                    raw: format!("Failed to wait for process: {}", e),
+                };
             }
         };
 
