@@ -247,10 +247,9 @@ impl Model {
                 self.error_message = None;
                 // Note: Textarea already cleared in SubmitInput
                 // Add cancellation status message to history
-                self.response_events
-                    .push(ConversationEvent::StatusMessage {
-                        text: "Interrupted".to_string(),
-                    });
+                self.response_events.push(ConversationEvent::StatusMessage {
+                    text: "Interrupted".to_string(),
+                });
             }
 
             Message::Error(error) => {
