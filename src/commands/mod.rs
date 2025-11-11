@@ -77,3 +77,13 @@ impl Default for CommandRegistry {
         registry
     }
 }
+
+/// Filters command names by prefix (case-insensitive)
+pub fn filter_commands(prefix: &str, all_commands: &[String]) -> Vec<String> {
+    let prefix_lower = prefix.to_lowercase();
+    all_commands
+        .iter()
+        .filter(|cmd| cmd.to_lowercase().starts_with(&prefix_lower))
+        .cloned()
+        .collect()
+}
