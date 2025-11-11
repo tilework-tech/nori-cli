@@ -168,6 +168,8 @@ impl Model {
                 // Capture user message and transition to streaming mode
                 let user_text = self.textarea.lines().join("\n");
                 if !user_text.trim().is_empty() {
+                    // Clear textarea immediately after capturing text
+                    self.textarea = TextArea::default();
                     self.response_events
                         .push(ConversationEvent::UserMessage { text: user_text });
                     self.current_mode = AppMode::Streaming;
@@ -181,7 +183,7 @@ impl Model {
             Message::StreamComplete => {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None; // Clear any errors when going back
-                self.textarea = TextArea::default(); // Reset textarea for next input
+                // Note: Textarea already cleared in SubmitInput
                 // Note: We do NOT clear response_events to preserve chat history
             }
 
@@ -193,7 +195,7 @@ impl Model {
                 // Transition to Selection mode
                 self.current_mode = AppMode::Selection;
                 self.error_message = None;
-                self.textarea = TextArea::default();
+                // Note: Textarea already cleared in SubmitInput
                 // Add cancellation event to history
                 self.response_events
                     .push(ConversationEvent::StreamCancelled);

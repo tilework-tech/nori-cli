@@ -37,7 +37,8 @@ pub mod ui;           // Rendering functions for each mode
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, and `KeyPress` for textarea input
 - `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, and `current_stream_token: Option<CancellationToken>` for tracking active stream
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
-- CancelStream handler: Calls token.cancel(), transitions to Selection mode, clears textarea, appends StreamCancelled event to history
+- SubmitInput handler (@/src/app.rs:167-177): Captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
+- CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
@@ -107,7 +108,8 @@ Cancellation Path
 - Navigation (NextItem/PreviousItem) only updates list_state when `show_agent_router` is true
 - KeyPress messages only update textarea when `show_agent_router` is false (input blocked when overlay open)
 - response_events accumulates across all interactions - conversation history never cleared, preserves full chat context
-- textarea is reset on StreamComplete to clear prompt for next submission
+- textarea is cleared exactly once per submission: in SubmitInput handler immediately after capturing user text, before transitioning to Streaming mode
+- StreamComplete and CancelStream handlers do NOT clear textarea - it's already empty from SubmitInput
 - SubmitInput only transitions to Streaming if textarea contains non-whitespace text
 
 **Conversation Event Parsing** (@/src/conversation.rs):

@@ -160,16 +160,17 @@ fn test_cancel_stream_during_streaming() {
 
     let mut model = Model::default();
 
-    // Set up streaming state with a cancellation token
-    model.current_mode = AppMode::Streaming;
+    // User submits a message (this will clear textarea and transition to Streaming)
+    model.textarea.insert_str("test prompt");
+    model.update(Message::SubmitInput);
+
+    // Verify textarea was cleared and mode changed
+    assert!(model.textarea.lines()[0].is_empty());
+    assert_eq!(model.current_mode, AppMode::Streaming);
+
+    // Set up cancellation token for the stream
     let token = CancellationToken::new();
     model.current_stream_token = Some(token.clone());
-    model.textarea.insert_str("test prompt");
-
-    // Add a user message to simulate stream start
-    model.response_events.push(ConversationEvent::UserMessage {
-        text: "test prompt".to_string(),
-    });
 
     // Send cancel message (simulates user pressing Escape)
     model.update(Message::CancelStream);

@@ -113,5 +113,6 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - Agent router as overlay avoids disrupting conversation flow
 - UserMessage events added to history on submit, before agent response streams in
 - Alt+A for agent switching works globally without disrupting current input
+- Textarea clears immediately on submit (before streaming starts) to provide instant visual feedback and enable typing follow-up messages while waiting for response
 
 Created and maintained by Nori.
