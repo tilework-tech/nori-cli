@@ -5,6 +5,8 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
+use tui_textarea::TextArea;
+use unicode_width::UnicodeWidthStr;
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
     // Always render the chat view as base
@@ -229,4 +231,37 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u16 {
+    const BORDER_WIDTH: u16 = 2;
+    const MIN_HEIGHT: u16 = 3; // 1 content line + 2 borders
+
+    if available_width <= BORDER_WIDTH {
+        return MIN_HEIGHT;
+    }
+
+    let inner_width = available_width - BORDER_WIDTH;
+    let lines = textarea.lines();
+
+    if lines.is_empty() || (lines.len() == 1 && lines[0].is_empty()) {
+        return MIN_HEIGHT;
+    }
+
+    let total_visual_rows: usize = lines
+        .iter()
+        .map(|line| {
+            let line_width = line.width();
+            if line_width == 0 {
+                1 // Empty line still takes one row
+            } else {
+                // Calculate how many visual rows this line needs
+                (line_width + inner_width as usize - 1) / inner_width as usize
+            }
+        })
+        .sum();
+
+    // Add borders to content height
+    let total_height = total_visual_rows as u16 + BORDER_WIDTH;
+    total_height.max(MIN_HEIGHT)
 }
