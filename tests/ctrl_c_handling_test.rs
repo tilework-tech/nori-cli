@@ -1,4 +1,4 @@
-use nori_cli::app::{Model, Message};
+use nori_cli::app::{Message, Model};
 use std::time::Duration;
 
 #[test]

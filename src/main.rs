@@ -305,7 +305,13 @@ fn handle_event_simple(
     if let Event::Key(key) = event
         && key.kind == KeyEventKind::Press
     {
-        return handle_key_simple(mode, show_overlay, show_install_prompt, last_ctrl_c_time, key);
+        return handle_key_simple(
+            mode,
+            show_overlay,
+            show_install_prompt,
+            last_ctrl_c_time,
+            key,
+        );
     }
     None
 }
@@ -320,7 +326,9 @@ fn handle_key_simple(
     // Check for Ctrl-C FIRST (even with overlays/install prompt open)
     // This ensures double Ctrl-C always works to exit
     if key.code == KeyCode::Char('c')
-        && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+        && key
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::CONTROL)
     {
         return Some(Message::ClearTextarea);
     }
