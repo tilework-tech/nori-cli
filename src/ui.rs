@@ -6,14 +6,28 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 use tui_textarea::TextArea;
+use unicode_width::UnicodeWidthStr;
 
-pub fn calculate_textarea_height(textarea: &TextArea, _available_width: u16) -> u16 {
+pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u16 {
     const MIN_HEIGHT: u16 = 3;
+    const MAX_HEIGHT: u16 = 10;
     const BORDER_HEIGHT: u16 = 2;
 
-    let line_count = textarea.lines().len() as u16;
-    let height = line_count.max(MIN_HEIGHT);
+    let available_width = available_width.max(1); // Prevent division by zero
 
+    let mut total_lines = 0u16;
+    for line in textarea.lines() {
+        let line_width = line.width() as u16;
+        // Calculate how many wrapped lines this will take
+        let wrapped_lines = if line_width == 0 {
+            1 // Empty line still takes 1 line
+        } else {
+            ((line_width + available_width - 1) / available_width).max(1)
+        };
+        total_lines += wrapped_lines;
+    }
+
+    let height = total_lines.clamp(MIN_HEIGHT, MAX_HEIGHT);
     height + BORDER_HEIGHT
 }
 
