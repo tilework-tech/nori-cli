@@ -80,12 +80,14 @@ User Message Rendering (@/src/main.rs:140-156)
   → User message appears in terminal scrollback BEFORE backend processing begins
 
 Subprocess Output (JSONL)
-  → spawn_and_stream task → tokio::select! on cancel_token.cancelled() vs stream.next()
-  → parse_jsonl_event() → ConversationEvent (if stream continues)
-  → Message::StreamEvent (via mpsc channel)
-  → run_app loop → render_event() converts to styled Line → wrap_text_to_width() splits into multiple Lines
-  → terminal.insert_before() called once per wrapped line → scrollback buffer accumulates all lines
-  → Model::update() → accumulates in response_events
+  → ClaudeBackend yields events from stdout parsed via parse_jsonl_event()
+  → When ResultSummary event is received, backend returns immediately (exits the async generator)
+  → spawn_and_stream() receives no more events → the else branch of tokio::select! fires
+  → Message::StreamComplete sent to UI (via mpsc channel)
+  → run_app loop transitions to Selection mode
+  → For each streamed event BEFORE ResultSummary: render_event() converts to styled Line
+  → wrap_text_to_width() splits into multiple Lines, terminal.insert_before() accumulates lines
+  → Model::update() accumulates events in response_events
   → render_chat() maps all events via render_event() to styled Lines
 
 Cancellation Path
@@ -193,14 +195,9 @@ Cancellation Path
 - **Timeout reset**: If Ctrl-C pressed after 2-second window expires, timestamp is updated and hint shown again (behaves as first press)
 - **Works everywhere**: Ctrl-C always functional regardless of application state - during streaming, with overlays open, in install prompt
 
-**Stream Cancellation Mechanism**:
-- CancellationToken from tokio-util used for cooperative cancellation
-- Token created in main loop when spawning stream task, stored in Model.current_stream_token
-- spawn_and_stream uses tokio::select! with three branches: cancel signal, stream next, stream end
-- When cancel branch fires, stream is dropped which closes file handles
-- Child process cleanup happens via Drop trait implementation on the stream
-- StreamCancelled event provides visual feedback in conversation history
-- No explicit process killing - relies on Drop semantics and closed handles
+**Stream Completion and Cancellation**:
+- **Normal completion**: Driven by semantic signals (ResultSummary events from JSONL output), not process exit. ClaudeBackend returns immediately upon receiving ResultSummary, stream stops yielding events, spawn_and_stream receives no more events and sends Message::StreamComplete
+- **User cancellation**: CancellationToken from tokio-util used for cooperative cancellation - Token created in main loop when spawning stream task, stored in Model.current_stream_token - When cancel branch fires in spawn_and_stream, stream is dropped which closes file handles - Child process cleanup happens via Drop trait implementation - StreamCancelled event provides visual feedback in conversation history - No explicit process killing - relies on Drop semantics and closed handles
 
 **Text Wrapping for Scrollback** (@/src/main.rs:339-443):
 - `wrap_text_to_width()` performs manual text wrapping before inserting into scrollback buffer

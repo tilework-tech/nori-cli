@@ -52,6 +52,7 @@ pub fn is_available(command: &str) -> bool {
 - command_name: "claude"
 - install_url: "https://code.claude.com"
 - Spawn error handling: ErrorKind::NotFound yields SystemEvent with install message
+- **Stream completion behavior** (lines 129-134): When a ResultSummary event is parsed from JSONL stdout, the stream returns immediately without attempting to read stderr or wait for process exit. The Claude subprocess continues running in the background (stdout/stderr remain open), but the stream terminates as soon as semantic completion is signaled via the ResultSummary event. This prevents the backend from hanging indefinitely waiting for process cleanup while the UI transitions to Selection mode.
 
 **GPT Codex Backend** (@/src/backends/codex.rs):
 - Command: `codex exec --json <prompt>`
@@ -142,6 +143,7 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 - Stream consumption multiplexed with cancellation signal via tokio::select! in spawn_and_stream
 - When cancellation fires, stream is dropped which closes file handles and triggers child process cleanup via Drop
 - No explicit process.kill() - relies on Drop semantics and closed handles for cleanup
+- **Stream completion**: The stream is driven by semantic completion signals (ResultSummary events from JSONL) rather than process exit status. The ClaudeBackend returns immediately upon receiving a ResultSummary, causing @/src/main.rs:spawn_and_stream() to receive no more events and exit the loop, which sends Message::StreamComplete to the UI. The subprocess may still be running in the background, but the stream is semantically complete from the user's perspective.
 
 **Error Paths**:
 - spawn_process() returns Result<Child> - spawn failure (CLI not found, permission denied) propagates to caller
