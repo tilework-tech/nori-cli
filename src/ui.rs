@@ -23,23 +23,30 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
         frame.render_widget(Clear, area);
         render_install_prompt_overlay(model, frame, area);
     }
-
-    // Conditionally render autocomplete dropdown
-    if model.show_autocomplete {
-        render_autocomplete_dropdown(model, frame);
-    }
 }
 
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
+    // Adjust layout based on whether autocomplete is visible
+    let constraints = if model.show_autocomplete {
+        vec![
+            Constraint::Length(3), // Title
+            Constraint::Length(4), // Input
+            Constraint::Min(3),    // Autocomplete (takes remaining space, min 3)
+            Constraint::Length(1), // Instructions (pushed to bottom)
+        ]
+    } else {
+        vec![
             Constraint::Length(3), // Title
             Constraint::Length(4), // Input
             Constraint::Length(1), // Instructions
-        ])
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(area);
 
     // Title - show selected agent
@@ -74,7 +81,14 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     };
 
     let instructions = Paragraph::new(instructions_text).style(instructions_style);
-    frame.render_widget(instructions, chunks[2]);
+
+    // Render autocomplete dropdown in its own layout chunk (if visible)
+    if model.show_autocomplete {
+        render_autocomplete_in_layout(model, frame, chunks[2]);
+        frame.render_widget(instructions, chunks[3]); // Instructions at bottom
+    } else {
+        frame.render_widget(instructions, chunks[2]); // Instructions directly after input
+    }
 }
 
 fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect) {
@@ -237,40 +251,13 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
-    // The viewport is 8 lines fixed (Viewport::Inline(8))
-    // We need to overlay the dropdown within those 8 lines
-    let area = frame.area();
+fn render_autocomplete_in_layout(model: &Model, frame: &mut Frame, area: Rect) {
+    // Render autocomplete as part of the layout (not an overlay)
+    // This area is the chunk allocated for autocomplete in the main layout
 
     if model.autocomplete_filtered_commands.is_empty() {
         return; // Nothing to show
     }
-
-    // Recreate the layout to get the actual chunk positions
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Title
-            Constraint::Length(4), // Input
-            Constraint::Length(1), // Instructions
-        ])
-        .split(area);
-
-    // Position dropdown to overlay on the input chunk (will cover the input area)
-    // This is necessary because the viewport is fixed at 8 lines with no room below
-    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 4) + 2; // +2 for borders
-    let dropdown_width = 50.min(area.width.saturating_sub(4));
-
-    // Position it to overlay chunks[1] (the input area), starting from its position
-    let dropdown_area = Rect {
-        x: chunks[1].x + 2,
-        y: chunks[1].y, // Overlay starting at input chunk position
-        width: dropdown_width,
-        height: dropdown_height.min(chunks[1].height), // Don't exceed input chunk space
-    };
-
-    // Clear background
-    frame.render_widget(Clear, dropdown_area);
 
     // Build list items
     let items: Vec<ListItem> = model
@@ -279,13 +266,12 @@ fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
         .map(|cmd| ListItem::new(format!("/{}", cmd)))
         .collect();
 
-    // Create highlighted list
+    // Create highlighted list - render directly in the provided area
     let list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Commands")
-                .style(Style::default().bg(Color::Black)),
+                .title("Commands"),
         )
         .highlight_style(
             Style::default()
@@ -298,5 +284,5 @@ fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
     let mut list_state = ratatui::widgets::ListState::default();
     list_state.select(Some(model.autocomplete_selected_index));
 
-    frame.render_stateful_widget(list, dropdown_area, &mut list_state);
+    frame.render_stateful_widget(list, area, &mut list_state);
 }
