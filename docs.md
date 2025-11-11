@@ -4,7 +4,7 @@ Path: @/
 
 ### Overview
 
-A terminal user interface (TUI) application that routes user prompts to different AI coding agent CLIs (Claude Code and GPT Codex). The application provides an interactive interface for selecting agents, entering prompts, and viewing streaming responses in real-time.
+A terminal user interface (TUI) application that routes user prompts to different AI coding agent CLIs (Claude Code and GPT Codex). The application provides a chat-style interface where conversation history is always visible, with an overlay for agent selection and an input field at the bottom for natural interaction.
 
 ### How it fits into the larger codebase
 
@@ -24,19 +24,27 @@ A terminal user interface (TUI) application that routes user prompts to differen
 5. Restores terminal on shutdown via `ratatui::restore()` and `LeaveAlternateScreen`
 
 **Architecture Pattern**: The Elm Architecture (TEA)
-- Model (@/src/app.rs): Application state including current mode, selected agent, textarea content, and response accumulation
-- Message (@/src/app.rs): Enum of all possible events/actions (navigation, input, streaming, errors)
-- Update (@/src/app.rs): `Model::update()` handles state transitions based on messages
-- Render (@/src/ui.rs): Mode-specific rendering functions that draw UI from current model state
+- Model (@/src/app.rs): Application state including overlay visibility (`show_agent_router`), selected agent, textarea content, and full conversation history in `response_events`
+- Message (@/src/app.rs): Enum of all possible events/actions (navigation, input, streaming, overlay toggle, errors)
+- Update (@/src/app.rs): `Model::update()` handles state transitions - navigation gated by overlay state, input blocked when overlay open
+- Render (@/src/ui.rs): Layered rendering with chat view as base and optional agent router overlay on top
 
-**State Machine**: Three modes with specific transitions
+**UI Layout**: Chat-based interface with persistent conversation
 ```
-Selection (agent list)
-    → Enter → Input (prompt entry)
-    → Alt+Enter → Streaming (receiving response)
-    → StreamComplete/Esc → Selection
+┌─ Title (selected agent) ─────────────┐
+│                                       │
+├─ Messages (conversation history) ────┤
+│ [user] What is the weather?           │
+│ The weather is...                     │
+│ [user] Tell me more                   │
+│ ...streaming response...              │
+├─ Input (textarea at bottom) ──────────┤
+│ Type your message here...             │
+├─ Instructions ────────────────────────┤
+│ Alt+Enter: send | Alt+A: agents | q   │
+└───────────────────────────────────────┘
 
-Input → Esc → Selection
+Alt+A overlays agent selector (60% width, 40% height centered)
 ```
 
 **Subprocess Integration**:
@@ -58,8 +66,9 @@ Input → Esc → Selection
 
 **Key Invariants**:
 - Terminal must be restored (raw mode disabled, alternate screen exited) on any exit path to avoid broken terminal state
-- Event handler task updates local mode tracking to prevent race conditions when converting events to messages
-- Response text accumulates across stream chunks - never cleared until next prompt submission
+- Event handler task receives mode updates via channel to prevent race conditions when converting events to messages
+- Conversation history (`response_events`) accumulates indefinitely - includes both UserMessage and assistant responses, never cleared
+- Navigation and text input are mutually exclusive based on `show_agent_router` flag - overlay blocks input, chat blocks navigation
 
 **Subprocess Lifecycle**:
 - Child processes are spawned when user submits prompt via tokio::spawn
@@ -75,8 +84,9 @@ Input → Esc → Selection
 
 **Error Handling**:
 - Non-zero exit status triggers Message::Error with helpful instructions
-- Error message is stored in Model::error_message and displayed in streaming view
-- Application stays in Streaming mode when error occurs so user can read stderr output
+- Error message is stored in Model::error_message and displayed in chat view
+- Application stays in Streaming mode when error occurs so user can read stderr output in conversation history
+- StderrOutput events render in red within conversation history for visibility
 - User must press Esc to return to Selection mode after error
 
 **Testing Strategy** (@/tests/):
@@ -86,8 +96,16 @@ Input → Esc → Selection
 
 **Current Limitations**:
 - Session resumption fields exist (session_id, thread_id) but are not persisted between runs
-- No scrolling in response view - long outputs overflow viewport
+- Terminal scrolling handles long conversations - no custom scroll implementation yet
 - Ctrl+Enter keybinding doesn't work reliably across terminals, so Alt+Enter is used for submit
 - Process cancellation not implemented - subprocess continues running even if user presses Esc
+- Conversation history grows indefinitely in memory - no pagination or pruning
+
+**UI/UX Design Decisions**:
+- Chat view always visible to maintain context across interactions
+- Input at bottom matches familiar chat application UX patterns
+- Agent router as overlay avoids disrupting conversation flow
+- UserMessage events added to history on submit, before agent response streams in
+- Alt+A for agent switching works globally without disrupting current input
 
 Created and maintained by Nori.

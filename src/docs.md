@@ -4,7 +4,7 @@ Path: @/src
 
 ### Overview
 
-Core application modules implementing the TUI's architecture: application state management (app.rs), UI rendering (ui.rs), backend abstractions (backends.rs), and the async event loop entry point (main.rs). Together these modules implement The Elm Architecture pattern for a responsive, mode-based terminal interface.
+Core application modules implementing the TUI's architecture: application state management (app.rs), UI rendering (ui.rs), backend abstractions (backends.rs), and the async event loop entry point (main.rs). Together these modules implement The Elm Architecture pattern for a responsive, chat-style terminal interface with conversation history and an overlay-based agent selector.
 
 ### How it fits into the larger codebase
 
@@ -32,22 +32,21 @@ pub mod ui;           // Rendering functions for each mode
 - `spawn_and_stream()`: Spawns subprocess, reads stdout/stderr concurrently, parses JSONL into ConversationEvent, sends StreamEvent messages
 
 **State Management** (@/src/app.rs):
-- `AppMode`: Enum representing three UI states (Selection, Input, Streaming)
-- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for parsed backend events
-- `Model`: Struct holding all application state (current_mode, list_state, textarea, response_events, etc.)
-- `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase
+- `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
+- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `ToggleAgentRouter` for overlay, and `KeyPress` for textarea input
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility and `response_events` vector for full conversation history
+- `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 
 **UI Rendering** (@/src/ui.rs):
-- `render()`: Dispatches to mode-specific render functions based on model.current_mode
-- `render_selection()`: Draws agent list with ListState for navigation, shows error popup if present
-- `render_input()`: Draws TextArea widget for multi-line prompt entry
-- `render_streaming()`: Maps response_events to styled Lines via conversation::render_event(), changes title color to red if error occurred
-- `centered_rect()`: Helper for creating centered popup areas using Layout constraints
+- `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
+- `render_chat()`: Four-section vertical layout - Title bar showing selected agent, Messages area with full conversation history, Input textarea at bottom, and Instructions footer
+- `render_agent_router_overlay()`: Renders agent list inside centered rectangle (60% width, 40% height) using Clear widget to blank underlying content
+- `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
 
 **Conversation Event Handling** (@/src/conversation.rs):
-- `ConversationEvent` enum: Structured representation of backend JSONL events (AssistantMessage, SystemEvent, ResultSummary, StderrOutput, UnknownEvent)
+- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, UnknownEvent
 - `parse_jsonl_event()`: Parses raw JSONL strings into ConversationEvent - handles Claude CLI event format with nested message.content arrays
-- `render_event()`: Converts ConversationEvent into styled ratatui Lines with appropriate colors and prefixes for each type
+- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, other events render with type-specific prefixes and colors
 
 **Backend Abstraction** (@/src/backends.rs):
 - `AgentBackend` trait: Async `spawn_process(prompt) -> Result<Child>` and `name() -> &str`
@@ -57,15 +56,17 @@ pub mod ui;           // Rendering functions for each mode
 **Message Flow**:
 ```
 User Input (keyboard)
+  → Alt+A toggles show_agent_router overlay
+  → Alt+Enter submits prompt → SubmitInput adds UserMessage to history
   → EventStream task → Message (via mpsc channel)
   → run_app loop → Model::update()
-  → render() on next tick
+  → render() displays chat + optional overlay on next tick
 
 Subprocess Output (JSONL)
   → spawn_and_stream task → parse_jsonl_event() → ConversationEvent
   → Message::StreamEvent (via mpsc channel)
   → run_app loop → Model::update() → accumulates in response_events
-  → render() maps events via render_event() to styled Lines
+  → render_chat() maps all events via render_event() to styled Lines
 ```
 
 ### Things to Know
@@ -76,17 +77,20 @@ Subprocess Output (JSONL)
 - Event handler maintains local `current_mode` copy to avoid race conditions when converting events to messages
 - Render task uses tokio::interval to decouple rendering from event/message frequency
 
-**Mode Transitions in Event Handler** (@/src/main.rs:42-62):
-- Event handler tracks mode locally because Model lives in main loop and isn't accessible from spawned task
-- After sending message, handler updates local mode based on message type to stay in sync
+**Mode Transitions in Event Handler** (@/src/main.rs:39-60):
+- Event handler tracks mode locally via mode_rx channel receiving updates from main loop after each Model::update()
+- Main loop sends updated mode after every state change to keep event handler in sync
 - This prevents stale mode from causing incorrect event-to-message conversions
-- Example: After sending Message::SelectItem, mode becomes AppMode::Input so next Esc key generates ExitInputMode
+- Alt+A is handled globally (works regardless of mode) to toggle agent router overlay
+- 'q' quit key respects mode - works in Selection/Streaming but types 'q' character in Input mode
 
 **State Machine Invariants**:
-- Selection mode: list_state always has Some(index) selected, never None
-- Input mode: selected_agent_index is always Some after transitioning from Selection
-- Streaming mode: response_events accumulates and is never cleared (grows indefinitely for now)
+- list_state always has Some(index) selected for agent router navigation
+- Navigation (NextItem/PreviousItem) only updates list_state when `show_agent_router` is true
+- KeyPress messages only update textarea when `show_agent_router` is false (input blocked when overlay open)
+- response_events accumulates across all interactions - conversation history never cleared, preserves full chat context
 - textarea is reset on StreamComplete to clear prompt for next submission
+- SubmitInput only transitions to Streaming if textarea contains non-whitespace text
 
 **Conversation Event Parsing** (@/src/conversation.rs):
 - Parsing based on actual Claude CLI output format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
@@ -97,17 +101,18 @@ Subprocess Output (JSONL)
 - Malformed JSON or unparseable events return None from parse_jsonl_event()
 
 **Event Rendering Styles** (@/src/conversation.rs):
+- UserMessage: `[user]` prefix in bold cyan, followed by user's prompt text
 - AssistantMessage: Plain white text, no prefix
 - SystemEvent: `[system]` prefix in dim dark gray, subtype and details in dark gray
 - ResultSummary: `[done]` prefix in bold green (success) or bold red (failure)
 - StderrOutput: Red text, no prefix
 - UnknownEvent: `[unknown]` prefix in yellow with raw JSON for debugging
 
-**Error Display Strategy** (@/src/ui.rs:119-151):
-- Errors don't transition mode - Model stays in Streaming so stderr output remains visible
-- Title bar changes to "Error - See details below" in red color
-- Instructions section shows full error message with wrap enabled
+**Error Display Strategy**:
+- Errors don't transition mode - Model stays in Streaming so stderr output remains visible in conversation history
+- Error message stored in Model::error_message for display in chat view
 - User must manually press Esc to return to Selection mode after reading error
+- Error events (StderrOutput) render in red within conversation history for visibility
 
 **Rendering Performance**:
 - Render interval is 33ms (~30 fps) regardless of event frequency
@@ -115,9 +120,11 @@ Subprocess Output (JSONL)
 - Frame is mut reference, allowing widgets to modify cursor position during render
 
 **Key Event Handling**:
-- Input mode passes KeyEvent directly to textarea via Message::KeyPress
+- KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
 - textarea.input() handles cursor movement, text editing, newlines internally
-- 'q' quits from any mode except Input (where it types 'q')
+- Alt+A globally toggles agent router overlay - handled before mode-specific logic in @/src/main.rs:117-121
+- 'q' quits from Selection/Streaming modes but types 'q' character when in Input mode
 - Alt+Enter submits because Ctrl+Enter doesn't work reliably across terminal emulators
+- Esc closes agent router overlay when open via ExitInputMode message
 
 Created and maintained by Nori.
