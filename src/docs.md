@@ -59,8 +59,8 @@ pub mod ui;           // Rendering functions for each mode
 **Message Flow**:
 ```
 User Input (keyboard)
-  → Alt+A toggles show_agent_router overlay
-  → Alt+Enter submits prompt → SubmitInput adds UserMessage to history, creates CancellationToken, spawns stream
+  → /switch-model toggles show_agent_router overlay
+  → Enter submits prompt → SubmitInput adds UserMessage to history, creates CancellationToken, spawns stream
   → Esc during streaming → CancelStream triggers token.cancel()
   → EventStream task → Message (via mpsc channel)
   → run_app loop → Model::update()
@@ -99,7 +99,7 @@ Cancellation Path
 - Event handler tracks mode locally via mode_rx channel receiving updates from main loop after each Model::update()
 - Main loop sends updated mode after every state change to keep event handler in sync
 - This prevents stale mode from causing incorrect event-to-message conversions
-- Alt+A is handled globally (works regardless of mode) to toggle agent router overlay
+- /switch-model command toggles agent router overlay
 - 'q' quit key respects mode - works in Selection/Streaming but types 'q' character in Input mode
 
 **State Machine Invariants**:
@@ -140,9 +140,9 @@ Cancellation Path
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
 - textarea.input() handles cursor movement, text editing, newlines internally
-- Alt+A globally toggles agent router overlay - handled before mode-specific logic in @/src/main.rs:117-121
+- /switch-model command toggles agent router overlay
 - 'q' quits from Selection/Streaming modes but types 'q' character when in Input mode
-- Alt+Enter submits because Ctrl+Enter doesn't work reliably across terminal emulators
+- Enter submits the prompt
 - Esc during streaming sends CancelStream message to interrupt the stream
 - Esc closes agent router overlay when open via ExitInputMode message
 

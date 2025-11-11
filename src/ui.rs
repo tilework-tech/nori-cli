@@ -117,13 +117,12 @@ fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect)
 }
 
 fn render_install_prompt_overlay(model: &mut Model, frame: &mut Frame, area: Rect) {
-
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Title
             Constraint::Min(4),    // Message
-            Constraint::Length(5), // Options
+            Constraint::Length(7), // Options (need more space for 3 items + borders)
             Constraint::Length(3), // Instructions
         ])
         .split(area);

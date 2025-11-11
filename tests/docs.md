@@ -97,7 +97,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - StreamCancelled renders "Interrupted" in red to provide visual feedback for cancelled streams
 
 **Coverage Gaps**:
-- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut
+- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including /switch-model command parsing
 - No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) - would require terminal buffer assertions
 - No tests for overlay interaction blocking (navigation disabled in chat, input disabled in overlay) - requires event handler integration
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds

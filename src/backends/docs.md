@@ -86,8 +86,8 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 ### Installation Prompting
 
 **User Experience Flow**:
-1. User selects backend in agent router (via Alt+A)
-2. User submits prompt (via Alt+Enter)
+1. User selects backend in agent router (via /switch-model)
+2. User submits prompt (via Enter)
 3. @/src/main.rs checks if backend command is available using `is_available(backend.command_name())`
 4. If not available: ShowInstallPrompt message sent with backend name and install URL
 5. Install prompt overlay appears (@/src/ui.rs:render_install_prompt_overlay)

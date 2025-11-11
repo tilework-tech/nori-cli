@@ -41,10 +41,10 @@ A terminal user interface (TUI) application that routes user prompts to differen
 ├─ Input (textarea at bottom) ──────────┤
 │ Type your message here...             │
 ├─ Instructions ────────────────────────┤
-│ Alt+Enter: send | Alt+A: agents | q   │
+│ Enter: send | /switch-model: agents | q   │
 └───────────────────────────────────────┘
 
-Alt+A overlays agent selector (60% width, 40% height centered)
+/switch-model overlays agent selector (60% width, 40% height centered)
 ```
 
 **Subprocess Integration**:
@@ -103,7 +103,6 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 **Current Limitations**:
 - Session resumption fields exist (session_id, thread_id) but are not persisted between runs
 - Terminal scrolling handles long conversations - no custom scroll implementation yet
-- Ctrl+Enter keybinding doesn't work reliably across terminals, so Alt+Enter is used for submit
 - Conversation history grows indefinitely in memory - no pagination or pruning
 - Stream cancellation relies on Drop semantics - no explicit process.kill() called
 
@@ -112,6 +111,6 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - Input at bottom matches familiar chat application UX patterns
 - Agent router as overlay avoids disrupting conversation flow
 - UserMessage events added to history on submit, before agent response streams in
-- Alt+A for agent switching works globally without disrupting current input
+- /switch-model command for agent switching works from the input prompt
 
 Created and maintained by Nori.
