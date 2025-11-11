@@ -238,9 +238,11 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
-    // Calculate position: below the prompt textarea (title=3 + input=4 = 7)
+    // Calculate position: below the prompt textarea
+    // Layout: Title (3) + Input (4) + Instructions (1) = 8
+    // Dropdown should start at line 8 (after instructions)
     let frame_area = frame.area();
-    let prompt_bottom = 7;
+    let prompt_bottom = 8;
 
     if prompt_bottom >= frame_area.height {
         return; // Not enough space
