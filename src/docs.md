@@ -37,7 +37,7 @@ pub mod ui;           // Rendering functions for each mode
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, and `KeyPress` for textarea input
 - `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, and `current_stream_token: Option<CancellationToken>` for tracking active stream
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
-- SubmitInput handler (@/src/app.rs:167-177): Captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
+- SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 
 **UI Rendering** (@/src/ui.rs):
@@ -61,11 +61,18 @@ pub mod ui;           // Rendering functions for each mode
 ```
 User Input (keyboard)
   → Alt+A toggles show_agent_router overlay
-  → Alt+Enter submits prompt → SubmitInput adds UserMessage to history, creates CancellationToken, spawns stream
+  → Enter submits prompt → SubmitInput renders UserMessage to scrollback using render_event() + wrap_text_to_width() + terminal.insert_before(), adds UserMessage to history, creates CancellationToken, spawns stream
   → Esc during streaming → CancelStream triggers token.cancel()
   → EventStream task → Message (via mpsc channel)
   → run_app loop → Model::update()
   → render() displays chat + optional overlay on next tick
+
+User Message Rendering (@/src/main.rs:140-156)
+  → SubmitInput handler creates UserMessage event from prompt text
+  → render_event() converts to styled Line with "[user]" prefix in cyan
+  → wrap_text_to_width() splits into multiple Lines fitting terminal width
+  → terminal.insert_before() called once per wrapped line → scrollback buffer accumulates all lines
+  → User message appears in terminal scrollback BEFORE backend processing begins
 
 Subprocess Output (JSONL)
   → spawn_and_stream task → tokio::select! on cancel_token.cancelled() vs stream.next()
@@ -111,6 +118,7 @@ Cancellation Path
 - textarea is cleared exactly once per submission: in SubmitInput handler immediately after capturing user text, before transitioning to Streaming mode
 - StreamComplete and CancelStream handlers do NOT clear textarea - it's already empty from SubmitInput
 - SubmitInput only transitions to Streaming if textarea contains non-whitespace text
+- User messages are rendered to terminal scrollback in SubmitInput handler BEFORE backend availability check and BEFORE slash command processing - ensures messages appear even if install prompt is shown or command execution fails
 
 **Conversation Event Parsing** (@/src/conversation.rs):
 - Parsing based on actual Claude CLI output format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
@@ -157,7 +165,7 @@ Cancellation Path
 - StreamCancelled event provides visual feedback in conversation history
 - No explicit process killing - relies on Drop semantics and closed handles
 
-**Text Wrapping for Scrollback** (@/src/main.rs:317-417):
+**Text Wrapping for Scrollback** (@/src/main.rs:339-443):
 - `wrap_text_to_width()` performs manual text wrapping before inserting into scrollback buffer
 - **Why manual wrapping is required**: `insert_before()` captures only one line at a time, but Ratatui's `Paragraph::wrap()` applies during render phase after capture - this causes long lines to be truncated or overflow instead of wrapping
 - **Algorithm**: Word-level wrapping with character-level fallback for extremely long words (JSON strings, URLs)
@@ -165,8 +173,16 @@ Cancellation Path
   - For words exceeding terminal width, falls back to character-by-character splitting
   - Preserves span styling across wrapped lines by creating new Spans with same style
   - Uses unicode-width crate for accurate width calculation (handles multi-byte UTF-8 characters)
-- **Integration**: On StreamEvent, gets terminal width (minus 2 for borders), converts rendered Line to Text, wraps via `wrap_text_to_width()`, then calls `insert_before()` separately for each wrapped line
+- **Integration**: Used in two places - StreamEvent messages (@/src/main.rs:88-112) and UserMessage rendering in SubmitInput handler (@/src/main.rs:140-156) - gets terminal width (minus 2 for borders), converts rendered Line to Text, wraps via `wrap_text_to_width()`, then calls `insert_before()` separately for each wrapped line
 - **Edge cases**: Returns original line if width < 10, preserves empty lines, ensures at least one line is always returned
 - **Dependency**: Added unicode-width = "0.2" to Cargo.toml for UnicodeWidthStr trait
+
+**User Message Scrollback Rendering** (@/src/main.rs:140-156):
+- User messages are rendered to terminal scrollback in SubmitInput handler, not in Model::update()
+- **Why rendering happens in main.rs**: Model::update() is pure state management with no side effects - it cannot call terminal.insert_before() which requires mutable terminal reference only available in main event loop
+- **Timing is critical**: User message must appear BEFORE backend availability check so message is visible even if install prompt appears
+- **Prevents message loss**: Without scrollback rendering, user's text disappears from textarea on submit but never appears in conversation history above TUI - only stored in response_events vector but not visible to user
+- **Follows existing pattern**: UserMessage rendering uses exact same pipeline as StreamEvent rendering (lines 88-112) - both call render_event(), wrap_text_to_width(), and terminal.insert_before() in identical sequence
+- **Slash command handling**: Slash commands bypass user message rendering entirely - they are not stored as conversation events and should not appear in chat history
 
 Created and maintained by Nori.
