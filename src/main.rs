@@ -36,22 +36,28 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     let mut model = Model::default();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
-    // Create mode channel for syncing state with event handler
+    // Create channels for syncing state with event handler
     let (mode_tx, mut mode_rx) = mpsc::unbounded_channel::<AppMode>();
+    let (overlay_tx, mut overlay_rx) = mpsc::unbounded_channel::<bool>();
 
     // Spawn event handling task
     let event_tx = tx.clone();
     tokio::spawn(async move {
         let mut reader = EventStream::new();
         let mut current_mode = AppMode::Selection;
+        let mut show_overlay = false;
         loop {
             tokio::select! {
                 // Receive mode updates from main loop (single source of truth)
                 Some(mode) = mode_rx.recv() => {
                     current_mode = mode;
                 }
+                // Receive overlay state updates
+                Some(overlay) = overlay_rx.recv() => {
+                    show_overlay = overlay;
+                }
                 Some(Ok(event)) = reader.next() => {
-                    if let Some(msg) = handle_event_simple(current_mode, event) {
+                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, event) {
                         let _ = event_tx.send(msg);
                     }
                 }
@@ -76,8 +82,9 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                             let backend = get_backend(&model);
                             let stream_tx = tx.clone();
                             model.update(msg);
-                            // Send updated mode to event handler
+                            // Send updated mode and overlay state to event handler
                             let _ = mode_tx.send(model.current_mode);
+                            let _ = overlay_tx.send(model.show_agent_router);
 
                             tokio::spawn(async move {
                                 if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
@@ -89,8 +96,9 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                     }
                     _ => {
                         model.update(msg);
-                        // Send updated mode to event handler after every state change
+                        // Send updated mode and overlay state to event handler after every state change
                         let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
                     }
                 }
             }
@@ -105,49 +113,56 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     Ok(())
 }
 
-fn handle_event_simple(mode: AppMode, event: Event) -> Option<Message> {
+fn handle_event_simple(mode: AppMode, show_overlay: bool, event: Event) -> Option<Message> {
     if let Event::Key(key) = event
         && key.kind == KeyEventKind::Press
     {
-        return handle_key_simple(mode, key);
+        return handle_key_simple(mode, show_overlay, key);
     }
     None
 }
 
-fn handle_key_simple(mode: AppMode, key: KeyEvent) -> Option<Message> {
+fn handle_key_simple(mode: AppMode, show_overlay: bool, key: KeyEvent) -> Option<Message> {
     // Global Alt+A shortcut to toggle agent router
     if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('a') {
         return Some(Message::ToggleAgentRouter);
     }
 
-    // Allow 'q' to quit from any mode
-    if key.code == KeyCode::Char('q') && mode != AppMode::Input {
-        return Some(Message::Quit);
-    }
-
-    match mode {
-        AppMode::Selection => match key.code {
+    // If overlay is open, handle navigation
+    if show_overlay {
+        return match key.code {
             KeyCode::Up | KeyCode::Char('k') => Some(Message::PreviousItem),
             KeyCode::Down | KeyCode::Char('j') => Some(Message::NextItem),
             KeyCode::Enter => Some(Message::SelectItem),
+            KeyCode::Esc => Some(Message::ExitInputMode),
+            KeyCode::Char('q') => Some(Message::Quit),
             _ => None,
-        },
-        AppMode::Input => {
-            // Check Alt+Enter for submit (Ctrl+Enter doesn't work reliably across platforms)
-            if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Enter {
-                Some(Message::SubmitInput)
-            } else if key.code == KeyCode::Esc {
-                Some(Message::ExitInputMode)
-            } else {
-                // Send key event to be handled by textarea
-                Some(Message::KeyPress(key))
-            }
-        }
-        AppMode::Streaming => match key.code {
+        };
+    }
+
+    // If streaming, only allow Esc to stop
+    if mode == AppMode::Streaming {
+        return match key.code {
             KeyCode::Esc => Some(Message::StreamComplete),
             _ => None,
-        },
+        };
     }
+
+    // Otherwise, handle chat input
+    // Check Alt+Enter for submit
+    if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Enter {
+        return Some(Message::SubmitInput);
+    }
+
+    // Allow 'q' to quit (but not while typing in input)
+    if key.code == KeyCode::Char('q') && key.modifiers.is_empty() {
+        // Only quit if we're not actively typing (this is a design choice)
+        // For now, let 'q' pass through to the textarea
+        return Some(Message::KeyPress(key));
+    }
+
+    // Send all other key events to textarea
+    Some(Message::KeyPress(key))
 }
 
 fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
