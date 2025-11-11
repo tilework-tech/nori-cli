@@ -17,6 +17,27 @@ Test suite for the agent-router-tui application, covering state machine transiti
 
 ### Core Implementation
 
+**Ctrl-C Handling Tests** (@/tests/ctrl_c_handling_test.rs):
+- `test_first_ctrl_c_clears_textarea_and_shows_hint()`: Verifies first Ctrl-C press behavior
+  - Adds text to textarea
+  - Sends ClearTextarea message
+  - Asserts textarea is cleared
+  - Asserts last_ctrl_c_time is set to Some(Instant)
+  - Asserts error_message contains "Press Ctrl-C again to exit" hint
+- `test_second_ctrl_c_within_timeout_clears_timestamp()`: Verifies second Ctrl-C within 2-second window
+  - Sends first ClearTextarea (sets timestamp)
+  - Immediately sends second ClearTextarea
+  - Asserts last_ctrl_c_time transitions to None (signals quit needed)
+  - Asserts error_message cleared
+- `test_ctrl_c_after_timeout_clears_textarea_again()`: Verifies timeout expiration behavior
+  - Sends first ClearTextarea
+  - Manually sets timestamp to 3 seconds in the past (simulates timeout)
+  - Adds new text to textarea
+  - Sends ClearTextarea again
+  - Asserts textarea cleared again
+  - Asserts new timestamp is set (more recent than old one)
+  - Asserts hint shown again (behaves as first press)
+
 **Textarea Clearing Tests** (@/tests/textarea_clearing_test.rs):
 - `test_textarea_clears_immediately_on_submit()`: Verifies textarea is cleared immediately when SubmitInput message is processed
   - User types a message into textarea
@@ -125,6 +146,14 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - UserMessage test verifies chat history rendering with cyan styling
 - StreamCancelled renders "Interrupted" in red to provide visual feedback for cancelled streams
 
+**Ctrl-C Handling Test Coverage** (@/tests/ctrl_c_handling_test.rs):
+- Comprehensive tests for two-stage Ctrl-C keyboard interrupt mechanism (3 tests total)
+- Verifies first press behavior: textarea clearing, timestamp setting, hint display
+- Verifies second press within timeout: timestamp cleared to signal quit
+- Verifies timeout expiration: behaves as first press after 2-second window
+- All tests use Model directly without event loop - tests state machine logic in isolation
+- Timeout simulation via manual timestamp manipulation (no actual sleeping)
+
 **Textarea Clearing Test Coverage** (@/tests/textarea_clearing_test.rs):
 - Comprehensive tests for textarea lifecycle across all state transitions (6 tests total)
 - Verifies immediate clearing on submit (before streaming begins)
@@ -133,13 +162,15 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Tests ensure textarea is never restored after cancellation (matches modern chat UX expectations)
 
 **Coverage Gaps**:
-- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut
+- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut and Ctrl-C priority detection
 - No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) - would require terminal buffer assertions
 - No tests for overlay interaction blocking (navigation disabled in chat, input disabled in overlay) - requires event handler integration
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds
 - No tests for session resumption - session_id/thread_id fields are never populated
 - No tests verifying conversation history persistence across multiple submit cycles
 - No integration test for actual stream cancellation with long-running process - test_cancel_stream_during_streaming only tests state machine
+- No integration test for Ctrl-C priority over overlays/install prompts - tests only verify Model state transitions, not actual key event routing in handle_key_simple
+- No test for main loop quit detection (Some → None timestamp transition) - would require full event loop integration
 
 **CI Integration**:
 - Tests run on every PR via @/.github/workflows/pr-ci.yml

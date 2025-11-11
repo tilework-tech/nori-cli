@@ -2,6 +2,7 @@ use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::{cursor::MoveTo, execute};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
@@ -15,6 +16,9 @@ use tokio::time::{Duration, interval};
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+
+    // Get starting cursor position before creating viewport
+    let viewport_start_row = crossterm::cursor::position()?.1;
 
     // Setup terminal with inline viewport (8 lines at bottom for input/instructions)
     enable_raw_mode()?;
@@ -53,6 +57,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     let (mode_tx, mut mode_rx) = mpsc::unbounded_channel::<AppMode>();
     let (overlay_tx, mut overlay_rx) = mpsc::unbounded_channel::<bool>();
     let (install_prompt_tx, mut install_prompt_rx) = mpsc::unbounded_channel::<bool>();
+    let (ctrl_c_tx, mut ctrl_c_rx) = mpsc::unbounded_channel::<Option<std::time::Instant>>();
 
     // Spawn event handling task
     let event_tx = tx.clone();
@@ -61,6 +66,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
         let mut current_mode = AppMode::Selection;
         let mut show_overlay = false;
         let mut show_install_prompt = false;
+        let mut last_ctrl_c_time: Option<std::time::Instant> = None;
         loop {
             tokio::select! {
                 // Receive mode updates from main loop (single source of truth)
@@ -75,8 +81,12 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                 Some(install_prompt) = install_prompt_rx.recv() => {
                     show_install_prompt = install_prompt;
                 }
+                // Receive ctrl-c timestamp updates
+                Some(time) = ctrl_c_rx.recv() => {
+                    last_ctrl_c_time = time;
+                }
                 Some(Ok(event)) = reader.next() => {
-                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, show_install_prompt, event) {
+                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, show_install_prompt, last_ctrl_c_time, event) {
                         let _ = event_tx.send(msg);
                     }
                 }
@@ -117,6 +127,22 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                    }
+                    Message::ClearTextarea => {
+                        let was_set = model.last_ctrl_c_time.is_some();
+                        model.update(msg);
+                        let is_now_none = model.last_ctrl_c_time.is_none();
+
+                        // If timestamp went from Some to None, second Ctrl-C occurred
+                        if was_set && is_now_none {
+                            let _ = tx.send(Message::Quit);
+                        }
+
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
                     }
                     Message::SubmitInput => {
                         // Extract prompt from textarea
@@ -144,6 +170,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                 let _ = mode_tx.send(model.current_mode);
                                 let _ = overlay_tx.send(model.show_agent_router);
                                 let _ = install_prompt_tx.send(model.show_install_prompt);
+                                let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
                             } else {
                                 // Regular prompt - render user message to scrollback first
                                 let user_event = ConversationEvent::UserMessage {
@@ -184,6 +211,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                     let _ = mode_tx.send(model.current_mode);
                                     let _ = overlay_tx.send(model.show_agent_router);
                                     let _ = install_prompt_tx.send(model.show_install_prompt);
+                                    let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
 
                                     tokio::spawn(async move {
                                         if let Err(e) = spawn_and_stream(backend, prompt, stream_tx, cancel_token).await {
@@ -249,12 +277,14 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
                     }
                     Message::CancelStream => {
                         model.update(msg);
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
                     }
                     _ => {
                         model.update(msg);
@@ -262,6 +292,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
                     }
                 }
             }
@@ -280,12 +311,19 @@ fn handle_event_simple(
     mode: AppMode,
     show_overlay: bool,
     show_install_prompt: bool,
+    last_ctrl_c_time: Option<std::time::Instant>,
     event: Event,
 ) -> Option<Message> {
     if let Event::Key(key) = event
         && key.kind == KeyEventKind::Press
     {
-        return handle_key_simple(mode, show_overlay, show_install_prompt, key);
+        return handle_key_simple(
+            mode,
+            show_overlay,
+            show_install_prompt,
+            last_ctrl_c_time,
+            key,
+        );
     }
     None
 }
@@ -294,8 +332,19 @@ fn handle_key_simple(
     mode: AppMode,
     show_overlay: bool,
     show_install_prompt: bool,
+    _last_ctrl_c_time: Option<std::time::Instant>,
     key: KeyEvent,
 ) -> Option<Message> {
+    // Check for Ctrl-C FIRST (even with overlays/install prompt open)
+    // This ensures double Ctrl-C always works to exit
+    if key.code == KeyCode::Char('c')
+        && key
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::CONTROL)
+    {
+        return Some(Message::ClearTextarea);
+    }
+
     // Install prompt takes highest precedence
     if show_install_prompt {
         return match key.code {

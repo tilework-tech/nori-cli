@@ -4,7 +4,7 @@ Path: @/src
 
 ### Overview
 
-Core application modules implementing the TUI's architecture: application state management (app.rs), UI rendering (ui.rs), backend abstractions (backends.rs), and the async event loop entry point (main.rs). Together these modules implement The Elm Architecture pattern for a responsive, chat-style terminal interface with conversation history and an overlay-based agent selector.
+Core application modules implementing the TUI's architecture: application state management (app.rs), UI rendering (ui.rs), backend abstractions (backends.rs), and the async event loop entry point (main.rs). Together these modules implement The Elm Architecture pattern for a responsive, chat-style terminal interface with conversation history and fullscreen mode switching for agent selection and install prompts.
 
 ### How it fits into the larger codebase
 
@@ -26,25 +26,27 @@ pub mod ui;           // Rendering functions for each mode
 
 **Entry Point** (@/src/main.rs):
 - `main()`: Sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
-- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval
-- `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode
+- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task
+- `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
 - `wrap_text_to_width()`: Manual text wrapping function that splits Text into multiple Lines fitting within terminal width - required because `insert_before()` only handles single-line insertion and Ratatui's `Paragraph::wrap()` only applies during render phase
 
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
-- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, and `current_stream_token: Option<CancellationToken>` for tracking active stream
+- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
+- ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
 
 **UI Rendering** (@/src/ui.rs):
-- `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
-- `render_chat()`: Four-section vertical layout - Title bar showing selected agent, Messages area with full conversation history, Input textarea at bottom, and Instructions footer
-- `render_agent_router_overlay()`: Renders agent list inside centered rectangle (60% width, 40% height) using Clear widget to blank underlying content
-- `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
+- `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
+- `render_chat()`: Three-section vertical layout for normal mode - Input textarea (4 lines), Agent info (1 line showing selected agent), and Instructions footer (1 line)
+- `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
+- `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
+- **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
 
 **Conversation Event Handling** (@/src/conversation.rs):
 - `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent
@@ -63,6 +65,8 @@ User Input (keyboard)
   → Alt+A toggles show_agent_router overlay
   → Enter submits prompt → SubmitInput renders UserMessage to scrollback using render_event() + wrap_text_to_width() + terminal.insert_before(), adds UserMessage to history, creates CancellationToken, spawns stream
   → Esc during streaming → CancelStream triggers token.cancel()
+  → Ctrl-C (first press) → ClearTextarea clears textarea, sets timestamp, shows "Press Ctrl-C again to exit" hint
+  → Ctrl-C (second press within 2 seconds) → ClearTextarea clears timestamp → main loop detects Some → None transition → sends Quit message
   → EventStream task → Message (via mpsc channel)
   → run_app loop → Model::update()
   → render() displays chat + optional overlay on next tick
@@ -105,9 +109,11 @@ Cancellation Path
 
 **Mode Transitions in Event Handler** (@/src/main.rs:39-60):
 - Event handler tracks mode locally via mode_rx channel receiving updates from main loop after each Model::update()
-- Main loop sends updated mode after every state change to keep event handler in sync
-- This prevents stale mode from causing incorrect event-to-message conversions
+- Event handler also tracks `last_ctrl_c_time` via ctrl_c_rx channel for two-stage Ctrl-C detection
+- Main loop sends updated mode and ctrl_c_time after every state change to keep event handler in sync
+- This prevents stale state from causing incorrect event-to-message conversions
 - Alt+A is handled globally (works regardless of mode) to toggle agent router overlay
+- Ctrl-C is checked FIRST in handle_key_simple (before overlay/install prompt checks) to ensure it always works
 - 'q' quit key respects mode - works in Selection/Streaming but types 'q' character in Input mode
 
 **State Machine Invariants**:
@@ -116,9 +122,12 @@ Cancellation Path
 - KeyPress messages only update textarea when `show_agent_router` is false (input blocked when overlay open)
 - response_events accumulates across all interactions - conversation history never cleared, preserves full chat context
 - textarea is cleared exactly once per submission: in SubmitInput handler immediately after capturing user text, before transitioning to Streaming mode
+- textarea is also cleared by first Ctrl-C press via ClearTextarea message
 - StreamComplete and CancelStream handlers do NOT clear textarea - it's already empty from SubmitInput
 - SubmitInput only transitions to Streaming if textarea contains non-whitespace text
 - User messages are rendered to terminal scrollback in SubmitInput handler BEFORE backend availability check and BEFORE slash command processing - ensures messages appear even if install prompt is shown or command execution fails
+- Ctrl-C timeout window is 2 seconds - first press sets timestamp, second press within window triggers quit, press after timeout resets to first press behavior
+- Main loop detects quit signal by monitoring last_ctrl_c_time transition from Some → None (not by checking timestamp directly)
 
 **Conversation Event Parsing** (@/src/conversation.rs):
 - Parsing based on actual Claude CLI output format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
@@ -147,14 +156,32 @@ Cancellation Path
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
 
+**Inline Viewport Compatibility** (@/src/ui.rs):
+- UI designed to work in both inline viewports (Viewport::Inline(8) from main.rs) and fullscreen mode
+- Uses fullscreen mode switching instead of overlay modals to avoid percentage-based positioning issues in constrained viewports
+- All UI modes (chat, agent selection, install prompt) use Constraint::Min() for flexible sections that adapt to available viewport height
+- Text wrapping enabled on install prompt message to handle varying viewport widths without manual text size management
+
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
 - textarea.input() handles cursor movement, text editing, newlines internally
+- Ctrl-C is checked FIRST in handle_key_simple (@/src/main.rs:320-326) - takes priority over all other key handling including overlays and install prompts
 - Alt+A globally toggles agent router overlay - handled before mode-specific logic in @/src/main.rs:117-121
 - 'q' quits from Selection/Streaming modes but types 'q' character when in Input mode
 - Alt+Enter submits because Ctrl+Enter doesn't work reliably across terminal emulators
 - Esc during streaming sends CancelStream message to interrupt the stream
 - Esc closes agent router overlay when open via ExitInputMode message
+
+**Ctrl-C Keyboard Interrupt Mechanism** (@/src/app.rs:265-288, @/src/main.rs:120-134, @/src/main.rs:320-326):
+- Two-stage interrupt pattern: first Ctrl-C clears textarea and shows hint, second Ctrl-C within 2 seconds exits application
+- **Priority**: Ctrl-C detection happens FIRST in handle_key_simple, before all other key checks (overlays, install prompts, mode-specific handling)
+- **State tracking**: Model.last_ctrl_c_time stores Option<Instant> - None initially, Some(time) after first press, None again after second press
+- **Timeout logic**: Lives in Model::update() ClearTextarea handler - compares current time to last_ctrl_c_time using 2-second const
+- **State sync**: Main loop syncs last_ctrl_c_time to event handler via ctrl_c_rx channel after every state change
+- **Quit detection**: Main loop monitors transition from Some → None (lines 121-128) - when detected, sends Message::Quit
+- **Visual feedback**: First press displays "Press Ctrl-C again to exit" via Model.error_message field (reuses existing error display mechanism)
+- **Timeout reset**: If Ctrl-C pressed after 2-second window expires, timestamp is updated and hint shown again (behaves as first press)
+- **Works everywhere**: Ctrl-C always functional regardless of application state - during streaming, with overlays open, in install prompt
 
 **Stream Cancellation Mechanism**:
 - CancellationToken from tokio-util used for cooperative cancellation

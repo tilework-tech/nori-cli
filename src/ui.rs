@@ -1,28 +1,26 @@
 use crate::app::Model;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
-    // Always render the chat view as base
-    render_chat(model, frame);
-
-    // Conditionally render agent router overlay on top
-    if model.show_agent_router {
-        let area = centered_rect(60, 40, frame.area());
-        frame.render_widget(Clear, area);
-        render_agent_router_overlay(model, frame, area);
-    }
-
-    // Conditionally render install prompt overlay on top of everything
+    // Install prompt takes priority (blocking action)
     if model.show_install_prompt {
-        let area = centered_rect(70, 30, frame.area());
-        frame.render_widget(Clear, area);
-        render_install_prompt_overlay(model, frame, area);
+        render_install_prompt_fullscreen(model, frame);
+        return;
     }
+
+    // Agent router takes second priority
+    if model.show_agent_router {
+        render_agent_selection_fullscreen(model, frame);
+        return;
+    }
+
+    // Default: render chat view
+    render_chat(model, frame);
 }
 
 fn render_chat(model: &mut Model, frame: &mut Frame) {
@@ -31,50 +29,63 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Title
             Constraint::Length(4), // Input
+            Constraint::Length(1), // Agent info
             Constraint::Length(1), // Instructions
         ])
         .split(area);
 
-    // Title - show selected agent
+    // Input - textarea (messages scroll in terminal scrollback above viewport)
+    let input_block = Block::default().borders(Borders::ALL);
+    let inner_area = input_block.inner(chunks[0]);
+    frame.render_widget(input_block, chunks[0]);
+    frame.render_widget(&model.textarea, inner_area);
+
+    // Agent info - show selected agent below prompt
     let selected_agent = model
         .selected_agent_index
         .and_then(|i| model.agents.get(i))
         .map(|s| s.as_str())
         .unwrap_or("No agent selected");
 
-    let title = Paragraph::new(format!("Agent: {}", selected_agent))
-        .block(Block::default().borders(Borders::ALL))
+    let agent_info = Paragraph::new(format!("Agent: {}", selected_agent))
         .style(Style::default().fg(Color::Cyan));
-    frame.render_widget(title, chunks[0]);
+    frame.render_widget(agent_info, chunks[1]);
 
-    // Input - textarea (messages scroll in terminal scrollback above viewport)
-    let input_block = Block::default().borders(Borders::ALL).title("Prompt");
-    let inner_area = input_block.inner(chunks[1]);
-    frame.render_widget(input_block, chunks[1]);
-    frame.render_widget(&model.textarea, inner_area);
+    // Instructions - show error/hint message if present, otherwise show default instructions
+    let instructions_text = if let Some(ref msg) = model.error_message {
+        msg.clone()
+    } else {
+        "/switch-model: agents | /exit: quit".to_string()
+    };
 
-    // Instructions
-    let instructions = Paragraph::new("Enter: send | /switch-model: agents | /exit: quit")
-        .style(Style::default().fg(Color::Gray));
+    let instructions_style = if model.error_message.is_some() {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+
+    let instructions = Paragraph::new(instructions_text).style(instructions_style);
     frame.render_widget(instructions, chunks[2]);
 }
 
-fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect) {
+fn render_agent_selection_fullscreen(model: &mut Model, frame: &mut Frame) {
+    let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(3),
+            Constraint::Length(2),
+            Constraint::Min(3),
+            Constraint::Length(2),
         ])
         .split(area);
 
     // Title
-    let title = Paragraph::new("Agent Router - Select an Agent")
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::Cyan));
+    let title = Paragraph::new("Agent Router - Select an Agent").style(
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(title, chunks[0]);
 
     // Agent list with availability indication
@@ -110,29 +121,31 @@ fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect)
     frame.render_stateful_widget(list, chunks[1], &mut model.list_state);
 
     // Instructions
-    let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to select, Esc to close")
-        .block(Block::default().borders(Borders::ALL))
+    let instructions = Paragraph::new("↑/↓: navigate | Enter: select | Esc: close")
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[2]);
 }
 
-fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
+fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
     use crate::app::InstallChoice;
 
+    let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Title
-            Constraint::Min(4),    // Message
-            Constraint::Length(5), // Options
-            Constraint::Length(3), // Instructions
+            Constraint::Length(2), // Title
+            Constraint::Min(2),    // Message (flexible)
+            Constraint::Length(3), // Options
+            Constraint::Length(1), // Instructions
         ])
         .split(area);
 
     // Title
-    let title = Paragraph::new("Backend Not Installed")
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::Yellow));
+    let title = Paragraph::new("Backend Not Installed").style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(title, chunks[0]);
 
     // Message
@@ -155,8 +168,8 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
         )
     };
     let message = Paragraph::new(message_text)
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(Color::White))
+        .wrap(ratatui::widgets::Wrap { trim: false });
     frame.render_widget(message, chunks[1]);
 
     // Options as a list
@@ -194,29 +207,7 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
     frame.render_widget(list, chunks[2]);
 
     // Instructions
-    let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to confirm, Esc to cancel")
-        .block(Block::default().borders(Borders::ALL))
+    let instructions = Paragraph::new("↑/↓: navigate | Enter: confirm | Esc: cancel")
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[3]);
-}
-
-// Helper function to create centered rect
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
 }
