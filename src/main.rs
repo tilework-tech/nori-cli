@@ -21,10 +21,10 @@ async fn main() -> Result<()> {
     // Get starting cursor position before creating viewport
     let viewport_start_row = crossterm::cursor::position()?.1;
 
-    // Setup terminal with inline viewport (14 lines at bottom for input/autocomplete/instructions)
+    // Setup terminal with inline viewport (20 lines at bottom for input/autocomplete/instructions)
     enable_raw_mode()?;
     let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: Viewport::Inline(14),
+        viewport: Viewport::Inline(20),
     });
 
     let result = run_app(&mut terminal).await;
@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
     use crossterm::terminal::Clear;
     execute!(
         std::io::stdout(),
-        MoveTo(0, viewport_start_row + 14),
+        MoveTo(0, viewport_start_row + 20),
         Clear(crossterm::terminal::ClearType::FromCursorDown)
     )?;
 

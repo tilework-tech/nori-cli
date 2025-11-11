@@ -5,6 +5,31 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+use tui_textarea::TextArea;
+use unicode_width::UnicodeWidthStr;
+
+pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u16 {
+    const MIN_HEIGHT: u16 = 3;
+    const MAX_HEIGHT: u16 = 10;
+    const BORDER_HEIGHT: u16 = 2;
+
+    let available_width = available_width.max(1); // Prevent division by zero
+
+    let mut total_lines = 0u16;
+    for line in textarea.lines() {
+        let line_width = line.width() as u16;
+        // Calculate how many wrapped lines this will take
+        let wrapped_lines = if line_width == 0 {
+            1 // Empty line still takes 1 line
+        } else {
+            line_width.div_ceil(available_width).max(1)
+        };
+        total_lines += wrapped_lines;
+    }
+
+    let height = total_lines.clamp(MIN_HEIGHT, MAX_HEIGHT);
+    height + BORDER_HEIGHT
+}
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
     // Install prompt takes priority (blocking action)
@@ -26,23 +51,25 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
+    // Calculate dynamic textarea height
+    let available_width = area.width.saturating_sub(2); // Account for borders
+    let textarea_height = calculate_textarea_height(&model.textarea, available_width);
+
     // Adjust layout based on whether autocomplete is visible
     let constraints = if model.show_autocomplete {
         // Calculate height needed for autocomplete (2 commands + borders = 4 lines)
         let autocomplete_height =
             (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
         vec![
-            Constraint::Length(3),                   // Title
-            Constraint::Length(4),                   // Input
+            Constraint::Length(textarea_height),     // Input (dynamic)
             Constraint::Length(autocomplete_height), // Autocomplete
             Constraint::Length(1),                   // Instructions
         ]
     } else {
         vec![
-            Constraint::Length(3), // Title
-            Constraint::Length(4), // Input
-            Constraint::Length(1), // Agent info
-            Constraint::Length(1), // Instructions
+            Constraint::Length(textarea_height), // Input (dynamic)
+            Constraint::Length(1),               // Agent info
+            Constraint::Length(1),               // Instructions
         ]
     };
 
@@ -85,10 +112,10 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     // Render autocomplete dropdown in its own layout chunk (if visible)
     if model.show_autocomplete {
-        render_autocomplete_in_layout(model, frame, chunks[2]);
-        frame.render_widget(instructions, chunks[3]); // Instructions at bottom
+        render_autocomplete_in_layout(model, frame, chunks[1]);
+        frame.render_widget(instructions, chunks[2]); // Instructions at bottom
     } else {
-        frame.render_widget(instructions, chunks[2]); // Instructions directly after input
+        frame.render_widget(instructions, chunks[2]); // Instructions directly after agent info
     }
 }
 
