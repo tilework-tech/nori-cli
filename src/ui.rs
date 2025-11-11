@@ -105,8 +105,11 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         String::new()
     };
 
-    let agent_info = Paragraph::new(format!("Agent: {}{}{}", selected_agent, debug_indicator, loading_indicator))
-        .style(Style::default().fg(Color::Cyan));
+    let agent_info = Paragraph::new(format!(
+        "Agent: {}{}{}",
+        selected_agent, debug_indicator, loading_indicator
+    ))
+    .style(Style::default().fg(Color::Cyan));
     frame.render_widget(agent_info, chunks[1]);
 
     // Instructions - show error/hint message if present, otherwise show default instructions
