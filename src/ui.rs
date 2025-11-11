@@ -239,21 +239,31 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
     // Calculate position: below the prompt textarea
-    // Layout: Title (3) + Input (4) + Instructions (1) = 8
-    // Dropdown should start at line 8 (after instructions)
-    let frame_area = frame.area();
-    let prompt_bottom = 8;
+    // We need to recreate the same layout to know where the instructions end
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Title
+            Constraint::Length(4), // Input
+            Constraint::Length(1), // Instructions
+        ])
+        .split(area);
 
-    if prompt_bottom >= frame_area.height {
+    // Position dropdown right after instructions chunk
+    let dropdown_y = chunks[2].y + chunks[2].height;
+
+    // Check if there's enough space
+    if dropdown_y >= area.height {
         return; // Not enough space
     }
 
     let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 8) + 2; // +2 for borders
-    let dropdown_width = 50.min(frame_area.width.saturating_sub(4));
+    let dropdown_width = 50.min(area.width.saturating_sub(4));
 
     let dropdown_area = Rect {
         x: 2,
-        y: prompt_bottom,
+        y: dropdown_y,
         width: dropdown_width,
         height: dropdown_height,
     };
