@@ -187,3 +187,29 @@ fn test_cancel_stream_during_streaming() {
         Some(ConversationEvent::StreamCancelled)
     ));
 }
+
+#[test]
+fn test_navigate_install_choice_with_install_cmd() {
+    use nori_cli::app::InstallChoice;
+
+    let mut model = Model::default();
+
+    model.update(Message::ShowInstallPrompt {
+        backend: "Claude Code".to_string(),
+        url: "https://code.claude.com".to_string(),
+        install_cmd: Some(vec!["npm".to_string(), "install".to_string()]),
+    });
+
+    // Should start at RunInstallation
+    assert_eq!(model.install_prompt_choice, InstallChoice::RunInstallation);
+
+    model.update(Message::NavigateInstallChoice);
+    assert_eq!(model.install_prompt_choice, InstallChoice::OpenInstallPage);
+
+    model.update(Message::NavigateInstallChoice);
+    assert_eq!(model.install_prompt_choice, InstallChoice::Cancel);
+
+    model.update(Message::NavigateInstallChoice);
+    // Should wrap around to first
+    assert_eq!(model.install_prompt_choice, InstallChoice::RunInstallation);
+}

@@ -13,6 +13,7 @@ pub enum AppMode {
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum InstallChoice {
+    RunInstallation,
     #[default]
     OpenInstallPage,
     Cancel,
