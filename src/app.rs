@@ -56,6 +56,7 @@ pub enum Message {
     },
 
     // Control
+    ClearTextarea,
     Quit,
 }
 
@@ -77,6 +78,7 @@ pub struct Model {
     pub install_prompt_cmd: Option<Vec<String>>,
     pub install_prompt_choice: InstallChoice,
     pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
+    pub last_ctrl_c_time: Option<std::time::Instant>,
 }
 
 impl Default for Model {
@@ -104,6 +106,7 @@ impl Default for Model {
             install_prompt_cmd: None,
             install_prompt_choice: InstallChoice::default(),
             current_stream_token: None,
+            last_ctrl_c_time: None,
         }
     }
 }
@@ -257,6 +260,12 @@ impl Model {
                 } else {
                     self.error_message = Some(message);
                 }
+            }
+
+            Message::ClearTextarea => {
+                self.textarea = TextArea::default();
+                self.last_ctrl_c_time = Some(std::time::Instant::now());
+                self.error_message = Some("Press Ctrl-C again to exit".to_string());
             }
 
             Message::Quit => {
