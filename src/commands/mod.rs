@@ -7,6 +7,24 @@ mod switch_model;
 pub use exit::ExitCommand;
 pub use switch_model::SwitchModelCommand;
 
+/// Parses a potential slash command from user input
+/// Returns Some(command_name) if input starts with "/", None otherwise
+pub fn parse_slash_command(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.starts_with('/') {
+        // Extract command name after the "/"
+        let command = &trimmed[1..]; // Remove leading "/"
+        let command = command.trim(); // Trim any whitespace after "/"
+        if command.is_empty() {
+            None
+        } else {
+            Some(command.to_string())
+        }
+    } else {
+        None
+    }
+}
+
 /// Standard interface for all slash commands
 pub trait CommandHandler {
     /// Returns the name of the command (without the "/" prefix)
