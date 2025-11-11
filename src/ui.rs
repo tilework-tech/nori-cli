@@ -81,8 +81,11 @@ fn render_agent_selection_fullscreen(model: &mut Model, frame: &mut Frame) {
         .split(area);
 
     // Title
-    let title = Paragraph::new("Agent Router - Select an Agent")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+    let title = Paragraph::new("Agent Router - Select an Agent").style(
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(title, chunks[0]);
 
     // Agent list with availability indication
@@ -138,8 +141,11 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
         .split(area);
 
     // Title
-    let title = Paragraph::new("Backend Not Installed")
-        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+    let title = Paragraph::new("Backend Not Installed").style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(title, chunks[0]);
 
     // Message
@@ -205,4 +211,3 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[3]);
 }
-
