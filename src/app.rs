@@ -79,6 +79,7 @@ pub struct Model {
     pub install_prompt_choice: InstallChoice,
     pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
     pub last_ctrl_c_time: Option<std::time::Instant>,
+    pub wrap_width: usize,
 }
 
 impl Default for Model {
@@ -107,6 +108,7 @@ impl Default for Model {
             install_prompt_choice: InstallChoice::default(),
             current_stream_token: None,
             last_ctrl_c_time: None,
+            wrap_width: 80, // Default width
         }
     }
 }
@@ -164,6 +166,8 @@ impl Model {
                 // Only handle text input when overlay is NOT open
                 if !self.show_agent_router {
                     self.textarea.input(key);
+                    // Apply text wrapping after input
+                    self.rewrap_textarea();
                     // Clear Ctrl-C timer when user types (resets the double-press window)
                     self.last_ctrl_c_time = None;
                     // Clear any error/hint messages when user starts typing
@@ -295,5 +299,33 @@ impl Model {
                 // Handled in main loop
             }
         }
+    }
+
+    /// Set the wrap width and rewrap existing content
+    pub fn set_wrap_width(&mut self, width: usize) {
+        self.wrap_width = width;
+        self.rewrap_textarea();
+    }
+
+    /// Apply text wrapping to the current textarea content
+    fn rewrap_textarea(&mut self) {
+        use crate::text_wrapping::wrap_text_for_width;
+
+        // Get current content
+        let current_text = self.textarea.lines().join("\n");
+
+        // Wrap it
+        let wrapped_text = wrap_text_for_width(&current_text, self.wrap_width);
+
+        // Create new textarea with wrapped content
+        // We need to set lines directly to avoid reconstruction issues
+        let wrapped_lines: Vec<String> = if wrapped_text.is_empty() {
+            vec![]
+        } else {
+            wrapped_text.split('\n').map(|s| s.to_string()).collect()
+        };
+
+        // Replace the textarea's lines directly
+        self.textarea = TextArea::from(wrapped_lines);
     }
 }
