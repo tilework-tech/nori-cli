@@ -11,16 +11,11 @@ pub enum AppMode {
     Streaming,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum InstallChoice {
+    #[default]
     OpenInstallPage,
     Cancel,
-}
-
-impl Default for InstallChoice {
-    fn default() -> Self {
-        Self::OpenInstallPage
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,11 +41,18 @@ pub enum Message {
     Error(String),
 
     // Install prompt
-    ShowInstallPrompt { backend: String, url: String, install_cmd: Option<Vec<String>> },
+    ShowInstallPrompt {
+        backend: String,
+        url: String,
+        install_cmd: Option<Vec<String>>,
+    },
     NavigateInstallChoice,
     ConfirmInstall,
     CancelInstall,
-    InstallationComplete { success: bool, message: String },
+    InstallationComplete {
+        success: bool,
+        message: String,
+    },
 
     // Control
     Quit,
@@ -190,7 +192,11 @@ impl Model {
                 self.show_agent_router = !self.show_agent_router;
             }
 
-            Message::ShowInstallPrompt { backend, url, install_cmd } => {
+            Message::ShowInstallPrompt {
+                backend,
+                url,
+                install_cmd,
+            } => {
                 self.show_install_prompt = true;
                 self.install_prompt_backend = Some(backend);
                 self.install_prompt_url = Some(url);

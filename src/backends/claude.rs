@@ -176,6 +176,6 @@ impl AgentBackend for ClaudeBackend {
     }
 
     fn install_command(&self) -> Option<Vec<String>> {
-        None  // Claude is installed via download, not command
+        None // Claude is installed via download, not command
     }
 }

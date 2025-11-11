@@ -224,7 +224,12 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     Ok(())
 }
 
-fn handle_event_simple(mode: AppMode, show_overlay: bool, show_install_prompt: bool, event: Event) -> Option<Message> {
+fn handle_event_simple(
+    mode: AppMode,
+    show_overlay: bool,
+    show_install_prompt: bool,
+    event: Event,
+) -> Option<Message> {
     if let Event::Key(key) = event
         && key.kind == KeyEventKind::Press
     {
@@ -233,7 +238,12 @@ fn handle_event_simple(mode: AppMode, show_overlay: bool, show_install_prompt: b
     None
 }
 
-fn handle_key_simple(mode: AppMode, show_overlay: bool, show_install_prompt: bool, key: KeyEvent) -> Option<Message> {
+fn handle_key_simple(
+    mode: AppMode,
+    show_overlay: bool,
+    show_install_prompt: bool,
+    key: KeyEvent,
+) -> Option<Message> {
     // Install prompt takes highest precedence
     if show_install_prompt {
         return match key.code {

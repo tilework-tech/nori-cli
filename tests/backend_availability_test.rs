@@ -1,6 +1,6 @@
 use nori_cli::backends;
-use nori_cli::backends::claude::ClaudeBackend;
 use nori_cli::backends::AgentBackend;
+use nori_cli::backends::claude::ClaudeBackend;
 
 #[test]
 fn test_backend_availability_check_installed() {

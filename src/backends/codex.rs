@@ -112,7 +112,7 @@ impl AgentBackend for CodexBackend {
     }
 
     fn install_url(&self) -> &str {
-        ""  // Codex is installed via npm, not URL
+        "" // Codex is installed via npm, not URL
     }
 
     fn install_command(&self) -> Option<Vec<String>> {

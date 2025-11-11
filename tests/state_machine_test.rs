@@ -125,8 +125,14 @@ fn test_show_install_prompt_message() {
     });
 
     assert!(model.show_install_prompt);
-    assert_eq!(model.install_prompt_backend, Some("Claude Code".to_string()));
-    assert_eq!(model.install_prompt_url, Some("https://code.claude.com".to_string()));
+    assert_eq!(
+        model.install_prompt_backend,
+        Some("Claude Code".to_string())
+    );
+    assert_eq!(
+        model.install_prompt_url,
+        Some("https://code.claude.com".to_string())
+    );
 }
 
 #[test]

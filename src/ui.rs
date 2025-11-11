@@ -122,10 +122,10 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Min(4),     // Message
-            Constraint::Length(5),  // Options
-            Constraint::Length(3),  // Instructions
+            Constraint::Length(3), // Title
+            Constraint::Min(4),    // Message
+            Constraint::Length(5), // Options
+            Constraint::Length(3), // Instructions
         ])
         .split(area);
 
@@ -137,7 +137,11 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
 
     // Message
     let backend_name = model.install_prompt_backend.as_deref().unwrap_or("Backend");
-    let has_install_cmd = model.install_prompt_cmd.as_ref().map(|v| !v.is_empty()).unwrap_or(false);
+    let has_install_cmd = model
+        .install_prompt_cmd
+        .as_ref()
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
 
     let message_text = if has_install_cmd {
         format!(
@@ -162,20 +166,16 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
         "Open Installation Page"
     };
 
-    let options = vec![
-        first_option,
-        "Cancel",
-    ];
+    let options = [first_option, "Cancel"];
 
     let items: Vec<ListItem> = options
         .iter()
         .enumerate()
         .map(|(i, option)| {
-            let is_selected = match (i, model.install_prompt_choice) {
-                (0, InstallChoice::OpenInstallPage) => true,
-                (1, InstallChoice::Cancel) => true,
-                _ => false,
-            };
+            let is_selected = matches!(
+                (i, model.install_prompt_choice),
+                (0, InstallChoice::OpenInstallPage) | (1, InstallChoice::Cancel)
+            );
 
             let style = if is_selected {
                 Style::default()
@@ -190,8 +190,7 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Options"));
+    let list = List::new(items).block(Block::default().borders(Borders::ALL).title("Options"));
     frame.render_widget(list, chunks[2]);
 
     // Instructions
