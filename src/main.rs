@@ -1,9 +1,11 @@
 use color_eyre::Result;
+use crossterm::cursor::MoveTo;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
+use nori_cli::autocomplete::update_autocomplete_state;
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
 use nori_cli::conversation::{ConversationEvent, render_event};
@@ -16,26 +18,26 @@ use tokio::time::{Duration, interval};
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
-    // Setup terminal with inline viewport (8 lines at bottom for input/instructions)
+    // Get starting cursor position before creating viewport
+    let viewport_start_row = crossterm::cursor::position()?.1;
+
+    // Setup terminal with inline viewport (14 lines at bottom for input/autocomplete/instructions)
     enable_raw_mode()?;
     let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: Viewport::Inline(8),
+        viewport: Viewport::Inline(14),
     });
 
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
-    // The viewport shows: 3 lines (title) + 4 lines (input) + 1 line (instructions) = 8 lines
     ratatui::restore();
     disable_raw_mode()?;
 
-    // Move cursor to column 0 and clear any remaining artifacts
-    // This ensures the shell prompt appears cleanly below the TUI
-    use crossterm::cursor::MoveToColumn;
+    // Move cursor below the viewport and clear any remaining artifacts
     use crossterm::terminal::Clear;
     execute!(
         std::io::stdout(),
-        MoveToColumn(0),
+        MoveTo(0, viewport_start_row + 14),
         Clear(crossterm::terminal::ClearType::FromCursorDown)
     )?;
 
@@ -54,6 +56,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     let (overlay_tx, mut overlay_rx) = mpsc::unbounded_channel::<bool>();
     let (install_prompt_tx, mut install_prompt_rx) = mpsc::unbounded_channel::<bool>();
     let (ctrl_c_tx, mut ctrl_c_rx) = mpsc::unbounded_channel::<Option<std::time::Instant>>();
+    let (autocomplete_tx, mut autocomplete_rx) = mpsc::unbounded_channel::<bool>();
 
     // Spawn event handling task
     let event_tx = tx.clone();
@@ -63,6 +66,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
         let mut show_overlay = false;
         let mut show_install_prompt = false;
         let mut last_ctrl_c_time: Option<std::time::Instant> = None;
+        let mut show_autocomplete = false;
         loop {
             tokio::select! {
                 // Receive mode updates from main loop (single source of truth)
@@ -81,8 +85,12 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                 Some(time) = ctrl_c_rx.recv() => {
                     last_ctrl_c_time = time;
                 }
+                // Receive autocomplete state updates
+                Some(autocomplete) = autocomplete_rx.recv() => {
+                    show_autocomplete = autocomplete;
+                }
                 Some(Ok(event)) = reader.next() => {
-                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, show_install_prompt, last_ctrl_c_time, event) {
+                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, show_install_prompt, show_autocomplete, last_ctrl_c_time, event) {
                         let _ = event_tx.send(msg);
                     }
                 }
@@ -124,6 +132,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
                         let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
                     }
                     Message::ClearTextarea => {
                         let was_set = model.last_ctrl_c_time.is_some();
@@ -281,6 +290,26 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
                         let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
+                    }
+                    Message::KeyPress(_) => {
+                        // Update model (which updates textarea)
+                        model.update(msg);
+                        // Update autocomplete state based on new textarea content
+                        let input = model.textarea.lines().join("\n");
+                        update_autocomplete_state(&mut model, &input, &command_registry);
+                        // Send state updates
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
+                    }
+                    Message::InputChanged => {
+                        // Explicitly update autocomplete state (called after other updates)
+                        let input = model.textarea.lines().join("\n");
+                        update_autocomplete_state(&mut model, &input, &command_registry);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
                     }
                     _ => {
                         model.update(msg);
@@ -289,6 +318,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
                         let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
                     }
                 }
             }
@@ -307,6 +337,7 @@ fn handle_event_simple(
     mode: AppMode,
     show_overlay: bool,
     show_install_prompt: bool,
+    show_autocomplete: bool,
     last_ctrl_c_time: Option<std::time::Instant>,
     event: Event,
 ) -> Option<Message> {
@@ -317,6 +348,7 @@ fn handle_event_simple(
             mode,
             show_overlay,
             show_install_prompt,
+            show_autocomplete,
             last_ctrl_c_time,
             key,
         );
@@ -328,6 +360,7 @@ fn handle_key_simple(
     mode: AppMode,
     show_overlay: bool,
     show_install_prompt: bool,
+    show_autocomplete: bool,
     _last_ctrl_c_time: Option<std::time::Instant>,
     key: KeyEvent,
 ) -> Option<Message> {
@@ -360,6 +393,26 @@ fn handle_key_simple(
             KeyCode::Enter => Some(Message::SelectItem),
             KeyCode::Esc => Some(Message::ExitInputMode),
             _ => None,
+        };
+    }
+
+    // If autocomplete is visible, handle navigation and selection
+    if show_autocomplete {
+        return match key.code {
+            KeyCode::Down | KeyCode::Char('j') if key.modifiers.is_empty() => {
+                Some(Message::AutocompleteDown)
+            }
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() => {
+                Some(Message::AutocompleteUp)
+            }
+            KeyCode::Tab | KeyCode::Enter if key.modifiers.is_empty() => {
+                Some(Message::AutocompleteSelect)
+            }
+            KeyCode::Esc => Some(Message::CloseAutocomplete),
+            _ => {
+                // Allow typing to continue filtering - forward to KeyPress and trigger InputChanged
+                Some(Message::KeyPress(key))
+            }
         };
     }
 

@@ -1,7 +1,7 @@
 use crate::app::Model;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
@@ -26,13 +26,29 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
+    // Adjust layout based on whether autocomplete is visible
+    let constraints = if model.show_autocomplete {
+        // Calculate height needed for autocomplete (2 commands + borders = 4 lines)
+        let autocomplete_height =
+            (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
+        vec![
+            Constraint::Length(3),                   // Title
+            Constraint::Length(4),                   // Input
+            Constraint::Length(autocomplete_height), // Autocomplete
+            Constraint::Length(1),                   // Instructions
+        ]
+    } else {
+        vec![
+            Constraint::Length(3), // Title
             Constraint::Length(4), // Input
             Constraint::Length(1), // Agent info
             Constraint::Length(1), // Instructions
-        ])
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(area);
 
     // Input - textarea (messages scroll in terminal scrollback above viewport)
@@ -66,7 +82,14 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     };
 
     let instructions = Paragraph::new(instructions_text).style(instructions_style);
-    frame.render_widget(instructions, chunks[2]);
+
+    // Render autocomplete dropdown in its own layout chunk (if visible)
+    if model.show_autocomplete {
+        render_autocomplete_in_layout(model, frame, chunks[2]);
+        frame.render_widget(instructions, chunks[3]); // Instructions at bottom
+    } else {
+        frame.render_widget(instructions, chunks[2]); // Instructions directly after input
+    }
 }
 
 fn render_agent_selection_fullscreen(model: &mut Model, frame: &mut Frame) {
@@ -210,4 +233,36 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
     let instructions = Paragraph::new("↑/↓: navigate | Enter: confirm | Esc: cancel")
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[3]);
+}
+
+fn render_autocomplete_in_layout(model: &Model, frame: &mut Frame, area: Rect) {
+    // Render autocomplete as part of the layout (not an overlay)
+    // This area is the chunk allocated for autocomplete in the main layout
+
+    if model.autocomplete_filtered_commands.is_empty() {
+        return; // Nothing to show
+    }
+
+    // Build list items
+    let items: Vec<ListItem> = model
+        .autocomplete_filtered_commands
+        .iter()
+        .map(|cmd| ListItem::new(format!("/{}", cmd)))
+        .collect();
+
+    // Create highlighted list - render directly in the provided area
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title("Commands"))
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
+
+    // Create stateful widget with current selection
+    let mut list_state = ratatui::widgets::ListState::default();
+    list_state.select(Some(model.autocomplete_selected_index));
+
+    frame.render_stateful_widget(list, area, &mut list_state);
 }

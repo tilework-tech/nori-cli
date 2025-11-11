@@ -32,6 +32,13 @@ pub enum Message {
     // Input handling
     KeyPress(crossterm::event::KeyEvent),
     SubmitInput,
+    InputChanged,
+
+    // Autocomplete
+    AutocompleteDown,
+    AutocompleteUp,
+    AutocompleteSelect,
+    CloseAutocomplete,
 
     // Streaming
     StreamEvent(ConversationEvent),
@@ -79,6 +86,9 @@ pub struct Model {
     pub install_prompt_choice: InstallChoice,
     pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
     pub last_ctrl_c_time: Option<std::time::Instant>,
+    pub show_autocomplete: bool,
+    pub autocomplete_filtered_commands: Vec<String>,
+    pub autocomplete_selected_index: usize,
 }
 
 impl Default for Model {
@@ -107,6 +117,9 @@ impl Default for Model {
             install_prompt_choice: InstallChoice::default(),
             current_stream_token: None,
             last_ctrl_c_time: None,
+            show_autocomplete: false,
+            autocomplete_filtered_commands: Vec::new(),
+            autocomplete_selected_index: 0,
         }
     }
 }
@@ -289,6 +302,46 @@ impl Model {
                         self.error_message = Some("Press Ctrl-C again to exit".to_string());
                     }
                 }
+            }
+
+            Message::InputChanged => {
+                // Autocomplete state will be updated in main.rs after textarea changes
+            }
+
+            Message::AutocompleteDown => {
+                if !self.autocomplete_filtered_commands.is_empty() {
+                    self.autocomplete_selected_index = (self.autocomplete_selected_index + 1)
+                        % self.autocomplete_filtered_commands.len();
+                }
+            }
+
+            Message::AutocompleteUp => {
+                if !self.autocomplete_filtered_commands.is_empty() {
+                    let len = self.autocomplete_filtered_commands.len();
+                    self.autocomplete_selected_index = if self.autocomplete_selected_index == 0 {
+                        len - 1
+                    } else {
+                        self.autocomplete_selected_index - 1
+                    };
+                }
+            }
+
+            Message::AutocompleteSelect => {
+                if let Some(selected_cmd) = self
+                    .autocomplete_filtered_commands
+                    .get(self.autocomplete_selected_index)
+                {
+                    // Replace textarea content with selected command
+                    self.textarea = TextArea::from([format!("/{}", selected_cmd)]);
+                    self.textarea.move_cursor(tui_textarea::CursorMove::End);
+                }
+                self.show_autocomplete = false;
+                self.autocomplete_filtered_commands.clear();
+            }
+
+            Message::CloseAutocomplete => {
+                self.show_autocomplete = false;
+                self.autocomplete_filtered_commands.clear();
             }
 
             Message::Quit => {

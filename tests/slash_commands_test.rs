@@ -1,5 +1,72 @@
 use nori_cli::app::Model;
-use nori_cli::commands::{CommandRegistry, parse_slash_command};
+use nori_cli::commands::{CommandRegistry, filter_commands, parse_slash_command};
+
+// Tests for CommandRegistry - listing available commands
+
+#[test]
+fn test_command_registry_lists_all_names() {
+    // Arrange: Create default registry
+    let registry = CommandRegistry::default();
+
+    // Act: Get all command names
+    let mut names = registry.get_all_command_names();
+    names.sort(); // Ensure stable order
+
+    // Assert: Returns both registered commands
+    assert_eq!(names, vec!["exit", "switch-model"]);
+}
+
+// Tests for filter_commands - prefix-based filtering
+
+#[test]
+fn test_filter_commands_empty_prefix() {
+    // Arrange: List of all commands
+    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+
+    // Act: Filter with empty prefix
+    let result = filter_commands("", &all_commands);
+
+    // Assert: Returns all commands
+    assert_eq!(result, vec!["exit", "switch-model"]);
+}
+
+#[test]
+fn test_filter_commands_partial_match() {
+    // Arrange: List of all commands
+    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+
+    // Act: Filter with "swi" prefix
+    let result = filter_commands("swi", &all_commands);
+
+    // Assert: Returns only "switch-model"
+    assert_eq!(result, vec!["switch-model"]);
+}
+
+#[test]
+fn test_filter_commands_no_match() {
+    // Arrange: List of all commands
+    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+
+    // Act: Filter with non-matching prefix
+    let result = filter_commands("xyz", &all_commands);
+
+    // Assert: Returns empty vector
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_filter_commands_case_insensitive() {
+    // Arrange: List of all commands
+    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+
+    // Act: Filter with uppercase prefix
+    let result = filter_commands("SWI", &all_commands);
+
+    // Assert: Returns "switch-model" (case-insensitive)
+    assert_eq!(result, vec!["switch-model"]);
+}
+
+// Tests for CommandRegistry - executing commands
 
 #[test]
 fn test_registry_executes_registered_command() {

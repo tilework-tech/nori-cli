@@ -59,6 +59,13 @@ impl CommandRegistry {
             None => Err(format!("Unknown command: /{}", name)),
         }
     }
+
+    /// Returns a sorted list of all registered command names
+    pub fn get_all_command_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.commands.keys().cloned().collect();
+        names.sort();
+        names
+    }
 }
 
 impl Default for CommandRegistry {
@@ -69,4 +76,14 @@ impl Default for CommandRegistry {
         registry.register(Box::new(SwitchModelCommand));
         registry
     }
+}
+
+/// Filters command names by prefix (case-insensitive)
+pub fn filter_commands(prefix: &str, all_commands: &[String]) -> Vec<String> {
+    let prefix_lower = prefix.to_lowercase();
+    all_commands
+        .iter()
+        .filter(|cmd| cmd.to_lowercase().starts_with(&prefix_lower))
+        .cloned()
+        .collect()
 }
