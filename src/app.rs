@@ -10,6 +10,18 @@ pub enum AppMode {
     Streaming,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum InstallChoice {
+    OpenInstallPage,
+    Cancel,
+}
+
+impl Default for InstallChoice {
+    fn default() -> Self {
+        Self::OpenInstallPage
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     // Navigation
@@ -32,6 +44,12 @@ pub enum Message {
     // Error handling
     Error(String),
 
+    // Install prompt
+    ShowInstallPrompt { backend: String, url: String },
+    NavigateInstallChoice,
+    ConfirmInstall,
+    CancelInstall,
+
     // Control
     Quit,
 }
@@ -47,6 +65,10 @@ pub struct Model {
     pub session_id: Option<String>,
     pub error_message: Option<String>,
     pub show_agent_router: bool,
+    pub show_install_prompt: bool,
+    pub install_prompt_backend: Option<String>,
+    pub install_prompt_url: Option<String>,
+    pub install_prompt_choice: InstallChoice,
 }
 
 impl Default for Model {
@@ -64,6 +86,10 @@ impl Default for Model {
             session_id: None,
             error_message: None,
             show_agent_router: false,
+            show_install_prompt: false,
+            install_prompt_backend: None,
+            install_prompt_url: None,
+            install_prompt_choice: InstallChoice::default(),
         }
     }
 }
@@ -153,6 +179,39 @@ impl Model {
 
             Message::ToggleAgentRouter => {
                 self.show_agent_router = !self.show_agent_router;
+            }
+
+            Message::ShowInstallPrompt { backend, url } => {
+                self.show_install_prompt = true;
+                self.install_prompt_backend = Some(backend);
+                self.install_prompt_url = Some(url);
+                self.install_prompt_choice = InstallChoice::default();
+            }
+
+            Message::NavigateInstallChoice => {
+                self.install_prompt_choice = match self.install_prompt_choice {
+                    InstallChoice::OpenInstallPage => InstallChoice::Cancel,
+                    InstallChoice::Cancel => InstallChoice::OpenInstallPage,
+                };
+            }
+
+            Message::ConfirmInstall => {
+                if let InstallChoice::OpenInstallPage = self.install_prompt_choice {
+                    if let Some(ref url) = self.install_prompt_url {
+                        // Attempt to open the URL in browser
+                        let _ = opener::open(url);
+                    }
+                }
+                // Close the prompt either way
+                self.show_install_prompt = false;
+                self.install_prompt_backend = None;
+                self.install_prompt_url = None;
+            }
+
+            Message::CancelInstall => {
+                self.show_install_prompt = false;
+                self.install_prompt_backend = None;
+                self.install_prompt_url = None;
             }
 
             Message::Quit => {

@@ -111,3 +111,37 @@ fn test_submit_input_adds_user_message_to_history() {
         _ => panic!("Expected UserMessage"),
     }
 }
+
+#[test]
+fn test_show_install_prompt_message() {
+    let mut model = Model::default();
+
+    assert!(!model.show_install_prompt);
+
+    model.update(Message::ShowInstallPrompt {
+        backend: "Claude Code".to_string(),
+        url: "https://code.claude.com".to_string(),
+    });
+
+    assert!(model.show_install_prompt);
+    assert_eq!(model.install_prompt_backend, Some("Claude Code".to_string()));
+    assert_eq!(model.install_prompt_url, Some("https://code.claude.com".to_string()));
+}
+
+#[test]
+fn test_cancel_install_prompt() {
+    let mut model = Model::default();
+
+    // Show the prompt first
+    model.update(Message::ShowInstallPrompt {
+        backend: "Claude Code".to_string(),
+        url: "https://code.claude.com".to_string(),
+    });
+    assert!(model.show_install_prompt);
+
+    // Cancel should hide it
+    model.update(Message::CancelInstall);
+    assert!(!model.show_install_prompt);
+    assert_eq!(model.install_prompt_backend, None);
+    assert_eq!(model.install_prompt_url, None);
+}
