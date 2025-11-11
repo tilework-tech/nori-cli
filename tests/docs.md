@@ -4,7 +4,7 @@ Path: @/tests
 
 ### Overview
 
-Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering, and subprocess JSONL streaming. Uses unit tests for Model::update() and conversation module logic, plus integration tests with MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
+Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), and subprocess JSONL streaming. Uses unit tests for Model::update() and conversation module logic, plus integration tests with MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
 
 ### How it fits into the larger codebase
 
@@ -18,14 +18,15 @@ Test suite for the agent-router-tui application, covering state machine transiti
 ### Core Implementation
 
 **State Machine Tests** (@/tests/state_machine_test.rs):
-- `test_state_transitions()`: Verifies mode transitions match expected state machine
-  - Selection → SelectItem → Input
-  - Input → SubmitInput → Streaming
-  - Streaming → StreamComplete → Selection
-  - Input → ExitInputMode → Selection
+- `test_state_transitions()`: Verifies overlay and mode transitions
+  - SelectItem closes agent router overlay (sets `show_agent_router` to false)
+  - SubmitInput with non-empty text transitions to Streaming mode
+  - StreamComplete returns to Selection mode
 - `test_stream_event_accumulation()`: Verifies response_events vector accumulates ConversationEvent instances in order
   - Sends two StreamEvent messages with AssistantMessage events
   - Asserts response_events length is 2 and contents match expected text
+- `test_toggle_agent_router_overlay()`: Verifies ToggleAgentRouter message toggles `show_agent_router` boolean
+- `test_submit_input_adds_user_message_to_history()`: Verifies SubmitInput captures textarea content and adds UserMessage to response_events before spawning agent
 
 **Subprocess Tests** (@/tests/subprocess_test.rs):
 - `test_mock_backend_spawns_process()`: Verifies MockBackend can spawn process and output is readable
@@ -53,6 +54,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_render_stderr()`: Verifies red styling for stderr output
 - `test_render_unknown()`: Verifies [unknown] prefix in yellow with raw JSON
 - `test_parse_result_without_details()`: Verifies default "Completed" text when result field missing
+- `test_render_user_message()`: Verifies UserMessage renders with `[user]` prefix in bold cyan with message text
 
 ### Things to Know
 
@@ -84,16 +86,19 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies contract between backends and main loop: backends output Claude CLI format, parse_jsonl_event() produces ConversationEvent
 
 **Conversation Module Test Coverage**:
-- Comprehensive tests for all ConversationEvent variants (12 tests total)
+- Comprehensive tests for all ConversationEvent variants (13 tests total including UserMessage)
 - Edge cases: malformed JSON, missing fields, multiple text blocks, empty details
 - Both parsing (JSONL → ConversationEvent) and rendering (ConversationEvent → styled Line) tested independently
 - Rendering tests verify color, style modifiers (dim, bold), and prefix text for each variant
+- UserMessage test verifies chat history rendering with cyan styling
 
 **Coverage Gaps**:
-- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events
-- No tests for @/src/ui.rs rendering functions - would require terminal buffer assertions
+- No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut
+- No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) - would require terminal buffer assertions
+- No tests for overlay interaction blocking (navigation disabled in chat, input disabled in overlay) - requires event handler integration
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds
 - No tests for session resumption - session_id/thread_id fields are never populated
+- No tests verifying conversation history persistence across multiple submit cycles
 
 **CI Integration**:
 - Tests run on every PR via @/.github/workflows/pr-ci.yml

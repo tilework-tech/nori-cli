@@ -3,6 +3,9 @@ use ratatui::text::{Line, Span};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConversationEvent {
+    UserMessage {
+        text: String,
+    },
     AssistantMessage {
         text: String,
     },
@@ -24,6 +27,15 @@ pub enum ConversationEvent {
 
 pub fn render_event(event: &ConversationEvent) -> Line<'static> {
     match event {
+        ConversationEvent::UserMessage { text } => Line::from(vec![
+            Span::styled(
+                "[user] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(text.clone()),
+        ]),
         ConversationEvent::AssistantMessage { text } => Line::from(text.clone()),
         ConversationEvent::SystemEvent { subtype, details } => {
             let mut spans = vec![

@@ -1,24 +1,60 @@
-use crate::app::{AppMode, Model};
-use crate::conversation::render_event;
+use crate::app::Model;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
-    match model.current_mode {
-        AppMode::Selection => render_selection(model, frame),
-        AppMode::Input => render_input(model, frame),
-        AppMode::Streaming => render_streaming(model, frame),
+    // Always render the chat view as base
+    render_chat(model, frame);
+
+    // Conditionally render agent router overlay on top
+    if model.show_agent_router {
+        let area = centered_rect(60, 40, frame.area());
+        frame.render_widget(Clear, area);
+        render_agent_router_overlay(model, frame, area);
     }
 }
 
-fn render_selection(model: &mut Model, frame: &mut Frame) {
+fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Title
+            Constraint::Length(4), // Input
+            Constraint::Length(1), // Instructions
+        ])
+        .split(area);
+
+    // Title - show selected agent
+    let selected_agent = model
+        .selected_agent_index
+        .and_then(|i| model.agents.get(i))
+        .map(|s| s.as_str())
+        .unwrap_or("No agent selected");
+
+    let title = Paragraph::new(format!("Agent: {}", selected_agent))
+        .block(Block::default().borders(Borders::ALL))
+        .style(Style::default().fg(Color::Cyan));
+    frame.render_widget(title, chunks[0]);
+
+    // Input - textarea (messages scroll in terminal scrollback above viewport)
+    let input_block = Block::default().borders(Borders::ALL).title("Prompt");
+    let inner_area = input_block.inner(chunks[1]);
+    frame.render_widget(input_block, chunks[1]);
+    frame.render_widget(&model.textarea, inner_area);
+
+    // Instructions
+    let instructions = Paragraph::new("Alt+Enter: send | Alt+A: agent router | q: quit")
+        .style(Style::default().fg(Color::Gray));
+    frame.render_widget(instructions, chunks[2]);
+}
+
+fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -53,109 +89,9 @@ fn render_selection(model: &mut Model, frame: &mut Frame) {
     frame.render_stateful_widget(list, chunks[1], &mut model.list_state);
 
     // Instructions
-    let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to select, q to quit")
+    let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to select, Esc/Alt+A to close")
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::Gray));
-    frame.render_widget(instructions, chunks[2]);
-
-    // Show error if present
-    if let Some(ref error) = model.error_message {
-        let error_area = centered_rect(60, 20, area);
-        let error_widget = Paragraph::new(error.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Error"))
-            .style(Style::default().fg(Color::Red))
-            .wrap(Wrap { trim: true });
-        frame.render_widget(error_widget, error_area);
-    }
-}
-
-fn render_input(model: &mut Model, frame: &mut Frame) {
-    let area = frame.area();
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
-        .split(area);
-
-    // Title
-    let selected_agent = model
-        .selected_agent_index
-        .and_then(|i| model.agents.get(i))
-        .map(|s| s.as_str())
-        .unwrap_or("Unknown");
-
-    let title = Paragraph::new(format!("Agent: {} - Enter your prompt", selected_agent))
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::Cyan));
-    frame.render_widget(title, chunks[0]);
-
-    // Text input
-    let input_block = Block::default().borders(Borders::ALL).title("Prompt");
-    let inner_area = input_block.inner(chunks[1]);
-    frame.render_widget(input_block, chunks[1]);
-    frame.render_widget(&model.textarea, inner_area);
-
-    // Instructions
-    let instructions = Paragraph::new("Alt+Enter to submit, Esc to go back")
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::Gray));
-    frame.render_widget(instructions, chunks[2]);
-}
-
-fn render_streaming(model: &Model, frame: &mut Frame) {
-    let area = frame.area();
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
-        .split(area);
-
-    // Title - change color if there's an error
-    let (title_text, title_color) = if model.error_message.is_some() {
-        ("Error - See details below", Color::Red)
-    } else {
-        ("Streaming Response...", Color::Green)
-    };
-    let title = Paragraph::new(title_text)
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(title_color));
-    frame.render_widget(title, chunks[0]);
-
-    // Response text - render events as styled lines
-    let lines: Vec<Line> = model
-        .response_events
-        .iter()
-        .map(|event| render_event(event))
-        .collect();
-
-    let text = Text::from(lines);
-    let response = Paragraph::new(text)
-        .block(Block::default().borders(Borders::ALL).title("Response"))
-        .wrap(Wrap { trim: false });
-    frame.render_widget(response, chunks[1]);
-
-    // Instructions - show error message if present
-    let instruction_text = if let Some(ref error) = model.error_message {
-        format!("ERROR: {}", error)
-    } else {
-        "Receiving response... (Esc to go back, q to quit)".to_string()
-    };
-    let instructions = Paragraph::new(instruction_text)
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(if model.error_message.is_some() {
-            Color::Red
-        } else {
-            Color::Gray
-        }))
-        .wrap(Wrap { trim: true });
     frame.render_widget(instructions, chunks[2]);
 }
 

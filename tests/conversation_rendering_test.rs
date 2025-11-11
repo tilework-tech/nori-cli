@@ -72,3 +72,15 @@ fn test_render_unknown_event() {
     assert!(line_text.contains("[unknown]"));
     assert!(line_text.contains("some unknown data"));
 }
+
+#[test]
+fn test_render_user_message() {
+    let event = ConversationEvent::UserMessage {
+        text: "What is the weather?".to_string(),
+    };
+    let line = render_event(&event);
+
+    let line_text = format!("{:?}", line);
+    assert!(line_text.contains("[user]"));
+    assert!(line_text.contains("What is the weather?"));
+}

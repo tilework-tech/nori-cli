@@ -19,6 +19,7 @@ pub enum Message {
 
     // Mode switching
     ExitInputMode,
+    ToggleAgentRouter,
 
     // Input handling
     KeyPress(crossterm::event::KeyEvent),
@@ -45,6 +46,7 @@ pub struct Model {
     pub selected_agent_index: Option<usize>,
     pub session_id: Option<String>,
     pub error_message: Option<String>,
+    pub show_agent_router: bool,
 }
 
 impl Default for Model {
@@ -61,6 +63,7 @@ impl Default for Model {
             selected_agent_index: None,
             session_id: None,
             error_message: None,
+            show_agent_router: false,
         }
     }
 }
@@ -69,7 +72,8 @@ impl Model {
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::NextItem => {
-                if self.current_mode == AppMode::Selection {
+                // Only navigate when agent router overlay is open
+                if self.show_agent_router {
                     let i = match self.list_state.selected() {
                         Some(i) => {
                             if i >= self.agents.len() - 1 {
@@ -85,7 +89,8 @@ impl Model {
             }
 
             Message::PreviousItem => {
-                if self.current_mode == AppMode::Selection {
+                // Only navigate when agent router overlay is open
+                if self.show_agent_router {
                     let i = match self.list_state.selected() {
                         Some(i) => {
                             if i == 0 {
@@ -101,30 +106,31 @@ impl Model {
             }
 
             Message::SelectItem => {
-                if self.current_mode == AppMode::Selection {
-                    self.selected_agent_index = self.list_state.selected();
-                    self.current_mode = AppMode::Input;
-                    self.textarea = TextArea::default();
-                    self.error_message = None;
-                }
+                // Select agent and close overlay
+                self.selected_agent_index = self.list_state.selected();
+                self.show_agent_router = false;
+                self.error_message = None;
             }
 
             Message::ExitInputMode => {
-                if self.current_mode == AppMode::Input {
-                    self.current_mode = AppMode::Selection;
-                }
+                // Close the agent router overlay if open
+                self.show_agent_router = false;
             }
 
             Message::KeyPress(key) => {
-                if self.current_mode == AppMode::Input {
+                // Only handle text input when overlay is NOT open
+                if !self.show_agent_router {
                     self.textarea.input(key);
                 }
             }
 
             Message::SubmitInput => {
-                if self.current_mode == AppMode::Input {
+                // Capture user message and transition to streaming mode
+                let user_text = self.textarea.lines().join("\n");
+                if !user_text.trim().is_empty() {
+                    self.response_events
+                        .push(ConversationEvent::UserMessage { text: user_text });
                     self.current_mode = AppMode::Streaming;
-                    // Don't clear response_text - we want to append
                 }
             }
 
@@ -136,12 +142,17 @@ impl Model {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None; // Clear any errors when going back
                 self.textarea = TextArea::default(); // Reset textarea for next input
+                // Note: We do NOT clear response_events to preserve chat history
             }
 
             Message::Error(error) => {
                 self.error_message = Some(error);
                 // Stay in Streaming mode so user can see the stderr output
                 // They can press Esc to go back to Selection
+            }
+
+            Message::ToggleAgentRouter => {
+                self.show_agent_router = !self.show_agent_router;
             }
 
             Message::Quit => {
