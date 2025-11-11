@@ -36,6 +36,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     // Create channels for syncing state with event handler
     let (mode_tx, mut mode_rx) = mpsc::unbounded_channel::<AppMode>();
     let (overlay_tx, mut overlay_rx) = mpsc::unbounded_channel::<bool>();
+    let (install_prompt_tx, mut install_prompt_rx) = mpsc::unbounded_channel::<bool>();
 
     // Spawn event handling task
     let event_tx = tx.clone();
@@ -43,6 +44,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
         let mut reader = EventStream::new();
         let mut current_mode = AppMode::Selection;
         let mut show_overlay = false;
+        let mut show_install_prompt = false;
         loop {
             tokio::select! {
                 // Receive mode updates from main loop (single source of truth)
@@ -53,8 +55,12 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                 Some(overlay) = overlay_rx.recv() => {
                     show_overlay = overlay;
                 }
+                // Receive install prompt state updates
+                Some(install_prompt) = install_prompt_rx.recv() => {
+                    show_install_prompt = install_prompt;
+                }
                 Some(Ok(event)) = reader.next() => {
-                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, event) {
+                    if let Some(msg) = handle_event_simple(current_mode, show_overlay, show_install_prompt, event) {
                         let _ = event_tx.send(msg);
                     }
                 }
@@ -82,6 +88,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         model.update(msg);
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
                     }
                     Message::SubmitInput => {
                         // Extract prompt from textarea
@@ -94,6 +101,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                             // Send updated mode and overlay state to event handler
                             let _ = mode_tx.send(model.current_mode);
                             let _ = overlay_tx.send(model.show_agent_router);
+                            let _ = install_prompt_tx.send(model.show_install_prompt);
 
                             tokio::spawn(async move {
                                 if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
@@ -108,6 +116,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         // Send updated mode and overlay state to event handler after every state change
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
                     }
                 }
             }
@@ -122,16 +131,27 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     Ok(())
 }
 
-fn handle_event_simple(mode: AppMode, show_overlay: bool, event: Event) -> Option<Message> {
+fn handle_event_simple(mode: AppMode, show_overlay: bool, show_install_prompt: bool, event: Event) -> Option<Message> {
     if let Event::Key(key) = event
         && key.kind == KeyEventKind::Press
     {
-        return handle_key_simple(mode, show_overlay, key);
+        return handle_key_simple(mode, show_overlay, show_install_prompt, key);
     }
     None
 }
 
-fn handle_key_simple(mode: AppMode, show_overlay: bool, key: KeyEvent) -> Option<Message> {
+fn handle_key_simple(mode: AppMode, show_overlay: bool, show_install_prompt: bool, key: KeyEvent) -> Option<Message> {
+    // Install prompt takes highest precedence
+    if show_install_prompt {
+        return match key.code {
+            KeyCode::Up | KeyCode::Char('k') => Some(Message::NavigateInstallChoice),
+            KeyCode::Down | KeyCode::Char('j') => Some(Message::NavigateInstallChoice),
+            KeyCode::Enter => Some(Message::ConfirmInstall),
+            KeyCode::Esc => Some(Message::CancelInstall),
+            _ => None,
+        };
+    }
+
     // Global Alt+A shortcut to toggle agent router
     if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('a') {
         return Some(Message::ToggleAgentRouter);
