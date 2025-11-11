@@ -248,8 +248,7 @@ fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
         return; // Not enough space
     }
 
-    let dropdown_height =
-        (model.autocomplete_filtered_commands.len() as u16).clamp(1, 8) + 2; // +2 for borders
+    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 8) + 2; // +2 for borders
     let dropdown_width = 50.min(frame_area.width.saturating_sub(4));
 
     let dropdown_area = Rect {
