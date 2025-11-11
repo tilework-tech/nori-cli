@@ -166,8 +166,8 @@ impl Model {
                 // Only handle text input when overlay is NOT open
                 if !self.show_agent_router {
                     self.textarea.input(key);
-                    // Apply text wrapping after input
-                    self.rewrap_textarea();
+                    // Don't rewrap on every keystroke - it resets cursor position
+                    // Wrapping will happen automatically on terminal resize via render_chat()
                     // Clear Ctrl-C timer when user types (resets the double-press window)
                     self.last_ctrl_c_time = None;
                     // Clear any error/hint messages when user starts typing

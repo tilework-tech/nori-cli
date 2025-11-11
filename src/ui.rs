@@ -30,11 +30,11 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
-    // Update wrap width if terminal size changed
-    // Subtract 2 for borders
+    // Store wrap width for potential future use, but don't apply rewrapping
+    // because it resets cursor position
     let wrap_width = (area.width.saturating_sub(2)) as usize;
-    if wrap_width > 0 && wrap_width != model.wrap_width {
-        model.set_wrap_width(wrap_width);
+    if wrap_width > 0 {
+        model.wrap_width = wrap_width;
     }
 
     // Calculate dynamic height for textarea based on content
