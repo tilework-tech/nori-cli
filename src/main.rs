@@ -2,7 +2,6 @@ use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::{cursor::MoveTo, execute};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::autocomplete::update_autocomplete_state;
