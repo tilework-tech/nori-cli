@@ -115,6 +115,8 @@ pub struct Model {
     pub show_autocomplete: bool,
     pub autocomplete_filtered_commands: Vec<String>,
     pub autocomplete_selected_index: usize,
+    pub show_debug_events: bool,
+    pub loading_frame: usize,
 }
 
 impl Default for Model {
@@ -146,6 +148,8 @@ impl Default for Model {
             show_autocomplete: false,
             autocomplete_filtered_commands: Vec::new(),
             autocomplete_selected_index: 0,
+            show_debug_events: false,
+            loading_frame: 0,
         }
     }
 }
@@ -242,9 +246,10 @@ impl Model {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None;
                 // Note: Textarea already cleared in SubmitInput
-                // Add cancellation event to history
-                self.response_events
-                    .push(ConversationEvent::StreamCancelled);
+                // Add cancellation status message to history
+                self.response_events.push(ConversationEvent::StatusMessage {
+                    text: "Interrupted".to_string(),
+                });
             }
 
             Message::Error(error) => {

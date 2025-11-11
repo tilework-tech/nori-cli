@@ -1,9 +1,11 @@
 use crate::app::Model;
 use std::collections::HashMap;
 
+mod debug;
 mod exit;
 mod switch_model;
 
+pub use debug::DebugCommand;
 pub use exit::ExitCommand;
 pub use switch_model::SwitchModelCommand;
 
@@ -72,6 +74,7 @@ impl Default for CommandRegistry {
     /// Creates a registry with all built-in commands registered
     fn default() -> Self {
         let mut registry = Self::new();
+        registry.register(Box::new(DebugCommand));
         registry.register(Box::new(ExitCommand));
         registry.register(Box::new(SwitchModelCommand));
         registry

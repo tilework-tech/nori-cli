@@ -91,8 +91,25 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .map(|s| s.as_str())
         .unwrap_or("No agent selected");
 
-    let agent_info = Paragraph::new(format!("Agent: {}", selected_agent))
-        .style(Style::default().fg(Color::Cyan));
+    let debug_indicator = if model.show_debug_events {
+        " [DEBUG]"
+    } else {
+        ""
+    };
+
+    // Show loading animation during streaming
+    let loading_indicator = if model.current_mode == crate::app::AppMode::Streaming {
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        format!(" {}", frames[model.loading_frame % frames.len()])
+    } else {
+        String::new()
+    };
+
+    let agent_info = Paragraph::new(format!(
+        "Agent: {}{}{}",
+        selected_agent, debug_indicator, loading_indicator
+    ))
+    .style(Style::default().fg(Color::Cyan));
     frame.render_widget(agent_info, chunks[1]);
 
     // Instructions - show error/hint message if present, otherwise show default instructions

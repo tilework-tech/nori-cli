@@ -18,8 +18,8 @@ fn test_autocomplete_shows_on_slash() {
     );
     assert_eq!(
         model.autocomplete_filtered_commands.len(),
-        2,
-        "Should show both commands"
+        3,
+        "Should show all three commands"
     );
     assert_eq!(
         model.autocomplete_selected_index, 0,
