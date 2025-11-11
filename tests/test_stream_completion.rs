@@ -2,10 +2,17 @@ use futures::stream::StreamExt;
 use nori_cli::backends::AgentBackend;
 /// Test to verify that StreamComplete is actually sent after ResultSummary
 use nori_cli::backends::claude::ClaudeBackend;
+use nori_cli::backends::is_available;
 use nori_cli::conversation::ConversationEvent;
 
 #[tokio::test]
 async fn test_claude_stream_sends_all_events_and_completes() {
+    // Skip test if Claude CLI is not installed
+    if !is_available("claude") {
+        println!("Skipping test - Claude CLI not available");
+        return;
+    }
+
     let backend = ClaudeBackend::new();
     let cancel_token = tokio_util::sync::CancellationToken::new();
 
