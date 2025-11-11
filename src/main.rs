@@ -485,6 +485,13 @@ fn wrap_text_to_width(
         for span in &line.spans {
             let span_text = span.content.as_ref();
 
+            // Handle standalone space spans (don't split them)
+            if span_text.trim().is_empty() && !span_text.is_empty() {
+                current_line_spans.push(Span::styled(span_text.to_string(), span.style));
+                current_width += span_text.width();
+                continue;
+            }
+
             // Split span text by words to wrap properly
             let words: Vec<&str> = span_text.split_whitespace().collect();
 
