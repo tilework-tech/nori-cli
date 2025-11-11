@@ -18,12 +18,24 @@ Backend implementations for spawning and interacting with different AI coding ag
 
 **Trait Definition** (@/src/backends.rs):
 ```rust
-#[async_trait]
 pub trait AgentBackend {
-    async fn spawn_process(&self, prompt: String) -> Result<Child>;
+    fn spawn_stream(&self, prompt: String)
+    -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
     fn name(&self) -> &str;
+    fn command_name(&self) -> &str;
+    fn install_url(&self) -> &str;
+}
+
+pub fn is_available(command: &str) -> bool {
+    which::which(command).is_ok()
 }
 ```
+
+**Backend Availability Checking**:
+- `is_available()` function checks if a command exists in PATH using the `which` crate
+- Called at Model initialization to populate `backend_availability` vec
+- Called before spawning to proactively detect missing backends
+- Returns true if command found, false otherwise (cross-platform via which crate)
 
 **Claude Code Backend** (@/src/backends/claude.rs):
 - Command: `claude --print --output-format stream-json --include-partial-messages --verbose <prompt>`
@@ -31,6 +43,9 @@ pub trait AgentBackend {
 - Session resumption: Includes `--resume <session_id>` if ClaudeBackend.session_id is Some
 - session_id field exists but is never populated - prepared for future persistence feature
 - Spawns with stdout/stderr piped to enable JSONL event streaming back to main loop
+- command_name: "claude"
+- install_url: "https://code.claude.com"
+- Spawn error handling: ErrorKind::NotFound yields SystemEvent with install message
 
 **GPT Codex Backend** (@/src/backends/codex.rs):
 - Command: `codex exec --json <prompt>`
@@ -38,6 +53,9 @@ pub trait AgentBackend {
 - thread_id field exists but is never populated - infrastructure for multi-turn conversations
 - Headless mode via `exec` subcommand for non-interactive operation
 - Always uses --json flag to get structured event output
+- command_name: "codex"
+- install_url: "https://developers.openai.com/codex/cli/"
+- Spawn error handling: ErrorKind::NotFound yields SystemEvent with install message
 
 **Mock Backend** (@/src/backends/mock.rs):
 - Uses `printf` shell command to output hardcoded JSONL without requiring agent CLI installation
@@ -56,6 +74,30 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
     }
 }
 ```
+
+### Installation Prompting
+
+**User Experience Flow**:
+1. User selects backend in agent router (via Alt+A)
+2. User submits prompt (via Alt+Enter)
+3. @/src/main.rs checks if backend command is available using `is_available(backend.command_name())`
+4. If not available: ShowInstallPrompt message sent with backend name and install URL
+5. Install prompt overlay appears (@/src/ui.rs:render_install_prompt_overlay)
+6. User can navigate options (Open Installation Page / Cancel) with arrow keys
+7. Enter on "Open Installation Page" opens URL in default browser via `opener` crate
+8. Enter on "Cancel" or Esc closes prompt and returns to selection mode
+
+**State Management** (@/src/app.rs):
+- Model tracks `show_install_prompt`, `install_prompt_backend`, `install_prompt_url`, `install_prompt_choice`
+- InstallChoice enum: OpenInstallPage | Cancel (toggled via NavigateInstallChoice message)
+- Message handlers: ShowInstallPrompt, NavigateInstallChoice, ConfirmInstall, CancelInstall
+- ConfirmInstall calls `opener::open(url)` if OpenInstallPage selected
+
+**Visual Indication** (@/src/ui.rs):
+- Model.backend_availability vec tracks installation status for each agent
+- Checked once at startup in Model::default()
+- Agent router displays unavailable backends with "[Not Installed]" suffix in dark gray
+- Provides visual feedback before user attempts to use unavailable backend
 
 ### Things to Know
 

@@ -45,6 +45,13 @@ impl AgentBackend for CodexBackend {
 
             let mut child = match cmd.spawn() {
                 Ok(c) => c,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    yield ConversationEvent::SystemEvent {
+                        subtype: "error".to_string(),
+                        details: Some("Codex CLI is not installed. Install from https://developers.openai.com/codex/cli/".to_string()),
+                    };
+                    return;
+                }
                 Err(e) => {
                     yield ConversationEvent::UnknownEvent {
                         raw: format!("Failed to spawn codex: {}", e),
@@ -98,5 +105,22 @@ impl AgentBackend for CodexBackend {
 
     fn name(&self) -> &str {
         "GPT Codex"
+    }
+
+    fn command_name(&self) -> &str {
+        "codex"
+    }
+
+    fn install_url(&self) -> &str {
+        "" // Codex is installed via npm, not URL
+    }
+
+    fn install_command(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "npm".to_string(),
+            "install".to_string(),
+            "-g".to_string(),
+            "@openai/codex".to_string(),
+        ])
     }
 }

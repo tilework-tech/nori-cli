@@ -31,4 +31,12 @@ impl AgentBackend for MockBackend {
     fn name(&self) -> &str {
         "Mock Backend"
     }
+
+    fn command_name(&self) -> &str {
+        "mock"
+    }
+
+    fn install_url(&self) -> &str {
+        ""
+    }
 }

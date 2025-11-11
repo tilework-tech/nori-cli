@@ -1,3 +1,4 @@
+use crate::backends;
 use crate::conversation::ConversationEvent;
 use ratatui::widgets::ListState;
 use tui_textarea::TextArea;
@@ -8,6 +9,13 @@ pub enum AppMode {
     Selection,
     Input,
     Streaming,
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+pub enum InstallChoice {
+    #[default]
+    OpenInstallPage,
+    Cancel,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +40,20 @@ pub enum Message {
     // Error handling
     Error(String),
 
+    // Install prompt
+    ShowInstallPrompt {
+        backend: String,
+        url: String,
+        install_cmd: Option<Vec<String>>,
+    },
+    NavigateInstallChoice,
+    ConfirmInstall,
+    CancelInstall,
+    InstallationComplete {
+        success: bool,
+        message: String,
+    },
+
     // Control
     Quit,
 }
@@ -41,12 +63,18 @@ pub struct Model {
     pub current_mode: AppMode,
     pub list_state: ListState,
     pub agents: Vec<String>,
+    pub backend_availability: Vec<bool>,
     pub textarea: TextArea<'static>,
     pub response_events: Vec<ConversationEvent>,
     pub selected_agent_index: Option<usize>,
     pub session_id: Option<String>,
     pub error_message: Option<String>,
     pub show_agent_router: bool,
+    pub show_install_prompt: bool,
+    pub install_prompt_backend: Option<String>,
+    pub install_prompt_url: Option<String>,
+    pub install_prompt_cmd: Option<Vec<String>>,
+    pub install_prompt_choice: InstallChoice,
 }
 
 impl Default for Model {
@@ -58,12 +86,21 @@ impl Default for Model {
             current_mode: AppMode::Selection,
             list_state,
             agents: vec!["Claude Code".to_string(), "GPT Codex".to_string()],
+            backend_availability: vec![
+                backends::is_available("claude"),
+                backends::is_available("codex"),
+            ],
             textarea: TextArea::default(),
             response_events: Vec::new(),
             selected_agent_index: None,
             session_id: None,
             error_message: None,
             show_agent_router: false,
+            show_install_prompt: false,
+            install_prompt_backend: None,
+            install_prompt_url: None,
+            install_prompt_cmd: None,
+            install_prompt_choice: InstallChoice::default(),
         }
     }
 }
@@ -153,6 +190,54 @@ impl Model {
 
             Message::ToggleAgentRouter => {
                 self.show_agent_router = !self.show_agent_router;
+            }
+
+            Message::ShowInstallPrompt {
+                backend,
+                url,
+                install_cmd,
+            } => {
+                self.show_install_prompt = true;
+                self.install_prompt_backend = Some(backend);
+                self.install_prompt_url = Some(url);
+                self.install_prompt_cmd = install_cmd;
+                self.install_prompt_choice = InstallChoice::default();
+            }
+
+            Message::NavigateInstallChoice => {
+                self.install_prompt_choice = match self.install_prompt_choice {
+                    InstallChoice::OpenInstallPage => InstallChoice::Cancel,
+                    InstallChoice::Cancel => InstallChoice::OpenInstallPage,
+                };
+            }
+
+            Message::ConfirmInstall => {
+                // Don't close prompt here - it will be closed after installation completes
+                // This message just triggers the installation process
+            }
+
+            Message::CancelInstall => {
+                self.show_install_prompt = false;
+                self.install_prompt_backend = None;
+                self.install_prompt_url = None;
+                self.install_prompt_cmd = None;
+            }
+
+            Message::InstallationComplete { success, message } => {
+                self.show_install_prompt = false;
+                self.install_prompt_backend = None;
+                self.install_prompt_url = None;
+                self.install_prompt_cmd = None;
+
+                if success {
+                    // Re-check backend availability
+                    self.backend_availability = vec![
+                        backends::is_available("claude"),
+                        backends::is_available("codex"),
+                    ];
+                } else {
+                    self.error_message = Some(message);
+                }
             }
 
             Message::Quit => {
