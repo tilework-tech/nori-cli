@@ -72,7 +72,8 @@ impl Model {
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::NextItem => {
-                if self.current_mode == AppMode::Selection {
+                // Only navigate when agent router overlay is open
+                if self.show_agent_router {
                     let i = match self.list_state.selected() {
                         Some(i) => {
                             if i >= self.agents.len() - 1 {
@@ -88,7 +89,8 @@ impl Model {
             }
 
             Message::PreviousItem => {
-                if self.current_mode == AppMode::Selection {
+                // Only navigate when agent router overlay is open
+                if self.show_agent_router {
                     let i = match self.list_state.selected() {
                         Some(i) => {
                             if i == 0 {
