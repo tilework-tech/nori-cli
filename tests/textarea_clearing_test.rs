@@ -13,8 +13,10 @@ fn test_textarea_clears_immediately_on_submit() {
     model.update(Message::SubmitInput);
 
     // Textarea should be cleared immediately
-    assert!(model.textarea.lines()[0].is_empty(),
-        "Textarea should be empty after SubmitInput");
+    assert!(
+        model.textarea.lines()[0].is_empty(),
+        "Textarea should be empty after SubmitInput"
+    );
 
     // Mode should transition to Streaming
     assert_eq!(model.current_mode, AppMode::Streaming);
@@ -69,8 +71,10 @@ fn test_textarea_stays_clear_during_streaming() {
     }));
 
     // Textarea should still be empty
-    assert!(model.textarea.lines()[0].is_empty(),
-        "Textarea should remain empty during streaming");
+    assert!(
+        model.textarea.lines()[0].is_empty(),
+        "Textarea should remain empty during streaming"
+    );
 }
 
 #[test]
@@ -86,8 +90,10 @@ fn test_textarea_stays_clear_after_stream_complete() {
     model.update(Message::StreamComplete);
 
     // Textarea should still be empty
-    assert!(model.textarea.lines()[0].is_empty(),
-        "Textarea should remain empty after StreamComplete");
+    assert!(
+        model.textarea.lines()[0].is_empty(),
+        "Textarea should remain empty after StreamComplete"
+    );
 
     // Should be back in Selection mode
     assert_eq!(model.current_mode, AppMode::Selection);
@@ -111,8 +117,10 @@ fn test_textarea_stays_clear_after_cancel() {
     model.update(Message::CancelStream);
 
     // Textarea should still be empty (not restored)
-    assert!(model.textarea.lines()[0].is_empty(),
-        "Textarea should remain empty after cancellation");
+    assert!(
+        model.textarea.lines()[0].is_empty(),
+        "Textarea should remain empty after cancellation"
+    );
 
     // Should be back in Selection mode
     assert_eq!(model.current_mode, AppMode::Selection);

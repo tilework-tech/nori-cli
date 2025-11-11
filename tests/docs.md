@@ -17,6 +17,34 @@ Test suite for the agent-router-tui application, covering state machine transiti
 
 ### Core Implementation
 
+**Textarea Clearing Tests** (@/tests/textarea_clearing_test.rs):
+- `test_textarea_clears_immediately_on_submit()`: Verifies textarea is cleared immediately when SubmitInput message is processed
+  - User types a message into textarea
+  - Sends SubmitInput message
+  - Asserts textarea is empty after SubmitInput (not waiting for stream to complete)
+  - Asserts mode transitions to Streaming
+- `test_empty_input_does_not_submit()`: Verifies empty textarea does not trigger submission
+  - Sends SubmitInput with empty textarea
+  - Asserts mode stays in Selection
+  - Asserts no events added to response_events
+- `test_whitespace_only_input_does_not_submit()`: Verifies whitespace-only input does not trigger submission
+  - Types only whitespace into textarea
+  - Sends SubmitInput
+  - Asserts mode stays in Selection
+- `test_textarea_stays_clear_during_streaming()`: Verifies textarea remains empty during streaming
+  - Submits message (clears textarea)
+  - Sends StreamEvent message
+  - Asserts textarea still empty
+- `test_textarea_stays_clear_after_stream_complete()`: Verifies textarea remains empty after stream completes
+  - Submits message (clears textarea)
+  - Sends StreamComplete message
+  - Asserts textarea still empty and mode is Selection
+- `test_textarea_stays_clear_after_cancel()`: Verifies textarea remains empty after stream cancellation
+  - Submits message (clears textarea)
+  - Sets up CancellationToken
+  - Sends CancelStream message
+  - Asserts textarea still empty (not restored to original content)
+
 **State Machine Tests** (@/tests/state_machine_test.rs):
 - `test_state_transitions()`: Verifies overlay and mode transitions
   - SelectItem closes agent router overlay (sets `show_agent_router` to false)
@@ -28,10 +56,11 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_toggle_agent_router_overlay()`: Verifies ToggleAgentRouter message toggles `show_agent_router` boolean
 - `test_submit_input_adds_user_message_to_history()`: Verifies SubmitInput captures textarea content and adds UserMessage to response_events before spawning agent
 - `test_cancel_stream_during_streaming()`: Verifies CancelStream message handling
-  - Sets up streaming state with CancellationToken
+  - Submits a message via SubmitInput (which clears textarea and sets up streaming state)
+  - Sets up CancellationToken for the stream
   - Sends CancelStream message
   - Asserts token.is_cancelled() is true
-  - Verifies mode transitions to Selection, token cleared from model, textarea cleared
+  - Verifies mode transitions to Selection, token cleared from model
   - Verifies StreamCancelled event added to response_events
 
 **Subprocess Tests** (@/tests/subprocess_test.rs):
@@ -95,6 +124,13 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Rendering tests verify color, style modifiers (dim, bold), and prefix text for each variant
 - UserMessage test verifies chat history rendering with cyan styling
 - StreamCancelled renders "Interrupted" in red to provide visual feedback for cancelled streams
+
+**Textarea Clearing Test Coverage** (@/tests/textarea_clearing_test.rs):
+- Comprehensive tests for textarea lifecycle across all state transitions (6 tests total)
+- Verifies immediate clearing on submit (before streaming begins)
+- Verifies edge cases: empty input, whitespace-only input
+- Verifies textarea stays clear throughout streaming, completion, and cancellation
+- Tests ensure textarea is never restored after cancellation (matches modern chat UX expectations)
 
 **Coverage Gaps**:
 - No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut
