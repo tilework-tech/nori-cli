@@ -1,6 +1,6 @@
+use super::CommandHandler;
 use crate::app::Model;
 use crate::conversation::ConversationEvent;
-use super::CommandHandler;
 
 pub struct DebugCommand;
 
@@ -19,9 +19,11 @@ impl CommandHandler for DebugCommand {
             "disabled"
         };
 
-        model.response_events.push(ConversationEvent::StatusMessage {
-            text: format!("Debug logs are now {}", status),
-        });
+        model
+            .response_events
+            .push(ConversationEvent::StatusMessage {
+                text: format!("Debug logs are now {}", status),
+            });
 
         Ok(())
     }

@@ -35,7 +35,7 @@ pub mod ui;           // Rendering functions for each mode
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
@@ -50,9 +50,10 @@ pub mod ui;           // Rendering functions for each mode
 - **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
 
 **Conversation Event Handling** (@/src/conversation.rs):
-- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent
+- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent for unparseable events, StatusMessage for system feedback messages
 - `parse_jsonl_event()`: Parses raw JSONL strings into ConversationEvent - handles Claude CLI event format with nested message.content arrays
-- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, StreamCancelled renders "Interrupted" in red, other events render with type-specific prefixes and colors
+- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, StatusMessage renders with green `[status]` prefix, StreamCancelled renders "Interrupted" in red, other events render with type-specific prefixes and colors
+- `should_render_event()`: Filters events based on debug mode - SystemEvent and UnknownEvent are considered debug events (hidden when `show_debug: false`), all other events (UserMessage, AssistantMessage, ResultSummary, StderrOutput, StreamCancelled, StatusMessage) are always visible
 
 **Backend Abstraction** (@/src/backends.rs):
 - `AgentBackend` trait: `spawn_stream(prompt, cancel_token) -> Pin<Box<dyn Stream<Item = ConversationEvent>>>` and metadata methods
@@ -83,9 +84,10 @@ Subprocess Output (JSONL)
   → spawn_and_stream task → tokio::select! on cancel_token.cancelled() vs stream.next()
   → parse_jsonl_event() → ConversationEvent (if stream continues)
   → Message::StreamEvent (via mpsc channel)
-  → run_app loop → render_event() converts to styled Line → wrap_text_to_width() splits into multiple Lines
-  → terminal.insert_before() called once per wrapped line → scrollback buffer accumulates all lines
-  → Model::update() → accumulates in response_events
+  → run_app loop → should_render_event() filters based on model.show_debug_events (@/src/main.rs:112)
+  → render_event() converts to styled Line (if event passes filter) → wrap_text_to_width() splits into multiple Lines
+  → terminal.insert_before() called once per wrapped line → scrollback buffer accumulates visible lines only
+  → Model::update() → accumulates ALL events in response_events (no filtering at storage level)
   → render_chat() maps all events via render_event() to styled Lines
 
 Cancellation Path
@@ -130,6 +132,18 @@ Cancellation Path
 - Ctrl-C timeout window is 2 seconds - first press sets timestamp, second press within window triggers quit, press after timeout resets to first press behavior
 - Main loop detects quit signal by monitoring last_ctrl_c_time transition from Some → None (not by checking timestamp directly)
 
+**Debug Event Filtering** (@/src/conversation.rs:should_render_event, @/src/main.rs:112):
+- Two-tier filtering architecture: storage vs rendering
+- **Storage level**: ALL events stored in `response_events` vector regardless of debug mode - no filtering at Model::update() level
+- **Rendering level**: Events filtered in main event loop based on `model.show_debug_events` before calling `terminal.insert_before()`
+- **Debug events**: SystemEvent and UnknownEvent are classified as debug events
+  - SystemEvent: Contains raw protocol messages like session initialization, state changes
+  - UnknownEvent: Contains unparseable JSONL that doesn't match known event types
+- **Always-visible events**: UserMessage, AssistantMessage, ResultSummary, StderrOutput, StreamCancelled, StatusMessage
+- **Toggle mechanism**: `/debug` slash command (@/src/commands/debug.rs) toggles `show_debug_events` boolean and emits StatusMessage with feedback
+- **Why filtering at render time**: Allows users to toggle debug mode and retroactively view debug events in conversation history without losing data - if filtered at storage, events would be permanently lost
+- **Default state**: Debug events hidden (`show_debug_events = false`) to reduce noise from system protocol messages
+
 **Conversation Event Parsing** (@/src/conversation.rs):
 - Parsing based on actual Claude CLI output format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
 - Assistant messages extract all text blocks from content array and join with newlines
@@ -139,12 +153,14 @@ Cancellation Path
 - Malformed JSON or unparseable events return None from parse_jsonl_event()
 
 **Event Rendering Styles** (@/src/conversation.rs):
-- UserMessage: `[user]` prefix in bold cyan, followed by user's prompt text
-- AssistantMessage: Plain white text, no prefix
-- SystemEvent: `[system]` prefix in dim dark gray, subtype and details in dark gray
-- ResultSummary: `[done]` prefix in bold green (success) or bold red (failure)
-- StderrOutput: Red text, no prefix
-- UnknownEvent: `[unknown]` prefix in yellow with raw JSON for debugging
+- UserMessage: `[user]` prefix in bold cyan, followed by user's prompt text - always visible
+- AssistantMessage: Plain white text, no prefix - always visible
+- SystemEvent: `[system]` prefix in dim dark gray, subtype and details in dark gray - hidden by default (debug event)
+- ResultSummary: `[done]` prefix in bold green (success) or bold red (failure) - always visible
+- StderrOutput: Red text, no prefix - always visible
+- StreamCancelled: "Interrupted" in red - always visible
+- UnknownEvent: `[unknown]` prefix in yellow with raw JSON - hidden by default (debug event)
+- StatusMessage: `[status]` prefix in bold green, followed by status text - always visible
 
 **Error Display Strategy**:
 - Errors don't transition mode - Model stays in Streaming so stderr output remains visible in conversation history

@@ -108,6 +108,14 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_render_unknown()`: Verifies [unknown] prefix in yellow with raw JSON
 - `test_parse_result_without_details()`: Verifies default "Completed" text when result field missing
 - `test_render_user_message()`: Verifies UserMessage renders with `[user]` prefix in bold cyan with message text
+- `test_render_status_message()`: Verifies StatusMessage renders with `[status]` prefix in bold green with status text
+- `test_should_render_system_event_when_debug_enabled()`: Verifies SystemEvent is visible when `show_debug` is true
+- `test_should_not_render_system_event_when_debug_disabled()`: Verifies SystemEvent is hidden when `show_debug` is false
+- `test_should_render_unknown_event_when_debug_enabled()`: Verifies UnknownEvent is visible when `show_debug` is true
+- `test_should_not_render_unknown_event_when_debug_disabled()`: Verifies UnknownEvent is hidden when `show_debug` is false
+- `test_should_always_render_user_message()`: Verifies UserMessage is visible regardless of debug mode
+- `test_should_always_render_assistant_message()`: Verifies AssistantMessage is visible regardless of debug mode
+- `test_should_always_render_status_message()`: Verifies StatusMessage is visible regardless of debug mode
 
 ### Things to Know
 
@@ -139,12 +147,17 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies contract between backends and main loop: backends output Claude CLI format, parse_jsonl_event() produces ConversationEvent
 
 **Conversation Module Test Coverage**:
-- Comprehensive tests for all ConversationEvent variants (14 tests total including UserMessage and StreamCancelled)
+- Comprehensive tests for all ConversationEvent variants (21 tests total including UserMessage, StreamCancelled, StatusMessage, and filtering logic)
 - Edge cases: malformed JSON, missing fields, multiple text blocks, empty details
 - Both parsing (JSONL → ConversationEvent) and rendering (ConversationEvent → styled Line) tested independently
 - Rendering tests verify color, style modifiers (dim, bold), and prefix text for each variant
 - UserMessage test verifies chat history rendering with cyan styling
 - StreamCancelled renders "Interrupted" in red to provide visual feedback for cancelled streams
+- StatusMessage test verifies system feedback messages with green styling
+- Event filtering tests verify `should_render_event()` behavior for debug mode toggle (7 tests)
+  - SystemEvent and UnknownEvent hidden when debug disabled
+  - SystemEvent and UnknownEvent visible when debug enabled
+  - UserMessage, AssistantMessage, and StatusMessage always visible regardless of debug mode
 
 **Ctrl-C Handling Test Coverage** (@/tests/ctrl_c_handling_test.rs):
 - Comprehensive tests for two-stage Ctrl-C keyboard interrupt mechanism (3 tests total)
