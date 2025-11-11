@@ -121,6 +121,7 @@ fn test_show_install_prompt_message() {
     model.update(Message::ShowInstallPrompt {
         backend: "Claude Code".to_string(),
         url: "https://code.claude.com".to_string(),
+        install_cmd: None,
     });
 
     assert!(model.show_install_prompt);
@@ -136,6 +137,7 @@ fn test_cancel_install_prompt() {
     model.update(Message::ShowInstallPrompt {
         backend: "Claude Code".to_string(),
         url: "https://code.claude.com".to_string(),
+        install_cmd: None,
     });
     assert!(model.show_install_prompt);
 
