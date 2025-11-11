@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::{cursor::MoveToNextLine, execute};
+use crossterm::{cursor::MoveTo, execute};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
@@ -16,6 +16,9 @@ use tokio::time::{Duration, interval};
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
+    // Get starting cursor position before creating viewport
+    let viewport_start_row = crossterm::cursor::position()?.1;
+
     // Setup terminal with inline viewport (8 lines at bottom for input/instructions)
     enable_raw_mode()?;
     let mut terminal = ratatui::init_with_options(TerminalOptions {
@@ -25,11 +28,12 @@ async fn main() -> Result<()> {
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
-    // Move cursor down 8 lines (viewport height) to ensure it's past all TUI content
+    // Use absolute positioning to place cursor below the 8-line viewport
     // The viewport shows: 3 lines (title) + 4 lines (input) + 1 line (instructions) = 8 lines
-    execute!(std::io::stdout(), MoveToNextLine(8))?;
     disable_raw_mode()?;
     ratatui::restore();
+    // Move to column 0, row = viewport_start + 8 lines
+    execute!(std::io::stdout(), MoveTo(0, viewport_start_row + 8))?;
 
     result
 }
