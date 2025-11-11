@@ -77,11 +77,25 @@ fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect)
         .style(Style::default().fg(Color::Cyan));
     frame.render_widget(title, chunks[0]);
 
-    // Agent list
+    // Agent list with availability indication
     let items: Vec<ListItem> = model
         .agents
         .iter()
-        .map(|agent| ListItem::new(agent.as_str()))
+        .enumerate()
+        .map(|(i, agent)| {
+            let is_available = model.backend_availability.get(i).copied().unwrap_or(false);
+            let text = if is_available {
+                agent.to_string()
+            } else {
+                format!("{} [Not Installed]", agent)
+            };
+            let style = if is_available {
+                Style::default()
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            ListItem::new(text).style(style)
+        })
         .collect();
 
     let list = List::new(items)

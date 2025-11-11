@@ -59,6 +59,7 @@ pub struct Model {
     pub current_mode: AppMode,
     pub list_state: ListState,
     pub agents: Vec<String>,
+    pub backend_availability: Vec<bool>,
     pub textarea: TextArea<'static>,
     pub response_events: Vec<ConversationEvent>,
     pub selected_agent_index: Option<usize>,
@@ -73,6 +74,8 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
+        use crate::backends;
+
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
@@ -80,6 +83,10 @@ impl Default for Model {
             current_mode: AppMode::Selection,
             list_state,
             agents: vec!["Claude Code".to_string(), "GPT Codex".to_string()],
+            backend_availability: vec![
+                backends::is_available("claude"),
+                backends::is_available("codex"),
+            ],
             textarea: TextArea::default(),
             response_events: Vec::new(),
             selected_agent_index: None,
