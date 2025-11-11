@@ -29,12 +29,13 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     // Adjust layout based on whether autocomplete is visible
     let constraints = if model.show_autocomplete {
         // Calculate height needed for autocomplete (2 commands + borders = 4 lines)
-        let autocomplete_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
+        let autocomplete_height =
+            (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
         vec![
-            Constraint::Length(3),                // Title
-            Constraint::Length(4),                // Input
+            Constraint::Length(3),                   // Title
+            Constraint::Length(4),                   // Input
             Constraint::Length(autocomplete_height), // Autocomplete
-            Constraint::Length(1),                // Instructions
+            Constraint::Length(1),                   // Instructions
         ]
     } else {
         vec![
@@ -234,27 +235,6 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
     frame.render_widget(instructions, chunks[3]);
 }
 
-// Helper function to create centered rect
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 fn render_autocomplete_in_layout(model: &Model, frame: &mut Frame, area: Rect) {
     // Render autocomplete as part of the layout (not an overlay)
     // This area is the chunk allocated for autocomplete in the main layout
@@ -272,11 +252,7 @@ fn render_autocomplete_in_layout(model: &Model, frame: &mut Frame, area: Rect) {
 
     // Create highlighted list - render directly in the provided area
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Commands"),
-        )
+        .block(Block::default().borders(Borders::ALL).title("Commands"))
         .highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
