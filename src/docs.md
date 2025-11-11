@@ -40,6 +40,7 @@ pub mod ui;           // Rendering functions for each mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 - ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
+- `create_textarea()` helper (@/src/app.rs:359-363): Factory function that creates TextArea instances with consistent styling - sets `cursor_line_style` to `Style::default()` to remove the default underline from the cursor line while preserving cursor visibility
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
@@ -161,6 +162,15 @@ Cancellation Path
 - Uses fullscreen mode switching instead of overlay modals to avoid percentage-based positioning issues in constrained viewports
 - All UI modes (chat, agent selection, install prompt) use Constraint::Min() for flexible sections that adapt to available viewport height
 - Text wrapping enabled on install prompt message to handle varying viewport widths without manual text size management
+
+**TextArea Styling Pattern** (@/src/app.rs, @/src/main.rs):
+- All TextArea instances created with `cursor_line_style` set to `Style::default()` to remove underline from cursor line
+- The tui-textarea library applies underline styling to the cursor line by default - this pattern removes that styling while keeping cursor itself visible (reversed colors)
+- TextArea creation happens in 6 places: Model::default() initialization, 4 locations in Model::update() (SubmitInput, two ClearTextarea branches, AutocompleteSelect), and 1 location in main.rs (slash command execution)
+- `create_textarea()` helper function in @/src/app.rs:359-363 provides DRY pattern for consistent styling across most creation sites
+- AutocompleteSelect (@/src/app.rs:336-341) and slash command clearing (@/src/main.rs:167-171) use inline styling because they need additional operations (TextArea::from() with content, move_cursor()) that don't fit the helper pattern
+- All inline creations follow same pattern: create TextArea, call `set_cursor_line_style(Style::default())`, perform other operations
+- This is a pure UI/styling change with no functional impact on text editing, cursor movement, or input handling
 
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false

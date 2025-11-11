@@ -1,5 +1,6 @@
 use crate::backends;
 use crate::conversation::ConversationEvent;
+use ratatui::style::Style;
 use ratatui::widgets::ListState;
 use tui_textarea::TextArea;
 
@@ -104,7 +105,7 @@ impl Default for Model {
                 backends::is_available("claude"),
                 backends::is_available("codex"),
             ],
-            textarea: TextArea::default(),
+            textarea: create_textarea(),
             response_events: Vec::new(),
             selected_agent_index: None,
             session_id: None,
@@ -189,7 +190,7 @@ impl Model {
                 let user_text = self.textarea.lines().join("\n");
                 if !user_text.trim().is_empty() {
                     // Clear textarea immediately after capturing text
-                    self.textarea = TextArea::default();
+                    self.textarea = create_textarea();
                     self.response_events
                         .push(ConversationEvent::UserMessage { text: user_text });
                     self.current_mode = AppMode::Streaming;
@@ -286,7 +287,7 @@ impl Model {
                 match self.last_ctrl_c_time {
                     None => {
                         // First Ctrl-C: clear textarea and show hint
-                        self.textarea = TextArea::default();
+                        self.textarea = create_textarea();
                         self.last_ctrl_c_time = Some(now);
                         self.error_message = Some("Press Ctrl-C again to exit".to_string());
                     }
@@ -297,7 +298,7 @@ impl Model {
                     }
                     Some(_) => {
                         // Ctrl-C after timeout expired: treat as first press
-                        self.textarea = TextArea::default();
+                        self.textarea = create_textarea();
                         self.last_ctrl_c_time = Some(now);
                         self.error_message = Some("Press Ctrl-C again to exit".to_string());
                     }
@@ -332,8 +333,12 @@ impl Model {
                     .get(self.autocomplete_selected_index)
                 {
                     // Replace textarea content with selected command
-                    self.textarea = TextArea::from([format!("/{}", selected_cmd)]);
-                    self.textarea.move_cursor(tui_textarea::CursorMove::End);
+                    self.textarea = {
+                        let mut textarea = TextArea::from([format!("/{}", selected_cmd)]);
+                        textarea.set_cursor_line_style(Style::default());
+                        textarea.move_cursor(tui_textarea::CursorMove::End);
+                        textarea
+                    };
                 }
                 self.show_autocomplete = false;
                 self.autocomplete_filtered_commands.clear();
@@ -349,4 +354,10 @@ impl Model {
             }
         }
     }
+}
+
+fn create_textarea() -> TextArea<'static> {
+    let mut textarea = TextArea::default();
+    textarea.set_cursor_line_style(Style::default());
+    textarea
 }
