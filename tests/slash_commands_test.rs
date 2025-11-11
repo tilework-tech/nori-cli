@@ -12,8 +12,8 @@ fn test_command_registry_lists_all_names() {
     let mut names = registry.get_all_command_names();
     names.sort(); // Ensure stable order
 
-    // Assert: Returns both registered commands
-    assert_eq!(names, vec!["exit", "switch-model"]);
+    // Assert: Returns all registered commands
+    assert_eq!(names, vec!["debug", "exit", "switch-model"]);
 }
 
 // Tests for filter_commands - prefix-based filtering

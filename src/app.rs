@@ -115,6 +115,7 @@ pub struct Model {
     pub show_autocomplete: bool,
     pub autocomplete_filtered_commands: Vec<String>,
     pub autocomplete_selected_index: usize,
+    pub show_debug_events: bool,
 }
 
 impl Default for Model {
@@ -146,6 +147,7 @@ impl Default for Model {
             show_autocomplete: false,
             autocomplete_filtered_commands: Vec::new(),
             autocomplete_selected_index: 0,
+            show_debug_events: false,
         }
     }
 }

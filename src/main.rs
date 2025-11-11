@@ -8,7 +8,7 @@ use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::autocomplete::update_autocomplete_state;
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
-use nori_cli::conversation::{ConversationEvent, render_event};
+use nori_cli::conversation::{ConversationEvent, render_event, should_render_event};
 use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use tokio::sync::mpsc;
@@ -108,23 +108,26 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                 match &msg {
                     Message::Quit => break,
                     Message::StreamEvent(event) => {
-                        // Render event to scrollback using insert_before
-                        let line = render_event(event);
+                        // Only render if event should be visible based on debug mode
+                        if should_render_event(event, model.show_debug_events) {
+                            // Render event to scrollback using insert_before
+                            let line = render_event(event);
 
-                        // Get terminal width for wrapping (full width, insert_before handles its own area)
-                        let width = terminal.size()?.width.saturating_sub(2) as usize; // Account for potential borders
+                            // Get terminal width for wrapping (full width, insert_before handles its own area)
+                            let width = terminal.size()?.width.saturating_sub(2) as usize; // Account for potential borders
 
-                        // Convert Line to wrapped lines based on terminal width
-                        use ratatui::text::Text;
-                        let text = Text::from(line.clone());
-                        let wrapped_lines = wrap_text_to_width(&text, width);
+                            // Convert Line to wrapped lines based on terminal width
+                            use ratatui::text::Text;
+                            let text = Text::from(line.clone());
+                            let wrapped_lines = wrap_text_to_width(&text, width);
 
-                        // Insert each wrapped line separately (insert_before only handles one line at a time)
-                        for wrapped_line in wrapped_lines {
-                            terminal.insert_before(1, |buf| {
-                                use ratatui::widgets::{Paragraph, Widget};
-                                Paragraph::new(wrapped_line.clone()).render(buf.area, buf);
-                            })?;
+                            // Insert each wrapped line separately (insert_before only handles one line at a time)
+                            for wrapped_line in wrapped_lines {
+                                terminal.insert_before(1, |buf| {
+                                    use ratatui::widgets::{Paragraph, Widget};
+                                    Paragraph::new(wrapped_line.clone()).render(buf.area, buf);
+                                })?;
+                            }
                         }
 
                         model.update(msg);
