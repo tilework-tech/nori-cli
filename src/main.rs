@@ -159,6 +159,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                             // Check if this is a slash command
                             if let Some(command_name) = parse_slash_command(&prompt) {
                                 // Execute slash command
+                                let events_before = model.response_events.len();
                                 match command_registry.execute(&command_name, &mut model) {
                                     Ok(()) => {
                                         // Command executed successfully
@@ -166,6 +167,24 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                         if command_name == "exit" {
                                             let _ = tx.send(Message::Quit);
                                         }
+
+                                        // Render any StatusMessage events that were added
+                                        for event in &model.response_events[events_before..] {
+                                            if matches!(event, ConversationEvent::StatusMessage { .. }) {
+                                                let line = render_event(event);
+                                                let width = terminal.size()?.width.saturating_sub(2) as usize;
+                                                use ratatui::text::Text;
+                                                let text = Text::from(line.clone());
+                                                let wrapped_lines = wrap_text_to_width(&text, width);
+                                                for wrapped_line in wrapped_lines {
+                                                    terminal.insert_before(1, |buf| {
+                                                        use ratatui::widgets::{Paragraph, Widget};
+                                                        Paragraph::new(wrapped_line.clone()).render(buf.area, buf);
+                                                    })?;
+                                                }
+                                            }
+                                        }
+
                                         // Clear textarea after successful command
                                         model.textarea = {
                                             let mut textarea = tui_textarea::TextArea::default();
