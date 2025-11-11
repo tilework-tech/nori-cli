@@ -1,6 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::{execute, cursor::MoveToNextLine};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
@@ -24,6 +25,8 @@ async fn main() -> Result<()> {
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
+    // Move cursor to next line before restoring to ensure clean exit
+    execute!(std::io::stdout(), MoveToNextLine(1))?;
     disable_raw_mode()?;
     ratatui::restore();
 
