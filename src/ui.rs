@@ -31,35 +31,34 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Title
             Constraint::Length(4), // Input
+            Constraint::Length(1), // Agent info
             Constraint::Length(1), // Instructions
         ])
         .split(area);
 
-    // Title - show selected agent
+    // Input - textarea (messages scroll in terminal scrollback above viewport)
+    let input_block = Block::default().borders(Borders::ALL);
+    let inner_area = input_block.inner(chunks[0]);
+    frame.render_widget(input_block, chunks[0]);
+    frame.render_widget(&model.textarea, inner_area);
+
+    // Agent info - show selected agent below prompt
     let selected_agent = model
         .selected_agent_index
         .and_then(|i| model.agents.get(i))
         .map(|s| s.as_str())
         .unwrap_or("No agent selected");
 
-    let title = Paragraph::new(format!("Agent: {}", selected_agent))
-        .block(Block::default().borders(Borders::ALL))
+    let agent_info = Paragraph::new(format!("Agent: {}", selected_agent))
         .style(Style::default().fg(Color::Cyan));
-    frame.render_widget(title, chunks[0]);
-
-    // Input - textarea (messages scroll in terminal scrollback above viewport)
-    let input_block = Block::default().borders(Borders::ALL).title("Prompt");
-    let inner_area = input_block.inner(chunks[1]);
-    frame.render_widget(input_block, chunks[1]);
-    frame.render_widget(&model.textarea, inner_area);
+    frame.render_widget(agent_info, chunks[1]);
 
     // Instructions - show error/hint message if present, otherwise show default instructions
     let instructions_text = if let Some(ref msg) = model.error_message {
         msg.clone()
     } else {
-        "Enter: send | /switch-model: agents | /exit: quit".to_string()
+        "/switch-model: agents | /exit: quit".to_string()
     };
 
     let instructions_style = if model.error_message.is_some() {
