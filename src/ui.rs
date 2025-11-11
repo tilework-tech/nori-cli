@@ -240,23 +240,33 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
     // The viewport is 8 lines fixed (Viewport::Inline(8))
     // We need to overlay the dropdown within those 8 lines
-    // Position it to overlay starting at line 3 (below title, overlaying input area)
     let area = frame.area();
 
     if model.autocomplete_filtered_commands.is_empty() {
         return; // Nothing to show
     }
 
-    // Calculate dropdown dimensions
-    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 4) + 2; // +2 for borders, max 4 items to fit
+    // Recreate the layout to get the actual chunk positions
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Title
+            Constraint::Length(4), // Input
+            Constraint::Length(1), // Instructions
+        ])
+        .split(area);
+
+    // Position dropdown to overlay on the input chunk (will cover the input area)
+    // This is necessary because the viewport is fixed at 8 lines with no room below
+    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 4) + 2; // +2 for borders
     let dropdown_width = 50.min(area.width.saturating_sub(4));
 
-    // Position: y=3 puts it right after the title box, overlaying the top of the input
+    // Position it to overlay chunks[1] (the input area), starting from its position
     let dropdown_area = Rect {
-        x: 2,
-        y: 3, // After title (3 lines), overlay on input area
+        x: chunks[1].x + 2,
+        y: chunks[1].y, // Overlay starting at input chunk position
         width: dropdown_width,
-        height: dropdown_height.min(5), // Max 5 lines to leave room for instructions
+        height: dropdown_height.min(chunks[1].height), // Don't exceed input chunk space
     };
 
     // Clear background
