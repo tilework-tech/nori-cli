@@ -20,6 +20,7 @@ pub enum ConversationEvent {
     StderrOutput {
         line: String,
     },
+    StreamCancelled,
     UnknownEvent {
         raw: String,
     },
@@ -74,6 +75,9 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
         }
         ConversationEvent::StderrOutput { line } => {
             Line::from(Span::styled(line.clone(), Style::default().fg(Color::Red)))
+        }
+        ConversationEvent::StreamCancelled => {
+            Line::from(Span::styled("Interrupted", Style::default().fg(Color::Red)))
         }
         ConversationEvent::UnknownEvent { raw } => Line::from(Span::styled(
             format!("[unknown] {}", raw),

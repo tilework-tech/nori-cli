@@ -132,6 +132,10 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                     });
                                 } else {
                                     // Backend available - spawn subprocess
+                                    // Create cancellation token for this stream
+                                    let cancel_token = tokio_util::sync::CancellationToken::new();
+                                    model.current_stream_token = Some(cancel_token.clone());
+
                                     let stream_tx = tx.clone();
                                     model.update(msg);
                                     // Send updated mode and overlay state to event handler
@@ -140,7 +144,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                     let _ = install_prompt_tx.send(model.show_install_prompt);
 
                                     tokio::spawn(async move {
-                                        if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
+                                        if let Err(e) = spawn_and_stream(backend, prompt, stream_tx, cancel_token).await {
                                             // Error already sent via channel
                                             eprintln!("Streaming error: {}", e);
                                         }
@@ -200,6 +204,12 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                             model.update(msg);
                         }
 
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
+                    }
+                    Message::CancelStream => {
+                        model.update(msg);
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
@@ -266,10 +276,10 @@ fn handle_key_simple(
         };
     }
 
-    // If streaming, only allow Esc to stop
+    // If streaming, only allow Esc to cancel
     if mode == AppMode::Streaming {
         return match key.code {
-            KeyCode::Esc => Some(Message::StreamComplete),
+            KeyCode::Esc => Some(Message::CancelStream),
             _ => None,
         };
     }
@@ -296,17 +306,31 @@ async fn spawn_and_stream(
     backend: Box<dyn AgentBackend + Send>,
     prompt: String,
     tx: mpsc::UnboundedSender<Message>,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> Result<()> {
     // Get stream from backend
-    let mut stream = backend.spawn_stream(prompt);
+    let mut stream = backend.spawn_stream(prompt, cancel_token.clone());
 
     // Consume stream and send events to UI
-    while let Some(event) = stream.next().await {
-        let _ = tx.send(Message::StreamEvent(event));
+    loop {
+        tokio::select! {
+            // Cancel branch - takes priority
+            _ = cancel_token.cancelled() => {
+                // Stream will be dropped here, cleaning up handles
+                // Note: Child process killing happens via Drop in the stream
+                break;
+            }
+            // Stream consumption
+            Some(event) = stream.next() => {
+                let _ = tx.send(Message::StreamEvent(event));
+            }
+            // Stream ended naturally
+            else => {
+                tx.send(Message::StreamComplete)?;
+                break;
+            }
+        }
     }
-
-    // Signal completion
-    tx.send(Message::StreamComplete)?;
 
     Ok(())
 }

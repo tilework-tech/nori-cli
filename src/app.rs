@@ -36,6 +36,7 @@ pub enum Message {
     // Streaming
     StreamEvent(ConversationEvent),
     StreamComplete,
+    CancelStream,
 
     // Error handling
     Error(String),
@@ -75,6 +76,7 @@ pub struct Model {
     pub install_prompt_url: Option<String>,
     pub install_prompt_cmd: Option<Vec<String>>,
     pub install_prompt_choice: InstallChoice,
+    pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 impl Default for Model {
@@ -101,6 +103,7 @@ impl Default for Model {
             install_prompt_url: None,
             install_prompt_cmd: None,
             install_prompt_choice: InstallChoice::default(),
+            current_stream_token: None,
         }
     }
 }
@@ -180,6 +183,20 @@ impl Model {
                 self.error_message = None; // Clear any errors when going back
                 self.textarea = TextArea::default(); // Reset textarea for next input
                 // Note: We do NOT clear response_events to preserve chat history
+            }
+
+            Message::CancelStream => {
+                // Cancel the current stream if one exists
+                if let Some(token) = self.current_stream_token.take() {
+                    token.cancel();
+                }
+                // Transition to Selection mode
+                self.current_mode = AppMode::Selection;
+                self.error_message = None;
+                self.textarea = TextArea::default();
+                // Add cancellation event to history
+                self.response_events
+                    .push(ConversationEvent::StreamCancelled);
             }
 
             Message::Error(error) => {

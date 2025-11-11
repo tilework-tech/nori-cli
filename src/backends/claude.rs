@@ -83,6 +83,7 @@ impl AgentBackend for ClaudeBackend {
     fn spawn_stream(
         &self,
         prompt: String,
+        _cancel_token: tokio_util::sync::CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
         let session_id = self.session_id.clone();
 
