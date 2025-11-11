@@ -59,6 +59,13 @@ impl CommandRegistry {
             None => Err(format!("Unknown command: /{}", name)),
         }
     }
+
+    /// Returns a sorted list of all registered command names
+    pub fn get_all_command_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.commands.keys().cloned().collect();
+        names.sort();
+        names
+    }
 }
 
 impl Default for CommandRegistry {

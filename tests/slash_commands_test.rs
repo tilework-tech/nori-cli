@@ -1,6 +1,23 @@
 use nori_cli::app::Model;
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
 
+// Tests for CommandRegistry - listing available commands
+
+#[test]
+fn test_command_registry_lists_all_names() {
+    // Arrange: Create default registry
+    let registry = CommandRegistry::default();
+
+    // Act: Get all command names
+    let mut names = registry.get_all_command_names();
+    names.sort(); // Ensure stable order
+
+    // Assert: Returns both registered commands
+    assert_eq!(names, vec!["exit", "switch-model"]);
+}
+
+// Tests for CommandRegistry - executing commands
+
 #[test]
 fn test_registry_executes_registered_command() {
     // Arrange: Create a model and registry
