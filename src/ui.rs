@@ -22,7 +22,7 @@ pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u
         let wrapped_lines = if line_width == 0 {
             1 // Empty line still takes 1 line
         } else {
-            ((line_width + available_width - 1) / available_width).max(1)
+            line_width.div_ceil(available_width).max(1)
         };
         total_lines += wrapped_lines;
     }

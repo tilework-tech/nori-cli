@@ -37,7 +37,11 @@ fn test_long_line_accounts_for_wrapping() {
     let height = calculate_textarea_height(&textarea, 80);
 
     // 4 wrapped lines + BORDER_HEIGHT (2) = 6
-    assert_eq!(height, 6, "Expected height 6 for wrapped line, got {}", height);
+    assert_eq!(
+        height, 6,
+        "Expected height 6 for wrapped line, got {}",
+        height
+    );
 }
 
 #[test]
