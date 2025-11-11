@@ -29,13 +29,14 @@ pub mod ui;           // Rendering functions for each mode
 - `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
-- `spawn_and_stream()`: Spawns subprocess, reads stdout/stderr concurrently, parses JSONL into ConversationEvent, sends StreamEvent messages
+- `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
 
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
-- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `ToggleAgentRouter` for overlay, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility and `response_events` vector for full conversation history
+- `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, and `KeyPress` for textarea input
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, and `current_stream_token: Option<CancellationToken>` for tracking active stream
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
+- CancelStream handler: Calls token.cancel(), transitions to Selection mode, clears textarea, appends StreamCancelled event to history
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
@@ -44,12 +45,13 @@ pub mod ui;           // Rendering functions for each mode
 - `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
 
 **Conversation Event Handling** (@/src/conversation.rs):
-- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, UnknownEvent
+- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent
 - `parse_jsonl_event()`: Parses raw JSONL strings into ConversationEvent - handles Claude CLI event format with nested message.content arrays
-- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, other events render with type-specific prefixes and colors
+- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, StreamCancelled renders "Interrupted" in red, other events render with type-specific prefixes and colors
 
 **Backend Abstraction** (@/src/backends.rs):
-- `AgentBackend` trait: Async `spawn_process(prompt) -> Result<Child>` and `name() -> &str`
+- `AgentBackend` trait: `spawn_stream(prompt, cancel_token) -> Pin<Box<dyn Stream<Item = ConversationEvent>>>` and metadata methods
+- Accepts CancellationToken for cooperative cancellation - backends receive token but child process cleanup happens via Drop
 - Enables polymorphism for different CLI tools while maintaining same subprocess streaming interface
 - Re-exports backend modules (claude, codex, mock) for external use
 
@@ -57,16 +59,23 @@ pub mod ui;           // Rendering functions for each mode
 ```
 User Input (keyboard)
   → Alt+A toggles show_agent_router overlay
-  → Alt+Enter submits prompt → SubmitInput adds UserMessage to history
+  → Alt+Enter submits prompt → SubmitInput adds UserMessage to history, creates CancellationToken, spawns stream
+  → Esc during streaming → CancelStream triggers token.cancel()
   → EventStream task → Message (via mpsc channel)
   → run_app loop → Model::update()
   → render() displays chat + optional overlay on next tick
 
 Subprocess Output (JSONL)
-  → spawn_and_stream task → parse_jsonl_event() → ConversationEvent
+  → spawn_and_stream task → tokio::select! on cancel_token.cancelled() vs stream.next()
+  → parse_jsonl_event() → ConversationEvent (if stream continues)
   → Message::StreamEvent (via mpsc channel)
   → run_app loop → Model::update() → accumulates in response_events
   → render_chat() maps all events via render_event() to styled Lines
+
+Cancellation Path
+  → User presses Esc → CancelStream message → token.cancel() called
+  → spawn_and_stream's cancel branch fires → stream dropped → child process cleanup via Drop
+  → StreamCancelled event added to history → UI returns to Selection mode
 ```
 
 ### Things to Know
@@ -125,6 +134,16 @@ Subprocess Output (JSONL)
 - Alt+A globally toggles agent router overlay - handled before mode-specific logic in @/src/main.rs:117-121
 - 'q' quits from Selection/Streaming modes but types 'q' character when in Input mode
 - Alt+Enter submits because Ctrl+Enter doesn't work reliably across terminal emulators
+- Esc during streaming sends CancelStream message to interrupt the stream
 - Esc closes agent router overlay when open via ExitInputMode message
+
+**Stream Cancellation Mechanism**:
+- CancellationToken from tokio-util used for cooperative cancellation
+- Token created in main loop when spawning stream task, stored in Model.current_stream_token
+- spawn_and_stream uses tokio::select! with three branches: cancel signal, stream next, stream end
+- When cancel branch fires, stream is dropped which closes file handles
+- Child process cleanup happens via Drop trait implementation on the stream
+- StreamCancelled event provides visual feedback in conversation history
+- No explicit process killing - relies on Drop semantics and closed handles
 
 Created and maintained by Nori.

@@ -19,8 +19,11 @@ Backend implementations for spawning and interacting with different AI coding ag
 **Trait Definition** (@/src/backends.rs):
 ```rust
 pub trait AgentBackend {
-    fn spawn_stream(&self, prompt: String)
-    -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
+    fn spawn_stream(
+        &self,
+        prompt: String,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
     fn name(&self) -> &str;
     fn command_name(&self) -> &str;
     fn install_url(&self) -> &str;
@@ -30,6 +33,8 @@ pub fn is_available(command: &str) -> bool {
     which::which(command).is_ok()
 }
 ```
+- spawn_stream now accepts CancellationToken for cooperative cancellation
+- Backends receive token but may not actively use it - cancellation happens when caller drops the returned stream
 
 **Backend Availability Checking**:
 - `is_available()` function checks if a command exists in PATH using the `which` crate
@@ -43,6 +48,7 @@ pub fn is_available(command: &str) -> bool {
 - Session resumption: Includes `--resume <session_id>` if ClaudeBackend.session_id is Some
 - session_id field exists but is never populated - prepared for future persistence feature
 - Spawns with stdout/stderr piped to enable JSONL event streaming back to main loop
+- Accepts cancel_token parameter but doesn't actively use it - cancellation handled by caller dropping stream
 - command_name: "claude"
 - install_url: "https://code.claude.com"
 - Spawn error handling: ErrorKind::NotFound yields SystemEvent with install message
@@ -53,6 +59,7 @@ pub fn is_available(command: &str) -> bool {
 - thread_id field exists but is never populated - infrastructure for multi-turn conversations
 - Headless mode via `exec` subcommand for non-interactive operation
 - Always uses --json flag to get structured event output
+- Accepts cancel_token parameter but doesn't actively use it - cancellation handled by caller dropping stream
 - command_name: "codex"
 - install_url: "https://developers.openai.com/codex/cli/"
 - Spawn error handling: ErrorKind::NotFound yields SystemEvent with install message
@@ -61,6 +68,7 @@ pub fn is_available(command: &str) -> bool {
 - Uses `printf` shell command to output hardcoded JSONL without requiring agent CLI installation
 - Outputs two test events in actual Claude CLI format: `{"type":"assistant","message":{"content":[{"type":"text","text":"Hello from mock"}]}}`
 - Format matches real Claude CLI output structure with nested message.content array of text blocks
+- Accepts cancel_token parameter but doesn't use it - test streams complete immediately
 - Used exclusively in @/tests/subprocess_test.rs and @/tests/conversation_rendering_test.rs to verify JSONL parsing logic
 - Demonstrates the minimal contract: any process that outputs newline-delimited JSON to stdout works
 
@@ -124,8 +132,9 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 - Child processes are spawned via tokio::process::Command, which returns a tokio::process::Child
 - stdout and stderr are piped (std::process::Stdio::piped()) so they can be read asynchronously
 - Spawning happens in @/src/main.rs:spawn_and_stream() which is called from tokio::spawn, so it runs concurrently
-- Process is waited on via child.wait().await in spawn_and_stream, blocking that task until exit
-- No cancellation mechanism - child continues running even if user escapes streaming view
+- Stream consumption multiplexed with cancellation signal via tokio::select! in spawn_and_stream
+- When cancellation fires, stream is dropped which closes file handles and triggers child process cleanup via Drop
+- No explicit process.kill() - relies on Drop semantics and closed handles for cleanup
 
 **Error Paths**:
 - spawn_process() returns Result<Child> - spawn failure (CLI not found, permission denied) propagates to caller

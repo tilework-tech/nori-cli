@@ -27,19 +27,22 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Asserts response_events length is 2 and contents match expected text
 - `test_toggle_agent_router_overlay()`: Verifies ToggleAgentRouter message toggles `show_agent_router` boolean
 - `test_submit_input_adds_user_message_to_history()`: Verifies SubmitInput captures textarea content and adds UserMessage to response_events before spawning agent
+- `test_cancel_stream_during_streaming()`: Verifies CancelStream message handling
+  - Sets up streaming state with CancellationToken
+  - Sends CancelStream message
+  - Asserts token.is_cancelled() is true
+  - Verifies mode transitions to Selection, token cleared from model, textarea cleared
+  - Verifies StreamCancelled event added to response_events
 
 **Subprocess Tests** (@/tests/subprocess_test.rs):
-- `test_mock_backend_spawns_process()`: Verifies MockBackend can spawn process and output is readable
-  - Spawns process via backend.spawn_process()
-  - Reads stdout line-by-line with tokio BufReader
-  - Asserts at least one line of output
-  - Parses first line as JSON to verify format matches Claude CLI structure
-- `test_parse_assistant_message_events()`: Verifies parse_jsonl_event() extracts text from assistant message events
-  - Spawns MockBackend subprocess outputting actual Claude CLI JSONL format
-  - Reads stdout and parses each line via parse_jsonl_event()
-  - Filters for ConversationEvent::AssistantMessage variants
-  - Extracts text field from each matching event
-  - Asserts at least one message was extracted and matches expected content
+- `test_mock_backend_streams_events()`: Verifies MockBackend can stream events
+  - Creates CancellationToken and passes to spawn_stream()
+  - Consumes stream and collects all events
+  - Asserts events contain expected AssistantMessage variants
+- `test_mock_backend_completes()`: Verifies stream completes naturally
+  - Creates CancellationToken and passes to spawn_stream()
+  - Consumes stream and verifies at least one event received
+  - Tests stream completion without cancellation
 
 **Conversation Rendering Tests** (@/tests/conversation_rendering_test.rs):
 - `test_parse_assistant_message_event()`: Verifies parsing of Claude CLI assistant message format
@@ -86,11 +89,12 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies contract between backends and main loop: backends output Claude CLI format, parse_jsonl_event() produces ConversationEvent
 
 **Conversation Module Test Coverage**:
-- Comprehensive tests for all ConversationEvent variants (13 tests total including UserMessage)
+- Comprehensive tests for all ConversationEvent variants (14 tests total including UserMessage and StreamCancelled)
 - Edge cases: malformed JSON, missing fields, multiple text blocks, empty details
 - Both parsing (JSONL → ConversationEvent) and rendering (ConversationEvent → styled Line) tested independently
 - Rendering tests verify color, style modifiers (dim, bold), and prefix text for each variant
 - UserMessage test verifies chat history rendering with cyan styling
+- StreamCancelled renders "Interrupted" in red to provide visual feedback for cancelled streams
 
 **Coverage Gaps**:
 - No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut
@@ -99,6 +103,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds
 - No tests for session resumption - session_id/thread_id fields are never populated
 - No tests verifying conversation history persistence across multiple submit cycles
+- No integration test for actual stream cancellation with long-running process - test_cancel_stream_during_streaming only tests state machine
 
 **CI Integration**:
 - Tests run on every PR via @/.github/workflows/pr-ci.yml
