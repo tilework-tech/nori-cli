@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, EventStream, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::{cursor::MoveTo, execute};
 use futures::StreamExt;
@@ -7,6 +7,7 @@ use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
 use nori_cli::conversation::{ConversationEvent, render_event};
+use nori_cli::input::handle_key_simple;
 use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use tokio::sync::mpsc;
@@ -320,62 +321,6 @@ fn handle_event_simple(
     None
 }
 
-fn handle_key_simple(
-    mode: AppMode,
-    show_overlay: bool,
-    show_install_prompt: bool,
-    _last_ctrl_c_time: Option<std::time::Instant>,
-    key: KeyEvent,
-) -> Option<Message> {
-    // Check for Ctrl-C FIRST (even with overlays/install prompt open)
-    // This ensures double Ctrl-C always works to exit
-    if key.code == KeyCode::Char('c')
-        && key
-            .modifiers
-            .contains(crossterm::event::KeyModifiers::CONTROL)
-    {
-        return Some(Message::ClearTextarea);
-    }
-
-    // Install prompt takes highest precedence
-    if show_install_prompt {
-        return match key.code {
-            KeyCode::Up | KeyCode::Char('k') => Some(Message::NavigateInstallChoice),
-            KeyCode::Down | KeyCode::Char('j') => Some(Message::NavigateInstallChoice),
-            KeyCode::Enter => Some(Message::ConfirmInstall),
-            KeyCode::Esc => Some(Message::CancelInstall),
-            _ => None,
-        };
-    }
-
-    // If overlay is open, handle navigation
-    if show_overlay {
-        return match key.code {
-            KeyCode::Up | KeyCode::Char('k') => Some(Message::PreviousItem),
-            KeyCode::Down | KeyCode::Char('j') => Some(Message::NextItem),
-            KeyCode::Enter => Some(Message::SelectItem),
-            KeyCode::Esc => Some(Message::ExitInputMode),
-            _ => None,
-        };
-    }
-
-    // If streaming, only allow Esc to cancel
-    if mode == AppMode::Streaming {
-        return match key.code {
-            KeyCode::Esc => Some(Message::CancelStream),
-            _ => None,
-        };
-    }
-
-    // Otherwise, handle chat input
-    // Check Enter for submit
-    if key.code == KeyCode::Enter && key.modifiers.is_empty() {
-        return Some(Message::SubmitInput);
-    }
-
-    // Send all other key events to textarea
-    Some(Message::KeyPress(key))
-}
 
 fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
     match model.selected_agent_index {
