@@ -71,3 +71,35 @@ fn test_ctrl_c_after_timeout_clears_textarea_again() {
         Some("Press Ctrl-C again to exit".to_string())
     );
 }
+
+#[test]
+fn test_typing_resets_ctrl_c_timer() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let mut model = Model::default();
+
+    // First Ctrl-C
+    model.update(Message::ClearTextarea);
+    assert!(model.last_ctrl_c_time.is_some());
+    assert_eq!(
+        model.error_message,
+        Some("Press Ctrl-C again to exit".to_string())
+    );
+
+    // User starts typing - should reset timer and clear hint
+    let key_event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+    model.update(Message::KeyPress(key_event));
+
+    // Timer should be reset
+    assert!(model.last_ctrl_c_time.is_none());
+    // Hint should be cleared
+    assert!(model.error_message.is_none());
+
+    // Now Ctrl-C again should behave like first press
+    model.update(Message::ClearTextarea);
+    assert!(model.last_ctrl_c_time.is_some());
+    assert_eq!(
+        model.error_message,
+        Some("Press Ctrl-C again to exit".to_string())
+    );
+}
