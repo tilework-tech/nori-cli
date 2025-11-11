@@ -104,35 +104,31 @@ impl Model {
             }
 
             Message::SelectItem => {
-                if self.current_mode == AppMode::Selection {
-                    self.selected_agent_index = self.list_state.selected();
-                    self.current_mode = AppMode::Input;
-                    self.textarea = TextArea::default();
-                    self.error_message = None;
-                }
+                // Select agent and close overlay
+                self.selected_agent_index = self.list_state.selected();
+                self.show_agent_router = false;
+                self.error_message = None;
             }
 
             Message::ExitInputMode => {
-                if self.current_mode == AppMode::Input {
-                    self.current_mode = AppMode::Selection;
-                }
+                // Close the agent router overlay if open
+                self.show_agent_router = false;
             }
 
             Message::KeyPress(key) => {
-                if self.current_mode == AppMode::Input {
+                // Only handle text input when overlay is NOT open
+                if !self.show_agent_router {
                     self.textarea.input(key);
                 }
             }
 
             Message::SubmitInput => {
-                if self.current_mode == AppMode::Input {
-                    // Capture user message before transitioning
-                    let user_text = self.textarea.lines().join("\n");
-                    if !user_text.trim().is_empty() {
-                        self.response_events.push(ConversationEvent::UserMessage {
-                            text: user_text,
-                        });
-                    }
+                // Capture user message and transition to streaming mode
+                let user_text = self.textarea.lines().join("\n");
+                if !user_text.trim().is_empty() {
+                    self.response_events.push(ConversationEvent::UserMessage {
+                        text: user_text,
+                    });
                     self.current_mode = AppMode::Streaming;
                 }
             }

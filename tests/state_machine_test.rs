@@ -8,22 +8,18 @@ fn test_state_transitions() {
     // Start in Selection mode
     assert_eq!(model.current_mode, AppMode::Selection);
 
-    // Select an item -> should transition to Input mode
+    // Select an item -> should close overlay
     model.update(Message::SelectItem);
-    assert_eq!(model.current_mode, AppMode::Input);
+    assert!(!model.show_agent_router);
+    assert!(model.selected_agent_index.is_some());
 
     // Submit input -> should transition to Streaming mode
+    model.textarea.insert_str("test input");
     model.update(Message::SubmitInput);
     assert_eq!(model.current_mode, AppMode::Streaming);
 
     // Stream completes -> should return to Selection mode
     model.update(Message::StreamComplete);
-    assert_eq!(model.current_mode, AppMode::Selection);
-
-    // Exit from Input mode with Esc -> back to Selection
-    model.update(Message::SelectItem);
-    assert_eq!(model.current_mode, AppMode::Input);
-    model.update(Message::ExitInputMode);
     assert_eq!(model.current_mode, AppMode::Selection);
 }
 
@@ -42,9 +38,7 @@ fn test_post_stream_state_handling() {
     let mut model = Model::default();
 
     // Simulate complete user flow
-    model.update(Message::SelectItem);
-    assert_eq!(model.current_mode, AppMode::Input);
-
+    model.textarea.insert_str("test input");
     model.update(Message::SubmitInput);
     assert_eq!(model.current_mode, AppMode::Streaming);
 
@@ -58,14 +52,10 @@ fn test_post_stream_state_handling() {
     model.update(Message::StreamComplete);
     assert_eq!(model.current_mode, AppMode::Selection);
 
-    // Verify we can interact again - this verifies the state machine
-    // The actual bug is in the event handler, not the Model
-    model.update(Message::NextItem);
-    assert_eq!(model.current_mode, AppMode::Selection);
-
-    // Verify we can select again
-    model.update(Message::SelectItem);
-    assert_eq!(model.current_mode, AppMode::Input);
+    // Verify we can still interact with chat
+    model.textarea.insert_str("another message");
+    model.update(Message::SubmitInput);
+    assert_eq!(model.current_mode, AppMode::Streaming);
 }
 
 #[test]
@@ -109,10 +99,6 @@ fn test_toggle_agent_router_overlay() {
 #[test]
 fn test_submit_input_adds_user_message_to_history() {
     let mut model = Model::default();
-
-    // Transition to Input mode first
-    model.update(Message::SelectItem);
-    assert_eq!(model.current_mode, AppMode::Input);
 
     model.textarea.insert_str("Hello agent");
 
