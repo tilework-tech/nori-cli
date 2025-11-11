@@ -61,14 +61,12 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         let autocomplete_height =
             (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
         vec![
-            Constraint::Length(3),                   // Title
             Constraint::Length(textarea_height),     // Input (dynamic)
             Constraint::Length(autocomplete_height), // Autocomplete
             Constraint::Length(1),                   // Instructions
         ]
     } else {
         vec![
-            Constraint::Length(3),               // Title
             Constraint::Length(textarea_height), // Input (dynamic)
             Constraint::Length(1),               // Agent info
             Constraint::Length(1),               // Instructions
@@ -114,10 +112,10 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     // Render autocomplete dropdown in its own layout chunk (if visible)
     if model.show_autocomplete {
-        render_autocomplete_in_layout(model, frame, chunks[2]);
-        frame.render_widget(instructions, chunks[3]); // Instructions at bottom
+        render_autocomplete_in_layout(model, frame, chunks[1]);
+        frame.render_widget(instructions, chunks[2]); // Instructions at bottom
     } else {
-        frame.render_widget(instructions, chunks[2]); // Instructions directly after input
+        frame.render_widget(instructions, chunks[2]); // Instructions directly after agent info
     }
 }
 
