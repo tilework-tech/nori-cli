@@ -115,6 +115,11 @@ fn handle_event_simple(mode: AppMode, event: Event) -> Option<Message> {
 }
 
 fn handle_key_simple(mode: AppMode, key: KeyEvent) -> Option<Message> {
+    // Global Alt+A shortcut to toggle agent router
+    if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('a') {
+        return Some(Message::ToggleAgentRouter);
+    }
+
     // Allow 'q' to quit from any mode
     if key.code == KeyCode::Char('q') && mode != AppMode::Input {
         return Some(Message::Quit);
