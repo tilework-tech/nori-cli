@@ -2,7 +2,6 @@ use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::{cursor::MoveTo, execute};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
@@ -16,9 +15,6 @@ use tokio::time::{Duration, interval};
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-
-    // Get starting cursor position before creating viewport
-    let viewport_start_row = crossterm::cursor::position()?.1;
 
     // Setup terminal with inline viewport (8 lines at bottom for input/instructions)
     enable_raw_mode()?;
