@@ -6,7 +6,7 @@ use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
-use nori_cli::conversation::{render_event, ConversationEvent};
+use nori_cli::conversation::{ConversationEvent, render_event};
 use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use tokio::sync::mpsc;
