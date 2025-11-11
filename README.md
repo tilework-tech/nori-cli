@@ -56,19 +56,27 @@ cargo run
 
 ### Navigation
 
-**Selection Mode** (choosing an agent):
+**Input Mode** (entering prompt):
+- Type your prompt (multi-line not supported - use Enter to submit)
+- `Enter`: Submit prompt to agent
+- Type slash commands for special actions (see below)
+
+**Agent Router Overlay** (when open):
 - `↑`/`↓` or `k`/`j`: Navigate agent list
 - `Enter`: Select agent
-- `q`: Quit
-
-**Input Mode** (entering prompt):
-- Type your prompt (supports multi-line)
-- `Alt+Enter`: Submit prompt to agent (note: Ctrl+Enter doesn't work reliably across terminals)
-- `Esc`: Go back to selection
+- `Esc`: Close overlay
 
 **Streaming Mode** (viewing response):
 - Watch the streaming response
-- `Esc`: Return to selection (interrupts current stream)
+- `Esc`: Return to input mode (interrupts current stream)
+
+### Slash Commands
+
+Nori CLI uses slash commands for special actions:
+
+- `/exit`: Quit the application
+- `/switch-model`: Open the agent router to select a different model
+- Any unknown command will show an error with available commands
 
 ### Response Format
 

@@ -49,7 +49,7 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     frame.render_widget(&model.textarea, inner_area);
 
     // Instructions
-    let instructions = Paragraph::new("Alt+Enter: send | Alt+A: agent router | q: quit")
+    let instructions = Paragraph::new("Enter: send | /switch-model: agents | /exit: quit")
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[2]);
 }
@@ -89,7 +89,7 @@ fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect)
     frame.render_stateful_widget(list, chunks[1], &mut model.list_state);
 
     // Instructions
-    let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to select, Esc/Alt+A to close")
+    let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to select, Esc to close")
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::Gray));
     frame.render_widget(instructions, chunks[2]);
