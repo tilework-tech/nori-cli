@@ -25,7 +25,7 @@ pub mod ui;           // Rendering functions for each mode
 ```
 
 **Entry Point** (@/src/main.rs):
-- `main()`: Sets up terminal (raw mode, alternate screen), runs async event loop, restores terminal on exit
+- `main()`: Sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
 - `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
@@ -79,6 +79,12 @@ Cancellation Path
 ```
 
 ### Things to Know
+
+**Terminal Cleanup Sequence** (@/src/main.rs:27-31):
+- Cleanup happens in specific order: move cursor to next line, disable raw mode, call ratatui::restore()
+- `MoveToNextLine(1)` from crossterm positions cursor below TUI content before raw mode is disabled
+- Without cursor positioning, shell prompt would appear in middle of painted TUI area with Viewport::Inline(8)
+- Must execute cursor command before disable_raw_mode() to ensure command is processed while terminal is still in raw mode
 
 **Async Architecture**:
 - Three concurrent tasks: event handler (reads keyboard), subprocess streaming (reads stdout/stderr), render interval (ticks at 30 fps)
