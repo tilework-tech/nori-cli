@@ -310,9 +310,8 @@ impl Model {
 
             Message::AutocompleteDown => {
                 if !self.autocomplete_filtered_commands.is_empty() {
-                    self.autocomplete_selected_index =
-                        (self.autocomplete_selected_index + 1)
-                            % self.autocomplete_filtered_commands.len();
+                    self.autocomplete_selected_index = (self.autocomplete_selected_index + 1)
+                        % self.autocomplete_filtered_commands.len();
                 }
             }
 

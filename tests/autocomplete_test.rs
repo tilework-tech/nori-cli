@@ -21,7 +21,10 @@ fn test_autocomplete_shows_on_slash() {
         2,
         "Should show both commands"
     );
-    assert_eq!(model.autocomplete_selected_index, 0, "Should select first item");
+    assert_eq!(
+        model.autocomplete_selected_index, 0,
+        "Should select first item"
+    );
 }
 
 #[test]

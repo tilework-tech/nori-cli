@@ -1,5 +1,5 @@
 use crate::app::Model;
-use crate::commands::{filter_commands, CommandRegistry};
+use crate::commands::{CommandRegistry, filter_commands};
 
 /// Updates autocomplete state based on current textarea input
 /// Triggers autocomplete when input starts with "/" at the beginning only

@@ -1,5 +1,5 @@
 use nori_cli::app::Model;
-use nori_cli::commands::{CommandRegistry, parse_slash_command, filter_commands};
+use nori_cli::commands::{CommandRegistry, filter_commands, parse_slash_command};
 
 // Tests for CommandRegistry - listing available commands
 
