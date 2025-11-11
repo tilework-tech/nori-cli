@@ -238,34 +238,25 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 fn render_autocomplete_dropdown(model: &Model, frame: &mut Frame) {
-    // Calculate position: below the prompt textarea
-    // We need to recreate the same layout to know where the instructions end
+    // The viewport is 8 lines fixed (Viewport::Inline(8))
+    // We need to overlay the dropdown within those 8 lines
+    // Position it to overlay starting at line 3 (below title, overlaying input area)
     let area = frame.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Title
-            Constraint::Length(4), // Input
-            Constraint::Length(1), // Instructions
-        ])
-        .split(area);
 
-    // Position dropdown right after instructions chunk
-    let dropdown_y = chunks[2].y + chunks[2].height;
-
-    // Check if there's enough space
-    if dropdown_y >= area.height {
-        return; // Not enough space
+    if model.autocomplete_filtered_commands.is_empty() {
+        return; // Nothing to show
     }
 
-    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 8) + 2; // +2 for borders
+    // Calculate dropdown dimensions
+    let dropdown_height = (model.autocomplete_filtered_commands.len() as u16).clamp(1, 4) + 2; // +2 for borders, max 4 items to fit
     let dropdown_width = 50.min(area.width.saturating_sub(4));
 
+    // Position: y=3 puts it right after the title box, overlaying the top of the input
     let dropdown_area = Rect {
         x: 2,
-        y: dropdown_y,
+        y: 3, // After title (3 lines), overlay on input area
         width: dropdown_width,
-        height: dropdown_height,
+        height: dropdown_height.min(5), // Max 5 lines to leave room for instructions
     };
 
     // Clear background
