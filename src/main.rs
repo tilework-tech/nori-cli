@@ -175,39 +175,38 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         match model.install_prompt_choice {
                             InstallChoice::RunInstallation => {
                                 // Run installation command
-                                if let Some(install_cmd) = &model.install_prompt_cmd {
-                                    if !install_cmd.is_empty() {
-                                        let cmd = install_cmd.clone();
-                                        let install_tx = tx.clone();
-                                        tokio::spawn(async move {
-                                            let result = tokio::process::Command::new(&cmd[0])
-                                                .args(&cmd[1..])
-                                                .output()
-                                                .await;
+                                if let Some(install_cmd) = &model.install_prompt_cmd
+                                    && !install_cmd.is_empty() {
+                                    let cmd = install_cmd.clone();
+                                    let install_tx = tx.clone();
+                                    tokio::spawn(async move {
+                                        let result = tokio::process::Command::new(&cmd[0])
+                                            .args(&cmd[1..])
+                                            .output()
+                                            .await;
 
-                                            match result {
-                                                Ok(output) if output.status.success() => {
-                                                    let _ = install_tx.send(Message::InstallationComplete {
-                                                        success: true,
-                                                        message: "Installation completed successfully".to_string(),
-                                                    });
-                                                }
-                                                Ok(output) => {
-                                                    let stderr = String::from_utf8_lossy(&output.stderr);
-                                                    let _ = install_tx.send(Message::InstallationComplete {
-                                                        success: false,
-                                                        message: format!("Installation failed: {}", stderr),
-                                                    });
-                                                }
-                                                Err(e) => {
-                                                    let _ = install_tx.send(Message::InstallationComplete {
-                                                        success: false,
-                                                        message: format!("Failed to run installation: {}", e),
-                                                    });
-                                                }
+                                        match result {
+                                            Ok(output) if output.status.success() => {
+                                                let _ = install_tx.send(Message::InstallationComplete {
+                                                    success: true,
+                                                    message: "Installation completed successfully".to_string(),
+                                                });
                                             }
-                                        });
-                                    }
+                                            Ok(output) => {
+                                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                                let _ = install_tx.send(Message::InstallationComplete {
+                                                    success: false,
+                                                    message: format!("Installation failed: {}", stderr),
+                                                });
+                                            }
+                                            Err(e) => {
+                                                let _ = install_tx.send(Message::InstallationComplete {
+                                                    success: false,
+                                                    message: format!("Failed to run installation: {}", e),
+                                                });
+                                            }
+                                        }
+                                    });
                                 }
                             }
                             InstallChoice::OpenInstallPage => {
