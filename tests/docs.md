@@ -4,7 +4,7 @@ Path: @/tests
 
 ### Overview
 
-Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), subprocess JSONL streaming, and UI dynamic height calculation. Uses unit tests for Model::update(), conversation module logic, and calculate_textarea_height() function. Integration tests use MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
+Test suite for the agent-router-tui application, covering state machine transitions, conversation event parsing/rendering (including UserMessage events), subprocess JSONL streaming, text wrapping, and UI dynamic height calculation. Uses unit tests for Model::update(), conversation module logic, wrap_text_for_width() function, and calculate_textarea_height() function. Integration tests use MockBackend to verify end-to-end subprocess streaming without requiring real agent CLIs.
 
 ### How it fits into the larger codebase
 
@@ -38,7 +38,19 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Asserts new timestamp is set (more recent than old one)
   - Asserts hint shown again (behaves as first press)
 
+**Text Wrapping Tests** (@/tests/text_wrapping_test.rs):
+- Unit tests for @/src/text_wrapping.rs:wrap_text_for_width() function (8 tests total)
+- `test_short_text_no_wrapping()`: Verifies text shorter than width returns unchanged
+- `test_long_line_wraps_at_word_boundary()`: Verifies wrapping at word boundaries when line exceeds width
+- `test_preserves_existing_newlines()`: Verifies existing newlines in input are preserved in output
+- `test_wraps_each_line_independently()`: Verifies each logical line is processed separately
+- `test_empty_string()`: Verifies empty input returns empty output
+- `test_single_long_word()`: Verifies words longer than width are broken mid-word
+- `test_unicode_text_wrapping()`: Verifies unicode/emoji handling doesn't panic
+- `test_multiple_spaces_preserved()`: Verifies textwrap handles multiple spaces reasonably
+
 **Dynamic Textarea Height Tests** (@/tests/dynamic_textarea_height_test.rs):
+- Unit tests for @/src/ui.rs:calculate_textarea_height() function (7 tests total)
 - `test_empty_textarea_height()`: Verifies empty textarea returns minimum height of 3
 - `test_single_short_line_height()`: Verifies single short line (5 chars) returns minimum height of 3
 - `test_single_wrapping_line_height()`: Verifies long line (100 chars at width 50) correctly calculates wrapped visual rows
@@ -172,18 +184,29 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies textarea stays clear throughout streaming, completion, and cancellation
 - Tests ensure textarea is never restored after cancellation (matches modern chat UX expectations)
 
+**Text Wrapping Test Coverage** (@/tests/text_wrapping_test.rs):
+- Comprehensive unit tests for wrap_text_for_width() function (8 tests total)
+- Verifies word boundary wrapping behavior
+- Verifies newline preservation (existing newlines are kept)
+- Verifies independent line processing (each logical line wrapped separately)
+- Verifies edge cases: empty strings, long words (mid-word breaking), unicode characters
+- Verifies textwrap crate integration works as expected
+- All tests pass - confirms text wrapping behaves correctly for prompt input use case
+
 **Dynamic Textarea Height Test Coverage** (@/tests/dynamic_textarea_height_test.rs):
-- Comprehensive tests for height calculation logic (7 tests total)
+- Comprehensive unit tests for calculate_textarea_height() function (7 tests total)
 - Verifies minimum height for empty and short content
 - Verifies line wrapping calculation for long single lines
 - Verifies multi-line height accumulation
 - Verifies unbounded growth (no maximum height enforcement)
 - Verifies unicode/emoji width handling using unicode-width crate
 - Verifies edge case handling for very small terminal widths
+- All tests pass - confirms height calculation produces correct visual height for textarea rendering
 
 **Coverage Gaps**:
 - No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut and Ctrl-C priority detection
 - No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) - would require terminal buffer assertions
+- No integration tests for text wrapping behavior (rewrapping on keystroke, rewrapping on terminal resize) - would require full event loop with terminal
 - No tests for overlay interaction blocking (navigation disabled in chat, input disabled in overlay) - requires event handler integration
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds
 - No tests for session resumption - session_id/thread_id fields are never populated

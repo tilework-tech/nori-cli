@@ -21,6 +21,7 @@ Core application modules implementing the TUI's architecture: application state 
 pub mod app;          // Model, Message, and update logic
 pub mod backends;     // AgentBackend trait and implementations
 pub mod conversation; // JSONL parsing and event rendering
+pub mod text_wrapping; // Textarea prompt wrapping using textwrap
 pub mod ui;           // Rendering functions for each mode
 ```
 
@@ -35,18 +36,27 @@ pub mod ui;           // Rendering functions for each mode
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window, and `wrap_width: usize` for text wrapping column limit
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 - ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
+- KeyPress handler: Delegates keystroke to textarea.input(), then calls rewrap_textarea() to apply wrapping after each character input
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
-- `render_chat()`: Three-section vertical layout - Input textarea at top with dynamic height (calculated per frame), Agent info line below input, Instructions footer at bottom. Uses `calculate_textarea_height()` to determine textarea constraint each render.
+- `render_chat()`: Three-section vertical layout - Input textarea at top with dynamic height (calculated per frame), Agent info line below input, Instructions footer at bottom. Detects terminal width changes and calls model.set_wrap_width() to trigger rewrapping when terminal is resized. Uses `calculate_textarea_height()` to determine textarea constraint each render.
 - `calculate_textarea_height()`: Calculates visual height needed for textarea content including line wrapping. Returns minimum 3 (1 content line + 2 borders) for empty/short content. No maximum height - grows indefinitely with content. Uses unicode-width for accurate character width calculation.
 - `render_agent_router_overlay()`: Renders agent list inside centered rectangle (60% width, 40% height) using Clear widget to blank underlying content
 - `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
+
+**Text Wrapping** (@/src/text_wrapping.rs):
+- `wrap_text_for_width()`: Wraps text at word boundaries using textwrap crate - processes each logical line independently, preserving existing newlines while wrapping long lines
+- Uses textwrap::fill() which implements optimal-fit algorithm (Knuth-Plass line breaking)
+- Breaks at word boundaries when possible, breaks mid-word for words longer than width
+- Unicode-aware: measures displayed width, not byte count
+- Returns string with actual newlines inserted (hard wrapping, not soft wrapping)
+- Called by Model::rewrap_textarea() after every keystroke to maintain wrapped state
 
 **Conversation Event Handling** (@/src/conversation.rs):
 - `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent
@@ -187,6 +197,16 @@ Cancellation Path
 - StreamCancelled event provides visual feedback in conversation history
 - No explicit process killing - relies on Drop semantics and closed handles
 
+**Prompt Input Text Wrapping Architecture** (@/src/app.rs:304-329, @/src/text_wrapping.rs, @/src/ui.rs:33-38):
+- Uses **hard wrapping** strategy: actual newlines inserted into textarea content after every keystroke
+- **Flow**: KeyPress → textarea.input(key) → rewrap_textarea() → wrap_text_for_width() → rebuild textarea with wrapped lines
+- **Terminal resize handling**: render_chat() detects width changes each frame, calls set_wrap_width() to trigger rewrapping
+- **Trade-off**: Wrapped lines become indistinguishable from user-entered newlines - editing wrapped text requires unwrap/rewrap cycle
+- **Performance**: Rewraps on every keystroke - fast enough for typical prompts (<1000 chars), could be optimized with debouncing for very large inputs
+- **Cursor position**: Rewrapping resets cursor to end of text - acceptable for append-only typing, less ideal for heavy editing
+- **Why hard wrapping**: Simpler implementation than soft wrapping (visual-only wrapping), acceptable for prompt input use case where users typically type and submit rather than heavily edit
+- **Dependencies**: textwrap = "0.16" for word-wrapping algorithm, unicode-width = "0.2" for character width calculation
+
 **Dynamic Textarea Height Calculation** (@/src/ui.rs:239-270):
 - `calculate_textarea_height()` computes visual rows needed for textarea content based on line wrapping
 - **Algorithm**: Iterates through logical lines, calculating visual rows per line by dividing character width by available width (terminal width minus 2-char border). Sums all visual rows and adds border overhead.
@@ -194,7 +214,7 @@ Cancellation Path
 - **No maximum**: Height grows unbounded with content - a 20-line prompt results in height 22 (20 + 2 borders)
 - **Unicode handling**: Uses unicode-width crate's `UnicodeWidthStr::width()` for accurate character width (handles emoji, multi-byte UTF-8)
 - **Edge cases**: Empty lines count as 1 row. Available width <= border width returns minimum height gracefully.
-- **Dependency**: Requires unicode-width = "0.2" and tui-textarea crate
+- **Integration**: Called every render frame from render_chat() - calculation is O(n) where n = number of lines, fast enough that caching is unnecessary
 
 **Text Wrapping for Scrollback** (@/src/main.rs:339-443):
 - `wrap_text_to_width()` performs manual text wrapping before inserting into scrollback buffer
