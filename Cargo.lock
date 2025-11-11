@@ -556,6 +556,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tui-textarea",
+ "unicode-width 0.2.0",
  "which",
 ]
 
