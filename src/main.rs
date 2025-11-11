@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::{cursor::MoveTo, execute};
+use crossterm::{cursor::MoveToNextLine, execute};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, InstallChoice, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
@@ -25,10 +25,9 @@ async fn main() -> Result<()> {
     let result = run_app(&mut terminal).await;
 
     // Restore terminal
-    // Get cursor position and move to bottom of viewport before restoring
-    let cursor_pos = terminal.get_cursor_position()?;
-    // Move cursor to the line after the viewport bottom
-    execute!(std::io::stdout(), MoveTo(0, cursor_pos.y + 1))?;
+    // Move cursor down 8 lines (viewport height) to ensure it's past all TUI content
+    // The viewport shows: 3 lines (title) + 4 lines (input) + 1 line (instructions) = 8 lines
+    execute!(std::io::stdout(), MoveToNextLine(8))?;
     disable_raw_mode()?;
     ratatui::restore();
 
