@@ -97,3 +97,15 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
         ]),
     }
 }
+
+/// Determines if an event should be rendered based on debug mode
+/// SystemEvent and UnknownEvent are debug events (hidden when show_debug is false)
+/// All other events are always visible
+pub fn should_render_event(event: &ConversationEvent, show_debug: bool) -> bool {
+    match event {
+        ConversationEvent::SystemEvent { .. } | ConversationEvent::UnknownEvent { .. } => {
+            show_debug
+        }
+        _ => true,
+    }
+}
