@@ -77,6 +77,7 @@ pub struct Model {
     pub install_prompt_url: Option<String>,
     pub install_prompt_cmd: Option<Vec<String>>,
     pub install_prompt_choice: InstallChoice,
+    pub install_options_state: ListState,
     pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
 }
 
@@ -84,6 +85,9 @@ impl Default for Model {
     fn default() -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
+
+        let mut install_options_state = ListState::default();
+        install_options_state.select(Some(0));
 
         Self {
             current_mode: AppMode::Selection,
@@ -104,12 +108,22 @@ impl Default for Model {
             install_prompt_url: None,
             install_prompt_cmd: None,
             install_prompt_choice: InstallChoice::default(),
+            install_options_state,
             current_stream_token: None,
         }
     }
 }
 
 impl Model {
+    /// Returns the number of install options based on whether install_cmd is available
+    fn install_option_count(&self) -> usize {
+        if self.install_prompt_cmd.is_some() {
+            3 // Run Installation, Open Installation Page, Cancel
+        } else {
+            2 // Open Installation Page, Cancel
+        }
+    }
+
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::NextItem => {
@@ -218,14 +232,36 @@ impl Model {
                 self.show_install_prompt = true;
                 self.install_prompt_backend = Some(backend);
                 self.install_prompt_url = Some(url);
-                self.install_prompt_cmd = install_cmd;
-                self.install_prompt_choice = InstallChoice::default();
+                self.install_prompt_cmd = install_cmd.clone();
+
+                // Set initial choice based on whether install_cmd is available
+                self.install_prompt_choice = if install_cmd.is_some() {
+                    InstallChoice::RunInstallation
+                } else {
+                    InstallChoice::OpenInstallPage
+                };
+
+                self.install_options_state.select(Some(0));
             }
 
             Message::NavigateInstallChoice => {
-                self.install_prompt_choice = match self.install_prompt_choice {
-                    InstallChoice::OpenInstallPage => InstallChoice::Cancel,
-                    InstallChoice::Cancel => InstallChoice::OpenInstallPage,
+                let option_count = self.install_option_count();
+                let current = self.install_options_state.selected().unwrap_or(0);
+                let next = (current + 1) % option_count;
+                self.install_options_state.select(Some(next));
+
+                // Map index to InstallChoice based on option count
+                self.install_prompt_choice = if option_count == 3 {
+                    match next {
+                        0 => InstallChoice::RunInstallation,
+                        1 => InstallChoice::OpenInstallPage,
+                        _ => InstallChoice::Cancel,
+                    }
+                } else {
+                    match next {
+                        0 => InstallChoice::OpenInstallPage,
+                        _ => InstallChoice::Cancel,
+                    }
                 };
             }
 
