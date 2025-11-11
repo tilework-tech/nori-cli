@@ -233,54 +233,55 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         }
                     }
                     Message::ConfirmInstall => {
-                        // Run installation if install command is available
-                        if let (Some(install_cmd), install_choice) = (
-                            &model.install_prompt_cmd,
-                            model.install_prompt_choice
-                        ) {
-                            if install_choice == InstallChoice::OpenInstallPage {
-                                if !install_cmd.is_empty() {
-                                    // Run the installation command
-                                    let cmd = install_cmd.clone();
-                                    let install_tx = tx.clone();
-                                    tokio::spawn(async move {
-                                        let result = tokio::process::Command::new(&cmd[0])
-                                            .args(&cmd[1..])
-                                            .output()
-                                            .await;
+                        // Handle install confirmation based on selected choice
+                        match model.install_prompt_choice {
+                            InstallChoice::RunInstallation => {
+                                // Run the installation command
+                                if let Some(install_cmd) = &model.install_prompt_cmd
+                                    && !install_cmd.is_empty() {
+                                        let cmd = install_cmd.clone();
+                                        let install_tx = tx.clone();
+                                        tokio::spawn(async move {
+                                            let result = tokio::process::Command::new(&cmd[0])
+                                                .args(&cmd[1..])
+                                                .output()
+                                                .await;
 
-                                        match result {
-                                            Ok(output) if output.status.success() => {
-                                                let _ = install_tx.send(Message::InstallationComplete {
-                                                    success: true,
-                                                    message: "Installation completed successfully".to_string(),
-                                                });
+                                            match result {
+                                                Ok(output) if output.status.success() => {
+                                                    let _ = install_tx.send(Message::InstallationComplete {
+                                                        success: true,
+                                                        message: "Installation completed successfully".to_string(),
+                                                    });
+                                                }
+                                                Ok(output) => {
+                                                    let stderr = String::from_utf8_lossy(&output.stderr);
+                                                    let _ = install_tx.send(Message::InstallationComplete {
+                                                        success: false,
+                                                        message: format!("Installation failed: {}", stderr),
+                                                    });
+                                                }
+                                                Err(e) => {
+                                                    let _ = install_tx.send(Message::InstallationComplete {
+                                                        success: false,
+                                                        message: format!("Failed to run installation: {}", e),
+                                                    });
+                                                }
                                             }
-                                            Ok(output) => {
-                                                let stderr = String::from_utf8_lossy(&output.stderr);
-                                                let _ = install_tx.send(Message::InstallationComplete {
-                                                    success: false,
-                                                    message: format!("Installation failed: {}", stderr),
-                                                });
-                                            }
-                                            Err(e) => {
-                                                let _ = install_tx.send(Message::InstallationComplete {
-                                                    success: false,
-                                                    message: format!("Failed to run installation: {}", e),
-                                                });
-                                            }
-                                        }
-                                    });
-                                } else if let Some(url) = &model.install_prompt_url {
-                                    // Fallback to opening URL if no install command
+                                        });
+                                    }
+                            }
+                            InstallChoice::OpenInstallPage => {
+                                // Open the installation page in browser
+                                if let Some(url) = &model.install_prompt_url {
                                     let _ = opener::open(url);
-                                    model.update(msg);
                                 }
-                            } else {
                                 model.update(msg);
                             }
-                        } else {
-                            model.update(msg);
+                            InstallChoice::Cancel => {
+                                // Cancel is handled by CancelInstall message
+                                model.update(msg);
+                            }
                         }
 
                         let _ = mode_tx.send(model.current_mode);
@@ -381,8 +382,8 @@ fn handle_key_simple(
     // Install prompt takes highest precedence
     if show_install_prompt {
         return match key.code {
-            KeyCode::Up | KeyCode::Char('k') => Some(Message::NavigateInstallChoice),
-            KeyCode::Down | KeyCode::Char('j') => Some(Message::NavigateInstallChoice),
+            KeyCode::Up | KeyCode::Char('k') => Some(Message::NavigateInstallChoicePrevious),
+            KeyCode::Down | KeyCode::Char('j') => Some(Message::NavigateInstallChoiceNext),
             KeyCode::Enter => Some(Message::ConfirmInstall),
             KeyCode::Esc => Some(Message::CancelInstall),
             _ => None,
