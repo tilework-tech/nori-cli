@@ -3,7 +3,7 @@ use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::{cursor::MoveToNextLine, execute};
 use futures::StreamExt;
-use nori_cli::app::{AppMode, InstallChoice, Message, Model};
+use nori_cli::app::{AppMode, Message, Model};
 use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::commands::{CommandRegistry, parse_slash_command};
 use nori_cli::conversation::render_event;
@@ -170,54 +170,63 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         }
                     }
                     Message::ConfirmInstall => {
-                        // Run installation if install command is available
-                        if let (Some(install_cmd), install_choice) = (
-                            &model.install_prompt_cmd,
-                            model.install_prompt_choice
-                        ) {
-                            if install_choice == InstallChoice::OpenInstallPage {
-                                if !install_cmd.is_empty() {
-                                    // Run the installation command
-                                    let cmd = install_cmd.clone();
-                                    let install_tx = tx.clone();
-                                    tokio::spawn(async move {
-                                        let result = tokio::process::Command::new(&cmd[0])
-                                            .args(&cmd[1..])
-                                            .output()
-                                            .await;
+                        use nori_cli::app::InstallChoice;
 
-                                        match result {
-                                            Ok(output) if output.status.success() => {
-                                                let _ = install_tx.send(Message::InstallationComplete {
-                                                    success: true,
-                                                    message: "Installation completed successfully".to_string(),
-                                                });
+                        match model.install_prompt_choice {
+                            InstallChoice::RunInstallation => {
+                                // Run installation command
+                                if let Some(install_cmd) = &model.install_prompt_cmd {
+                                    if !install_cmd.is_empty() {
+                                        let cmd = install_cmd.clone();
+                                        let install_tx = tx.clone();
+                                        tokio::spawn(async move {
+                                            let result = tokio::process::Command::new(&cmd[0])
+                                                .args(&cmd[1..])
+                                                .output()
+                                                .await;
+
+                                            match result {
+                                                Ok(output) if output.status.success() => {
+                                                    let _ = install_tx.send(Message::InstallationComplete {
+                                                        success: true,
+                                                        message: "Installation completed successfully".to_string(),
+                                                    });
+                                                }
+                                                Ok(output) => {
+                                                    let stderr = String::from_utf8_lossy(&output.stderr);
+                                                    let _ = install_tx.send(Message::InstallationComplete {
+                                                        success: false,
+                                                        message: format!("Installation failed: {}", stderr),
+                                                    });
+                                                }
+                                                Err(e) => {
+                                                    let _ = install_tx.send(Message::InstallationComplete {
+                                                        success: false,
+                                                        message: format!("Failed to run installation: {}", e),
+                                                    });
+                                                }
                                             }
-                                            Ok(output) => {
-                                                let stderr = String::from_utf8_lossy(&output.stderr);
-                                                let _ = install_tx.send(Message::InstallationComplete {
-                                                    success: false,
-                                                    message: format!("Installation failed: {}", stderr),
-                                                });
-                                            }
-                                            Err(e) => {
-                                                let _ = install_tx.send(Message::InstallationComplete {
-                                                    success: false,
-                                                    message: format!("Failed to run installation: {}", e),
-                                                });
-                                            }
-                                        }
-                                    });
-                                } else if let Some(url) = &model.install_prompt_url {
-                                    // Fallback to opening URL if no install command
-                                    let _ = opener::open(url);
-                                    model.update(msg);
+                                        });
+                                    }
                                 }
-                            } else {
-                                model.update(msg);
                             }
-                        } else {
-                            model.update(msg);
+                            InstallChoice::OpenInstallPage => {
+                                // Open installation page in browser
+                                if let Some(url) = &model.install_prompt_url {
+                                    let _ = opener::open(url);
+                                }
+                                model.show_install_prompt = false;
+                                model.install_prompt_backend = None;
+                                model.install_prompt_url = None;
+                                model.install_prompt_cmd = None;
+                            }
+                            InstallChoice::Cancel => {
+                                // Just close the prompt
+                                model.show_install_prompt = false;
+                                model.install_prompt_backend = None;
+                                model.install_prompt_url = None;
+                                model.install_prompt_cmd = None;
+                            }
                         }
 
                         let _ = mode_tx.send(model.current_mode);

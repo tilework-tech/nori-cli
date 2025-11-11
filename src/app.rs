@@ -275,6 +275,8 @@ impl Model {
                 self.install_prompt_backend = None;
                 self.install_prompt_url = None;
                 self.install_prompt_cmd = None;
+                self.install_prompt_choice = InstallChoice::default();
+                self.install_options_state.select(Some(0));
             }
 
             Message::InstallationComplete { success, message } => {

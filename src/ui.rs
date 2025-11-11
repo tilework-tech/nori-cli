@@ -116,8 +116,7 @@ fn render_agent_router_overlay(model: &mut Model, frame: &mut Frame, area: Rect)
     frame.render_widget(instructions, chunks[2]);
 }
 
-fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
-    use crate::app::InstallChoice;
+fn render_install_prompt_overlay(model: &mut Model, frame: &mut Frame, area: Rect) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -159,39 +158,29 @@ fn render_install_prompt_overlay(model: &Model, frame: &mut Frame, area: Rect) {
         .style(Style::default().fg(Color::White));
     frame.render_widget(message, chunks[1]);
 
-    // Options as a list
-    let first_option = if has_install_cmd {
-        "Run Installation"
-    } else {
-        "Open Installation Page"
-    };
-
-    let options = [first_option, "Cancel"];
+    // Build options list based on whether install_cmd is available
+    let mut options = Vec::new();
+    if has_install_cmd {
+        options.push("Run Installation");
+    }
+    options.push("Open Installation Page");
+    options.push("Cancel");
 
     let items: Vec<ListItem> = options
         .iter()
-        .enumerate()
-        .map(|(i, option)| {
-            let is_selected = matches!(
-                (i, model.install_prompt_choice),
-                (0, InstallChoice::OpenInstallPage) | (1, InstallChoice::Cancel)
-            );
-
-            let style = if is_selected {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-
-            let prefix = if is_selected { ">> " } else { "   " };
-            ListItem::new(format!("{}{}", prefix, option)).style(style)
-        })
+        .map(|option| ListItem::new(*option))
         .collect();
 
-    let list = List::new(items).block(Block::default().borders(Borders::ALL).title("Options"));
-    frame.render_widget(list, chunks[2]);
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title("Options"))
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">> ");
+
+    frame.render_stateful_widget(list, chunks[2], &mut model.install_options_state);
 
     // Instructions
     let instructions = Paragraph::new("Use ↑/↓ to navigate, Enter to confirm, Esc to cancel")

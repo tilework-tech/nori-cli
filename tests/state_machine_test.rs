@@ -213,3 +213,29 @@ fn test_navigate_install_choice_with_install_cmd() {
     // Should wrap around to first
     assert_eq!(model.install_prompt_choice, InstallChoice::RunInstallation);
 }
+
+#[test]
+fn test_navigate_install_choice_without_install_cmd() {
+    use nori_cli::app::InstallChoice;
+
+    let mut model = Model::default();
+
+    model.update(Message::ShowInstallPrompt {
+        backend: "Claude Code".to_string(),
+        url: "https://code.claude.com".to_string(),
+        install_cmd: None,
+    });
+
+    // Should start at OpenInstallPage
+    assert_eq!(model.install_prompt_choice, InstallChoice::OpenInstallPage);
+    assert_eq!(model.install_options_state.selected(), Some(0));
+
+    model.update(Message::NavigateInstallChoice);
+    assert_eq!(model.install_prompt_choice, InstallChoice::Cancel);
+    assert_eq!(model.install_options_state.selected(), Some(1));
+
+    model.update(Message::NavigateInstallChoice);
+    // Should wrap around to first
+    assert_eq!(model.install_prompt_choice, InstallChoice::OpenInstallPage);
+    assert_eq!(model.install_options_state.selected(), Some(0));
+}
