@@ -19,6 +19,7 @@ pub enum Message {
 
     // Mode switching
     ExitInputMode,
+    ToggleAgentRouter,
 
     // Input handling
     KeyPress(crossterm::event::KeyEvent),
@@ -45,6 +46,7 @@ pub struct Model {
     pub selected_agent_index: Option<usize>,
     pub session_id: Option<String>,
     pub error_message: Option<String>,
+    pub show_agent_router: bool,
 }
 
 impl Default for Model {
@@ -61,6 +63,7 @@ impl Default for Model {
             selected_agent_index: None,
             session_id: None,
             error_message: None,
+            show_agent_router: false,
         }
     }
 }
@@ -142,6 +145,10 @@ impl Model {
                 self.error_message = Some(error);
                 // Stay in Streaming mode so user can see the stderr output
                 // They can press Esc to go back to Selection
+            }
+
+            Message::ToggleAgentRouter => {
+                self.show_agent_router = !self.show_agent_router;
             }
 
             Message::Quit => {

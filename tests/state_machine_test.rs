@@ -93,3 +93,15 @@ fn test_stream_event_accumulation() {
         ConversationEvent::SystemEvent { .. }
     ));
 }
+
+#[test]
+fn test_toggle_agent_router_overlay() {
+    let mut model = Model::default();
+    assert!(!model.show_agent_router);
+
+    model.update(Message::ToggleAgentRouter);
+    assert!(model.show_agent_router);
+
+    model.update(Message::ToggleAgentRouter);
+    assert!(!model.show_agent_router);
+}
