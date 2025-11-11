@@ -3,7 +3,7 @@ use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyM
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
 use nori_cli::app::{AppMode, Message, Model};
-use nori_cli::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
+use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
 use nori_cli::conversation::render_event;
 use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
@@ -94,21 +94,30 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                         // Extract prompt from textarea
                         let prompt = model.textarea.lines().join("\n");
                         if !prompt.trim().is_empty() {
-                            // Spawn subprocess
+                            // Check if backend is available before spawning
                             let backend = get_backend(&model);
-                            let stream_tx = tx.clone();
-                            model.update(msg);
-                            // Send updated mode and overlay state to event handler
-                            let _ = mode_tx.send(model.current_mode);
-                            let _ = overlay_tx.send(model.show_agent_router);
-                            let _ = install_prompt_tx.send(model.show_install_prompt);
+                            if !backends::is_available(backend.command_name()) {
+                                // Backend not available - show install prompt
+                                let _ = tx.send(Message::ShowInstallPrompt {
+                                    backend: backend.name().to_string(),
+                                    url: backend.install_url().to_string(),
+                                });
+                            } else {
+                                // Backend available - spawn subprocess
+                                let stream_tx = tx.clone();
+                                model.update(msg);
+                                // Send updated mode and overlay state to event handler
+                                let _ = mode_tx.send(model.current_mode);
+                                let _ = overlay_tx.send(model.show_agent_router);
+                                let _ = install_prompt_tx.send(model.show_install_prompt);
 
-                            tokio::spawn(async move {
-                                if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
-                                    // Error already sent via channel
-                                    eprintln!("Streaming error: {}", e);
-                                }
-                            });
+                                tokio::spawn(async move {
+                                    if let Err(e) = spawn_and_stream(backend, prompt, stream_tx).await {
+                                        // Error already sent via channel
+                                        eprintln!("Streaming error: {}", e);
+                                    }
+                                });
+                            }
                         }
                     }
                     _ => {
