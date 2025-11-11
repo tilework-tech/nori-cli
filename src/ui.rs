@@ -58,7 +58,7 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     let instructions_text = if let Some(ref msg) = model.error_message {
         msg.clone()
     } else {
-        "Enter: submit | Shift+Enter: newline | /switch-model: agents | /exit: quit".to_string()
+        "Enter: submit | Alt+Enter: newline | /switch-model: agents | /exit: quit".to_string()
     };
 
     let instructions_style = if model.error_message.is_some() {

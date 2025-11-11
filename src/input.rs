@@ -45,14 +45,15 @@ pub fn handle_key_simple(
     }
 
     // Otherwise, handle chat input
-    // Shift+Enter inserts newline (pass through to textarea)
-    if key.code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::SHIFT) {
-        return Some(Message::KeyPress(key));
-    }
-
-    // Plain Enter submits
+    // Plain Enter submits (check this FIRST to prevent textarea from handling it)
     if key.code == KeyCode::Enter && key.modifiers.is_empty() {
         return Some(Message::SubmitInput);
+    }
+
+    // Alt+Enter inserts newline (pass through to textarea)
+    // Note: Using Alt instead of Shift because most terminals don't send SHIFT modifier for Enter key
+    if key.code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::ALT) {
+        return Some(Message::KeyPress(key));
     }
 
     // Send all other key events to textarea
