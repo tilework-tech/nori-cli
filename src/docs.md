@@ -4,7 +4,7 @@ Path: @/src
 
 ### Overview
 
-Core application modules implementing the TUI's architecture: application state management (app.rs), UI rendering (ui.rs), backend abstractions (backends.rs), and the async event loop entry point (main.rs). Together these modules implement The Elm Architecture pattern for a responsive, chat-style terminal interface with conversation history and an overlay-based agent selector.
+Core application modules implementing the TUI's architecture: application state management (app.rs), UI rendering (ui.rs), backend abstractions (backends.rs), and the async event loop entry point (main.rs). Together these modules implement The Elm Architecture pattern for a responsive, chat-style terminal interface with conversation history and fullscreen mode switching for agent selection and install prompts.
 
 ### How it fits into the larger codebase
 
@@ -42,10 +42,11 @@ pub mod ui;           // Rendering functions for each mode
 - ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
 
 **UI Rendering** (@/src/ui.rs):
-- `render()`: Always renders chat view as base layer, then conditionally overlays agent router if `show_agent_router` is true
-- `render_chat()`: Four-section vertical layout - Title bar showing selected agent, Messages area with full conversation history, Input textarea at bottom, and Instructions footer
-- `render_agent_router_overlay()`: Renders agent list inside centered rectangle (60% width, 40% height) using Clear widget to blank underlying content
-- `centered_rect()`: Helper for creating centered popup areas using nested Layout constraints
+- `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
+- `render_chat()`: Three-section vertical layout for normal mode - Input textarea (4 lines), Agent info (1 line showing selected agent), and Instructions footer (1 line)
+- `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
+- `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
+- **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
 
 **Conversation Event Handling** (@/src/conversation.rs):
 - `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent
@@ -154,6 +155,12 @@ Cancellation Path
 - Render interval is 33ms (~30 fps) regardless of event frequency
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
+
+**Inline Viewport Compatibility** (@/src/ui.rs):
+- UI designed to work in both inline viewports (Viewport::Inline(8) from main.rs) and fullscreen mode
+- Uses fullscreen mode switching instead of overlay modals to avoid percentage-based positioning issues in constrained viewports
+- All UI modes (chat, agent selection, install prompt) use Constraint::Min() for flexible sections that adapt to available viewport height
+- Text wrapping enabled on install prompt message to handle varying viewport widths without manual text size management
 
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
