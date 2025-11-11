@@ -246,9 +246,11 @@ impl Model {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None;
                 // Note: Textarea already cleared in SubmitInput
-                // Add cancellation event to history
+                // Add cancellation status message to history
                 self.response_events
-                    .push(ConversationEvent::StreamCancelled);
+                    .push(ConversationEvent::StatusMessage {
+                        text: "Interrupted".to_string(),
+                    });
             }
 
             Message::Error(error) => {
