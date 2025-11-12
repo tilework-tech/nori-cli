@@ -23,5 +23,5 @@ async-stream = "0.3"
 which = "7.0"
 opener = "0.7"
 unicode-width = "0.2"
-codex-tui-components = { path = "../codex-rs/tui-components" }
+tui-components = { path = "./tui-components" }
 # dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender

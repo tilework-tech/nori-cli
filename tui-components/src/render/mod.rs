@@ -37,7 +37,7 @@
 //! ## Basic Composition
 //!
 //! ```rust
-//! use codex_tui_components::render::{ColumnRenderable, Renderable};
+//! use tui_components::render::{ColumnRenderable, Renderable};
 //! use ratatui::buffer::Buffer;
 //! use ratatui::layout::Rect;
 //!
@@ -57,7 +57,7 @@
 //! ## Using Insets
 //!
 //! ```rust
-//! use codex_tui_components::render::{Insets, RenderableExt};
+//! use tui_components::render::{Insets, RenderableExt};
 //! use ratatui::buffer::Buffer;
 //! use ratatui::layout::Rect;
 //!
@@ -81,7 +81,7 @@ pub use renderable::{ColumnRenderable, InsetRenderable, Renderable, RenderableEx
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::Insets;
+/// use tui_components::render::Insets;
 ///
 /// // Create insets with 1 unit of vertical padding and 2 units horizontal
 /// let insets = Insets::vh(1, 2);
@@ -110,7 +110,7 @@ impl Insets {
     /// # Examples
     ///
     /// ```rust
-    /// use codex_tui_components::render::Insets;
+    /// use tui_components::render::Insets;
     ///
     /// let insets = Insets::tlbr(1, 2, 3, 4);
     /// ```
@@ -133,7 +133,7 @@ impl Insets {
     /// # Examples
     ///
     /// ```rust
-    /// use codex_tui_components::render::Insets;
+    /// use tui_components::render::Insets;
     ///
     /// // 1 unit vertical, 2 units horizontal
     /// let insets = Insets::vh(1, 2);
@@ -156,7 +156,7 @@ impl Insets {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::{Insets, RectExt};
+/// use tui_components::render::{Insets, RectExt};
 /// use ratatui::layout::Rect;
 ///
 /// let outer = Rect::new(0, 0, 20, 10);

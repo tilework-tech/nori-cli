@@ -9,7 +9,7 @@
 //! ```rust
 //! # #[cfg(feature = "syntax-highlighting")]
 //! # {
-//! use codex_tui_components::render::highlight::highlight_bash_to_lines;
+//! use tui_components::render::highlight::highlight_bash_to_lines;
 //!
 //! let script = r#"
 //! echo "Hello, world!"
@@ -151,7 +151,7 @@ fn push_segment(lines: &mut Vec<Line<'static>>, segment: &str, style: Option<Sty
 /// ```rust
 /// # #[cfg(feature = "syntax-highlighting")]
 /// # {
-/// use codex_tui_components::render::highlight::highlight_bash_to_lines;
+/// use tui_components::render::highlight::highlight_bash_to_lines;
 ///
 /// let script = "echo hello && ls | grep test";
 /// let lines = highlight_bash_to_lines(script);

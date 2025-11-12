@@ -1,9 +1,9 @@
-use codex_tui_components::key_hint::{alt, ctrl, plain, shift, KeyBinding};
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Span;
 use ratatui::widgets::Widget;
+use tui_components::key_hint::{KeyBinding, alt, ctrl, plain, shift};
 
 #[test]
 fn test_plain_key() {

@@ -1,7 +1,7 @@
-use codex_tui_components::shimmer::{ColorPalette, Shimmer};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::WidgetRef;
+use tui_components::shimmer::{ColorPalette, Shimmer};
 
 #[test]
 fn test_shimmer_basic() {

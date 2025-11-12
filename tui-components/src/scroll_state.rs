@@ -13,7 +13,7 @@
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::scroll_state::ScrollState;
+/// use tui_components::scroll_state::ScrollState;
 ///
 /// let mut state = ScrollState::new();
 /// let list_len = 10;

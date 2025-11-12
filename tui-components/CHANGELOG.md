@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - Unreleased
 
 ### Added
-- Initial release of codex-tui-components
+- Initial release of tui-components
 - Shimmer component for animated text effects with configurable color palettes
 - KeyHint component for keyboard shortcut display with platform-aware formatting
 - Renderable trait with composable layout primitives:

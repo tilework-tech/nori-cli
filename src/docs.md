@@ -45,7 +45,7 @@ pub mod ui;           // Rendering functions for each mode
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
 - `render_chat()`: Four-section vertical layout for normal mode - Input textarea (dynamic height), Agent info (1 line showing selected agent), Loading animation (1 line, only visible during streaming), and Instructions footer (1 line)
-- **Conditional Loading Animation**: When `current_mode == AppMode::Streaming`, checks `use_codex_components` flag to select rendering path - if true (default), instantiates `Shimmer::new()` from codex-tui-components with message "{agent_name} processing..." and renders time-based animation; if false, renders legacy spinner using `loading_frame % frames.len()` to cycle through Braille spinner characters ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+- **Conditional Loading Animation**: When `current_mode == AppMode::Streaming`, checks `use_codex_components` flag to select rendering path - if true (default), instantiates `Shimmer::new()` from tui-components with message "{agent_name} processing..." and renders time-based animation; if false, renders legacy spinner using `loading_frame % frames.len()` to cycle through Braille spinner characters ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 - `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
 - `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
 - **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
@@ -187,7 +187,7 @@ Cancellation Path
 - **No runtime overhead**: Branch check in render path is negligible, frame increment gated at event loop level
 
 **Component Library Integration** (@/Cargo.toml, @/src/ui.rs, @/src/app.rs, @/src/main.rs):
-- nori-cli depends on codex-tui-components as a path dependency (../codex-rs/tui-components)
+- nori-cli depends on tui-components as a path dependency (./tui-components)
 - **Conditional rendering approach**: `use_codex_components: bool` flag in Model (defaults to true) controls whether to use Shimmer component or legacy spinner
 - **Shimmer component path** (when `use_codex_components = true`): Shimmer instantiated on-demand during render (`Shimmer::new()`) with time-based animation using `Instant::now()` internally - no Model state tracking required
 - **Legacy spinner path** (when `use_codex_components = false`): Uses frame-based animation with `loading_frame: usize` counter in Model, incremented on each render tick in main.rs event loop (lines 374-377), cycles through Braille spinner frames using modulo

@@ -1,7 +1,6 @@
 ///! Keyboard shortcut hint rendering
 ///!
 ///! Provides platform-aware keyboard shortcut formatting for displaying in terminal UIs.
-
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Span;
@@ -21,7 +20,7 @@ const SHIFT_PREFIX: &str = "shift + ";
 ///
 /// ```
 /// use crossterm::event::{KeyCode, KeyModifiers};
-/// use codex_tui_components::key_hint::KeyBinding;
+/// use tui_components::key_hint::KeyBinding;
 ///
 /// let enter = KeyBinding::new(KeyCode::Enter, KeyModifiers::NONE);
 /// let ctrl_c = KeyBinding::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
@@ -38,7 +37,7 @@ impl KeyBinding {
     /// # Example
     /// ```
     /// use crossterm::event::{KeyCode, KeyModifiers};
-    /// use codex_tui_components::key_hint::KeyBinding;
+    /// use tui_components::key_hint::KeyBinding;
     ///
     /// let ctrl_s = KeyBinding::new(KeyCode::Char('s'), KeyModifiers::CONTROL);
     /// ```
@@ -54,7 +53,7 @@ impl KeyBinding {
     /// # Example
     /// ```
     /// use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    /// use codex_tui_components::key_hint::KeyBinding;
+    /// use tui_components::key_hint::KeyBinding;
     ///
     /// let binding = KeyBinding::new(KeyCode::Char('s'), KeyModifiers::CONTROL);
     /// // Check against incoming key events...
@@ -71,7 +70,7 @@ impl KeyBinding {
 /// # Example
 /// ```
 /// use crossterm::event::KeyCode;
-/// use codex_tui_components::key_hint::plain;
+/// use tui_components::key_hint::plain;
 ///
 /// let enter_key = plain(KeyCode::Enter);
 /// ```
@@ -86,7 +85,7 @@ pub const fn plain(key: KeyCode) -> KeyBinding {
 /// # Example
 /// ```
 /// use crossterm::event::KeyCode;
-/// use codex_tui_components::key_hint::alt;
+/// use tui_components::key_hint::alt;
 ///
 /// let alt_f = alt(KeyCode::Char('f'));
 /// ```
@@ -99,7 +98,7 @@ pub const fn alt(key: KeyCode) -> KeyBinding {
 /// # Example
 /// ```
 /// use crossterm::event::KeyCode;
-/// use codex_tui_components::key_hint::shift;
+/// use tui_components::key_hint::shift;
 ///
 /// let shift_tab = shift(KeyCode::Tab);
 /// ```
@@ -112,7 +111,7 @@ pub const fn shift(key: KeyCode) -> KeyBinding {
 /// # Example
 /// ```
 /// use crossterm::event::KeyCode;
-/// use codex_tui_components::key_hint::ctrl;
+/// use tui_components::key_hint::ctrl;
 ///
 /// let ctrl_c = ctrl(KeyCode::Char('c'));
 /// ```

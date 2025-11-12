@@ -106,8 +106,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     // Loading animation - show during streaming
     if model.current_mode == crate::app::AppMode::Streaming {
         if model.use_codex_components {
-            // Use Shimmer component from codex-tui-components
-            use codex_tui_components::Shimmer;
+            // Use Shimmer component from tui-components
+            use tui_components::Shimmer;
             let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
             frame.render_widget(shimmer, chunks[2]);
         } else {

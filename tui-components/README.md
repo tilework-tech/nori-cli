@@ -1,6 +1,6 @@
-# codex-tui-components
+# tui-components
 
-Reusable TUI components built on Ratatui, extracted from the Codex project.
+Reusable TUI components built on Ratatui.
 
 ## Features
 
@@ -18,20 +18,20 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-codex-tui-components = "0.1.0"
+tui-components = "0.1.0"
 ```
 
 For syntax highlighting support:
 
 ```toml
 [dependencies]
-codex-tui-components = { version = "0.1.0", features = ["syntax-highlighting"] }
+tui-components = { version = "0.1.0", features = ["syntax-highlighting"] }
 ```
 
 ## Quick Start
 
 ```rust
-use codex_tui_components::shimmer::Shimmer;
+use tui_components::shimmer::Shimmer;
 use ratatui::widgets::WidgetRef;
 
 // Create an animated shimmer effect

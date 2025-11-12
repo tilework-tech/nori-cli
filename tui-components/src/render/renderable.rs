@@ -27,7 +27,7 @@ use crate::render::RectExt as _;
 /// ## Implementing Renderable
 ///
 /// ```rust
-/// use codex_tui_components::render::Renderable;
+/// use tui_components::render::Renderable;
 /// use ratatui::buffer::Buffer;
 /// use ratatui::layout::Rect;
 /// use ratatui::widgets::{Paragraph, WidgetRef};
@@ -165,7 +165,7 @@ impl<R: Renderable> Renderable for Arc<R> {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::{ColumnRenderable, Renderable};
+/// use tui_components::render::{ColumnRenderable, Renderable};
 /// use ratatui::buffer::Buffer;
 /// use ratatui::layout::Rect;
 ///
@@ -214,7 +214,7 @@ impl ColumnRenderable {
     /// # Examples
     ///
     /// ```rust
-    /// use codex_tui_components::render::{ColumnRenderable, Renderable};
+    /// use tui_components::render::{ColumnRenderable, Renderable};
     ///
     /// let column = ColumnRenderable::with(vec![
     ///     Box::new("Line 1") as Box<dyn Renderable>,
@@ -232,7 +232,7 @@ impl ColumnRenderable {
     /// # Examples
     ///
     /// ```rust
-    /// use codex_tui_components::render::ColumnRenderable;
+    /// use tui_components::render::ColumnRenderable;
     ///
     /// let mut column = ColumnRenderable::new();
     /// column.push("First item");
@@ -257,7 +257,7 @@ impl Default for ColumnRenderable {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::{RowRenderable, Renderable};
+/// use tui_components::render::{RowRenderable, Renderable};
 /// use ratatui::buffer::Buffer;
 /// use ratatui::layout::Rect;
 ///
@@ -321,7 +321,7 @@ impl RowRenderable {
     /// # Examples
     ///
     /// ```rust
-    /// use codex_tui_components::render::RowRenderable;
+    /// use tui_components::render::RowRenderable;
     ///
     /// let mut row = RowRenderable::new();
     /// row.push(15, "Label:");
@@ -345,7 +345,7 @@ impl Default for RowRenderable {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::{InsetRenderable, Insets, Renderable};
+/// use tui_components::render::{InsetRenderable, Insets, Renderable};
 /// use ratatui::buffer::Buffer;
 /// use ratatui::layout::Rect;
 ///
@@ -379,7 +379,7 @@ impl InsetRenderable {
     /// # Examples
     ///
     /// ```rust
-    /// use codex_tui_components::render::{InsetRenderable, Insets};
+    /// use tui_components::render::{InsetRenderable, Insets};
     ///
     /// let padded = InsetRenderable::new("Content", Insets::vh(1, 2));
     /// ```
@@ -396,7 +396,7 @@ impl InsetRenderable {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::{Insets, RenderableExt};
+/// use tui_components::render::{Insets, RenderableExt};
 ///
 /// let padded = "My content".inset(Insets::vh(1, 2));
 /// ```

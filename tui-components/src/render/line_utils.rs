@@ -15,7 +15,7 @@ use ratatui::text::Span;
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::line_utils::line_to_static;
+/// use tui_components::render::line_utils::line_to_static;
 /// use ratatui::text::Line;
 ///
 /// let borrowed_line = Line::from("Hello");
@@ -45,7 +45,7 @@ pub fn line_to_static(line: &Line<'_>) -> Line<'static> {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::line_utils::push_owned_lines;
+/// use tui_components::render::line_utils::push_owned_lines;
 /// use ratatui::text::Line;
 ///
 /// let source = vec![Line::from("Line 1"), Line::from("Line 2")];
@@ -70,7 +70,7 @@ pub fn push_owned_lines<'a>(src: &[Line<'a>], out: &mut Vec<Line<'static>>) {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::line_utils::is_blank_line_spaces_only;
+/// use tui_components::render::line_utils::is_blank_line_spaces_only;
 /// use ratatui::text::Line;
 ///
 /// assert!(is_blank_line_spaces_only(&Line::from("")));
@@ -105,7 +105,7 @@ pub fn is_blank_line_spaces_only(line: &Line<'_>) -> bool {
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::render::line_utils::prefix_lines;
+/// use tui_components::render::line_utils::prefix_lines;
 /// use ratatui::text::{Line, Span};
 ///
 /// let lines = vec![

@@ -1,9 +1,9 @@
-use codex_tui_components::render::{
-    ColumnRenderable, Insets, InsetRenderable, RectExt, Renderable, RenderableExt, RowRenderable,
-};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
+use tui_components::render::{
+    ColumnRenderable, InsetRenderable, Insets, RectExt, Renderable, RenderableExt, RowRenderable,
+};
 
 fn render_to_string(renderable: &dyn Renderable, width: u16, height: u16) -> String {
     let mut buf = Buffer::empty(Rect::new(0, 0, width, height));
@@ -136,10 +136,7 @@ fn test_option_renderable_none() {
 
 #[test]
 fn test_line_renderable() {
-    let line = Line::from(vec![
-        Span::raw("Hello "),
-        Span::raw("world"),
-    ]);
+    let line = Line::from(vec![Span::raw("Hello "), Span::raw("world")]);
     let output = render_to_string(&line, 15, 1);
     insta::assert_snapshot!(output, @"Hello world");
 }
@@ -182,7 +179,7 @@ fn test_complex_layout() {
 
 #[cfg(feature = "syntax-highlighting")]
 mod highlight_tests {
-    use codex_tui_components::render::highlight::highlight_bash_to_lines;
+    use tui_components::render::highlight::highlight_bash_to_lines;
 
     #[test]
     fn test_highlight_simple_command() {
@@ -193,11 +190,7 @@ mod highlight_tests {
         assert!(!lines[0].spans.is_empty());
 
         // Check that the text is preserved
-        let reconstructed: String = lines[0]
-            .spans
-            .iter()
-            .map(|s| s.content.as_ref())
-            .collect();
+        let reconstructed: String = lines[0].spans.iter().map(|s| s.content.as_ref()).collect();
         assert_eq!(reconstructed, "echo hello");
     }
 
@@ -208,16 +201,8 @@ mod highlight_tests {
 
         assert_eq!(lines.len(), 2);
 
-        let line1: String = lines[0]
-            .spans
-            .iter()
-            .map(|s| s.content.as_ref())
-            .collect();
-        let line2: String = lines[1]
-            .spans
-            .iter()
-            .map(|s| s.content.as_ref())
-            .collect();
+        let line1: String = lines[0].spans.iter().map(|s| s.content.as_ref()).collect();
+        let line2: String = lines[1].spans.iter().map(|s| s.content.as_ref()).collect();
 
         assert_eq!(line1, "echo line1");
         assert_eq!(line2, "echo line2");

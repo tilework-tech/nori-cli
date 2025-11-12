@@ -21,7 +21,7 @@ const PASTE_ENTER_SUPPRESS_WINDOW: Duration = Duration::from_millis(120);
 /// # Examples
 ///
 /// ```rust
-/// use codex_tui_components::paste_burst::{PasteBurst, CharDecision, FlushResult};
+/// use tui_components::paste_burst::{PasteBurst, CharDecision, FlushResult};
 /// use std::time::{Duration, Instant};
 ///
 /// let mut detector = PasteBurst::default();

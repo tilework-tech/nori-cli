@@ -2,7 +2,6 @@
 ///!
 ///! Creates a time-based color sweep effect across text, useful for indicating
 ///! loading or processing states.
-
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -45,7 +44,7 @@ impl ColorPalette {
     ///
     /// # Example
     /// ```
-    /// use codex_tui_components::shimmer::ColorPalette;
+    /// use tui_components::shimmer::ColorPalette;
     ///
     /// let palette = ColorPalette::new((100, 100, 150), (200, 200, 255));
     /// ```
@@ -64,7 +63,7 @@ impl ColorPalette {
 ///
 /// Basic usage with default colors:
 /// ```rust,no_run
-/// use codex_tui_components::shimmer::Shimmer;
+/// use tui_components::shimmer::Shimmer;
 /// use ratatui::widgets::WidgetRef;
 ///
 /// let shimmer = Shimmer::new("Processing...");
@@ -73,7 +72,7 @@ impl ColorPalette {
 ///
 /// Custom color palette:
 /// ```rust,no_run
-/// use codex_tui_components::shimmer::{Shimmer, ColorPalette};
+/// use tui_components::shimmer::{Shimmer, ColorPalette};
 ///
 /// let palette = ColorPalette::new((50, 100, 150), (150, 200, 255));
 /// let shimmer = Shimmer::with_palette("Loading...", palette);
@@ -88,7 +87,7 @@ impl Shimmer {
     ///
     /// # Example
     /// ```
-    /// use codex_tui_components::shimmer::Shimmer;
+    /// use tui_components::shimmer::Shimmer;
     ///
     /// let shimmer = Shimmer::new("Processing...");
     /// ```
@@ -103,7 +102,7 @@ impl Shimmer {
     ///
     /// # Example
     /// ```
-    /// use codex_tui_components::shimmer::{Shimmer, ColorPalette};
+    /// use tui_components::shimmer::{Shimmer, ColorPalette};
     ///
     /// let palette = ColorPalette::new((100, 100, 100), (255, 255, 200));
     /// let shimmer = Shimmer::with_palette("Loading...", palette);
@@ -126,8 +125,8 @@ impl Shimmer {
         let padding = 10usize;
         let period = chars.len() + padding * 2;
         let sweep_seconds = 2.0f32;
-        let pos_f = (elapsed_since_start().as_secs_f32() % sweep_seconds) / sweep_seconds
-            * (period as f32);
+        let pos_f =
+            (elapsed_since_start().as_secs_f32() % sweep_seconds) / sweep_seconds * (period as f32);
         let pos = pos_f as usize;
 
         let has_true_color = supports_color::on_cached(supports_color::Stream::Stdout)

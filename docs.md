@@ -67,7 +67,7 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - tui-textarea 0.7: Multi-line text input widget
 - serde + serde_json: JSONL parsing
 - color-eyre: Error reporting
-- codex-tui-components (path dependency): Reusable TUI components library, provides Shimmer loading animation widget
+- tui-components (path dependency): Reusable TUI components library, provides Shimmer loading animation widget
 
 ### Things to Know
 

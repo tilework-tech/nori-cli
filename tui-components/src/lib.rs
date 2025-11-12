@@ -1,4 +1,4 @@
-//! # codex-tui-components
+//! # tui-components
 //!
 //! A collection of reusable TUI components built on top of Ratatui.
 //!
@@ -23,7 +23,7 @@
 //! ## Examples
 //!
 //! ```rust,no_run
-//! use codex_tui_components::shimmer::Shimmer;
+//! use tui_components::shimmer::Shimmer;
 //! use ratatui::widgets::WidgetRef;
 //!
 //! // Create an animated shimmer effect
@@ -39,12 +39,12 @@
 pub mod render;
 
 // Animation and visual effects
-pub mod shimmer;
 pub mod key_hint;
+pub mod shimmer;
 
 // Text handling and utilities
-pub mod scroll_state;
 pub mod paste_burst;
+pub mod scroll_state;
 
 // TODO: Extract these in future iterations
 // pub mod wrapping;
@@ -52,6 +52,6 @@ pub mod paste_burst;
 // pub mod selection_list;
 
 // Re-export commonly used types for convenience
+pub use key_hint::KeyBinding;
 pub use render::{ColumnRenderable, InsetRenderable, Renderable, RenderableExt, RowRenderable};
 pub use shimmer::Shimmer;
-pub use key_hint::KeyBinding;
