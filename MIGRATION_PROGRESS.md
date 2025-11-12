@@ -42,32 +42,56 @@
 - **Documentation**: Updated module organization in lib.rs
 - **Code quality**: All clippy warnings fixed, cargo fmt applied
 
+### ✅ TextArea Module (`tui-components/src/textarea.rs`)
+- **Status**: Complete with 18 passing snapshot tests
+- **Extracted from**: `codex-rs/tui/src/bottom_pane/textarea.rs`
+- **Key functionality**:
+  - `TextArea` - Multiline text input widget with cursor navigation
+  - `TextAreaState` - State for scroll tracking
+  - `TextAreaConfig` - Configuration for placeholder, text/cursor/placeholder styles
+  - Text insertion, deletion, cursor movement
+  - Emacs-style keybindings (arrow keys, Home/End, Backspace/Delete, Enter)
+  - Word wrapping with configurable width
+  - Scrolling support for content exceeding viewport
+  - Unicode-aware text handling
+  - Rendering via `WidgetRef` and `StatefulWidgetRef` traits
+- **Changes from original**:
+  - Simplified implementation suitable for shared library
+  - Removed Codex-specific dependencies (elements tracking, kill/yank buffer, advanced editing)
+  - Used `wrap_ranges_trim` for proper text wrapping without sentinel bytes
+  - Configuration via `TextAreaConfig` struct
+  - Full module and API documentation
+- **Tests**: `/home/clifford/Documents/source/codex/nori-cli/.worktrees/migrate-tui-components/tui-components/tests/textarea_snapshots.rs`
+  - Tests for placeholder rendering, text insertion, multiline text, wrapping, cursor positioning
+  - Unicode content and empty line handling
+  - Scroll viewport testing
+  - Dynamic height calculation
+
+### Library Integration
+- **Exports added to `lib.rs`**:
+  - `pub mod textarea`
+  - Re-exported: `TextArea`, `TextAreaConfig`, `TextAreaState`
+- **Fixed**: Module documentation syntax errors in `key_hint.rs` and `shimmer.rs`
+- **Code quality**: All tests pass, clippy clean, formatted with cargo fmt
+
 ## Test Results
 
 ```
 wrapping_snapshots: 23 tests passed
 live_wrap_snapshots: 16 tests passed
-Total tui-components tests: 64 tests passed, 0 failed
+textarea_snapshots: 18 tests passed
+key_hint_snapshots: 7 tests passed
+shimmer_snapshots: 5 tests passed
+render_snapshots: 12 tests passed
+scroll_state: 1 test passed
+doctests: 45 tests passed
+Total tui-components tests: 127 tests passed, 0 failed
 ```
 
 ## Next Steps (Remaining from Phase 1 Plan)
 
 ### Phase 3: TextArea Component
-**Not started** - This is the next priority task
-
-Files to extract:
-- Source: `codex-rs/tui/src/bottom_pane/textarea.rs` (653 lines)
-- Target: `tui-components/src/textarea.rs`
-
-Key work needed:
-1. Create `TextArea` and `TextAreaState` structs
-2. Add `TextAreaConfig` for customization (placeholder, styles, callbacks)
-3. Remove Codex-specific style dependencies
-4. Make generic and configurable
-5. Write comprehensive snapshot tests
-6. Document API thoroughly
-
-Estimated complexity: **High** - TextArea is ~650 lines with complex cursor navigation, wrapping, and scroll logic
+**✅ COMPLETE** - See above
 
 ### Phase 4: Selection & Popup Infrastructure
 **Not started**
@@ -173,18 +197,18 @@ cargo doc --no-deps --open
 
 ## Estimated Remaining Work
 
-- **TextArea extraction**: 4-6 hours (complex component)
+- ~~**TextArea extraction**: 4-6 hours (complex component)~~ ✅ **COMPLETE**
 - **Selection infrastructure**: 6-8 hours (multiple files, generics)
 - **Command popup & footer**: 3-4 hours
 - **nori-cli integration**: 4-6 hours (testing, debugging)
 - **Documentation & cleanup**: 2-3 hours
 
-**Total estimated**: 19-27 hours of development work
+**Total estimated**: 15-21 hours of development work remaining
 
 ## Notes
 
 - All work is in worktree to keep main branch clean
 - Codex source files at `../../../codex-rs/tui/` relative to worktree
 - No modifications made to codex-rs (read-only)
-- tui-components tests run independently (64 tests currently)
-- Ready to proceed with TextArea extraction as next step
+- tui-components tests run independently (127 tests currently)
+- Phase 3 (TextArea) now complete - ready to proceed with Phase 4 (Selection & Popup Infrastructure)
