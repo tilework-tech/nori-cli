@@ -115,7 +115,7 @@ impl AgentBackend for ClaudeBackend {
                 }
                 Err(e) => {
                     yield ConversationEvent::UnknownEvent {
-                        raw: format!("Failed to spawn claude: {}", e),
+                        raw: format!("Failed to spawn claude: {e}"),
                     };
                     return;
                 }
@@ -144,7 +144,7 @@ impl AgentBackend for ClaudeBackend {
             // from the JSONL stream already contains the final result
             if let Err(e) = child.wait().await {
                 yield ConversationEvent::UnknownEvent {
-                    raw: format!("Failed to wait for process: {}", e),
+                    raw: format!("Failed to wait for process: {e}"),
                 };
             }
         };

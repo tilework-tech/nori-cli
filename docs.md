@@ -40,8 +40,12 @@ A terminal user interface (TUI) application that routes user prompts to differen
 │ ...streaming response...              │
 ├─ Input (textarea at bottom) ──────────┤
 │ Type your message here...             │
+├─ Agent Info ──────────────────────────┤
+│ Agent: Claude Code                    │
+├─ Shimmer (during streaming) ──────────┤
+│ Claude Code processing... ⚡          │
 ├─ Instructions ────────────────────────┤
-│ Alt+Enter: send | Alt+A: agents | q   │
+│ /switch-model: agents | /exit: quit   │
 └───────────────────────────────────────┘
 
 Alt+A overlays agent selector (60% width, 40% height centered)
@@ -63,6 +67,7 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - tui-textarea 0.7: Multi-line text input widget
 - serde + serde_json: JSONL parsing
 - color-eyre: Error reporting
+- codex-tui-components (path dependency): Reusable TUI components library, provides Shimmer loading animation widget
 
 ### Things to Know
 

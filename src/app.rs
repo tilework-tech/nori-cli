@@ -116,7 +116,6 @@ pub struct Model {
     pub autocomplete_filtered_commands: Vec<String>,
     pub autocomplete_selected_index: usize,
     pub show_debug_events: bool,
-    pub loading_frame: usize,
 }
 
 impl Default for Model {
@@ -149,7 +148,6 @@ impl Default for Model {
             autocomplete_filtered_commands: Vec::new(),
             autocomplete_selected_index: 0,
             show_debug_events: false,
-            loading_frame: 0,
         }
     }
 }
@@ -388,7 +386,7 @@ impl Model {
                 {
                     // Replace textarea content with selected command
                     self.textarea = {
-                        let mut textarea = TextArea::from([format!("/{}", selected_cmd)]);
+                        let mut textarea = TextArea::from([format!("/{selected_cmd}")]);
                         textarea.set_cursor_line_style(Style::default());
                         textarea.move_cursor(tui_textarea::CursorMove::End);
                         textarea

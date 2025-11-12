@@ -26,7 +26,7 @@ pub mod ui;           // Rendering functions for each mode
 
 **Entry Point** (@/src/main.rs):
 - `main()`: Sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
-- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task
+- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task, no longer increments loading_frame counter (removed after Shimmer migration)
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
@@ -35,7 +35,7 @@ pub mod ui;           // Rendering functions for each mode
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window - no longer contains `loading_frame` field after migration to Shimmer component
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
@@ -44,10 +44,12 @@ pub mod ui;           // Rendering functions for each mode
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
-- `render_chat()`: Three-section vertical layout for normal mode - Input textarea (4 lines), Agent info (1 line showing selected agent), and Instructions footer (1 line)
+- `render_chat()`: Four-section vertical layout for normal mode - Input textarea (dynamic height), Agent info (1 line showing selected agent), Shimmer animation (1 line, only visible during streaming), and Instructions footer (1 line)
+- **Shimmer Integration**: When `current_mode == AppMode::Streaming`, instantiates `Shimmer::new()` from codex-tui-components with message "{agent_name} processing..." and renders to chunks[2] - Shimmer uses time-based animation (Instant::now()) rather than frame counters, so no state tracking needed in Model
 - `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
 - `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
 - **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
+- **Layout Constraints**: Autocomplete mode uses 4 constraints (textarea, autocomplete, shimmer, instructions), non-autocomplete mode uses 4 constraints (textarea, agent info, shimmer, instructions) - instructions always at chunks[3]
 
 **Conversation Event Handling** (@/src/conversation.rs):
 - `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent for unparseable events, StatusMessage for system feedback messages
@@ -172,6 +174,13 @@ Cancellation Path
 - Render interval is 33ms (~30 fps) regardless of event frequency
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
+
+**Component Library Integration** (@/Cargo.toml, @/src/ui.rs):
+- nori-cli depends on codex-tui-components as a path dependency (../codex-rs/tui-components)
+- Shimmer widget replaces manual frame-based loading animation that previously used `loading_frame: usize` counter in Model
+- **Migration from frame-based to time-based animation**: Old implementation incremented `loading_frame` on each render tick and used modulo to cycle through spinner frames - new Shimmer uses `Instant::now()` internally for smooth time-based animation without requiring Model state
+- Shimmer is instantiated on-demand during render (`Shimmer::new()`) rather than stored in Model - this is possible because Shimmer maintains its own time reference
+- Integration demonstrates nori-cli as a consumer of the extracted component library pattern
 
 **Inline Viewport Compatibility** (@/src/ui.rs):
 - UI designed to work in both inline viewports (Viewport::Inline(8) from main.rs) and fullscreen mode

@@ -93,7 +93,7 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
             Line::from(Span::styled("Interrupted", Style::default().fg(Color::Red)))
         }
         ConversationEvent::UnknownEvent { raw } => Line::from(Span::styled(
-            format!("[unknown] {}", raw),
+            format!("[unknown] {raw}"),
             Style::default().fg(Color::Yellow),
         )),
         ConversationEvent::StatusMessage { text } => Line::from(vec![

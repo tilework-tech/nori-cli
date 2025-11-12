@@ -63,12 +63,14 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         vec![
             Constraint::Length(textarea_height),     // Input (dynamic)
             Constraint::Length(autocomplete_height), // Autocomplete
+            Constraint::Length(1),                   // Shimmer
             Constraint::Length(1),                   // Instructions
         ]
     } else {
         vec![
             Constraint::Length(textarea_height), // Input (dynamic)
             Constraint::Length(1),               // Agent info
+            Constraint::Length(1),               // Shimmer
             Constraint::Length(1),               // Instructions
         ]
     };
@@ -97,20 +99,16 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         ""
     };
 
-    // Show loading animation during streaming
-    let loading_indicator = if model.current_mode == crate::app::AppMode::Streaming {
-        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        format!(" {}", frames[model.loading_frame % frames.len()])
-    } else {
-        String::new()
-    };
-
-    let agent_info = Paragraph::new(format!(
-        "Agent: {}{}{}",
-        selected_agent, debug_indicator, loading_indicator
-    ))
-    .style(Style::default().fg(Color::Cyan));
+    let agent_info = Paragraph::new(format!("Agent: {selected_agent}{debug_indicator}"))
+        .style(Style::default().fg(Color::Cyan));
     frame.render_widget(agent_info, chunks[1]);
+
+    // Shimmer - show loading animation during streaming
+    if model.current_mode == crate::app::AppMode::Streaming {
+        use codex_tui_components::Shimmer;
+        let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
+        frame.render_widget(shimmer, chunks[2]);
+    }
 
     // Instructions - show error/hint message if present, otherwise show default instructions
     let instructions_text = if let Some(ref msg) = model.error_message {
@@ -130,9 +128,9 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     // Render autocomplete dropdown in its own layout chunk (if visible)
     if model.show_autocomplete {
         render_autocomplete_in_layout(model, frame, chunks[1]);
-        frame.render_widget(instructions, chunks[2]); // Instructions at bottom
+        frame.render_widget(instructions, chunks[3]); // Instructions at bottom
     } else {
-        frame.render_widget(instructions, chunks[2]); // Instructions directly after agent info
+        frame.render_widget(instructions, chunks[3]); // Instructions directly after shimmer
     }
 }
 
@@ -165,7 +163,7 @@ fn render_agent_selection_fullscreen(model: &mut Model, frame: &mut Frame) {
             let text = if is_available {
                 agent.to_string()
             } else {
-                format!("{} [Not Installed]", agent)
+                format!("{agent} [Not Installed]")
             };
             let style = if is_available {
                 Style::default()
@@ -225,13 +223,11 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
 
     let message_text = if has_install_cmd {
         format!(
-            "{} is not installed on your system.\n\nWould you like to install it now?",
-            backend_name
+            "{backend_name} is not installed on your system.\n\nWould you like to install it now?"
         )
     } else {
         format!(
-            "{} is not installed on your system.\n\nWould you like to open the installation page?",
-            backend_name
+            "{backend_name} is not installed on your system.\n\nWould you like to open the installation page?"
         )
     };
     let message = Paragraph::new(message_text)
@@ -267,7 +263,7 @@ fn render_install_prompt_fullscreen(model: &Model, frame: &mut Frame) {
             };
 
             let prefix = if is_selected { ">> " } else { "   " };
-            ListItem::new(format!("{}{}", prefix, label)).style(style)
+            ListItem::new(format!("{prefix}{label}")).style(style)
         })
         .collect();
 
@@ -292,7 +288,7 @@ fn render_autocomplete_in_layout(model: &Model, frame: &mut Frame, area: Rect) {
     let items: Vec<ListItem> = model
         .autocomplete_filtered_commands
         .iter()
-        .map(|cmd| ListItem::new(format!("/{}", cmd)))
+        .map(|cmd| ListItem::new(format!("/{cmd}")))
         .collect();
 
     // Create highlighted list - render directly in the provided area

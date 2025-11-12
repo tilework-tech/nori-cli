@@ -102,8 +102,8 @@ fn test_registry_returns_error_for_unknown_command() {
 fn test_switch_model_command_opens_agent_router() {
     // Arrange: Create a model with agent router closed
     let mut model = Model::default();
-    assert_eq!(
-        model.show_agent_router, false,
+    assert!(
+        !model.show_agent_router,
         "agent router should start closed"
     );
 
@@ -117,8 +117,8 @@ fn test_switch_model_command_opens_agent_router() {
         result.is_ok(),
         "switch-model command should execute successfully"
     );
-    assert_eq!(
-        model.show_agent_router, true,
+    assert!(
+        model.show_agent_router,
         "agent router should be open after switch-model"
     );
 }

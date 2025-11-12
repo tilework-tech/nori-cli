@@ -22,7 +22,7 @@ impl CommandHandler for DebugCommand {
         model
             .response_events
             .push(ConversationEvent::StatusMessage {
-                text: format!("Debug logs are now {}", status),
+                text: format!("Debug logs are now {status}"),
             });
 
         Ok(())

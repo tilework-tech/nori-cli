@@ -194,7 +194,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                     }
                                     Err(err) => {
                                         // Command execution failed - show error
-                                        let _ = tx.send(Message::Error(format!("{}\nAvailable commands: /exit, /switch-model", err)));
+                                        let _ = tx.send(Message::Error(format!("{err}\nAvailable commands: /exit, /switch-model")));
                                     }
                                 }
                                 // Send updated mode and overlay state to event handler
@@ -247,7 +247,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                     tokio::spawn(async move {
                                         if let Err(e) = spawn_and_stream(backend, prompt, stream_tx, cancel_token).await {
                                             // Error already sent via channel
-                                            eprintln!("Streaming error: {}", e);
+                                            eprintln!("Streaming error: {e}");
                                         }
                                     });
                                 }
@@ -280,13 +280,13 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
                                                     let stderr = String::from_utf8_lossy(&output.stderr);
                                                     let _ = install_tx.send(Message::InstallationComplete {
                                                         success: false,
-                                                        message: format!("Installation failed: {}", stderr),
+                                                        message: format!("Installation failed: {stderr}"),
                                                     });
                                                 }
                                                 Err(e) => {
                                                     let _ = install_tx.send(Message::InstallationComplete {
                                                         success: false,
-                                                        message: format!("Failed to run installation: {}", e),
+                                                        message: format!("Failed to run installation: {e}"),
                                                     });
                                                 }
                                             }
@@ -371,10 +371,6 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
 
             // Render
             _ = render_interval.tick() => {
-                // Increment loading frame for animation
-                if model.current_mode == AppMode::Streaming {
-                    model.loading_frame = model.loading_frame.wrapping_add(1);
-                }
                 terminal.draw(|frame| ui::render(&mut model, frame))?;
             }
         }
@@ -578,7 +574,7 @@ fn wrap_text_to_width(
                 } else {
                     // Add the word normally
                     let word_str = if space_width > 0 {
-                        format!("{} ", word)
+                        format!("{word} ")
                     } else {
                         word.to_string()
                     };

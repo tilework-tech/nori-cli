@@ -18,3 +18,4 @@ async-stream = "0.3"
 which = "7.0"
 opener = "0.7"
 unicode-width = "0.2"
+codex-tui-components = { path = "../codex-rs/tui-components" }

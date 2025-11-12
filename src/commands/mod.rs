@@ -58,7 +58,7 @@ impl CommandRegistry {
     pub fn execute(&self, name: &str, model: &mut Model) -> Result<(), String> {
         match self.commands.get(name) {
             Some(handler) => handler.execute(model),
-            None => Err(format!("Unknown command: /{}", name)),
+            None => Err(format!("Unknown command: /{name}")),
         }
     }
 
