@@ -103,11 +103,24 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .style(Style::default().fg(Color::Cyan));
     frame.render_widget(agent_info, chunks[1]);
 
-    // Shimmer - show loading animation during streaming
+    // Loading animation - show during streaming
     if model.current_mode == crate::app::AppMode::Streaming {
-        use codex_tui_components::Shimmer;
-        let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
-        frame.render_widget(shimmer, chunks[2]);
+        if model.use_codex_components {
+            // Use Shimmer component from codex-tui-components
+            use codex_tui_components::Shimmer;
+            let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
+            frame.render_widget(shimmer, chunks[2]);
+        } else {
+            // Use legacy spinner animation
+            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let spinner_text = format!(
+                "{} {}",
+                frames[model.loading_frame % frames.len()],
+                format!("{selected_agent} processing...")
+            );
+            let spinner = Paragraph::new(spinner_text);
+            frame.render_widget(spinner, chunks[2]);
+        }
     }
 
     // Instructions - show error/hint message if present, otherwise show default instructions
