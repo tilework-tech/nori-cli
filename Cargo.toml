@@ -2,6 +2,11 @@
 name = "nori-cli"
 version = "0.1.0"
 edition = "2024"
+default-run = "tui"
+
+[[bin]]
+name = "tui"
+path = "src/main.rs"
 
 [dependencies]
 ratatui = "0.29.0"
@@ -19,3 +24,4 @@ which = "7.0"
 opener = "0.7"
 unicode-width = "0.2"
 codex-tui-components = { path = "../codex-rs/tui-components" }
+# dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender
