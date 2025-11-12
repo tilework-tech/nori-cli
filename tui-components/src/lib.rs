@@ -18,6 +18,7 @@
 //! Components are organized into modules by functionality:
 //! - **Animation & Visual Effects**: [`shimmer`], [`key_hint`]
 //! - **Layout & Rendering**: [`render`]
+//! - **Text Wrapping**: [`wrapping`], [`live_wrap`]
 //! - **Input & State Management**: [`scroll_state`], [`paste_burst`]
 //!
 //! ## Examples
@@ -43,15 +44,20 @@ pub mod key_hint;
 pub mod shimmer;
 
 // Text handling and utilities
+pub mod live_wrap;
 pub mod paste_burst;
 pub mod scroll_state;
+pub mod wrapping;
 
 // TODO: Extract these in future iterations
-// pub mod wrapping;
 // pub mod textarea;
 // pub mod selection_list;
 
 // Re-export commonly used types for convenience
 pub use key_hint::KeyBinding;
+pub use live_wrap::{Row, RowBuilder, take_prefix_by_width};
 pub use render::{ColumnRenderable, InsetRenderable, Renderable, RenderableExt, RowRenderable};
 pub use shimmer::Shimmer;
+pub use wrapping::{
+    RtOptions, prefix_lines, word_wrap_line, word_wrap_lines, word_wrap_lines_borrowed,
+};
