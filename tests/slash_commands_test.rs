@@ -1,5 +1,5 @@
 use nori_cli::app::Model;
-use nori_cli::commands::{CommandRegistry, filter_commands, parse_slash_command};
+use nori_cli::commands::{filter_commands, parse_slash_command, CommandRegistry};
 
 // Tests for CommandRegistry - listing available commands
 
@@ -102,10 +102,7 @@ fn test_registry_returns_error_for_unknown_command() {
 fn test_switch_model_command_opens_agent_router() {
     // Arrange: Create a model with agent router closed
     let mut model = Model::default();
-    assert!(
-        !model.show_agent_router,
-        "agent router should start closed"
-    );
+    assert!(!model.show_agent_router, "agent router should start closed");
 
     let registry = CommandRegistry::default();
 

@@ -1,9 +1,9 @@
 use crate::app::Model;
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
+    Frame,
 };
 use tui_textarea::TextArea;
 use unicode_width::UnicodeWidthStr;
@@ -114,9 +114,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
             // Use legacy spinner animation
             let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let spinner_text = format!(
-                "{} {}",
+                "{} {selected_agent} processing...",
                 frames[model.loading_frame % frames.len()],
-                format!("{selected_agent} processing...")
             );
             let spinner = Paragraph::new(spinner_text);
             frame.render_widget(spinner, chunks[2]);
