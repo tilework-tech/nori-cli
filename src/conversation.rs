@@ -20,7 +20,7 @@ pub enum ConversationEvent {
     StderrOutput {
         line: String,
     },
-    StreamCancelled,
+    // StreamCancelled,
     UnknownEvent {
         raw: String,
     },

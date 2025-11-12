@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::backends;
 use crate::conversation::ConversationEvent;
 use ratatui::style::Style;
@@ -235,8 +237,8 @@ impl Model {
             Message::StreamComplete => {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None; // Clear any errors when going back
-                // Note: Textarea already cleared in SubmitInput
-                // Note: We do NOT clear response_events to preserve chat history
+                                           // Note: Textarea already cleared in SubmitInput
+                                           // Note: We do NOT clear response_events to preserve chat history
             }
 
             Message::CancelStream => {
