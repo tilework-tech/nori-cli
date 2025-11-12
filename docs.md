@@ -32,21 +32,21 @@ A terminal user interface (TUI) application that routes user prompts to differen
 **UI Layout**: Chat-based interface with persistent conversation
 ```
 ┌─ Title (selected agent) ─────────────┐
-│                                       │
+│                                      │
 ├─ Messages (conversation history) ────┤
-│ [user] What is the weather?           │
-│ The weather is...                     │
-│ [user] Tell me more                   │
-│ ...streaming response...              │
-├─ Input (textarea at bottom) ──────────┤
-│ Type your message here...             │
-├─ Agent Info ──────────────────────────┤
-│ Agent: Claude Code                    │
-├─ Shimmer (during streaming) ──────────┤
-│ Claude Code processing... ⚡          │
-├─ Instructions ────────────────────────┤
-│ /switch-model: agents | /exit: quit   │
-└───────────────────────────────────────┘
+│ [user] What is the weather?          │
+│ The weather is...                    │
+│ [user] Tell me more                  │
+│ ...streaming response...             │
+├─ Input (textarea at bottom) ─────────┤
+│ Type your message here...            │
+├─ Agent Info ─────────────────────────┤
+│ Agent: Claude Code                   │
+├─ Shimmer (during streaming) ─────────┤
+│ Claude Code processing...            │
+├─ Instructions ───────────────────────┤
+│ /switch-model: agents | /exit: quit  │
+└──────────────────────────────────────┘
 
 Alt+A overlays agent selector (60% width, 40% height centered)
 ```

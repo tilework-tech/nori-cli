@@ -95,4 +95,4 @@ All public APIs include comprehensive rustdoc with examples.
 
 ## License
 
-Licensed under MIT OR Apache-2.0.
+Licensed under Apache-2.0.
