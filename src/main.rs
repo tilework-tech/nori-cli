@@ -1,15 +1,22 @@
+mod app;
+mod autocomplete;
+mod backends;
+mod commands;
+mod conversation;
+mod ui;
+
+use crate::app::{AppMode, InstallChoice, Message, Model};
+use crate::autocomplete::update_autocomplete_state;
+use crate::backends::{AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
+use crate::commands::{CommandRegistry, parse_slash_command};
+use crate::conversation::{ConversationEvent, render_event, should_render_event};
+
 use color_eyre::Result;
 use crossterm::cursor::MoveTo;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
-use nori_cli::app::{AppMode, InstallChoice, Message, Model};
-use nori_cli::autocomplete::update_autocomplete_state;
-use nori_cli::backends::{self, AgentBackend, claude::ClaudeBackend, codex::CodexBackend};
-use nori_cli::commands::{CommandRegistry, parse_slash_command};
-use nori_cli::conversation::{ConversationEvent, render_event, should_render_event};
-use nori_cli::ui;
 use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
