@@ -1,0 +1,14 @@
+---
+source: tui-components/tests/key_hint_snapshots.rs
+expression: "format!(\"{buf:?}\")"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 20, height: 1 },
+    content: [
+        "enter               ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 5, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}
