@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::backends;
 use crate::conversation::ConversationEvent;
 use ratatui::style::Style;
