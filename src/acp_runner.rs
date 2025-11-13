@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::conversation::{ConversationEvent, PlanEntry};
 use agent_client_protocol::{
     Client, ContentBlock, PermissionOptionKind, PlanEntryPriority, PlanEntryStatus,
@@ -79,10 +81,9 @@ pub fn translate_session_update(update: SessionUpdate) -> Option<ConversationEve
 
             let content = update.fields.content.and_then(|blocks| {
                 blocks.into_iter().find_map(|block| match block {
-                    ToolCallContent::Content { content } => match content {
-                        ContentBlock::Text(text_content) => Some(text_content.text),
-                        _ => None,
-                    },
+                    ToolCallContent::Content {
+                        content: ContentBlock::Text(text_content),
+                    } => Some(text_content.text),
                     _ => None,
                 })
             });
