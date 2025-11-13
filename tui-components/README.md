@@ -85,23 +85,51 @@ Bash syntax highlighting using tree-sitter. Converts bash scripts into styled Ra
 
 ## Examples
 
-### TextArea Example
+Interactive examples are available for several components. Each example demonstrates multiple configurations side-by-side:
 
-An interactive example demonstrating the TextArea widget is available:
+### TextArea Example
 
 ```bash
 cargo run --example textarea
 ```
 
-This example displays four TextArea configurations simultaneously:
+Displays four TextArea configurations simultaneously:
 - Default with placeholder text
 - Custom styling with colored text
 - Pre-filled multiline content
 - Narrow width demonstrating text wrapping
 
-All TextAreas receive the same keyboard input, allowing you to compare behaviors across configurations. Press `Esc` or `Ctrl+C` to exit.
+### Selection Example
 
-For other components, comprehensive usage examples are included in the rustdoc.
+```bash
+cargo run --example selection
+```
+
+Demonstrates the SelectionList widget with four configurations:
+- Basic selection with title and footer
+- Selection with search filtering enabled
+- Selection with subtitle
+- Long list (12 items) showing scrolling behavior
+
+### KeyHint Example
+
+```bash
+cargo run --example key_hint
+```
+
+Shows platform-aware keyboard shortcut formatting for various key combinations.
+
+### Shimmer Example
+
+```bash
+cargo run --example shimmer
+```
+
+Animated text effects with different color palettes and animation modes.
+
+---
+
+All examples receive keyboard input simultaneously for easy comparison. Press `Esc` or `Ctrl+C` to exit. For additional usage examples, see the rustdoc.
 
 ## Documentation
 

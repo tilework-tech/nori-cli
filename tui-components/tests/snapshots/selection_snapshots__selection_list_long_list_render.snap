@@ -1,0 +1,26 @@
+---
+source: tui-components/tests/selection_snapshots.rs
+assertion_line: 285
+expression: output
+---
+                                                
+  Select Option                                 
+                                                
+› 1. Option 1 (current)  Description for        
+                         option 1               
+  2. Option 2            Description for        
+                         option 2               
+  3. Option 3            Description for        
+                         option 3               
+  4. Option 4            Description for        
+                         option 4               
+  5. Option 5            Description for        
+                         option 5               
+  6. Option 6            Description for        
+                         option 6               
+  7. Option 7            Description for        
+                         option 7               
+  8. Option 8            Description for        
+                         option 8               
+                                                
+  Press enter to confirm or esc to go back
