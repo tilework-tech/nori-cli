@@ -48,9 +48,7 @@ async fn diagnose_claude_stream() {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
                         if json.get("type").and_then(|v| v.as_str()) == Some("result") {
                             saw_result_summary = true;
-                            println!(
-                                "\n>>> Found ResultSummary event at line {line_count} <<<\n"
-                            );
+                            println!("\n>>> Found ResultSummary event at line {line_count} <<<\n");
                         }
                     }
 
@@ -71,9 +69,7 @@ async fn diagnose_claude_stream() {
                     break;
                 }
                 Err(_) => {
-                    println!(
-                        "\n>>> Timeout waiting for next line (after {line_count} lines) <<<"
-                    );
+                    println!("\n>>> Timeout waiting for next line (after {line_count} lines) <<<");
                     println!("This suggests stdout is still open but no more data is coming");
                     break;
                 }
