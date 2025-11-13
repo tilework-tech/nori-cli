@@ -1,10 +1,10 @@
 use crate::conversation::{ConversationEvent, PlanEntry};
 use agent_client_protocol::{
-    Client, ContentBlock, PermissionOptionKind, Plan, PlanEntryPriority, PlanEntryStatus,
-    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, RequestPermissionResponse, Result as AcpResult, SessionNotification,
-    SessionUpdate, ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolKind,
-    WriteTextFileRequest, WriteTextFileResponse,
+    Client, ContentBlock, PermissionOptionKind, PlanEntryPriority, PlanEntryStatus,
+    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, Result as AcpResult, SessionNotification, SessionUpdate,
+    ToolCallContent, ToolCallStatus, ToolKind, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use futures::stream::Stream;
 use std::path::PathBuf;
@@ -169,7 +169,7 @@ impl Client for AcpClientHandler {
             })
             .or_else(|| args.options.first())
             .map(|opt| opt.id.clone())
-            .ok_or_else(|| agent_client_protocol::Error::internal_error())?;
+            .ok_or_else(agent_client_protocol::Error::internal_error)?;
 
         Ok(RequestPermissionResponse {
             outcome: RequestPermissionOutcome::Selected { option_id },

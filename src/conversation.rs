@@ -136,7 +136,7 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
                     .fg(Color::Magenta)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(format!("{} ({})", title, kind)),
+            Span::raw(format!("{title} ({kind})")),
         ]),
         ConversationEvent::ToolCallProgress {
             id: _,
