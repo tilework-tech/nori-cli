@@ -143,7 +143,7 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 - Stream consumption multiplexed with cancellation signal via tokio::select! in spawn_and_stream
 - When cancellation fires, stream is dropped which closes file handles and triggers child process cleanup via Drop
 - No explicit process.kill() - relies on Drop semantics and closed handles for cleanup
-- **Stream completion**: The stream is driven by semantic completion signals (ResultSummary events from JSONL) rather than process exit status. The ClaudeBackend returns immediately upon receiving a ResultSummary, causing @/src/main.rs:spawn_and_stream() to receive no more events and exit the loop, which sends Message::StreamComplete to the UI. The subprocess may still be running in the background, but the stream is semantically complete from the user's perspective.
+- **Stream completion**: The stream is driven by semantic completion signals (ResultSummary events from JSONL) rather than process exit status. The ClaudeBackend returns immediately upon receiving a ResultSummary, and @/src/main.rs:spawn_and_stream() terminates stream consumption immediately upon receiving ResultSummary, sending Message::StreamComplete to the UI. The subprocess may still be running in the background, but the stream is semantically complete from the user's perspective.
 
 **Error Paths**:
 - spawn_process() returns Result<Child> - spawn failure (CLI not found, permission denied) propagates to caller

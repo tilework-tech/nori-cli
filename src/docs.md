@@ -85,8 +85,7 @@ User Message Rendering (@/src/main.rs:140-156)
 Subprocess Output (JSONL)
   → ClaudeBackend yields events from stdout parsed via parse_jsonl_event()
   → When ResultSummary event is received, backend returns immediately (exits the async generator)
-  → spawn_and_stream() receives no more events → the else branch of tokio::select! fires
-  → Message::StreamComplete sent to UI (via mpsc channel)
+  → spawn_and_stream() receives ResultSummary event → sends Message::StreamEvent + immediately sends Message::StreamComplete
   → run_app loop transitions to Selection mode
   → For each streamed event BEFORE ResultSummary: render_event() converts to styled Line
   → wrap_text_to_width() splits into multiple Lines, terminal.insert_before() accumulates lines
