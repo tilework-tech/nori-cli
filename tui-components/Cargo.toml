@@ -20,6 +20,10 @@ name = "shimmer"
 path = "tests/shimmer_snapshots.rs"
 
 [[example]]
+name = "live_wrap"
+path = "tests/live_wrap_snapshots.rs"
+
+[[example]]
 name = "selection"
 path = "tests/selection_snapshots.rs"
 
