@@ -130,10 +130,15 @@ impl Default for Model {
         Self {
             current_mode: AppMode::Selection,
             list_state,
-            agents: vec!["Claude Code".to_string(), "GPT Codex".to_string()],
+            agents: vec![
+                "Claude Code".to_string(),
+                "GPT Codex".to_string(),
+                "Mock ACP Agent".to_string(),
+            ],
             backend_availability: vec![
                 backends::is_available("claude"),
                 backends::is_available("codex"),
+                backends::is_available(crate::backends::mock::binary_path()),
             ],
             textarea: create_textarea(),
             response_events: Vec::new(),
@@ -332,6 +337,7 @@ impl Model {
                     self.backend_availability = vec![
                         backends::is_available("claude"),
                         backends::is_available("codex"),
+                        backends::is_available(crate::backends::mock::binary_path()),
                     ];
                 } else {
                     self.error_message = Some(message);

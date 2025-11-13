@@ -4,6 +4,7 @@ pub mod mock;
 
 use crate::conversation::ConversationEvent;
 use futures::stream::Stream;
+use std::path::Path;
 use std::pin::Pin;
 
 pub trait AgentBackend {
@@ -25,5 +26,9 @@ pub trait AgentBackend {
 
 /// Check if a command is available in PATH
 pub fn is_available(command: &str) -> bool {
-    which::which(command).is_ok()
+    if command.contains(std::path::MAIN_SEPARATOR) || command.contains('/') {
+        Path::new(command).exists()
+    } else {
+        which::which(command).is_ok()
+    }
 }

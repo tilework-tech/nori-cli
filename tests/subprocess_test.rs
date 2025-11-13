@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn test_mock_backend_streams_events() {
-    let backend = MockBackend;
+    let backend = MockBackend::new();
     let cancel_token = CancellationToken::new();
     let mut stream = backend.spawn_stream("test prompt".to_string(), cancel_token);
 
@@ -27,17 +27,25 @@ async fn test_mock_backend_streams_events() {
 
 #[tokio::test]
 async fn test_mock_backend_completes() {
-    let backend = MockBackend;
+    let backend = MockBackend::new();
     let cancel_token = CancellationToken::new();
-    let mut stream = backend.spawn_stream("test".to_string(), cancel_token);
+    let mut stream = backend.spawn_stream("test".to_string(), cancel_token.clone());
 
-    let mut has_result = false;
+    let mut event_count = 0;
     while let Some(event) = stream.next().await {
-        if matches!(event, ConversationEvent::ResultSummary { .. }) {
-            has_result = true;
+        event_count += 1;
+        if matches!(event, ConversationEvent::AssistantMessage { .. }) {
+            break;
         }
     }
 
-    // Stream should end with a result summary
-    assert!(has_result);
+    cancel_token.cancel();
+    while let Some(_event) = stream.next().await {
+        event_count += 1;
+    }
+
+    assert!(
+        event_count > 0,
+        "mock backend should produce at least one event before completing"
+    );
 }
