@@ -1,0 +1,13 @@
+---
+source: tui-components/tests/selection_snapshots.rs
+assertion_line: 251
+expression: output
+---
+                                                
+  Select Approval Mode                          
+                                                
+  Type to search...                             
+› Read Only (current)  Codex can read files     
+  Full Access          Codex can edit files     
+                                                
+  Press enter to confirm or esc to go back
