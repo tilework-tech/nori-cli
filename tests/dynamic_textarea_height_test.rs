@@ -32,15 +32,14 @@ fn test_long_line_accounts_for_wrapping() {
     let mut textarea = TextArea::default();
     // Create a 250-character line (will wrap at width 80)
     // 250 / 80 = 4 wrapped lines (rounded up from 3.125)
-    textarea.insert_str(&"a".repeat(250));
+    textarea.insert_str("a".repeat(250));
 
     let height = calculate_textarea_height(&textarea, 80);
 
     // 4 wrapped lines + BORDER_HEIGHT (2) = 6
     assert_eq!(
         height, 6,
-        "Expected height 6 for wrapped line, got {}",
-        height
+        "Expected height 6 for wrapped line, got {height}"
     );
 }
 
@@ -52,11 +51,11 @@ fn test_height_respects_maximum_bound() {
         if i > 0 {
             textarea.insert_newline();
         }
-        textarea.insert_str(&format!("line {}", i));
+        textarea.insert_str(format!("line {i}"));
     }
 
     let height = calculate_textarea_height(&textarea, 80);
 
     // MAX_HEIGHT (10) + BORDER_HEIGHT (2) = 12
-    assert_eq!(height, 12, "Expected maximum height of 12, got {}", height);
+    assert_eq!(height, 12, "Expected maximum height of 12, got {height}");
 }

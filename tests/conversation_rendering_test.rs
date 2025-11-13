@@ -9,7 +9,7 @@ fn test_render_assistant_message_as_plain_text() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("Test content"));
 }
 
@@ -21,7 +21,7 @@ fn test_render_system_event_with_prefix() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("[system]"));
     assert!(line_text.contains("init"));
 }
@@ -34,7 +34,7 @@ fn test_render_result_summary() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("[done]"));
     assert!(line_text.contains("Completed"));
 }
@@ -46,7 +46,7 @@ fn test_render_stderr_output() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("Error message"));
 }
 
@@ -57,7 +57,7 @@ fn test_render_multiline_assistant_message() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("Line 1"));
 }
 
@@ -68,7 +68,7 @@ fn test_render_unknown_event() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("[unknown]"));
     assert!(line_text.contains("some unknown data"));
 }
@@ -80,7 +80,103 @@ fn test_render_user_message() {
     };
     let line = render_event(&event);
 
-    let line_text = format!("{:?}", line);
+    let line_text = format!("{line:?}");
     assert!(line_text.contains("[user]"));
     assert!(line_text.contains("What is the weather?"));
+}
+
+#[test]
+fn test_render_status_message() {
+    let event = ConversationEvent::StatusMessage {
+        text: "Debug logs are now enabled".to_string(),
+    };
+    let line = render_event(&event);
+
+    let line_text = format!("{line:?}");
+    assert!(line_text.contains("[status]"));
+    assert!(line_text.contains("Debug logs are now enabled"));
+}
+
+// Event filtering tests
+
+#[test]
+fn test_should_render_system_event_when_debug_enabled() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::SystemEvent {
+        subtype: "init".to_string(),
+        details: Some("session started".to_string()),
+    };
+
+    assert!(should_render_event(&event, true));
+}
+
+#[test]
+fn test_should_not_render_system_event_when_debug_disabled() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::SystemEvent {
+        subtype: "init".to_string(),
+        details: Some("session started".to_string()),
+    };
+
+    assert!(!should_render_event(&event, false));
+}
+
+#[test]
+fn test_should_render_unknown_event_when_debug_enabled() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::UnknownEvent {
+        raw: "unknown data".to_string(),
+    };
+
+    assert!(should_render_event(&event, true));
+}
+
+#[test]
+fn test_should_not_render_unknown_event_when_debug_disabled() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::UnknownEvent {
+        raw: "unknown data".to_string(),
+    };
+
+    assert!(!should_render_event(&event, false));
+}
+
+#[test]
+fn test_should_always_render_user_message() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::UserMessage {
+        text: "Hello".to_string(),
+    };
+
+    assert!(should_render_event(&event, true));
+    assert!(should_render_event(&event, false));
+}
+
+#[test]
+fn test_should_always_render_assistant_message() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::AssistantMessage {
+        text: "Hello".to_string(),
+    };
+
+    assert!(should_render_event(&event, true));
+    assert!(should_render_event(&event, false));
+}
+
+#[test]
+fn test_should_always_render_status_message() {
+    use nori_cli::conversation::should_render_event;
+
+    let event = ConversationEvent::StatusMessage {
+        text: "Debug enabled".to_string(),
+    };
+
+    assert!(should_render_event(&event, true));
+    assert!(should_render_event(&event, false));
 }

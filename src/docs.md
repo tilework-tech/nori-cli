@@ -26,7 +26,7 @@ pub mod ui;           // Rendering functions for each mode
 
 **Entry Point** (@/src/main.rs):
 - `main()`: Sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
-- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task
+- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task, conditionally increments `loading_frame` counter during streaming when using legacy spinner (only when `use_codex_components = false`)
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
@@ -35,7 +35,7 @@ pub mod ui;           // Rendering functions for each mode
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, and `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window, `use_codex_components: bool` flag to toggle between Shimmer component (true, default) and legacy spinner (false), and `loading_frame: usize` for legacy spinner animation frame tracking
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
@@ -44,15 +44,18 @@ pub mod ui;           // Rendering functions for each mode
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
-- `render_chat()`: Three-section vertical layout for normal mode - Input textarea (4 lines), Agent info (1 line showing selected agent), and Instructions footer (1 line)
+- `render_chat()`: Four-section vertical layout for normal mode - Input textarea (dynamic height), Agent info (1 line showing selected agent), Loading animation (1 line, only visible during streaming), and Instructions footer (1 line)
+- **Conditional Loading Animation**: When `current_mode == AppMode::Streaming`, checks `use_codex_components` flag to select rendering path - if true (default), instantiates `Shimmer::new()` from tui-components with message "{agent_name} processing..." and renders time-based animation; if false, renders legacy spinner using `loading_frame % frames.len()` to cycle through Braille spinner characters ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 - `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
 - `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
 - **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
+- **Layout Constraints**: Autocomplete mode uses 4 constraints (textarea, autocomplete, shimmer, instructions), non-autocomplete mode uses 4 constraints (textarea, agent info, shimmer, instructions) - instructions always at chunks[3]
 
 **Conversation Event Handling** (@/src/conversation.rs):
-- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent
+- `ConversationEvent` enum: Structured representation of backend JSONL events - includes UserMessage for chat history, AssistantMessage, SystemEvent, ResultSummary, StderrOutput, StreamCancelled for interruptions, UnknownEvent for unparseable events, StatusMessage for system feedback messages
 - `parse_jsonl_event()`: Parses raw JSONL strings into ConversationEvent - handles Claude CLI event format with nested message.content arrays
-- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, StreamCancelled renders "Interrupted" in red, other events render with type-specific prefixes and colors
+- `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, StatusMessage renders with green `[status]` prefix, StreamCancelled renders "Interrupted" in red, other events render with type-specific prefixes and colors
+- `should_render_event()`: Filters events based on debug mode - SystemEvent and UnknownEvent are considered debug events (hidden when `show_debug: false`), all other events (UserMessage, AssistantMessage, ResultSummary, StderrOutput, StreamCancelled, StatusMessage) are always visible
 
 **Backend Abstraction** (@/src/backends.rs):
 - `AgentBackend` trait: `spawn_stream(prompt, cancel_token) -> Pin<Box<dyn Stream<Item = ConversationEvent>>>` and metadata methods
@@ -88,6 +91,7 @@ Subprocess Output (JSONL)
   → For each streamed event BEFORE ResultSummary: render_event() converts to styled Line
   → wrap_text_to_width() splits into multiple Lines, terminal.insert_before() accumulates lines
   → Model::update() accumulates events in response_events
+  → Model::update() → accumulates ALL events in response_events (no filtering at storage level)
   → render_chat() maps all events via render_event() to styled Lines
 
 Cancellation Path
@@ -132,6 +136,18 @@ Cancellation Path
 - Ctrl-C timeout window is 2 seconds - first press sets timestamp, second press within window triggers quit, press after timeout resets to first press behavior
 - Main loop detects quit signal by monitoring last_ctrl_c_time transition from Some → None (not by checking timestamp directly)
 
+**Debug Event Filtering** (@/src/conversation.rs:should_render_event, @/src/main.rs:112):
+- Two-tier filtering architecture: storage vs rendering
+- **Storage level**: ALL events stored in `response_events` vector regardless of debug mode - no filtering at Model::update() level
+- **Rendering level**: Events filtered in main event loop based on `model.show_debug_events` before calling `terminal.insert_before()`
+- **Debug events**: SystemEvent and UnknownEvent are classified as debug events
+  - SystemEvent: Contains raw protocol messages like session initialization, state changes
+  - UnknownEvent: Contains unparseable JSONL that doesn't match known event types
+- **Always-visible events**: UserMessage, AssistantMessage, ResultSummary, StderrOutput, StreamCancelled, StatusMessage
+- **Toggle mechanism**: `/debug` slash command (@/src/commands/debug.rs) toggles `show_debug_events` boolean and emits StatusMessage with feedback
+- **Why filtering at render time**: Allows users to toggle debug mode and retroactively view debug events in conversation history without losing data - if filtered at storage, events would be permanently lost
+- **Default state**: Debug events hidden (`show_debug_events = false`) to reduce noise from system protocol messages
+
 **Conversation Event Parsing** (@/src/conversation.rs):
 - Parsing based on actual Claude CLI output format: `{"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}`
 - Assistant messages extract all text blocks from content array and join with newlines
@@ -141,12 +157,14 @@ Cancellation Path
 - Malformed JSON or unparseable events return None from parse_jsonl_event()
 
 **Event Rendering Styles** (@/src/conversation.rs):
-- UserMessage: `[user]` prefix in bold cyan, followed by user's prompt text
-- AssistantMessage: Plain white text, no prefix
-- SystemEvent: `[system]` prefix in dim dark gray, subtype and details in dark gray
-- ResultSummary: `[done]` prefix in bold green (success) or bold red (failure)
-- StderrOutput: Red text, no prefix
-- UnknownEvent: `[unknown]` prefix in yellow with raw JSON for debugging
+- UserMessage: `[user]` prefix in bold cyan, followed by user's prompt text - always visible
+- AssistantMessage: Plain white text, no prefix - always visible
+- SystemEvent: `[system]` prefix in dim dark gray, subtype and details in dark gray - hidden by default (debug event)
+- ResultSummary: `[done]` prefix in bold green (success) or bold red (failure) - always visible
+- StderrOutput: Red text, no prefix - always visible
+- StreamCancelled: "Interrupted" in red - always visible
+- UnknownEvent: `[unknown]` prefix in yellow with raw JSON - hidden by default (debug event)
+- StatusMessage: `[status]` prefix in bold green, followed by status text - always visible
 
 **Error Display Strategy**:
 - Errors don't transition mode - Model stays in Streaming so stderr output remains visible in conversation history
@@ -158,6 +176,26 @@ Cancellation Path
 - Render interval is 33ms (~30 fps) regardless of event frequency
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
+
+**Conditional Loading Animation Strategy** (@/src/ui.rs:107-124, @/src/app.rs:119-120, @/src/main.rs:374-377):
+- Two parallel animation implementations: Shimmer component (new) and legacy spinner (old)
+- **Toggle mechanism**: `use_codex_components` flag in Model enables switching at runtime without code changes
+- **Default behavior**: Shimmer component enabled (`use_codex_components = true`)
+- **Animation architecture differences**:
+  - Shimmer: Time-based animation using `Instant::now()`, no Model state required
+  - Legacy: Frame-based animation using `loading_frame` counter, incremented per render tick
+- **Frame increment optimization**: Counter only advances when both conditions met: `current_mode == AppMode::Streaming && !use_codex_components`
+- **Purpose**: Provides flexibility for testing/comparison, demonstrates component library integration while maintaining fallback, enables A/B testing of animation approaches
+- **No runtime overhead**: Branch check in render path is negligible, frame increment gated at event loop level
+
+**Component Library Integration** (@/Cargo.toml, @/src/ui.rs, @/src/app.rs, @/src/main.rs):
+- nori-cli depends on tui-components as a path dependency (./tui-components)
+- **Conditional rendering approach**: `use_codex_components: bool` flag in Model (defaults to true) controls whether to use Shimmer component or legacy spinner
+- **Shimmer component path** (when `use_codex_components = true`): Shimmer instantiated on-demand during render (`Shimmer::new()`) with time-based animation using `Instant::now()` internally - no Model state tracking required
+- **Legacy spinner path** (when `use_codex_components = false`): Uses frame-based animation with `loading_frame: usize` counter in Model, incremented on each render tick in main.rs event loop (lines 374-377), cycles through Braille spinner frames using modulo
+- **Frame increment gating** (@/src/main.rs:374-377): Frame counter only increments when `current_mode == AppMode::Streaming && !use_codex_components`, ensuring frame counter doesn't advance when using Shimmer
+- **Backward compatibility**: Preserves legacy spinner as fallback option while demonstrating component library integration pattern
+- Integration demonstrates nori-cli as a consumer of the extracted component library pattern with graceful fallback mechanism
 
 **Inline Viewport Compatibility** (@/src/ui.rs):
 - UI designed to work in both inline viewports (Viewport::Inline(8) from main.rs) and fullscreen mode

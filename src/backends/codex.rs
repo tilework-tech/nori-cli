@@ -55,7 +55,7 @@ impl AgentBackend for CodexBackend {
                 }
                 Err(e) => {
                     yield ConversationEvent::UnknownEvent {
-                        raw: format!("Failed to spawn codex: {}", e),
+                        raw: format!("Failed to spawn codex: {e}"),
                     };
                     return;
                 }
@@ -90,12 +90,12 @@ impl AgentBackend for CodexBackend {
                 Ok(status) => {
                     yield ConversationEvent::ResultSummary {
                         success: false,
-                        details: format!("Process exited with status: {}", status),
+                        details: format!("Process exited with status: {status}"),
                     };
                 }
                 Err(e) => {
                     yield ConversationEvent::UnknownEvent {
-                        raw: format!("Failed to wait for process: {}", e),
+                        raw: format!("Failed to wait for process: {e}"),
                     };
                 }
             }

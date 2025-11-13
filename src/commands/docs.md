@@ -73,6 +73,13 @@ To add a new slash command:
 
 ## Built-in Commands
 
+### /debug
+- Toggles visibility of debug events (SystemEvent and UnknownEvent)
+- Implementation: Toggles `model.show_debug_events` boolean, adds StatusMessage to response_events
+- File: `src/commands/debug.rs`
+- Default state: Debug events hidden (`show_debug_events = false`)
+- StatusMessage provides immediate feedback: "Debug logs are now enabled/disabled"
+
 ### /exit
 - Quits the application
 - Implementation: Returns Ok(()), main loop sends Message::Quit

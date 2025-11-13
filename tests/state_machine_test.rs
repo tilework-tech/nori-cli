@@ -181,10 +181,10 @@ fn test_cancel_stream_during_streaming() {
     assert!(model.textarea.lines()[0].is_empty());
     assert!(token.is_cancelled());
 
-    // Verify cancellation event was added to history
+    // Verify cancellation status message was added to history
     let last_event = model.response_events.last();
     assert!(matches!(
         last_event,
-        Some(ConversationEvent::StreamCancelled)
+        Some(ConversationEvent::StatusMessage { text }) if text == "Interrupted"
     ));
 }

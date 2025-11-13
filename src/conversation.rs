@@ -24,20 +24,33 @@ pub enum ConversationEvent {
     UnknownEvent {
         raw: String,
     },
+    StatusMessage {
+        text: String,
+    },
 }
 
 pub fn render_event(event: &ConversationEvent) -> Line<'static> {
     match event {
         ConversationEvent::UserMessage { text } => Line::from(vec![
             Span::styled(
-                "[user] ",
+                "[user]",
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
+            Span::raw(" "),
             Span::raw(text.clone()),
         ]),
-        ConversationEvent::AssistantMessage { text } => Line::from(text.clone()),
+        ConversationEvent::AssistantMessage { text } => Line::from(vec![
+            Span::styled(
+                "[agent]",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" "),
+            Span::raw(text.clone()),
+        ]),
         ConversationEvent::SystemEvent { subtype, details } => {
             let mut spans = vec![
                 Span::styled(
@@ -80,8 +93,29 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
             Line::from(Span::styled("Interrupted", Style::default().fg(Color::Red)))
         }
         ConversationEvent::UnknownEvent { raw } => Line::from(Span::styled(
-            format!("[unknown] {}", raw),
+            format!("[unknown] {raw}"),
             Style::default().fg(Color::Yellow),
         )),
+        ConversationEvent::StatusMessage { text } => Line::from(vec![
+            Span::styled(
+                "[status] ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(text.clone()),
+        ]),
+    }
+}
+
+/// Determines if an event should be rendered based on debug mode
+/// SystemEvent, UnknownEvent, and ResultSummary are debug events (hidden when show_debug is false)
+/// All other events are always visible
+pub fn should_render_event(event: &ConversationEvent, show_debug: bool) -> bool {
+    match event {
+        ConversationEvent::SystemEvent { .. }
+        | ConversationEvent::UnknownEvent { .. }
+        | ConversationEvent::ResultSummary { .. } => show_debug,
+        _ => true,
     }
 }

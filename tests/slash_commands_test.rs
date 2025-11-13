@@ -12,8 +12,8 @@ fn test_command_registry_lists_all_names() {
     let mut names = registry.get_all_command_names();
     names.sort(); // Ensure stable order
 
-    // Assert: Returns both registered commands
-    assert_eq!(names, vec!["exit", "switch-model"]);
+    // Assert: Returns all registered commands
+    assert_eq!(names, vec!["debug", "exit", "switch-model"]);
 }
 
 // Tests for filter_commands - prefix-based filtering
@@ -102,10 +102,7 @@ fn test_registry_returns_error_for_unknown_command() {
 fn test_switch_model_command_opens_agent_router() {
     // Arrange: Create a model with agent router closed
     let mut model = Model::default();
-    assert_eq!(
-        model.show_agent_router, false,
-        "agent router should start closed"
-    );
+    assert!(!model.show_agent_router, "agent router should start closed");
 
     let registry = CommandRegistry::default();
 
@@ -117,8 +114,8 @@ fn test_switch_model_command_opens_agent_router() {
         result.is_ok(),
         "switch-model command should execute successfully"
     );
-    assert_eq!(
-        model.show_agent_router, true,
+    assert!(
+        model.show_agent_router,
         "agent router should be open after switch-model"
     );
 }

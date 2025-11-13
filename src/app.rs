@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::backends;
 use crate::conversation::ConversationEvent;
 use ratatui::style::Style;
@@ -115,6 +117,9 @@ pub struct Model {
     pub show_autocomplete: bool,
     pub autocomplete_filtered_commands: Vec<String>,
     pub autocomplete_selected_index: usize,
+    pub show_debug_events: bool,
+    pub use_codex_components: bool,
+    pub loading_frame: usize,
 }
 
 impl Default for Model {
@@ -146,6 +151,9 @@ impl Default for Model {
             show_autocomplete: false,
             autocomplete_filtered_commands: Vec::new(),
             autocomplete_selected_index: 0,
+            show_debug_events: false,
+            use_codex_components: true,
+            loading_frame: 0,
         }
     }
 }
@@ -242,9 +250,10 @@ impl Model {
                 self.current_mode = AppMode::Selection;
                 self.error_message = None;
                 // Note: Textarea already cleared in SubmitInput
-                // Add cancellation event to history
-                self.response_events
-                    .push(ConversationEvent::StreamCancelled);
+                // Add cancellation status message to history
+                self.response_events.push(ConversationEvent::StatusMessage {
+                    text: "Interrupted".to_string(),
+                });
             }
 
             Message::Error(error) => {
@@ -383,7 +392,7 @@ impl Model {
                 {
                     // Replace textarea content with selected command
                     self.textarea = {
-                        let mut textarea = TextArea::from([format!("/{}", selected_cmd)]);
+                        let mut textarea = TextArea::from([format!("/{selected_cmd}")]);
                         textarea.set_cursor_line_style(Style::default());
                         textarea.move_cursor(tui_textarea::CursorMove::End);
                         textarea

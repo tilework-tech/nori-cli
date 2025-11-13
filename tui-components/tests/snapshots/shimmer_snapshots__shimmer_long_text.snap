@@ -1,0 +1,14 @@
+---
+source: tui-components/tests/shimmer_snapshots.rs
+expression: "format!(\"{buf:?}\")"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 60, height: 1 },
+    content: [
+        "Processing a very long operation that takes time...         ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 51, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}
