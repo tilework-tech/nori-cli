@@ -1,0 +1,233 @@
+use std::process::Command;
+use std::time::Duration;
+
+use futures::StreamExt;
+use nori_cli::acp_runner::{AcpAgentConfig, AcpAgentRunner};
+use nori_cli::conversation::ConversationEvent;
+use tempfile::tempdir;
+use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
+
+const MOCK_AGENT_COMMAND: &str = "target/debug/mock_acp_agent";
+
+fn set_test_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
+    unsafe {
+        std::env::set_var(key, value);
+    }
+}
+
+fn remove_test_env(key: &str) {
+    unsafe {
+        std::env::remove_var(key);
+    }
+}
+
+fn build_mock_agent() {
+    let status = Command::new("cargo")
+        .args([
+            "build",
+            "--manifest-path",
+            "tests/mock_acp_agent/Cargo.toml",
+        ])
+        .status()
+        .expect("Failed to build mock agent");
+    assert!(
+        status.success(),
+        "Mock agent build failed with status {status:?}"
+    );
+}
+
+fn mock_agent_config() -> AcpAgentConfig {
+    AcpAgentConfig {
+        name: "mock",
+        command: MOCK_AGENT_COMMAND,
+        args: vec![],
+        install_url: "",
+        install_command: None,
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_acp_handshake_succeeds() {
+    build_mock_agent();
+    let temp_dir = tempdir().unwrap();
+    let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
+    let cancel_token = CancellationToken::new();
+
+    let result = runner
+        .spawn_stream("test prompt".to_string(), cancel_token.clone())
+        .await;
+
+    let stream = result.unwrap_or_else(|err| panic!("spawn_stream should succeed: {err}"));
+    cancel_token.cancel();
+    drop(stream);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_session_updates_are_streamed() {
+    build_mock_agent();
+    let temp_dir = tempdir().unwrap();
+    let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
+    let cancel_token = CancellationToken::new();
+
+    let mut stream = runner
+        .spawn_stream("collect updates".to_string(), cancel_token.clone())
+        .await
+        .expect("spawn_stream should succeed");
+
+    let first = timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timed out waiting for first event")
+        .expect("stream closed before first event");
+
+    let second = timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timed out waiting for second event")
+        .expect("stream closed before second event");
+
+    assert!(
+        matches!(
+            first,
+            ConversationEvent::AssistantMessage {
+                ref text
+            } if text == "Test message 1"
+        ),
+        "first event mismatch: {:?}",
+        first
+    );
+
+    assert!(
+        matches!(
+            second,
+            ConversationEvent::AssistantMessage {
+                ref text
+            } if text == "Test message 2"
+        ),
+        "second event mismatch: {:?}",
+        second
+    );
+
+    cancel_token.cancel();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_agent_calls_read_text_file() {
+    build_mock_agent();
+    let temp_dir = tempdir().unwrap();
+    let file_path = temp_dir.path().join("sample.txt");
+    std::fs::write(&file_path, "Hello from file").expect("write sample file");
+    set_test_env("MOCK_AGENT_REQUEST_FILE", &file_path);
+
+    let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
+    let cancel_token = CancellationToken::new();
+
+    let mut stream = runner
+        .spawn_stream("request file".to_string(), cancel_token.clone())
+        .await
+        .expect("spawn_stream should succeed");
+
+    for idx in 0..2 {
+        timeout(Duration::from_secs(5), stream.next())
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for default message {idx}"))
+            .unwrap_or_else(|| panic!("stream closed before default message {idx}"));
+    }
+
+    let third_event = timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timed out waiting for file read event")
+        .expect("stream closed without file read event");
+
+    assert!(
+        matches!(
+            third_event,
+            ConversationEvent::AssistantMessage { ref text }
+                if text.contains("Read file content: Hello from file")
+        ),
+        "expected file content event, got {:?}",
+        third_event
+    );
+
+    cancel_token.cancel();
+    remove_test_env("MOCK_AGENT_REQUEST_FILE");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_cancellation_stops_stream() {
+    build_mock_agent();
+    set_test_env("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+    let temp_dir = tempdir().unwrap();
+    let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
+    let cancel_token = CancellationToken::new();
+
+    let mut stream = runner
+        .spawn_stream("long running".to_string(), cancel_token.clone())
+        .await
+        .expect("spawn_stream should succeed");
+
+    // Wait for at least one event to confirm streaming started
+    timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timed out waiting for stream start");
+
+    cancel_token.cancel();
+
+    let end = timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timed out waiting for stream shutdown");
+
+    assert!(
+        end.is_none(),
+        "stream should terminate after cancellation, got {:?}",
+        end
+    );
+
+    remove_test_env("MOCK_AGENT_STREAM_UNTIL_CANCEL");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_spawn_failure_returns_error() {
+    let bad_config = AcpAgentConfig {
+        name: "bad",
+        command: "definitely-missing-binary",
+        args: vec![],
+        install_url: "",
+        install_command: None,
+    };
+
+    let temp_dir = tempdir().unwrap();
+    let mut runner = AcpAgentRunner::new(bad_config, temp_dir.path().to_path_buf());
+    let cancel_token = CancellationToken::new();
+
+    match runner
+        .spawn_stream("prompt".to_string(), cancel_token)
+        .await
+    {
+        Ok(_) => panic!("expected spawning to fail"),
+        Err(msg) => assert!(
+            msg.contains("Failed to spawn agent"),
+            "unexpected error message: {msg}"
+        ),
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_initialization_timeout() {
+    build_mock_agent();
+    set_test_env("MOCK_AGENT_HANG", "1");
+    let temp_dir = tempdir().unwrap();
+    let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
+    let cancel_token = CancellationToken::new();
+
+    match runner
+        .spawn_stream("prompt".to_string(), cancel_token)
+        .await
+    {
+        Ok(_) => panic!("expected initialization to time out"),
+        Err(msg) => assert!(
+            msg.contains("Initialization timeout"),
+            "unexpected error message: {msg}"
+        ),
+    }
+    remove_test_env("MOCK_AGENT_HANG");
+}

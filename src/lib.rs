@@ -1,3 +1,4 @@
+pub mod acp_runner;
 pub mod app;
 pub mod autocomplete;
 pub mod backends;
