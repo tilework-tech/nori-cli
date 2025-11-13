@@ -1,47 +1,14 @@
 ---
-source: tui-components/tests/key_hint_snapshots.rs
+source: tests/key_hint_snapshots.rs
 expression: "outputs.join(\"\\n---\\n\")"
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 10, height: 1 },
-    content: [
-        "↑         ",
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 1, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"↑         "
+
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 10, height: 1 },
-    content: [
-        "↓         ",
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 1, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"↓         "
+
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 10, height: 1 },
-    content: [
-        "←         ",
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 1, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"←         "
+
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 10, height: 1 },
-    content: [
-        "→         ",
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 1, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"→         "

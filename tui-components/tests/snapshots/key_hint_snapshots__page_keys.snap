@@ -1,25 +1,8 @@
 ---
-source: tui-components/tests/key_hint_snapshots.rs
-expression: "format!(\"{buf1:?}\\n---\\n{buf2:?}\")"
+source: tests/key_hint_snapshots.rs
+expression: "format!(\"{}\\n---\\n{}\", terminal1.backend(), terminal2.backend())"
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 10, height: 1 },
-    content: [
-        "pgup      ",
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 4, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"pgup      "
+
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 10, height: 1 },
-    content: [
-        "pgdn      ",
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 4, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"pgdn      "
