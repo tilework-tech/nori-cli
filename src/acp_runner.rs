@@ -215,10 +215,10 @@ impl Client for AcpClientHandler {
         };
 
         // Create parent directories if they don't exist
-        if let Some(parent) = canonical_path.parent() {
-            if let Err(_e) = tokio::fs::create_dir_all(parent).await {
-                return Err(agent_client_protocol::Error::internal_error());
-            }
+        if let Some(parent) = canonical_path.parent()
+            && let Err(_e) = tokio::fs::create_dir_all(parent).await
+        {
+            return Err(agent_client_protocol::Error::internal_error());
         }
 
         // Write the file

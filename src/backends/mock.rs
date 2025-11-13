@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::AgentBackend;
 use crate::conversation::ConversationEvent;
 use async_stream::stream;
