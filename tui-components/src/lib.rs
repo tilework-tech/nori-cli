@@ -59,8 +59,8 @@ pub use key_hint::KeyBinding;
 pub use live_wrap::{Row, RowBuilder, take_prefix_by_width};
 pub use render::{ColumnRenderable, InsetRenderable, Renderable, RenderableExt, RowRenderable};
 pub use selection::{
-    selection_option_row, standard_popup_hint_line, GenericDisplayRow, SelectionItem,
-    SelectionList, SelectionListConfig, SelectionListEvent, MAX_POPUP_ROWS,
+    GenericDisplayRow, MAX_POPUP_ROWS, SelectionItem, SelectionList, SelectionListConfig,
+    SelectionListEvent, selection_option_row, standard_popup_hint_line,
 };
 pub use shimmer::Shimmer;
 pub use textarea::{TextArea, TextAreaConfig, TextAreaState};

@@ -1,0 +1,10 @@
+---
+source: tests/selection_snapshots.rs
+expression: output
+---
+                                                
+  Empty List                                    
+                                                
+no matches                                      
+                                                
+  Press enter to confirm or esc to go back

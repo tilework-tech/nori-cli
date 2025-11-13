@@ -2,7 +2,7 @@
 
 use crate::key_hint::KeyBinding;
 use crate::scroll_state::ScrollState;
-use crate::wrapping::{word_wrap_line, RtOptions};
+use crate::wrapping::{RtOptions, word_wrap_line};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;

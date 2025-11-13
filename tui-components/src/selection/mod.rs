@@ -97,11 +97,7 @@ pub fn standard_popup_hint_line() -> Line<'static> {
 /// row.render(area, &mut buf);
 /// // Renders: ": 1. First Option" in cyan
 /// ```
-pub fn selection_option_row(
-    index: usize,
-    label: String,
-    is_selected: bool,
-) -> Box<dyn Renderable> {
+pub fn selection_option_row(index: usize, label: String, is_selected: bool) -> Box<dyn Renderable> {
     let prefix = if is_selected {
         format!(": {}. ", index + 1)
     } else {

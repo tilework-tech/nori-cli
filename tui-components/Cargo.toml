@@ -18,6 +18,7 @@ textwrap = "0.16"
 unicode-width = "0.1"
 unicode-segmentation = "1.12"
 supports-color = "3"
+itertools = "0.13"
 
 # Optional features
 tree-sitter = { version = "0.25", optional = true }
