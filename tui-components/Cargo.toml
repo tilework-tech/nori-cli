@@ -19,6 +19,10 @@ path = "tests/key_hint_snapshots.rs"
 name = "shimmer"
 path = "tests/shimmer_snapshots.rs"
 
+[[example]]
+name = "live_wrap"
+path = "tests/live_wrap_snapshots.rs"
+
 [dependencies]
 ratatui = { version = "0.29", features = ["unstable-widget-ref"] }
 crossterm = { version = "0.28", features = ["bracketed-paste"] }
