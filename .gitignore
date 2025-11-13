@@ -3,3 +3,6 @@ target
 .worktrees/
 
 /acp-docs/
+
+committer.md
+

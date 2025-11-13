@@ -1,3 +1,6 @@
+[workspace]
+members = ["tui-components"]
+
 [package]
 name = "nori-cli"
 version = "0.1.0"
