@@ -5,9 +5,9 @@
 //! The footer supports multiple display modes and can be customized with different indentation,
 //! styling, and content formatting.
 
+use crate::KeyBinding;
 use crate::key_hint;
 use crate::wrapping::prefix_lines;
-use crate::KeyBinding;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -62,7 +62,10 @@ impl std::fmt::Debug for FooterConfig {
             .field("shortcuts_hint_text", &self.shortcuts_hint_text)
             .field("custom_message", &self.custom_message)
             .field("shortcuts", &self.shortcuts)
-            .field("context_format_fn", &self.context_format_fn.as_ref().map(|_| "<function>"))
+            .field(
+                "context_format_fn",
+                &self.context_format_fn.as_ref().map(|_| "<function>"),
+            )
             .field("style", &self.style)
             .finish()
     }
@@ -82,11 +85,7 @@ impl Default for FooterConfig {
 }
 
 /// Calculate the height required for the footer in the given mode.
-pub fn footer_height(
-    config: &FooterConfig,
-    mode: FooterMode,
-    context_percent: Option<i64>,
-) -> u16 {
+pub fn footer_height(config: &FooterConfig, mode: FooterMode, context_percent: Option<i64>) -> u16 {
     footer_lines(config, mode, context_percent).len() as u16
 }
 
@@ -124,9 +123,7 @@ fn footer_lines(
             }
             vec![line]
         }
-        FooterMode::ShortcutOverlay => {
-            build_shortcut_overlay(&config.shortcuts)
-        }
+        FooterMode::ShortcutOverlay => build_shortcut_overlay(&config.shortcuts),
         FooterMode::CustomMessage => {
             if let Some(message) = &config.custom_message {
                 vec![Line::from(vec![message.clone().dim()])]
@@ -173,7 +170,12 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    fn snapshot_footer(name: &str, config: &FooterConfig, mode: FooterMode, context_percent: Option<i64>) {
+    fn snapshot_footer(
+        name: &str,
+        config: &FooterConfig,
+        mode: FooterMode,
+        context_percent: Option<i64>,
+    ) {
         let height = footer_height(config, mode, context_percent).max(1);
         let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
         terminal
@@ -252,9 +254,18 @@ mod tests {
 
         let mut config_with_shortcuts = FooterConfig::default();
         config_with_shortcuts.shortcuts = vec![
-            ShortcutEntry { key: key_hint::plain(KeyCode::Char('a')), description: "test".to_string() },
-            ShortcutEntry { key: key_hint::plain(KeyCode::Char('b')), description: "test".to_string() },
+            ShortcutEntry {
+                key: key_hint::plain(KeyCode::Char('a')),
+                description: "test".to_string(),
+            },
+            ShortcutEntry {
+                key: key_hint::plain(KeyCode::Char('b')),
+                description: "test".to_string(),
+            },
         ];
-        assert_eq!(footer_height(&config_with_shortcuts, FooterMode::ShortcutOverlay, None), 2);
+        assert_eq!(
+            footer_height(&config_with_shortcuts, FooterMode::ShortcutOverlay, None),
+            2
+        );
     }
 }
