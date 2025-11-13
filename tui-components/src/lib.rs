@@ -51,13 +51,17 @@ pub mod scroll_state;
 pub mod textarea;
 pub mod wrapping;
 
-// TODO: Extract these in future iterations
-// pub mod selection_list;
+// Selection and popup components
+pub mod selection;
 
 // Re-export commonly used types for convenience
 pub use key_hint::KeyBinding;
 pub use live_wrap::{Row, RowBuilder, take_prefix_by_width};
 pub use render::{ColumnRenderable, InsetRenderable, Renderable, RenderableExt, RowRenderable};
+pub use selection::{
+    selection_option_row, standard_popup_hint_line, GenericDisplayRow, SelectionItem,
+    SelectionList, SelectionListConfig, SelectionListEvent, MAX_POPUP_ROWS,
+};
 pub use shimmer::Shimmer;
 pub use textarea::{TextArea, TextAreaConfig, TextAreaState};
 pub use wrapping::{
