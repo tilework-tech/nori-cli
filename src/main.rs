@@ -634,7 +634,12 @@ async fn spawn_and_stream(
             }
             // Stream consumption
             Some(event) = stream.next() => {
-                let _ = tx.send(Message::StreamEvent(event));
+                let _ = tx.send(Message::StreamEvent(event.clone()));
+                // End stream immediately on ResultSummary to prevent hanging
+                if matches!(event, ConversationEvent::ResultSummary { .. }) {
+                    tx.send(Message::StreamComplete)?;
+                    break;
+                }
             }
             // Stream ended naturally
             else => {
