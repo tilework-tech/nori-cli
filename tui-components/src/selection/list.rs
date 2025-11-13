@@ -397,10 +397,9 @@ impl<T> SelectionList<T> {
                     .map(|d| d as usize)
                     .and_then(|d| d.checked_sub(1))
                     && idx < self.filtered_indices.len()
+                    && let Some(actual_idx) = self.filtered_indices.get(idx)
                 {
-                    if let Some(actual_idx) = self.filtered_indices.get(idx) {
-                        return SelectionListEvent::Selected(*actual_idx);
-                    }
+                    return SelectionListEvent::Selected(*actual_idx);
                 }
                 SelectionListEvent::None
             }
