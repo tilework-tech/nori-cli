@@ -120,9 +120,19 @@ Legend for complexity:
 - **`public_widgets/mod.rs`** – Currently only re-exports `composer_input`; future home for more components. **Complexity:** Low.
 - **`test_backend.rs`** – Testing-only backend for vt100 snapshots. **Complexity:** Medium. **Dependencies:** `vt100`, `tokio`. **Codex logic:** none.
 
-### Snapshot Directories
+### Snapshot Testing
 
-Each major visual module (`bottom_pane/snapshots`, `chatwidget/snapshots`, `status/snapshots`, `snapshots/` root) carries Insta snapshot fixtures. Migrating components requires porting or regenerating these under `tui-components/tests` to preserve visual behavior.
+`tui-components` uses [Insta](https://insta.rs/) snapshot tests following Ratatui best practices. Tests use `TestBackend` and `Terminal` to capture the full rendering pipeline:
+
+```rust
+let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+terminal.draw(|frame| {
+    frame.render_widget(&component, frame.area());
+}).unwrap();
+insta::assert_snapshot!(terminal.backend());
+```
+
+This approach ensures comprehensive testing of the rendering pipeline and produces human-readable string snapshots. When migrating components, regenerate snapshots using `cargo insta test` to capture the new format.
 
 ## Extraction Priorities
 

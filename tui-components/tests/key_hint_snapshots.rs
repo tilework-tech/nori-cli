@@ -1,5 +1,18 @@
 use crossterm::event::KeyCode;
+<<<<<<< HEAD
+use ratatui::backend::TestBackend;
+||||||| 20e7306
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+=======
+>>>>>>> main
 use ratatui::text::Span;
+<<<<<<< HEAD
+use ratatui::Terminal;
+||||||| 20e7306
+use ratatui::widgets::Widget;
+=======
+>>>>>>> main
 use tui_components::key_hint::{KeyBinding, alt, ctrl, plain, shift};
 
 // Test-only imports
@@ -127,10 +140,12 @@ fn test_plain_key() {
     let binding = plain(KeyCode::Enter);
     let span: Span = binding.into();
 
-    let mut buf = Buffer::empty(Rect::new(0, 0, 20, 1));
-    span.clone().render(buf.area, &mut buf);
+    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    terminal.draw(|frame| {
+        frame.render_widget(&span, frame.area());
+    }).unwrap();
 
-    insta::assert_snapshot!(format!("{buf:?}"));
+    insta::assert_snapshot!(terminal.backend());
 }
 
 #[test]
@@ -138,10 +153,12 @@ fn test_ctrl_key() {
     let binding = ctrl(KeyCode::Char('c'));
     let span: Span = binding.into();
 
-    let mut buf = Buffer::empty(Rect::new(0, 0, 20, 1));
-    span.clone().render(buf.area, &mut buf);
+    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    terminal.draw(|frame| {
+        frame.render_widget(&span, frame.area());
+    }).unwrap();
 
-    insta::assert_snapshot!(format!("{buf:?}"));
+    insta::assert_snapshot!(terminal.backend());
 }
 
 #[test]
@@ -149,10 +166,12 @@ fn test_alt_key() {
     let binding = alt(KeyCode::Char('f'));
     let span: Span = binding.into();
 
-    let mut buf = Buffer::empty(Rect::new(0, 0, 20, 1));
-    span.clone().render(buf.area, &mut buf);
+    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    terminal.draw(|frame| {
+        frame.render_widget(&span, frame.area());
+    }).unwrap();
 
-    insta::assert_snapshot!(format!("{buf:?}"));
+    insta::assert_snapshot!(terminal.backend());
 }
 
 #[test]
@@ -160,10 +179,12 @@ fn test_shift_key() {
     let binding = shift(KeyCode::Tab);
     let span: Span = binding.into();
 
-    let mut buf = Buffer::empty(Rect::new(0, 0, 20, 1));
-    span.clone().render(buf.area, &mut buf);
+    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    terminal.draw(|frame| {
+        frame.render_widget(&span, frame.area());
+    }).unwrap();
 
-    insta::assert_snapshot!(format!("{buf:?}"));
+    insta::assert_snapshot!(terminal.backend());
 }
 
 #[test]
@@ -178,9 +199,11 @@ fn test_arrow_keys() {
     let mut outputs = Vec::new();
     for binding in bindings {
         let span: Span = binding.into();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 10, 1));
-        span.clone().render(buf.area, &mut buf);
-        outputs.push(format!("{buf:?}"));
+        let mut terminal = Terminal::new(TestBackend::new(10, 1)).unwrap();
+        terminal.draw(|frame| {
+            frame.render_widget(&span, frame.area());
+        }).unwrap();
+        outputs.push(terminal.backend().to_string());
     }
 
     insta::assert_snapshot!(outputs.join("\n---\n"));
@@ -194,13 +217,17 @@ fn test_page_keys() {
     let span1: Span = pg_up.into();
     let span2: Span = pg_down.into();
 
-    let mut buf1 = Buffer::empty(Rect::new(0, 0, 10, 1));
-    let mut buf2 = Buffer::empty(Rect::new(0, 0, 10, 1));
+    let mut terminal1 = Terminal::new(TestBackend::new(10, 1)).unwrap();
+    let mut terminal2 = Terminal::new(TestBackend::new(10, 1)).unwrap();
 
-    span1.clone().render(buf1.area, &mut buf1);
-    span2.clone().render(buf2.area, &mut buf2);
+    terminal1.draw(|frame| {
+        frame.render_widget(&span1, frame.area());
+    }).unwrap();
+    terminal2.draw(|frame| {
+        frame.render_widget(&span2, frame.area());
+    }).unwrap();
 
-    insta::assert_snapshot!(format!("{buf1:?}\n---\n{buf2:?}"));
+    insta::assert_snapshot!(format!("{}\n---\n{}", terminal1.backend(), terminal2.backend()));
 }
 
 #[test]
@@ -213,8 +240,10 @@ fn test_multiple_modifiers() {
     );
     let span: Span = binding.into();
 
-    let mut buf = Buffer::empty(Rect::new(0, 0, 20, 1));
-    span.clone().render(buf.area, &mut buf);
+    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    terminal.draw(|frame| {
+        frame.render_widget(&span, frame.area());
+    }).unwrap();
 
-    insta::assert_snapshot!(format!("{buf:?}"));
+    insta::assert_snapshot!(terminal.backend());
 }
