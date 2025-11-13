@@ -1,7 +1,7 @@
-///! Animated shimmer effect for text
-///!
-///! Creates a time-based color sweep effect across text, useful for indicating
-///! loading or processing states.
+//! Animated shimmer effect for text
+//!
+//! Creates a time-based color sweep effect across text, useful for indicating
+//! loading or processing states.
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 

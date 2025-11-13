@@ -4,6 +4,7 @@ Reusable TUI components built on Ratatui.
 
 ## Features
 
+- **Text Input** - Multiline TextArea widget with cursor management and wrapping
 - **Animation Effects** - Shimmer animations for loading states
 - **Keyboard Hints** - Platform-aware keyboard shortcut display
 - **Composable Rendering** - Renderable trait with Column, Row, and Inset layouts
@@ -68,6 +69,9 @@ Helper functions for manipulating Ratatui Line and Span types.
 
 ### Input & State Management
 
+#### TextArea
+Multiline text input widget with cursor management, text wrapping, and Unicode support. Handles keyboard input including insertion, deletion, and cursor navigation (arrows, home/end). Supports configurable placeholders and text styling.
+
 #### ScrollState
 Generic scroll and selection state for vertical lists with wrap-around navigation and automatic scroll adjustment.
 
@@ -81,7 +85,23 @@ Bash syntax highlighting using tree-sitter. Converts bash scripts into styled Ra
 
 ## Examples
 
-Examples are coming soon. In the meantime, comprehensive usage examples are included in the rustdoc for each component.
+### TextArea Example
+
+An interactive example demonstrating the TextArea widget is available:
+
+```bash
+cargo run --example textarea
+```
+
+This example displays four TextArea configurations simultaneously:
+- Default with placeholder text
+- Custom styling with colored text
+- Pre-filled multiline content
+- Narrow width demonstrating text wrapping
+
+All TextAreas receive the same keyboard input, allowing you to compare behaviors across configurations. Press `Esc` or `Ctrl+C` to exit.
+
+For other components, comprehensive usage examples are included in the rustdoc.
 
 ## Documentation
 
