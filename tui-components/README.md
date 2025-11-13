@@ -8,6 +8,7 @@ Reusable TUI components built on Ratatui.
 - **Selection Lists** - Generic selection widget with keyboard navigation and filtering
 - **Text Wrapping** - Word wrapping utilities with Ratatui integration
 - **Live Wrapping** - Incremental text wrapping for streaming content
+- **Footer Component** - Configurable footer with keyboard shortcuts, hints, and context display
 - **Animation Effects** - Shimmer animations for loading states
 - **Keyboard Hints** - Platform-aware keyboard shortcut display
 - **Composable Rendering** - Renderable trait with Column, Row, and Inset layouts
@@ -111,6 +112,11 @@ Platform-aware keyboard shortcut display:
 - Helper functions for common key combinations
 - `KeyBinding` type for structured key representation
 - Proper formatting with modifiers (Ctrl+C, Alt+Enter, etc.)
+
+### Footer Component
+
+#### Footer
+Configurable footer widget supporting multiple display modes: shortcut summaries, detailed shortcut overlays, custom messages, and context indicators. Features platform-aware keyboard hint rendering and dynamic height calculation.
 
 ### Layout & Rendering
 
