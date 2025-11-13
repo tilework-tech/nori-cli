@@ -12,7 +12,7 @@ fn render_to_string(renderable: &dyn Renderable, width: u16, height: u16) -> Str
     for y in 0..height {
         let mut line = String::new();
         for x in 0..width {
-            line.push_str(&buf.cell((x, y)).unwrap().symbol());
+            line.push_str(buf.cell((x, y)).unwrap().symbol());
         }
         // Trim trailing spaces from each line
         lines.push(line.trim_end().to_string());

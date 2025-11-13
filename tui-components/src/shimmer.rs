@@ -177,7 +177,7 @@ impl WidgetRef for Shimmer {
 
 impl Widget for Shimmer {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        (&self).render_ref(area, buf);
+        self.render_ref(area, buf);
     }
 }
 

@@ -11,7 +11,7 @@ use ratatui::{
 use tui_components::shimmer::{ColorPalette, Shimmer};
 
 #[cfg(test)]
-use ratatui::{backend::TestBackend, Terminal};
+use ratatui::{Terminal, backend::TestBackend};
 
 // Interactive example application
 struct App {
@@ -63,7 +63,10 @@ impl App {
         let mut examples = Vec::new();
 
         // Fixed 30 FPS shimmers
-        examples.push(ShimmerExample::fixed("Basic Shimmer", Shimmer::new("Loading...")));
+        examples.push(ShimmerExample::fixed(
+            "Basic Shimmer",
+            Shimmer::new("Loading..."),
+        ));
 
         let palette = ColorPalette::new((50, 100, 150), (150, 200, 255));
         let shimmer = Shimmer::with_palette("Processing data...", palette);
@@ -81,15 +84,24 @@ impl App {
         examples.push(ShimmerExample::on_keypress("Long Text (Keypress)", shimmer));
 
         let shimmer = Shimmer::new("");
-        examples.push(ShimmerExample::on_keypress("Empty Text (Keypress)", shimmer));
+        examples.push(ShimmerExample::on_keypress(
+            "Empty Text (Keypress)",
+            shimmer,
+        ));
 
         let palette = ColorPalette::new((100, 50, 150), (200, 150, 255));
         let shimmer = Shimmer::with_palette("Syncing files...", palette);
-        examples.push(ShimmerExample::on_keypress("Purple Palette (Keypress)", shimmer));
+        examples.push(ShimmerExample::on_keypress(
+            "Purple Palette (Keypress)",
+            shimmer,
+        ));
 
         let palette = ColorPalette::new((150, 50, 50), (255, 150, 150));
         let shimmer = Shimmer::with_palette("Error checking...", palette);
-        examples.push(ShimmerExample::on_keypress("Red Palette (Keypress)", shimmer));
+        examples.push(ShimmerExample::on_keypress(
+            "Red Palette (Keypress)",
+            shimmer,
+        ));
 
         Self { examples }
     }
@@ -157,25 +169,30 @@ impl App {
             let area = chunks[i];
             let inner_layout = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Length(1), Constraint::Length(1)])
+                .constraints([
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                ])
                 .split(area);
 
-            let label_text = Paragraph::new(format!(
-                "[ {} • {} ]",
-                example.label,
-                example.mode.badge()
-            ))
-            .style(Style::default().fg(Color::Yellow));
+            let label_text =
+                Paragraph::new(format!("[ {} • {} ]", example.label, example.mode.badge()))
+                    .style(Style::default().fg(Color::Yellow));
             frame.render_widget(label_text, inner_layout[0]);
 
             match &example.mode {
                 AnimationMode::FixedFps => {
-                    example.shimmer.render_ref(inner_layout[1], frame.buffer_mut());
-                }
-                AnimationMode::OnKeypress { elapsed } => {
                     example
                         .shimmer
-                        .render_with_elapsed(*elapsed, inner_layout[1], frame.buffer_mut());
+                        .render_ref(inner_layout[1], frame.buffer_mut());
+                }
+                AnimationMode::OnKeypress { elapsed } => {
+                    example.shimmer.render_with_elapsed(
+                        *elapsed,
+                        inner_layout[1],
+                        frame.buffer_mut(),
+                    );
                 }
             }
         }

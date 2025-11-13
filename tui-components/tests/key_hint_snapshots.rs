@@ -7,8 +7,6 @@ use ratatui::text::Span;
 use tui_components::key_hint::{KeyBinding, alt, ctrl, plain, shift};
 
 // Test-only imports
-#[cfg(test)]
-use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
 // Imports for the interactive example
 use color_eyre::Result;
@@ -21,8 +19,6 @@ use ratatui::{
 };
 
 // Imports for tests
-#[cfg(test)]
-use insta::assert_snapshot;
 
 // Interactive example application
 struct App {
