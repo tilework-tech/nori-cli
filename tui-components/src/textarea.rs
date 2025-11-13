@@ -293,10 +293,10 @@ impl TextArea {
     }
 
     fn wrapped_lines(&self, width: u16) -> Vec<Range<usize>> {
-        if let Some(cached) = self.wrap_cache.borrow().as_ref() {
-            if cached.width == width {
-                return cached.lines.clone();
-            }
+        if let Some(cached) = self.wrap_cache.borrow().as_ref()
+            && cached.width == width
+        {
+            return cached.lines.clone();
         }
 
         let lines = crate::wrapping::wrap_ranges_trim(&self.text, Options::new(width as usize));
@@ -438,11 +438,12 @@ impl StatefulWidgetRef for TextArea {
         }
 
         // Render cursor if visible
-        if let Some((cx, cy)) = self.cursor_pos_with_state(area, *state) {
-            if cx < area.right() && cy < area.bottom() {
-                let cursor_cell = &mut buf[(cx, cy)];
-                cursor_cell.set_style(self.config.cursor_style);
-            }
+        if let Some((cx, cy)) = self.cursor_pos_with_state(area, *state)
+            && cx < area.right()
+            && cy < area.bottom()
+        {
+            let cursor_cell = &mut buf[(cx, cy)];
+            cursor_cell.set_style(self.config.cursor_style);
         }
     }
 }

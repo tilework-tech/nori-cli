@@ -1,23 +1,7 @@
-<<<<<<< Updated upstream
 {
   "permissions": {
     "allow": [
-      "Bash(cargo search:*)",
-      "Bash(cargo doc:*)",
-      "Bash(cargo test:*)",
-      "Bash(cargo build:*)",
-      "Bash(cargo fmt:*)",
-      "Bash(cargo clippy:*)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}
-||||||| constructed merge base
-=======
-{
-  "permissions": {
-    "allow": [
+      "Bash(cat:*)",
       "Bash(mkdir:*)",
       "Bash(tree:*)",
       "Bash(git diff:*)",
@@ -39,4 +23,3 @@
     "ask": []
   }
 }
->>>>>>> Stashed changes

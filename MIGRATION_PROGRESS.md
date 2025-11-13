@@ -80,12 +80,13 @@
 wrapping_snapshots: 23 tests passed
 live_wrap_snapshots: 16 tests passed
 textarea_snapshots: 18 tests passed
+selection_snapshots: 15 tests passed (10 snapshot + 5 unit)
 key_hint_snapshots: 7 tests passed
 shimmer_snapshots: 5 tests passed
 render_snapshots: 12 tests passed
 scroll_state: 1 test passed
-doctests: 45 tests passed
-Total tui-components tests: 127 tests passed, 0 failed
+doctests: 49 tests passed
+Total tui-components tests: 146 tests passed, 0 failed
 ```
 
 ## Next Steps (Remaining from Phase 1 Plan)
@@ -94,19 +95,51 @@ Total tui-components tests: 127 tests passed, 0 failed
 **✅ COMPLETE** - See above
 
 ### Phase 4: Selection & Popup Infrastructure
-**Not started**
+**✅ COMPLETE**
 
-Files to extract:
-- `codex-rs/tui/src/selection_list.rs`
-- `codex-rs/tui/src/bottom_pane/list_selection_view.rs`
-- `codex-rs/tui/src/bottom_pane/selection_popup_common.rs`
-- `codex-rs/tui/src/bottom_pane/popup_consts.rs`
+**Status**: Complete with 15 passing tests (10 snapshot + 5 unit tests)
 
-Create:
-- `tui-components/src/selection/` module
-- Generic `SelectionList<T>` widget
-- `PopupFrame` helper
-- Configuration structs
+**Extracted from**:
+- `codex-rs/tui/src/selection_list.rs` - Simple selection row renderer
+- `codex-rs/tui/src/bottom_pane/list_selection_view.rs` - Full selection widget
+- `codex-rs/tui/src/bottom_pane/selection_popup_common.rs` - Common rendering utilities
+- `codex-rs/tui/src/bottom_pane/popup_consts.rs` - Popup layout constants
+
+**Created**:
+- `tui-components/src/selection/mod.rs` - Module with constants and selection_option_row
+- `tui-components/src/selection/common.rs` - GenericDisplayRow and rendering utilities
+- `tui-components/src/selection/list.rs` - SelectionList<T> widget with full functionality
+- Tests: `tui-components/tests/selection_snapshots.rs`
+
+**Key functionality**:
+- `selection_option_row` - Single row rendering with selection marker
+- `SelectionList<T>` - Generic selection widget with:
+  - Keyboard navigation (up/down with wrapping)
+  - Optional search filtering
+  - Number key shortcuts (when search disabled)
+  - Configuration via SelectionListConfig (title, subtitle, footer, styles)
+  - Event-based API (SelectionListEvent enum)
+  - Full Renderable trait implementation
+- `GenericDisplayRow` - Common row structure
+- `render_rows` - Shared rendering with scrolling, wrapping, and alignment
+- `measure_rows_height` - Dynamic height calculation
+- `standard_popup_hint_line` - Standard footer hints
+- `MAX_POPUP_ROWS` constant
+
+**Changes from original**:
+- Removed dependency on AppEventSender - uses SelectionListEvent enum instead
+- Removed BottomPaneView trait - consumers handle events directly
+- Made generic over data type `T` for maximum flexibility
+- Configurable styles via SelectionListConfig instead of hardcoded styles
+- Builder pattern for configuration
+- Comprehensive documentation and examples
+
+**Tests**: 15 tests passing
+- 10 snapshot tests for visual rendering
+- 5 unit tests for navigation, search, and keyboard handling
+- Tests cover: basic rendering, search, empty lists, navigation, filtering, keyboard events
+
+**Dependencies added**: itertools 0.13
 
 ### Phase 5: Command Popup & Footer
 **Not started**
@@ -198,7 +231,7 @@ cargo doc --no-deps --open
 ## Estimated Remaining Work
 
 - ~~**TextArea extraction**: 4-6 hours (complex component)~~ ✅ **COMPLETE**
-- **Selection infrastructure**: 6-8 hours (multiple files, generics)
+- ~~**Selection infrastructure**: 6-8 hours (multiple files, generics)~~ ✅ **COMPLETE**
 - **Command popup & footer**: 3-4 hours
 - **nori-cli integration**: 4-6 hours (testing, debugging)
 - **Documentation & cleanup**: 2-3 hours
@@ -211,4 +244,3 @@ cargo doc --no-deps --open
 - Codex source files at `../../../codex-rs/tui/` relative to worktree
 - No modifications made to codex-rs (read-only)
 - tui-components tests run independently (127 tests currently)
-- Phase 3 (TextArea) now complete - ready to proceed with Phase 4 (Selection & Popup Infrastructure)

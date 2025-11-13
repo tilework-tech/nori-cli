@@ -1,0 +1,5 @@
+---
+source: tests/selection_snapshots.rs
+expression: output
+---
+: 1. First Option

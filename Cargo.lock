@@ -1382,6 +1382,7 @@ dependencies = [
  "color-eyre",
  "crossterm",
  "insta",
+ "itertools",
  "pretty_assertions",
  "ratatui",
  "supports-color",
