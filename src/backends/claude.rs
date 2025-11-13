@@ -126,7 +126,12 @@ impl AgentBackend for ClaudeBackend {
                 let mut reader = BufReader::new(stdout).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
                     if let Some(event) = Self::parse_jsonl_event(&line) {
+                        // Close stream immediately when result is received
+                        let is_result = matches!(event, ConversationEvent::ResultSummary { .. });
                         yield event;
+                        if is_result {
+                            return;
+                        }
                     }
                 }
             }

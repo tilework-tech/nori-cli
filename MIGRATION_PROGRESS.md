@@ -231,7 +231,7 @@ cargo doc --no-deps --open
 ## Estimated Remaining Work
 
 - ~~**TextArea extraction**: 4-6 hours (complex component)~~ ✅ **COMPLETE**
-- **Selection infrastructure**: 6-8 hours (multiple files, generics)
+- ~~**Selection infrastructure**: 6-8 hours (multiple files, generics)~~ ✅ **COMPLETE**
 - **Command popup & footer**: 3-4 hours
 - **nori-cli integration**: 4-6 hours (testing, debugging)
 - **Documentation & cleanup**: 2-3 hours
@@ -244,4 +244,3 @@ cargo doc --no-deps --open
 - Codex source files at `../../../codex-rs/tui/` relative to worktree
 - No modifications made to codex-rs (read-only)
 - tui-components tests run independently (127 tests currently)
-- Phase 3 (TextArea) now complete - ready to proceed with Phase 4 (Selection & Popup Infrastructure)

@@ -1,3 +1,6 @@
+[workspace]
+members = ["tui-components"]
+
 [package]
 name = "nori-cli"
 version = "0.1.0"
@@ -24,4 +27,5 @@ which = "7.0"
 opener = "0.7"
 unicode-width = "0.2"
 tui-components = { path = "./tui-components" }
+agent-client-protocol = "0.7.0"
 # dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender

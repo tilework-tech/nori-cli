@@ -53,6 +53,10 @@ pub mod wrapping;
 
 // Selection and popup components
 pub mod selection;
+// TODO: Extract these in future iterations
+// pub mod wrapping;
+// pub mod textarea;
+// pub mod selection_list;
 
 // Re-export commonly used types for convenience
 pub use key_hint::KeyBinding;

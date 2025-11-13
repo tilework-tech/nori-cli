@@ -1,14 +1,5 @@
 ---
-source: tui-components/tests/shimmer_snapshots.rs
-expression: "format!(\"{buf:?}\")"
+source: tests/shimmer_snapshots.rs
+expression: terminal.backend()
 ---
-Buffer {
-    area: Rect { x: 0, y: 0, width: 20, height: 1 },
-    content: [
-        "Loading… 🚀         ", // hidden by multi-width symbols: [(10, " ")]
-    ],
-    styles: [
-        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 10, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-    ]
-}
+"Loading… 🚀         " Hidden by multi-width symbols: [(10, " ")]
