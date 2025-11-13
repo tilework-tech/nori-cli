@@ -1,6 +1,6 @@
-///! Keyboard shortcut hint rendering
-///!
-///! Provides platform-aware keyboard shortcut formatting for displaying in terminal UIs.
+//! Keyboard shortcut hint rendering
+//!
+//! Provides platform-aware keyboard shortcut formatting for displaying in terminal UIs.
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Span;
