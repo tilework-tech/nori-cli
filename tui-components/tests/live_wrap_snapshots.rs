@@ -126,7 +126,7 @@ fn test_display_rows_includes_partial() {
 fn test_drain_commit_ready_keeps_recent() {
     let mut rb = RowBuilder::new(10);
     for i in 0..10 {
-        rb.push_fragment(&format!("line {}\n", i));
+        rb.push_fragment(&format!("line {i}\n"));
     }
 
     let old_rows = rb.drain_commit_ready(5);

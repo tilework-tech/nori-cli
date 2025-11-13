@@ -114,8 +114,8 @@ impl Shimmer {
         }
     }
 
-    /// Returns the spans for the shimmer effect
-    fn shimmer_spans(&self) -> Vec<Span<'static>> {
+    /// Returns the spans for the shimmer effect at the provided elapsed time
+    fn shimmer_spans_at(&self, elapsed: Duration) -> Vec<Span<'static>> {
         let chars: Vec<char> = self.text.chars().collect();
         if chars.is_empty() {
             return Vec::new();
@@ -125,8 +125,7 @@ impl Shimmer {
         let padding = 10usize;
         let period = chars.len() + padding * 2;
         let sweep_seconds = 2.0f32;
-        let pos_f =
-            (elapsed_since_start().as_secs_f32() % sweep_seconds) / sweep_seconds * (period as f32);
+        let pos_f = (elapsed.as_secs_f32() % sweep_seconds) / sweep_seconds * (period as f32);
         let pos = pos_f as usize;
 
         let has_true_color = supports_color::on_cached(supports_color::Stream::Stdout)
@@ -161,19 +160,24 @@ impl Shimmer {
         }
         spans
     }
-}
 
-impl WidgetRef for &Shimmer {
-    fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        let spans = self.shimmer_spans();
+    /// Renders the shimmer at a manually supplied elapsed time
+    pub fn render_with_elapsed(&self, elapsed: Duration, area: Rect, buf: &mut Buffer) {
+        let spans = self.shimmer_spans_at(elapsed);
         let line = ratatui::text::Line::from(spans);
         line.render(area, buf);
     }
 }
 
+impl WidgetRef for Shimmer {
+    fn render_ref(&self, area: Rect, buf: &mut Buffer) {
+        self.render_with_elapsed(elapsed_since_start(), area, buf);
+    }
+}
+
 impl Widget for Shimmer {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        (&self).render_ref(area, buf);
+        self.render_ref(area, buf);
     }
 }
 
