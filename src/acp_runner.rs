@@ -3,8 +3,7 @@ use agent_client_protocol::{
     Client, ContentBlock, PermissionOptionKind, PlanEntryPriority, PlanEntryStatus,
     ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
     RequestPermissionResponse, Result as AcpResult, SessionNotification, SessionUpdate,
-    ToolCallContent, ToolCallStatus, ToolKind, WriteTextFileRequest,
-    WriteTextFileResponse,
+    ToolCallContent, ToolCallStatus, ToolKind, WriteTextFileRequest, WriteTextFileResponse,
 };
 use futures::stream::Stream;
 use std::path::PathBuf;
@@ -278,8 +277,8 @@ impl AcpAgentRunner {
 mod tests {
     use super::*;
     use agent_client_protocol::{
-        ContentChunk, PlanEntry as AcpPlanEntry, ResourceLink, TextContent, ToolCallId,
-        ToolCallUpdateFields,
+        ContentChunk, Plan, PlanEntry as AcpPlanEntry, ResourceLink, TextContent, ToolCall,
+        ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
     };
 
     #[test]
