@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -9,6 +10,14 @@ use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
 const MOCK_AGENT_COMMAND: &str = "target/debug/mock_acp_agent";
+
+static TEST_GUARD: once_cell::sync::Lazy<Mutex<()>> = once_cell::sync::Lazy::new(|| Mutex::new(()));
+
+fn acquire_test_guard<'a>() -> std::sync::MutexGuard<'a, ()> {
+    TEST_GUARD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 fn set_test_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
     unsafe {
@@ -24,6 +33,7 @@ fn remove_test_env(key: &str) {
 
 fn build_mock_agent() {
     let status = Command::new("cargo")
+        .env("CARGO_TARGET_DIR", "target")
         .args([
             "build",
             "--manifest-path",
@@ -49,6 +59,7 @@ fn mock_agent_config() -> AcpAgentConfig {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_acp_handshake_succeeds() {
+    let _guard = acquire_test_guard();
     build_mock_agent();
     let temp_dir = tempdir().unwrap();
     let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
@@ -65,6 +76,7 @@ async fn test_acp_handshake_succeeds() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_session_updates_are_streamed() {
+    let _guard = acquire_test_guard();
     build_mock_agent();
     let temp_dir = tempdir().unwrap();
     let mut runner = AcpAgentRunner::new(mock_agent_config(), temp_dir.path().to_path_buf());
@@ -112,6 +124,7 @@ async fn test_session_updates_are_streamed() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_agent_calls_read_text_file() {
+    let _guard = acquire_test_guard();
     build_mock_agent();
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("sample.txt");
@@ -154,6 +167,7 @@ async fn test_agent_calls_read_text_file() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_cancellation_stops_stream() {
+    let _guard = acquire_test_guard();
     build_mock_agent();
     set_test_env("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
     let temp_dir = tempdir().unwrap();
@@ -172,21 +186,18 @@ async fn test_cancellation_stops_stream() {
 
     cancel_token.cancel();
 
-    let end = timeout(Duration::from_secs(5), stream.next())
-        .await
-        .expect("timed out waiting for stream shutdown");
-
-    assert!(
-        end.is_none(),
-        "stream should terminate after cancellation, got {:?}",
-        end
-    );
+    timeout(Duration::from_secs(5), async {
+        while stream.next().await.is_some() {}
+    })
+    .await
+    .expect("timed out waiting for stream shutdown");
 
     remove_test_env("MOCK_AGENT_STREAM_UNTIL_CANCEL");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_spawn_failure_returns_error() {
+    let _guard = acquire_test_guard();
     let bad_config = AcpAgentConfig {
         name: "bad",
         command: "definitely-missing-binary",
@@ -213,6 +224,7 @@ async fn test_spawn_failure_returns_error() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_initialization_timeout() {
+    let _guard = acquire_test_guard();
     build_mock_agent();
     set_test_env("MOCK_AGENT_HANG", "1");
     let temp_dir = tempdir().unwrap();

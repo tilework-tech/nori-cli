@@ -2,16 +2,27 @@
 
 use crate::conversation::{ConversationEvent, PlanEntry};
 use agent_client_protocol::{
-    Client, ContentBlock, PermissionOptionKind, PlanEntryPriority, PlanEntryStatus,
-    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, Result as AcpResult, SessionNotification, SessionUpdate,
-    ToolCallContent, ToolCallStatus, ToolKind, WriteTextFileRequest, WriteTextFileResponse,
+    self as acp, Agent, Client, ClientCapabilities, ContentBlock, FileSystemCapability,
+    Implementation, InitializeRequest, NewSessionRequest, PermissionOptionKind, PlanEntryPriority,
+    PlanEntryStatus, PromptRequest, ReadTextFileRequest, ReadTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    Result as AcpResult, SessionNotification, SessionUpdate, TextContent, ToolCallContent,
+    ToolCallStatus, ToolKind, WriteTextFileRequest, WriteTextFileResponse,
 };
 use futures::stream::Stream;
 use std::path::PathBuf;
 use std::pin::Pin;
-use tokio::process::Child;
-use tokio::sync::mpsc;
+use std::process::Stdio;
+use std::rc::Rc;
+use std::thread;
+use std::time::Duration;
+use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tokio::runtime::Builder as TokioRuntimeBuilder;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::LocalSet;
+use tokio::time::timeout;
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tokio_util::sync::CancellationToken;
 
 /// Configuration for an ACP agent
@@ -250,11 +261,76 @@ impl AcpAgentRunner {
 
     pub async fn spawn_stream(
         &mut self,
-        _prompt: String,
-        _cancel_token: CancellationToken,
+        prompt: String,
+        cancel_token: CancellationToken,
     ) -> Result<Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>, String> {
-        // TODO: Implement actual ACP protocol flow
-        Err("Not implemented".to_string())
+        if let Some(mut existing) = self._agent_process.take() {
+            let _ = existing.kill().await;
+        }
+
+        let mut command = Command::new(self.config.command);
+        command
+            .args(&self.config.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
+
+        let mut child = command
+            .spawn()
+            .map_err(|e| format!("Failed to spawn agent: {e}"))?;
+
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "Failed to capture agent stdin".to_string())?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "Failed to capture agent stdout".to_string())?;
+
+        self._agent_process = Some(child);
+
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (session_update_tx, session_update_rx) = mpsc::unbounded_channel();
+        let (handshake_tx, handshake_rx) = oneshot::channel();
+
+        let client_handler =
+            AcpClientHandler::new(self.cwd.clone(), session_update_tx, cancel_token.clone());
+        let cwd = self.cwd.clone();
+
+        thread::spawn(move || {
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build ACP runtime");
+            runtime.block_on(run_acp_connection(
+                stdin,
+                stdout,
+                client_handler,
+                session_update_rx,
+                event_tx,
+                cancel_token,
+                prompt,
+                cwd,
+                handshake_tx,
+            ));
+        });
+
+        match handshake_rx
+            .await
+            .map_err(|_| "ACP connection task exited before initialization".to_string())?
+        {
+            Ok(()) => {
+                let stream = UnboundedReceiverStream::new(event_rx);
+                Ok(Box::pin(stream))
+            }
+            Err(err) => {
+                if let Some(mut child) = self._agent_process.take() {
+                    let _ = child.kill().await;
+                }
+                Err(err)
+            }
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -271,6 +347,194 @@ impl AcpAgentRunner {
 
     pub fn install_command(&self) -> Option<Vec<String>> {
         self.config.install_command.clone()
+    }
+}
+
+async fn run_acp_connection(
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+    client_handler: AcpClientHandler,
+    session_update_rx: mpsc::UnboundedReceiver<SessionUpdate>,
+    event_tx: mpsc::UnboundedSender<ConversationEvent>,
+    cancel_token: CancellationToken,
+    prompt: String,
+    cwd: PathBuf,
+    handshake_tx: oneshot::Sender<Result<(), String>>,
+) {
+    let local = LocalSet::new();
+    let connection_event_tx = event_tx.clone();
+    let result = local
+        .run_until(async move {
+            run_connection_inner(
+                stdin,
+                stdout,
+                client_handler,
+                session_update_rx,
+                connection_event_tx,
+                cancel_token,
+                prompt,
+                cwd,
+                handshake_tx,
+            )
+            .await
+        })
+        .await;
+
+    if let Err(err) = result {
+        let _ = event_tx.send(ConversationEvent::SystemEvent {
+            subtype: "acp_error".to_string(),
+            details: Some(err),
+        });
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_connection_inner(
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+    client_handler: AcpClientHandler,
+    session_update_rx: mpsc::UnboundedReceiver<SessionUpdate>,
+    event_tx: mpsc::UnboundedSender<ConversationEvent>,
+    cancel_token: CancellationToken,
+    prompt: String,
+    cwd: PathBuf,
+    handshake_tx: oneshot::Sender<Result<(), String>>,
+) -> Result<(), String> {
+    let (connection, io_future) = acp::ClientSideConnection::new(
+        client_handler,
+        stdin.compat_write(),
+        stdout.compat(),
+        |fut| {
+            tokio::task::spawn_local(fut);
+        },
+    );
+
+    let connection = Rc::new(connection);
+    let mut handshake_tx = Some(handshake_tx);
+    let io_task = tokio::task::spawn_local(async move { io_future.await });
+
+    {
+        let event_tx = event_tx.clone();
+        tokio::task::spawn_local(async move {
+            let mut updates = session_update_rx;
+            while let Some(update) = updates.recv().await {
+                if let Some(event) = translate_session_update(update) {
+                    let _ = event_tx.send(event);
+                }
+            }
+        });
+    }
+
+    let init_request = InitializeRequest {
+        protocol_version: acp::V1,
+        client_capabilities: ClientCapabilities {
+            fs: FileSystemCapability {
+                read_text_file: true,
+                write_text_file: true,
+                ..Default::default()
+            },
+            terminal: false,
+            meta: None,
+        },
+        client_info: Some(Implementation {
+            name: "nori-cli".to_string(),
+            title: Some("Nori CLI".to_string()),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        }),
+        meta: None,
+    };
+
+    let init_response =
+        match timeout(Duration::from_secs(30), connection.initialize(init_request)).await {
+            Ok(Ok(response)) => response,
+            Ok(Err(err)) => {
+                let message = format!("Initialize failed: {err}");
+                if let Some(tx) = handshake_tx.take() {
+                    let _ = tx.send(Err(message.clone()));
+                }
+                return Err(message);
+            }
+            Err(_) => {
+                let message = "Initialization timeout after 30s".to_string();
+                if let Some(tx) = handshake_tx.take() {
+                    let _ = tx.send(Err(message.clone()));
+                }
+                return Err(message);
+            }
+        };
+
+    if init_response.protocol_version != acp::V1 {
+        let err = format!(
+            "Unsupported protocol version: {:?}",
+            init_response.protocol_version
+        );
+        if let Some(tx) = handshake_tx.take() {
+            let _ = tx.send(Err(err.clone()));
+        }
+        return Err(err);
+    }
+
+    let session_response = match connection
+        .new_session(NewSessionRequest {
+            cwd: cwd.clone(),
+            mcp_servers: Vec::new(),
+            meta: None,
+        })
+        .await
+    {
+        Ok(response) => response,
+        Err(err) => {
+            let message = format!("Session creation failed: {err}");
+            if let Some(tx) = handshake_tx.take() {
+                let _ = tx.send(Err(message.clone()));
+            }
+            return Err(message);
+        }
+    };
+    let session_id = session_response.session_id.clone();
+
+    if let Some(tx) = handshake_tx.take() {
+        let _ = tx.send(Ok(()));
+    }
+
+    {
+        let connection = Rc::clone(&connection);
+        let cancel_token = cancel_token.clone();
+        let session_id = session_id.clone();
+        tokio::task::spawn_local(async move {
+            cancel_token.cancelled().await;
+            let _ = connection
+                .cancel(acp::CancelNotification {
+                    session_id,
+                    meta: None,
+                })
+                .await;
+        });
+    }
+
+    let prompt_request = PromptRequest {
+        session_id,
+        prompt: vec![ContentBlock::Text(TextContent {
+            annotations: None,
+            text: prompt,
+            meta: None,
+        })],
+        meta: None,
+    };
+
+    if let Err(err) = connection.prompt(prompt_request).await {
+        let _ = event_tx.send(ConversationEvent::SystemEvent {
+            subtype: "prompt_failed".to_string(),
+            details: Some(err.to_string()),
+        });
+    }
+
+    io_task.abort();
+    match io_task.await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(err)) => Err(format!("ACP I/O task failed: {err}")),
+        Err(join_err) if join_err.is_cancelled() => Ok(()),
+        Err(join_err) => Err(format!("ACP I/O task panicked: {join_err}")),
     }
 }
 
