@@ -24,11 +24,11 @@ async fn test_claude_stream_sends_all_events_and_completes() {
     println!("\n=== Consuming stream events ===");
 
     while let Some(event) = stream.next().await {
-        println!("Received event: {:?}", event);
+        println!("Received event: {event:?}");
 
         if matches!(event, ConversationEvent::ResultSummary { .. }) {
             result_summary_count += 1;
-            println!(">>> ResultSummary #{} <<<", result_summary_count);
+            println!(">>> ResultSummary #{result_summary_count} <<<");
         }
 
         events.push(event);
@@ -36,7 +36,7 @@ async fn test_claude_stream_sends_all_events_and_completes() {
 
     println!("\n=== Stream ended ===");
     println!("Total events: {}", events.len());
-    println!("ResultSummary events: {}", result_summary_count);
+    println!("ResultSummary events: {result_summary_count}");
 
     // The stream should have ended naturally
     // If we got here, the stream completed
