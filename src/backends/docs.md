@@ -6,6 +6,8 @@ Path: @/src/backends
 
 Backend implementations for spawning and interacting with different AI coding agent CLIs. Defines the AgentBackend trait and provides concrete implementations for Claude Code (claude.rs), GPT Codex (codex.rs), and a mock backend for testing (mock.rs).
 
+**NEW (Phase 1 Complete):** ACP (Agent Client Protocol) integration added in @/src/acp_runner.rs. This provides a standardized protocol-based approach that will eventually replace custom backend implementations. See ACP Integration section below.
+
 ### How it fits into the larger codebase
 
 - Trait definition and implementations are re-exported via @/src/backends.rs module declaration
@@ -152,5 +154,75 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
 - MockBackend allows testing entire JSONL parsing pipeline without external dependencies
 - No integration tests with real claude/codex CLIs because they require API keys and authentication
 - @/tests/subprocess_test.rs verifies MockBackend can spawn process and output is parseable JSON
+
+### ACP Integration (Phase 1 - Foundation Complete)
+
+**Location**: @/src/acp_runner.rs
+
+The Agent Client Protocol (ACP) is a standardized protocol for communication between code editors and AI coding agents, similar to how LSP standardized language server integration. This integration will eventually replace the custom per-agent implementations above.
+
+**What's Been Implemented**:
+
+1. **Extended ConversationEvent Enum** (@/src/conversation.rs):
+   - `ToolCallStarted` - When agent initiates a tool call (edit, write, bash, etc.)
+   - `ToolCallProgress` - Tool execution progress with status and optional content
+   - `AgentPlan` - Agent's multi-step execution plan
+   - `AgentThinking` - Agent's internal reasoning/thought process
+   - `PlanEntry` - Individual step with content, status (pending/in_progress/completed), priority
+
+2. **Event Translation Layer** (`translate_session_update` function):
+   - Converts ACP `SessionUpdate` → `ConversationEvent`
+   - Handles all message chunk types (agent, user, thought)
+   - Maps tool call lifecycle (pending → in_progress → completed/failed)
+   - Translates plan entries with priority levels
+   - Returns `None` for non-text content (images, audio)
+   - 7 passing unit tests covering all translation paths
+
+3. **AcpClientHandler** - Full `Client` trait implementation:
+   - `request_permission()` - Auto-approves by selecting first "allow" option (AllowOnce/AllowAlways)
+   - `session_notification()` - Forwards SessionUpdate to event stream via mpsc channel
+   - `read_text_file()` - Reads from working directory, handles absolute/relative paths
+   - `write_text_file()` - Writes with auto-created parent directories
+   - Terminal methods blocked - returns `method_not_found` errors (security requirement)
+   - Uses cancellation token to return `Cancelled` outcome if session cancelled mid-flight
+
+**Architecture**:
+```
+User Prompt → AcpAgentRunner::spawn_stream() → JSON-RPC over stdio → Agent Process
+                         ↓
+              AcpClientHandler (implements Client trait)
+                         ↓
+              Handles file reads/writes, permissions
+                         ↓
+              SessionUpdate → translate_session_update → ConversationEvent → UI
+```
+
+**What's NOT Yet Implemented** (See @/ACP_IMPLEMENTATION_PLAN.md):
+- `AcpAgentRunner::spawn_stream()` - Core method to spawn agent and manage JSON-RPC lifecycle
+- JSON-RPC transport layer over stdin/stdout
+- Initialize handshake with capability negotiation
+- Session creation and prompt sending
+- Integration into main.rs (still using old backends)
+- Agent configurations (CLAUDE_CONFIG, CODEX_CONFIG)
+
+**Benefits of ACP**:
+- No more custom JSONL parsing per agent
+- Standardized tool call visualization
+- Agent plans visible to user
+- File operations auto-approved (simpler UX)
+- Any ACP-compliant agent works (Claude Code, Codex, Goose, etc.)
+- Protocol-level cancellation support
+
+**Migration Strategy**:
+- Keep old AgentBackend trait during transition
+- Add `--use-acp` flag to test new implementation
+- Make ACP default after thorough testing
+- Remove old backends in future release
+
+**Testing**:
+- Unit tests for event translation ✅ (7 tests, all passing)
+- Client handler tested via compilation ✅
+- Integration tests with mock agent (TODO)
+- Manual testing with Claude Code (TODO)
 
 Created and maintained by Nori.

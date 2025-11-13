@@ -1,3 +1,4 @@
+mod acp_runner;
 mod app;
 mod autocomplete;
 mod backends;

@@ -27,6 +27,30 @@ pub enum ConversationEvent {
     StatusMessage {
         text: String,
     },
+    // ACP-specific events
+    ToolCallStarted {
+        id: String,
+        title: String,
+        kind: String, // "edit", "write", "bash", "other"
+    },
+    ToolCallProgress {
+        id: String,
+        status: String, // "pending", "in_progress", "completed", "failed", "cancelled"
+        content: Option<String>,
+    },
+    AgentPlan {
+        entries: Vec<PlanEntry>,
+    },
+    AgentThinking {
+        text: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlanEntry {
+    pub content: String,
+    pub status: String, // "pending", "in_progress", "completed"
+    pub priority: Option<String>,
 }
 
 pub fn render_event(event: &ConversationEvent) -> Line<'static> {
@@ -102,6 +126,56 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
                 Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(text.clone()),
+        ]),
+        ConversationEvent::ToolCallStarted { id: _, title, kind } => Line::from(vec![
+            Span::styled(
+                "[tool] ",
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!("{title} ({kind})")),
+        ]),
+        ConversationEvent::ToolCallProgress {
+            id: _,
+            status,
+            content,
+        } => {
+            let mut spans = vec![
+                Span::styled(
+                    "[tool] ",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(status.clone()),
+            ];
+            if let Some(c) = content {
+                spans.push(Span::raw(": "));
+                spans.push(Span::raw(c.clone()));
+            }
+            Line::from(spans)
+        }
+        ConversationEvent::AgentPlan { entries } => {
+            let summary = format!("Plan: {} steps", entries.len());
+            Line::from(vec![
+                Span::styled(
+                    "[plan] ",
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(summary),
+            ])
+        }
+        ConversationEvent::AgentThinking { text } => Line::from(vec![
+            Span::styled(
+                "[thinking] ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD | Modifier::ITALIC),
             ),
             Span::raw(text.clone()),
         ]),
