@@ -1,18 +1,9 @@
 use crossterm::event::KeyCode;
-<<<<<<< HEAD
-use ratatui::backend::TestBackend;
-||||||| 20e7306
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-=======
->>>>>>> main
-use ratatui::text::Span;
-<<<<<<< HEAD
+#[cfg(test)]
 use ratatui::Terminal;
-||||||| 20e7306
-use ratatui::widgets::Widget;
-=======
->>>>>>> main
+#[cfg(test)]
+use ratatui::backend::TestBackend;
+use ratatui::text::Span;
 use tui_components::key_hint::{KeyBinding, alt, ctrl, plain, shift};
 
 // Test-only imports
@@ -71,8 +62,18 @@ impl App {
         key_hints.push(("Page Down".to_string(), plain(KeyCode::PageDown).into()));
 
         // 7. Multiple modifiers
-        key_hints.push(("Ctrl+Shift+S".to_string(), KeyBinding::new(KeyCode::Char('s'), KeyModifiers::CONTROL | KeyModifiers::SHIFT).into()));
-        key_hints.push(("Ctrl+Alt+Delete".to_string(), KeyBinding::new(KeyCode::Delete, KeyModifiers::CONTROL | KeyModifiers::ALT).into()));
+        key_hints.push((
+            "Ctrl+Shift+S".to_string(),
+            KeyBinding::new(
+                KeyCode::Char('s'),
+                KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+            )
+            .into(),
+        ));
+        key_hints.push((
+            "Ctrl+Alt+Delete".to_string(),
+            KeyBinding::new(KeyCode::Delete, KeyModifiers::CONTROL | KeyModifiers::ALT).into(),
+        ));
 
         Self { key_hints }
     }
@@ -116,7 +117,8 @@ impl App {
                 .split(area);
 
             // Render label
-            let label_paragraph = Paragraph::new(label.clone()).style(Style::default().fg(Color::Yellow));
+            let label_paragraph =
+                Paragraph::new(label.clone()).style(Style::default().fg(Color::Yellow));
             frame.render_widget(label_paragraph, inner_layout[0]);
 
             // Render hint span
@@ -141,9 +143,11 @@ fn test_plain_key() {
     let span: Span = binding.into();
 
     let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
-    terminal.draw(|frame| {
-        frame.render_widget(&span, frame.area());
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            frame.render_widget(&span, frame.area());
+        })
+        .unwrap();
 
     insta::assert_snapshot!(terminal.backend());
 }
@@ -154,9 +158,11 @@ fn test_ctrl_key() {
     let span: Span = binding.into();
 
     let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
-    terminal.draw(|frame| {
-        frame.render_widget(&span, frame.area());
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            frame.render_widget(&span, frame.area());
+        })
+        .unwrap();
 
     insta::assert_snapshot!(terminal.backend());
 }
@@ -167,9 +173,11 @@ fn test_alt_key() {
     let span: Span = binding.into();
 
     let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
-    terminal.draw(|frame| {
-        frame.render_widget(&span, frame.area());
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            frame.render_widget(&span, frame.area());
+        })
+        .unwrap();
 
     insta::assert_snapshot!(terminal.backend());
 }
@@ -180,9 +188,11 @@ fn test_shift_key() {
     let span: Span = binding.into();
 
     let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
-    terminal.draw(|frame| {
-        frame.render_widget(&span, frame.area());
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            frame.render_widget(&span, frame.area());
+        })
+        .unwrap();
 
     insta::assert_snapshot!(terminal.backend());
 }
@@ -200,9 +210,11 @@ fn test_arrow_keys() {
     for binding in bindings {
         let span: Span = binding.into();
         let mut terminal = Terminal::new(TestBackend::new(10, 1)).unwrap();
-        terminal.draw(|frame| {
-            frame.render_widget(&span, frame.area());
-        }).unwrap();
+        terminal
+            .draw(|frame| {
+                frame.render_widget(&span, frame.area());
+            })
+            .unwrap();
         outputs.push(terminal.backend().to_string());
     }
 
@@ -220,14 +232,22 @@ fn test_page_keys() {
     let mut terminal1 = Terminal::new(TestBackend::new(10, 1)).unwrap();
     let mut terminal2 = Terminal::new(TestBackend::new(10, 1)).unwrap();
 
-    terminal1.draw(|frame| {
-        frame.render_widget(&span1, frame.area());
-    }).unwrap();
-    terminal2.draw(|frame| {
-        frame.render_widget(&span2, frame.area());
-    }).unwrap();
+    terminal1
+        .draw(|frame| {
+            frame.render_widget(&span1, frame.area());
+        })
+        .unwrap();
+    terminal2
+        .draw(|frame| {
+            frame.render_widget(&span2, frame.area());
+        })
+        .unwrap();
 
-    insta::assert_snapshot!(format!("{}\n---\n{}", terminal1.backend(), terminal2.backend()));
+    insta::assert_snapshot!(format!(
+        "{}\n---\n{}",
+        terminal1.backend(),
+        terminal2.backend()
+    ));
 }
 
 #[test]
@@ -241,9 +261,11 @@ fn test_multiple_modifiers() {
     let span: Span = binding.into();
 
     let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
-    terminal.draw(|frame| {
-        frame.render_widget(&span, frame.area());
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            frame.render_widget(&span, frame.area());
+        })
+        .unwrap();
 
     insta::assert_snapshot!(terminal.backend());
 }
