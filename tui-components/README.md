@@ -5,6 +5,9 @@ Reusable TUI components built on Ratatui.
 ## Features
 
 - **Text Input** - Multiline TextArea widget with cursor management and wrapping
+- **Selection Lists** - Generic selection widget with keyboard navigation and filtering
+- **Text Wrapping** - Word wrapping utilities with Ratatui integration
+- **Live Wrapping** - Incremental text wrapping for streaming content
 - **Animation Effects** - Shimmer animations for loading states
 - **Keyboard Hints** - Platform-aware keyboard shortcut display
 - **Composable Rendering** - Renderable trait with Column, Row, and Inset layouts
@@ -42,46 +45,103 @@ let shimmer = Shimmer::new("Processing...");
 
 ## Components
 
+### Text Handling & Wrapping
+
+#### Wrapping Module (`wrapping`)
+Core text wrapping utilities with Ratatui integration:
+- **`word_wrap_line`** - Wrap a single `Line` with style preservation
+- **`word_wrap_lines`** - Wrap multiple lines with indent support
+- **`word_wrap_lines_borrowed`** - Borrowed variant for zero-copy wrapping
+- **`prefix_lines`** - Add prefixes to lines (indentation, bullets, etc.)
+- **`RtOptions`** - Ratatui-specific wrapping configuration
+
+Handles Unicode correctly, preserves ANSI styling across wraps, and supports custom break behavior.
+
+#### Live Wrap Module (`live_wrap`)
+Incremental text wrapping for streaming content:
+- **`RowBuilder`** - Builds wrapped rows incrementally as text arrives
+- **`Row`** - Single visual row with explicit break tracking
+- **`take_prefix_by_width`** - Unicode-aware width-based text slicing
+
+Designed for streaming scenarios where text arrives in chunks. Maintains fragmentation invariance (results don't depend on input chunking) and handles dynamic width changes with automatic rewrapping.
+
+### Input Widgets
+
+#### TextArea (`textarea`)
+Full-featured multiline text input widget:
+- Text insertion, deletion, and cursor navigation
+- Emacs-style keybindings (arrows, Home/End, Backspace/Delete, Enter)
+- Word wrapping with configurable width
+- Scrolling support for content exceeding viewport
+- Unicode-aware text handling
+- Configurable placeholder text and styling via `TextAreaConfig`
+- Implements `WidgetRef` and `StatefulWidgetRef` traits
+
+Perfect for chat input, form fields, and any multiline text editing needs.
+
+### Selection & Popups
+
+#### Selection Module (`selection`)
+Generic selection list components for building menus, dropdowns, and pickers:
+
+- **`SelectionList<T>`** - Generic selection widget with:
+  - Keyboard navigation (up/down with wrapping)
+  - Optional search filtering
+  - Number key shortcuts (when search disabled)
+  - Event-based API via `SelectionListEvent` enum
+  - Full `Renderable` trait implementation
+  - Configuration via `SelectionListConfig`
+
+- **`selection_option_row`** - Single row rendering with selection marker
+- **`GenericDisplayRow`** - Common row structure for list items
+- **`render_rows`** - Shared rendering with scrolling, wrapping, and alignment
+- **`measure_rows_height`** - Dynamic height calculation
+- **`standard_popup_hint_line`** - Standard footer hints for popups
+
+Use cases: command palettes, file pickers, option menus, agent selection dialogs.
+
 ### Animation & Visual Effects
 
-#### Shimmer
-Animated text effect with customizable color palettes for loading states. Creates a wave-like shimmer effect that sweeps across text.
+#### Shimmer (`shimmer`)
+Animated text effect with customizable color palettes for loading states. Creates a wave-like shimmer effect that sweeps across text. Useful for "Working..." indicators and processing states.
 
-#### KeyHint
-Display keyboard shortcuts with platform-aware formatting (Cmd vs Ctrl, etc.). Provides helper functions for common key combinations.
+#### KeyHint (`key_hint`)
+Platform-aware keyboard shortcut display:
+- Automatically uses Cmd on macOS, Ctrl on other platforms
+- Helper functions for common key combinations
+- `KeyBinding` type for structured key representation
+- Proper formatting with modifiers (Ctrl+C, Alt+Enter, etc.)
 
 ### Layout & Rendering
 
-#### Renderable Trait
+#### Renderable Trait (`render`)
 Composable rendering abstraction that extends Ratatui's widget system. Unlike widgets which are consumed on render, Renderables can calculate their desired height before rendering, enabling dynamic layouts.
 
-#### ColumnRenderable
-Stack children vertically with automatic height calculation.
+- **`ColumnRenderable`** - Stack children vertically with automatic height calculation
+- **`RowRenderable`** - Place children horizontally with specified widths
+- **`InsetRenderable`** - Add padding around child components
+- **Line Utilities** - Helper functions for manipulating Ratatui `Line` and `Span` types
 
-#### RowRenderable
-Place children horizontally with specified widths.
+### State Management
 
-#### InsetRenderable
-Add padding around child components.
+#### ScrollState (`scroll_state`)
+Generic scroll and selection state for vertical lists:
+- Wrap-around navigation (top to bottom, bottom to top)
+- Automatic scroll adjustment to keep selection visible
+- Viewport tracking
+- Works seamlessly with `SelectionList` and custom list widgets
 
-#### Line Utilities
-Helper functions for manipulating Ratatui Line and Span types.
-
-### Input & State Management
-
-#### TextArea
-Multiline text input widget with cursor management, text wrapping, and Unicode support. Handles keyboard input including insertion, deletion, and cursor navigation (arrows, home/end). Supports configurable placeholders and text styling.
-
-#### ScrollState
-Generic scroll and selection state for vertical lists with wrap-around navigation and automatic scroll adjustment.
-
-#### PasteBurst
-Timing-based detection of paste operations vs typed input. Enables special handling for multi-line pastes and prevents flickering.
+#### PasteBurst (`paste_burst`)
+Timing-based detection of paste operations vs typed input:
+- Distinguishes rapid input (paste) from typing
+- Configurable threshold and burst window
+- Enables special handling for multi-line pastes
+- Prevents UI flickering during large pastes
 
 ### Optional Features
 
 #### Syntax Highlighting (feature: `syntax-highlighting`)
-Bash syntax highlighting using tree-sitter. Converts bash scripts into styled Ratatui lines with appropriate dimming for comments, operators, and strings.
+Bash syntax highlighting using tree-sitter. Converts bash scripts into styled Ratatui lines with appropriate dimming for comments, operators, and strings. Enable with the `syntax-highlighting` feature flag.
 
 ## Examples
 
