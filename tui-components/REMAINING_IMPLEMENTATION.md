@@ -15,7 +15,7 @@ The following components have been successfully migrated (see `MIGRATION_PROGRES
 - ✅ **Shimmer Animation** (`shimmer.rs`)
 - ✅ **Rendering Abstractions** (`render/` module)
 
-## Phase 5: Command Popup & Footer Components
+## Phase 5: Footer Component
 
 ### 5.1 Footer Component
 
@@ -56,63 +56,61 @@ The following components have been successfully migrated (see `MIGRATION_PROGRES
 - Multi-line footer rendering with wrapping
 - Context percentage display formatting
 
-### 5.2 Filterable List / Command Popup
+### 5.2 ~~Filterable List / Command Popup~~ ✅ ALREADY COMPLETE
 
-**Source**: `codex-rs/tui/src/bottom_pane/command_popup.rs` (generic portion)
-**Target**: `tui-components/src/selection/filterable_list.rs`
+**Status**: The existing `SelectionList<T>` widget **already provides all typeahead filtering functionality**.
 
-**Scope**:
-- Extract generic typeahead filtering for selection lists
-- Support fuzzy matching on list items
-- Dynamic filtering with scroll state management
-- Height calculation for filtered results
+**What's Already Available** (in `tui-components/src/selection/list.rs`):
+- ✅ Generic over item type `T` via `SelectionItem<T>`
+- ✅ Filter string management (`search_query`, `set_search_query()`)
+- ✅ Dynamic filtering with scroll state sync (`apply_filter()`)
+- ✅ Keyboard input handling (typing updates filter automatically)
+- ✅ Search placeholder support via config
+- ✅ Empty state handling with custom message
+- ✅ Selection preservation across filter changes
+- ✅ Height calculation for filtered results
+- ✅ Backspace to edit filter
+- ✅ Optional search via `is_searchable` flag
 
-**Key Functionality to Extract**:
-- `FilterableList<T>` widget generic over item type
-- Filter string management and update logic
-- Integration with `SelectionList<T>` for rendering
-- Dynamic height calculation based on filtered matches
-- Scroll state sync with filter changes
-
-**Configuration Approach**:
-- Use `FilterableListConfig<T>` with:
-  - Filter function: `Fn(&str, &T) -> Option<Score>`
-  - Item display function: `Fn(&T) -> GenericDisplayRow`
-  - All `SelectionListConfig` options
-- Consumer provides filtering logic (fuzzy match, exact match, regex, etc.)
-
-**Codex-Specific Logic to Remove**:
-- Remove `SlashCommand` and `CustomPrompt` types
-- Remove built-in command registry
-- Remove prompt collision detection
-- Abstract filter extraction from "composer text" (make generic)
-- Remove `CommandItem` enum (use generic `T`)
-
-**Public API**:
+**How to Use for Command Popup Use Cases**:
 ```rust
-pub struct FilterableList<T> {
-    items: Vec<T>,
-    filter: String,
-    filtered_indices: Vec<usize>,
-    state: ScrollState,
-}
+// Enable search in the config
+let config = SelectionListConfig::new()
+    .with_title("Commands")
+    .with_search(Some("Type to filter...".to_string()));
 
-impl<T> FilterableList<T> {
-    pub fn new(items: Vec<T>) -> Self;
-    pub fn with_filter(items: Vec<T>, filter: String) -> Self;
-    pub fn update_filter(&mut self, filter: String, matcher: impl Fn(&str, &T) -> bool);
-    pub fn selected_item(&self) -> Option<&T>;
-    pub fn filtered_items(&self) -> impl Iterator<Item = &T>;
-    // Handle keyboard events similar to SelectionList
-}
+// Provide items with search_value field
+let items = commands.iter().map(|cmd| SelectionItem {
+    data: cmd.clone(),
+    name: format!("/{}", cmd.name),
+    description: Some(cmd.description.clone()),
+    search_value: Some(cmd.name.clone()), // Used for filtering
+    is_current: false,
+    display_shortcut: None,
+    selected_description: None,
+}).collect();
+
+let mut list = SelectionList::new(config, items, Box::new(()));
 ```
 
-**Tests**:
-- Filtering behavior with different match functions
-- Scroll state updates on filter changes
-- Empty filter (show all items)
-- No matches (empty list)
-- Selection clamping when filter changes
+**Current Implementation Details**:
+- Filtering uses **substring matching** (case-insensitive) on `search_value` field
+- Consumers can pre-process items to support fuzzy matching if needed
+- Filter updates trigger automatic scroll state adjustment
+- Selection preserved when possible during filter changes
+
+**What's NOT Included** (intentionally Codex-specific):
+- Fuzzy matching algorithm (consumers can implement externally)
+- Match indices highlighting (visual feature, not core functionality)
+- Composite item type handling (consumers use enum in data field)
+- Slash-command-specific filter extraction logic
+
+**Note**: The `command_popup.rs` in Codex uses this same foundation (`selection_popup_common.rs`) that was already extracted. The only additions in CommandPopup are:
+1. Fuzzy matching (Codex-specific utility from `codex_common`)
+2. Handling two item types (builtins + custom prompts)
+3. Extracting filter from composer text (app-specific logic)
+
+All three of these are **application-level concerns** that should stay in the consumer (Codex/nori-cli), not in the shared component library.
 
 ## Phase 6: Status Indicator
 
@@ -193,14 +191,9 @@ impl WidgetRef for StatusIndicator { ... }
    - Reuses existing `shimmer` and timer utilities
    - Straightforward API design
 
-3. **Filterable List** (4-5 hours)
-   - More complex due to generic filtering
-   - Builds on completed `SelectionList`
-   - Requires careful API design for flexibility
-
 ## Exit Criteria
 
-- All three components have comprehensive rustdoc
+- Both remaining components (Footer, Status Indicator) have comprehensive rustdoc
 - Snapshot tests for visual rendering (>5 tests per component)
 - Unit tests for behavior and state management
 - `cargo test -p tui-components` passes with all new tests
@@ -264,10 +257,10 @@ The following components are **not critical** for the initial tui-components sta
 
 ## Estimated Timeline
 
-**Remaining Critical Work (Phase 5-6)**: 9-12 hours
+**Remaining Critical Work (Phase 5)**: 5-7 hours
 - Footer: 3-4 hours
 - Status Indicator: 2-3 hours
-- Filterable List: 4-5 hours
+- ~~Filterable List: Already complete via SelectionList~~
 
 **Future Work (Phase 7)**: 40-60 hours
 - Resume Picker: 6-8 hours
