@@ -1,5 +1,5 @@
 ---
-source: tui-components/tests/key_hint_snapshots.rs
+source: "../../update-tui-snapshot-tests/tui-components/tests/key_hint_snapshots.rs"
 expression: "outputs.join(\"\\n---\\n\")"
 ---
 Buffer {

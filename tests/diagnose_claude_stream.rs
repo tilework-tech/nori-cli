@@ -22,7 +22,7 @@ async fn diagnose_claude_stream() {
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            println!("Failed to spawn claude: {}", e);
+            println!("Failed to spawn claude: {e}");
             println!("Skipping test - Claude CLI not available");
             return;
         }
@@ -42,15 +42,14 @@ async fn diagnose_claude_stream() {
             match timeout(Duration::from_secs(5), reader.next_line()).await {
                 Ok(Ok(Some(line))) => {
                     line_count += 1;
-                    println!("[Line {}] {}", line_count, line);
+                    println!("[Line {line_count}] {line}");
 
                     // Check if this is a result event
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
                         if json.get("type").and_then(|v| v.as_str()) == Some("result") {
                             saw_result_summary = true;
                             println!(
-                                "\n>>> Found ResultSummary event at line {} <<<\n",
-                                line_count
+                                "\n>>> Found ResultSummary event at line {line_count} <<<\n"
                             );
                         }
                     }
@@ -64,17 +63,16 @@ async fn diagnose_claude_stream() {
                     }
                 }
                 Ok(Ok(None)) => {
-                    println!("\n>>> stdout EOF reached after {} lines <<<", line_count);
+                    println!("\n>>> stdout EOF reached after {line_count} lines <<<");
                     break;
                 }
                 Ok(Err(e)) => {
-                    println!("\n>>> Error reading line: {} <<<", e);
+                    println!("\n>>> Error reading line: {e} <<<");
                     break;
                 }
                 Err(_) => {
                     println!(
-                        "\n>>> Timeout waiting for next line (after {} lines) <<<",
-                        line_count
+                        "\n>>> Timeout waiting for next line (after {line_count} lines) <<<"
                     );
                     println!("This suggests stdout is still open but no more data is coming");
                     break;
@@ -92,10 +90,10 @@ async fn diagnose_claude_stream() {
     println!("\nChecking process status...");
     match timeout(Duration::from_secs(2), child.wait()).await {
         Ok(Ok(status)) => {
-            println!("Process exited with status: {}", status);
+            println!("Process exited with status: {status}");
         }
         Ok(Err(e)) => {
-            println!("Error waiting for process: {}", e);
+            println!("Error waiting for process: {e}");
         }
         Err(_) => {
             println!("Process still running after timeout - killing it");
