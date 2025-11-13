@@ -1,0 +1,42 @@
+<<<<<<< Updated upstream
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo search:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
+||||||| constructed merge base
+=======
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git worktree:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo insta:*)",
+      "Bash(cargo search:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo tree:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:ratatui.rs)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
+>>>>>>> Stashed changes
