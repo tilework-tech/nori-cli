@@ -39,44 +39,29 @@ impl App {
         // ASCII text wrapping
         let mut rb = RowBuilder::new(10);
         rb.push_fragment("hello whirl this is a test");
-        examples.push(LiveWrapExample::new(
-            "ASCII Wrapping",
-            rb.rows().to_vec(),
-        ));
+        examples.push(LiveWrapExample::new("ASCII Wrapping", rb.rows().to_vec()));
 
         // Emoji and CJK wrapping
         let mut rb = RowBuilder::new(6);
         rb.push_fragment("😀😀 你好");
-        examples.push(LiveWrapExample::new(
-            "Unicode Wrapping",
-            rb.rows().to_vec(),
-        ));
+        examples.push(LiveWrapExample::new("Unicode Wrapping", rb.rows().to_vec()));
 
         // Newline handling
         let mut rb = RowBuilder::new(10);
         rb.push_fragment("hello\nworld");
-        examples.push(LiveWrapExample::new(
-            "Newline Breaks",
-            rb.display_rows(),
-        ));
+        examples.push(LiveWrapExample::new("Newline Breaks", rb.display_rows()));
 
         // Explicit line breaks
         let mut rb = RowBuilder::new(20);
         rb.push_fragment("first line");
         rb.end_line();
         rb.push_fragment("second line");
-        examples.push(LiveWrapExample::new(
-            "Explicit Breaks",
-            rb.display_rows(),
-        ));
+        examples.push(LiveWrapExample::new("Explicit Breaks", rb.display_rows()));
 
         // Multiple newlines
         let mut rb = RowBuilder::new(20);
         rb.push_fragment("line1\n\nline3");
-        examples.push(LiveWrapExample::new(
-            "Multiple Newlines",
-            rb.display_rows(),
-        ));
+        examples.push(LiveWrapExample::new("Multiple Newlines", rb.display_rows()));
 
         // Long word wrapping
         let mut rb = RowBuilder::new(5);
@@ -98,10 +83,7 @@ impl App {
             explicit_break: true,
         });
         combined_rows.extend(resized_rows);
-        examples.push(LiveWrapExample::new(
-            "Dynamic Width Change",
-            combined_rows,
-        ));
+        examples.push(LiveWrapExample::new("Dynamic Width Change", combined_rows));
 
         Self { examples }
     }
@@ -158,8 +140,7 @@ impl App {
                 .split(area)[1];
 
             let content = render_rows(&example.rows);
-            let paragraph = Paragraph::new(content)
-                .style(Style::default().fg(Color::White));
+            let paragraph = Paragraph::new(content).style(Style::default().fg(Color::White));
             frame.render_widget(paragraph, content_area);
         }
     }
