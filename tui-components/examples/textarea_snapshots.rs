@@ -4,9 +4,128 @@ use ratatui::style::{Color, Style};
 use ratatui::widgets::{StatefulWidgetRef, WidgetRef};
 use tui_components::textarea::{TextArea, TextAreaConfig, TextAreaState};
 
+// Imports for the interactive example
+use color_eyre::Result;
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout},
+    widgets::Paragraph,
+};
+
 // Imports for tests
 #[cfg(test)]
 use insta::assert_snapshot;
+
+// Interactive example application
+struct App {
+    textareas: Vec<(String, TextArea)>,
+}
+
+impl App {
+    fn new() -> Self {
+        let mut textareas = Vec::new();
+
+        // 1. Default with placeholder
+        let config = TextAreaConfig::default().with_placeholder("Type here...");
+        let textarea = TextArea::new(config);
+        textareas.push(("Default with Placeholder".to_string(), textarea));
+
+        // 2. With custom styling (colored)
+        let config = TextAreaConfig::default()
+            .with_text_style(Style::default().fg(Color::Cyan))
+            .with_placeholder("Styled text (cyan)...");
+        let textarea = TextArea::new(config);
+        textareas.push(("Custom Style (Colored)".to_string(), textarea));
+
+        // 3. Pre-filled with multiline text
+        let config = TextAreaConfig::default();
+        let mut textarea = TextArea::new(config);
+        textarea.set_text("Hello, world!\nThis is pre-filled text.\nTry editing it!");
+        textareas.push(("Pre-filled Content".to_string(), textarea));
+
+        // 4. Narrow width for wrapping demonstration
+        let config =
+            TextAreaConfig::default().with_placeholder("Type a long line to see wrapping...");
+        let textarea = TextArea::new(config);
+        textareas.push(("Wrapping Demo (20 cols)".to_string(), textarea));
+
+        Self { textareas }
+    }
+
+    fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
+        loop {
+            terminal.draw(|frame| self.draw(frame))?;
+
+            if let Event::Key(key) = event::read()? {
+                // Exit on Esc or Ctrl+C
+                if key.code == KeyCode::Esc
+                    || (key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL))
+                {
+                    break;
+                }
+
+                // Distribute input to all TextAreas
+                for (_, textarea) in &mut self.textareas {
+                    textarea.handle_key(key);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {
+        let num_areas = self.textareas.len();
+
+        // Create vertical layout with equal heights
+        let constraints = vec![Constraint::Percentage(100 / num_areas as u16); num_areas];
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(frame.area());
+
+        // Render each TextArea with its label
+        for (i, (label, textarea)) in self.textareas.iter_mut().enumerate() {
+            let area = chunks[i];
+
+            // Split area: 1 line for label, rest for textarea
+            let inner_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(0)])
+                .split(area);
+
+            // Render label
+            let label_text =
+                Paragraph::new(format!("[ {label} ]")).style(Style::default().fg(Color::Yellow));
+            frame.render_widget(label_text, inner_layout[0]);
+
+            // Render textarea - handle narrow width for wrapping demo
+            let textarea_area = if i == 3 {
+                // Narrow width for the last TextArea
+                let narrow_layout = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Length(20), Constraint::Min(0)])
+                    .split(inner_layout[1]);
+                narrow_layout[0]
+            } else {
+                inner_layout[1]
+            };
+
+            WidgetRef::render_ref(textarea, textarea_area, frame.buffer_mut());
+        }
+    }
+}
+
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    let mut terminal = ratatui::init();
+    let mut app = App::new();
+    let result = app.run(&mut terminal);
+    ratatui::restore();
+    result
+}
 
 fn render_to_string(textarea: &TextArea, width: u16, height: u16) -> String {
     let area = Rect::new(0, 0, width, height);

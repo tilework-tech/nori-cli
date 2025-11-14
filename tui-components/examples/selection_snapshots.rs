@@ -6,7 +6,14 @@ use tui_components::render::Renderable;
 use tui_components::selection::selection_option_row;
 
 // Imports for the interactive example
-use crossterm::event::KeyModifiers;
+use color_eyre::Result;
+use crossterm::event::{self, Event, KeyCode as EventKeyCode, KeyModifiers};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Style},
+    widgets::Paragraph,
+};
 use tui_components::selection::{
     SelectionItem, SelectionList, SelectionListConfig, SelectionListEvent, standard_popup_hint_line,
 };
@@ -113,6 +120,235 @@ fn render_list_to_string<T: Clone>(list: &SelectionList<T>, width: u16) -> Strin
         })
         .collect();
     lines.join("\n")
+}
+
+// Interactive example application
+struct App {
+    lists: Vec<(String, SelectionList<ExampleData>)>,
+    last_event: String,
+}
+
+#[derive(Clone)]
+struct ExampleData {
+    name: String,
+}
+
+impl App {
+    fn new() -> Self {
+        let mut lists = Vec::new();
+
+        // 1. Basic selection with title and footer
+        let config = SelectionListConfig::new()
+            .with_title("Basic Selection")
+            .with_footer_hint(standard_popup_hint_line());
+        let items = vec![
+            SelectionItem {
+                data: ExampleData {
+                    name: "Option A".to_string(),
+                },
+                name: "Option A".to_string(),
+                description: Some("First option".to_string()),
+                selected_description: None,
+                is_current: true,
+                display_shortcut: None,
+                search_value: Some("option a".to_string()),
+            },
+            SelectionItem {
+                data: ExampleData {
+                    name: "Option B".to_string(),
+                },
+                name: "Option B".to_string(),
+                description: Some("Second option".to_string()),
+                selected_description: None,
+                is_current: false,
+                display_shortcut: None,
+                search_value: Some("option b".to_string()),
+            },
+        ];
+        lists.push((
+            "Basic".to_string(),
+            SelectionList::new(config, items, Box::new(())),
+        ));
+
+        // 2. With search enabled
+        let config = SelectionListConfig::new()
+            .with_title("With Search")
+            .with_search(Some("Type to filter...".to_string()))
+            .with_footer_hint(standard_popup_hint_line());
+        let items = vec![
+            SelectionItem {
+                data: ExampleData {
+                    name: "Apple".to_string(),
+                },
+                name: "Apple".to_string(),
+                description: Some("A fruit".to_string()),
+                selected_description: None,
+                is_current: false,
+                display_shortcut: None,
+                search_value: Some("apple fruit".to_string()),
+            },
+            SelectionItem {
+                data: ExampleData {
+                    name: "Banana".to_string(),
+                },
+                name: "Banana".to_string(),
+                description: Some("Another fruit".to_string()),
+                selected_description: None,
+                is_current: false,
+                display_shortcut: None,
+                search_value: Some("banana fruit".to_string()),
+            },
+            SelectionItem {
+                data: ExampleData {
+                    name: "Carrot".to_string(),
+                },
+                name: "Carrot".to_string(),
+                description: Some("A vegetable".to_string()),
+                selected_description: None,
+                is_current: false,
+                display_shortcut: None,
+                search_value: Some("carrot vegetable".to_string()),
+            },
+        ];
+        lists.push((
+            "Searchable".to_string(),
+            SelectionList::new(config, items, Box::new(())),
+        ));
+
+        // 3. With subtitle
+        let config = SelectionListConfig::new()
+            .with_title("With Subtitle")
+            .with_subtitle("This is a helpful subtitle")
+            .with_footer_hint(standard_popup_hint_line());
+        let items = vec![SelectionItem {
+            data: ExampleData {
+                name: "First".to_string(),
+            },
+            name: "First".to_string(),
+            description: Some("First item".to_string()),
+            selected_description: None,
+            is_current: false,
+            display_shortcut: None,
+            search_value: Some("first".to_string()),
+        }];
+        lists.push((
+            "Subtitle".to_string(),
+            SelectionList::new(config, items, Box::new(())),
+        ));
+
+        // 4. Long list for scrolling
+        let config = SelectionListConfig::new()
+            .with_title("Scrolling List")
+            .with_footer_hint(standard_popup_hint_line());
+        let mut items = Vec::new();
+        for i in 0..12 {
+            items.push(SelectionItem {
+                data: ExampleData {
+                    name: format!("Item {}", i + 1),
+                },
+                name: format!("Item {}", i + 1),
+                description: Some(format!("Description {}", i + 1)),
+                selected_description: None,
+                is_current: i == 0,
+                display_shortcut: None,
+                search_value: Some(format!("item {}", i + 1)),
+            });
+        }
+        lists.push((
+            "Long List".to_string(),
+            SelectionList::new(config, items, Box::new(())),
+        ));
+
+        Self {
+            lists,
+            last_event: "Press keys to interact...".to_string(),
+        }
+    }
+
+    fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
+        loop {
+            terminal.draw(|frame| self.draw(frame))?;
+
+            if let Event::Key(key) = event::read()? {
+                // Exit on Esc or Ctrl+C
+                if key.code == EventKeyCode::Esc
+                    || (key.code == EventKeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL))
+                {
+                    break;
+                }
+
+                // Distribute input to all SelectionLists
+                for (label, list) in &mut self.lists {
+                    let event = list.handle_key_event(key);
+                    match event {
+                        SelectionListEvent::Selected(idx) => {
+                            self.last_event = format!("[{}] Selected item at index {}", label, idx);
+                        }
+                        SelectionListEvent::Cancelled => {
+                            self.last_event = format!("[{}] Cancelled", label);
+                        }
+                        SelectionListEvent::None => {}
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {
+        let main_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Status line
+                Constraint::Min(0),    // Lists
+            ])
+            .split(frame.area());
+
+        // Render status line
+        let status = Paragraph::new(format!("Last event: {}", self.last_event))
+            .style(Style::default().fg(Color::Cyan));
+        frame.render_widget(status, main_layout[0]);
+
+        // Calculate heights for each list
+        let num_lists = self.lists.len();
+        let constraints = vec![Constraint::Min(0); num_lists];
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(main_layout[1]);
+
+        // Render each SelectionList with its label
+        for (i, (label, list)) in self.lists.iter_mut().enumerate() {
+            if i < chunks.len() {
+                let area = chunks[i];
+
+                // Split area: 1 line for label, rest for list
+                let inner_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(1), Constraint::Min(0)])
+                    .split(area);
+
+                // Render label
+                let label_text = Paragraph::new(format!("[ {} ]", label))
+                    .style(Style::default().fg(Color::Yellow));
+                frame.render_widget(label_text, inner_layout[0]);
+
+                // Render list
+                list.render(inner_layout[1], frame.buffer_mut());
+            }
+        }
+    }
+}
+
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    let mut terminal = ratatui::init();
+    let mut app = App::new();
+    let result = app.run(&mut terminal);
+    ratatui::restore();
+    result
 }
 
 #[cfg(test)]
