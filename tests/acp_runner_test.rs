@@ -100,8 +100,7 @@ async fn test_session_updates_are_streamed() {
                 ref text
             } if text == "Test message 1"
         ),
-        "first event mismatch: {:?}",
-        first
+        "first event mismatch: {first:?}"
     );
 
     assert!(
@@ -111,8 +110,7 @@ async fn test_session_updates_are_streamed() {
                 ref text
             } if text == "Test message 2"
         ),
-        "second event mismatch: {:?}",
-        second
+        "second event mismatch: {second:?}"
     );
 
     cancel_token.cancel();
@@ -153,8 +151,7 @@ async fn test_agent_calls_read_text_file() {
             ConversationEvent::AssistantMessage { ref text }
                 if text.contains("Read file content: Hello from file")
         ),
-        "expected file content event, got {:?}",
-        third_event
+        "expected file content event, got {third_event:?}"
     );
 
     cancel_token.cancel();

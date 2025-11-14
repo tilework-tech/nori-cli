@@ -4,7 +4,7 @@ Path: @/
 
 ### Overview
 
-A terminal user interface (TUI) application that routes user prompts to different AI coding agent CLIs (Claude Code and GPT Codex). The application provides a chat-style interface where conversation history is always visible, with an overlay for agent selection and an input field at the bottom for natural interaction.
+A terminal user interface (TUI) application that routes user prompts to different AI coding agent CLIs (Claude Code, Codex ACP, Claude Code ACP, and Mock ACP Agent). The application provides a chat-style interface where conversation history is always visible, with an overlay for agent selection and an input field at the bottom for natural interaction.
 
 ### How it fits into the larger codebase
 
@@ -53,7 +53,8 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 
 **Subprocess Integration**:
 - Backend trait (@/src/backends.rs) defines `spawn_stream()` for launching agent CLIs and streaming events
-- Implementations spawn processes with stdout/stderr piped (@/src/backends/claude.rs, @/src/backends/codex.rs)
+- Implementations spawn processes with stdout/stderr piped (@/src/backends/claude.rs for native CLI, @/src/backends/codex_acp.rs and @/src/backends/claude_code_acp.rs for ACP-based agents)
+- ACP-based backends wrap AcpAgentRunner (@/src/acp_runner.rs) to launch npm packages via bunx/npx
 - Main loop in @/src/main.rs:spawn_and_stream() uses tokio::select! to multiplex stream consumption with cancellation
 - CancellationToken from tokio-util enables cooperative cancellation - when token fires, stream is dropped
 - Events are sent through mpsc channel as Message::StreamEvent to update UI in real-time
