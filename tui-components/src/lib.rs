@@ -53,12 +53,12 @@ pub mod wrapping;
 
 // Selection and popup components
 pub mod selection;
-// TODO: Extract these in future iterations
-// pub mod wrapping;
-// pub mod textarea;
-// pub mod selection_list;
+
+// Footer component
+pub mod footer;
 
 // Re-export commonly used types for convenience
+pub use footer::{FooterConfig, FooterMode, footer_height, render_footer};
 pub use key_hint::KeyBinding;
 pub use live_wrap::{Row, RowBuilder, take_prefix_by_width};
 pub use render::{ColumnRenderable, InsetRenderable, Renderable, RenderableExt, RowRenderable};

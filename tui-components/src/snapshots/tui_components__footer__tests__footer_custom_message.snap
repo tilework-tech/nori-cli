@@ -1,0 +1,5 @@
+---
+source: tui-components/src/footer.rs
+expression: terminal.backend()
+---
+"  Processing your request...                                                    "
