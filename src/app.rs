@@ -134,11 +134,15 @@ impl Default for Model {
             agents: vec![
                 "Claude Code".to_string(),
                 "Codex ACP".to_string(),
+                "Claude Code ACP".to_string(),
                 "Mock ACP Agent".to_string(),
             ],
             backend_availability: vec![
                 backends::is_available("claude"),
                 backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
+                backends::is_available(
+                    backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
+                ),
                 backends::is_available(crate::backends::mock::binary_path()),
             ],
             textarea: create_textarea(),
@@ -339,6 +343,9 @@ impl Model {
                         backends::is_available("claude"),
                         backends::is_available(
                             backends::codex_acp::CodexAcpBackend::new().command_name(),
+                        ),
+                        backends::is_available(
+                            backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
                         ),
                         backends::is_available(crate::backends::mock::binary_path()),
                     ];

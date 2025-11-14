@@ -14,8 +14,7 @@ fn test_codex_acp_command_name_returns_runtime_executable() {
     // Should be either bunx, npx, or a fallback
     assert!(
         cmd == "bunx" || cmd == "npx",
-        "Command should be bunx or npx, got: {}",
-        cmd
+        "Command should be bunx or npx, got: {cmd}"
     );
 }
 
