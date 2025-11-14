@@ -932,6 +932,7 @@ dependencies = [
  "agent-client-protocol",
  "async-stream",
  "async-trait",
+ "clap",
  "color-eyre",
  "crossterm",
  "futures",

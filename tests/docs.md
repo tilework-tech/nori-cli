@@ -17,6 +17,19 @@ Test suite for the agent-router-tui application, covering state machine transiti
 
 ### Core Implementation
 
+**CLI Argument Parsing Tests** (@/tests/cli_args_test.rs):
+- `test_agent_long_flag()`: Verifies --agent flag parses correctly with agent name
+- `test_agent_short_flag()`: Verifies -a short flag parses correctly
+- `test_message_only()`: Verifies positional message argument without agent flag
+- `test_agent_and_message()`: Verifies both --agent and message arguments together
+- `test_no_arguments()`: Verifies empty CLI args parse to None values
+- `test_agent_name_claude()`: Verifies "claude" maps to index 0
+- `test_agent_name_codex()`: Verifies "codex" maps to index 1
+- `test_agent_name_claudecode()`: Verifies "claudecode" maps to index 2
+- `test_agent_name_mock()`: Verifies "mock" maps to index 3
+- `test_agent_name_case_insensitive()`: Verifies agent name matching is case-insensitive
+- `test_agent_name_invalid()`: Verifies invalid agent names return None from agent_name_to_index()
+
 **Ctrl-C Handling Tests** (@/tests/ctrl_c_handling_test.rs):
 - `test_first_ctrl_c_clears_textarea_and_shows_hint()`: Verifies first Ctrl-C press behavior
   - Adds text to textarea via .insert_str()
@@ -170,6 +183,16 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Extracts text field from AssistantMessage
 - Verifies contract between backends and main loop: backends output Claude CLI format, parse_jsonl_event() produces ConversationEvent
 
+**CLI Argument Test Coverage** (@/tests/cli_args_test.rs):
+- Comprehensive tests for clap::Parser argument parsing (11 tests total)
+- Tests both long (--agent) and short (-a) flag forms
+- Tests positional message argument parsing
+- Tests combination of agent flag and message argument
+- Tests empty argument scenario (no flags or args)
+- Agent name mapping tests verify all four backends (claude, codex, claudecode, mock)
+- Case-insensitive matching tests verify .to_lowercase() behavior
+- Invalid agent name test verifies None return for unknown agents
+
 **Conversation Module Test Coverage**:
 - Comprehensive tests for all ConversationEvent variants (21 tests total including UserMessage, StreamCancelled, StatusMessage, and filtering logic)
 - Edge cases: malformed JSON, missing fields, multiple text blocks, empty details
@@ -208,6 +231,8 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - No integration test for actual stream cancellation with long-running process - test_cancel_stream_during_streaming only tests state machine
 - No integration test for Ctrl-C priority over overlays/install prompts - tests only verify Model state transitions, not actual key event routing in handle_key_simple
 - No test for main loop quit detection (Some → None timestamp transition) - would require full event loop integration
+- No integration tests for CLI argument flow - stdin reading, agent validation with exit code, agent selection bypass, textarea pre-fill - only unit tests for clap parsing and agent name mapping
+- No test for CLI message precedence (CLI arg vs stdin) - would require mocking stdin and command-line args together
 
 **CI Integration**:
 - Tests run on every PR via @/.github/workflows/pr-ci.yml

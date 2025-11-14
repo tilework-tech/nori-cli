@@ -26,6 +26,7 @@ async-stream = "0.3"
 which = "7.0"
 opener = "0.7"
 unicode-width = "0.2"
+clap = { version = "4", features = ["derive"] }
 tui-components = { path = "./tui-components" }
  agent-client-protocol = "0.7.0"
  tuicore = { git = "https://github.com/CSRessel/terminal-input-debug", rev = "a2f66fd" }
