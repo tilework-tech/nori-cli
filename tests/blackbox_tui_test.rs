@@ -2,8 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use nori_cli::app::{Message, Model};
 use nori_cli::ui;
-use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 
 /// Helper to create a KeyEvent for testing
 fn key_event(code: KeyCode) -> KeyEvent {
