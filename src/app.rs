@@ -218,11 +218,13 @@ impl Model {
                 self.selected_agent_index = self.list_state.selected();
                 self.show_agent_router = false;
                 self.error_message = None;
+                self.textarea = create_textarea();
             }
 
             Message::ExitInputMode => {
                 // Close the agent router overlay if open
                 self.show_agent_router = false;
+                self.textarea = create_textarea();
             }
 
             Message::KeyPress(key) => {
@@ -430,6 +432,7 @@ impl Model {
             Message::CloseAutocomplete => {
                 self.show_autocomplete = false;
                 self.autocomplete_filtered_commands.clear();
+                self.textarea = create_textarea();
             }
 
             Message::Quit => {
