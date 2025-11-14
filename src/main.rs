@@ -2,6 +2,7 @@ mod acp_runner;
 mod app;
 mod autocomplete;
 mod backends;
+mod cli;
 mod commands;
 mod conversation;
 mod ui;
@@ -11,32 +12,83 @@ use crate::autocomplete::update_autocomplete_state;
 use crate::backends::{
     AgentBackend, claude::ClaudeBackend, claude_code_acp::ClaudeCodeAcpBackend, mock::MockBackend,
 };
+use crate::cli::{Cli, agent_name_to_index, valid_agent_names};
 use crate::commands::{CommandRegistry, parse_slash_command};
 use crate::conversation::{ConversationEvent, render_event, should_render_event};
 
 use _tuicore::{TerminalWriter, TuiApp};
+use clap::Parser;
 use color_eyre::Result;
 use futures::StreamExt;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::CrosstermBackend;
+use std::io::{self, IsTerminal, Read};
 use std::thread;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Parse CLI arguments
+    let cli = Cli::parse();
+
+    // Validate agent name if provided
+    let agent_index = if let Some(ref agent_name) = cli.agent {
+        match agent_name_to_index(agent_name) {
+            Some(index) => Some(index),
+            None => {
+                eprintln!("Error: Invalid agent name '{agent_name}'");
+                eprintln!("Valid agents: {}", valid_agent_names().join(", "));
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
+
+    // Read from stdin if available (piped input)
+    let stdin_message = if !io::stdin().is_terminal() {
+        let mut buffer = String::new();
+        io::stdin().read_to_string(&mut buffer)?;
+        if !buffer.trim().is_empty() {
+            Some(buffer.trim().to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Determine initial message (CLI arg takes precedence over stdin)
+    let initial_message = cli.message.or(stdin_message);
+
     let mut tui_app = TuiApp::builder("nori-cli").inline(20).build();
 
     let mut terminal = tui_app.init()?;
-    run_app(&mut terminal).await?;
+    run_app(&mut terminal, agent_index, initial_message).await?;
 
     tui_app.restore()?;
     // Optional terminal.insert_before here, for an exit status/usage message!
     Ok(())
 }
 
-async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWriter>>) -> Result<()> {
+async fn run_app(
+    terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWriter>>,
+    agent_index: Option<usize>,
+    initial_message: Option<String>,
+) -> Result<()> {
     let mut model = Model::default();
+
+    // Set agent index if provided via CLI
+    if let Some(index) = agent_index {
+        model.selected_agent_index = Some(index);
+    }
+
+    // Pre-fill textarea with initial message if provided
+    if let Some(message) = initial_message {
+        model.textarea.set_text(&message);
+    }
+
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
     // Create command registry

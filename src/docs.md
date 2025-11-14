@@ -20,13 +20,14 @@ Core application modules implementing the TUI's architecture: application state 
 ```rust
 pub mod app;          // Model, Message, and update logic
 pub mod backends;     // AgentBackend trait and implementations
+pub mod cli;          // CLI argument parsing and agent name mapping
 pub mod conversation; // JSONL parsing and event rendering
 pub mod ui;           // Rendering functions for each mode
 ```
 
 **Entry Point** (@/src/main.rs):
-- `main()`: Sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
-- `run_app()`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task, conditionally increments `loading_frame` counter during streaming when using legacy spinner (only when `use_codex_components = false`)
+- `main()`: Parses CLI arguments via clap::Parser, validates agent name (exits with error if invalid), reads from stdin if piped, then sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
+- `run_app(agent_index, initial_message)`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - accepts optional agent_index to skip agent selection screen and optional initial_message to pre-fill textarea - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task, conditionally increments `loading_frame` counter during streaming when using legacy spinner (only when `use_codex_components = false`)
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
@@ -56,6 +57,14 @@ pub mod ui;           // Rendering functions for each mode
 - `parse_jsonl_event()`: Parses raw JSONL strings into ConversationEvent - handles Claude CLI event format with nested message.content arrays
 - `render_event()`: Converts ConversationEvent into styled ratatui Lines - UserMessage renders with cyan `[user]` prefix, StatusMessage renders with green `[status]` prefix, StreamCancelled renders "Interrupted" in red, other events render with type-specific prefixes and colors
 - `should_render_event()`: Filters events based on debug mode - SystemEvent and UnknownEvent are considered debug events (hidden when `show_debug: false`), all other events (UserMessage, AssistantMessage, ResultSummary, StderrOutput, StreamCancelled, StatusMessage) are always visible
+
+**CLI Argument Parsing** (@/src/cli.rs):
+- `Cli` struct: Derives clap::Parser for command-line argument parsing with two optional fields - `agent: Option<String>` for agent selection and `message: Option<String>` for initial message
+- `agent_name_to_index(name)`: Maps agent name strings to backend array indices - supports "claude" (0), "codex" (1), "claudecode" (2), "mock" (3) - case-insensitive matching via .to_lowercase(), returns None for invalid names
+- `valid_agent_names()`: Returns Vec of valid agent names for error messages
+- Agent selection via CLI bypasses TUI selection screen by setting `model.selected_agent_index` directly in run_app()
+- Stdin detection via `io::stdin().is_terminal()` from std::io::IsTerminal trait - reads piped input with `read_to_string()` before TUI initialization
+- CLI message argument takes precedence over stdin when both provided
 
 **Backend Abstraction** (@/src/backends.rs):
 - `AgentBackend` trait: `spawn_stream(prompt, cancel_token) -> Pin<Box<dyn Stream<Item = ConversationEvent>>>` and metadata methods
@@ -101,7 +110,16 @@ Cancellation Path
 
 ### Things to Know
 
-**Terminal Cleanup Sequence** (@/src/main.rs:27-31):
+**CLI Argument Initialization Flow** (@/src/main.rs:31-68):
+- CLI parsing happens before terminal initialization to allow early exit on invalid agent names
+- Agent validation uses fail-fast strategy: invalid agent name prints error and exits with code 1 before TUI setup
+- Stdin detection via `!io::stdin().is_terminal()` checks if input is piped before consuming stdin with `read_to_string()`
+- Reading stdin consumes the entire input stream before TUI initialization - cannot read stdin after terminal is in raw mode
+- Message precedence: CLI argument (--message) takes priority over piped stdin via `cli.message.or(stdin_message)`
+- Agent selection bypass: when agent_index is Some, skips TUI agent selection screen by pre-populating `model.selected_agent_index`
+- Textarea pre-fill: initial_message sets textarea content via `.set_text()` before event loop starts
+
+**Terminal Cleanup Sequence** (@/src/main.rs):
 - Cleanup happens in specific order: move cursor to next line, disable raw mode, call ratatui::restore()
 - `MoveToNextLine(1)` from crossterm positions cursor below TUI content before raw mode is disabled
 - Without cursor positioning, shell prompt would appear in middle of painted TUI area with Viewport::Inline(8)
