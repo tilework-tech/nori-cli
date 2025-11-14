@@ -935,6 +935,7 @@ dependencies = [
  "color-eyre",
  "crossterm",
  "futures",
+ "insta",
  "once_cell",
  "opener",
  "ratatui",
