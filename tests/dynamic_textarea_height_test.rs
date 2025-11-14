@@ -8,8 +8,8 @@ fn test_single_line_returns_minimum_height() {
 
     let height = calculate_textarea_height(&textarea, 80);
 
-    // MIN_HEIGHT (3) + BORDER_HEIGHT (2) = 5
-    assert_eq!(height, 5);
+    // MIN_HEIGHT (1) + BORDER_HEIGHT (0) = 1
+    assert_eq!(height, 1);
 }
 
 #[test]
@@ -23,8 +23,23 @@ fn test_multiline_returns_correct_height() {
 
     let height = calculate_textarea_height(&textarea, 80);
 
-    // 3 lines + BORDER_HEIGHT (2) = 5
-    assert_eq!(height, 5);
+    // 3 lines + BORDER_HEIGHT (0) = 3
+    assert_eq!(height, 3);
+}
+
+#[test]
+fn test_multiline_bordered_returns_correct_height() {
+    let mut textarea = TextArea::new(TextAreaConfig::default().with_padding(4, 5, 6, 7));
+    textarea.insert_str("line 1");
+    textarea.insert_str("\n");
+    textarea.insert_str("line 2");
+    textarea.insert_str("\n");
+    textarea.insert_str("line 3");
+
+    let height = calculate_textarea_height(&textarea, 80);
+
+    // 3 lines + BORDER_HEIGHT (4 and 5) = 12
+    assert_eq!(height, 12);
 }
 
 #[test]
@@ -36,9 +51,9 @@ fn test_long_line_accounts_for_wrapping() {
 
     let height = calculate_textarea_height(&textarea, 80);
 
-    // 4 wrapped lines + BORDER_HEIGHT (2) = 6
+    // 4 wrapped lines + BORDER_HEIGHT (0) = 4
     assert_eq!(
-        height, 6,
+        height, 4,
         "Expected height 6 for wrapped line, got {height}"
     );
 }
@@ -56,6 +71,6 @@ fn test_height_respects_maximum_bound() {
 
     let height = calculate_textarea_height(&textarea, 80);
 
-    // MAX_HEIGHT (10) + BORDER_HEIGHT (2) = 12
-    assert_eq!(height, 12, "Expected maximum height of 12, got {height}");
+    // MAX_HEIGHT (10) + BORDER_HEIGHT (0) = 12
+    assert_eq!(height, 10, "Expected maximum height of 12, got {height}");
 }
