@@ -3,7 +3,9 @@
 use crate::backends;
 use crate::backends::AgentBackend;
 use crate::conversation::ConversationEvent;
-use ratatui::widgets::ListState;
+use tui_components::selection::{
+    SelectionItem, SelectionList, SelectionListConfig, standard_popup_hint_line,
+};
 use tui_components::textarea::{TextArea, TextAreaConfig};
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
@@ -102,10 +104,9 @@ pub enum Message {
     MouseEvent(crossterm::event::MouseEvent),
 }
 
-#[derive(Debug)]
 pub struct Model {
     pub current_mode: AppMode,
-    pub list_state: ListState,
+    pub agent_selection_list: SelectionList<String>,
     pub agents: Vec<String>,
     pub backend_availability: Vec<bool>,
     pub textarea: TextArea,
@@ -121,9 +122,8 @@ pub struct Model {
     pub install_prompt_choice: InstallChoice,
     pub current_stream_token: Option<tokio_util::sync::CancellationToken>,
     pub last_ctrl_c_time: Option<std::time::Instant>,
+    pub autocomplete_selection_list: SelectionList<String>,
     pub show_autocomplete: bool,
-    pub autocomplete_filtered_commands: Vec<String>,
-    pub autocomplete_selected_index: usize,
     pub show_debug_events: bool,
     pub use_codex_components: bool,
     pub loading_frame: usize,
@@ -132,26 +132,68 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
-        let mut list_state = ListState::default();
-        list_state.select(Some(0));
+        let agents = vec![
+            "Claude Code".to_string(),
+            "Codex ACP".to_string(),
+            "Claude Code ACP".to_string(),
+            "Mock ACP Agent".to_string(),
+        ];
+
+        let backend_availability = vec![
+            backends::is_available("claude"),
+            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
+            backends::is_available(
+                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
+            ),
+            backends::is_available(crate::backends::mock::binary_path()),
+        ];
+
+        // Create agent selection list
+        let agent_items: Vec<SelectionItem<String>> = agents
+            .iter()
+            .enumerate()
+            .map(|(i, agent)| {
+                let is_available = backend_availability[i];
+                let name = if is_available {
+                    agent.clone()
+                } else {
+                    format!("{agent} [Not Installed]")
+                };
+                SelectionItem {
+                    data: agent.clone(),
+                    name,
+                    description: Some(if is_available {
+                        "Available".to_string()
+                    } else {
+                        "Not installed on your system".to_string()
+                    }),
+                    selected_description: None,
+                    is_current: i == 0,
+                    display_shortcut: None,
+                    search_value: Some(agent.to_lowercase()),
+                }
+            })
+            .collect();
+
+        let agent_config = SelectionListConfig::new()
+            .with_title("Agent Router - Select an Agent")
+            .with_footer_hint(standard_popup_hint_line());
+
+        let agent_selection_list = SelectionList::new(agent_config, agent_items, Box::new(()));
+
+        // Create empty autocomplete selection list (will be populated dynamically)
+        let autocomplete_config = SelectionListConfig::new()
+            .with_title("Commands")
+            .with_footer_hint(standard_popup_hint_line());
+
+        let autocomplete_selection_list =
+            SelectionList::new(autocomplete_config, vec![], Box::new(()));
 
         Self {
             current_mode: AppMode::Selection,
-            list_state,
-            agents: vec![
-                "Claude Code".to_string(),
-                "Codex ACP".to_string(),
-                "Claude Code ACP".to_string(),
-                "Mock ACP Agent".to_string(),
-            ],
-            backend_availability: vec![
-                backends::is_available("claude"),
-                backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
-                backends::is_available(
-                    backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-                ),
-                backends::is_available(crate::backends::mock::binary_path()),
-            ],
+            agent_selection_list,
+            agents,
+            backend_availability,
             textarea: create_textarea(),
             response_events: Vec::new(),
             selected_agent_index: None,
@@ -165,9 +207,8 @@ impl Default for Model {
             install_prompt_choice: InstallChoice::default(),
             current_stream_token: None,
             last_ctrl_c_time: None,
+            autocomplete_selection_list,
             show_autocomplete: false,
-            autocomplete_filtered_commands: Vec::new(),
-            autocomplete_selected_index: 0,
             show_debug_events: false,
             use_codex_components: true,
             loading_frame: 0,
@@ -182,40 +223,20 @@ impl Model {
             Message::NextItem => {
                 // Only navigate when agent router overlay is open
                 if self.show_agent_router {
-                    let i = match self.list_state.selected() {
-                        Some(i) => {
-                            if i >= self.agents.len() - 1 {
-                                0
-                            } else {
-                                i + 1
-                            }
-                        }
-                        None => 0,
-                    };
-                    self.list_state.select(Some(i));
+                    self.agent_selection_list.move_down();
                 }
             }
 
             Message::PreviousItem => {
                 // Only navigate when agent router overlay is open
                 if self.show_agent_router {
-                    let i = match self.list_state.selected() {
-                        Some(i) => {
-                            if i == 0 {
-                                self.agents.len() - 1
-                            } else {
-                                i - 1
-                            }
-                        }
-                        None => 0,
-                    };
-                    self.list_state.select(Some(i));
+                    self.agent_selection_list.move_up();
                 }
             }
 
             Message::SelectItem => {
                 // Select agent and close overlay
-                self.selected_agent_index = self.list_state.selected();
+                self.selected_agent_index = self.agent_selection_list.selected_index();
                 self.show_agent_router = false;
                 self.error_message = None;
             }
@@ -392,44 +413,39 @@ impl Model {
             }
 
             Message::AutocompleteDown => {
-                if !self.autocomplete_filtered_commands.is_empty() {
-                    self.autocomplete_selected_index = (self.autocomplete_selected_index + 1)
-                        % self.autocomplete_filtered_commands.len();
-                }
+                self.autocomplete_selection_list.move_down();
             }
 
             Message::AutocompleteUp => {
-                if !self.autocomplete_filtered_commands.is_empty() {
-                    let len = self.autocomplete_filtered_commands.len();
-                    self.autocomplete_selected_index = if self.autocomplete_selected_index == 0 {
-                        len - 1
-                    } else {
-                        self.autocomplete_selected_index - 1
-                    };
-                }
+                self.autocomplete_selection_list.move_up();
             }
 
             Message::AutocompleteSelect => {
-                if let Some(selected_cmd) = self
-                    .autocomplete_filtered_commands
-                    .get(self.autocomplete_selected_index)
-                {
+                if let Some(item) = self.autocomplete_selection_list.selected_item() {
                     // Replace textarea content with selected command
                     self.textarea = {
                         let mut textarea = TextArea::new(TextAreaConfig::default());
-                        let text = format!("/{selected_cmd}");
+                        let text = format!("/{}", item.data);
                         textarea.set_text(&text);
                         textarea.set_cursor(text.len());
                         textarea
                     };
                 }
                 self.show_autocomplete = false;
-                self.autocomplete_filtered_commands.clear();
+                // Clear the autocomplete list
+                let config = SelectionListConfig::new()
+                    .with_title("Commands")
+                    .with_footer_hint(standard_popup_hint_line());
+                self.autocomplete_selection_list = SelectionList::new(config, vec![], Box::new(()));
             }
 
             Message::CloseAutocomplete => {
                 self.show_autocomplete = false;
-                self.autocomplete_filtered_commands.clear();
+                // Clear the autocomplete list
+                let config = SelectionListConfig::new()
+                    .with_title("Commands")
+                    .with_footer_hint(standard_popup_hint_line());
+                self.autocomplete_selection_list = SelectionList::new(config, vec![], Box::new(()));
             }
 
             Message::Quit => {

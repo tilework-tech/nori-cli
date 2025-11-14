@@ -5,6 +5,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+use tui_components::render::Renderable;
 use tui_components::textarea::TextArea;
 use unicode_width::UnicodeWidthStr;
 
@@ -71,9 +72,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     // Adjust layout based on whether autocomplete is visible
     let constraints = if model.show_autocomplete {
-        // Calculate height needed for autocomplete (2 commands + borders = 4 lines)
-        let autocomplete_height =
-            (model.autocomplete_filtered_commands.len() as u16).clamp(1, 6) + 2;
+        // Calculate height needed for autocomplete using SelectionList
+        let autocomplete_height = model.autocomplete_selection_list.desired_height(area.width);
         vec![
             Constraint::Length(textarea_height),     // Input (dynamic)
             Constraint::Length(autocomplete_height), // Autocomplete
@@ -177,37 +177,10 @@ fn render_agent_selection_fullscreen(model: &mut Model, frame: &mut Frame) {
     );
     frame.render_widget(title, chunks[0]);
 
-    // Agent list with availability indication
-    let items: Vec<ListItem> = model
-        .agents
-        .iter()
-        .enumerate()
-        .map(|(i, agent)| {
-            let is_available = model.backend_availability.get(i).copied().unwrap_or(false);
-            let text = if is_available {
-                agent.to_string()
-            } else {
-                format!("{agent} [Not Installed]")
-            };
-            let style = if is_available {
-                Style::default()
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-            ListItem::new(text).style(style)
-        })
-        .collect();
-
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Agents"))
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(">> ");
-
-    frame.render_stateful_widget(list, chunks[1], &mut model.list_state);
+    // Agent selection list
+    model
+        .agent_selection_list
+        .render(chunks[1], frame.buffer_mut());
 
     // Instructions
     let instructions = Paragraph::new("↑/↓: navigate | Enter: select | Esc: close")
@@ -304,30 +277,12 @@ fn render_autocomplete_in_layout(model: &Model, frame: &mut Frame, area: Rect) {
     // Render autocomplete as part of the layout (not an overlay)
     // This area is the chunk allocated for autocomplete in the main layout
 
-    if model.autocomplete_filtered_commands.is_empty() {
+    if model.autocomplete_selection_list.selected_index().is_none() {
         return; // Nothing to show
     }
 
-    // Build list items
-    let items: Vec<ListItem> = model
-        .autocomplete_filtered_commands
-        .iter()
-        .map(|cmd| ListItem::new(format!("/{cmd}")))
-        .collect();
-
-    // Create highlighted list - render directly in the provided area
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Commands"))
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("> ");
-
-    // Create stateful widget with current selection
-    let mut list_state = ratatui::widgets::ListState::default();
-    list_state.select(Some(model.autocomplete_selected_index));
-
-    frame.render_stateful_widget(list, area, &mut list_state);
+    // Render the autocomplete selection list
+    model
+        .autocomplete_selection_list
+        .render(area, frame.buffer_mut());
 }
