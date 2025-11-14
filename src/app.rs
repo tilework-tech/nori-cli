@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::backends;
+use crate::backends::AgentBackend;
 use crate::conversation::ConversationEvent;
 use ratatui::style::Style;
 use ratatui::widgets::ListState;
@@ -132,12 +133,12 @@ impl Default for Model {
             list_state,
             agents: vec![
                 "Claude Code".to_string(),
-                "GPT Codex".to_string(),
+                "Codex ACP".to_string(),
                 "Mock ACP Agent".to_string(),
             ],
             backend_availability: vec![
                 backends::is_available("claude"),
-                backends::is_available("codex"),
+                backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
                 backends::is_available(crate::backends::mock::binary_path()),
             ],
             textarea: create_textarea(),
@@ -336,7 +337,9 @@ impl Model {
                     // Re-check backend availability
                     self.backend_availability = vec![
                         backends::is_available("claude"),
-                        backends::is_available("codex"),
+                        backends::is_available(
+                            backends::codex_acp::CodexAcpBackend::new().command_name(),
+                        ),
                         backends::is_available(crate::backends::mock::binary_path()),
                     ];
                 } else {
