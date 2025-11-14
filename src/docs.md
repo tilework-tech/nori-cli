@@ -205,11 +205,15 @@ Cancellation Path
 - Text wrapping enabled on install prompt message to handle varying viewport widths without manual text size management
 
 **TextArea Creation Pattern** (@/src/app.rs, @/src/main.rs):
-- All TextArea instances created via `TextArea::new(TextAreaConfig::default())` from tui-components library
+- All TextArea instances created via `create_textarea()` helper function in @/src/app.rs:433-443
 - TextArea creation happens in multiple locations: Model::default() initialization, Model::update() handlers (SubmitInput, ClearTextarea, AutocompleteSelect), and main.rs (slash command execution)
-- `create_textarea()` helper function in @/src/app.rs:433-435 provides DRY pattern for consistent creation with default configuration
+- `create_textarea()` provides DRY pattern with consistent styling configuration:
+  - DarkGray background via `.with_background_style(Style::default().bg(Color::DarkGray))`
+  - 1 row top/bottom padding, 0 columns left/right padding via `.with_padding(1, 1, 0, 0)`
+  - › prefix symbol via `.with_prefix("›", Style::default())`
+  - "Write a message..." placeholder via `.with_placeholder()`
 - AutocompleteSelect handler creates TextArea with initial text content and positions cursor at end of text using `.set_cursor(text.len())`
-- All TextArea instances use default configuration which provides standard text editing behavior, cursor handling, and styling
+- Styling provides visual distinction from terminal background and clear input affordance
 
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false

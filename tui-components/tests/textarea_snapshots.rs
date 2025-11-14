@@ -385,3 +385,154 @@ fn test_trailing_newline() {
 
     "###);
 }
+
+#[test]
+fn test_background_style() {
+    let config =
+        TextAreaConfig::default().with_background_style(Style::default().bg(Color::DarkGray));
+    let textarea = TextArea::new(config);
+
+    // Render to buffer and verify background color is applied to entire area
+    let area = Rect::new(0, 0, 10, 3);
+    let mut buf = Buffer::empty(area);
+    WidgetRef::render_ref(&textarea, area, &mut buf);
+
+    // Check that all cells have the background color
+    for y in 0..3 {
+        for x in 0..10 {
+            let cell = &buf[(x, y)];
+            assert_eq!(
+                cell.bg,
+                Color::DarkGray,
+                "Cell at ({}, {}) should have DarkGray background",
+                x,
+                y
+            );
+        }
+    }
+}
+
+#[test]
+fn test_padding() {
+    let config = TextAreaConfig::default().with_padding(1, 1, 2, 2);
+    let mut textarea = TextArea::new(config);
+    textarea.set_text("Text");
+
+    // With 2-column left padding and 2-column right padding,
+    // text should start at column 2
+    assert_snapshot!(render_to_string(&textarea, 10, 3), @r###"
+      Text
+    "###);
+}
+
+#[test]
+fn test_prefix_symbol() {
+    let config = TextAreaConfig::default().with_prefix("›", Style::default());
+    let textarea = TextArea::new(config);
+
+    // Prefix should appear on the left side, vertically centered
+    let area = Rect::new(0, 0, 10, 3);
+    let mut buf = Buffer::empty(area);
+    WidgetRef::render_ref(&textarea, area, &mut buf);
+
+    // With height 3, center is at y=1
+    assert_eq!(
+        buf[(0, 1)].symbol(),
+        "›",
+        "Prefix should be at vertical center"
+    );
+}
+
+#[test]
+fn test_border_style() {
+    let config = TextAreaConfig::default().with_border_style(Style::default().fg(Color::Gray));
+    let textarea = TextArea::new(config);
+
+    // Render and verify border exists
+    assert_snapshot!(render_to_string(&textarea, 10, 5), @r###"
+    ┌────────┐
+    │        │
+    │        │
+    │        │
+    └────────┘
+    "###);
+}
+
+// Variation tests for UI/UX exploration
+
+#[test]
+fn test_variation_1_default_spec() {
+    // Light gray background, no border, 2-col L/R padding, 1-row T/B padding, › prefix
+    let config = TextAreaConfig::default()
+        .with_background_style(Style::default().bg(Color::DarkGray))
+        .with_padding(1, 1, 2, 2)
+        .with_prefix("›", Style::default())
+        .with_placeholder("Write tests for @filename");
+    let textarea = TextArea::new(config);
+
+    // Test empty state with placeholder (› + 2 padding + text)
+    assert_snapshot!(render_to_string(&textarea, 40, 3), @"›    Write tests for @filename");
+}
+
+#[test]
+fn test_variation_1_with_text() {
+    let config = TextAreaConfig::default()
+        .with_background_style(Style::default().bg(Color::DarkGray))
+        .with_padding(1, 1, 2, 2)
+        .with_prefix("›", Style::default());
+    let mut textarea = TextArea::new(config);
+    textarea.set_text("Add dark mode");
+
+    assert_snapshot!(render_to_string(&textarea, 40, 3), @"›    Add dark mode");
+}
+
+#[test]
+fn test_variation_2_bordered() {
+    // Darker background, subtle border, 3-col L/R padding, 1-row T/B padding, > prefix
+    let config = TextAreaConfig::default()
+        .with_background_style(Style::default().bg(Color::Black))
+        .with_border_style(Style::default().fg(Color::Gray))
+        .with_padding(1, 1, 3, 3)
+        .with_prefix(">", Style::default())
+        .with_placeholder("Enter command...");
+    let textarea = TextArea::new(config);
+
+    assert_snapshot!(render_to_string(&textarea, 40, 5), @r"
+    ┌──────────────────────────────────────┐
+    │                                      │
+    │>   Enter command...                  │
+    │                                      │
+    └──────────────────────────────────────┘
+    ");
+}
+
+#[test]
+fn test_variation_3_tinted() {
+    // Cyan-tinted background, no border, 1-col L/R padding, 1-row T/B padding, • prefix
+    let config = TextAreaConfig::default()
+        .with_background_style(Style::default().bg(Color::Cyan).fg(Color::Black))
+        .with_padding(1, 1, 1, 1)
+        .with_prefix("•", Style::default())
+        .with_placeholder("Type here...");
+    let textarea = TextArea::new(config);
+
+    assert_snapshot!(render_to_string(&textarea, 30, 3), @"•   Type here...");
+}
+
+#[test]
+fn test_variation_4_minimal() {
+    // Very subtle gray, no border, 1-col L/R padding, 0-row T/B padding, ▸ prefix
+    let config = TextAreaConfig::default()
+        .with_background_style(Style::default().bg(Color::DarkGray))
+        .with_padding(0, 0, 1, 1)
+        .with_prefix("▸", Style::default())
+        .with_placeholder("Message...");
+    let mut textarea = TextArea::new(config);
+    textarea.set_text("Test multiline\nwrapping behavior");
+
+    assert_snapshot!(render_to_string(&textarea, 20, 3), @r"
+        Test multiline
+    ▸   wrapping
+        behavior
+    ");
+}

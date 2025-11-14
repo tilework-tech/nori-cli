@@ -449,5 +449,14 @@ impl Model {
 }
 
 fn create_textarea() -> TextArea {
-    TextArea::new(TextAreaConfig::default())
+    use ratatui::style::{Color, Style};
+
+    // Variation 1: Default - Light gray background, › prefix, balanced padding
+    let config = TextAreaConfig::default()
+        .with_background_style(Style::default().bg(Color::DarkGray))
+        .with_padding(1, 1, 0, 0)
+        .with_prefix("›", Style::default())
+        .with_placeholder("Write a message...");
+
+    TextArea::new(config)
 }

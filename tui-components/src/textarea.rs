@@ -28,7 +28,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
-use ratatui::widgets::{StatefulWidgetRef, WidgetRef};
+use ratatui::widgets::{StatefulWidgetRef, Widget, WidgetRef};
 use std::cell::RefCell;
 use std::ops::Range;
 use textwrap::Options;
@@ -46,6 +46,22 @@ pub struct TextAreaConfig {
     pub cursor_style: Style,
     /// Style for placeholder text
     pub placeholder_style: Style,
+    /// Style for background
+    pub background_style: Style,
+    /// Padding from top edge in rows
+    pub padding_top: u16,
+    /// Padding from bottom edge in rows
+    pub padding_bottom: u16,
+    /// Padding from left edge in columns
+    pub padding_left: u16,
+    /// Padding from right edge in columns
+    pub padding_right: u16,
+    /// Optional prefix symbol
+    pub prefix: Option<String>,
+    /// Style for prefix symbol
+    pub prefix_style: Style,
+    /// Optional border style
+    pub border_style: Option<Style>,
 }
 
 impl Default for TextAreaConfig {
@@ -55,6 +71,14 @@ impl Default for TextAreaConfig {
             text_style: Style::default(),
             cursor_style: Style::default().bg(Color::White).fg(Color::Black),
             placeholder_style: Style::default().fg(Color::DarkGray),
+            background_style: Style::default(),
+            padding_top: 0,
+            padding_bottom: 0,
+            padding_left: 0,
+            padding_right: 0,
+            prefix: None,
+            prefix_style: Style::default(),
+            border_style: None,
         }
     }
 }
@@ -86,6 +110,34 @@ impl TextAreaConfig {
     /// Set the placeholder text style.
     pub fn with_placeholder_style(mut self, style: Style) -> Self {
         self.placeholder_style = style;
+        self
+    }
+
+    /// Set the background style.
+    pub fn with_background_style(mut self, style: Style) -> Self {
+        self.background_style = style;
+        self
+    }
+
+    /// Set the padding (top, bottom, left, right).
+    pub fn with_padding(mut self, top: u16, bottom: u16, left: u16, right: u16) -> Self {
+        self.padding_top = top;
+        self.padding_bottom = bottom;
+        self.padding_left = left;
+        self.padding_right = right;
+        self
+    }
+
+    /// Set the prefix symbol and its style.
+    pub fn with_prefix(mut self, prefix: impl Into<String>, style: Style) -> Self {
+        self.prefix = Some(prefix.into());
+        self.prefix_style = style;
+        self
+    }
+
+    /// Set the border style.
+    pub fn with_border_style(mut self, style: Style) -> Self {
+        self.border_style = Some(style);
         self
     }
 }
@@ -414,36 +466,95 @@ impl StatefulWidgetRef for TextArea {
     type State = TextAreaState;
 
     fn render_ref(&self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        // Fill background
+        for y in area.top()..area.bottom() {
+            for x in area.left()..area.right() {
+                buf[(x, y)].set_style(self.config.background_style);
+            }
+        }
+
+        // Render border if configured
+        let content_area = if let Some(border_style) = self.config.border_style {
+            use ratatui::widgets::Block;
+            let block = Block::bordered().style(border_style);
+            let inner = block.inner(area);
+            block.render(area, buf);
+            inner
+        } else {
+            area
+        };
+
+        // Calculate prefix width
+        let prefix_width = self.config.prefix.as_ref().map_or(0, |p| p.len() as u16);
+
+        // Calculate inner area with padding (accounting for prefix on the left)
+        let inner_area = Rect {
+            x: content_area.x + prefix_width + self.config.padding_left,
+            y: content_area.y + self.config.padding_top,
+            width: content_area.width.saturating_sub(
+                prefix_width + self.config.padding_left + self.config.padding_right,
+            ),
+            height: content_area
+                .height
+                .saturating_sub(self.config.padding_top + self.config.padding_bottom),
+        };
+
+        // Render prefix symbol at vertical center
+        if let Some(prefix) = &self.config.prefix {
+            let prefix_y = content_area.y + (content_area.height / 2);
+            if prefix_y < content_area.bottom() {
+                buf.set_string(content_area.x, prefix_y, prefix, self.config.prefix_style);
+            }
+        }
+
+        // Render text content in inner area
         if self.text.is_empty() {
             // Render placeholder if configured
             if let Some(placeholder) = &self.config.placeholder {
-                buf.set_string(area.x, area.y, placeholder, self.config.placeholder_style);
+                buf.set_string(
+                    inner_area.x,
+                    inner_area.y,
+                    placeholder,
+                    self.config.placeholder_style,
+                );
             }
             return;
         }
 
-        let lines = self.wrapped_lines(area.width);
-        let effective_scroll = self.effective_scroll(area.height, &lines, state.scroll);
+        let lines = self.wrapped_lines(inner_area.width);
+        let effective_scroll = self.effective_scroll(inner_area.height, &lines, state.scroll);
 
         for (row_idx, line_range) in lines
             .iter()
             .enumerate()
             .skip(effective_scroll as usize)
-            .take(area.height as usize)
+            .take(inner_area.height as usize)
         {
-            let y = area.y + (row_idx - effective_scroll as usize) as u16;
+            let y = inner_area.y + (row_idx - effective_scroll as usize) as u16;
             let end = line_range.end.min(self.text.len());
             let line_text = &self.text[line_range.start..end];
-            buf.set_string(area.x, y, line_text, self.config.text_style);
+            buf.set_string(inner_area.x, y, line_text, self.config.text_style);
         }
 
-        // Render cursor if visible
-        if let Some((cx, cy)) = self.cursor_pos_with_state(area, *state)
-            && cx < area.right()
-            && cy < area.bottom()
-        {
-            let cursor_cell = &mut buf[(cx, cy)];
-            cursor_cell.set_style(self.config.cursor_style);
+        // Render cursor if visible (adjusted for padding and prefix)
+        let cursor_area = Rect {
+            x: area.x + prefix_width + self.config.padding_left,
+            y: area.y + self.config.padding_top,
+            width: area.width.saturating_sub(
+                prefix_width + self.config.padding_left + self.config.padding_right,
+            ),
+            height: area
+                .height
+                .saturating_sub(self.config.padding_top + self.config.padding_bottom),
+        };
+
+        if let Some((cx, cy)) = self.cursor_pos_with_state(cursor_area, *state) {
+            let adjusted_cx = cx;
+            let adjusted_cy = cy;
+            if adjusted_cx < area.right() && adjusted_cy < area.bottom() {
+                let cursor_cell = &mut buf[(adjusted_cx, adjusted_cy)];
+                cursor_cell.set_style(self.config.cursor_style);
+            }
         }
     }
 }
