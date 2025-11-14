@@ -350,6 +350,7 @@ impl AcpAgentRunner {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_acp_connection(
     stdin: ChildStdin,
     stdout: ChildStdout,
@@ -411,7 +412,7 @@ async fn run_connection_inner(
 
     let connection = Rc::new(connection);
     let mut handshake_tx = Some(handshake_tx);
-    let io_task = tokio::task::spawn_local(async move { io_future.await });
+    let io_task = tokio::task::spawn_local(io_future);
 
     {
         let event_tx = event_tx.clone();
