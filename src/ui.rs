@@ -9,11 +9,15 @@ use tui_components::textarea::TextArea;
 use unicode_width::UnicodeWidthStr;
 
 pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u16 {
-    const MIN_HEIGHT: u16 = 3;
+    const MIN_HEIGHT: u16 = 1;
     const MAX_HEIGHT: u16 = 10;
-    const BORDER_HEIGHT: u16 = 2;
 
-    let available_width = available_width.max(1); // Prevent division by zero
+    let config = textarea.config();
+
+    // Account for padding and prefix when calculating wrapping width
+    let prefix_width = config.prefix.as_ref().map_or(0, |p| p.len() as u16);
+    let horizontal_space = config.padding_left + config.padding_right + prefix_width;
+    let content_width = available_width.saturating_sub(horizontal_space).max(1);
 
     let mut total_lines = 0u16;
     let text = textarea.text();
@@ -29,13 +33,16 @@ pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u
         let wrapped_lines = if line_width == 0 {
             1 // Empty line still takes 1 line
         } else {
-            line_width.div_ceil(available_width).max(1)
+            line_width.div_ceil(content_width).max(1)
         };
         total_lines += wrapped_lines;
     }
 
-    let height = total_lines.clamp(MIN_HEIGHT, MAX_HEIGHT);
-    height + BORDER_HEIGHT
+    let content_height = total_lines.clamp(MIN_HEIGHT, MAX_HEIGHT);
+
+    // Add padding to get total height
+    let vertical_space = config.padding_top + config.padding_bottom;
+    content_height + vertical_space
 }
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
@@ -88,10 +95,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
         .split(area);
 
     // Input - textarea (messages scroll in terminal scrollback above viewport)
-    let input_block = Block::default().borders(Borders::ALL);
-    let inner_area = input_block.inner(chunks[0]);
-    frame.render_widget(input_block, chunks[0]);
-    frame.render_widget(&model.textarea, inner_area);
+    // Textarea now handles its own borders/styling via TextAreaConfig
+    frame.render_widget(&model.textarea, chunks[0]);
 
     // Agent info - show selected agent below prompt
     let selected_agent = model
