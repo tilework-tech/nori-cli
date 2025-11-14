@@ -40,7 +40,7 @@ pub mod ui;           // Rendering functions for each mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 - ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
-- `create_textarea()` helper (@/src/app.rs:359-363): Factory function that creates TextArea instances with consistent styling - sets `cursor_line_style` to `Style::default()` to remove the default underline from the cursor line while preserving cursor visibility
+- `create_textarea()` helper (@/src/app.rs:433-435): Factory function that creates TextArea instances with default configuration using `TextArea::new(TextAreaConfig::default())`
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
@@ -189,7 +189,9 @@ Cancellation Path
 
 **Component Library Integration** (@/Cargo.toml, @/src/ui.rs, @/src/app.rs, @/src/main.rs):
 - nori-cli depends on tui-components as a path dependency (./tui-components)
-- **Conditional rendering approach**: `use_codex_components: bool` flag in Model (defaults to true) controls whether to use Shimmer component or legacy spinner
+- **TextArea component**: Uses `tui_components::textarea::TextArea` for multi-line text input - replaced external `tui-textarea` crate to consolidate dependencies within tui-components library
+- **TextArea API**: Created via `TextArea::new(TextAreaConfig::default())`, handles key events via `.handle_key(key)`, exposes text via `.text()` returning `&str`, supports `.is_empty()` check, and cursor positioning via `.set_cursor(pos)`
+- **Shimmer component**: Conditional rendering approach using `use_codex_components: bool` flag in Model (defaults to true) to toggle between Shimmer component and legacy spinner
 - **Shimmer component path** (when `use_codex_components = true`): Shimmer instantiated on-demand during render (`Shimmer::new()`) with time-based animation using `Instant::now()` internally - no Model state tracking required
 - **Legacy spinner path** (when `use_codex_components = false`): Uses frame-based animation with `loading_frame: usize` counter in Model, incremented on each render tick in main.rs event loop (lines 374-377), cycles through Braille spinner frames using modulo
 - **Frame increment gating** (@/src/main.rs:374-377): Frame counter only increments when `current_mode == AppMode::Streaming && !use_codex_components`, ensuring frame counter doesn't advance when using Shimmer
@@ -202,18 +204,16 @@ Cancellation Path
 - All UI modes (chat, agent selection, install prompt) use Constraint::Min() for flexible sections that adapt to available viewport height
 - Text wrapping enabled on install prompt message to handle varying viewport widths without manual text size management
 
-**TextArea Styling Pattern** (@/src/app.rs, @/src/main.rs):
-- All TextArea instances created with `cursor_line_style` set to `Style::default()` to remove underline from cursor line
-- The tui-textarea library applies underline styling to the cursor line by default - this pattern removes that styling while keeping cursor itself visible (reversed colors)
-- TextArea creation happens in 6 places: Model::default() initialization, 4 locations in Model::update() (SubmitInput, two ClearTextarea branches, AutocompleteSelect), and 1 location in main.rs (slash command execution)
-- `create_textarea()` helper function in @/src/app.rs:359-363 provides DRY pattern for consistent styling across most creation sites
-- AutocompleteSelect (@/src/app.rs:336-341) and slash command clearing (@/src/main.rs:167-171) use inline styling because they need additional operations (TextArea::from() with content, move_cursor()) that don't fit the helper pattern
-- All inline creations follow same pattern: create TextArea, call `set_cursor_line_style(Style::default())`, perform other operations
-- This is a pure UI/styling change with no functional impact on text editing, cursor movement, or input handling
+**TextArea Creation Pattern** (@/src/app.rs, @/src/main.rs):
+- All TextArea instances created via `TextArea::new(TextAreaConfig::default())` from tui-components library
+- TextArea creation happens in multiple locations: Model::default() initialization, Model::update() handlers (SubmitInput, ClearTextarea, AutocompleteSelect), and main.rs (slash command execution)
+- `create_textarea()` helper function in @/src/app.rs:433-435 provides DRY pattern for consistent creation with default configuration
+- AutocompleteSelect handler creates TextArea with initial text content and positions cursor at end of text using `.set_cursor(text.len())`
+- All TextArea instances use default configuration which provides standard text editing behavior, cursor handling, and styling
 
 **Key Event Handling**:
 - KeyEvent passed to textarea via Message::KeyPress only when `show_agent_router` is false
-- textarea.input() handles cursor movement, text editing, newlines internally
+- textarea.handle_key(key) processes keyboard input for cursor movement, text editing, and newlines internally
 - Ctrl-C is checked FIRST in handle_key_simple (@/src/main.rs:320-326) - takes priority over all other key handling including overlays and install prompts
 - Alt+A globally toggles agent router overlay - handled before mode-specific logic in @/src/main.rs:117-121
 - 'q' quits from Selection/Streaming modes but types 'q' character when in Input mode

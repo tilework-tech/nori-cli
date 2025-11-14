@@ -5,7 +5,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
-use tui_textarea::TextArea;
+use tui_components::textarea::TextArea;
 use unicode_width::UnicodeWidthStr;
 
 pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u16 {
@@ -16,7 +16,14 @@ pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u
     let available_width = available_width.max(1); // Prevent division by zero
 
     let mut total_lines = 0u16;
-    for line in textarea.lines() {
+    let text = textarea.text();
+    let lines: Vec<&str> = if text.is_empty() {
+        vec![""]
+    } else {
+        text.lines().collect()
+    };
+
+    for line in lines {
         let line_width = line.width() as u16;
         // Calculate how many wrapped lines this will take
         let wrapped_lines = if line_width == 0 {

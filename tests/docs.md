@@ -19,9 +19,9 @@ Test suite for the agent-router-tui application, covering state machine transiti
 
 **Ctrl-C Handling Tests** (@/tests/ctrl_c_handling_test.rs):
 - `test_first_ctrl_c_clears_textarea_and_shows_hint()`: Verifies first Ctrl-C press behavior
-  - Adds text to textarea
+  - Adds text to textarea via .insert_str()
   - Sends ClearTextarea message
-  - Asserts textarea is cleared
+  - Asserts textarea is cleared via .is_empty()
   - Asserts last_ctrl_c_time is set to Some(Instant)
   - Asserts error_message contains "Press Ctrl-C again to exit" hint
 - `test_second_ctrl_c_within_timeout_clears_timestamp()`: Verifies second Ctrl-C within 2-second window
@@ -32,39 +32,39 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_ctrl_c_after_timeout_clears_textarea_again()`: Verifies timeout expiration behavior
   - Sends first ClearTextarea
   - Manually sets timestamp to 3 seconds in the past (simulates timeout)
-  - Adds new text to textarea
+  - Adds new text to textarea via .insert_str()
   - Sends ClearTextarea again
-  - Asserts textarea cleared again
+  - Asserts textarea cleared again via .is_empty()
   - Asserts new timestamp is set (more recent than old one)
   - Asserts hint shown again (behaves as first press)
 
 **Textarea Clearing Tests** (@/tests/textarea_clearing_test.rs):
 - `test_textarea_clears_immediately_on_submit()`: Verifies textarea is cleared immediately when SubmitInput message is processed
-  - User types a message into textarea
+  - User types a message into textarea via .insert_str()
   - Sends SubmitInput message
-  - Asserts textarea is empty after SubmitInput (not waiting for stream to complete)
+  - Asserts textarea is empty via .is_empty() after SubmitInput (not waiting for stream to complete)
   - Asserts mode transitions to Streaming
 - `test_empty_input_does_not_submit()`: Verifies empty textarea does not trigger submission
   - Sends SubmitInput with empty textarea
-  - Asserts mode stays in Selection
+  - Asserts mode stays in Selection via .is_empty()
   - Asserts no events added to response_events
 - `test_whitespace_only_input_does_not_submit()`: Verifies whitespace-only input does not trigger submission
-  - Types only whitespace into textarea
+  - Types only whitespace into textarea via .insert_str()
   - Sends SubmitInput
   - Asserts mode stays in Selection
 - `test_textarea_stays_clear_during_streaming()`: Verifies textarea remains empty during streaming
-  - Submits message (clears textarea)
+  - Submits message via .insert_str() and SubmitInput (clears textarea)
   - Sends StreamEvent message
-  - Asserts textarea still empty
+  - Asserts textarea still empty via .is_empty()
 - `test_textarea_stays_clear_after_stream_complete()`: Verifies textarea remains empty after stream completes
-  - Submits message (clears textarea)
+  - Submits message via .insert_str() and SubmitInput (clears textarea)
   - Sends StreamComplete message
-  - Asserts textarea still empty and mode is Selection
+  - Asserts textarea still empty via .is_empty() and mode is Selection
 - `test_textarea_stays_clear_after_cancel()`: Verifies textarea remains empty after stream cancellation
-  - Submits message (clears textarea)
+  - Submits message via .insert_str() and SubmitInput (clears textarea)
   - Sets up CancellationToken
   - Sends CancelStream message
-  - Asserts textarea still empty (not restored to original content)
+  - Asserts textarea still empty via .is_empty() (not restored to original content)
 
 **State Machine Tests** (@/tests/state_machine_test.rs):
 - `test_state_transitions()`: Verifies overlay and mode transitions
@@ -77,11 +77,12 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_toggle_agent_router_overlay()`: Verifies ToggleAgentRouter message toggles `show_agent_router` boolean
 - `test_submit_input_adds_user_message_to_history()`: Verifies SubmitInput captures textarea content and adds UserMessage to response_events before spawning agent
 - `test_cancel_stream_during_streaming()`: Verifies CancelStream message handling
-  - Submits a message via SubmitInput (which clears textarea and sets up streaming state)
+  - Submits a message via .insert_str() and SubmitInput (which clears textarea and sets up streaming state)
   - Sets up CancellationToken for the stream
   - Sends CancelStream message
   - Asserts token.is_cancelled() is true
   - Verifies mode transitions to Selection, token cleared from model
+  - Verifies textarea is empty via .is_empty()
   - Verifies StreamCancelled event added to response_events
 
 **Subprocess Tests** (@/tests/subprocess_test.rs):
@@ -93,6 +94,21 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Creates CancellationToken and passes to spawn_stream()
   - Consumes stream and verifies at least one event received
   - Tests stream completion without cancellation
+
+**Dynamic TextArea Height Tests** (@/tests/dynamic_textarea_height_test.rs):
+- `test_single_line_returns_minimum_height()`: Verifies single line of text returns minimum height
+  - Creates TextArea via TextArea::new(TextAreaConfig::default())
+  - Inserts text via .insert_str()
+  - Asserts calculated height matches minimum
+- `test_multiline_returns_correct_height()`: Verifies multiple lines return correct height
+  - Creates TextArea and inserts multiple lines via .insert_str() with embedded newlines
+  - Asserts height accounts for all lines
+- `test_long_line_accounts_for_wrapping()`: Verifies long lines account for text wrapping
+  - Creates TextArea and inserts long string via .insert_str() with &str reference
+  - Asserts height accounts for wrapped lines based on terminal width
+- `test_height_respects_maximum_bound()`: Verifies maximum height constraint
+  - Creates TextArea and inserts many lines via .insert_str() with loop
+  - Asserts height respects maximum bound regardless of content
 
 **Conversation Rendering Tests** (@/tests/conversation_rendering_test.rs):
 - `test_parse_assistant_message_event()`: Verifies parsing of Claude CLI assistant message format
@@ -125,6 +141,14 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Subprocess tests use MockBackend to avoid external dependencies on claude/codex CLIs
 - No integration tests with real backends because they require API authentication
 - Rendering tests verify both parsing and styling independently for each event type
+
+**TextArea Testing Pattern**:
+- Tests use tui_components::textarea::TextArea instead of external tui-textarea crate
+- TextArea creation: `TextArea::new(TextAreaConfig::default())` in all tests
+- Text insertion: `.insert_str()` method for adding text content (takes string or &str reference)
+- Empty check: `.is_empty()` method replaces `.lines()[0].is_empty()` pattern
+- Text access: `.text()` returns `&str` instead of `.lines()` returning array
+- Newlines: Embedded in strings passed to `.insert_str()` instead of separate `.insert_newline()` calls
 
 **MockBackend Implementation**:
 - Uses `printf` command to output hardcoded JSONL strings in actual Claude CLI format

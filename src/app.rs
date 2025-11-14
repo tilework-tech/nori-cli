@@ -3,9 +3,8 @@
 use crate::backends;
 use crate::backends::AgentBackend;
 use crate::conversation::ConversationEvent;
-use ratatui::style::Style;
 use ratatui::widgets::ListState;
-use tui_textarea::TextArea;
+use tui_components::textarea::{TextArea, TextAreaConfig};
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum AppMode {
@@ -102,7 +101,7 @@ pub struct Model {
     pub list_state: ListState,
     pub agents: Vec<String>,
     pub backend_availability: Vec<bool>,
-    pub textarea: TextArea<'static>,
+    pub textarea: TextArea,
     pub response_events: Vec<ConversationEvent>,
     pub selected_agent_index: Option<usize>,
     pub session_id: Option<String>,
@@ -220,7 +219,7 @@ impl Model {
             Message::KeyPress(key) => {
                 // Only handle text input when overlay is NOT open
                 if !self.show_agent_router {
-                    self.textarea.input(key);
+                    self.textarea.handle_key(key);
                     // Clear Ctrl-C timer when user types (resets the double-press window)
                     self.last_ctrl_c_time = None;
                     // Clear any error/hint messages when user starts typing
@@ -230,7 +229,7 @@ impl Model {
 
             Message::SubmitInput => {
                 // Capture user message and transition to streaming mode
-                let user_text = self.textarea.lines().join("\n");
+                let user_text = self.textarea.text().to_string();
                 if !user_text.trim().is_empty() {
                     // Clear textarea immediately after capturing text
                     self.textarea = create_textarea();
@@ -408,9 +407,10 @@ impl Model {
                 {
                     // Replace textarea content with selected command
                     self.textarea = {
-                        let mut textarea = TextArea::from([format!("/{selected_cmd}")]);
-                        textarea.set_cursor_line_style(Style::default());
-                        textarea.move_cursor(tui_textarea::CursorMove::End);
+                        let mut textarea = TextArea::new(TextAreaConfig::default());
+                        let text = format!("/{selected_cmd}");
+                        textarea.set_text(&text);
+                        textarea.set_cursor(text.len());
                         textarea
                     };
                 }
@@ -430,8 +430,6 @@ impl Model {
     }
 }
 
-fn create_textarea() -> TextArea<'static> {
-    let mut textarea = TextArea::default();
-    textarea.set_cursor_line_style(Style::default());
-    textarea
+fn create_textarea() -> TextArea {
+    TextArea::new(TextAreaConfig::default())
 }

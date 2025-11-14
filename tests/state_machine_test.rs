@@ -165,7 +165,7 @@ fn test_cancel_stream_during_streaming() {
     model.update(Message::SubmitInput);
 
     // Verify textarea was cleared and mode changed
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
     assert_eq!(model.current_mode, AppMode::Streaming);
 
     // Set up cancellation token for the stream
@@ -178,7 +178,7 @@ fn test_cancel_stream_during_streaming() {
     // Verify state transitions correctly
     assert_eq!(model.current_mode, AppMode::Selection);
     assert!(model.current_stream_token.is_none());
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
     assert!(token.is_cancelled());
 
     // Verify cancellation status message was added to history
