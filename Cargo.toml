@@ -28,8 +28,9 @@ which = "7.0"
 opener = "0.7"
 unicode-width = "0.2"
 tui-components = { path = "./tui-components" }
-agent-client-protocol = "0.7.0"
-# dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender
+ agent-client-protocol = "0.7.0"
+ tuicore = { git = "https://github.com/CSRessel/terminal-input-debug", rev = "a2f66fd" }
+ # dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender
 
 [dev-dependencies]
 tempfile = "3"

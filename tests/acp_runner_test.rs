@@ -86,7 +86,8 @@ async fn test_session_updates_are_streamed() {
     // Find both test messages, skipping debug events
     let mut found_messages = Vec::new();
 
-    for _ in 0..20 { // Allow up to 20 events to find both messages
+    for _ in 0..20 {
+        // Allow up to 20 events to find both messages
         let event = timeout(Duration::from_secs(5), stream.next())
             .await
             .expect("timed out waiting for event")

@@ -14,47 +14,27 @@ use crate::backends::{
 use crate::commands::{CommandRegistry, parse_slash_command};
 use crate::conversation::{ConversationEvent, render_event, should_render_event};
 
+use _tuicore::{TerminalWriter, TuiApp};
 use color_eyre::Result;
-use crossterm::cursor::MoveTo;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
-use crossterm::execute;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use futures::StreamExt;
-use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
+use ratatui::prelude::CrosstermBackend;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    color_eyre::install()?;
+    let mut tui_app = TuiApp::builder("nori-cli").inline(20).build();
 
-    // Get starting cursor position before creating viewport
-    let viewport_start_row = crossterm::cursor::position()?.1;
+    let mut terminal = tui_app.init()?;
+    run_app(&mut terminal).await?;
 
-    // Setup terminal with inline viewport (20 lines at bottom for input/autocomplete/instructions)
-    enable_raw_mode()?;
-    let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: Viewport::Inline(20),
-    });
-
-    let result = run_app(&mut terminal).await;
-
-    // Restore terminal
-    ratatui::restore();
-    disable_raw_mode()?;
-
-    // Move cursor below the viewport and clear any remaining artifacts
-    use crossterm::terminal::Clear;
-    execute!(
-        std::io::stdout(),
-        MoveTo(0, viewport_start_row + 20),
-        Clear(crossterm::terminal::ClearType::FromCursorDown)
-    )?;
-
-    result
+    tui_app.restore()?;
+    // Optional terminal.insert_before here, for an exit status/usage message!
+    Ok(())
 }
 
-async fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
+async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWriter>>) -> Result<()> {
     let mut model = Model::default();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
