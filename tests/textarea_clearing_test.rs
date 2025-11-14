@@ -7,14 +7,14 @@ fn test_textarea_clears_immediately_on_submit() {
 
     // User types a message
     model.textarea.insert_str("test message");
-    assert!(!model.textarea.lines()[0].is_empty());
+    assert!(!model.textarea.is_empty());
 
     // User submits
     model.update(Message::SubmitInput);
 
     // Textarea should be cleared immediately
     assert!(
-        model.textarea.lines()[0].is_empty(),
+        model.textarea.is_empty(),
         "Textarea should be empty after SubmitInput"
     );
 
@@ -27,7 +27,7 @@ fn test_empty_input_does_not_submit() {
     let mut model = Model::default();
 
     // Start with empty textarea
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
 
     // Try to submit
     model.update(Message::SubmitInput);
@@ -63,7 +63,7 @@ fn test_textarea_stays_clear_during_streaming() {
     // Submit a message
     model.textarea.insert_str("test");
     model.update(Message::SubmitInput);
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
 
     // Receive stream events
     model.update(Message::StreamEvent(ConversationEvent::AssistantMessage {
@@ -72,7 +72,7 @@ fn test_textarea_stays_clear_during_streaming() {
 
     // Textarea should still be empty
     assert!(
-        model.textarea.lines()[0].is_empty(),
+        model.textarea.is_empty(),
         "Textarea should remain empty during streaming"
     );
 }
@@ -84,14 +84,14 @@ fn test_textarea_stays_clear_after_stream_complete() {
     // Submit and clear
     model.textarea.insert_str("test");
     model.update(Message::SubmitInput);
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
 
     // Stream completes
     model.update(Message::StreamComplete);
 
     // Textarea should still be empty
     assert!(
-        model.textarea.lines()[0].is_empty(),
+        model.textarea.is_empty(),
         "Textarea should remain empty after StreamComplete"
     );
 
@@ -108,7 +108,7 @@ fn test_textarea_stays_clear_after_cancel() {
     // Submit and clear
     model.textarea.insert_str("test message");
     model.update(Message::SubmitInput);
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
 
     // Set up cancellation token for streaming
     model.current_stream_token = Some(CancellationToken::new());
@@ -118,7 +118,7 @@ fn test_textarea_stays_clear_after_cancel() {
 
     // Textarea should still be empty (not restored)
     assert!(
-        model.textarea.lines()[0].is_empty(),
+        model.textarea.is_empty(),
         "Textarea should remain empty after cancellation"
     );
 

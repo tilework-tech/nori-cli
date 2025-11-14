@@ -144,7 +144,7 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
                     }
                     Message::SubmitInput => {
                         // Extract prompt from textarea
-                        let prompt = model.textarea.lines().join("\n");
+                        let prompt = model.textarea.text().to_string();
                         if !prompt.trim().is_empty() {
                             // Check if this is a slash command
                             if let Some(command_name) = parse_slash_command(&prompt) {
@@ -176,11 +176,9 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
                                         }
 
                                         // Clear textarea after successful command
-                                        model.textarea = {
-                                            let mut textarea = tui_textarea::TextArea::default();
-                                            textarea.set_cursor_line_style(ratatui::style::Style::default());
-                                            textarea
-                                        };
+                                        model.textarea = tui_components::textarea::TextArea::new(
+                                            tui_components::textarea::TextAreaConfig::default()
+                                        );
                                     }
                                     Err(err) => {
                                         // Command execution failed - show error
@@ -332,7 +330,7 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
                         // Update model (which updates textarea)
                         model.update(msg);
                         // Update autocomplete state based on new textarea content
-                        let input = model.textarea.lines().join("\n");
+                        let input = model.textarea.text().to_string();
                         update_autocomplete_state(&mut model, &input, &command_registry);
                         // Send state updates
                         let _ = mode_tx.send(model.current_mode);
@@ -343,7 +341,7 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
                     }
                     Message::InputChanged => {
                         // Explicitly update autocomplete state (called after other updates)
-                        let input = model.textarea.lines().join("\n");
+                        let input = model.textarea.text().to_string();
                         update_autocomplete_state(&mut model, &input, &command_registry);
                         let _ = autocomplete_tx.send(model.show_autocomplete);
                     }

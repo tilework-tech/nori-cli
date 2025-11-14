@@ -9,7 +9,7 @@ fn test_first_ctrl_c_clears_textarea_and_shows_hint() {
     model.update(Message::ClearTextarea);
 
     // Textarea should be cleared
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
 
     // Timestamp should be set
     assert!(model.last_ctrl_c_time.is_some());
@@ -56,7 +56,7 @@ fn test_ctrl_c_after_timeout_clears_textarea_again() {
     model.update(Message::ClearTextarea);
 
     // Textarea should be cleared
-    assert!(model.textarea.lines()[0].is_empty());
+    assert!(model.textarea.is_empty());
 
     // Timestamp should be updated (not None)
     assert!(model.last_ctrl_c_time.is_some());

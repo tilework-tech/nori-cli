@@ -65,10 +65,9 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - tokio (full features): Async runtime for subprocess management and concurrent I/O
 - tokio-util: Provides CancellationToken for cooperative cancellation
 - crossterm 0.28.1 (event-stream feature): Terminal manipulation and async event handling
-- tui-textarea 0.7: Multi-line text input widget
 - serde + serde_json: JSONL parsing
 - color-eyre: Error reporting
-- tui-components (path dependency): Reusable TUI components library, provides Shimmer loading animation widget
+- tui-components (path dependency): Reusable TUI components library, provides Shimmer loading animation widget and TextArea input widget
 
 ### Things to Know
 
