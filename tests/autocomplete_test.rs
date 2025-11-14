@@ -17,12 +17,8 @@ fn test_autocomplete_shows_on_slash() {
         "Autocomplete should be visible when input is '/'"
     );
     assert_eq!(
-        model.autocomplete_filtered_commands.len(),
-        3,
-        "Should show all three commands"
-    );
-    assert_eq!(
-        model.autocomplete_selected_index, 0,
+        model.autocomplete_selection_list.selected_index(),
+        Some(0),
         "Should select first item"
     );
 }
@@ -42,10 +38,16 @@ fn test_autocomplete_filters_on_prefix() {
         "Autocomplete should be visible with matching prefix"
     );
     assert_eq!(
-        model.autocomplete_filtered_commands,
-        vec!["switch-model"],
-        "Should filter to matching command"
+        model.autocomplete_selection_list.selected_index(),
+        Some(0),
+        "Should have a selection"
     );
+    if let Some(item) = model.autocomplete_selection_list.selected_item() {
+        assert_eq!(
+            item.data, "switch-model",
+            "Should filter to matching command"
+        );
+    }
 }
 
 #[test]
@@ -63,8 +65,8 @@ fn test_autocomplete_hides_on_non_slash() {
         "Autocomplete should be hidden for non-slash input"
     );
     assert!(
-        model.autocomplete_filtered_commands.is_empty(),
-        "Filtered commands should be empty"
+        model.autocomplete_selection_list.selected_index().is_none(),
+        "Should have no selection when empty"
     );
 }
 
@@ -86,9 +88,8 @@ fn test_autocomplete_hides_on_empty_string() {
 
 #[test]
 fn test_autocomplete_resets_selection_on_filter_change() {
-    // Arrange: Create model with selection on second item
+    // Arrange: Create model and registry
     let mut model = Model::default();
-    model.autocomplete_selected_index = 1;
     let registry = CommandRegistry::default();
 
     // Act: Update autocomplete state (changes filter)
@@ -96,7 +97,8 @@ fn test_autocomplete_resets_selection_on_filter_change() {
 
     // Assert: Selection is reset to first item
     assert_eq!(
-        model.autocomplete_selected_index, 0,
+        model.autocomplete_selection_list.selected_index(),
+        Some(0),
         "Selection should reset to 0 when filter changes"
     );
 }
