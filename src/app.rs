@@ -239,11 +239,13 @@ impl Model {
                 self.selected_agent_index = self.agent_selection_list.selected_index();
                 self.show_agent_router = false;
                 self.error_message = None;
+                self.textarea = create_textarea();
             }
 
             Message::ExitInputMode => {
                 // Close the agent router overlay if open
                 self.show_agent_router = false;
+                self.textarea = create_textarea();
             }
 
             Message::KeyPress(key) => {
@@ -424,7 +426,7 @@ impl Model {
                 if let Some(item) = self.autocomplete_selection_list.selected_item() {
                     // Replace textarea content with selected command
                     self.textarea = {
-                        let mut textarea = TextArea::new(TextAreaConfig::default());
+                        let mut textarea = create_textarea();
                         let text = format!("/{}", item.data);
                         textarea.set_text(&text);
                         textarea.set_cursor(text.len());
@@ -446,6 +448,8 @@ impl Model {
                     .with_title("Commands")
                     .with_footer_hint(standard_popup_hint_line());
                 self.autocomplete_selection_list = SelectionList::new(config, vec![], Box::new(()));
+                // self.autocomplete_filtered_commands.clear();
+                self.textarea = create_textarea();
             }
 
             Message::Quit => {

@@ -1,0 +1,14 @@
+---
+source: tests/blackbox_tui_test.rs
+expression: terminal.backend()
+---
+"                                        "
+"   This is a very long message that     "
+"›  should wrap properly in a narrow     "
+"   terminal                             "
+"                                        "
+"Agent: No agent selected                "
+"                                        "
+"/switch-model: agents | /exit: quit     "
+"                                        "
+"                                        "
