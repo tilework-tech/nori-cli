@@ -395,7 +395,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mock_acp_agent"
+name = "mock-acp-agent"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",

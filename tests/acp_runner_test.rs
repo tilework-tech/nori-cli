@@ -34,11 +34,7 @@ fn remove_test_env(key: &str) {
 fn build_mock_agent() {
     let status = Command::new("cargo")
         .env("CARGO_TARGET_DIR", "target")
-        .args([
-            "build",
-            "--manifest-path",
-            "tests/mock_acp_agent/Cargo.toml",
-        ])
+        .args(["build", "--manifest-path", "mock-acp-agent/Cargo.toml"])
         .status()
         .expect("Failed to build mock agent");
     assert!(
