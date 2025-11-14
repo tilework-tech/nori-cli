@@ -18,9 +18,18 @@ async fn test_mock_backend_streams_events() {
     // MockBackend should yield at least some events
     assert!(!events.is_empty());
 
-    // First events should be assistant messages
+    println!("{:?}", events);
+    assert!(matches!(events[0], ConversationEvent::SystemEvent { .. }));
+    assert!(matches!(events[1], ConversationEvent::SystemEvent { .. }));
+    assert!(matches!(events[2], ConversationEvent::SystemEvent { .. }));
+    assert!(matches!(events[3], ConversationEvent::UnknownEvent { .. }));
     assert!(matches!(
-        events[0],
+        events[4],
+        ConversationEvent::AssistantMessage { .. }
+    ));
+    assert!(matches!(events[5], ConversationEvent::UnknownEvent { .. }));
+    assert!(matches!(
+        events[6],
         ConversationEvent::AssistantMessage { .. }
     ));
 }

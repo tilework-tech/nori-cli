@@ -83,34 +83,45 @@ async fn test_session_updates_are_streamed() {
         .await
         .expect("spawn_stream should succeed");
 
-    let first = timeout(Duration::from_secs(5), stream.next())
-        .await
-        .expect("timed out waiting for first event")
-        .expect("stream closed before first event");
+    // Find both test messages, skipping debug events
+    let mut found_messages = Vec::new();
 
-    let second = timeout(Duration::from_secs(5), stream.next())
-        .await
-        .expect("timed out waiting for second event")
-        .expect("stream closed before second event");
+    for _ in 0..20 { // Allow up to 20 events to find both messages
+        let event = timeout(Duration::from_secs(5), stream.next())
+            .await
+            .expect("timed out waiting for event")
+            .expect("stream closed before event");
+
+        if let ConversationEvent::AssistantMessage { ref text } = event {
+            if text == "Test message 1" || text == "Test message 2" {
+                found_messages.push(event);
+                if found_messages.len() == 2 {
+                    break;
+                }
+            }
+        }
+    }
+
+    assert_eq!(found_messages.len(), 2, "Did not find both test messages");
 
     assert!(
         matches!(
-            first,
+            &found_messages[0],
             ConversationEvent::AssistantMessage {
-                ref text
+                text
             } if text == "Test message 1"
         ),
-        "first event mismatch: {first:?}"
+        "first message mismatch: {found_messages:?}"
     );
 
     assert!(
         matches!(
-            second,
+            &found_messages[1],
             ConversationEvent::AssistantMessage {
-                ref text
+                text
             } if text == "Test message 2"
         ),
-        "second event mismatch: {second:?}"
+        "second message mismatch: {found_messages:?}"
     );
 
     cancel_token.cancel();
@@ -133,25 +144,48 @@ async fn test_agent_calls_read_text_file() {
         .await
         .expect("spawn_stream should succeed");
 
-    for idx in 0..2 {
-        timeout(Duration::from_secs(5), stream.next())
+    // Skip debug events and find the two test messages
+    let mut found_messages = 0;
+    for _ in 0..20 {
+        // Allow more events due to debug logging
+        let event = timeout(Duration::from_secs(5), stream.next())
             .await
-            .unwrap_or_else(|_| panic!("timed out waiting for default message {idx}"))
-            .unwrap_or_else(|| panic!("stream closed before default message {idx}"));
+            .unwrap_or_else(|_| panic!("timed out waiting for event"))
+            .unwrap_or_else(|| panic!("stream closed"));
+
+        match event {
+            ConversationEvent::AssistantMessage { ref text }
+                if text == "Test message 1" || text == "Test message 2" =>
+            {
+                found_messages += 1;
+                if found_messages == 2 {
+                    break;
+                }
+            }
+            _ => continue, // Skip debug events
+        }
+    }
+    assert_eq!(found_messages, 2, "Did not find both test messages");
+
+    // Now find the file content message
+    let mut file_content_event = None;
+    for _ in 0..10 {
+        let event = timeout(Duration::from_secs(5), stream.next())
+            .await
+            .expect("timed out waiting for file read event")
+            .expect("stream closed without file read event");
+
+        if let ConversationEvent::AssistantMessage { ref text } = event {
+            if text.contains("Read file content: Hello from file") {
+                file_content_event = Some(event);
+                break;
+            }
+        }
     }
 
-    let third_event = timeout(Duration::from_secs(5), stream.next())
-        .await
-        .expect("timed out waiting for file read event")
-        .expect("stream closed without file read event");
-
     assert!(
-        matches!(
-            third_event,
-            ConversationEvent::AssistantMessage { ref text }
-                if text.contains("Read file content: Hello from file")
-        ),
-        "expected file content event, got {third_event:?}"
+        file_content_event.is_some(),
+        "Did not find file content message"
     );
 
     cancel_token.cancel();

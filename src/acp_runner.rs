@@ -419,6 +419,13 @@ async fn run_connection_inner(
         tokio::task::spawn_local(async move {
             let mut updates = session_update_rx;
             while let Some(update) = updates.recv().await {
+                // Send debug event for all session updates
+                let debug_event = ConversationEvent::UnknownEvent {
+                    raw: format!("{update:?}"),
+                };
+                let _ = event_tx.send(debug_event);
+
+                // Send translated event if available
                 if let Some(event) = translate_session_update(update) {
                     let _ = event_tx.send(event);
                 }
@@ -475,6 +482,15 @@ async fn run_connection_inner(
         return Err(err);
     }
 
+    // Send debug event for successful initialization
+    let _ = event_tx.send(ConversationEvent::SystemEvent {
+        subtype: "acp_initialized".to_string(),
+        details: Some(format!(
+            "Protocol version: {:?}",
+            init_response.protocol_version
+        )),
+    });
+
     let session_response = match connection
         .new_session(NewSessionRequest {
             cwd: cwd.clone(),
@@ -494,6 +510,12 @@ async fn run_connection_inner(
     };
     let session_id = session_response.session_id.clone();
 
+    // Send debug event for session creation
+    let _ = event_tx.send(ConversationEvent::SystemEvent {
+        subtype: "acp_session_created".to_string(),
+        details: Some(format!("Session ID: {session_id}")),
+    });
+
     if let Some(tx) = handshake_tx.take() {
         let _ = tx.send(Ok(()));
     }
@@ -512,6 +534,12 @@ async fn run_connection_inner(
                 .await;
         });
     }
+
+    // Send debug event for prompt
+    let _ = event_tx.send(ConversationEvent::SystemEvent {
+        subtype: "acp_prompt_sent".to_string(),
+        details: Some(format!("Prompt length: {} chars", prompt.len())),
+    });
 
     let prompt_request = PromptRequest {
         session_id,
