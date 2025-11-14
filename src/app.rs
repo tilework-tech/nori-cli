@@ -93,6 +93,13 @@ pub enum Message {
     // Control
     ClearTextarea,
     Quit,
+
+    // Terminal events
+    TerminalResize {
+        width: u16,
+        height: u16,
+    },
+    MouseEvent(crossterm::event::MouseEvent),
 }
 
 #[derive(Debug)]
@@ -120,6 +127,7 @@ pub struct Model {
     pub show_debug_events: bool,
     pub use_codex_components: bool,
     pub loading_frame: usize,
+    pub terminal_size: (u16, u16),
 }
 
 impl Default for Model {
@@ -163,6 +171,7 @@ impl Default for Model {
             show_debug_events: false,
             use_codex_components: true,
             loading_frame: 0,
+            terminal_size: (80, 24), // Default terminal size
         }
     }
 }
@@ -425,6 +434,15 @@ impl Model {
 
             Message::Quit => {
                 // Handled in main loop
+            }
+
+            Message::TerminalResize { width, height } => {
+                self.terminal_size = (width, height);
+            }
+
+            Message::MouseEvent(_mouse_event) => {
+                // TODO: Handle mouse events (scrolling, clicking, etc.)
+                // For now, just consume the event
             }
         }
     }

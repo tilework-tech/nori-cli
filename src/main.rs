@@ -16,9 +16,10 @@ use crate::conversation::{ConversationEvent, render_event, should_render_event};
 
 use _tuicore::{TerminalWriter, TuiApp};
 use color_eyre::Result;
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::StreamExt;
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::CrosstermBackend;
+use std::thread;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
@@ -50,8 +51,17 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
 
     // Spawn event handling task
     let event_tx = tx.clone();
+    let (event_thread_tx, mut event_thread_rx) = mpsc::unbounded_channel::<Event>();
+    thread::spawn(move || {
+        loop {
+            if let Ok(true) = event::poll(Duration::from_millis(10))
+                && let Ok(event) = event::read()
+            {
+                let _ = event_thread_tx.send(event);
+            }
+        }
+    });
     tokio::spawn(async move {
-        let mut reader = EventStream::new();
         let mut current_mode = AppMode::Selection;
         let mut show_overlay = false;
         let mut show_install_prompt = false;
@@ -79,7 +89,7 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
                 Some(autocomplete) = autocomplete_rx.recv() => {
                     show_autocomplete = autocomplete;
                 }
-                Some(Ok(event)) = reader.next() => {
+                Some(event) = event_thread_rx.recv() => {
                     if let Some(msg) = handle_event_simple(current_mode, show_overlay, show_install_prompt, show_autocomplete, last_ctrl_c_time, event) {
                         let _ = event_tx.send(msg);
                     }
@@ -345,6 +355,26 @@ async fn run_app(terminal: &mut ratatui::Terminal<CrosstermBackend<TerminalWrite
                         update_autocomplete_state(&mut model, &input, &command_registry);
                         let _ = autocomplete_tx.send(model.show_autocomplete);
                     }
+                    Message::TerminalResize { width: _w, height: _h } => {
+                        terminal.autoresize()?;
+                        model.update(msg);
+                        // Send updated mode and overlay state to event handler
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
+                    }
+                    Message::MouseEvent(_mouse_event) => {
+                        // TODO: Handle mouse interactions (scrolling, clicking, etc.)
+                        // For now, just update model and send state updates
+                        model.update(msg);
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
+                    }
                     _ => {
                         model.update(msg);
                         // Send updated mode and overlay state to event handler after every state change
@@ -379,19 +409,19 @@ fn handle_event_simple(
     last_ctrl_c_time: Option<std::time::Instant>,
     event: Event,
 ) -> Option<Message> {
-    if let Event::Key(key) = event
-        && key.kind == KeyEventKind::Press
-    {
-        return handle_key_simple(
+    match event {
+        Event::Key(key) if key.kind == KeyEventKind::Press => handle_key_simple(
             mode,
             show_overlay,
             show_install_prompt,
             show_autocomplete,
             last_ctrl_c_time,
             key,
-        );
+        ),
+        Event::Resize(width, height) => Some(Message::TerminalResize { width, height }),
+        Event::Mouse(mouse_event) => Some(Message::MouseEvent(mouse_event)),
+        _ => None,
     }
-    None
 }
 
 fn handle_key_simple(
