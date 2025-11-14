@@ -8,9 +8,7 @@ mod ui;
 
 use crate::app::{AppMode, InstallChoice, Message, Model};
 use crate::autocomplete::update_autocomplete_state;
-use crate::backends::{
-    AgentBackend, claude::ClaudeBackend, codex::CodexBackend, mock::MockBackend,
-};
+use crate::backends::{AgentBackend, claude::ClaudeBackend, mock::MockBackend};
 use crate::commands::{CommandRegistry, parse_slash_command};
 use crate::conversation::{ConversationEvent, render_event, should_render_event};
 
@@ -497,7 +495,7 @@ fn handle_key_simple(
 fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
     match model.selected_agent_index {
         Some(0) => Box::new(ClaudeBackend::new()),
-        Some(1) => Box::new(CodexBackend::new()),
+        Some(1) => Box::new(backends::codex_acp::CodexAcpBackend::new()),
         Some(2) => Box::new(MockBackend::new()),
         _ => Box::new(ClaudeBackend::new()), // Default
     }

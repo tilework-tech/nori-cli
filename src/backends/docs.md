@@ -68,23 +68,48 @@ pub fn is_available(command: &str) -> bool {
 - Spawn error handling: ErrorKind::NotFound yields SystemEvent with install message
 
 **Mock Backend** (@/src/backends/mock.rs):
-- Uses `printf` shell command to output hardcoded JSONL without requiring agent CLI installation
-- Outputs two test events in actual Claude CLI format: `{"type":"assistant","message":{"content":[{"type":"text","text":"Hello from mock"}]}}`
-- Format matches real Claude CLI output structure with nested message.content array of text blocks
-- Accepts cancel_token parameter but doesn't use it - test streams complete immediately
-- Used exclusively in @/tests/subprocess_test.rs and @/tests/conversation_rendering_test.rs to verify JSONL parsing logic
-- Demonstrates the minimal contract: any process that outputs newline-delimited JSON to stdout works
+- Uses ACP protocol via mock_acp_agent binary (wraps AcpAgentRunner)
+- Binary built from @/mock-acp-agent/src/main.rs using agent-client-protocol crate
+- Implements full Agent trait with initialize, new_session, prompt methods
+- Outputs test messages via SessionUpdate notifications
+- Demonstrates real ACP protocol handshake and communication
+- Used in @/tests/subprocess_test.rs and @/tests/acp_runner_test.rs
+- Pattern: Wraps AcpAgentRunner just like CodexAcpBackend
 
-**Instantiation Pattern** (@/src/main.rs:144-150):
+**Codex ACP Backend** (@/src/backends/codex_acp.rs):
+- Wraps AcpAgentRunner to launch @zed-industries/codex-acp via bunx/npx
+- JavaScript runtime detection: Prioritizes Bun (bunx) over npm (npx)
+- Command construction: `bunx @zed-industries/codex-acp` or `npx @zed-industries/codex-acp`
+- No direct subprocess management - delegates entirely to AcpAgentRunner
+- Runtime detection cached at backend creation via javascript_runtime module
+- command_name: Returns "bunx" or "npx" based on detected runtime
+- install_url: "https://www.npmjs.com/package/@zed-industries/codex-acp"
+- install_command: `npm install -g @zed-industries/codex-acp`
+- Error handling: Emits SystemEvent if no JavaScript runtime available
+
+**JavaScript Runtime Detection** (@/src/backends/javascript_runtime.rs):
+- Detects Bun or npm/Node.js availability on system
+- Detection order: bun/bunx → npm/npx → None
+- JavaScriptRuntime enum: Bun | Npm
+- Runtime.command() returns executable name: "bunx" or "npx"
+- Used by CodexAcpBackend to determine package execution method
+- Bun preferred for faster package loading (downloads on-demand)
+- npm requires global package installation but more widely available
+
+**Instantiation Pattern** (@/src/main.rs:497-504):
 ```rust
 fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
     match model.selected_agent_index {
         Some(0) => Box::new(ClaudeBackend::new()),
-        Some(1) => Box::new(CodexBackend::new()),
+        Some(1) => Box::new(backends::codex_acp::CodexAcpBackend::new()),
+        Some(2) => Box::new(MockBackend::new()),
         _ => Box::new(ClaudeBackend::new()), // Default
     }
 }
 ```
+- Index 0: Claude Code (native CLI)
+- Index 1: Codex ACP (via bunx/npx wrapper)
+- Index 2: Mock ACP Agent (for testing)
 
 ### Installation Prompting
 
