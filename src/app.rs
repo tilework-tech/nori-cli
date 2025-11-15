@@ -143,8 +143,6 @@ pub struct Model {
     pub autocomplete_selection_list: SelectionList<String>,
     pub show_autocomplete: bool,
     pub show_debug_events: bool,
-    pub use_codex_components: bool,
-    pub loading_frame: usize,
     pub terminal_size: (u16, u16),
 }
 
@@ -229,8 +227,6 @@ impl Default for Model {
             autocomplete_selection_list,
             show_autocomplete: false,
             show_debug_events: false,
-            use_codex_components: true,
-            loading_frame: 0,
             terminal_size: (80, 24), // Default terminal size
         }
     }

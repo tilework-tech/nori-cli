@@ -98,6 +98,19 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Verifies textarea is empty via .is_empty()
   - Verifies StreamCancelled event added to response_events
 
+**Blackbox TUI Tests** (@/tests/blackbox_tui_test.rs):
+- `test_initial_state()`: Verifies initial TUI rendering with empty model and default state
+- `test_typed_hi()`: Verifies textarea rendering after typing "hi"
+- `test_multiline_input()`: Verifies textarea rendering with multiple lines
+- `test_long_text_wrapping()`: Verifies text wrapping in textarea for long input
+- `test_unicode_input()`: Verifies unicode character handling in textarea
+- `test_empty_submission_prevented()`: Verifies UI state when empty submission is blocked
+- `test_shimmer_renders_during_streaming()`: Verifies Shimmer component renders during streaming mode
+  - Sets `model.current_mode = AppMode::Streaming`
+  - Sets `model.selected_agent_index = Some(0)` for agent name in shimmer
+  - Renders UI and verifies output contains "processing" text
+  - Snapshot captures Shimmer animation (not legacy spinner)
+
 **Subprocess Tests** (@/tests/subprocess_test.rs):
 - `test_mock_backend_streams_events()`: Verifies MockBackend can stream events
   - Creates CancellationToken and passes to spawn_stream()
@@ -112,16 +125,22 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_single_line_returns_minimum_height()`: Verifies single line of text returns minimum height
   - Creates TextArea via TextArea::new(TextAreaConfig::default())
   - Inserts text via .insert_str()
-  - Asserts calculated height matches minimum
+  - Calls `textarea.desired_height(80)` and asserts it returns 1 (content only, no padding)
 - `test_multiline_returns_correct_height()`: Verifies multiple lines return correct height
   - Creates TextArea and inserts multiple lines via .insert_str() with embedded newlines
-  - Asserts height accounts for all lines
+  - Calls `textarea.desired_height(80)` and asserts height equals line count
+- `test_multiline_bordered_returns_correct_height()`: Verifies height calculation with padding
+  - Creates TextArea with custom padding (4 top, 5 bottom, 6 left, 7 right)
+  - Calls `textarea.desired_height(80)` to get content height
+  - Manually adds `config.padding_top + config.padding_bottom` to get total height
+  - Asserts total height = content height + padding (3 lines + 4 + 5 = 12)
 - `test_long_line_accounts_for_wrapping()`: Verifies long lines account for text wrapping
-  - Creates TextArea and inserts long string via .insert_str() with &str reference
-  - Asserts height accounts for wrapped lines based on terminal width
-- `test_height_respects_maximum_bound()`: Verifies maximum height constraint
-  - Creates TextArea and inserts many lines via .insert_str() with loop
-  - Asserts height respects maximum bound regardless of content
+  - Creates TextArea and inserts 250-character string via .insert_str()
+  - Calls `textarea.desired_height(80)` and asserts height equals 4 (250/80 = 3.125 rounded up)
+- `test_desired_height_returns_actual_line_count()`: Verifies TextArea returns actual line count without max constraint
+  - Creates TextArea and inserts 20 lines
+  - Calls `textarea.desired_height(80)` and asserts it returns 20 (no built-in max)
+  - Documents that UI code must apply max height constraint separately
 
 **Conversation Rendering Tests** (@/tests/conversation_rendering_test.rs):
 - `test_parse_assistant_message_event()`: Verifies parsing of Claude CLI assistant message format
@@ -162,6 +181,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Empty check: `.is_empty()` method replaces `.lines()[0].is_empty()` pattern
 - Text access: `.text()` returns `&str` instead of `.lines()` returning array
 - Newlines: Embedded in strings passed to `.insert_str()` instead of separate `.insert_newline()` calls
+- Height calculation: `.desired_height(width)` returns content height (line count with wrapping), padding must be added separately via `config.padding_top + config.padding_bottom`
 
 **MockBackend Implementation**:
 - Uses `printf` command to output hardcoded JSONL strings in actual Claude CLI format
@@ -221,9 +241,16 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Verifies textarea stays clear throughout streaming, completion, and cancellation
 - Tests ensure textarea is never restored after cancellation (matches modern chat UX expectations)
 
+**TUI Component Adoption Test Coverage**:
+- Height calculation tests (@/tests/dynamic_textarea_height_test.rs) updated to use `textarea.desired_height()` instead of `calculate_textarea_height()` function
+- Tests verify `desired_height()` returns content height only, requiring manual padding addition for total height
+- Test renamed from `test_height_respects_maximum_bound()` to `test_desired_height_returns_actual_line_count()` to reflect that TextArea does not enforce max height
+- New test `test_shimmer_renders_during_streaming()` verifies Shimmer component renders during streaming mode
+- Snapshot verification ensures Shimmer animation appears (not legacy spinner with Braille characters)
+
 **Coverage Gaps**:
 - No tests for @/src/main.rs event handling (handle_event_simple, handle_key_simple) - would require simulating crossterm events including Alt+A global shortcut and Ctrl-C priority detection
-- No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) - would require terminal buffer assertions
+- No tests for @/src/ui.rs rendering functions (render_chat, render_agent_router_overlay) beyond blackbox snapshot tests - would require detailed terminal buffer assertions
 - No tests for overlay interaction blocking (navigation disabled in chat, input disabled in overlay) - requires event handler integration
 - No tests for error handling paths (non-zero exit status, stderr output) - MockBackend always succeeds
 - No tests for session resumption - session_id/thread_id fields are never populated
@@ -233,6 +260,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - No test for main loop quit detection (Some → None timestamp transition) - would require full event loop integration
 - No integration tests for CLI argument flow - stdin reading, agent validation with exit code, agent selection bypass, textarea pre-fill - only unit tests for clap parsing and agent name mapping
 - No test for CLI message precedence (CLI arg vs stdin) - would require mocking stdin and command-line args together
+- No test for MAX_HEIGHT constraint enforcement in UI code - tests verify TextArea returns actual line count, but UI applies 10-line max separately
 
 **CI Integration**:
 - Tests run on every PR via @/.github/workflows/pr-ci.yml

@@ -466,10 +466,6 @@ async fn run_app(
 
             // Render
             _ = render_interval.tick() => {
-                // Increment loading frame for animation (only used when not using codex components)
-                if model.current_mode == AppMode::Streaming && !model.use_codex_components {
-                    model.loading_frame = model.loading_frame.wrapping_add(1);
-                }
                 terminal.draw(|frame| ui::render(&mut model, frame))?;
             }
         }
