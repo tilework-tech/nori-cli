@@ -263,9 +263,7 @@ async fn run_app(
                                         }
 
                                         // Clear textarea after successful command
-                                        model.textarea = tui_components::textarea::TextArea::new(
-                                            tui_components::textarea::TextAreaConfig::default()
-                                        );
+                                        model.clear_textarea();
                                     }
                                     Err(err) => {
                                         // Command execution failed - show error

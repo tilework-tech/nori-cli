@@ -254,13 +254,13 @@ impl Model {
                 self.selected_agent_index = self.agent_selection_list.selected_index();
                 self.show_agent_router = false;
                 self.error_message = None;
-                self.textarea = create_textarea();
+                self.clear_textarea();
             }
 
             Message::ExitInputMode => {
                 // Close the agent router overlay if open
                 self.show_agent_router = false;
-                self.textarea = create_textarea();
+                self.clear_textarea();
             }
 
             Message::KeyPress(key) => {
@@ -279,7 +279,7 @@ impl Model {
                 let user_text = self.textarea.text().to_string();
                 if !user_text.trim().is_empty() {
                     // Clear textarea immediately after capturing text
-                    self.textarea = create_textarea();
+                    self.clear_textarea();
                     self.response_events
                         .push(ConversationEvent::UserMessage { text: user_text });
                     self.current_mode = AppMode::Streaming;
@@ -423,7 +423,7 @@ impl Model {
                 match self.last_ctrl_c_time {
                     None => {
                         // First Ctrl-C: clear textarea and show hint
-                        self.textarea = create_textarea();
+                        self.clear_textarea();
                         self.last_ctrl_c_time = Some(now);
                         self.error_message = Some("Press Ctrl-C again to exit".to_string());
                     }
@@ -434,7 +434,7 @@ impl Model {
                     }
                     Some(_) => {
                         // Ctrl-C after timeout expired: treat as first press
-                        self.textarea = create_textarea();
+                        self.clear_textarea();
                         self.last_ctrl_c_time = Some(now);
                         self.error_message = Some("Press Ctrl-C again to exit".to_string());
                     }
@@ -480,7 +480,7 @@ impl Model {
                     .with_footer_hint(standard_popup_hint_line());
                 self.autocomplete_selection_list = SelectionList::new(config, vec![], Box::new(()));
                 // self.autocomplete_filtered_commands.clear();
-                self.textarea = create_textarea();
+                self.clear_textarea();
             }
 
             Message::Quit => {
@@ -497,6 +497,10 @@ impl Model {
                 // For now, just consume the event
             }
         }
+    }
+
+    pub fn clear_textarea(&mut self) {
+        self.textarea = create_textarea();
     }
 
     pub fn inline_wrap_width(&self) -> usize {
