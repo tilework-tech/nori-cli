@@ -15,31 +15,32 @@ use tokio_util::sync::CancellationToken;
 /// Helper to track inline entries and convert them to ConversationEvents
 #[derive(Default)]
 struct InlineTracker {
-    entries: HashMap<InlineEntryId, String>,
+    entries: HashMap<InlineEntryId, (InlineEntryKind, String)>,
 }
 
 impl InlineTracker {
     fn handle_event(&mut self, event: &BackendEvent) -> Option<ConversationEvent> {
         match event {
             BackendEvent::InlineBegin { id, kind } => {
-                match kind {
-                    InlineEntryKind::AssistantMessage => {
-                        self.entries.insert(id.clone(), String::new());
-                    }
-                }
+                self.entries
+                    .insert(id.clone(), (kind.clone(), String::new()));
                 None
             }
             BackendEvent::InlineUpdate { id, update } => {
-                if let Some(buffer) = self.entries.get_mut(id) {
+                if let Some((_, buffer)) = self.entries.get_mut(id) {
                     let InlineEntryUpdate::AppendText(text) = update;
                     buffer.push_str(text);
                 }
                 None
             }
-            BackendEvent::InlineCommit { id } => self
-                .entries
-                .remove(id)
-                .map(|text| ConversationEvent::AssistantMessage { text }),
+            BackendEvent::InlineCommit { id } => {
+                self.entries.remove(id).map(|(kind, text)| match kind {
+                    InlineEntryKind::AssistantMessage => {
+                        ConversationEvent::AssistantMessage { text }
+                    }
+                    InlineEntryKind::AgentThinking => ConversationEvent::AgentThinking { text },
+                })
+            }
             BackendEvent::InlineAbort { id } => {
                 self.entries.remove(id);
                 None

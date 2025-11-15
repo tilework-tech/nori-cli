@@ -7,11 +7,7 @@ pub type InlineEntryId = String;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InlineEntryKind {
     AssistantMessage,
-}
-
-#[derive(Debug, Clone)]
-enum InlineEntryData {
-    AssistantText { buffer: String },
+    AgentThinking,
 }
 
 #[derive(Debug, Clone)]
@@ -22,7 +18,8 @@ pub enum InlineEntryUpdate {
 #[derive(Debug, Clone)]
 pub struct InlineEntryState {
     pub id: InlineEntryId,
-    data: InlineEntryData,
+    pub kind: InlineEntryKind,
+    buffer: String,
     wrapped_lines: Vec<Line<'static>>,
     last_width: usize,
 }
@@ -36,24 +33,19 @@ pub struct CommittedInlineEntry {
 
 impl InlineEntryState {
     pub fn new(id: InlineEntryId, kind: InlineEntryKind) -> Self {
-        let data = match kind {
-            InlineEntryKind::AssistantMessage => InlineEntryData::AssistantText {
-                buffer: String::new(),
-            },
-        };
-
         Self {
             id,
-            data,
+            kind,
+            buffer: String::new(),
             wrapped_lines: vec![Line::from("")],
             last_width: 0,
         }
     }
 
     pub fn apply_update(&mut self, update: InlineEntryUpdate, width: usize) {
-        match (&mut self.data, update) {
-            (InlineEntryData::AssistantText { buffer }, InlineEntryUpdate::AppendText(text)) => {
-                buffer.push_str(&text);
+        match update {
+            InlineEntryUpdate::AppendText(text) => {
+                self.buffer.push_str(&text);
             }
         }
 
@@ -85,9 +77,12 @@ impl InlineEntryState {
     }
 
     pub fn to_event(&self) -> ConversationEvent {
-        match &self.data {
-            InlineEntryData::AssistantText { buffer } => ConversationEvent::AssistantMessage {
-                text: buffer.clone(),
+        match self.kind {
+            InlineEntryKind::AssistantMessage => ConversationEvent::AssistantMessage {
+                text: self.buffer.clone(),
+            },
+            InlineEntryKind::AgentThinking => ConversationEvent::AgentThinking {
+                text: self.buffer.clone(),
             },
         }
     }

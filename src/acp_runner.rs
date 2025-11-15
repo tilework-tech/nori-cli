@@ -437,7 +437,17 @@ async fn run_connection_inner(
                             tracker.append_agent_chunk(text_content.text, &event_tx);
                         }
                     }
+                    SessionUpdate::AgentThoughtChunk(chunk) => {
+                        if let ContentBlock::Text(text_content) = chunk.content {
+                            let mut tracker = tracker.borrow_mut();
+                            tracker.append_thinking_chunk(text_content.text, &event_tx);
+                        }
+                    }
                     other => {
+                        {
+                            let mut tracker = tracker.borrow_mut();
+                            tracker.commit_kind(InlineEntryKind::AgentThinking, &event_tx);
+                        }
                         if let Some(event) = translate_session_update(other) {
                             let _ = event_tx.send(BackendEvent::Conversation(event));
                         }
@@ -569,7 +579,7 @@ async fn run_connection_inner(
         Ok(response) => {
             {
                 let mut tracker = inline_tracker.borrow_mut();
-                tracker.commit_current(&event_tx);
+                tracker.commit_all(&event_tx);
             }
             let success = matches!(response.stop_reason, acp::StopReason::EndTurn);
             let details = format!("Stop reason: {:?}", response.stop_reason);
@@ -580,7 +590,7 @@ async fn run_connection_inner(
         Err(err) => {
             {
                 let mut tracker = inline_tracker.borrow_mut();
-                tracker.abort_current(&event_tx);
+                tracker.abort_all(&event_tx);
             }
             let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
                 subtype: "prompt_failed".to_string(),
@@ -601,7 +611,8 @@ async fn run_connection_inner(
 #[derive(Default)]
 struct InlineEntryTracker {
     next_id: usize,
-    current_assistant: Option<InlineEntryId>,
+    assistant_entry: Option<InlineEntryId>,
+    thinking_entry: Option<InlineEntryId>,
 }
 
 impl InlineEntryTracker {
@@ -609,36 +620,98 @@ impl InlineEntryTracker {
         if text.is_empty() {
             return;
         }
+        self.commit_kind(InlineEntryKind::AgentThinking, event_tx);
+        self.append_chunk(InlineEntryKind::AssistantMessage, text, event_tx);
+    }
 
-        let id = if let Some(id) = &self.current_assistant {
-            id.clone()
-        } else {
-            self.next_id += 1;
-            let id = format!("assistant-{}", self.next_id);
-            let _ = event_tx.send(BackendEvent::InlineBegin {
-                id: id.clone(),
-                kind: InlineEntryKind::AssistantMessage,
-            });
-            self.current_assistant = Some(id.clone());
-            id
-        };
+    fn append_thinking_chunk(
+        &mut self,
+        text: String,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        if text.is_empty() {
+            return;
+        }
+        self.append_chunk(InlineEntryKind::AgentThinking, text, event_tx);
+    }
 
+    fn append_chunk(
+        &mut self,
+        kind: InlineEntryKind,
+        text: String,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        let id = self.ensure_entry(kind.clone(), event_tx);
         let _ = event_tx.send(BackendEvent::InlineUpdate {
             id,
             update: InlineEntryUpdate::AppendText(text),
         });
     }
 
-    fn commit_current(&mut self, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
-        if let Some(id) = self.current_assistant.take() {
+    fn ensure_entry(
+        &mut self,
+        kind: InlineEntryKind,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) -> InlineEntryId {
+        let slot = match kind {
+            InlineEntryKind::AssistantMessage => &mut self.assistant_entry,
+            InlineEntryKind::AgentThinking => &mut self.thinking_entry,
+        };
+
+        if let Some(id) = slot.clone() {
+            return id;
+        }
+
+        self.next_id += 1;
+        let prefix = match kind {
+            InlineEntryKind::AssistantMessage => "assistant",
+            InlineEntryKind::AgentThinking => "thinking",
+        };
+        let id = format!("{prefix}-{}", self.next_id);
+        let _ = event_tx.send(BackendEvent::InlineBegin {
+            id: id.clone(),
+            kind,
+        });
+        *slot = Some(id.clone());
+        id
+    }
+
+    fn commit_kind(
+        &mut self,
+        kind: InlineEntryKind,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        let slot = match kind {
+            InlineEntryKind::AssistantMessage => &mut self.assistant_entry,
+            InlineEntryKind::AgentThinking => &mut self.thinking_entry,
+        };
+        if let Some(id) = slot.take() {
             let _ = event_tx.send(BackendEvent::InlineCommit { id });
         }
     }
 
-    fn abort_current(&mut self, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
-        if let Some(id) = self.current_assistant.take() {
+    fn commit_all(&mut self, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
+        self.commit_kind(InlineEntryKind::AgentThinking, event_tx);
+        self.commit_kind(InlineEntryKind::AssistantMessage, event_tx);
+    }
+
+    fn abort_kind(
+        &mut self,
+        kind: InlineEntryKind,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        let slot = match kind {
+            InlineEntryKind::AssistantMessage => &mut self.assistant_entry,
+            InlineEntryKind::AgentThinking => &mut self.thinking_entry,
+        };
+        if let Some(id) = slot.take() {
             let _ = event_tx.send(BackendEvent::InlineAbort { id });
         }
+    }
+
+    fn abort_all(&mut self, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
+        self.abort_kind(InlineEntryKind::AgentThinking, event_tx);
+        self.abort_kind(InlineEntryKind::AssistantMessage, event_tx);
     }
 }
 
