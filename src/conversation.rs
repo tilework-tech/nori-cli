@@ -58,22 +58,20 @@ pub fn render_event(event: &ConversationEvent) -> Line<'static> {
     match event {
         ConversationEvent::UserMessage { text } => Line::from(vec![
             Span::styled(
-                "[user]",
+                "[user] ",
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" "),
             Span::raw(text.clone()),
         ]),
         ConversationEvent::AssistantMessage { text } => Line::from(vec![
             Span::styled(
-                "[agent]",
+                "[agent] ",
                 Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" "),
             Span::raw(text.clone()),
         ]),
         ConversationEvent::SystemEvent { subtype, details } => {

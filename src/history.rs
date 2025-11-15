@@ -1,6 +1,5 @@
 use crate::conversation::{ConversationEvent, render_event};
-use crate::text_utils::wrap_text_to_width;
-use ratatui::text::{Line, Text};
+use ratatui::text::{Line, Span};
 
 pub type InlineEntryId = String;
 
@@ -59,13 +58,29 @@ impl InlineEntryState {
         self.last_width = width;
 
         let event = self.to_event();
-        let text = Text::from(render_event(&event));
-        let wrapped = wrap_text_to_width(&text, width);
-        if wrapped.is_empty() {
-            self.wrapped_lines = vec![Line::from("")];
-        } else {
-            self.wrapped_lines = wrapped;
+        let rendered = render_event(&event);
+        // Split the text on newlines to preserve whitespace and newlines
+        let empty_span = Span::default();
+        let text_span = &rendered.spans.last().unwrap_or(&empty_span); // The text span
+        let text_lines: Vec<&str> = text_span.content.lines().collect();
+        let mut lines = Vec::new();
+        for (i, text_line) in text_lines.iter().enumerate() {
+            let mut spans = Vec::new();
+            if i == 0 {
+                // First line with prefix
+                spans.push(rendered.spans[0].clone());
+                spans.push(rendered.spans[1].clone());
+            } else {
+                // Subsequent lines with indentation to match prefix
+                spans.push(Span::raw("        ")); // 8 spaces to match "[agent] "
+            }
+            spans.push(Span::styled(text_line.to_string(), text_span.style));
+            lines.push(Line::from(spans));
         }
+        if lines.is_empty() {
+            lines.push(Line::from(""));
+        }
+        self.wrapped_lines = lines;
     }
 
     pub fn height(&self) -> u16 {
