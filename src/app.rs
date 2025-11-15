@@ -3,6 +3,9 @@
 use crate::backends;
 use crate::backends::AgentBackend;
 use crate::conversation::ConversationEvent;
+use crate::history::{
+    CommittedInlineEntry, InlineEntryId, InlineEntryKind, InlineEntryState, InlineEntryUpdate,
+};
 use tui_components::selection::{
     SelectionItem, SelectionList, SelectionListConfig, standard_popup_hint_line,
 };
@@ -70,6 +73,20 @@ pub enum Message {
 
     // Streaming
     StreamEvent(ConversationEvent),
+    BeginInlineEntry {
+        id: InlineEntryId,
+        kind: InlineEntryKind,
+    },
+    UpdateInlineEntry {
+        id: InlineEntryId,
+        update: InlineEntryUpdate,
+    },
+    CommitInlineEntry {
+        id: InlineEntryId,
+    },
+    AbortInlineEntry {
+        id: InlineEntryId,
+    },
     StreamComplete,
     CancelStream,
 
@@ -111,6 +128,7 @@ pub struct Model {
     pub backend_availability: Vec<bool>,
     pub textarea: TextArea,
     pub response_events: Vec<ConversationEvent>,
+    pub inline_entries: Vec<InlineEntryState>,
     pub selected_agent_index: Option<usize>,
     pub session_id: Option<String>,
     pub error_message: Option<String>,
@@ -196,6 +214,7 @@ impl Default for Model {
             backend_availability,
             textarea: create_textarea(),
             response_events: Vec::new(),
+            inline_entries: Vec::new(),
             selected_agent_index: None,
             session_id: None,
             error_message: None,
@@ -273,6 +292,22 @@ impl Model {
 
             Message::StreamEvent(event) => {
                 self.response_events.push(event);
+            }
+
+            Message::BeginInlineEntry { id, kind } => {
+                self.begin_inline_entry(id, kind);
+            }
+
+            Message::UpdateInlineEntry { id, update } => {
+                self.update_inline_entry(&id, update);
+            }
+
+            Message::AbortInlineEntry { id } => {
+                self.abort_inline_entry(&id);
+            }
+
+            Message::CommitInlineEntry { .. } => {
+                // Commit is handled in the main loop so the scrollback can be updated there.
             }
 
             Message::StreamComplete => {
@@ -458,12 +493,64 @@ impl Model {
 
             Message::TerminalResize { width, height } => {
                 self.terminal_size = (width, height);
+                self.rewrap_inline_entries();
             }
 
             Message::MouseEvent(_mouse_event) => {
                 // TODO: Handle mouse events (scrolling, clicking, etc.)
                 // For now, just consume the event
             }
+        }
+    }
+
+    pub fn inline_wrap_width(&self) -> usize {
+        self.terminal_size.0.saturating_sub(2).max(1) as usize
+    }
+
+    pub fn inline_height(&self) -> u16 {
+        self.inline_entries.iter().map(|entry| entry.height()).sum()
+    }
+
+    pub fn begin_inline_entry(&mut self, id: InlineEntryId, kind: InlineEntryKind) {
+        let mut entry = InlineEntryState::new(id, kind);
+        let width = self.inline_wrap_width();
+        if width > 0 {
+            entry.rewrap(width);
+        }
+        self.inline_entries.push(entry);
+    }
+
+    pub fn update_inline_entry(&mut self, id: &InlineEntryId, update: InlineEntryUpdate) {
+        let width = self.inline_wrap_width();
+        if let Some(entry) = self.inline_entries.iter_mut().find(|entry| &entry.id == id) {
+            entry.apply_update(update, width);
+        }
+    }
+
+    pub fn commit_inline_entry(&mut self, id: &InlineEntryId) -> Option<CommittedInlineEntry> {
+        let index = self
+            .inline_entries
+            .iter()
+            .position(|entry| &entry.id == id)?;
+        let entry = self.inline_entries.remove(index);
+        Some(entry.into_committed())
+    }
+
+    pub fn abort_inline_entry(&mut self, id: &InlineEntryId) -> Option<InlineEntryState> {
+        let index = self
+            .inline_entries
+            .iter()
+            .position(|entry| &entry.id == id)?;
+        Some(self.inline_entries.remove(index))
+    }
+
+    pub fn rewrap_inline_entries(&mut self) {
+        let width = self.inline_wrap_width();
+        if width == 0 {
+            return;
+        }
+        for entry in &mut self.inline_entries {
+            entry.rewrap(width);
         }
     }
 }

@@ -5,16 +5,20 @@ mod backends;
 mod cli;
 mod commands;
 mod conversation;
+mod history;
+mod text_utils;
 mod ui;
 
 use crate::app::{AppMode, InstallChoice, Message, Model};
 use crate::autocomplete::update_autocomplete_state;
 use crate::backends::{
-    AgentBackend, claude::ClaudeBackend, claude_code_acp::ClaudeCodeAcpBackend, mock::MockBackend,
+    AgentBackend, BackendEvent, claude::ClaudeBackend, claude_code_acp::ClaudeCodeAcpBackend,
+    mock::MockBackend,
 };
 use crate::cli::{Cli, agent_name_to_index, valid_agent_names};
 use crate::commands::{CommandRegistry, parse_slash_command};
 use crate::conversation::{ConversationEvent, render_event, should_render_event};
+use crate::text_utils::wrap_text_to_width;
 
 use _tuicore::{TerminalWriter, TuiApp};
 use clap::Parser;
@@ -78,6 +82,9 @@ async fn run_app(
     initial_message: Option<String>,
 ) -> Result<()> {
     let mut model = Model::default();
+    if let Ok(size) = terminal.size() {
+        model.terminal_size = (size.width, size.height);
+    }
 
     // Set agent index if provided via CLI
     if let Some(index) = agent_index {
@@ -183,6 +190,24 @@ async fn run_app(
                         }
 
                         model.update(msg);
+                        let _ = mode_tx.send(model.current_mode);
+                        let _ = overlay_tx.send(model.show_agent_router);
+                        let _ = install_prompt_tx.send(model.show_install_prompt);
+                        let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
+                        let _ = autocomplete_tx.send(model.show_autocomplete);
+                    }
+                    Message::CommitInlineEntry { id } => {
+                        if let Some(committed) = model.commit_inline_entry(id) {
+                            let lines = committed.lines.clone();
+                            let height = committed.height;
+                            terminal.insert_before(height, move |buf| {
+                                use ratatui::widgets::{Paragraph, Widget};
+                                use ratatui::text::Text;
+                                Paragraph::new(Text::from(lines.clone())).render(buf.area, buf);
+                            })?;
+                            model.response_events.push(committed.event);
+                        }
+
                         let _ = mode_tx.send(model.current_mode);
                         let _ = overlay_tx.send(model.show_agent_router);
                         let _ = install_prompt_tx.send(model.show_install_prompt);
@@ -564,120 +589,6 @@ fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
     }
 }
 
-/// Wrap text to fit within the specified width, preserving styling from spans.
-/// Returns a vector of Lines, each fitting within the width constraint.
-fn wrap_text_to_width(
-    text: &ratatui::text::Text,
-    width: usize,
-) -> Vec<ratatui::text::Line<'static>> {
-    use ratatui::text::{Line, Span};
-    use unicode_width::UnicodeWidthStr;
-
-    let mut wrapped_lines = Vec::new();
-
-    // If width is too small, just return the original line
-    if width < 10 {
-        for line in &text.lines {
-            let owned_spans: Vec<Span> = line
-                .spans
-                .iter()
-                .map(|s| Span::styled(s.content.to_string(), s.style))
-                .collect();
-            wrapped_lines.push(Line::from(owned_spans));
-        }
-        return wrapped_lines;
-    }
-
-    for line in &text.lines {
-        let mut current_line_spans = Vec::new();
-        let mut current_width = 0;
-
-        for span in &line.spans {
-            let span_text = span.content.as_ref();
-
-            // Handle standalone space spans (don't split them)
-            if span_text.trim().is_empty() && !span_text.is_empty() {
-                current_line_spans.push(Span::styled(span_text.to_string(), span.style));
-                current_width += span_text.width();
-                continue;
-            }
-
-            // Split span text by words to wrap properly
-            let words: Vec<&str> = span_text.split_whitespace().collect();
-
-            for (i, word) in words.iter().enumerate() {
-                let word_width = word.width();
-                let space_width = if i < words.len() - 1 { 1 } else { 0 };
-
-                // If this word would exceed width, start new line
-                if current_width + word_width > width && current_width > 0 {
-                    wrapped_lines.push(Line::from(current_line_spans.clone()));
-                    current_line_spans.clear();
-                    current_width = 0;
-                }
-
-                // If word itself is too long (longer than width), split it character by character
-                if word_width > width {
-                    let mut remaining = word.to_string();
-                    while !remaining.is_empty() {
-                        let mut chunk = String::new();
-                        let mut chunk_width = 0;
-
-                        for ch in remaining.chars() {
-                            let ch_width = ch.to_string().width();
-                            if chunk_width + ch_width > width && !chunk.is_empty() {
-                                break;
-                            }
-                            chunk.push(ch);
-                            chunk_width += ch_width;
-                        }
-
-                        if !chunk.is_empty() {
-                            if current_width > 0 {
-                                wrapped_lines.push(Line::from(current_line_spans.clone()));
-                                current_line_spans.clear();
-                            }
-                            current_line_spans.push(Span::styled(chunk.clone(), span.style));
-                            wrapped_lines.push(Line::from(current_line_spans.clone()));
-                            current_line_spans.clear();
-                            current_width = 0;
-
-                            remaining = remaining[chunk.len()..].to_string();
-                        } else {
-                            break;
-                        }
-                    }
-                } else {
-                    // Add the word normally
-                    let word_str = if space_width > 0 {
-                        format!("{word} ")
-                    } else {
-                        word.to_string()
-                    };
-
-                    current_line_spans.push(Span::styled(word_str, span.style));
-                    current_width += word_width + space_width;
-                }
-            }
-        }
-
-        // Add remaining spans as a line
-        if !current_line_spans.is_empty() {
-            wrapped_lines.push(Line::from(current_line_spans));
-        } else if wrapped_lines.is_empty() {
-            // Empty line - preserve it
-            wrapped_lines.push(Line::from(""));
-        }
-    }
-
-    // If no lines were created, return at least one empty line
-    if wrapped_lines.is_empty() {
-        wrapped_lines.push(Line::from(""));
-    }
-
-    wrapped_lines
-}
-
 async fn spawn_and_stream(
     backend: Box<dyn AgentBackend + Send>,
     prompt: String,
@@ -698,11 +609,27 @@ async fn spawn_and_stream(
             }
             // Stream consumption
             Some(event) = stream.next() => {
-                let _ = tx.send(Message::StreamEvent(event.clone()));
-                // End stream immediately on ResultSummary to prevent hanging
-                if matches!(event, ConversationEvent::ResultSummary { .. }) {
-                    tx.send(Message::StreamComplete)?;
-                    break;
+                match event {
+                    BackendEvent::Conversation(event) => {
+                        let result_summary = matches!(event, ConversationEvent::ResultSummary { .. });
+                        let _ = tx.send(Message::StreamEvent(event));
+                        if result_summary {
+                            tx.send(Message::StreamComplete)?;
+                            break;
+                        }
+                    }
+                    BackendEvent::InlineBegin { id, kind } => {
+                        let _ = tx.send(Message::BeginInlineEntry { id, kind });
+                    }
+                    BackendEvent::InlineUpdate { id, update } => {
+                        let _ = tx.send(Message::UpdateInlineEntry { id, update });
+                    }
+                    BackendEvent::InlineCommit { id } => {
+                        let _ = tx.send(Message::CommitInlineEntry { id });
+                    }
+                    BackendEvent::InlineAbort { id } => {
+                        let _ = tx.send(Message::AbortInlineEntry { id });
+                    }
                 }
             }
             // Stream ended naturally

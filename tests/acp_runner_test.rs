@@ -1,13 +1,53 @@
+use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use futures::StreamExt;
 use nori_cli::acp_runner::{AcpAgentConfig, AcpAgentRunner};
+use nori_cli::backends::BackendEvent;
 use nori_cli::conversation::ConversationEvent;
+use nori_cli::history::{InlineEntryId, InlineEntryKind, InlineEntryUpdate};
 use tempfile::tempdir;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
+
+/// Helper to track inline entries and convert them to ConversationEvents
+#[derive(Default)]
+struct InlineTracker {
+    entries: HashMap<InlineEntryId, String>,
+}
+
+impl InlineTracker {
+    fn handle_event(&mut self, event: &BackendEvent) -> Option<ConversationEvent> {
+        match event {
+            BackendEvent::InlineBegin { id, kind } => {
+                match kind {
+                    InlineEntryKind::AssistantMessage => {
+                        self.entries.insert(id.clone(), String::new());
+                    }
+                }
+                None
+            }
+            BackendEvent::InlineUpdate { id, update } => {
+                if let Some(buffer) = self.entries.get_mut(id) {
+                    let InlineEntryUpdate::AppendText(text) = update;
+                    buffer.push_str(text);
+                }
+                None
+            }
+            BackendEvent::InlineCommit { id } => self
+                .entries
+                .remove(id)
+                .map(|text| ConversationEvent::AssistantMessage { text }),
+            BackendEvent::InlineAbort { id } => {
+                self.entries.remove(id);
+                None
+            }
+            _ => None,
+        }
+    }
+}
 
 const MOCK_AGENT_COMMAND: &str = "target/debug/mock_acp_agent";
 
@@ -83,19 +123,33 @@ async fn test_session_updates_are_streamed() {
         .await
         .expect("spawn_stream should succeed");
 
-    // Find both test messages, skipping debug events
+    // Find both test messages, handling inline events
     let mut found_messages = Vec::new();
+    let mut tracker = InlineTracker::default();
 
-    for _ in 0..20 {
-        // Allow up to 20 events to find both messages
+    for _ in 0..30 {
+        // Allow up to 30 events to find both messages
         let event = timeout(Duration::from_secs(5), stream.next())
             .await
             .expect("timed out waiting for event")
             .expect("stream closed before event");
 
-        if let ConversationEvent::AssistantMessage { ref text } = event {
+        // Handle inline events and convert to ConversationEvent
+        if let Some(conv_event) = tracker.handle_event(&event) {
+            if let ConversationEvent::AssistantMessage { ref text } = conv_event {
+                // The inline tracker combines all chunks, so we'll get one message with both
+                if text.contains("Test message 1") && text.contains("Test message 2") {
+                    found_messages.push(text.clone());
+                    break;
+                }
+            }
+        }
+
+        // Also check for direct ConversationEvent (for backward compatibility)
+        if let BackendEvent::Conversation(ConversationEvent::AssistantMessage { ref text }) = event
+        {
             if text == "Test message 1" || text == "Test message 2" {
-                found_messages.push(event);
+                found_messages.push(text.clone());
                 if found_messages.len() == 2 {
                     break;
                 }
@@ -103,26 +157,14 @@ async fn test_session_updates_are_streamed() {
         }
     }
 
-    assert_eq!(found_messages.len(), 2, "Did not find both test messages");
-
+    assert!(!found_messages.is_empty(), "Did not find test messages");
     assert!(
-        matches!(
-            &found_messages[0],
-            ConversationEvent::AssistantMessage {
-                text
-            } if text == "Test message 1"
-        ),
-        "first message mismatch: {found_messages:?}"
+        found_messages[0].contains("Test message 1"),
+        "Missing 'Test message 1'"
     );
-
     assert!(
-        matches!(
-            &found_messages[1],
-            ConversationEvent::AssistantMessage {
-                text
-            } if text == "Test message 2"
-        ),
-        "second message mismatch: {found_messages:?}"
+        found_messages[0].contains("Test message 2"),
+        "Missing 'Test message 2'"
     );
 
     cancel_token.cancel();
@@ -145,49 +187,48 @@ async fn test_agent_calls_read_text_file() {
         .await
         .expect("spawn_stream should succeed");
 
-    // Skip debug events and find the two test messages
-    let mut found_messages = 0;
-    for _ in 0..20 {
-        // Allow more events due to debug logging
+    // Skip debug events and find the messages using inline tracker
+    let mut tracker = InlineTracker::default();
+    let mut found_initial_messages = false;
+    let mut found_file_content = false;
+
+    for _ in 0..30 {
+        // Allow more events due to debug logging and inline events
         let event = timeout(Duration::from_secs(5), stream.next())
             .await
             .unwrap_or_else(|_| panic!("timed out waiting for event"))
             .unwrap_or_else(|| panic!("stream closed"));
 
-        match event {
-            ConversationEvent::AssistantMessage { ref text }
-                if text == "Test message 1" || text == "Test message 2" =>
-            {
-                found_messages += 1;
-                if found_messages == 2 {
+        // Handle inline events
+        if let Some(conv_event) = tracker.handle_event(&event) {
+            if let ConversationEvent::AssistantMessage { ref text } = conv_event {
+                if text.contains("Test message 1") && text.contains("Test message 2") {
+                    found_initial_messages = true;
+                }
+                if text.contains("Read file content: Hello from file") {
+                    found_file_content = true;
                     break;
                 }
             }
-            _ => continue, // Skip debug events
         }
-    }
-    assert_eq!(found_messages, 2, "Did not find both test messages");
 
-    // Now find the file content message
-    let mut file_content_event = None;
-    for _ in 0..10 {
-        let event = timeout(Duration::from_secs(5), stream.next())
-            .await
-            .expect("timed out waiting for file read event")
-            .expect("stream closed without file read event");
-
-        if let ConversationEvent::AssistantMessage { ref text } = event {
-            if text.contains("Read file content: Hello from file") {
-                file_content_event = Some(event);
-                break;
+        // Also check for direct ConversationEvent (for backward compatibility)
+        match event {
+            BackendEvent::Conversation(ConversationEvent::AssistantMessage { ref text }) => {
+                if (text == "Test message 1" || text == "Test message 2") && !found_initial_messages
+                {
+                    // Skip for now, we're looking for the combined message
+                } else if text.contains("Read file content: Hello from file") {
+                    found_file_content = true;
+                    break;
+                }
             }
+            _ => continue,
         }
     }
 
-    assert!(
-        file_content_event.is_some(),
-        "Did not find file content message"
-    );
+    assert!(found_initial_messages, "Did not find initial test messages");
+    assert!(found_file_content, "Did not find file content message");
 
     cancel_token.cancel();
     remove_test_env("MOCK_AGENT_REQUEST_FILE");

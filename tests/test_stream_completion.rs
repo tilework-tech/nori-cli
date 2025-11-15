@@ -1,5 +1,6 @@
 use futures::stream::StreamExt;
 use nori_cli::backends::AgentBackend;
+use nori_cli::backends::BackendEvent;
 /// Test to verify that StreamComplete is actually sent after ResultSummary
 use nori_cli::backends::claude::ClaudeBackend;
 use nori_cli::backends::is_available;
@@ -26,7 +27,10 @@ async fn test_claude_stream_sends_all_events_and_completes() {
     while let Some(event) = stream.next().await {
         println!("Received event: {event:?}");
 
-        if matches!(event, ConversationEvent::ResultSummary { .. }) {
+        if matches!(
+            event,
+            BackendEvent::Conversation(ConversationEvent::ResultSummary { .. })
+        ) {
             result_summary_count += 1;
             println!(">>> ResultSummary #{result_summary_count} <<<");
         }

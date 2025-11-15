@@ -5,4 +5,6 @@ pub mod backends;
 pub mod cli;
 pub mod commands;
 pub mod conversation;
+pub mod history;
+pub mod text_utils;
 pub mod ui;
