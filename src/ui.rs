@@ -6,45 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 use tui_components::render::Renderable;
-use tui_components::textarea::TextArea;
-use unicode_width::UnicodeWidthStr;
-
-pub fn calculate_textarea_height(textarea: &TextArea, available_width: u16) -> u16 {
-    const MIN_HEIGHT: u16 = 1;
-    const MAX_HEIGHT: u16 = 10;
-
-    let config = textarea.config();
-
-    // Account for padding and prefix when calculating wrapping width
-    let prefix_width = config.prefix.as_ref().map_or(0, |p| p.len() as u16);
-    let horizontal_space = config.padding_left + config.padding_right + prefix_width;
-    let content_width = available_width.saturating_sub(horizontal_space).max(1);
-
-    let mut total_lines = 0u16;
-    let text = textarea.text();
-    let lines: Vec<&str> = if text.is_empty() {
-        vec![""]
-    } else {
-        text.lines().collect()
-    };
-
-    for line in lines {
-        let line_width = line.width() as u16;
-        // Calculate how many wrapped lines this will take
-        let wrapped_lines = if line_width == 0 {
-            1 // Empty line still takes 1 line
-        } else {
-            line_width.div_ceil(content_width).max(1)
-        };
-        total_lines += wrapped_lines;
-    }
-
-    let content_height = total_lines.clamp(MIN_HEIGHT, MAX_HEIGHT);
-
-    // Add padding to get total height
-    let vertical_space = config.padding_top + config.padding_bottom;
-    content_height + vertical_space
-}
 
 pub fn render(model: &mut Model, frame: &mut Frame) {
     // Install prompt takes priority (blocking action)
@@ -66,9 +27,14 @@ pub fn render(model: &mut Model, frame: &mut Frame) {
 fn render_chat(model: &mut Model, frame: &mut Frame) {
     let area = frame.area();
 
-    // Calculate dynamic textarea height
+    // Calculate dynamic textarea height using TextArea's built-in method
     let available_width = area.width.saturating_sub(2); // Account for borders
-    let textarea_height = calculate_textarea_height(&model.textarea, available_width);
+    let content_height = model.textarea.desired_height(available_width);
+    let config = model.textarea.config();
+    let total_height = content_height + config.padding_top + config.padding_bottom;
+    // Apply max height constraint (from old calculate_textarea_height logic)
+    const MAX_HEIGHT: u16 = 10;
+    let textarea_height = total_height.min(MAX_HEIGHT + config.padding_top + config.padding_bottom);
 
     // Adjust layout based on whether autocomplete is visible
     let constraints = if model.show_autocomplete {
@@ -117,21 +83,9 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     // Loading animation - show during streaming
     if model.current_mode == crate::app::AppMode::Streaming {
-        if model.use_codex_components {
-            // Use Shimmer component from tui-components
-            use tui_components::Shimmer;
-            let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
-            frame.render_widget(shimmer, chunks[2]);
-        } else {
-            // Use legacy spinner animation
-            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-            let spinner_text = format!(
-                "{} {selected_agent} processing...",
-                frames[model.loading_frame % frames.len()],
-            );
-            let spinner = Paragraph::new(spinner_text);
-            frame.render_widget(spinner, chunks[2]);
-        }
+        use tui_components::Shimmer;
+        let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
+        frame.render_widget(shimmer, chunks[2]);
     }
 
     // Instructions - show error/hint message if present, otherwise show default instructions

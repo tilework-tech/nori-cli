@@ -136,3 +136,30 @@ fn test_multiline_input() {
 
     assert_snapshot!("multiline_input", terminal.backend());
 }
+
+#[test]
+fn test_shimmer_renders_during_streaming() {
+    use nori_cli::app::AppMode;
+
+    let mut model = Model::default();
+
+    // Set mode to Streaming to trigger shimmer animation
+    model.current_mode = AppMode::Streaming;
+
+    // Select an agent so it shows in the shimmer text
+    model.selected_agent_index = Some(0); // "Claude Code"
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| ui::render(&mut model, frame))
+        .unwrap();
+
+    // The snapshot should show the Shimmer animation (not legacy spinner)
+    let output = format!("{:?}", terminal.backend());
+    assert!(
+        output.contains("processing"),
+        "Shimmer should show 'processing' text"
+    );
+
+    assert_snapshot!("shimmer_during_streaming", terminal.backend());
+}
