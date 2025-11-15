@@ -69,8 +69,8 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     // Agent info - show selected agent below prompt
     let selected_agent = model
-        .selected_agent_index
-        .and_then(|i| model.agents.get(i))
+        .agents
+        .get(model.selected_agent_index)
         .map(|s| s.as_str())
         .unwrap_or("No agent selected");
 

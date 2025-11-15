@@ -129,7 +129,7 @@ pub struct Model {
     pub textarea: TextArea,
     pub response_events: Vec<ConversationEvent>,
     pub inline_entries: Vec<InlineEntryState>,
-    pub selected_agent_index: Option<usize>,
+    pub selected_agent_index: usize,
     pub session_id: Option<String>,
     pub error_message: Option<String>,
     pub show_agent_router: bool,
@@ -149,10 +149,10 @@ pub struct Model {
 impl Default for Model {
     fn default() -> Self {
         let agents = vec![
-            "Claude Code".to_string(),
-            "Codex ACP".to_string(),
             "Claude Code ACP".to_string(),
+            "Codex ACP".to_string(),
             "Mock ACP Agent".to_string(),
+            // "Claude Code".to_string(),
         ];
 
         let backend_availability = vec![
@@ -213,7 +213,7 @@ impl Default for Model {
             textarea: create_textarea(),
             response_events: Vec::new(),
             inline_entries: Vec::new(),
-            selected_agent_index: None,
+            selected_agent_index: 0,
             session_id: None,
             error_message: None,
             show_agent_router: false,
@@ -251,7 +251,7 @@ impl Model {
 
             Message::SelectItem => {
                 // Select agent and close overlay
-                self.selected_agent_index = self.agent_selection_list.selected_index();
+                self.selected_agent_index = self.agent_selection_list.selected_index().unwrap_or(0);
                 self.show_agent_router = false;
                 self.error_message = None;
                 self.clear_textarea();
@@ -551,6 +551,16 @@ impl Model {
         }
         for entry in &mut self.inline_entries {
             entry.rewrap(width);
+        }
+    }
+
+    pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
+        match self.selected_agent_index {
+            0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
+            1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
+            2 => Box::new(backends::mock::MockBackend::new()),
+            // 3 => Box::new(ClaudeBackend::new()),
+            _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
         }
     }
 }

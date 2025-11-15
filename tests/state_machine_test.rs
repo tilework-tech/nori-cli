@@ -11,7 +11,6 @@ fn test_state_transitions() {
     // Select an item -> should close overlay
     model.update(Message::SelectItem);
     assert!(!model.show_agent_router);
-    assert!(model.selected_agent_index.is_some());
 
     // Submit input -> should transition to Streaming mode
     model.textarea.insert_str("test input");

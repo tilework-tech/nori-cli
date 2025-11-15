@@ -11,10 +11,7 @@ mod ui;
 
 use crate::app::{AppMode, InstallChoice, Message, Model};
 use crate::autocomplete::update_autocomplete_state;
-use crate::backends::{
-    AgentBackend, BackendEvent, claude::ClaudeBackend, claude_code_acp::ClaudeCodeAcpBackend,
-    mock::MockBackend,
-};
+use crate::backends::{AgentBackend, BackendEvent};
 use crate::cli::{Cli, agent_name_to_index, valid_agent_names};
 use crate::commands::{CommandRegistry, parse_slash_command};
 use crate::conversation::{ConversationEvent, render_event, should_render_event};
@@ -88,7 +85,7 @@ async fn run_app(
 
     // Set agent index if provided via CLI
     if let Some(index) = agent_index {
-        model.selected_agent_index = Some(index);
+        model.selected_agent_index = index;
     }
 
     // Pre-fill textarea with initial message if provided
@@ -295,7 +292,7 @@ async fn run_app(
                                 }
 
                                 // Check if backend is available before spawning
-                                let backend = get_backend(&model);
+                                let backend = model.get_backend();
                                 if !backends::is_available(backend.command_name()) {
                                     // Backend not available - show install prompt
                                     let _ = tx.send(Message::ShowInstallPrompt {
@@ -571,16 +568,6 @@ fn handle_key_simple(
 
     // Send all other key events to textarea
     Some(Message::KeyPress(key))
-}
-
-fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
-    match model.selected_agent_index {
-        Some(0) => Box::new(ClaudeBackend::new()),
-        Some(1) => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-        Some(2) => Box::new(ClaudeCodeAcpBackend::new()),
-        Some(3) => Box::new(MockBackend::new()),
-        _ => Box::new(ClaudeBackend::new()), // Default
-    }
 }
 
 async fn spawn_and_stream(

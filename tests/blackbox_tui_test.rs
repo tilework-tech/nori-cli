@@ -147,7 +147,7 @@ fn test_shimmer_renders_during_streaming() {
     model.current_mode = AppMode::Streaming;
 
     // Select an agent so it shows in the shimmer text
-    model.selected_agent_index = Some(0); // "Claude Code"
+    model.selected_agent_index = 0; // "Claude Code ACP"
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal

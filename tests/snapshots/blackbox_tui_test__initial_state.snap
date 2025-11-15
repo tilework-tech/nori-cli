@@ -5,7 +5,7 @@ expression: terminal.backend()
 "                                                                                                    "
 "›  Write a message...                                                                               "
 "                                                                                                    "
-"Agent: No agent selected                                                                            "
+"Agent: Claude Code ACP                                                                              "
 "                                                                                                    "
 "/switch-model: agents | /exit: quit                                                                 "
 "                                                                                                    "
