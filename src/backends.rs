@@ -5,16 +5,36 @@ pub mod javascript_runtime;
 pub mod mock;
 
 use crate::conversation::ConversationEvent;
+use crate::history::{InlineEntryId, InlineEntryKind, InlineEntryUpdate};
 use futures::stream::Stream;
 use std::path::Path;
 use std::pin::Pin;
+
+#[derive(Debug, Clone)]
+pub enum BackendEvent {
+    Conversation(ConversationEvent),
+    InlineBegin {
+        id: InlineEntryId,
+        kind: InlineEntryKind,
+    },
+    InlineUpdate {
+        id: InlineEntryId,
+        update: InlineEntryUpdate,
+    },
+    InlineCommit {
+        id: InlineEntryId,
+    },
+    InlineAbort {
+        id: InlineEntryId,
+    },
+}
 
 pub trait AgentBackend {
     fn spawn_stream(
         &self,
         prompt: String,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
+    ) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>>;
     fn name(&self) -> &str;
     fn command_name(&self) -> &str;
     fn install_url(&self) -> &str;

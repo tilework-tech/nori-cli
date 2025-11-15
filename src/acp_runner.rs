@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
+use crate::backends::BackendEvent;
 use crate::conversation::{ConversationEvent, PlanEntry};
+use crate::history::{InlineEntryId, InlineEntryKind, InlineEntryUpdate};
 use agent_client_protocol::{
     self as acp, Agent, Client, ClientCapabilities, ContentBlock, FileSystemCapability,
     Implementation, InitializeRequest, NewSessionRequest, PermissionOptionKind, PlanEntryPriority,
@@ -10,6 +12,7 @@ use agent_client_protocol::{
     ToolCallStatus, ToolKind, WriteTextFileRequest, WriteTextFileResponse,
 };
 use futures::stream::Stream;
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::process::Stdio;
@@ -263,7 +266,7 @@ impl AcpAgentRunner {
         &mut self,
         prompt: String,
         cancel_token: CancellationToken,
-    ) -> Result<Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>, String> {
+    ) -> Result<Pin<Box<dyn Stream<Item = BackendEvent> + Send>>, String> {
         if let Some(mut existing) = self._agent_process.take() {
             let _ = existing.kill().await;
         }
@@ -356,7 +359,7 @@ async fn run_acp_connection(
     stdout: ChildStdout,
     client_handler: AcpClientHandler,
     session_update_rx: mpsc::UnboundedReceiver<SessionUpdate>,
-    event_tx: mpsc::UnboundedSender<ConversationEvent>,
+    event_tx: mpsc::UnboundedSender<BackendEvent>,
     cancel_token: CancellationToken,
     prompt: String,
     cwd: PathBuf,
@@ -382,10 +385,10 @@ async fn run_acp_connection(
         .await;
 
     if let Err(err) = result {
-        let _ = event_tx.send(ConversationEvent::SystemEvent {
+        let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
             subtype: "acp_error".to_string(),
             details: Some(err),
-        });
+        }));
     }
 }
 
@@ -395,7 +398,7 @@ async fn run_connection_inner(
     stdout: ChildStdout,
     client_handler: AcpClientHandler,
     session_update_rx: mpsc::UnboundedReceiver<SessionUpdate>,
-    event_tx: mpsc::UnboundedSender<ConversationEvent>,
+    event_tx: mpsc::UnboundedSender<BackendEvent>,
     cancel_token: CancellationToken,
     prompt: String,
     cwd: PathBuf,
@@ -414,8 +417,10 @@ async fn run_connection_inner(
     let mut handshake_tx = Some(handshake_tx);
     let io_task = tokio::task::spawn_local(io_future);
 
+    let inline_tracker = Rc::new(RefCell::new(InlineEntryTracker::default()));
     {
         let event_tx = event_tx.clone();
+        let tracker = Rc::clone(&inline_tracker);
         tokio::task::spawn_local(async move {
             let mut updates = session_update_rx;
             while let Some(update) = updates.recv().await {
@@ -423,11 +428,30 @@ async fn run_connection_inner(
                 let debug_event = ConversationEvent::UnknownEvent {
                     raw: format!("{update:?}"),
                 };
-                let _ = event_tx.send(debug_event);
+                let _ = event_tx.send(BackendEvent::Conversation(debug_event));
 
-                // Send translated event if available
-                if let Some(event) = translate_session_update(update) {
-                    let _ = event_tx.send(event);
+                match update {
+                    SessionUpdate::AgentMessageChunk(chunk) => {
+                        if let ContentBlock::Text(text_content) = chunk.content {
+                            let mut tracker = tracker.borrow_mut();
+                            tracker.append_agent_chunk(text_content.text, &event_tx);
+                        }
+                    }
+                    SessionUpdate::AgentThoughtChunk(chunk) => {
+                        if let ContentBlock::Text(text_content) = chunk.content {
+                            let mut tracker = tracker.borrow_mut();
+                            tracker.append_thinking_chunk(text_content.text, &event_tx);
+                        }
+                    }
+                    other => {
+                        {
+                            let mut tracker = tracker.borrow_mut();
+                            tracker.commit_kind(InlineEntryKind::AgentThinking, &event_tx);
+                        }
+                        if let Some(event) = translate_session_update(other) {
+                            let _ = event_tx.send(BackendEvent::Conversation(event));
+                        }
+                    }
                 }
             }
         });
@@ -483,13 +507,13 @@ async fn run_connection_inner(
     }
 
     // Send debug event for successful initialization
-    let _ = event_tx.send(ConversationEvent::SystemEvent {
+    let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
         subtype: "acp_initialized".to_string(),
         details: Some(format!(
             "Protocol version: {:?}",
             init_response.protocol_version
         )),
-    });
+    }));
 
     let session_response = match connection
         .new_session(NewSessionRequest {
@@ -511,10 +535,10 @@ async fn run_connection_inner(
     let session_id = session_response.session_id.clone();
 
     // Send debug event for session creation
-    let _ = event_tx.send(ConversationEvent::SystemEvent {
+    let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
         subtype: "acp_session_created".to_string(),
         details: Some(format!("Session ID: {session_id}")),
-    });
+    }));
 
     if let Some(tx) = handshake_tx.take() {
         let _ = tx.send(Ok(()));
@@ -536,10 +560,10 @@ async fn run_connection_inner(
     }
 
     // Send debug event for prompt
-    let _ = event_tx.send(ConversationEvent::SystemEvent {
+    let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
         subtype: "acp_prompt_sent".to_string(),
         details: Some(format!("Prompt length: {} chars", prompt.len())),
-    });
+    }));
 
     let prompt_request = PromptRequest {
         session_id,
@@ -551,11 +575,28 @@ async fn run_connection_inner(
         meta: None,
     };
 
-    if let Err(err) = connection.prompt(prompt_request).await {
-        let _ = event_tx.send(ConversationEvent::SystemEvent {
-            subtype: "prompt_failed".to_string(),
-            details: Some(err.to_string()),
-        });
+    match connection.prompt(prompt_request).await {
+        Ok(response) => {
+            {
+                let mut tracker = inline_tracker.borrow_mut();
+                tracker.commit_all(&event_tx);
+            }
+            let success = matches!(response.stop_reason, acp::StopReason::EndTurn);
+            let details = format!("Stop reason: {:?}", response.stop_reason);
+            let _ = event_tx.send(BackendEvent::Conversation(
+                ConversationEvent::ResultSummary { success, details },
+            ));
+        }
+        Err(err) => {
+            {
+                let mut tracker = inline_tracker.borrow_mut();
+                tracker.abort_all(&event_tx);
+            }
+            let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
+                subtype: "prompt_failed".to_string(),
+                details: Some(err.to_string()),
+            }));
+        }
     }
 
     io_task.abort();
@@ -564,6 +605,113 @@ async fn run_connection_inner(
         Ok(Err(err)) => Err(format!("ACP I/O task failed: {err}")),
         Err(join_err) if join_err.is_cancelled() => Ok(()),
         Err(join_err) => Err(format!("ACP I/O task panicked: {join_err}")),
+    }
+}
+
+#[derive(Default)]
+struct InlineEntryTracker {
+    next_id: usize,
+    assistant_entry: Option<InlineEntryId>,
+    thinking_entry: Option<InlineEntryId>,
+}
+
+impl InlineEntryTracker {
+    fn append_agent_chunk(&mut self, text: String, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
+        if text.is_empty() {
+            return;
+        }
+        self.commit_kind(InlineEntryKind::AgentThinking, event_tx);
+        self.append_chunk(InlineEntryKind::AssistantMessage, text, event_tx);
+    }
+
+    fn append_thinking_chunk(
+        &mut self,
+        text: String,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        if text.is_empty() {
+            return;
+        }
+        self.append_chunk(InlineEntryKind::AgentThinking, text, event_tx);
+    }
+
+    fn append_chunk(
+        &mut self,
+        kind: InlineEntryKind,
+        text: String,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        let id = self.ensure_entry(kind.clone(), event_tx);
+        let _ = event_tx.send(BackendEvent::InlineUpdate {
+            id,
+            update: InlineEntryUpdate::AppendText(text),
+        });
+    }
+
+    fn ensure_entry(
+        &mut self,
+        kind: InlineEntryKind,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) -> InlineEntryId {
+        let slot = match kind {
+            InlineEntryKind::AssistantMessage => &mut self.assistant_entry,
+            InlineEntryKind::AgentThinking => &mut self.thinking_entry,
+        };
+
+        if let Some(id) = slot.clone() {
+            return id;
+        }
+
+        self.next_id += 1;
+        let prefix = match kind {
+            InlineEntryKind::AssistantMessage => "assistant",
+            InlineEntryKind::AgentThinking => "thinking",
+        };
+        let id = format!("{prefix}-{}", self.next_id);
+        let _ = event_tx.send(BackendEvent::InlineBegin {
+            id: id.clone(),
+            kind,
+        });
+        *slot = Some(id.clone());
+        id
+    }
+
+    fn commit_kind(
+        &mut self,
+        kind: InlineEntryKind,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        let slot = match kind {
+            InlineEntryKind::AssistantMessage => &mut self.assistant_entry,
+            InlineEntryKind::AgentThinking => &mut self.thinking_entry,
+        };
+        if let Some(id) = slot.take() {
+            let _ = event_tx.send(BackendEvent::InlineCommit { id });
+        }
+    }
+
+    fn commit_all(&mut self, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
+        self.commit_kind(InlineEntryKind::AgentThinking, event_tx);
+        self.commit_kind(InlineEntryKind::AssistantMessage, event_tx);
+    }
+
+    fn abort_kind(
+        &mut self,
+        kind: InlineEntryKind,
+        event_tx: &mpsc::UnboundedSender<BackendEvent>,
+    ) {
+        let slot = match kind {
+            InlineEntryKind::AssistantMessage => &mut self.assistant_entry,
+            InlineEntryKind::AgentThinking => &mut self.thinking_entry,
+        };
+        if let Some(id) = slot.take() {
+            let _ = event_tx.send(BackendEvent::InlineAbort { id });
+        }
+    }
+
+    fn abort_all(&mut self, event_tx: &mpsc::UnboundedSender<BackendEvent>) {
+        self.abort_kind(InlineEntryKind::AgentThinking, event_tx);
+        self.abort_kind(InlineEntryKind::AssistantMessage, event_tx);
     }
 }
 

@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use nori_cli::backends::AgentBackend;
+use nori_cli::backends::BackendEvent;
 use nori_cli::backends::mock::MockBackend;
 use nori_cli::conversation::ConversationEvent;
 use tokio_util::sync::CancellationToken;
@@ -18,20 +19,34 @@ async fn test_mock_backend_streams_events() {
     // MockBackend should yield at least some events
     assert!(!events.is_empty());
 
-    println!("{:?}", events);
-    assert!(matches!(events[0], ConversationEvent::SystemEvent { .. }));
-    assert!(matches!(events[1], ConversationEvent::SystemEvent { .. }));
-    assert!(matches!(events[2], ConversationEvent::SystemEvent { .. }));
-    assert!(matches!(events[3], ConversationEvent::UnknownEvent { .. }));
+    println!("{events:?}");
     assert!(matches!(
-        events[4],
-        ConversationEvent::AssistantMessage { .. }
+        events[0],
+        BackendEvent::Conversation(ConversationEvent::SystemEvent { .. })
     ));
-    assert!(matches!(events[5], ConversationEvent::UnknownEvent { .. }));
+    assert!(matches!(
+        events[1],
+        BackendEvent::Conversation(ConversationEvent::SystemEvent { .. })
+    ));
+    assert!(matches!(
+        events[2],
+        BackendEvent::Conversation(ConversationEvent::SystemEvent { .. })
+    ));
+    assert!(matches!(
+        events[3],
+        BackendEvent::Conversation(ConversationEvent::UnknownEvent { .. })
+    ));
+
+    // With inline streaming, we now get InlineBegin/InlineUpdate/InlineCommit events
+    assert!(matches!(events[4], BackendEvent::InlineBegin { .. }));
+    assert!(matches!(events[5], BackendEvent::InlineUpdate { .. }));
+    // events[6] is another UnknownEvent (debug event for second chunk)
     assert!(matches!(
         events[6],
-        ConversationEvent::AssistantMessage { .. }
+        BackendEvent::Conversation(ConversationEvent::UnknownEvent { .. })
     ));
+    assert!(matches!(events[7], BackendEvent::InlineUpdate { .. }));
+    assert!(matches!(events[8], BackendEvent::InlineCommit { .. }));
 }
 
 #[tokio::test]
@@ -43,7 +58,10 @@ async fn test_mock_backend_completes() {
     let mut event_count = 0;
     while let Some(event) = stream.next().await {
         event_count += 1;
-        if matches!(event, ConversationEvent::AssistantMessage { .. }) {
+        if matches!(
+            event,
+            BackendEvent::Conversation(ConversationEvent::AssistantMessage { .. })
+        ) {
             break;
         }
     }

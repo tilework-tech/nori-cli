@@ -1,4 +1,4 @@
-use super::AgentBackend;
+use super::{AgentBackend, BackendEvent};
 use crate::acp_runner::{AcpAgentConfig, AcpAgentRunner};
 use crate::conversation::ConversationEvent;
 use async_stream::stream;
@@ -53,7 +53,7 @@ impl AgentBackend for MockBackend {
         &self,
         prompt: String,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
+    ) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>> {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let config = mock_agent_config();
 
@@ -66,10 +66,10 @@ impl AgentBackend for MockBackend {
                     }
                 }
                 Err(err) => {
-                    yield ConversationEvent::SystemEvent {
+                    yield BackendEvent::Conversation(ConversationEvent::SystemEvent {
                         subtype: "acp_error".to_string(),
                         details: Some(err),
-                    };
+                    });
                 }
             }
         };

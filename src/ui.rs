@@ -35,34 +35,37 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     // Apply max height constraint (from old calculate_textarea_height logic)
     const MAX_HEIGHT: u16 = 10;
     let textarea_height = total_height.min(MAX_HEIGHT + config.padding_top + config.padding_bottom);
+    let inline_height = model.inline_height().min(area.height);
 
-    // Adjust layout based on whether autocomplete is visible
-    let constraints = if model.show_autocomplete {
-        // Calculate height needed for autocomplete using SelectionList
+    // Build layout constraints
+    let mut constraints = Vec::new();
+    if inline_height > 0 {
+        constraints.push(Constraint::Length(inline_height));
+    }
+    constraints.push(Constraint::Length(textarea_height));
+    constraints.push(Constraint::Length(1)); // Agent info
+    if model.show_autocomplete {
         let autocomplete_height = model.autocomplete_selection_list.desired_height(area.width);
-        vec![
-            Constraint::Length(textarea_height),     // Input (dynamic)
-            Constraint::Length(autocomplete_height), // Autocomplete
-            Constraint::Length(1),                   // Shimmer
-            Constraint::Length(1),                   // Instructions
-        ]
-    } else {
-        vec![
-            Constraint::Length(textarea_height), // Input (dynamic)
-            Constraint::Length(1),               // Agent info
-            Constraint::Length(1),               // Shimmer
-            Constraint::Length(1),               // Instructions
-        ]
-    };
+        constraints.push(Constraint::Length(autocomplete_height));
+    }
+    constraints.push(Constraint::Length(1)); // Shimmer
+    constraints.push(Constraint::Length(1)); // Instructions
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(constraints)
         .split(area);
 
-    // Input - textarea (messages scroll in terminal scrollback above viewport)
-    // Textarea now handles its own borders/styling via TextAreaConfig
-    frame.render_widget(&model.textarea, chunks[0]);
+    let mut chunk_index = 0;
+
+    if inline_height > 0 {
+        render_inline_entries(model, frame, chunks[chunk_index]);
+        chunk_index += 1;
+    }
+
+    // Input - textarea
+    frame.render_widget(&model.textarea, chunks[chunk_index]);
+    chunk_index += 1;
 
     // Agent info - show selected agent below prompt
     let selected_agent = model
@@ -79,13 +82,25 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
 
     let agent_info = Paragraph::new(format!("Agent: {selected_agent}{debug_indicator}"))
         .style(Style::default().fg(Color::Cyan));
-    frame.render_widget(agent_info, chunks[1]);
+    frame.render_widget(agent_info, chunks[chunk_index]);
+    chunk_index += 1;
+
+    let autocomplete_area = if model.show_autocomplete {
+        let area = chunks[chunk_index];
+        chunk_index += 1;
+        Some(area)
+    } else {
+        None
+    };
 
     // Loading animation - show during streaming
+    let shimmer_chunk = chunks[chunk_index];
+    chunk_index += 1;
     if model.current_mode == crate::app::AppMode::Streaming {
+        // Use Shimmer component from tui-components
         use tui_components::Shimmer;
         let shimmer = Shimmer::new(format!("{selected_agent} processing..."));
-        frame.render_widget(shimmer, chunks[2]);
+        frame.render_widget(shimmer, shimmer_chunk);
     }
 
     // Instructions - show error/hint message if present, otherwise show default instructions
@@ -102,14 +117,28 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     };
 
     let instructions = Paragraph::new(instructions_text).style(instructions_style);
+    frame.render_widget(instructions, chunks[chunk_index]);
 
-    // Render autocomplete dropdown in its own layout chunk (if visible)
-    if model.show_autocomplete {
-        render_autocomplete_in_layout(model, frame, chunks[1]);
-        frame.render_widget(instructions, chunks[3]); // Instructions at bottom
-    } else {
-        frame.render_widget(instructions, chunks[3]); // Instructions directly after shimmer
+    if let Some(area) = autocomplete_area {
+        render_autocomplete_in_layout(model, frame, area);
     }
+}
+
+fn render_inline_entries(model: &Model, frame: &mut Frame, area: Rect) {
+    if model.inline_entries.is_empty() {
+        return;
+    }
+
+    use ratatui::text::Text;
+    use ratatui::widgets::Paragraph;
+
+    let mut lines = Vec::new();
+    for entry in &model.inline_entries {
+        lines.extend_from_slice(entry.lines());
+    }
+
+    let paragraph = Paragraph::new(Text::from(lines));
+    frame.render_widget(paragraph, area);
 }
 
 fn render_agent_selection_fullscreen(model: &mut Model, frame: &mut Frame) {

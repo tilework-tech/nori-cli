@@ -1,5 +1,5 @@
-use super::AgentBackend;
 use super::javascript_runtime::{JavaScriptRuntime, detect_javascript_runtime};
+use super::{AgentBackend, BackendEvent};
 use crate::acp_runner::{AcpAgentConfig, AcpAgentRunner};
 use crate::conversation::ConversationEvent;
 use async_stream::stream;
@@ -30,18 +30,18 @@ impl AgentBackend for CodexAcpBackend {
         &self,
         prompt: String,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
+    ) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>> {
         let runtime = self.runtime;
 
         let stream = stream! {
             // If no runtime available, emit error
             let Some(runtime) = runtime else {
-                yield ConversationEvent::SystemEvent {
+                yield BackendEvent::Conversation(ConversationEvent::SystemEvent {
                     subtype: "error".to_string(),
                     details: Some(
                         "No JavaScript runtime found. Install Node.js (npm/npx) or Bun.".to_string()
                     ),
-                };
+                });
                 return;
             };
 
@@ -69,10 +69,10 @@ impl AgentBackend for CodexAcpBackend {
                     }
                 }
                 Err(err) => {
-                    yield ConversationEvent::SystemEvent {
+                    yield BackendEvent::Conversation(ConversationEvent::SystemEvent {
                         subtype: "acp_error".to_string(),
                         details: Some(err),
-                    };
+                    });
                 }
             }
         };

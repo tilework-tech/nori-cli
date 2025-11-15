@@ -1,4 +1,4 @@
-use super::AgentBackend;
+use super::{AgentBackend, BackendEvent};
 use crate::conversation::ConversationEvent;
 use async_stream::stream;
 use futures::stream::Stream;
@@ -84,7 +84,7 @@ impl AgentBackend for ClaudeBackend {
         &self,
         prompt: String,
         _cancel_token: tokio_util::sync::CancellationToken,
-    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>> {
+    ) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>> {
         let session_id = self.session_id.clone();
 
         let stream = stream! {
@@ -107,16 +107,16 @@ impl AgentBackend for ClaudeBackend {
             let mut child = match cmd.spawn() {
                 Ok(c) => c,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    yield ConversationEvent::SystemEvent {
+                    yield BackendEvent::Conversation(ConversationEvent::SystemEvent {
                         subtype: "error".to_string(),
                         details: Some("Claude CLI is not installed. Install from https://code.claude.com".to_string()),
-                    };
+                    });
                     return;
                 }
                 Err(e) => {
-                    yield ConversationEvent::UnknownEvent {
+                    yield BackendEvent::Conversation(ConversationEvent::UnknownEvent {
                         raw: format!("Failed to spawn claude: {e}"),
-                    };
+                    });
                     return;
                 }
             };
@@ -128,7 +128,7 @@ impl AgentBackend for ClaudeBackend {
                     if let Some(event) = Self::parse_jsonl_event(&line) {
                         // Close stream immediately when result is received
                         let is_result = matches!(event, ConversationEvent::ResultSummary { .. });
-                        yield event;
+                        yield BackendEvent::Conversation(event);
                         if is_result {
                             return;
                         }
@@ -140,7 +140,7 @@ impl AgentBackend for ClaudeBackend {
             if let Some(stderr) = child.stderr.take() {
                 let mut reader = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
-                    yield ConversationEvent::StderrOutput { line };
+                    yield BackendEvent::Conversation(ConversationEvent::StderrOutput { line });
                 }
             }
 
@@ -148,9 +148,9 @@ impl AgentBackend for ClaudeBackend {
             // Note: We don't emit a ResultSummary here because the "result" event
             // from the JSONL stream already contains the final result
             if let Err(e) = child.wait().await {
-                yield ConversationEvent::UnknownEvent {
+                yield BackendEvent::Conversation(ConversationEvent::UnknownEvent {
                     raw: format!("Failed to wait for process: {e}"),
-                };
+                });
             }
         };
 

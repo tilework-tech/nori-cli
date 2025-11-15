@@ -3,35 +3,35 @@ use nori_cli::cli::Cli;
 
 #[test]
 fn test_agent_long_flag() {
-    let cli = Cli::try_parse_from(&["prog", "--agent", "claude"]).unwrap();
+    let cli = Cli::try_parse_from(["prog", "--agent", "claude"]).unwrap();
     assert_eq!(cli.agent, Some("claude".to_string()));
     assert_eq!(cli.message, None);
 }
 
 #[test]
 fn test_agent_short_flag() {
-    let cli = Cli::try_parse_from(&["prog", "-a", "codex"]).unwrap();
+    let cli = Cli::try_parse_from(["prog", "-a", "codex"]).unwrap();
     assert_eq!(cli.agent, Some("codex".to_string()));
     assert_eq!(cli.message, None);
 }
 
 #[test]
 fn test_message_only() {
-    let cli = Cli::try_parse_from(&["prog", "Hello world"]).unwrap();
+    let cli = Cli::try_parse_from(["prog", "Hello world"]).unwrap();
     assert_eq!(cli.agent, None);
     assert_eq!(cli.message, Some("Hello world".to_string()));
 }
 
 #[test]
 fn test_agent_and_message() {
-    let cli = Cli::try_parse_from(&["prog", "--agent", "mock", "Test message"]).unwrap();
+    let cli = Cli::try_parse_from(["prog", "--agent", "mock", "Test message"]).unwrap();
     assert_eq!(cli.agent, Some("mock".to_string()));
     assert_eq!(cli.message, Some("Test message".to_string()));
 }
 
 #[test]
 fn test_no_arguments() {
-    let cli = Cli::try_parse_from(&["prog"]).unwrap();
+    let cli = Cli::try_parse_from(["prog"]).unwrap();
     assert_eq!(cli.agent, None);
     assert_eq!(cli.message, None);
 }
