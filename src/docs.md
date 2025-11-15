@@ -27,7 +27,7 @@ pub mod ui;           // Rendering functions for each mode
 
 **Entry Point** (@/src/main.rs):
 - `main()`: Parses CLI arguments via clap::Parser, validates agent name (exits with error if invalid), reads from stdin if piped, then sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
-- `run_app(agent_index, initial_message)`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - accepts optional agent_index to skip agent selection screen and optional initial_message to pre-fill textarea - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task, conditionally increments `loading_frame` counter during streaming when using legacy spinner (only when `use_codex_components = false`)
+- `run_app(agent_index, initial_message)`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - accepts optional agent_index to skip agent selection screen and optional initial_message to pre-fill textarea - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task - removed loading frame increment logic after adopting Shimmer component
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
 - `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
@@ -36,7 +36,7 @@ pub mod ui;           // Rendering functions for each mode
 **State Management** (@/src/app.rs):
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
-- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window, `use_codex_components: bool` flag to toggle between Shimmer component (true, default) and legacy spinner (false), and `loading_frame: usize` for legacy spinner animation frame tracking
+- `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window - removed `use_codex_components: bool` and `loading_frame: usize` fields as part of TUI component adoption
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
@@ -46,7 +46,8 @@ pub mod ui;           // Rendering functions for each mode
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
 - `render_chat()`: Four-section vertical layout for normal mode - Input textarea (dynamic height), Agent info (1 line showing selected agent), Loading animation (1 line, only visible during streaming), and Instructions footer (1 line)
-- **Conditional Loading Animation**: When `current_mode == AppMode::Streaming`, checks `use_codex_components` flag to select rendering path - if true (default), instantiates `Shimmer::new()` from tui-components with message "{agent_name} processing..." and renders time-based animation; if false, renders legacy spinner using `loading_frame % frames.len()` to cycle through Braille spinner characters ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+- **TextArea Height Calculation**: Uses `textarea.desired_height(width)` to get content height based on line count and wrapping, adds `config.padding_top + config.padding_bottom` for total height, then applies MAX_HEIGHT constraint (10 lines) - removed custom `calculate_textarea_height()` function in favor of built-in component method
+- **Loading Animation**: When `current_mode == AppMode::Streaming`, renders `Shimmer::new()` from tui-components with message "{agent_name} processing..." - removed legacy spinner code path and conditional rendering logic
 - `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
 - `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
 - **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
@@ -194,27 +195,13 @@ Cancellation Path
 - ratatui only redraws changed terminal cells, so rapid renders are efficient
 - Frame is mut reference, allowing widgets to modify cursor position during render
 
-**Conditional Loading Animation Strategy** (@/src/ui.rs:107-124, @/src/app.rs:119-120, @/src/main.rs:374-377):
-- Two parallel animation implementations: Shimmer component (new) and legacy spinner (old)
-- **Toggle mechanism**: `use_codex_components` flag in Model enables switching at runtime without code changes
-- **Default behavior**: Shimmer component enabled (`use_codex_components = true`)
-- **Animation architecture differences**:
-  - Shimmer: Time-based animation using `Instant::now()`, no Model state required
-  - Legacy: Frame-based animation using `loading_frame` counter, incremented per render tick
-- **Frame increment optimization**: Counter only advances when both conditions met: `current_mode == AppMode::Streaming && !use_codex_components`
-- **Purpose**: Provides flexibility for testing/comparison, demonstrates component library integration while maintaining fallback, enables A/B testing of animation approaches
-- **No runtime overhead**: Branch check in render path is negligible, frame increment gated at event loop level
-
-**Component Library Integration** (@/Cargo.toml, @/src/ui.rs, @/src/app.rs, @/src/main.rs):
+**Component Library Integration** (@/Cargo.toml, @/src/ui.rs, @/src/app.rs):
 - nori-cli depends on tui-components as a path dependency (./tui-components)
 - **TextArea component**: Uses `tui_components::textarea::TextArea` for multi-line text input - replaced external `tui-textarea` crate to consolidate dependencies within tui-components library
-- **TextArea API**: Created via `TextArea::new(TextAreaConfig::default())`, handles key events via `.handle_key(key)`, exposes text via `.text()` returning `&str`, supports `.is_empty()` check, and cursor positioning via `.set_cursor(pos)`
-- **Shimmer component**: Conditional rendering approach using `use_codex_components: bool` flag in Model (defaults to true) to toggle between Shimmer component and legacy spinner
-- **Shimmer component path** (when `use_codex_components = true`): Shimmer instantiated on-demand during render (`Shimmer::new()`) with time-based animation using `Instant::now()` internally - no Model state tracking required
-- **Legacy spinner path** (when `use_codex_components = false`): Uses frame-based animation with `loading_frame: usize` counter in Model, incremented on each render tick in main.rs event loop (lines 374-377), cycles through Braille spinner frames using modulo
-- **Frame increment gating** (@/src/main.rs:374-377): Frame counter only increments when `current_mode == AppMode::Streaming && !use_codex_components`, ensuring frame counter doesn't advance when using Shimmer
-- **Backward compatibility**: Preserves legacy spinner as fallback option while demonstrating component library integration pattern
-- Integration demonstrates nori-cli as a consumer of the extracted component library pattern with graceful fallback mechanism
+- **TextArea API**: Created via `TextArea::new(TextAreaConfig::default())`, handles key events via `.handle_key(key)`, exposes text via `.text()` returning `&str`, supports `.is_empty()` check, provides `.desired_height(width)` for layout calculations, and cursor positioning via `.set_cursor(pos)`
+- **Height calculation pattern**: Call `textarea.desired_height(width)` to get content height based on line count and wrapping, add padding via `config.padding_top + config.padding_bottom`, apply max constraint in UI code as needed - component provides accurate height without custom calculation logic
+- **Shimmer component**: Uses `Shimmer::new(message)` from tui-components for streaming animation - instantiated on-demand during render with time-based animation using `Instant::now()` internally, no Model state tracking required
+- **Removed conditional rendering**: Eliminated `use_codex_components` flag and `loading_frame` counter by fully adopting Shimmer component - single code path for loading animations simplifies maintenance
 
 **Inline Viewport Compatibility** (@/src/ui.rs):
 - UI designed to work in both inline viewports (Viewport::Inline(8) from main.rs) and fullscreen mode
