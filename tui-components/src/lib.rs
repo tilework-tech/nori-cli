@@ -43,6 +43,7 @@ pub mod render;
 // Animation and visual effects
 pub mod key_hint;
 pub mod shimmer;
+pub mod throbber;
 
 // Text handling and utilities
 pub mod live_wrap;
@@ -68,6 +69,7 @@ pub use selection::{
 };
 pub use shimmer::Shimmer;
 pub use textarea::{TextArea, TextAreaConfig, TextAreaState};
+pub use throbber::Throbber;
 pub use wrapping::{
     RtOptions, prefix_lines, word_wrap_line, word_wrap_lines, word_wrap_lines_borrowed,
 };

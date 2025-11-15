@@ -7,26 +7,6 @@ description = "Reusable TUI components built on Ratatui"
 keywords = ["tui", "terminal", "ratatui", "components"]
 categories = ["command-line-interface"]
 
-[[example]]
-name = "textarea"
-path = "examples/textarea_snapshots.rs"
-
-[[example]]
-name = "key_hint"
-path = "examples/key_hint_snapshots.rs"
-
-[[example]]
-name = "shimmer"
-path = "examples/shimmer_snapshots.rs"
-
-[[example]]
-name = "live_wrap"
-path = "examples/live_wrap_snapshots.rs"
-
-[[example]]
-name = "selection"
-path = "examples/selection_snapshots.rs"
-
 [dependencies]
 ratatui = { version = "0.29", features = ["unstable-widget-ref"] }
 crossterm = { version = "0.28", features = ["bracketed-paste"] }
