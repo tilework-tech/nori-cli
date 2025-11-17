@@ -4,5 +4,4 @@ target
 
 /acp-docs/
 
-committer.md
-
+.claude/settings.local.json

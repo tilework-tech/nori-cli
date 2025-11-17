@@ -1,9 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat:*)",
-      "Bash(mkdir:*)",
-      "Bash(tree:*)",
       "Bash(git diff:*)",
       "Bash(git status:*)",
       "Bash(git worktree:*)",
