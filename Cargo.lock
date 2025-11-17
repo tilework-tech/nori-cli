@@ -937,6 +937,7 @@ dependencies = [
  "crossterm",
  "futures",
  "insta",
+ "libc",
  "once_cell",
  "opener",
  "ratatui",

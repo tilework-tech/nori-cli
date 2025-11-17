@@ -31,6 +31,7 @@ tui-components = { path = "./tui-components" }
  agent-client-protocol = "0.7.0"
  tuicore = { git = "https://github.com/CSRessel/terminal-input-debug", rev = "a2f66fd" }
 tracing = "0.1.41"
+libc = "0.2"
  # dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender
 
 [dev-dependencies]
