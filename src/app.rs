@@ -2,7 +2,6 @@
 
 use crate::backends;
 use crate::backends::AgentBackend;
-use crate::backends::claude::ClaudeBackend;
 use crate::conversation::ConversationEvent;
 use crate::history::{
     CommittedInlineEntry, InlineEntryId, InlineEntryKind, InlineEntryState, InlineEntryUpdate,
@@ -152,8 +151,8 @@ impl Default for Model {
         let agents = vec![
             "Claude Code ACP".to_string(),
             "Codex ACP".to_string(),
-            "Mock ACP Agent".to_string(),
             "Gemini ACP".to_string(),
+            "Mock ACP Agent".to_string(),
             "Claude Code SDK".to_string(),
         ];
 
@@ -546,8 +545,9 @@ impl Model {
                 backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
             ),
             backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
-            backends::is_available(crate::backends::mock::binary_path()),
             backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name()),
+            backends::is_available(crate::backends::mock::binary_path()),
+            backends::is_available(backends::claude::ClaudeBackend::new().command_name()),
         ]
     }
 
@@ -555,9 +555,9 @@ impl Model {
         match self.selected_agent_index {
             0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
             1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-            2 => Box::new(backends::mock::MockBackend::new()),
-            3 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
-            4 => Box::new(ClaudeBackend::new()),
+            2 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
+            3 => Box::new(backends::mock::MockBackend::new()),
+            4 => Box::new(backends::claude::ClaudeBackend::new()),
             _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
         }
     }

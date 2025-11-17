@@ -126,16 +126,18 @@ pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
     match self.selected_agent_index {
         0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
         1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-        2 => Box::new(backends::mock::MockBackend::new()),
-        3 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
+        2 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
+        3 => Box::new(backends::mock::MockBackend::new()),
+        4 => Box::new(backends::claude::ClaudeBackend::new()),
         _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
     }
 }
 ```
 - Index 0: Claude Code ACP (via bunx/npx wrapper)
 - Index 1: Codex ACP (via bunx/npx wrapper)
-- Index 2: Mock ACP Agent (for testing)
-- Index 3: Gemini ACP (via bunx/npx wrapper)
+- Index 2: Gemini ACP (via bunx/npx wrapper)
+- Index 3: Mock ACP Agent (for testing)
+- Index 4: Claude commandline SDK (legacy approach)
 
 ### Installation Prompting
 
