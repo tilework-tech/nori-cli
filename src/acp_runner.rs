@@ -361,42 +361,39 @@ impl AcpAgentRunner {
 
 impl Drop for AcpAgentRunner {
     fn drop(&mut self) {
-        if let Some(child) = self._agent_process.take() {
-            if let Some(pid) = child.id() {
-                tracing::info!(
-                    pid = pid,
-                    agent = self.config.name,
-                    "Cleaning up ACP agent process on runner drop"
-                );
+        if let Some(child) = self._agent_process.take()
+            && let Some(pid) = child.id()
+        {
+            tracing::info!(
+                pid = pid,
+                agent = self.config.name,
+                "Cleaning up ACP agent process on runner drop"
+            );
 
-                // Use libc::kill to send SIGTERM to the process
-                // This works synchronously and doesn't require tokio runtime
-                #[cfg(unix)]
-                {
-                    unsafe {
-                        let result = libc::kill(pid as libc::pid_t, libc::SIGTERM);
-                        if result == 0 {
-                            tracing::info!(
-                                pid = pid,
-                                "Successfully sent SIGTERM to ACP agent process"
-                            );
-                        } else {
-                            tracing::warn!(
-                                pid = pid,
-                                error = std::io::Error::last_os_error().to_string(),
-                                "Failed to kill ACP agent process"
-                            );
-                        }
+            // Use libc::kill to send SIGTERM to the process
+            // This works synchronously and doesn't require tokio runtime
+            #[cfg(unix)]
+            {
+                unsafe {
+                    let result = libc::kill(pid as libc::pid_t, libc::SIGTERM);
+                    if result == 0 {
+                        tracing::info!(pid = pid, "Successfully sent SIGTERM to ACP agent process");
+                    } else {
+                        tracing::warn!(
+                            pid = pid,
+                            error = std::io::Error::last_os_error().to_string(),
+                            "Failed to kill ACP agent process"
+                        );
                     }
                 }
+            }
 
-                #[cfg(not(unix))]
-                {
-                    tracing::warn!(
-                        pid = pid,
-                        "Process cleanup not implemented for non-Unix platforms"
-                    );
-                }
+            #[cfg(not(unix))]
+            {
+                tracing::warn!(
+                    pid = pid,
+                    "Process cleanup not implemented for non-Unix platforms"
+                );
             }
         }
     }
