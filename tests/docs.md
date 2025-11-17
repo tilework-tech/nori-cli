@@ -128,6 +128,31 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Consumes stream and verifies at least one event received
   - Tests stream completion without cancellation
 
+**ACP Process Cleanup Tests** (@/tests/acp_process_cleanup_test.rs):
+- `test_process_cleanup_on_runner_drop()`: Verifies process termination when AcpAgentRunner is dropped
+  - Spawns mock ACP agent via AcpAgentRunner.spawn_stream()
+  - Retrieves PID via agent_pid() method
+  - Verifies process is running via OS-level `kill -0 <pid>` check
+  - Drops runner without cancelling stream
+  - Verifies process is terminated after 100ms (proves Drop impl kills process)
+  - Tests RAII pattern - process cleanup happens automatically on scope exit
+- `test_process_cleanup_on_reuse()`: Verifies old process is killed when spawning new stream
+  - Spawns first stream and captures PID
+  - Spawns second stream (triggers drop of first process)
+  - Verifies first process is terminated via `kill -0` check
+  - Verifies new process is running with different PID
+  - Tests process cleanup on stream reuse scenario
+- `test_process_cleanup_on_init_failure()`: Verifies cleanup on initialization errors
+  - Uses invalid agent config (echo command instead of real agent)
+  - Attempts to spawn stream (should fail during initialization)
+  - Verifies error is returned
+  - Verifies no processes are left hanging (echo exits immediately)
+  - Tests error path doesn't panic or leak processes
+- All tests use `once_cell::sync::Lazy<Mutex<()>>` guard to prevent parallel execution (avoids port conflicts)
+- Tests build mock_acp_agent binary via `cargo build --manifest-path mock-acp-agent/Cargo.toml` before each test
+- Process verification uses actual OS calls (`kill -0`) instead of Rust object state - validates real system behavior
+- Uses tokio::time::sleep for timing delays to allow OS process cleanup to complete
+
 **Dynamic TextArea Height Tests** (@/tests/dynamic_textarea_height_test.rs):
 - `test_single_line_returns_minimum_height()`: Verifies single line of text returns minimum height
   - Creates TextArea via TextArea::new(TextAreaConfig::default())
@@ -180,6 +205,7 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - Subprocess tests use MockBackend to avoid external dependencies on claude/codex CLIs
 - No integration tests with real backends because they require API authentication
 - Rendering tests verify both parsing and styling independently for each event type
+- **ACP process cleanup tests verify OS-level behavior**: Use `kill -0` syscall to check if process actually exists, not just Rust object state - validates that Drop implementation actually terminates processes at system level, not just Rust's internal tracking
 
 **TextArea Testing Pattern**:
 - Tests use tui_components::textarea::TextArea instead of external tui-textarea crate
@@ -268,6 +294,13 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - No integration tests for CLI argument flow - stdin reading, agent validation with exit code, agent selection bypass, textarea pre-fill - only unit tests for clap parsing and agent name mapping
 - No test for CLI message precedence (CLI arg vs stdin) - would require mocking stdin and command-line args together
 - No test for MAX_HEIGHT constraint enforcement in UI code - tests verify TextArea returns actual line count, but UI applies 10-line max separately
+
+**Test Coverage Added for Process Cleanup**:
+- ✅ ACP runner Drop trait implementation verified via @/tests/acp_process_cleanup_test.rs
+- ✅ Process termination on normal runner drop
+- ✅ Process termination when spawning new stream (reuse scenario)
+- ✅ Process cleanup on initialization failure
+- ✅ OS-level verification using `kill -0` syscall (not just Rust object state)
 
 **CI Integration**:
 - Tests run on every PR via @/.github/workflows/pr-ci.yml
