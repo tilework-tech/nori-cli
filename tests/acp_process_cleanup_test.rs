@@ -51,6 +51,12 @@ async fn test_process_cleanup_on_runner_drop() {
     let _guard = acquire_test_guard();
     build_mock_agent();
 
+    // Set env var to make mock agent stream continuously until cancelled
+    // This prevents it from exiting naturally
+    unsafe {
+        std::env::set_var("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+    }
+
     // Create a runner with the mock ACP agent
     let config = mock_agent_config();
 
@@ -58,7 +64,6 @@ async fn test_process_cleanup_on_runner_drop() {
     let cancel_token = CancellationToken::new();
 
     // Spawn a stream to start the agent process
-    // Use cancel_token immediately so the agent will wait and not complete
     let _stream = runner
         .spawn_stream("test prompt".to_string(), cancel_token.clone())
         .await
@@ -69,16 +74,27 @@ async fn test_process_cleanup_on_runner_drop() {
         .agent_pid()
         .expect("Runner should have an agent process");
 
-    // Verify the process is running
-    assert!(process_exists(pid), "Process should be running after spawn");
+    // Give the agent a moment to start streaming
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Verify the process is still running (streaming continuously)
+    assert!(
+        process_exists(pid),
+        "Process should be running and streaming"
+    );
 
     // Drop the runner WITHOUT cancelling
-    // The agent process is still running (haven't read from stream yet)
+    // The agent process is actively streaming and won't exit on its own
     drop(_stream);
     drop(runner);
 
-    // Give the system a moment
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    // Give the system a moment for cleanup
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Clean up env var
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_STREAM_UNTIL_CANCEL");
+    }
 
     // WITHOUT a Drop impl, the process will still be running (orphaned)
     // WITH a Drop impl, the process should be killed
