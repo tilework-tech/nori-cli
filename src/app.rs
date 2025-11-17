@@ -69,19 +69,25 @@ impl BackendOption {
 pub const BACKEND_OPTIONS: &[BackendOption] = &[
     BackendOption {
         name: "Claude Code ACP",
-        availability_check: || backends::is_available(
-            backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-        ),
+        availability_check: || {
+            backends::is_available(
+                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
+            )
+        },
         factory: || Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
     },
     BackendOption {
         name: "Codex ACP",
-        availability_check: || backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
+        availability_check: || {
+            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name())
+        },
         factory: || Box::new(backends::codex_acp::CodexAcpBackend::new()),
     },
     BackendOption {
         name: "Gemini ACP",
-        availability_check: || backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name()),
+        availability_check: || {
+            backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name())
+        },
         factory: || Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
     },
     BackendOption {
@@ -91,7 +97,9 @@ pub const BACKEND_OPTIONS: &[BackendOption] = &[
     },
     BackendOption {
         name: "Claude Code",
-        availability_check: || backends::is_available(backends::claude::ClaudeBackend::new().command_name()),
+        availability_check: || {
+            backends::is_available(backends::claude::ClaudeBackend::new().command_name())
+        },
         factory: || Box::new(backends::claude::ClaudeBackend::new()),
     },
 ];
@@ -458,7 +466,8 @@ impl Model {
                         .with_title("Agent Router - Select an Agent")
                         .with_footer_hint(standard_popup_hint_line());
 
-                    self.agent_selection_list = SelectionList::new(agent_config, agent_items, Box::new(()));
+                    self.agent_selection_list =
+                        SelectionList::new(agent_config, agent_items, Box::new(()));
                 } else {
                     self.error_message = Some(message);
                 }
@@ -601,8 +610,6 @@ impl Model {
             entry.rewrap(width);
         }
     }
-
-
 
     pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
         BACKEND_OPTIONS
