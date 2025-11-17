@@ -1,21 +1,20 @@
-use nori_cli::app::Model;
-use nori_cli::backends::AgentBackend;
+use nori_cli::app::{BACKEND_OPTIONS, Model};
 
 #[test]
 fn test_backend_options_ordering() {
-    let model = Model::default();
-
     // Verify the backend names are in the correct order
     let expected_names = vec![
         "Claude Code ACP",
         "Codex ACP",
         "Gemini ACP",
         "Mock ACP Agent",
-        "Claude Code SDK",
+        "Claude Code",
     ];
 
+    let actual_names: Vec<&str> = BACKEND_OPTIONS.iter().map(|option| option.name).collect();
+
     assert_eq!(
-        model.agents, expected_names,
+        actual_names, expected_names,
         "Backend names should be in the expected order"
     );
 }
@@ -62,7 +61,7 @@ fn test_get_backend_returns_correct_types() {
     let backend_4 = model.get_backend();
     assert_eq!(
         backend_4.name(),
-        "Claude Code SDK",
-        "Index 4 should return Claude Code SDK backend"
+        "Claude Code",
+        "Index 4 should return Claude Code backend"
     );
 }
