@@ -1,6 +1,7 @@
 pub mod claude;
 pub mod claude_code_acp;
 pub mod codex_acp;
+pub mod gemini_acp;
 pub mod javascript_runtime;
 pub mod mock;
 
