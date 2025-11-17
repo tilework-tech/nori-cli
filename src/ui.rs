@@ -68,10 +68,9 @@ fn render_chat(model: &mut Model, frame: &mut Frame) {
     chunk_index += 1;
 
     // Agent info - show selected agent below prompt
-    let selected_agent = model
-        .agents
+    let selected_agent = crate::app::BACKEND_OPTIONS
         .get(model.selected_agent_index)
-        .map(|s| s.as_str())
+        .map(|option| option.name)
         .unwrap_or("No agent selected");
 
     let debug_indicator = if model.show_debug_events {

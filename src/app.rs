@@ -49,6 +49,61 @@ impl InstallChoice {
     }
 }
 
+#[derive(Clone)]
+pub struct BackendOption {
+    pub name: &'static str,
+    pub availability_check: fn() -> bool,
+    pub factory: fn() -> Box<dyn AgentBackend + Send>,
+}
+
+impl BackendOption {
+    pub fn is_available(&self) -> bool {
+        (self.availability_check)()
+    }
+
+    pub fn create_backend(&self) -> Box<dyn AgentBackend + Send> {
+        (self.factory)()
+    }
+}
+
+pub const BACKEND_OPTIONS: &[BackendOption] = &[
+    BackendOption {
+        name: "Claude Code ACP",
+        availability_check: || {
+            backends::is_available(
+                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
+            )
+        },
+        factory: || Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
+    },
+    BackendOption {
+        name: "Codex ACP",
+        availability_check: || {
+            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name())
+        },
+        factory: || Box::new(backends::codex_acp::CodexAcpBackend::new()),
+    },
+    BackendOption {
+        name: "Gemini ACP",
+        availability_check: || {
+            backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name())
+        },
+        factory: || Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
+    },
+    BackendOption {
+        name: "Mock ACP Agent",
+        availability_check: || backends::is_available(crate::backends::mock::binary_path()),
+        factory: || Box::new(backends::mock::MockBackend::new()),
+    },
+    BackendOption {
+        name: "Claude Code",
+        availability_check: || {
+            backends::is_available(backends::claude::ClaudeBackend::new().command_name())
+        },
+        factory: || Box::new(backends::claude::ClaudeBackend::new()),
+    },
+];
+
 #[derive(Debug, Clone)]
 pub enum Message {
     // Navigation
@@ -124,8 +179,6 @@ pub enum Message {
 pub struct Model {
     pub current_mode: AppMode,
     pub agent_selection_list: SelectionList<String>,
-    pub agents: Vec<String>,
-    pub backend_availability: Vec<bool>,
     pub textarea: TextArea,
     pub response_events: Vec<ConversationEvent>,
     pub inline_entries: Vec<InlineEntryState>,
@@ -148,29 +201,19 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
-        let agents = vec![
-            "Claude Code ACP".to_string(),
-            "Codex ACP".to_string(),
-            "Gemini ACP".to_string(),
-            "Mock ACP Agent".to_string(),
-            "Claude Code SDK".to_string(),
-        ];
-
-        let backend_availability = Model::compute_backend_availability();
-
-        // Create agent selection list
-        let agent_items: Vec<SelectionItem<String>> = agents
+        // Create agent selection list from BACKEND_OPTIONS
+        let agent_items: Vec<SelectionItem<String>> = BACKEND_OPTIONS
             .iter()
             .enumerate()
-            .map(|(i, agent)| {
-                let is_available = backend_availability[i];
+            .map(|(i, backend_option)| {
+                let is_available = backend_option.is_available();
                 let name = if is_available {
-                    agent.clone()
+                    backend_option.name.to_string()
                 } else {
-                    format!("{agent} [Not Installed]")
+                    format!("{} [Not Installed]", backend_option.name)
                 };
                 SelectionItem {
-                    data: agent.clone(),
+                    data: backend_option.name.to_string(),
                     name,
                     description: Some(if is_available {
                         "Available".to_string()
@@ -180,7 +223,7 @@ impl Default for Model {
                     selected_description: None,
                     is_current: i == 0,
                     display_shortcut: None,
-                    search_value: Some(agent.to_lowercase()),
+                    search_value: Some(backend_option.name.to_lowercase()),
                 }
             })
             .collect();
@@ -202,8 +245,6 @@ impl Default for Model {
         Self {
             current_mode: AppMode::Selection,
             agent_selection_list,
-            agents,
-            backend_availability,
             textarea: create_textarea(),
             response_events: Vec::new(),
             inline_entries: Vec::new(),
@@ -394,8 +435,39 @@ impl Model {
                 self.install_prompt_cmd = None;
 
                 if success {
-                    // Re-check backend availability
-                    self.backend_availability = Model::compute_backend_availability();
+                    // Re-create agent selection list to reflect new availability
+                    let agent_items: Vec<SelectionItem<String>> = BACKEND_OPTIONS
+                        .iter()
+                        .enumerate()
+                        .map(|(i, backend_option)| {
+                            let is_available = backend_option.is_available();
+                            let name = if is_available {
+                                backend_option.name.to_string()
+                            } else {
+                                format!("{} [Not Installed]", backend_option.name)
+                            };
+                            SelectionItem {
+                                data: backend_option.name.to_string(),
+                                name,
+                                description: Some(if is_available {
+                                    "Available".to_string()
+                                } else {
+                                    "Not installed on your system".to_string()
+                                }),
+                                selected_description: None,
+                                is_current: i == self.selected_agent_index,
+                                display_shortcut: None,
+                                search_value: Some(backend_option.name.to_lowercase()),
+                            }
+                        })
+                        .collect();
+
+                    let agent_config = SelectionListConfig::new()
+                        .with_title("Agent Router - Select an Agent")
+                        .with_footer_hint(standard_popup_hint_line());
+
+                    self.agent_selection_list =
+                        SelectionList::new(agent_config, agent_items, Box::new(()));
                 } else {
                     self.error_message = Some(message);
                 }
@@ -539,27 +611,11 @@ impl Model {
         }
     }
 
-    fn compute_backend_availability() -> Vec<bool> {
-        vec![
-            backends::is_available(
-                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-            ),
-            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
-            backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name()),
-            backends::is_available(crate::backends::mock::binary_path()),
-            backends::is_available(backends::claude::ClaudeBackend::new().command_name()),
-        ]
-    }
-
     pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
-        match self.selected_agent_index {
-            0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
-            1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-            2 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
-            3 => Box::new(backends::mock::MockBackend::new()),
-            4 => Box::new(backends::claude::ClaudeBackend::new()),
-            _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
-        }
+        BACKEND_OPTIONS
+            .get(self.selected_agent_index)
+            .map(|option| option.create_backend())
+            .unwrap_or_else(|| Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()))
     }
 }
 
