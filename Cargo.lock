@@ -947,6 +947,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "tui-components",
  "tuicore",
  "unicode-width 0.2.0",

@@ -63,7 +63,10 @@ async fn main() -> Result<()> {
     // Determine initial message (CLI arg takes precedence over stdin)
     let initial_message = cli.message.or(stdin_message);
 
-    let mut tui_app = TuiApp::builder("nori-cli").inline(20).build();
+    let mut tui_app = TuiApp::builder("nori-cli")
+        .inline(20)
+        .use_disk_logs(true)
+        .build();
 
     let mut terminal = tui_app.init()?;
     run_app(&mut terminal, agent_index, initial_message).await?;

@@ -27,6 +27,7 @@ use tokio::time::timeout;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, info, warn};
 
 /// Configuration for an ACP agent
 #[derive(Debug, Clone)]
@@ -162,6 +163,8 @@ impl Client for AcpClientHandler {
         &self,
         args: RequestPermissionRequest,
     ) -> AcpResult<RequestPermissionResponse> {
+        debug!("Permission requested for tool call");
+
         // Check if session was cancelled
         if self.cancel_token.is_cancelled() {
             return Ok(RequestPermissionResponse {
@@ -185,6 +188,8 @@ impl Client for AcpClientHandler {
             .map(|opt| opt.id.clone())
             .ok_or_else(agent_client_protocol::Error::internal_error)?;
 
+        debug!("Permission granted: option_id={:?}", option_id);
+
         Ok(RequestPermissionResponse {
             outcome: RequestPermissionOutcome::Selected { option_id },
             meta: None,
@@ -198,6 +203,8 @@ impl Client for AcpClientHandler {
     }
 
     async fn read_text_file(&self, args: ReadTextFileRequest) -> AcpResult<ReadTextFileResponse> {
+        debug!("Reading file: {:?}", args.path);
+
         // Ensure the path is within the working directory
         let requested_path = PathBuf::from(&args.path);
         let canonical_path = if requested_path.is_absolute() {
@@ -212,7 +219,10 @@ impl Client for AcpClientHandler {
                 content,
                 meta: None,
             }),
-            Err(_e) => Err(agent_client_protocol::Error::internal_error()),
+            Err(_e) => {
+                warn!("File read failed: {:?}", canonical_path);
+                Err(agent_client_protocol::Error::internal_error())
+            }
         }
     }
 
@@ -220,6 +230,12 @@ impl Client for AcpClientHandler {
         &self,
         args: WriteTextFileRequest,
     ) -> AcpResult<WriteTextFileResponse> {
+        debug!(
+            "Writing file: {:?}, content_length={}",
+            args.path,
+            args.content.len()
+        );
+
         // Ensure the path is within the working directory
         let requested_path = PathBuf::from(&args.path);
         let canonical_path = if requested_path.is_absolute() {
@@ -232,13 +248,20 @@ impl Client for AcpClientHandler {
         if let Some(parent) = canonical_path.parent()
             && let Err(_e) = tokio::fs::create_dir_all(parent).await
         {
+            warn!(
+                "Failed to create parent directories for: {:?}",
+                canonical_path
+            );
             return Err(agent_client_protocol::Error::internal_error());
         }
 
         // Write the file
         match tokio::fs::write(&canonical_path, &args.content).await {
             Ok(_) => Ok(WriteTextFileResponse { meta: None }),
-            Err(_e) => Err(agent_client_protocol::Error::internal_error()),
+            Err(_e) => {
+                warn!("File write failed: {:?}", canonical_path);
+                Err(agent_client_protocol::Error::internal_error())
+            }
         }
     }
 
@@ -424,6 +447,9 @@ async fn run_connection_inner(
         tokio::task::spawn_local(async move {
             let mut updates = session_update_rx;
             while let Some(update) = updates.recv().await {
+                // Log all session updates to file
+                debug!("Session update received: {:?}", update);
+
                 // Send debug event for all session updates
                 let debug_event = ConversationEvent::UnknownEvent {
                     raw: format!("{update:?}"),
@@ -457,6 +483,8 @@ async fn run_connection_inner(
         });
     }
 
+    info!("Starting ACP connection initialization");
+
     let init_request = InitializeRequest {
         protocol_version: acp::V1,
         client_capabilities: ClientCapabilities {
@@ -476,10 +504,16 @@ async fn run_connection_inner(
         meta: None,
     };
 
+    debug!(
+        "Sending initialize request: protocol_version={:?}",
+        init_request.protocol_version
+    );
+
     let init_response =
         match timeout(Duration::from_secs(30), connection.initialize(init_request)).await {
             Ok(Ok(response)) => response,
             Ok(Err(err)) => {
+                warn!("ACP initialization failed: {}", err);
                 let message = format!("Initialize failed: {err}");
                 if let Some(tx) = handshake_tx.take() {
                     let _ = tx.send(Err(message.clone()));
@@ -487,6 +521,7 @@ async fn run_connection_inner(
                 return Err(message);
             }
             Err(_) => {
+                warn!("ACP initialization timeout after 30s");
                 let message = "Initialization timeout after 30s".to_string();
                 if let Some(tx) = handshake_tx.take() {
                     let _ = tx.send(Err(message.clone()));
@@ -500,11 +535,20 @@ async fn run_connection_inner(
             "Unsupported protocol version: {:?}",
             init_response.protocol_version
         );
+        warn!(
+            "Unsupported protocol version: {:?}",
+            init_response.protocol_version
+        );
         if let Some(tx) = handshake_tx.take() {
             let _ = tx.send(Err(err.clone()));
         }
         return Err(err);
     }
+
+    info!(
+        "ACP initialized successfully: protocol_version={:?}, agent_info={:?}",
+        init_response.protocol_version, init_response.agent_info
+    );
 
     // Send debug event for successful initialization
     let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
@@ -514,6 +558,8 @@ async fn run_connection_inner(
             init_response.protocol_version
         )),
     }));
+
+    debug!("Creating new ACP session: cwd={:?}", cwd);
 
     let session_response = match connection
         .new_session(NewSessionRequest {
@@ -525,6 +571,7 @@ async fn run_connection_inner(
     {
         Ok(response) => response,
         Err(err) => {
+            warn!("ACP session creation failed: {}", err);
             let message = format!("Session creation failed: {err}");
             if let Some(tx) = handshake_tx.take() {
                 let _ = tx.send(Err(message.clone()));
@@ -533,6 +580,8 @@ async fn run_connection_inner(
         }
     };
     let session_id = session_response.session_id.clone();
+
+    info!("ACP session created: session_id={}", session_id);
 
     // Send debug event for session creation
     let _ = event_tx.send(BackendEvent::Conversation(ConversationEvent::SystemEvent {
@@ -565,8 +614,9 @@ async fn run_connection_inner(
         details: Some(format!("Prompt length: {} chars", prompt.len())),
     }));
 
+    let prompt_len = prompt.len();
     let prompt_request = PromptRequest {
-        session_id,
+        session_id: session_id.clone(),
         prompt: vec![ContentBlock::Text(TextContent {
             annotations: None,
             text: prompt,
@@ -575,8 +625,14 @@ async fn run_connection_inner(
         meta: None,
     };
 
+    debug!(
+        "Sending prompt to ACP agent: session_id={}, prompt_length={}",
+        session_id, prompt_len
+    );
+
     match connection.prompt(prompt_request).await {
         Ok(response) => {
+            info!("Prompt completed: stop_reason={:?}", response.stop_reason);
             {
                 let mut tracker = inline_tracker.borrow_mut();
                 tracker.commit_all(&event_tx);
@@ -588,6 +644,7 @@ async fn run_connection_inner(
             ));
         }
         Err(err) => {
+            warn!("Prompt failed: {}", err);
             {
                 let mut tracker = inline_tracker.borrow_mut();
                 tracker.abort_all(&event_tx);
