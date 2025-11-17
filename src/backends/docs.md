@@ -168,6 +168,14 @@ pub fn is_available(command: &str) -> bool {
 
 ### Things to Know
 
+**libc Dependency for Process Cleanup**:
+- Added `libc = "0.2"` dependency in @/Cargo.toml for synchronous process termination
+- Required because Drop trait must be synchronous but `tokio::process::Child::kill()` is async
+- Cannot use `tokio::runtime::Handle::block_on()` inside Drop when already in a tokio runtime (causes panic)
+- Direct syscall via `libc::kill(pid, SIGTERM)` provides synchronous, reliable cleanup without runtime issues
+- Platform-specific: Unix-only implementation via `#[cfg(unix)]`, Windows would need different approach
+- Trade-off: Small unsafe block in Drop for guaranteed resource cleanup vs potential process leaks
+
 **Async Trait Pattern**:
 - `#[async_trait]` macro is required because Rust doesn't natively support async functions in traits yet
 - Macro transforms async trait method into one that returns a boxed Future
@@ -195,6 +203,16 @@ pub fn is_available(command: &str) -> bool {
 - When cancellation fires, stream is dropped which closes file handles and triggers child process cleanup via Drop
 - No explicit process.kill() - relies on Drop semantics and closed handles for cleanup
 - **Stream completion**: The stream is driven by semantic completion signals (ResultSummary events from JSONL) rather than process exit status. The ClaudeBackend returns immediately upon receiving a ResultSummary, and @/src/main.rs:spawn_and_stream() terminates stream consumption immediately upon receiving ResultSummary, sending Message::StreamComplete to the UI. The subprocess may still be running in the background, but the stream is semantically complete from the user's perspective.
+
+**ACP Process Cleanup (RAII Pattern)** (@/src/acp_runner.rs:362-403):
+- AcpAgentRunner implements Drop trait to guarantee process termination regardless of how runner is disposed
+- When runner is dropped (normal drop, panic, stream reuse), Drop implementation sends SIGTERM to child process via `libc::kill`
+- Uses synchronous syscall (`libc::kill`) instead of async `tokio::process::Child::kill()` because Drop must be synchronous and cannot use `block_on` inside an existing tokio runtime
+- Process cleanup happens on three scenarios: (1) runner drop at end of scope, (2) spawning new stream while old process still running, (3) initialization failure during spawn_stream
+- Unix-only implementation using `#[cfg(unix)]` - Windows would require different approach
+- Includes tracing logs for process cleanup events (pid, agent name, success/failure)
+- Critical for preventing orphaned agent processes that would persist after application exit
+- `agent_pid()` method (@/src/acp_runner.rs:265-269) exposes process PID for testing - returns `Option<u32>`
 
 **Error Paths**:
 - spawn_process() returns Result<Child> - spawn failure (CLI not found, permission denied) propagates to caller
