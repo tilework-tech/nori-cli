@@ -248,10 +248,10 @@ The Agent Client Protocol (ACP) is a standardized protocol for communication bet
    - 7 passing unit tests covering all translation paths
 
 3. **AcpClientHandler** - Full `Client` trait implementation:
-   - `request_permission()` - Auto-approves by selecting first "allow" option (AllowOnce/AllowAlways)
-   - `session_notification()` - Forwards SessionUpdate to event stream via mpsc channel
-   - `read_text_file()` - Reads from working directory, handles absolute/relative paths
-   - `write_text_file()` - Writes with auto-created parent directories
+   - `request_permission()` - Auto-approves by selecting first "allow" option (AllowOnce/AllowAlways) - logs permission requests and granted options at debug level
+   - `session_notification()` - Forwards SessionUpdate to event stream via mpsc channel - logs all session updates at debug level
+   - `read_text_file()` - Reads from working directory, handles absolute/relative paths - logs file path at debug level, logs failures at warn level
+   - `write_text_file()` - Writes with auto-created parent directories - logs file path and content length at debug level, logs failures at warn level
    - Terminal methods blocked - returns `method_not_found` errors (security requirement)
    - Uses cancellation token to return `Cancelled` outcome if session cancelled mid-flight
 
@@ -265,6 +265,30 @@ User Prompt → AcpAgentRunner::spawn_stream() → JSON-RPC over stdio → Agent
                          ↓
               SessionUpdate → translate_session_update → ConversationEvent → UI
 ```
+
+**Structured Tracing** (@/src/acp_runner.rs):
+- ACP runner includes comprehensive tracing instrumentation using Rust's `tracing` crate
+- **Lifecycle events** (info level):
+  - Connection initialization start: "Starting ACP connection initialization"
+  - Successful initialization with protocol version and agent info
+  - Session creation with session ID
+  - Prompt completion with stop reason
+- **Detailed events** (debug level):
+  - Initialize request with protocol version
+  - Session creation request with working directory
+  - Prompt sending with session ID and prompt length
+  - All session updates (SessionUpdate messages from protocol)
+  - Permission requests and granted options
+  - File operations (read/write) with paths and content lengths
+- **Error events** (warn level):
+  - Initialization failures with error message
+  - Initialization timeouts (30s)
+  - Unsupported protocol versions
+  - Session creation failures
+  - Prompt execution failures
+  - File operation failures (read/write)
+- **Log output**: Writes to `~/.nori-cli/logs/` when disk logging enabled in TuiApp
+- **Purpose**: Debug ACP transport issues, understand lifecycle timing, investigate file operations without disrupting TUI
 
 **What's NOT Yet Implemented** (See @/ACP_IMPLEMENTATION_PLAN.md):
 - `AcpAgentRunner::spawn_stream()` - Core method to spawn agent and manage JSON-RPC lifecycle

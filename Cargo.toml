@@ -32,9 +32,9 @@ tui-components = { path = "./tui-components" }
  tuicore = { git = "https://github.com/CSRessel/terminal-input-debug", rev = "a2f66fd" }
 tracing = "0.1.41"
 libc = "0.2"
- # dev deps: insta tempfile tokio-test tracing tracing-subscriber tracing-appender
 
 [dev-dependencies]
 tempfile = "3"
 once_cell = "1"
 insta = "1.43"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

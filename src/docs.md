@@ -26,7 +26,7 @@ pub mod ui;           // Rendering functions for each mode
 ```
 
 **Entry Point** (@/src/main.rs):
-- `main()`: Parses CLI arguments via clap::Parser, validates agent name (exits with error if invalid), reads from stdin if piped, then sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
+- `main()`: Parses CLI arguments via clap::Parser, validates agent name (exits with error if invalid), reads from stdin if piped, then sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content - enables disk-based logging via `TuiApp::builder().use_disk_logs(true)` which writes structured logs to ~/.nori-cli/logs/ directory using tuicore's tracing-appender integration with daily log rotation
 - `run_app(agent_index, initial_message)`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - accepts optional agent_index to skip agent selection screen and optional initial_message to pre-fill textarea - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task - removed loading frame increment logic after adopting Shimmer component
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
 - `get_backend()`: Factory function that returns appropriate backend based on selected_agent_index, using the centralized BACKEND_OPTIONS constant for consistent backend ordering
@@ -216,5 +216,25 @@ pub mod ui;           // Rendering functions for each mode
 - **Prevents message loss**: Without scrollback rendering, user's text disappears from textarea on submit but never appears in conversation history above TUI - only stored in response_events vector but not visible to user
 - **Follows existing pattern**: UserMessage rendering uses exact same pipeline as StreamEvent rendering (lines 88-112) - both call render_event(), wrap_text_to_width(), and terminal.insert_before() in identical sequence
 - **Slash command handling**: Slash commands bypass user message rendering entirely - they are not stored as conversation events and should not appear in chat history
+
+### Things to Know
+
+**Structured Tracing and Observability** (@/src/acp_runner.rs, @/src/main.rs):
+- Parallel logging system using Rust's `tracing` crate alongside existing TUI debug events
+- **Log file location**: `~/.nori-cli/logs/` with daily rotation handled by tuicore's tracing-appender integration
+- **Enabled via**: `TuiApp::builder().use_disk_logs(true)` in main.rs - opt-in configuration
+- **Log levels in ACP runner**:
+  - `info!()`: Lifecycle events (initialization start/success, session creation, prompt completion)
+  - `debug!()`: Detailed events (requests sent, file operations, permissions, session updates)
+  - `warn!()`: Error conditions (init failures, session failures, prompt failures, file I/O errors)
+- **ACP lifecycle instrumentation** (@/src/acp_runner.rs:163-628):
+  - Connection initialization: logs protocol version negotiation and agent info
+  - Session management: logs session ID, working directory on creation
+  - Prompt handling: logs prompt length, session ID, stop reason on completion
+  - File operations: logs file paths and content lengths for read/write operations
+  - Permission requests: logs tool call permissions and selected options
+  - Session updates: logs all ACP SessionUpdate messages as debug events
+- **Non-intrusive design**: Tracing calls parallel existing functionality without replacing TUI debug events or changing business logic
+- **Use case**: Debugging ACP transport issues, understanding lifecycle timing, investigating file operation failures without disrupting TUI interaction
 
 Created and maintained by Nori.
