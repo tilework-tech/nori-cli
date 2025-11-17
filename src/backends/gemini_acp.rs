@@ -49,7 +49,7 @@ impl AgentBackend for GeminiAcpBackend {
             let config = AcpAgentConfig {
                 name: "Gemini ACP",
                 command: runtime.command(),
-                args: vec!["@google/gemini-cli".to_string()],
+                args: vec!["@google/gemini-cli".to_string(), "--experimental-acp".to_string()],
                 install_url: "https://www.npmjs.com/package/@google/gemini-cli",
                 install_command: Some(vec![
                     "npm".to_string(),
