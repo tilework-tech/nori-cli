@@ -2,6 +2,7 @@
 
 use crate::backends;
 use crate::backends::AgentBackend;
+use crate::backends::claude::ClaudeBackend;
 use crate::conversation::ConversationEvent;
 use crate::history::{
     CommittedInlineEntry, InlineEntryId, InlineEntryKind, InlineEntryState, InlineEntryUpdate,
@@ -153,7 +154,7 @@ impl Default for Model {
             "Codex ACP".to_string(),
             "Mock ACP Agent".to_string(),
             "Gemini ACP".to_string(),
-            // "Claude Code".to_string(),
+            "Claude Code SDK".to_string(),
         ];
 
         let backend_availability = Model::compute_backend_availability();
@@ -556,7 +557,7 @@ impl Model {
             1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
             2 => Box::new(backends::mock::MockBackend::new()),
             3 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
-            // 4 => Box::new(ClaudeBackend::new()),
+            4 => Box::new(ClaudeBackend::new()),
             _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
         }
     }
