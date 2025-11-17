@@ -98,6 +98,13 @@ Test suite for the agent-router-tui application, covering state machine transiti
   - Verifies textarea is empty via .is_empty()
   - Verifies StreamCancelled event added to response_events
 
+**Model Backend Ordering Tests** (@/tests/model_backend_ordering_test.rs):
+- `test_backend_options_ordering()`: Verifies BACKEND_OPTIONS contains backends in correct order
+- `test_backend_instantiation()`: Verifies each backend can be instantiated correctly via factory functions
+- `test_backend_availability_checks()`: Verifies availability check functions work for each backend
+- `test_get_backend_returns_correct_type()`: Verifies get_backend() returns correct backend type for each index
+- Ensures centralized backend system maintains consistency across instantiation, availability checking, and UI display
+
 **Blackbox TUI Tests** (@/tests/blackbox_tui_test.rs):
 - `test_initial_state()`: Verifies initial TUI rendering with empty model and default state
 - `test_typed_hi()`: Verifies textarea rendering after typing "hi"

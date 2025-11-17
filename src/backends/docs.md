@@ -40,7 +40,7 @@ pub fn is_available(command: &str) -> bool {
 
 **Backend Availability Checking**:
 - `is_available()` function checks if a command exists in PATH using the `which` crate
-- Called at Model initialization to populate `backend_availability` vec
+- Called dynamically via BACKEND_OPTIONS availability check functions
 - Called before spawning to proactively detect missing backends
 - Returns true if command found, false otherwise (cross-platform via which crate)
 
@@ -120,24 +120,19 @@ pub fn is_available(command: &str) -> bool {
 - Bun preferred for faster package loading (downloads on-demand)
 - npm requires global package installation but more widely available
 
-**Instantiation Pattern** (@/src/app.rs:553-563):
-```rust
-pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
-    match self.selected_agent_index {
-        0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
-        1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-        2 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
-        3 => Box::new(backends::mock::MockBackend::new()),
-        4 => Box::new(backends::claude::ClaudeBackend::new()),
-        _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
-    }
-}
-```
-- Index 0: Claude Code ACP (via bunx/npx wrapper)
-- Index 1: Codex ACP (via bunx/npx wrapper)
-- Index 2: Gemini ACP (via bunx/npx wrapper)
-- Index 3: Mock ACP Agent (for testing)
-- Index 4: Claude commandline SDK (legacy approach)
+**Instantiation Pattern** (@/src/app.rs):
+- `BACKEND_OPTIONS`: Centralized constant containing all backend metadata and factory functions
+- `BackendOption` struct: Contains backend name, availability check function, and factory function
+- `get_backend()`: Uses BACKEND_OPTIONS to instantiate the appropriate backend based on selected_agent_index
+- Eliminates hardcoded match statements and ensures consistent backend ordering across the application
+- Backend ordering: Claude Code ACP (0), Codex ACP (1), Gemini ACP (2), Mock ACP Agent (3), Claude commandline SDK (4)
+
+**Centralized Backend Ordering System**:
+- `BACKEND_OPTIONS` constant in @/src/app.rs serves as single source of truth for backend metadata
+- Contains `BackendOption` structs with name, availability check, and factory function for each backend
+- Eliminates maintenance issues from disconnected sources (separate `agents` and `backend_availability` vectors)
+- Ensures consistency when adding/removing/modifying backends
+- Used by UI rendering (@/src/ui.rs), backend instantiation (@/src/app.rs), and testing (@/tests/model_backend_ordering_test.rs)
 
 ### Installation Prompting
 
@@ -161,12 +156,13 @@ pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
 - Navigation: NavigateInstallChoiceNext (down arrow) and NavigateInstallChoicePrevious (up arrow) for directional cycling
 - Context-aware cycling: When install_cmd exists, all 3 options are available; otherwise only OpenInstallPage and Cancel
 - Default selection: RunInstallation when install_cmd exists, OpenInstallPage otherwise
-- Message handlers: ShowInstallPrompt, NavigateInstallChoiceNext, NavigateInstallChoicePrevious, ConfirmInstall, CancelInstall
+- Message handlers: ShowInstallPrompt, NavigateInstallChoiceNext, NavigateInstallChoicePrevious, ConfirmInstall, CancelInstall, InstallationComplete
 - ConfirmInstall: Runs installation command if RunInstallation selected, opens URL if OpenInstallPage selected, closes prompt if Cancel
+- InstallationComplete: Updates backend availability status when installation completes successfully
 
 **Visual Indication** (@/src/ui.rs):
-- Model.backend_availability vec tracks installation status for each agent
-- Checked once at startup in Model::default()
+- BACKEND_OPTIONS availability check functions determine installation status for each agent
+- Checked dynamically when needed rather than cached in Model
 - Agent router displays unavailable backends with "[Not Installed]" suffix in dark gray
 - Provides visual feedback before user attempts to use unavailable backend
 

@@ -29,7 +29,7 @@ pub mod ui;           // Rendering functions for each mode
 - `main()`: Parses CLI arguments via clap::Parser, validates agent name (exits with error if invalid), reads from stdin if piped, then sets up terminal (raw mode, Viewport::Inline(8)), runs async event loop, restores terminal on exit with cursor positioning to next line before disabling raw mode to ensure shell prompt appears cleanly below TUI content
 - `run_app(agent_index, initial_message)`: Core event loop using tokio::select! to handle messages and render at ~30 fps interval - accepts optional agent_index to skip agent selection screen and optional initial_message to pre-fill textarea - includes mpsc channel for syncing `last_ctrl_c_time` to event handler task - removed loading frame increment logic after adopting Shimmer component
 - `handle_event_simple()` / `handle_key_simple()`: Convert crossterm key events to Message based on current mode - Ctrl-C detection happens FIRST before overlay/install prompt checks to ensure double Ctrl-C always works
-- `get_backend()`: Factory function that returns appropriate backend (Claude or Codex) based on selected_agent_index
+- `get_backend()`: Factory function that returns appropriate backend based on selected_agent_index, using the centralized BACKEND_OPTIONS constant for consistent backend ordering
 - `spawn_and_stream()`: Consumes backend stream using tokio::select! to multiplex stream consumption with cancellation signal - when cancelled, stream is dropped and child process cleanup happens via Drop semantics
 - `wrap_text_to_width()`: Manual text wrapping function that splits Text into multiple Lines fitting within terminal width - required because `insert_before()` only handles single-line insertion and Ratatui's `Paragraph::wrap()` only applies during render phase
 
@@ -37,18 +37,21 @@ pub mod ui;           // Rendering functions for each mode
 - `AppMode`: Enum with Selection/Input/Streaming states - now primarily tracks Streaming vs non-Streaming (simplified from screen-based modes)
 - `Message`: Enum of all possible events that trigger state changes - includes `StreamEvent(ConversationEvent)` for backend events, `CancelStream` for interruption, `ToggleAgentRouter` for overlay, `ClearTextarea` for Ctrl-C keyboard interrupt, and `KeyPress` for textarea input
 - `Model`: Struct holding all application state including `show_agent_router: bool` for overlay visibility, `show_debug_events: bool` for debug event filtering (defaults to false), `response_events` vector for full conversation history, `current_stream_token: Option<CancellationToken>` for tracking active stream, `last_ctrl_c_time: Option<Instant>` for tracking Ctrl-C timeout window - removed `use_codex_components: bool` and `loading_frame: usize` fields as part of TUI component adoption
+- `BACKEND_OPTIONS`: Centralized constant containing all backend metadata (name, availability check, factory function) - eliminates multiple disconnected sources for backend ordering that could get out of sync
+- `BackendOption` struct: Contains backend name, availability check function, and factory function for each backend
 - `Model::update()`: Pure function that transitions state based on message - implements TEA "update" phase, with navigation/selection now gated by `show_agent_router` flag instead of mode
 - SubmitInput handler (@/src/main.rs:113-188): For regular prompts (non-slash-commands), renders UserMessage to scrollback BEFORE backend availability check, captures textarea content, clears textarea immediately (before streaming begins), adds UserMessage to history, transitions to Streaming mode
 - CancelStream handler: Calls token.cancel(), transitions to Selection mode, appends StreamCancelled event to history (textarea already cleared by SubmitInput)
 - ClearTextarea handler: Implements two-stage Ctrl-C keyboard interrupt - first press clears textarea and shows hint, second press within 2-second timeout signals quit by clearing timestamp (detected in main loop via Some → None transition)
+- `InstallationComplete` handler: Updates backend availability status when installation completes successfully
 - `create_textarea()` helper (@/src/app.rs:433-435): Factory function that creates TextArea instances with default configuration using `TextArea::new(TextAreaConfig::default())`
 
 **UI Rendering** (@/src/ui.rs):
 - `render()`: Routes to appropriate fullscreen renderer based on state flags - install prompt takes priority (blocking action), then agent router, then normal chat view
-- `render_chat()`: Four-section vertical layout for normal mode - Input textarea (dynamic height), Agent info (1 line showing selected agent), Loading animation (1 line, only visible during streaming), and Instructions footer (1 line)
+- `render_chat()`: Four-section vertical layout for normal mode - Input textarea (dynamic height), Agent info (1 line showing selected agent from BACKEND_OPTIONS), Loading animation (1 line, only visible during streaming), and Instructions footer (1 line)
 - **TextArea Height Calculation**: Uses `textarea.desired_height(width)` to get content height based on line count and wrapping, adds `config.padding_top + config.padding_bottom` for total height, then applies MAX_HEIGHT constraint (10 lines) - removed custom `calculate_textarea_height()` function in favor of built-in component method
 - **Loading Animation**: When `current_mode == AppMode::Streaming`, renders `Shimmer::new()` from tui-components with message "{agent_name} processing..." - removed legacy spinner code path and conditional rendering logic
-- `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list with availability (Min 3 lines, flexible), Instructions (2 lines)
+- `render_agent_selection_fullscreen()`: Fullscreen agent selection UI using entire viewport - Title (2 lines), Agent list from BACKEND_OPTIONS with availability status (Min 3 lines, flexible), Instructions (2 lines)
 - `render_install_prompt_fullscreen()`: Fullscreen install prompt UI using entire viewport - Title (2 lines), Message with wrapping (Min 2 lines, flexible), Options list (3 lines), Instructions (1 line)
 - **Fullscreen mode switching**: Instead of overlaying modals with `Clear` widget and percentage-based positioning, UI switches between three exclusive fullscreen views - works consistently in both inline viewports (8 lines) and fullscreen mode
 - **Layout Constraints**: Autocomplete mode uses 4 constraints (textarea, autocomplete, shimmer, instructions), non-autocomplete mode uses 4 constraints (textarea, agent info, shimmer, instructions) - instructions always at chunks[3]
@@ -61,61 +64,10 @@ pub mod ui;           // Rendering functions for each mode
 
 **CLI Argument Parsing** (@/src/cli.rs):
 - `Cli` struct: Derives clap::Parser for command-line argument parsing with two optional fields - `agent: Option<String>` for agent selection and `message: Option<String>` for initial message
-- `agent_name_to_index(name)`: Maps agent name strings to backend array indices - supports "claude" (0), "codex" (1), "claudecode" (2), "mock" (3) - case-insensitive matching via .to_lowercase(), returns None for invalid names
-- `valid_agent_names()`: Returns Vec of valid agent names for error messages
+- `agent_name_to_index(name)`: Maps agent name strings to backend array indices using BACKEND_OPTIONS - supports all backend names defined in the centralized constant - case-insensitive matching via .to_lowercase(), returns None for invalid names
+- `valid_agent_names()`: Returns Vec of valid agent names from BACKEND_OPTIONS for error messages
 - Agent selection via CLI bypasses TUI selection screen by setting `model.selected_agent_index` directly in run_app()
 - Stdin detection via `io::stdin().is_terminal()` from std::io::IsTerminal trait - reads piped input with `read_to_string()` before TUI initialization
-- CLI message argument takes precedence over stdin when both provided
-
-**Backend Abstraction** (@/src/backends.rs):
-- `AgentBackend` trait: `spawn_stream(prompt, cancel_token) -> Pin<Box<dyn Stream<Item = ConversationEvent>>>` and metadata methods
-- Accepts CancellationToken for cooperative cancellation - backends receive token but child process cleanup happens via Drop
-- Enables polymorphism for different CLI tools while maintaining same subprocess streaming interface
-- Re-exports backend modules (claude, codex, mock) for external use
-
-**Message Flow**:
-```
-User Input (keyboard)
-  → Alt+A toggles show_agent_router overlay
-  → Enter submits prompt → SubmitInput renders UserMessage to scrollback using render_event() + wrap_text_to_width() + terminal.insert_before(), adds UserMessage to history, creates CancellationToken, spawns stream
-  → Esc during streaming → CancelStream triggers token.cancel()
-  → Ctrl-C (first press) → ClearTextarea clears textarea, sets timestamp, shows "Press Ctrl-C again to exit" hint
-  → Ctrl-C (second press within 2 seconds) → ClearTextarea clears timestamp → main loop detects Some → None transition → sends Quit message
-  → EventStream task → Message (via mpsc channel)
-  → run_app loop → Model::update()
-  → render() displays chat + optional overlay on next tick
-
-User Message Rendering (@/src/main.rs:140-156)
-  → SubmitInput handler creates UserMessage event from prompt text
-  → render_event() converts to styled Line with "[user]" prefix in cyan
-  → wrap_text_to_width() splits into multiple Lines fitting terminal width
-  → terminal.insert_before() called once per wrapped line → scrollback buffer accumulates all lines
-  → User message appears in terminal scrollback BEFORE backend processing begins
-
-Subprocess Output (JSONL)
-  → ClaudeBackend yields events from stdout parsed via parse_jsonl_event()
-  → When ResultSummary event is received, backend returns immediately (exits the async generator)
-  → spawn_and_stream() receives ResultSummary event → sends Message::StreamEvent + immediately sends Message::StreamComplete
-  → run_app loop transitions to Selection mode
-  → For each streamed event BEFORE ResultSummary: render_event() converts to styled Line
-  → wrap_text_to_width() splits into multiple Lines, terminal.insert_before() accumulates lines
-  → Model::update() accumulates events in response_events
-  → Model::update() → accumulates ALL events in response_events (no filtering at storage level)
-  → render_chat() maps all events via render_event() to styled Lines
-
-Cancellation Path
-  → User presses Esc → CancelStream message → token.cancel() called
-  → spawn_and_stream's cancel branch fires → stream dropped → child process cleanup via Drop
-  → StreamCancelled event added to history → UI returns to Selection mode
-```
-
-### Things to Know
-
-**CLI Argument Initialization Flow** (@/src/main.rs:31-68):
-- CLI parsing happens before terminal initialization to allow early exit on invalid agent names
-- Agent validation uses fail-fast strategy: invalid agent name prints error and exits with code 1 before TUI setup
-- Stdin detection via `!io::stdin().is_terminal()` checks if input is piped before consuming stdin with `read_to_string()`
-- Reading stdin consumes the entire input stream before TUI initialization - cannot read stdin after terminal is in raw mode
 - Message precedence: CLI argument (--message) takes priority over piped stdin via `cli.message.or(stdin_message)`
 - Agent selection bypass: when agent_index is Some, skips TUI agent selection screen by pre-populating `model.selected_agent_index`
 - Textarea pre-fill: initial_message sets textarea content via `.set_text()` before event loop starts
