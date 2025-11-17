@@ -151,18 +151,12 @@ impl Default for Model {
         let agents = vec![
             "Claude Code ACP".to_string(),
             "Codex ACP".to_string(),
+            "Gemini ACP".to_string(),
             "Mock ACP Agent".to_string(),
-            // "Claude Code".to_string(),
+            "Claude Code SDK".to_string(),
         ];
 
-        let backend_availability = vec![
-            backends::is_available("claude"),
-            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
-            backends::is_available(
-                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-            ),
-            backends::is_available(crate::backends::mock::binary_path()),
-        ];
+        let backend_availability = Model::compute_backend_availability();
 
         // Create agent selection list
         let agent_items: Vec<SelectionItem<String>> = agents
@@ -401,16 +395,7 @@ impl Model {
 
                 if success {
                     // Re-check backend availability
-                    self.backend_availability = vec![
-                        backends::is_available("claude"),
-                        backends::is_available(
-                            backends::codex_acp::CodexAcpBackend::new().command_name(),
-                        ),
-                        backends::is_available(
-                            backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-                        ),
-                        backends::is_available(crate::backends::mock::binary_path()),
-                    ];
+                    self.backend_availability = Model::compute_backend_availability();
                 } else {
                     self.error_message = Some(message);
                 }
@@ -554,12 +539,25 @@ impl Model {
         }
     }
 
+    fn compute_backend_availability() -> Vec<bool> {
+        vec![
+            backends::is_available(
+                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
+            ),
+            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name()),
+            backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name()),
+            backends::is_available(crate::backends::mock::binary_path()),
+            backends::is_available(backends::claude::ClaudeBackend::new().command_name()),
+        ]
+    }
+
     pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
         match self.selected_agent_index {
             0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
             1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-            2 => Box::new(backends::mock::MockBackend::new()),
-            // 3 => Box::new(ClaudeBackend::new()),
+            2 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
+            3 => Box::new(backends::mock::MockBackend::new()),
+            4 => Box::new(backends::claude::ClaudeBackend::new()),
             _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
         }
     }

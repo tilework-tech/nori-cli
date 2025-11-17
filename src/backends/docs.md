@@ -4,9 +4,9 @@ Path: @/src/backends
 
 ### Overview
 
-Backend implementations for spawning and interacting with different AI coding agent CLIs. Defines the AgentBackend trait and provides concrete implementations for Claude Code (claude.rs), GPT Codex (codex.rs), ACP-based backends (codex_acp.rs, claude_code_acp.rs), and a mock backend for testing (mock.rs).
+Backend implementations for spawning and interacting with different AI coding agent CLIs. Defines the AgentBackend trait and provides concrete implementations for Claude Code (claude.rs), GPT Codex (codex.rs), ACP-based backends (codex_acp.rs, claude_code_acp.rs, gemini_acp.rs), and a mock backend for testing (mock.rs).
 
-**NEW (Phase 1 Complete):** ACP (Agent Client Protocol) integration added in @/src/acp_runner.rs. This provides a standardized protocol-based approach that will eventually replace custom backend implementations. The system now includes two ACP-based backends: Codex ACP and Claude Code ACP, both from @zed-industries npm packages. See ACP Integration section below.
+**NEW (Phase 1 Complete):** ACP (Agent Client Protocol) integration added in @/src/acp_runner.rs. This provides a standardized protocol-based approach that will eventually replace custom backend implementations. The system now includes three ACP-based backends: Codex ACP and Claude Code ACP from @zed-industries npm packages, plus Gemini ACP from @google/gemini-cli. See ACP Integration section below.
 
 ### How it fits into the larger codebase
 
@@ -99,6 +99,18 @@ pub fn is_available(command: &str) -> bool {
 - install_command: `npm install -g @zed-industries/claude-code-acp`
 - Error handling: Emits SystemEvent if no JavaScript runtime available
 
+**Gemini ACP Backend** (@/src/backends/gemini_acp.rs):
+- Wraps AcpAgentRunner to launch @google/gemini-cli via bunx/npx
+- Identical architecture to CodexAcpBackend and ClaudeCodeAcpBackend - follows exact same pattern
+- JavaScript runtime detection: Prioritizes Bun (bunx) over npm (npx)
+- Command construction: `bunx @google/gemini-cli` or `npx @google/gemini-cli`
+- No direct subprocess management - delegates entirely to AcpAgentRunner
+- Runtime detection cached at backend creation via javascript_runtime module
+- command_name: Returns "bunx" or "npx" based on detected runtime
+- install_url: "https://www.npmjs.com/package/@google/gemini-cli"
+- install_command: `npm install -g @google/gemini-cli`
+- Error handling: Emits SystemEvent if no JavaScript runtime available
+
 **JavaScript Runtime Detection** (@/src/backends/javascript_runtime.rs):
 - Detects Bun or npm/Node.js availability on system
 - Detection order: bun/bunx → npm/npx → None
@@ -108,22 +120,24 @@ pub fn is_available(command: &str) -> bool {
 - Bun preferred for faster package loading (downloads on-demand)
 - npm requires global package installation but more widely available
 
-**Instantiation Pattern** (@/src/main.rs:497-504):
+**Instantiation Pattern** (@/src/app.rs:553-563):
 ```rust
-fn get_backend(model: &Model) -> Box<dyn AgentBackend + Send> {
-    match model.selected_agent_index {
-        Some(0) => Box::new(ClaudeBackend::new()),
-        Some(1) => Box::new(backends::codex_acp::CodexAcpBackend::new()),
-        Some(2) => Box::new(ClaudeCodeAcpBackend::new()),
-        Some(3) => Box::new(MockBackend::new()),
-        _ => Box::new(ClaudeBackend::new()), // Default
+pub fn get_backend(&self) -> Box<dyn AgentBackend + Send> {
+    match self.selected_agent_index {
+        0 => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
+        1 => Box::new(backends::codex_acp::CodexAcpBackend::new()),
+        2 => Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
+        3 => Box::new(backends::mock::MockBackend::new()),
+        4 => Box::new(backends::claude::ClaudeBackend::new()),
+        _ => Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
     }
 }
 ```
-- Index 0: Claude Code (native CLI)
+- Index 0: Claude Code ACP (via bunx/npx wrapper)
 - Index 1: Codex ACP (via bunx/npx wrapper)
-- Index 2: Claude Code ACP (via bunx/npx wrapper)
+- Index 2: Gemini ACP (via bunx/npx wrapper)
 - Index 3: Mock ACP Agent (for testing)
+- Index 4: Claude commandline SDK (legacy approach)
 
 ### Installation Prompting
 

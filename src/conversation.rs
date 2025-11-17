@@ -17,6 +17,7 @@ pub enum ConversationEvent {
         success: bool,
         details: String,
     },
+    #[allow(dead_code)]
     StderrOutput {
         line: String,
     },
