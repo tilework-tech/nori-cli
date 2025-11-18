@@ -29,8 +29,8 @@ fn test_autocomplete_filters_on_prefix() {
     let mut model = Model::default();
     let registry = CommandRegistry::default();
 
-    // Act: Update autocomplete state with "/swi" input
-    update_autocomplete_state(&mut model, "/swi", &registry);
+    // Act: Update autocomplete state with "/mod" input
+    update_autocomplete_state(&mut model, "/mod", &registry);
 
     // Assert: Autocomplete shows only matching command
     assert!(
@@ -43,10 +43,7 @@ fn test_autocomplete_filters_on_prefix() {
         "Should have a selection"
     );
     if let Some(item) = model.autocomplete_selection_list.selected_item() {
-        assert_eq!(
-            item.data, "switch-model",
-            "Should filter to matching command"
-        );
+        assert_eq!(item.data, "model", "Should filter to matching command");
     }
 }
 

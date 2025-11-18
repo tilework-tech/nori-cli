@@ -268,7 +268,7 @@ async fn run_app(
                                     }
                                     Err(err) => {
                                         // Command execution failed - show error
-                                        let _ = tx.send(Message::Error(format!("{err}\nAvailable commands: /exit, /switch-model")));
+                                        let _ = tx.send(Message::Error(format!("{err}\nAvailable commands: /exit, /model")));
                                     }
                                 }
                                 // Send updated mode and overlay state to event handler

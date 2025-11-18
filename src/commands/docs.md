@@ -10,7 +10,7 @@ The system uses a trait-based registry pattern:
 src/commands/
 ├── mod.rs          # CommandHandler trait, CommandRegistry, parse_slash_command
 ├── exit.rs         # /exit command implementation
-└── switch_model.rs # /switch-model command implementation
+└── switch_model.rs # /model command implementation
 ```
 
 ## CommandHandler Trait
@@ -85,7 +85,7 @@ To add a new slash command:
 - Implementation: Returns Ok(()), main loop sends Message::Quit
 - File: `src/commands/exit.rs`
 
-### /switch-model
+### /model
 - Opens the agent router overlay
 - Implementation: Sets `model.show_agent_router = true`
 - File: `src/commands/switch_model.rs`
@@ -114,7 +114,7 @@ In `src/main.rs`, the SubmitInput handler:
 Tests are in `tests/slash_commands_test.rs`:
 
 - Command registry execution (success and unknown command)
-- Individual command behavior (exit, switch-model)
+- Individual command behavior (exit, model)
 - Command parsing (valid commands, regular text, edge cases)
 
 All tests use real Model instances to verify actual behavior, not mocks.

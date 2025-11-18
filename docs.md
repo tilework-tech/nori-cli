@@ -45,7 +45,7 @@ A terminal user interface (TUI) application that routes user prompts to differen
 ├─ Shimmer (during streaming) ─────────┤
 │ Claude Code processing...            │
 ├─ Instructions ───────────────────────┤
-│ /switch-model: agents | /exit: quit  │
+│ /model: agents | /exit: quit  │
 └──────────────────────────────────────┘
 
 Alt+A overlays agent selector (60% width, 40% height centered)

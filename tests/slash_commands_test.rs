@@ -13,7 +13,7 @@ fn test_command_registry_lists_all_names() {
     names.sort(); // Ensure stable order
 
     // Assert: Returns all registered commands
-    assert_eq!(names, vec!["debug", "exit", "switch-model"]);
+    assert_eq!(names, vec!["debug", "exit", "model"]);
 }
 
 // Tests for filter_commands - prefix-based filtering
@@ -21,31 +21,31 @@ fn test_command_registry_lists_all_names() {
 #[test]
 fn test_filter_commands_empty_prefix() {
     // Arrange: List of all commands
-    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+    let all_commands = vec!["exit".to_string(), "model".to_string()];
 
     // Act: Filter with empty prefix
     let result = filter_commands("", &all_commands);
 
     // Assert: Returns all commands
-    assert_eq!(result, vec!["exit", "switch-model"]);
+    assert_eq!(result, vec!["exit", "model"]);
 }
 
 #[test]
 fn test_filter_commands_partial_match() {
     // Arrange: List of all commands
-    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+    let all_commands = vec!["exit".to_string(), "model".to_string()];
 
-    // Act: Filter with "swi" prefix
-    let result = filter_commands("swi", &all_commands);
+    // Act: Filter with "mod" prefix
+    let result = filter_commands("mod", &all_commands);
 
-    // Assert: Returns only "switch-model"
-    assert_eq!(result, vec!["switch-model"]);
+    // Assert: Returns only "model"
+    assert_eq!(result, vec!["model"]);
 }
 
 #[test]
 fn test_filter_commands_no_match() {
     // Arrange: List of all commands
-    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+    let all_commands = vec!["exit".to_string(), "model".to_string()];
 
     // Act: Filter with non-matching prefix
     let result = filter_commands("xyz", &all_commands);
@@ -57,13 +57,13 @@ fn test_filter_commands_no_match() {
 #[test]
 fn test_filter_commands_case_insensitive() {
     // Arrange: List of all commands
-    let all_commands = vec!["exit".to_string(), "switch-model".to_string()];
+    let all_commands = vec!["exit".to_string(), "model".to_string()];
 
     // Act: Filter with uppercase prefix
-    let result = filter_commands("SWI", &all_commands);
+    let result = filter_commands("MOD", &all_commands);
 
-    // Assert: Returns "switch-model" (case-insensitive)
-    assert_eq!(result, vec!["switch-model"]);
+    // Assert: Returns "model" (case-insensitive)
+    assert_eq!(result, vec!["model"]);
 }
 
 // Tests for CommandRegistry - executing commands
@@ -106,17 +106,14 @@ fn test_switch_model_command_opens_agent_router() {
 
     let registry = CommandRegistry::default();
 
-    // Act: Execute switch-model command
-    let result = registry.execute("switch-model", &mut model);
+    // Act: Execute model command
+    let result = registry.execute("model", &mut model);
 
     // Assert: Agent router is now open
-    assert!(
-        result.is_ok(),
-        "switch-model command should execute successfully"
-    );
+    assert!(result.is_ok(), "model command should execute successfully");
     assert!(
         model.show_agent_router,
-        "agent router should be open after switch-model"
+        "agent router should be open after model"
     );
 }
 
@@ -136,15 +133,15 @@ fn test_parse_slash_command_with_exit() {
 }
 
 #[test]
-fn test_parse_slash_command_with_switch_model() {
-    // Act: Parse "/switch-model"
-    let result = parse_slash_command("/switch-model");
+fn test_parse_slash_command_with_model() {
+    // Act: Parse "/model"
+    let result = parse_slash_command("/model");
 
-    // Assert: Returns command name "switch-model"
+    // Assert: Returns command name "model"
     assert_eq!(
         result,
-        Some("switch-model".to_string()),
-        "/switch-model should parse to 'switch-model'"
+        Some("model".to_string()),
+        "/model should parse to 'model'"
     );
 }
 

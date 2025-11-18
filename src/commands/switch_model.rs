@@ -6,7 +6,7 @@ pub struct SwitchModelCommand;
 
 impl CommandHandler for SwitchModelCommand {
     fn name(&self) -> &'static str {
-        "switch-model"
+        "model"
     }
 
     fn execute(&self, model: &mut Model) -> Result<(), String> {

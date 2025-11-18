@@ -75,7 +75,7 @@ cargo run
 Nori CLI uses slash commands for special actions:
 
 - `/exit`: Quit the application
-- `/switch-model`: Open the agent router to select a different model
+- `/model`: Open the agent router to select a different model
 - Any unknown command will show an error with available commands
 
 ### Response Format
