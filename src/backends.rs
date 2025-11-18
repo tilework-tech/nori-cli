@@ -45,6 +45,9 @@ pub trait AgentBackend {
     fn install_command(&self) -> Option<Vec<String>> {
         None
     }
+
+    /// Check if this backend is available for use
+    fn is_available(&self) -> bool;
 }
 
 /// Check if a command is available in PATH
@@ -53,5 +56,47 @@ pub fn is_available(command: &str) -> bool {
         Path::new(command).exists()
     } else {
         which::which(command).is_ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_acp_backend_is_available_reflects_runtime_detection() {
+        // ACP backends should report availability based on JavaScript runtime detection,
+        // not just whether their command (npx/bunx) is in PATH
+        let backend = claude_code_acp::ClaudeCodeAcpBackend::new();
+
+        // The backend's is_available() should match whether it detected a runtime
+        // This tests actual behavior: can this backend be used?
+        let has_runtime = backend.is_available();
+
+        // If we have npm or bun installed, the backend should be available
+        // If not, it should be unavailable
+        let expected = is_available("bun")
+            || is_available("bunx")
+            || is_available("npm")
+            || is_available("npx");
+
+        assert_eq!(
+            has_runtime, expected,
+            "ACP backend availability should reflect JavaScript runtime detection"
+        );
+    }
+
+    #[test]
+    fn test_claude_backend_is_available_checks_binary() {
+        // ClaudeBackend should check if the 'claude' binary is in PATH
+        let backend = claude::ClaudeBackend::new();
+
+        let available = backend.is_available();
+        let expected = is_available("claude");
+
+        assert_eq!(
+            available, expected,
+            "Claude backend availability should match 'claude' binary presence"
+        );
     }
 }

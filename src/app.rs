@@ -52,13 +52,14 @@ impl InstallChoice {
 #[derive(Clone)]
 pub struct BackendOption {
     pub name: &'static str,
-    pub availability_check: fn() -> bool,
     pub factory: fn() -> Box<dyn AgentBackend + Send>,
 }
 
 impl BackendOption {
     pub fn is_available(&self) -> bool {
-        (self.availability_check)()
+        // Create a temporary backend to check availability
+        // This delegates the check to each backend's implementation
+        self.create_backend().is_available()
     }
 
     pub fn create_backend(&self) -> Box<dyn AgentBackend + Send> {
@@ -69,37 +70,22 @@ impl BackendOption {
 pub const BACKEND_OPTIONS: &[BackendOption] = &[
     BackendOption {
         name: "Claude Code ACP",
-        availability_check: || {
-            backends::is_available(
-                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-            )
-        },
         factory: || Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
     },
     BackendOption {
         name: "Codex ACP",
-        availability_check: || {
-            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name())
-        },
         factory: || Box::new(backends::codex_acp::CodexAcpBackend::new()),
     },
     BackendOption {
         name: "Gemini ACP",
-        availability_check: || {
-            backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name())
-        },
         factory: || Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
     },
     BackendOption {
         name: "Mock ACP Agent",
-        availability_check: || backends::is_available(crate::backends::mock::binary_path()),
         factory: || Box::new(backends::mock::MockBackend::new()),
     },
     BackendOption {
         name: "Claude Code",
-        availability_check: || {
-            backends::is_available(backends::claude::ClaudeBackend::new().command_name())
-        },
         factory: || Box::new(backends::claude::ClaudeBackend::new()),
     },
 ];
@@ -197,6 +183,8 @@ pub struct Model {
     pub show_autocomplete: bool,
     pub show_debug_events: bool,
     pub terminal_size: (u16, u16),
+    pub current_backend: Option<Box<dyn AgentBackend>>,
+    pub current_backend_agent_index: Option<usize>,
 }
 
 impl Default for Model {
@@ -263,6 +251,8 @@ impl Default for Model {
             show_autocomplete: false,
             show_debug_events: false,
             terminal_size: (80, 24), // Default terminal size
+            current_backend: None,
+            current_backend_agent_index: None,
         }
     }
 }
@@ -616,6 +606,41 @@ impl Model {
             .get(self.selected_agent_index)
             .map(|option| option.create_backend())
             .unwrap_or_else(|| Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()))
+    }
+
+    /// Ensures a backend exists for the currently selected agent, reusing the existing
+    /// backend if the agent hasn't changed, or creating a new one if it has.
+    /// This is the preferred method for obtaining a backend for prompt submission.
+    pub fn ensure_backend_for_current_agent(&mut self) -> &mut Box<dyn AgentBackend> {
+        // Check if we need to create a new backend
+        let needs_new_backend = match self.current_backend_agent_index {
+            None => true, // No backend exists yet
+            Some(cached_index) => cached_index != self.selected_agent_index, // Agent changed
+        };
+
+        if needs_new_backend {
+            // Drop the old backend (if any) and create a new one
+            // Note: Dropping the old backend will trigger its Drop impl,
+            // which for ACP runners will kill the subprocess
+            self.current_backend = Some(
+                BACKEND_OPTIONS
+                    .get(self.selected_agent_index)
+                    .map(|option| {
+                        // Create backend without Send bound for storage
+                        // We'll need to modify the factory function signature
+                        option.create_backend()
+                    })
+                    .unwrap_or_else(|| {
+                        Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new())
+                    }),
+            );
+            self.current_backend_agent_index = Some(self.selected_agent_index);
+        }
+
+        // Return a mutable reference to the backend
+        self.current_backend
+            .as_mut()
+            .expect("Backend should exist after ensure")
     }
 }
 

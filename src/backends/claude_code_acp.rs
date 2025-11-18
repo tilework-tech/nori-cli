@@ -100,4 +100,8 @@ impl AgentBackend for ClaudeCodeAcpBackend {
             "@zed-industries/claude-code-acp".to_string(),
         ])
     }
+
+    fn is_available(&self) -> bool {
+        self.runtime.is_some()
+    }
 }

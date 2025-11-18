@@ -25,24 +25,28 @@ pub trait AgentBackend {
         &self,
         prompt: String,
         cancel_token: tokio_util::sync::CancellationToken,
-    ) -> Pin<Box<dyn Stream<Item = ConversationEvent> + Send>>;
+    ) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>>;
     fn name(&self) -> &str;
     fn command_name(&self) -> &str;
     fn install_url(&self) -> &str;
+    fn install_command(&self) -> Option<Vec<String>> { None }
+    fn is_available(&self) -> bool;
 }
 
 pub fn is_available(command: &str) -> bool {
-    which::which(command).is_ok()
+    // Checks PATH or absolute/relative path existence
 }
 ```
 - spawn_stream now accepts CancellationToken for cooperative cancellation
 - Backends receive token but may not actively use it - cancellation happens when caller drops the returned stream
 
 **Backend Availability Checking**:
-- `is_available()` function checks if a command exists in PATH using the `which` crate
-- Called dynamically via BACKEND_OPTIONS availability check functions
-- Called before spawning to proactively detect missing backends
-- Returns true if command found, false otherwise (cross-platform via which crate)
+- `is_available(&self) -> bool` is a required trait method - each backend defines its own availability semantics
+- **ACP backends** (claude_code_acp, codex_acp, gemini_acp): Return `self.runtime.is_some()` - checks if JavaScript runtime (Bun or npm) was detected at construction time
+- **Binary backends** (claude, mock): Return `super::is_available(self.command_name())` - checks if binary exists in PATH using `which` crate
+- Module-level `is_available()` function used by binary backends for PATH lookup
+- This design reflects that different backend types have fundamentally different availability criteria - ACP backends need a JS runtime, binary backends need the CLI binary
+- `BackendOption::is_available()` in @/src/app.rs creates a temporary backend and delegates to the trait method
 
 **Claude Code Backend** (@/src/backends/claude.rs):
 - Command: `claude --print --output-format stream-json --include-partial-messages --verbose <prompt>`
@@ -122,14 +126,17 @@ pub fn is_available(command: &str) -> bool {
 
 **Instantiation Pattern** (@/src/app.rs):
 - `BACKEND_OPTIONS`: Centralized constant containing all backend metadata and factory functions
-- `BackendOption` struct: Contains backend name, availability check function, and factory function
+- `BackendOption` struct: Contains `name: &'static str` and `factory: fn() -> Box<dyn AgentBackend + Send>`
+- `BackendOption::is_available()`: Creates temporary backend via factory and delegates to trait method
+- `BackendOption::create_backend()`: Creates backend instance via factory function
 - `get_backend()`: Uses BACKEND_OPTIONS to instantiate the appropriate backend based on selected_agent_index
 - Eliminates hardcoded match statements and ensures consistent backend ordering across the application
-- Backend ordering: Claude Code ACP (0), Codex ACP (1), Gemini ACP (2), Mock ACP Agent (3), Claude commandline SDK (4)
+- Backend ordering: Claude Code ACP (0), Codex ACP (1), Gemini ACP (2), Mock ACP Agent (3), Claude Code (4)
 
 **Centralized Backend Ordering System**:
 - `BACKEND_OPTIONS` constant in @/src/app.rs serves as single source of truth for backend metadata
-- Contains `BackendOption` structs with name, availability check, and factory function for each backend
+- Contains `BackendOption` structs with name and factory function for each backend
+- Availability checking delegates to each backend's `is_available()` trait implementation
 - Eliminates maintenance issues from disconnected sources (separate `agents` and `backend_availability` vectors)
 - Ensures consistency when adding/removing/modifying backends
 - Used by UI rendering (@/src/ui.rs), backend instantiation (@/src/app.rs), and testing (@/tests/model_backend_ordering_test.rs)
@@ -139,7 +146,7 @@ pub fn is_available(command: &str) -> bool {
 **User Experience Flow**:
 1. User selects backend in agent router (via Alt+A)
 2. User submits prompt (via Alt+Enter)
-3. @/src/main.rs checks if backend command is available using `is_available(backend.command_name())`
+3. @/src/main.rs checks backend availability using `backend.is_available()` trait method
 4. If not available: ShowInstallPrompt message sent with backend name, install URL, and optional install_cmd
 5. Install prompt fullscreen overlay appears (@/src/ui.rs:render_install_prompt_fullscreen)
 6. User sees 2-3 options depending on whether install_cmd exists:
@@ -161,7 +168,7 @@ pub fn is_available(command: &str) -> bool {
 - InstallationComplete: Updates backend availability status when installation completes successfully
 
 **Visual Indication** (@/src/ui.rs):
-- BACKEND_OPTIONS availability check functions determine installation status for each agent
+- `BackendOption::is_available()` delegates to each backend's trait method to determine installation status
 - Checked dynamically when needed rather than cached in Model
 - Agent router displays unavailable backends with "[Not Installed]" suffix in dark gray
 - Provides visual feedback before user attempts to use unavailable backend
