@@ -105,6 +105,16 @@ Test suite for the agent-router-tui application, covering state machine transiti
 - `test_get_backend_returns_correct_type()`: Verifies get_backend() returns correct backend type for each index
 - Ensures centralized backend system maintains consistency across instantiation, availability checking, and UI display
 
+**Backend Availability Unit Tests** (@/src/backends.rs):
+- `test_acp_backend_is_available_reflects_runtime_detection()`: Verifies ACP backends report availability based on JavaScript runtime detection, not PATH lookup of npx/bunx
+  - Creates ClaudeCodeAcpBackend and calls `is_available()`
+  - Compares result against actual bun/npm availability in system
+  - Validates that ACP availability reflects whether a JS runtime was detected
+- `test_claude_backend_is_available_checks_binary()`: Verifies ClaudeBackend reports availability based on 'claude' binary in PATH
+  - Creates ClaudeBackend and calls `is_available()`
+  - Compares result against `backends::is_available("claude")` PATH lookup
+  - Validates that binary backends use PATH lookup for availability
+
 **Blackbox TUI Tests** (@/tests/blackbox_tui_test.rs):
 - `test_initial_state()`: Verifies initial TUI rendering with empty model and default state
 - `test_typed_hi()`: Verifies textarea rendering after typing "hi"

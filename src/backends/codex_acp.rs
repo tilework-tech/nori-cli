@@ -100,4 +100,8 @@ impl AgentBackend for CodexAcpBackend {
             "@zed-industries/codex-acp".to_string(),
         ])
     }
+
+    fn is_available(&self) -> bool {
+        self.runtime.is_some()
+    }
 }

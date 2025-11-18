@@ -52,13 +52,14 @@ impl InstallChoice {
 #[derive(Clone)]
 pub struct BackendOption {
     pub name: &'static str,
-    pub availability_check: fn() -> bool,
     pub factory: fn() -> Box<dyn AgentBackend + Send>,
 }
 
 impl BackendOption {
     pub fn is_available(&self) -> bool {
-        (self.availability_check)()
+        // Create a temporary backend to check availability
+        // This delegates the check to each backend's implementation
+        self.create_backend().is_available()
     }
 
     pub fn create_backend(&self) -> Box<dyn AgentBackend + Send> {
@@ -69,37 +70,22 @@ impl BackendOption {
 pub const BACKEND_OPTIONS: &[BackendOption] = &[
     BackendOption {
         name: "Claude Code ACP",
-        availability_check: || {
-            backends::is_available(
-                backends::claude_code_acp::ClaudeCodeAcpBackend::new().command_name(),
-            )
-        },
         factory: || Box::new(backends::claude_code_acp::ClaudeCodeAcpBackend::new()),
     },
     BackendOption {
         name: "Codex ACP",
-        availability_check: || {
-            backends::is_available(backends::codex_acp::CodexAcpBackend::new().command_name())
-        },
         factory: || Box::new(backends::codex_acp::CodexAcpBackend::new()),
     },
     BackendOption {
         name: "Gemini ACP",
-        availability_check: || {
-            backends::is_available(backends::gemini_acp::GeminiAcpBackend::new().command_name())
-        },
         factory: || Box::new(backends::gemini_acp::GeminiAcpBackend::new()),
     },
     BackendOption {
         name: "Mock ACP Agent",
-        availability_check: || backends::is_available(crate::backends::mock::binary_path()),
         factory: || Box::new(backends::mock::MockBackend::new()),
     },
     BackendOption {
         name: "Claude Code",
-        availability_check: || {
-            backends::is_available(backends::claude::ClaudeBackend::new().command_name())
-        },
         factory: || Box::new(backends::claude::ClaudeBackend::new()),
     },
 ];

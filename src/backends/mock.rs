@@ -15,10 +15,6 @@ const MOCK_ACP_AGENT_COMMAND: &str = concat!(
 const MOCK_ACP_AGENT_COMMAND: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/target/debug/mock_acp_agent");
 
-pub fn binary_path() -> &'static str {
-    MOCK_ACP_AGENT_COMMAND
-}
-
 fn mock_agent_config() -> AcpAgentConfig {
     AcpAgentConfig {
         name: "Mock ACP Agent",
@@ -96,5 +92,9 @@ impl AgentBackend for MockBackend {
             "--manifest-path".to_string(),
             "tests/mock_acp_agent/Cargo.toml".to_string(),
         ])
+    }
+
+    fn is_available(&self) -> bool {
+        super::is_available(MOCK_ACP_AGENT_COMMAND)
     }
 }
