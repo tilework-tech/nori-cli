@@ -1,6 +1,6 @@
 # Nori CLI - Agent Router TUI
 
-A terminal user interface (TUI) for routing prompts to different AI coding agents: Claude Code and GPT Codex.
+A terminal user interface (TUI) for routing prompts to different AI coding agents: Claude Code, GPT Codex, Gemini, and more.
 
 ## Features
 
