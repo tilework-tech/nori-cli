@@ -11,7 +11,7 @@ mod ui;
 
 use crate::app::{AppMode, InstallChoice, Message, Model};
 use crate::autocomplete::update_autocomplete_state;
-use crate::backends::{AgentBackend, BackendEvent};
+use crate::backends::BackendEvent;
 use crate::cli::{Cli, agent_name_to_index, valid_agent_names};
 use crate::commands::{CommandRegistry, parse_slash_command};
 use crate::conversation::{ConversationEvent, render_event, should_render_event};
@@ -20,10 +20,11 @@ use crate::text_utils::wrap_text_to_width;
 use _tuicore::{TerminalWriter, TuiApp};
 use clap::Parser;
 use color_eyre::Result;
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::CrosstermBackend;
 use std::io::{self, IsTerminal, Read};
+use std::pin::Pin;
 use std::thread;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
@@ -294,19 +295,36 @@ async fn run_app(
                                     })?;
                                 }
 
-                                // Check if backend is available before spawning
-                                let backend = model.get_backend();
-                                if !backends::is_available(backend.command_name()) {
+                                // Ensure we have a backend for the current agent
+                                // This will reuse the existing backend if the agent hasn't changed,
+                                // or create a new one (dropping the old one) if it has
+                                let backend = model.ensure_backend_for_current_agent();
+
+                                // Check availability first
+                                let backend_name = backend.name().to_string();
+                                let backend_url = backend.install_url().to_string();
+                                let backend_install_cmd = backend.install_command();
+                                let backend_command_name = backend.command_name().to_string();
+
+                                if !backends::is_available(&backend_command_name) {
                                     // Backend not available - show install prompt
                                     let _ = tx.send(Message::ShowInstallPrompt {
-                                        backend: backend.name().to_string(),
-                                        url: backend.install_url().to_string(),
-                                        install_cmd: backend.install_command(),
+                                        backend: backend_name,
+                                        url: backend_url,
+                                        install_cmd: backend_install_cmd,
                                     });
                                 } else {
-                                    // Backend available - spawn subprocess
+                                    // Backend available - spawn stream
                                     // Create cancellation token for this stream
                                     let cancel_token = tokio_util::sync::CancellationToken::new();
+
+                                    // Get the stream from the backend
+                                    // The backend remains in Model and persists across prompts
+                                    let stream = {
+                                        let backend = model.ensure_backend_for_current_agent();
+                                        backend.spawn_stream(prompt.clone(), cancel_token.clone())
+                                    }; // backend reference dropped here
+
                                     model.current_stream_token = Some(cancel_token.clone());
 
                                     let stream_tx = tx.clone();
@@ -318,7 +336,7 @@ async fn run_app(
                                     let _ = ctrl_c_tx.send(model.last_ctrl_c_time);
 
                                     tokio::spawn(async move {
-                                        if let Err(e) = spawn_and_stream(backend, prompt, stream_tx, cancel_token).await {
+                                        if let Err(e) = spawn_and_stream(stream, stream_tx, cancel_token).await {
                                             // Error already sent via channel
                                             eprintln!("Streaming error: {e}");
                                         }
@@ -574,13 +592,11 @@ fn handle_key_simple(
 }
 
 async fn spawn_and_stream(
-    backend: Box<dyn AgentBackend + Send>,
-    prompt: String,
+    mut stream: Pin<Box<dyn Stream<Item = BackendEvent> + Send>>,
     tx: mpsc::UnboundedSender<Message>,
     cancel_token: tokio_util::sync::CancellationToken,
 ) -> Result<()> {
-    // Get stream from backend
-    let mut stream = backend.spawn_stream(prompt, cancel_token.clone());
+    // Stream is already created by the caller
 
     // Consume stream and send events to UI
     loop {

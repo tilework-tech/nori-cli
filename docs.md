@@ -55,6 +55,8 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - Backend trait (@/src/backends.rs) defines `spawn_stream()` for launching agent CLIs and streaming events
 - Implementations spawn processes with stdout/stderr piped (@/src/backends/claude.rs for native CLI, @/src/backends/codex_acp.rs, @/src/backends/claude_code_acp.rs, and @/src/backends/gemini_acp.rs for ACP-based agents)
 - ACP-based backends wrap AcpAgentRunner (@/src/acp_runner.rs) to launch npm packages via bunx/npx
+- Backend persistence: Model stores current_backend and reuses it across prompts until agent changes (@/src/app.rs:ensure_backend_for_current_agent())
+- Agent subprocess persists across multiple conversational turns - only replaced when user switches agents and submits new prompt
 - Main loop in @/src/main.rs:spawn_and_stream() uses tokio::select! to multiplex stream consumption with cancellation
 - CancellationToken from tokio-util enables cooperative cancellation - when token fires, stream is dropped
 - Events are sent through mpsc channel as Message::StreamEvent to update UI in real-time
@@ -77,15 +79,19 @@ Alt+A overlays agent selector (60% width, 40% height centered)
 - Event handler task receives mode updates via channel to prevent race conditions when converting events to messages
 - Conversation history (`response_events`) accumulates indefinitely - includes both UserMessage and assistant responses, never cleared
 - Navigation and text input are mutually exclusive based on `show_agent_router` flag - overlay blocks input, chat blocks navigation
+- Backend persists in Model.current_backend until agent changes AND new prompt submitted - enables efficient multi-turn conversations with same agent subprocess
 
 **Subprocess Lifecycle**:
-- Child processes are spawned when user submits prompt via tokio::spawn
+- Backend is created lazily on first prompt submission and stored in Model.current_backend
+- Backend persists across multiple prompts to the same agent - subprocess remains alive between turns
+- When user switches agents and submits prompt, old backend is dropped (killing its subprocess) and new one created
+- IMPORTANT: Merely changing agent selection (without submitting) does NOT drop the backend - allows safe browsing while stream is active
 - CancellationToken created and stored in Model when stream starts
 - stdout/stderr are read line-by-line in separate tokio tasks to avoid blocking
-- spawn_and_stream uses tokio::select! to multiplex stream consumption with cancellation signal
+- spawn_and_stream consumes the stream (not the backend) - backend stays in Model after stream completes
 - Pressing Esc during streaming triggers CancelStream message which calls token.cancel()
-- When cancel fires, stream is dropped, closing file handles and triggering child process cleanup via Drop
-- Process wait() happens naturally when stream completes or is cancelled
+- When cancel fires, stream is dropped, but backend persists for next prompt
+- Subprocess cleanup only happens when: (1) switching agents and submitting, (2) app exits (Drop on Model.current_backend)
 
 **JSONL Event Parsing** (@/src/main.rs:152-234):
 - Each line of stdout must be valid JSON with a "type" field
