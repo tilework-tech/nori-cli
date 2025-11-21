@@ -12,7 +12,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::client_handler::{AcpClientHandler, ClientEvent};
 
@@ -163,7 +163,7 @@ impl AgentProcess {
     /// Create a new session
     pub async fn new_session(&self, cwd: String, _mcp_servers: Vec<Value>) -> Result<String> {
         let request = NewSessionRequest {
-            cwd: std::path::PathBuf::from(cwd),
+            cwd: std::path::PathBuf::from(cwd.clone()),
             mcp_servers: vec![],
             // mcp_servers
             //     .into_iter()
@@ -173,12 +173,13 @@ impl AgentProcess {
             meta: None,
         };
 
-        let response = self
-            .connection
-            .new_session(request)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to create session: {e}"))?;
+        debug!("Sending new_session request with cwd: {}", cwd);
+        let response = self.connection.new_session(request).await.map_err(|e| {
+            error!("Protocol error creating session: {:?}", e);
+            anyhow::anyhow!("Failed to create session: {e}")
+        })?;
 
+        debug!("Received session_id: {}", response.session_id);
         Ok(response.session_id.to_string())
     }
 

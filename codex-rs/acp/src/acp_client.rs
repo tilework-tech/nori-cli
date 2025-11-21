@@ -129,12 +129,30 @@ async fn run_session(
     tx: mpsc::Sender<Result<AcpEvent>>,
 ) -> Result<()> {
     // Create new session
-    let session_id = agent
+    debug!("Attempting to create session with cwd: {}", cwd.display());
+    let session_id = match agent
         .new_session(cwd.to_string_lossy().to_string(), vec![])
         .await
-        .context("Failed to create session")?;
-
-    debug!("Created session: {}", session_id);
+    {
+        Ok(id) => {
+            debug!("Created session: {}", id);
+            id
+        }
+        Err(e) => {
+            // Gather diagnostic information from agent stderr
+            let stderr = agent.get_stderr_lines().await;
+            error!("Failed to create session. Full error: {:#}", e);
+            if !stderr.is_empty() {
+                error!("Agent stderr ({} lines):", stderr.len());
+                for (i, line) in stderr.iter().enumerate() {
+                    error!("  [{}] {}", i, line);
+                }
+            } else {
+                error!("Agent stderr is empty");
+            }
+            return Err(e).context("Failed to create session");
+        }
+    };
 
     // Send prompt
     let prompt_content = vec![json!({

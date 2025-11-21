@@ -8,7 +8,7 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 fn test_submit_prompt_default_response() {
     let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn codex");
 
-    session.wait_for_text("To get started", TIMEOUT).unwrap();
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
 
     // Type prompt
     session.send_str("Hello").unwrap();
