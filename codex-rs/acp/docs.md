@@ -8,6 +8,7 @@ Path: @/codex-rs/acp
 - Provides JSON-RPC 2.0-based IPC over stdin/stdout pipes
 - Includes `AcpModelClient` for high-level streaming interaction with ACP agents
 - Manages agent lifecycle, initialization handshake, and stderr capture for diagnostic logging
+- Exports `init_file_tracing()` for file-based structured logging at DEBUG level
 
 ### How it fits into the larger codebase
 
@@ -63,6 +64,7 @@ AcpModelClient                AgentProcess                Agent Subprocess
 - `JsonRpcRequest/Response/Notification` in `@/codex-rs/acp/src/protocol.rs` - Protocol data structures
 - `AcpSession` in `@/codex-rs/acp/src/session.rs` - Session state management placeholder
 - `get_agent_config()` in `@/codex-rs/acp/src/registry.rs` - Maps provider names to subprocess commands and args
+- `init_file_tracing()` in `@/codex-rs/acp/src/tracing_setup.rs` - Initializes file-based tracing subscriber
 
 ### Things to Know
 
@@ -105,11 +107,24 @@ Each `AcpModelClient::stream()` call spawns a fresh agent process:
 - `read_line()` - Read single line from stdout
 - Used by `stream_prompt()` for notification-aware communication
 
+**File-Based Tracing:**
+
+The `init_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.rs` provides structured file logging:
+- Sets global tracing subscriber that writes to a user-specified file path
+- Filters at DEBUG level and above (TRACE is excluded)
+- Uses non-blocking file appender for async-safe writes
+- Creates parent directories automatically if they don't exist
+- Returns error on re-initialization since global subscriber can only be set once per process
+- Guard is intentionally leaked via `std::mem::forget()` to keep non-blocking writer alive for program lifetime
+- ANSI colors disabled for clean file output
+- Intended to be called once at program startup before any ACP operations
+
 **Test coverage:**
 
 - Thin slice integration tests in `@/codex-rs/acp/tests/thin_slice.rs` verify end-to-end streaming with mock agent
 - Unit tests in `agent.rs` use shell commands to test stderr capture, buffer overflow, and line truncation
 - Integration tests in `@/codex-rs/acp/tests/integration.rs` test with actual mock-acp-agent binary
+- Tracing integration test in `@/codex-rs/acp/tests/tracing_test.rs` validates file creation, log level filtering, and re-initialization error handling
 - TUI black-box tests in `@/codex-rs/tui-integration-tests` exercise full application flow including ACP protocol
 
 Created and maintained by Nori.

@@ -863,11 +863,14 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "serial_test",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
  "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "which",
 ]
 

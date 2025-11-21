@@ -18,8 +18,8 @@ pub struct AcpAgentConfig {
 ///
 /// # Arguments
 /// * `provider_name` - The provider identifier (e.g., "mock-acp", "gemini-acp")
-///                     or display name (e.g., "Mock ACP", "Gemini ACP").
-///                     Names are normalized to lowercase with spaces replaced by hyphens.
+///   or display name (e.g., "Mock ACP", "Gemini ACP").
+///   Names are normalized to lowercase with spaces replaced by hyphens.
 ///
 /// # Returns
 /// Configuration with command and args to spawn the agent subprocess
@@ -103,10 +103,7 @@ mod tests {
         );
 
         let mock_result = get_agent_config("Mock ACP");
-        assert!(
-            mock_result.is_ok(),
-            "Display name 'Mock ACP' should work"
-        );
+        assert!(mock_result.is_ok(), "Display name 'Mock ACP' should work");
         assert_eq!(
             mock_result.unwrap().command,
             "mock_acp_agent",

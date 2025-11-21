@@ -9,6 +9,7 @@ pub mod client;
 pub mod protocol;
 pub mod registry;
 pub mod session;
+pub mod tracing_setup;
 pub mod transport;
 
 pub use acp_client::{AcpEvent, AcpModelClient, AcpStream};
@@ -16,6 +17,7 @@ pub use agent::AgentProcess;
 pub use protocol::{JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 pub use registry::{AcpAgentConfig, get_agent_config};
 pub use session::{AcpSession, SessionState};
+pub use tracing_setup::init_file_tracing;
 pub use transport::StdioTransport;
 
 // Re-export commonly used types from tokio
