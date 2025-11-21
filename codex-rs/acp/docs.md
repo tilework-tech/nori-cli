@@ -117,7 +117,7 @@ The `init_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.rs` prov
 - Returns error on re-initialization since global subscriber can only be set once per process
 - Guard is intentionally leaked via `std::mem::forget()` to keep non-blocking writer alive for program lifetime
 - ANSI colors disabled for clean file output
-- Intended to be called once at program startup before any ACP operations
+- Automatically initialized by the CLI (`@/codex-rs/cli/src/main.rs`) at startup, writing to `.codex-acp.log` in the current working directory
 
 **Test coverage:**
 
