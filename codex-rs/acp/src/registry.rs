@@ -18,6 +18,8 @@ pub struct AcpAgentConfig {
 ///
 /// # Arguments
 /// * `provider_name` - The provider identifier (e.g., "mock-acp", "gemini-acp")
+///                     or display name (e.g., "Mock ACP", "Gemini ACP").
+///                     Names are normalized to lowercase with spaces replaced by hyphens.
 ///
 /// # Returns
 /// Configuration with command and args to spawn the agent subprocess
@@ -25,7 +27,10 @@ pub struct AcpAgentConfig {
 /// # Errors
 /// Returns error if provider_name is not recognized
 pub fn get_agent_config(provider_name: &str) -> Result<AcpAgentConfig> {
-    match provider_name {
+    // Normalize provider name: lowercase and replace spaces with hyphens
+    let normalized = provider_name.to_lowercase().replace(' ', "-");
+
+    match normalized.as_str() {
         "mock-acp" => Ok(AcpAgentConfig {
             command: "mock_acp_agent".to_string(),
             args: vec![],
@@ -71,5 +76,59 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("unknown-provider"));
+    }
+
+    #[test]
+    fn test_get_agent_config_normalizes_provider_names() {
+        // Should work with canonical ID (lowercase, hyphenated)
+        assert!(
+            get_agent_config("gemini-acp").is_ok(),
+            "Canonical format 'gemini-acp' should work"
+        );
+        assert!(
+            get_agent_config("mock-acp").is_ok(),
+            "Canonical format 'mock-acp' should work"
+        );
+
+        // Should work with display name (title case with spaces)
+        let gemini_result = get_agent_config("Gemini ACP");
+        assert!(
+            gemini_result.is_ok(),
+            "Display name 'Gemini ACP' should work"
+        );
+        assert_eq!(
+            gemini_result.unwrap().command,
+            "npx",
+            "Gemini ACP should resolve to correct config"
+        );
+
+        let mock_result = get_agent_config("Mock ACP");
+        assert!(
+            mock_result.is_ok(),
+            "Display name 'Mock ACP' should work"
+        );
+        assert_eq!(
+            mock_result.unwrap().command,
+            "mock_acp_agent",
+            "Mock ACP should resolve to correct config"
+        );
+
+        // Should work with mixed case
+        assert!(
+            get_agent_config("GeMiNi-AcP").is_ok(),
+            "Mixed case 'GeMiNi-AcP' should work"
+        );
+
+        // Should still reject unknown providers
+        let unknown_result = get_agent_config("Unknown Provider");
+        assert!(
+            unknown_result.is_err(),
+            "Unknown provider should return error"
+        );
+        let err_msg = unknown_result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Unknown Provider"),
+            "Error message should contain original input"
+        );
     }
 }

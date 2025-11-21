@@ -62,8 +62,18 @@ AcpModelClient                AgentProcess                Agent Subprocess
 - `StdioTransport` in `@/codex-rs/acp/src/transport.rs` - Serializes/deserializes JSON-RPC messages over async streams
 - `JsonRpcRequest/Response/Notification` in `@/codex-rs/acp/src/protocol.rs` - Protocol data structures
 - `AcpSession` in `@/codex-rs/acp/src/session.rs` - Session state management placeholder
+- `get_agent_config()` in `@/codex-rs/acp/src/registry.rs` - Maps provider names to subprocess commands and args
 
 ### Things to Know
+
+**Provider Registry and Name Normalization:**
+
+The `get_agent_config()` function in `registry.rs` accepts provider names in multiple formats:
+- Canonical IDs: "mock-acp", "gemini-acp" (lowercase with hyphens)
+- Display names: "Mock ACP", "Gemini ACP" (from `ModelProviderInfo.name` in `@/codex-rs/core/src/model_provider_info.rs`)
+- Mixed case variations: "GeMiNi-AcP"
+
+Names are normalized by converting to lowercase and replacing spaces with hyphens before matching. This allows `@/codex-rs/core/src/client.rs` to pass `provider.name` directly to `get_agent_config()` without transformation. The registry maps normalized names to `AcpAgentConfig` structs containing the subprocess command and arguments.
 
 **Streaming Notification Pattern:**
 

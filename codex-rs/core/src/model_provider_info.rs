@@ -410,10 +410,8 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 name: "Gemini ACP".into(),
                 // ACP agents communicate via subprocess, not HTTP
                 base_url: None,
-                env_key: Some("GOOGLE_API_KEY".into()),
-                env_key_instructions: Some(
-                    "Get your API key from https://aistudio.google.com/app/apikey".into(),
-                ),
+                env_key: None,
+                env_key_instructions: None,
                 experimental_bearer_token: None,
                 // ACP uses its own protocol, not HTTP-based wire APIs
                 wire_api: WireApi::Acp,
