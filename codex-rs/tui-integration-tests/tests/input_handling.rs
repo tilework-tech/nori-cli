@@ -5,7 +5,7 @@ use tui_integration_tests::{normalize_for_snapshot, Key, TuiSession, TIMEOUT};
 #[test]
 fn test_ctrl_c_clears_input() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_for_text("To get started", TIMEOUT).unwrap();
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
 
     // Type some text
     session.send_str("draft message").unwrap();
@@ -28,7 +28,7 @@ fn test_ctrl_c_clears_input() {
 #[test]
 fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_for_text("To get started", TIMEOUT).unwrap();
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
 
     session.send_str("Hello").unwrap();
     session.wait_for_text("Hello", TIMEOUT).unwrap();
