@@ -203,7 +203,7 @@ impl ModelProviderInfo {
         match self.wire_api {
             WireApi::Responses => format!("{base_url}/responses{query_string}"),
             WireApi::Chat => format!("{base_url}/chat/completions{query_string}"),
-            WireApi::Acp => todo!(),
+            WireApi::Acp => String::new(), // ACP uses subprocess, not HTTP
         }
     }
 
@@ -393,7 +393,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 env_key_instructions: None,
                 experimental_bearer_token: None,
                 // ACP uses its own protocol, not HTTP-based wire APIs
-                wire_api: WireApi::Chat,
+                wire_api: WireApi::Acp,
                 query_params: None,
                 http_headers: None,
                 env_http_headers: None,
@@ -416,7 +416,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 ),
                 experimental_bearer_token: None,
                 // ACP uses its own protocol, not HTTP-based wire APIs
-                wire_api: WireApi::Chat,
+                wire_api: WireApi::Acp,
                 query_params: None,
                 http_headers: None,
                 env_http_headers: None,

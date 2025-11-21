@@ -389,7 +389,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            model: "mock-acp-agent".to_string(),
+            model: "mock-acp".to_string(),
             mock_agent_env: HashMap::new(),
             no_color: true,
             approval_policy: Some(ApprovalPolicy::OnFailure),
