@@ -221,8 +221,11 @@ impl ModelClient {
             }
             WireApi::Acp => {
                 // Get ACP agent configuration from registry
-                let agent_config = codex_acp::get_agent_config(&self.provider.name)
+                debug!("Found provider: {}", &self.provider.name);
+                let provider = "mock-acp";
+                let agent_config = codex_acp::get_agent_config(provider)
                     .map_err(|e| CodexErr::Fatal(format!("ACP agent config error: {e}")))?;
+                debug!("Found agent cmd: {}", agent_config.command.to_owned());
 
                 // Create ACP model client
                 let acp_client = codex_acp::AcpModelClient::new(

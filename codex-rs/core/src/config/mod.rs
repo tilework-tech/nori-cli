@@ -52,6 +52,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
+use tracing;
 
 use crate::config::profile::ConfigProfile;
 use toml::Value as TomlValue;
@@ -1332,13 +1333,16 @@ fn default_review_model() -> String {
 /// specify `--model-provider mock-acp`.
 fn infer_provider_from_model(model: &str) -> Option<String> {
     use crate::model_provider_info::{GEMINI_ACP_PROVIDER_ID, MOCK_ACP_PROVIDER_ID};
+    tracing::debug!("Inferring provider! found model {model}");
 
     // Check for ACP-based models that have their own provider
     if model.starts_with("mock-acp") {
+        tracing::debug!("Inferring provider! choosing `mock-acp`");
         return Some(MOCK_ACP_PROVIDER_ID.to_string());
     }
 
     if model.starts_with("gemini") || model.contains("gemini") {
+        tracing::debug!("Inferring provider! choosing `gemini-acp`");
         return Some(GEMINI_ACP_PROVIDER_ID.to_string());
     }
 

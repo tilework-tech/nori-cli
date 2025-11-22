@@ -41,7 +41,7 @@ impl Drop for TuiSession {
                 let log_path = tmpdir.path().join(".codex-acp.log");
                 let log_tail = if let Ok(content) = std::fs::read_to_string(log_path) {
                     let lines: Vec<&str> = content.lines().collect();
-                    let start = lines.len().saturating_sub(50);
+                    let start = lines.len().saturating_sub(150);
                     lines[start..].join("\n")
                 } else {
                     "<failed to read log file>".to_string()
@@ -403,7 +403,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            model: "gemini-acp".to_string(),
+            model: "mock-acp".to_string(),
             mock_agent_env: HashMap::new(),
             no_color: true,
             approval_policy: Some(ApprovalPolicy::OnFailure),

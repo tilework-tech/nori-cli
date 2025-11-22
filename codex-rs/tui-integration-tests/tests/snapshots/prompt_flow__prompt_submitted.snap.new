@@ -1,0 +1,8 @@
+---
+source: tui-integration-tests/tests/prompt_flow.rs
+assertion_line: 40
+expression: session.screen_contents()
+---
+› Hello
+
+  100% context left

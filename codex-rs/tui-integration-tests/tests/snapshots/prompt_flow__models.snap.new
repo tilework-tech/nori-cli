@@ -1,0 +1,24 @@
+---
+source: tui-integration-tests/tests/prompt_flow.rs
+assertion_line: 20
+expression: session.screen_contents()
+---
+╭───────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.0.0)                      │
+│                                               │
+│ model:     mock-acp medium   /model to change │
+│ directory: /tmp/.tmpm3rzj5                    │
+╰───────────────────────────────────────────────╯
+
+  To get started, describe a task or try one of these commands:
+
+  /init - create an AGENTS.md file with instructions for Codex
+  /status - show current session configuration
+  /approvals - choose what Codex can do without approval
+  /model - choose what model and reasoning effort to use
+  /review - review any changes and find issues
+
+
+› /model
+
+  /model  choose what model and reasoning effort to use

@@ -98,10 +98,15 @@ impl AcpModelClient {
                     }
                 };
 
-                // Initialize
+                // Initialize - use camelCase to match JSON serialization format
                 let client_caps = json!({
-                    "fs": { "readTextFile": true, "writeTextFile": true },
-                    "terminal": true
+                    "fs": {
+                        "readTextFile": true,
+                        "writeTextFile": true,
+                        "meta": null
+                    },
+                    "terminal": true,
+                    "meta": null
                 });
                 if let Err(e) = agent.initialize(client_caps).await {
                     error!("Failed to initialize agent: {}", e);
