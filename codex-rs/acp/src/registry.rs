@@ -20,7 +20,7 @@ pub struct AcpAgentConfig {
 /// Get ACP agent configuration for a given model name
 ///
 /// # Arguments
-/// * `model_name` - The model identifier (e.g., "mock-model", "gemini-flash-2.0")
+/// * `model_name` - The model identifier (e.g., "mock-model", "gemini-flash-2.5")
 ///   Names are normalized to lowercase for case-insensitive matching.
 ///
 /// # Returns
@@ -38,14 +38,18 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
             // This handles both debug and release builds
             let exe_path = match std::env::current_exe() {
                 Ok(p) => {
-                    let mock_path = p.parent()
+                    let mock_path = p
+                        .parent()
                         .map(|parent| parent.join("mock_acp_agent"))
                         .unwrap_or_else(|| std::path::PathBuf::from("mock_acp_agent"));
                     tracing::debug!("Mock ACP agent path resolved to: {}", mock_path.display());
                     mock_path
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to get current_exe for mock-model: {}, falling back to 'mock_acp_agent'", e);
+                    tracing::warn!(
+                        "Failed to get current_exe for mock-model: {}, falling back to 'mock_acp_agent'",
+                        e
+                    );
                     std::path::PathBuf::from("mock_acp_agent")
                 }
             };
@@ -56,7 +60,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 args: vec![],
             })
         }
-        "gemini-flash-2.0" => Ok(AcpAgentConfig {
+        "gemini-2.5-flash" | "gemini-acp" => Ok(AcpAgentConfig {
             provider: "gemini-acp".to_string(),
             command: "npx".to_string(),
             args: vec![
@@ -87,7 +91,8 @@ mod tests {
 
     #[test]
     fn test_get_gemini_model_config() {
-        let config = get_agent_config("gemini-flash-2.0").expect("Should return config for gemini-flash-2.0");
+        let config = get_agent_config("gemini-2.5-flash")
+            .expect("Should return config for gemini-2.5-flash");
 
         assert_eq!(config.provider, "gemini-acp");
         assert_eq!(config.command, "npx");
@@ -110,8 +115,8 @@ mod tests {
     fn test_get_agent_config_normalizes_model_names() {
         // Should work with lowercase model names
         assert!(
-            get_agent_config("gemini-flash-2.0").is_ok(),
-            "Lowercase 'gemini-flash-2.0' should work"
+            get_agent_config("gemini-2.5-flash").is_ok(),
+            "Lowercase 'gemini-2.5-flash' should work"
         );
         assert!(
             get_agent_config("mock-model").is_ok(),
@@ -119,10 +124,10 @@ mod tests {
         );
 
         // Should work with mixed case (normalized to lowercase)
-        let gemini_result = get_agent_config("Gemini-Flash-2.0");
+        let gemini_result = get_agent_config("Gemini-2.5-Flash");
         assert!(
             gemini_result.is_ok(),
-            "Mixed case 'Gemini-Flash-2.0' should work"
+            "Mixed case 'Gemini-2.5-Flash' should work"
         );
         assert_eq!(
             gemini_result.unwrap().provider,
@@ -140,10 +145,7 @@ mod tests {
 
         // Should still reject unknown models
         let unknown_result = get_agent_config("unknown-model-xyz");
-        assert!(
-            unknown_result.is_err(),
-            "Unknown model should return error"
-        );
+        assert!(unknown_result.is_err(), "Unknown model should return error");
         let err_msg = unknown_result.unwrap_err().to_string();
         assert!(
             err_msg.contains("unknown-model-xyz"),

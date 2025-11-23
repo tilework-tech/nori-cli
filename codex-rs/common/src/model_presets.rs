@@ -60,8 +60,8 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             upgrade: None,
         },
         ModelPreset {
-            id: "gemini-2.0-flash-thinking-exp",
-            model: "gemini-2.0-flash-thinking-exp",
+            id: "gemini-2.5-flash",
+            model: "gemini-2.5-flash",
             display_name: "Gemini 2.0 Flash Thinking",
             description: "Google's experimental thinking model.",
             default_reasoning_effort: ReasoningEffort::Medium,

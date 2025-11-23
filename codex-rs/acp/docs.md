@@ -112,13 +112,13 @@ Agent callbacks are handled through a channel-based forwarding pattern:
 **Model Registry and Lookup Architecture:**
 
 The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather than provider-centric:
-- `get_agent_config()` accepts model names (e.g., "mock-model", "gemini-flash-2.0") instead of provider names
+- `get_agent_config()` accepts model names (e.g., "mock-model", "gemini-flash-2.5") instead of provider names
 - Called from `@/codex-rs/core/src/client.rs` with `self.config.model` when handling `WireApi::Acp`
 - Returns `AcpAgentConfig` containing three fields:
   - `provider`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "gemini-acp")
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
-- Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-Flash-2.0" → "gemini-flash-2.0")
+- Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-Flash-2.5" → "gemini-flash-2.5")
 - Uses exact matching only (no prefix matching) - each model must be explicitly registered
 - The `provider` field enables future optimization to determine when existing subprocess can be reused vs when new one must be spawned when switching models
 
