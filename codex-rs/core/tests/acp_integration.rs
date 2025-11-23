@@ -39,6 +39,7 @@ async fn test_acp_stream_with_mock_agent() {
     // Load default config
     let codex_home = TempDir::new().expect("Failed to create temp dir");
     let mut config = load_default_config_for_test(&codex_home);
+    config.model = "mock-model".to_string(); // Use model name registered in ACP registry
     config.model_provider_id = provider.name.clone();
     config.model_provider = provider.clone();
     let effort = config.model_reasoning_effort;

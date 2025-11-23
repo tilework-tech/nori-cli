@@ -76,7 +76,8 @@ AcpModelClient          AgentProcess           ClientSideConnection        Agent
 - `ClientEvent` enum in `@/codex-rs/acp/src/client_handler.rs` - Forwarding type for client callbacks sent through mpsc channel
 - `ClientSideConnection` from `agent-client-protocol` library - Implements Agent trait for sending requests to subprocess
 - `AcpSession` in `@/codex-rs/acp/src/session.rs` - Session state management placeholder
-- `get_agent_config()` in `@/codex-rs/acp/src/registry.rs` - Maps provider names to subprocess commands and args
+- `get_agent_config()` in `@/codex-rs/acp/src/registry.rs` - Maps model names to subprocess commands, args, and provider identifier
+- `AcpAgentConfig` in `@/codex-rs/acp/src/registry.rs` - Configuration struct containing provider, command, and args for spawning agent subprocess
 - `init_file_tracing()` in `@/codex-rs/acp/src/tracing_setup.rs` - Initializes file-based tracing subscriber
 
 ### Things to Know
@@ -108,14 +109,18 @@ Agent callbacks are handled through a channel-based forwarding pattern:
 - Permission requests currently auto-cancel (TODO: implement proper permission handling)
 - File operations and terminal operations return `method_not_found` errors
 
-**Provider Registry and Name Normalization:**
+**Model Registry and Lookup Architecture:**
 
-The `get_agent_config()` function in `registry.rs` accepts provider names in multiple formats:
-- Canonical IDs: "mock-acp", "gemini-acp" (lowercase with hyphens)
-- Display names: "Mock ACP", "Gemini ACP" (from `ModelProviderInfo.name` in `@/codex-rs/core/src/model_provider_info.rs`)
-- Mixed case variations: "GeMiNi-AcP"
-
-Names are normalized by converting to lowercase and replacing spaces with hyphens before matching. This allows `@/codex-rs/core/src/client.rs` to pass `provider.name` directly to `get_agent_config()` without transformation. The registry maps normalized names to `AcpAgentConfig` structs containing the subprocess command and arguments.
+The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather than provider-centric:
+- `get_agent_config()` accepts model names (e.g., "mock-model", "gemini-flash-2.0") instead of provider names
+- Called from `@/codex-rs/core/src/client.rs` with `self.config.model` when handling `WireApi::Acp`
+- Returns `AcpAgentConfig` containing three fields:
+  - `provider`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "gemini-acp")
+  - `command`: Executable path or command name
+  - `args`: Arguments to pass to the subprocess
+- Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-Flash-2.0" → "gemini-flash-2.0")
+- Uses exact matching only (no prefix matching) - each model must be explicitly registered
+- The `provider` field enables future optimization to determine when existing subprocess can be reused vs when new one must be spawned when switching models
 
 **Session Lifecycle:**
 

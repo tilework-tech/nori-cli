@@ -220,18 +220,19 @@ impl ModelClient {
                 Ok(ResponseStream { rx_event: rx })
             }
             WireApi::Acp => {
-                // Get ACP agent configuration from registry
-                debug!("Found provider: {}", &self.provider.name);
-                let provider = "mock-acp";
-                let agent_config = codex_acp::get_agent_config(provider)
+                // Get ACP agent configuration from registry using model name
+                debug!("Looking up ACP agent for model: {}", &self.config.model);
+                let agent_config = codex_acp::get_agent_config(&self.config.model)
                     .map_err(|e| CodexErr::Fatal(format!("ACP agent config error: {e}")))?;
-                debug!("Found agent cmd: {}", agent_config.command.to_owned());
+                debug!("Resolved ACP provider: {}, command: {}",
+                    agent_config.provider,
+                    agent_config.command);
 
                 // Create ACP model client
                 let acp_client = codex_acp::AcpModelClient::new(
                     agent_config.command,
                     agent_config.args,
-                    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+                    self.config.cwd.clone(),
                 );
 
                 // Convert prompt to simple text (initial implementation)

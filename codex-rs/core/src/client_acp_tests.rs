@@ -54,15 +54,19 @@ mod tests {
 
     #[test]
     fn test_acp_registry_integration() {
-        // Verify that the ACP registry can be called from core
-        let mock_config = codex_acp::get_agent_config("mock-acp");
+        // Verify that the ACP registry can be called from core using model names
+        let mock_config = codex_acp::get_agent_config("mock-model");
         assert!(
             mock_config.is_ok(),
-            "Should be able to get mock-acp config from registry"
+            "Should be able to get config for mock-model from registry"
         );
 
         let config = mock_config.unwrap();
-        assert_eq!(config.command, "mock_acp_agent");
+        assert_eq!(config.provider, "mock-acp");
+        assert!(
+            config.command.contains("mock_acp_agent"),
+            "Command should contain 'mock_acp_agent'"
+        );
         assert_eq!(config.args, Vec::<String>::new());
     }
 

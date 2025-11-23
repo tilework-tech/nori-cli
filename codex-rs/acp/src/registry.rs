@@ -8,41 +8,63 @@ use anyhow::Result;
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
+    /// Provider identifier (e.g., "mock-acp", "gemini-acp")
+    /// Used to determine when subprocess can be reused vs needs replacement
+    pub provider: String,
     /// Command to execute (binary path or command name)
     pub command: String,
     /// Arguments to pass to the command
     pub args: Vec<String>,
 }
 
-/// Get ACP agent configuration for a given provider name
+/// Get ACP agent configuration for a given model name
 ///
 /// # Arguments
-/// * `provider_name` - The provider identifier (e.g., "mock-acp", "gemini-acp")
-///   or display name (e.g., "Mock ACP", "Gemini ACP").
-///   Names are normalized to lowercase with spaces replaced by hyphens.
+/// * `model_name` - The model identifier (e.g., "mock-model", "gemini-flash-2.0")
+///   Names are normalized to lowercase for case-insensitive matching.
 ///
 /// # Returns
-/// Configuration with command and args to spawn the agent subprocess
+/// Configuration with provider, command and args to spawn the agent subprocess
 ///
 /// # Errors
-/// Returns error if provider_name is not recognized
-pub fn get_agent_config(provider_name: &str) -> Result<AcpAgentConfig> {
-    // Normalize provider name: lowercase and replace spaces with hyphens
-    let normalized = provider_name.to_lowercase().replace(' ', "-");
+/// Returns error if model_name is not recognized
+pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
+    // Normalize model name: lowercase
+    let normalized = model_name.to_lowercase();
 
     match normalized.as_str() {
-        "mock-acp" => Ok(AcpAgentConfig {
-            command: "mock_acp_agent".to_string(),
-            args: vec![],
-        }),
-        "gemini-acp" => Ok(AcpAgentConfig {
+        "mock-model" => {
+            // Use full path to mock_acp_agent binary from target directory
+            // This handles both debug and release builds
+            let exe_path = match std::env::current_exe() {
+                Ok(p) => {
+                    let mock_path = p.parent()
+                        .map(|parent| parent.join("mock_acp_agent"))
+                        .unwrap_or_else(|| std::path::PathBuf::from("mock_acp_agent"));
+                    tracing::debug!("Mock ACP agent path resolved to: {}", mock_path.display());
+                    mock_path
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to get current_exe for mock-model: {}, falling back to 'mock_acp_agent'", e);
+                    std::path::PathBuf::from("mock_acp_agent")
+                }
+            };
+
+            Ok(AcpAgentConfig {
+                provider: "mock-acp".to_string(),
+                command: exe_path.to_string_lossy().to_string(),
+                args: vec![],
+            })
+        }
+        "gemini-flash-2.0" => Ok(AcpAgentConfig {
+            provider: "gemini-acp".to_string(),
             command: "npx".to_string(),
             args: vec![
                 "@google/gemini-cli".to_string(),
                 "--experimental-acp".to_string(),
             ],
         }),
-        _ => anyhow::bail!("Unknown ACP provider: {provider_name}"),
+        _ => anyhow::bail!("Unknown ACP model: {model_name}"),
     }
 }
 
@@ -51,17 +73,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_mock_acp_agent_config() {
-        let config = get_agent_config("mock-acp").expect("Should return mock-acp config");
+    fn test_get_mock_model_config() {
+        let config = get_agent_config("mock-model").expect("Should return config for mock-model");
 
-        assert_eq!(config.command, "mock_acp_agent");
+        assert_eq!(config.provider, "mock-acp");
+        assert!(
+            config.command.contains("mock_acp_agent"),
+            "Command should contain 'mock_acp_agent', got: {}",
+            config.command
+        );
         assert_eq!(config.args, Vec::<String>::new());
     }
 
     #[test]
-    fn test_get_gemini_acp_agent_config() {
-        let config = get_agent_config("gemini-acp").expect("Should return gemini-acp config");
+    fn test_get_gemini_model_config() {
+        let config = get_agent_config("gemini-flash-2.0").expect("Should return config for gemini-flash-2.0");
 
+        assert_eq!(config.provider, "gemini-acp");
         assert_eq!(config.command, "npx");
         assert_eq!(
             config.args,
@@ -70,61 +98,55 @@ mod tests {
     }
 
     #[test]
-    fn test_get_unknown_provider_returns_error() {
-        let result = get_agent_config("unknown-provider");
+    fn test_get_unknown_model_returns_error() {
+        let result = get_agent_config("unknown-model-xyz");
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("unknown-provider"));
+        assert!(err_msg.contains("unknown-model-xyz"));
     }
 
     #[test]
-    fn test_get_agent_config_normalizes_provider_names() {
-        // Should work with canonical ID (lowercase, hyphenated)
+    fn test_get_agent_config_normalizes_model_names() {
+        // Should work with lowercase model names
         assert!(
-            get_agent_config("gemini-acp").is_ok(),
-            "Canonical format 'gemini-acp' should work"
+            get_agent_config("gemini-flash-2.0").is_ok(),
+            "Lowercase 'gemini-flash-2.0' should work"
         );
         assert!(
-            get_agent_config("mock-acp").is_ok(),
-            "Canonical format 'mock-acp' should work"
+            get_agent_config("mock-model").is_ok(),
+            "Lowercase 'mock-model' should work"
         );
 
-        // Should work with display name (title case with spaces)
-        let gemini_result = get_agent_config("Gemini ACP");
+        // Should work with mixed case (normalized to lowercase)
+        let gemini_result = get_agent_config("Gemini-Flash-2.0");
         assert!(
             gemini_result.is_ok(),
-            "Display name 'Gemini ACP' should work"
+            "Mixed case 'Gemini-Flash-2.0' should work"
         );
         assert_eq!(
-            gemini_result.unwrap().command,
-            "npx",
-            "Gemini ACP should resolve to correct config"
+            gemini_result.unwrap().provider,
+            "gemini-acp",
+            "Should resolve to gemini-acp provider"
         );
 
-        let mock_result = get_agent_config("Mock ACP");
-        assert!(mock_result.is_ok(), "Display name 'Mock ACP' should work");
+        let mock_result = get_agent_config("Mock-Model");
+        assert!(mock_result.is_ok(), "Mixed case 'Mock-Model' should work");
         assert_eq!(
-            mock_result.unwrap().command,
-            "mock_acp_agent",
-            "Mock ACP should resolve to correct config"
+            mock_result.unwrap().provider,
+            "mock-acp",
+            "Should resolve to mock-acp provider"
         );
 
-        // Should work with mixed case
-        assert!(
-            get_agent_config("GeMiNi-AcP").is_ok(),
-            "Mixed case 'GeMiNi-AcP' should work"
-        );
-
-        // Should still reject unknown providers
-        let unknown_result = get_agent_config("Unknown Provider");
+        // Should still reject unknown models
+        let unknown_result = get_agent_config("unknown-model-xyz");
         assert!(
             unknown_result.is_err(),
-            "Unknown provider should return error"
+            "Unknown model should return error"
         );
         let err_msg = unknown_result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("Unknown Provider"),
+            err_msg.contains("unknown-model-xyz"),
             "Error message should contain original input"
         );
     }

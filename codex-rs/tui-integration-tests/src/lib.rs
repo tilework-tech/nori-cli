@@ -124,6 +124,12 @@ impl TuiSession {
         // Set TERM to enable terminal features
         cmd.env("TERM", "xterm-256color");
 
+        // Set CODEX_HOME to temp directory if we have one, so logs and config
+        // go to the temp directory instead of trying to write to ~/.codex
+        if let Some(temp) = &temp_dir {
+            cmd.env("CODEX_HOME", temp.path().to_str().unwrap());
+        }
+
         // Pass through mock agent env vars
         for (key, value) in config.mock_agent_env {
             cmd.env(&key, &value);
