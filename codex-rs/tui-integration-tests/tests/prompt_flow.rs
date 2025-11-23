@@ -43,6 +43,36 @@ fn test_submit_prompt_default_response() {
     assert_snapshot!("prompt_submitted", session.screen_contents());
 }
 
+#[test]
+fn test_submit_prompt_missing_model() {
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        80,
+        SessionConfig::new().with_model("nonexistent".to_owned()),
+    )
+    .expect("Failed to spawn codex");
+
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+
+    // Type prompt
+    session.send_str("Hello").unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    session.wait_for_text("Hello", TIMEOUT).unwrap();
+
+    // Submit
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+
+    session
+        .wait_for_text(
+            "ACP agent config error: Unknown ACP model: nonexistent-acp",
+            Duration::from_secs(10),
+        )
+        .unwrap();
+
+    assert_snapshot!("missing_model", session.screen_contents());
+}
+
 // #[test]
 // fn test_submit_prompt_custom_response() {
 //     let config = SessionConfig::new()

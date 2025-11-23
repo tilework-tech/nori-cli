@@ -56,7 +56,7 @@ impl Drop for TuiSession {
 }
 
 impl TuiSession {
-    /// Spawn codex with mock-acp-agent in a temporary directory
+    /// Spawn codex using mock-acp-agent binary in a temporary directory
     pub fn spawn(rows: u16, cols: u16) -> Result<Self> {
         let temp_dir = tempfile::tempdir()?;
         let hello_py = temp_dir.path().join("hello.py");
@@ -409,7 +409,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            model: "mock-acp".to_string(),
+            model: "mock-model".to_string(),
             mock_agent_env: HashMap::new(),
             no_color: true,
             approval_policy: Some(ApprovalPolicy::OnFailure),
@@ -417,6 +417,11 @@ impl SessionConfig {
             sandbox: Some(Sandbox::WorkspaceWrite),
             cwd: None,
         }
+    }
+
+    pub fn with_model(mut self, model: String) -> Self {
+        self.model = model;
+        self
     }
 
     pub fn with_mock_response(mut self, response: impl Into<String>) -> Self {

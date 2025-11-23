@@ -121,3 +121,107 @@ async fn test_acp_stream_with_mock_agent() {
         .any(|e| matches!(e, ResponseEvent::Completed { .. }));
     assert!(completed, "Should receive Completed event");
 }
+
+#[tokio::test]
+async fn test_acp_event_ordering() {
+    // Create ACP provider for mock-acp-agent
+    let provider = ModelProviderInfo {
+        name: "mock-acp".into(),
+        base_url: None,
+        env_key: None,
+        env_key_instructions: None,
+        experimental_bearer_token: None,
+        wire_api: WireApi::Acp,
+        query_params: None,
+        http_headers: None,
+        env_http_headers: None,
+        request_max_retries: Some(0),
+        stream_max_retries: Some(0),
+        stream_idle_timeout_ms: Some(5_000),
+        requires_openai_auth: false,
+    };
+
+    // Load default config
+    let codex_home = TempDir::new().expect("Failed to create temp dir");
+    let mut config = load_default_config_for_test(&codex_home);
+    config.model = "mock-model".to_string();
+    config.model_provider_id = provider.name.clone();
+    config.model_provider = provider.clone();
+    let effort = config.model_reasoning_effort;
+    let summary = config.model_reasoning_summary;
+    let config = Arc::new(config);
+
+    let conversation_id = ConversationId::new();
+
+    let otel_event_manager = OtelEventManager::new(
+        conversation_id,
+        config.model.as_str(),
+        config.model_family.slug.as_str(),
+        None,
+        Some("test@test.com".to_string()),
+        Some(AuthMode::ChatGPT),
+        false,
+        "test".to_string(),
+    );
+
+    let client = ModelClient::new(
+        Arc::clone(&config),
+        None,
+        otel_event_manager,
+        provider,
+        effort,
+        summary,
+        conversation_id,
+        SessionSource::Exec,
+    );
+
+    let mut prompt = Prompt::default();
+    prompt.input = vec![ResponseItem::Message {
+        id: None,
+        role: "user".to_string(),
+        content: vec![ContentItem::InputText {
+            text: "Hello".to_string(),
+        }],
+    }];
+
+    // Stream response
+    let mut stream = client.stream(&prompt).await.expect("Stream should start");
+
+    // Collect events
+    let mut events = Vec::new();
+    while let Some(event_result) = stream.next().await {
+        let event = event_result.expect("Event should not be error");
+        events.push(event);
+    }
+
+    // Verify event ordering follows Created -> OutputItemAdded -> Deltas pattern
+    assert!(!events.is_empty(), "Should receive events from mock agent");
+
+    // First event should be Created
+    assert!(
+        matches!(events[0], ResponseEvent::Created),
+        "First event should be Created, got: {:?}",
+        events[0]
+    );
+
+    // Find first OutputItemAdded event
+    let output_item_added_index = events
+        .iter()
+        .position(|e| matches!(e, ResponseEvent::OutputItemAdded(_)))
+        .expect("Should have OutputItemAdded event");
+
+    // OutputItemAdded should come before any deltas
+    for (i, event) in events.iter().enumerate() {
+        match event {
+            ResponseEvent::OutputTextDelta(_) | ResponseEvent::ReasoningContentDelta { .. } => {
+                assert!(
+                    i > output_item_added_index,
+                    "Delta event at index {} should come after OutputItemAdded at index {}",
+                    i,
+                    output_item_added_index
+                );
+            }
+            _ => {}
+        }
+    }
+}

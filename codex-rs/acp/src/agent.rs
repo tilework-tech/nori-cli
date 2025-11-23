@@ -138,7 +138,7 @@ impl AgentProcess {
         debug!("Initializing ACP agent");
 
         let request = InitializeRequest {
-            protocol_version: agent_client_protocol::V0,  // Gemini uses protocol version 0
+            protocol_version: agent_client_protocol::V0, // Gemini uses protocol version 0
             client_capabilities: serde_json::from_value(client_capabilities.clone())
                 .context("Invalid client capabilities")?,
             client_info: None,
@@ -147,7 +147,10 @@ impl AgentProcess {
 
         // Log the initialization request
         match serde_json::to_string_pretty(&request) {
-            Ok(json) => debug!("=== INITIALIZE REQUEST JSON ===\n{}\n=== END REQUEST ===", json),
+            Ok(json) => debug!(
+                "=== INITIALIZE REQUEST JSON ===\n{}\n=== END REQUEST ===",
+                json
+            ),
             Err(e) => debug!("Failed to serialize init request to JSON: {}", e),
         }
 
@@ -159,7 +162,10 @@ impl AgentProcess {
 
         // Log the full initialization response
         match serde_json::to_string_pretty(&response) {
-            Ok(json) => debug!("=== INITIALIZE RESPONSE JSON ===\n{}\n=== END RESPONSE ===", json),
+            Ok(json) => debug!(
+                "=== INITIALIZE RESPONSE JSON ===\n{}\n=== END RESPONSE ===",
+                json
+            ),
             Err(e) => debug!("Failed to serialize init response to JSON: {}", e),
         }
 
@@ -187,7 +193,10 @@ impl AgentProcess {
 
         // Serialize request to JSON for debugging
         match serde_json::to_string_pretty(&request) {
-            Ok(json) => debug!("=== NEW_SESSION REQUEST JSON ===\n{}\n=== END REQUEST ===", json),
+            Ok(json) => debug!(
+                "=== NEW_SESSION REQUEST JSON ===\n{}\n=== END REQUEST ===",
+                json
+            ),
             Err(e) => debug!("Failed to serialize request to JSON: {}", e),
         }
 
@@ -197,8 +206,11 @@ impl AgentProcess {
             error!("Protocol error creating session: {:?}", e);
 
             // Try to extract and log error details as JSON if available
-            if let Some(err_str) = format!("{:?}", e).split("data:").nth(1) {
-                error!("=== ERROR RESPONSE DETAILS ===\n{}\n=== END ERROR ===", err_str);
+            if let Some(err_str) = format!("{e:?}").split("data:").nth(1) {
+                error!(
+                    "=== ERROR RESPONSE DETAILS ===\n{}\n=== END ERROR ===",
+                    err_str
+                );
             }
 
             anyhow::anyhow!("Failed to create session: {e}")
@@ -206,7 +218,10 @@ impl AgentProcess {
 
         // Log successful response as JSON
         match serde_json::to_string_pretty(&response) {
-            Ok(json) => debug!("=== NEW_SESSION RESPONSE JSON ===\n{}\n=== END RESPONSE ===", json),
+            Ok(json) => debug!(
+                "=== NEW_SESSION RESPONSE JSON ===\n{}\n=== END RESPONSE ===",
+                json
+            ),
             Err(e) => debug!("Failed to serialize response to JSON: {}", e),
         }
 

@@ -224,9 +224,10 @@ impl ModelClient {
                 debug!("Looking up ACP agent for model: {}", &self.config.model);
                 let agent_config = codex_acp::get_agent_config(&self.config.model)
                     .map_err(|e| CodexErr::Fatal(format!("ACP agent config error: {e}")))?;
-                debug!("Resolved ACP provider: {}, command: {}",
-                    agent_config.provider,
-                    agent_config.command);
+                debug!(
+                    "Resolved ACP provider: {}, command: {}",
+                    agent_config.provider, agent_config.command
+                );
 
                 // Create ACP model client
                 let acp_client = codex_acp::AcpModelClient::new(
@@ -251,12 +252,57 @@ impl ModelClient {
 
                 tokio::spawn(async move {
                     use futures::StreamExt;
+                    let mut created_sent = false;
+                    let mut assistant_item_sent = false;
+                    let mut reasoning_item_sent = false;
+
                     while let Some(acp_event_result) = acp_stream.next().await {
+                        // Send Created event at stream start
+                        if !created_sent {
+                            if tx.send(Ok(ResponseEvent::Created)).await.is_err() {
+                                break;
+                            }
+                            created_sent = true;
+                        }
+
                         let response_event = match acp_event_result {
                             Ok(codex_acp::AcpEvent::TextDelta(text)) => {
+                                // Send OutputItemAdded before first TextDelta
+                                if !assistant_item_sent {
+                                    let item = ResponseItem::Message {
+                                        id: None,
+                                        role: "assistant".to_string(),
+                                        content: vec![],
+                                    };
+                                    if tx
+                                        .send(Ok(ResponseEvent::OutputItemAdded(item)))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
+                                    assistant_item_sent = true;
+                                }
                                 Ok(ResponseEvent::OutputTextDelta(text))
                             }
                             Ok(codex_acp::AcpEvent::ReasoningDelta(text)) => {
+                                // Send OutputItemAdded before first ReasoningDelta
+                                if !reasoning_item_sent {
+                                    let item = ResponseItem::Reasoning {
+                                        id: String::new(),
+                                        summary: Vec::new(),
+                                        content: Some(vec![]),
+                                        encrypted_content: None,
+                                    };
+                                    if tx
+                                        .send(Ok(ResponseEvent::OutputItemAdded(item)))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
+                                    reasoning_item_sent = true;
+                                }
                                 Ok(ResponseEvent::ReasoningContentDelta {
                                     delta: text,
                                     content_index: 0,
