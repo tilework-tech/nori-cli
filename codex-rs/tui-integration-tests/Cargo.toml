@@ -11,7 +11,6 @@ anyhow = "1"
 tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27", features = ["fs"] }
 libc = "0.2"
 
 [dev-dependencies]
