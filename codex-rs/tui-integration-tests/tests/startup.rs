@@ -1,6 +1,10 @@
 use insta::assert_snapshot;
-use std::time::{Duration, Instant};
-use tui_integration_tests::{normalize_for_snapshot, SessionConfig, TuiSession, TIMEOUT};
+use std::time::Duration;
+use std::time::Instant;
+use tui_integration_tests::normalize_for_snapshot;
+use tui_integration_tests::SessionConfig;
+use tui_integration_tests::TuiSession;
+use tui_integration_tests::TIMEOUT;
 
 #[test]
 fn test_startup_shows_welcome() {

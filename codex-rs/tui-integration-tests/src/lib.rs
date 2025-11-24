@@ -1,8 +1,12 @@
 use anyhow::Result;
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::native_pty_system;
+use portable_pty::CommandBuilder;
+use portable_pty::PtySize;
 use std::collections::HashMap;
-use std::io::{Read, Write};
-use std::time::{Duration, Instant};
+use std::io::Read;
+use std::io::Write;
+use std::time::Duration;
+use std::time::Instant;
 use vt100::Parser;
 
 #[cfg(unix)]

@@ -2,7 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::model_provider_info::{WireApi, built_in_model_providers};
+    use crate::model_provider_info::WireApi;
+    use crate::model_provider_info::built_in_model_providers;
 
     #[test]
     fn test_mock_acp_provider_exists() {

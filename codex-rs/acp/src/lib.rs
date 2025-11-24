@@ -10,7 +10,14 @@ pub use registry::get_agent_config;
 pub use tracing_setup::init_file_tracing;
 
 // Re-export commonly used types from agent-client-protocol
-pub use agent_client_protocol::{
-    Agent, Client, ClientSideConnection, InitializeRequest, InitializeResponse, NewSessionRequest,
-    NewSessionResponse, PromptRequest, PromptResponse, SessionNotification, SessionUpdate,
-};
+pub use agent_client_protocol::Agent;
+pub use agent_client_protocol::Client;
+pub use agent_client_protocol::ClientSideConnection;
+pub use agent_client_protocol::InitializeRequest;
+pub use agent_client_protocol::InitializeResponse;
+pub use agent_client_protocol::NewSessionRequest;
+pub use agent_client_protocol::NewSessionResponse;
+pub use agent_client_protocol::PromptRequest;
+pub use agent_client_protocol::PromptResponse;
+pub use agent_client_protocol::SessionNotification;
+pub use agent_client_protocol::SessionUpdate;

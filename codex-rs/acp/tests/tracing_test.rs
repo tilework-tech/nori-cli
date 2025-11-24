@@ -1,7 +1,10 @@
 use serial_test::serial;
 use std::fs;
 use tempfile::TempDir;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 /// Comprehensive test that verifies all tracing functionality
 /// This must be a single test because the global subscriber can only be set once

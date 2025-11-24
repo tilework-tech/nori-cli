@@ -1,6 +1,8 @@
 use insta::assert_snapshot;
 use std::time::Duration;
-use tui_integration_tests::{Key, SessionConfig, TuiSession};
+use tui_integration_tests::Key;
+use tui_integration_tests::SessionConfig;
+use tui_integration_tests::TuiSession;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 

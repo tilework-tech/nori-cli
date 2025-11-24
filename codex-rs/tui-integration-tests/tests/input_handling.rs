@@ -1,6 +1,9 @@
 use insta::assert_snapshot;
 use std::time::Duration;
-use tui_integration_tests::{normalize_for_snapshot, Key, TuiSession, TIMEOUT};
+use tui_integration_tests::normalize_for_snapshot;
+use tui_integration_tests::Key;
+use tui_integration_tests::TuiSession;
+use tui_integration_tests::TIMEOUT;
 
 #[test]
 fn test_ctrl_c_clears_input() {

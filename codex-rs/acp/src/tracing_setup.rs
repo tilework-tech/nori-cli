@@ -2,9 +2,13 @@
 //!
 //! Provides initialization for logging ACP activity to a file using the tracing framework.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use std::path::Path;
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 /// Initialize file-based tracing subscriber
 ///

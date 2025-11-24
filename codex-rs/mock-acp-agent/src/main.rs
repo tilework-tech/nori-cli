@@ -1,12 +1,18 @@
 //! Mock ACP agent for testing nori-cli
 
-use std::{cell::Cell, path::PathBuf, rc::Rc};
+use std::cell::Cell;
+use std::path::PathBuf;
+use std::rc::Rc;
 
-use agent_client_protocol::{self as acp, Client as _};
+use agent_client_protocol::Client as _;
+use agent_client_protocol::{self as acp};
 use serde_json::json;
-use tokio::sync::{mpsc, oneshot};
-use tokio::time::{Duration, sleep};
-use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::time::Duration;
+use tokio::time::sleep;
+use tokio_util::compat::TokioAsyncReadCompatExt as _;
+use tokio_util::compat::TokioAsyncWriteCompatExt as _;
 
 enum MockClientRequest {
     ReadFile {
