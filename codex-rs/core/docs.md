@@ -88,6 +88,8 @@ The `client.rs` defines `ModelClient` trait implemented by:
 
 Response streaming uses `ResponseStream` of `ResponseEvent` items.
 
+For ACP providers (`wire_api: WireApi::Acp`), the client looks up subprocess configuration via `codex_acp::get_agent_config(self.config.model)` from `@/codex-rs/acp/src/registry.rs`. The registry is **model-centric**: it maps model names (e.g., "mock-model", "gemini-2.5-flash") to `AcpAgentConfig` structs containing provider identifier, command, and args. This differs from the provider-based approach used for HTTP APIs. ACP providers should not define `env_key` or `env_key_instructions` in their `ModelProviderInfo` entries, as they communicate via subprocess rather than HTTP APIs.
+
 **Session Recording:**
 
 The `rollout/` module handles session persistence:

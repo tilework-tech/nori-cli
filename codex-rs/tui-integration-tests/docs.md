@@ -66,9 +66,11 @@ TuiSession (portable_pty)
     ↓
 PTY Master ←→ PTY Slave
     ↓           ↓
-VT100 Parser   codex binary (--model mock-acp-agent)
+VT100 Parser   codex binary (--model mock-model)
     ↓           ↓
-Screen State   ACP JSON-RPC over stdin/stdout
+Screen State   ACP registry lookup → mock-acp provider
+                ↓
+            ACP JSON-RPC over stdin/stdout
                 ↓
             mock_acp_agent (env var configured)
 ```
@@ -85,6 +87,7 @@ Converts high-level key events to ANSI escape sequences:
 **Session Configuration:** `SessionConfig` in `@/codex-rs/tui-integration-tests/src/lib.rs`
 
 Builder pattern for test environment setup:
+- `model` field - Model name to use (defaults to `"mock-model"` which resolves to mock-acp-agent via ACP registry)
 - `with_mock_response(text)` - Set `MOCK_AGENT_RESPONSE` env var
 - `with_stream_until_cancel()` - Set `MOCK_AGENT_STREAM_UNTIL_CANCEL=1`
 - `with_agent_env(key, value)` - Pass custom env vars to mock agent
@@ -194,6 +197,11 @@ The `intercept_control_sequences()` method handles terminal queries that require
 - Enables crossterm terminal initialization without real terminal support
 
 **Mock Agent Integration:**
+
+Tests use the model name `"mock-model"` which the ACP registry (`@/codex-rs/acp/src/registry.rs`) resolves to the mock-acp-agent subprocess. The registry returns configuration with:
+- `provider: "mock-acp"`
+- `command: <path-to-mock_acp_agent-binary>`
+- `args: []`
 
 Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_RESPONSE` - Custom response text instead of defaults

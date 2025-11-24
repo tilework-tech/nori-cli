@@ -42,9 +42,13 @@ pub struct ModelPreset {
 
 static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
     vec![
+        // TODO:
+        // Pro (gemini-2.5-pro)
+        // Flash (gemini-2.5-flash)
+        // Flash-Lite (gemini-2.5-flash-lite)
         ModelPreset {
             id: "mock-acp-agent",
-            model: "mock-acp-agent",
+            model: "mock-model",
             display_name: "Mock ACP Agent",
             description: "Mock agent for testing purposes.",
             default_reasoning_effort: ReasoningEffort::Medium,
@@ -56,8 +60,8 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             upgrade: None,
         },
         ModelPreset {
-            id: "gemini-2.0-flash-thinking-exp",
-            model: "gemini-2.0-flash-thinking-exp",
+            id: "gemini-2.5-flash",
+            model: "gemini-2.5-flash",
             display_name: "Gemini 2.0 Flash Thinking",
             description: "Google's experimental thinking model.",
             default_reasoning_effort: ReasoningEffort::Medium,

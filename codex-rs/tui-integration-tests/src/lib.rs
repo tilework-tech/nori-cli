@@ -36,13 +36,27 @@ impl Drop for TuiSession {
         if std::thread::panicking() {
             eprintln!("\n=== TUI Screen State at Panic ===");
             eprintln!("{}", self.screen_contents());
+
+            if let Some(tmpdir) = &self._temp_dir {
+                let log_path = tmpdir.path().join(".codex-acp.log");
+                let log_tail = if let Ok(content) = std::fs::read_to_string(log_path) {
+                    let lines: Vec<&str> = content.lines().collect();
+                    let start = lines.len().saturating_sub(150);
+                    lines[start..].join("\n")
+                } else {
+                    "<failed to read log file>".to_string()
+                };
+                eprintln!("\n=== ACP Tracing Subscriber    ===");
+                eprintln!("{log_tail}");
+            }
+
             eprintln!("=================================\n");
         }
     }
 }
 
 impl TuiSession {
-    /// Spawn codex with mock-acp-agent in a temporary directory
+    /// Spawn codex using mock-acp-agent binary in a temporary directory
     pub fn spawn(rows: u16, cols: u16) -> Result<Self> {
         let temp_dir = tempfile::tempdir()?;
         let hello_py = temp_dir.path().join("hello.py");
@@ -109,6 +123,12 @@ impl TuiSession {
 
         // Set TERM to enable terminal features
         cmd.env("TERM", "xterm-256color");
+
+        // Set CODEX_HOME to temp directory if we have one, so logs and config
+        // go to the temp directory instead of trying to write to ~/.codex
+        if let Some(temp) = &temp_dir {
+            cmd.env("CODEX_HOME", temp.path().to_str().unwrap());
+        }
 
         // Pass through mock agent env vars
         for (key, value) in config.mock_agent_env {
@@ -389,7 +409,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            model: "mock-acp-agent".to_string(),
+            model: "mock-model".to_string(),
             mock_agent_env: HashMap::new(),
             no_color: true,
             approval_policy: Some(ApprovalPolicy::OnFailure),
@@ -397,6 +417,11 @@ impl SessionConfig {
             sandbox: Some(Sandbox::WorkspaceWrite),
             cwd: None,
         }
+    }
+
+    pub fn with_model(mut self, model: String) -> Self {
+        self.model = model;
+        self
     }
 
     pub fn with_mock_response(mut self, response: impl Into<String>) -> Self {

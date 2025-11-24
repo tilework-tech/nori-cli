@@ -203,7 +203,7 @@ impl ModelProviderInfo {
         match self.wire_api {
             WireApi::Responses => format!("{base_url}/responses{query_string}"),
             WireApi::Chat => format!("{base_url}/chat/completions{query_string}"),
-            WireApi::Acp => todo!(),
+            WireApi::Acp => String::new(), // ACP uses subprocess, not HTTP
         }
     }
 
@@ -393,12 +393,12 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 env_key_instructions: None,
                 experimental_bearer_token: None,
                 // ACP uses its own protocol, not HTTP-based wire APIs
-                wire_api: WireApi::Chat,
+                wire_api: WireApi::Acp,
                 query_params: None,
                 http_headers: None,
                 env_http_headers: None,
-                request_max_retries: None,
-                stream_max_retries: None,
+                request_max_retries: Some(2),
+                stream_max_retries: Some(2),
                 stream_idle_timeout_ms: None,
                 requires_openai_auth: false,
             },
@@ -410,18 +410,16 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 name: "Gemini ACP".into(),
                 // ACP agents communicate via subprocess, not HTTP
                 base_url: None,
-                env_key: Some("GOOGLE_API_KEY".into()),
-                env_key_instructions: Some(
-                    "Get your API key from https://aistudio.google.com/app/apikey".into(),
-                ),
+                env_key: None,
+                env_key_instructions: None,
                 experimental_bearer_token: None,
                 // ACP uses its own protocol, not HTTP-based wire APIs
-                wire_api: WireApi::Chat,
+                wire_api: WireApi::Acp,
                 query_params: None,
                 http_headers: None,
                 env_http_headers: None,
-                request_max_retries: None,
-                stream_max_retries: None,
+                request_max_retries: Some(2),
+                stream_max_retries: Some(2),
                 stream_idle_timeout_ms: None,
                 requires_openai_auth: false,
             },
