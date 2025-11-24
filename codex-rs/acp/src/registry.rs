@@ -68,6 +68,11 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 "--experimental-acp".to_string(),
             ],
         }),
+        "claude" | "claude-acp" => Ok(AcpAgentConfig {
+            provider: "claude-acp".to_string(),
+            command: "npx".to_string(),
+            args: vec!["@zed-industries/claude-code-acp".to_string()],
+        }),
         _ => anyhow::bail!("Unknown ACP model: {model_name}"),
     }
 }

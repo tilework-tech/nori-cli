@@ -91,32 +91,6 @@ struct CompactHistoryResponse {
     output: Vec<ResponseItem>,
 }
 
-/// Convert a Prompt to simple text for ACP agents
-/// Initial implementation: concatenate text from user messages
-/// TODO: Support full conversation history formatting
-fn convert_prompt_to_text(prompt: &Prompt) -> String {
-    use crate::ContentItem;
-
-    let mut text_parts = Vec::new();
-
-    for item in &prompt.input {
-        match item {
-            ResponseItem::Message { role, content, .. } => {
-                for content_item in content {
-                    if let ContentItem::InputText { text } = content_item {
-                        text_parts.push(format!("{role}: {text}"));
-                    }
-                }
-            }
-            _ => {
-                // Skip other item types for now
-            }
-        }
-    }
-
-    text_parts.join("\n")
-}
-
 #[derive(Debug, Clone)]
 pub struct ModelClient {
     config: Arc<Config>,
@@ -180,6 +154,8 @@ impl ModelClient {
     }
 
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
+        // TODO! provider doesn't change until restart, so need to fix that
+        // if we want to support both ACP and API longer term
         match self.provider.wire_api {
             WireApi::Responses => self.stream_responses(prompt).await,
             WireApi::Chat => {
@@ -230,101 +206,8 @@ impl ModelClient {
                 );
 
                 // Create ACP model client
-                let acp_client = codex_acp::AcpModelClient::new(
-                    agent_config.command,
-                    agent_config.args,
-                    self.config.cwd.clone(),
-                );
-
-                // Convert prompt to simple text (initial implementation)
-                // TODO: Support full conversation history and tools
-                let prompt_text = convert_prompt_to_text(prompt);
-
-                // Stream from ACP agent
-                let mut acp_stream = acp_client
-                    .stream(&prompt_text)
-                    .await
-                    .map_err(|e| CodexErr::Fatal(format!("ACP stream error: {e}")))?;
-
-                // Bridge AcpStream to ResponseStream
-                let (tx, rx) = mpsc::channel::<Result<ResponseEvent>>(16);
-                let conversation_id = self.conversation_id.to_string();
-
-                tokio::spawn(async move {
-                    use futures::StreamExt;
-                    let mut created_sent = false;
-                    let mut assistant_item_sent = false;
-                    let mut reasoning_item_sent = false;
-
-                    while let Some(acp_event_result) = acp_stream.next().await {
-                        // Send Created event at stream start
-                        if !created_sent {
-                            if tx.send(Ok(ResponseEvent::Created)).await.is_err() {
-                                break;
-                            }
-                            created_sent = true;
-                        }
-
-                        let response_event = match acp_event_result {
-                            Ok(codex_acp::AcpEvent::TextDelta(text)) => {
-                                // Send OutputItemAdded before first TextDelta
-                                if !assistant_item_sent {
-                                    let item = ResponseItem::Message {
-                                        id: None,
-                                        role: "assistant".to_string(),
-                                        content: vec![],
-                                    };
-                                    if tx
-                                        .send(Ok(ResponseEvent::OutputItemAdded(item)))
-                                        .await
-                                        .is_err()
-                                    {
-                                        break;
-                                    }
-                                    assistant_item_sent = true;
-                                }
-                                Ok(ResponseEvent::OutputTextDelta(text))
-                            }
-                            Ok(codex_acp::AcpEvent::ReasoningDelta(text)) => {
-                                // Send OutputItemAdded before first ReasoningDelta
-                                if !reasoning_item_sent {
-                                    let item = ResponseItem::Reasoning {
-                                        id: String::new(),
-                                        summary: Vec::new(),
-                                        content: Some(vec![]),
-                                        encrypted_content: None,
-                                    };
-                                    if tx
-                                        .send(Ok(ResponseEvent::OutputItemAdded(item)))
-                                        .await
-                                        .is_err()
-                                    {
-                                        break;
-                                    }
-                                    reasoning_item_sent = true;
-                                }
-                                Ok(ResponseEvent::ReasoningContentDelta {
-                                    delta: text,
-                                    content_index: 0,
-                                })
-                            }
-                            Ok(codex_acp::AcpEvent::Completed { stop_reason: _ }) => {
-                                Ok(ResponseEvent::Completed {
-                                    response_id: conversation_id.clone(),
-                                    token_usage: None, // ACP doesn't expose token usage
-                                })
-                            }
-                            Ok(codex_acp::AcpEvent::Error(msg)) => Err(CodexErr::Stream(msg, None)),
-                            Err(e) => Err(CodexErr::Stream(e.to_string(), None)),
-                        };
-
-                        if tx.send(response_event).await.is_err() {
-                            break;
-                        }
-                    }
-                });
-
-                Ok(ResponseStream { rx_event: rx })
+                todo!();
+                // Then bridge from ACP event stream back to ResponseStream
             }
         }
     }
