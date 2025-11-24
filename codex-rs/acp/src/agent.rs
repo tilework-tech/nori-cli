@@ -138,7 +138,7 @@ impl AgentProcess {
         debug!("Initializing ACP agent");
 
         let request = InitializeRequest {
-            protocol_version: agent_client_protocol::V0, // Gemini uses protocol version 0
+            protocol_version: agent_client_protocol::V1,
             client_capabilities: serde_json::from_value(client_capabilities.clone())
                 .context("Invalid client capabilities")?,
             client_info: None,

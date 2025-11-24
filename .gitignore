@@ -93,6 +93,9 @@ CHANGELOG.ignore.md
 .worktree/
 .worktrees/
 /codex-rs/tui/target/
-/nori-cli
 /target
+
+# Local code/doc references for ACP work
+/agent-client-protocol
+/zed
 
