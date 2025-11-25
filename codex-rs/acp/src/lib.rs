@@ -3,9 +3,12 @@
 //! This crate provides JSON-RPC 2.0-based communication with ACP-compliant
 //! agent subprocesses over stdin/stdout (capturing stderr logs).
 
+pub mod connection;
 pub mod registry;
 pub mod tracing_setup;
+pub mod translator;
 
+pub use connection::AcpConnection;
 pub use registry::AcpAgentConfig;
 pub use registry::AcpProviderInfo;
 pub use registry::get_agent_config;

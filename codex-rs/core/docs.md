@@ -90,6 +90,40 @@ Response streaming uses `ResponseStream` of `ResponseEvent` items.
 
 For ACP providers (`wire_api: WireApi::Acp`), the client looks up subprocess configuration via `codex_acp::get_agent_config(self.config.model)` from `@/codex-rs/acp/src/registry.rs`. The registry is **model-centric**: it maps model names (e.g., "mock-model", "gemini-2.5-flash") to `AcpAgentConfig` structs containing provider identifier, command, and args. This differs from the provider-based approach used for HTTP APIs. ACP providers should not define `env_key` or `env_key_instructions` in their `ModelProviderInfo` entries, as they communicate via subprocess rather than HTTP APIs.
 
+**ACP Streaming Flow (`stream_acp` / `stream_acp_internal`):**
+
+When ACP provider is detected in `stream()`, control passes to `stream_acp()` which:
+
+```
+Client.stream()
+    │
+    ├─► Check ACP registry for model
+    │       │
+    │       ├─► Not found: Continue to HTTP providers
+    │       └─► Found: Call stream_acp(config, prompt)
+    │
+    └─► stream_acp()
+            │
+            ├─► Convert prompt to ACP ContentBlocks via translator
+            ├─► Spawn async task with stream_acp_internal()
+            └─► Return ResponseStream immediately
+
+stream_acp_internal() [in spawned task]:
+    │
+    ├─► AcpConnection::spawn() - Create subprocess & worker thread
+    ├─► connection.create_session()
+    ├─► Send OutputItemAdded event (establishes active_item)
+    ├─► Spawn forward_task for update translation
+    ├─► connection.prompt() - Blocks until completion
+    ├─► Wait for forward_task
+    ├─► Send OutputItemDone with accumulated text
+    └─► Send Completed event
+```
+
+**Critical Invariant - OutputItemAdded First:**
+
+The codex-core event processing expects `OutputItemAdded` before any `OutputTextDelta` events to establish the "active_item" tracking in the TUI. The ACP integration sends an empty assistant message via `OutputItemAdded` at the start, then streams text deltas, then sends `OutputItemDone` with the complete accumulated text.
+
 **Session Recording:**
 
 The `rollout/` module handles session persistence:

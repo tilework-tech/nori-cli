@@ -63,6 +63,78 @@ The `init_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.rs` prov
 
 ### Core Implementation
 
-TODO!
+**Thread-Safe Connection Wrapper (`connection.rs`):**
+
+The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in codex-core's multi-threaded tokio runtime. The solution is a thread-safe wrapper pattern:
+
+```
+┌─────────────────────────┐   mpsc channels     ┌─────────────────────────┐
+│   Main Tokio Runtime    │◄───────────────────►│  ACP Worker Thread      │
+│                         │  AcpCommand enum    │  (single-threaded RT)   │
+│   AcpConnection         │                     │                         │
+│   - spawn()             │  ────────────────►  │  AcpConnectionInner     │
+│   - create_session()    │  CreateSession      │  - ClientDelegate       │
+│   - prompt()            │  Prompt             │  - run_command_loop()   │
+│   - cancel()            │  Cancel             │                         │
+│                         │  ◄────────────────  │                         │
+│                         │  oneshot responses  │                         │
+└─────────────────────────┘                     └─────────────────────────┘
+```
+
+- `AcpConnection::spawn()` creates dedicated thread with `LocalSet` for `!Send` futures
+- Commands sent via `mpsc::Sender<AcpCommand>` to worker thread
+- Responses returned via `oneshot` channels embedded in commands
+- Worker thread spawns subprocess, handles JSON-RPC handshake, runs command loop
+
+**ClientDelegate (`connection.rs`):**
+
+- Implements `acp::Client` trait to handle agent requests
+- Routes session updates to registered `mpsc::Sender<SessionUpdate>` channels
+- Auto-approves permission requests (TODO: bridge to codex approval system)
+- Implements file read (synchronous `std::fs::read_to_string`)
+- Terminal operations return `method_not_found` (not yet supported)
+
+**Event Translation (`translator.rs`):**
+
+Bridges between ACP types and codex-protocol types:
+
+| Function | Purpose |
+|----------|---------|
+| `response_items_to_content_blocks()` | Converts codex `ResponseItem` to ACP `ContentBlock` for prompts |
+| `text_to_content_block()` | Simple text-to-ContentBlock conversion |
+| `translate_session_update()` | Translates ACP `SessionUpdate` to `TranslatedEvent` enum |
+
+`TranslatedEvent` variants:
+- `TextDelta(String)` - Text content from `AgentMessageChunk` or `AgentThoughtChunk`
+- `Completed(StopReason)` - Session completion signal
+
+Non-text content (images, audio, resources) and tool calls are currently dropped with empty vec.
+
+### Things to Know
+
+**Protocol Version Check:**
+
+- Minimum supported version is `acp::V1`
+- Checked during initialization handshake
+- Connection fails if agent reports older version
+
+**Stderr Handling:**
+
+- Agent stderr is captured via `spawn_local` task in `spawn_connection_internal()`
+- Lines are logged via `tracing::warn!` with "ACP agent stderr:" prefix
+- Task runs until EOF or error
+
+**Session Update Routing:**
+
+- `ClientDelegate` maintains `HashMap<SessionId, Sender<SessionUpdate>>`
+- Updates for unregistered sessions are silently dropped
+- Uses `try_send()` (non-blocking) - full/closed channels cause update loss
+
+**Agent Initialization:**
+
+Client advertises these capabilities to agents:
+- `fs.read_text_file: true`
+- `fs.write_text_file: true`
+- `terminal: false`
 
 Created and maintained by Nori.

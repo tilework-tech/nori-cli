@@ -859,6 +859,7 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "async-trait",
+ "codex-protocol",
  "futures",
  "pretty_assertions",
  "serde",
@@ -1127,6 +1128,7 @@ dependencies = [
 name = "codex-core"
 version = "0.0.0"
 dependencies = [
+ "agent-client-protocol",
  "anyhow",
  "askama",
  "assert_cmd",
