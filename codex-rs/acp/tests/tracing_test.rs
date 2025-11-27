@@ -32,8 +32,7 @@ fn test_file_tracing_comprehensive() {
     // Verify log file exists
     assert!(
         log_file_path.exists(),
-        "Log file should exist at {:?}",
-        log_file_path
+        "Log file should exist at {log_file_path:?}"
     );
 
     // Read and verify log file contents

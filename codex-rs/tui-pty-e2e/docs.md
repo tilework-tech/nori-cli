@@ -142,6 +142,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/prompt_flow.rs` | Prompt submission and agent responses |
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
+| `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
 
@@ -235,6 +236,16 @@ target/debug (parent.parent)
           ↓
 target/debug/codex (join "codex")
 ```
+
+**Live ACP Testing:**
+
+Two opt-in E2E tests in `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` validate integration with real ACP providers:
+- `test_gemini_acp_live_response` - Tests gemini-acp with real Gemini API (requires GEMINI_API_KEY environment variable)
+- `test_claude_acp_live_response` - Tests claude-acp with real Claude API (requires ANTHROPIC_API_KEY environment variable)
+- Both tests are marked `#[ignore]` to be opt-in and run separately: `cargo test --package tui-pty-e2e -- --ignored`
+- Use 30-second timeout vs 5-second standard timeout to account for network latency and model processing time
+- Generate dynamic config.toml with `wire_api = "acp"` to route through ACP registry
+- Verify basic response reception without requiring specific output text
 
 **Known Limitations:**
 

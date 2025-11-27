@@ -4,7 +4,7 @@ expression: normalize_for_snapshot(session.screen_contents())
 ---
 │                                          │
 │ model:     mock-model   /model to change │
-│ directory: [TMP_DIR]               │
+│ directory: [TMP_DIR]        │
 ╰──────────────────────────────────────────╯
 
   To get started, describe a task or try one of these commands:

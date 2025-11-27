@@ -70,6 +70,16 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             upgrade: None,
         },
         ModelPreset {
+            id: "claude-acp",
+            model: "claude-acp",
+            display_name: "Claude",
+            description: "Anthropic's Claude via Agent Context Protocol.",
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: &[],
+            is_default: false,
+            upgrade: None,
+        },
+        ModelPreset {
             id: "gpt-5.1-codex",
             model: "gpt-5.1-codex",
             display_name: "gpt-5.1-codex",

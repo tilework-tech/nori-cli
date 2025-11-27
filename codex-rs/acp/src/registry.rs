@@ -155,6 +155,16 @@ mod tests {
     }
 
     #[test]
+    fn test_get_claude_model_config() {
+        let config = get_agent_config("claude-acp").expect("Should return config for claude-acp");
+
+        assert_eq!(config.provider_slug, "claude-acp");
+        assert_eq!(config.command, "npx");
+        assert_eq!(config.args, vec!["@zed-industries/claude-code-acp"]);
+        assert_eq!(config.provider_info.name, "Claude ACP");
+    }
+
+    #[test]
     fn test_get_unknown_model_returns_error() {
         let result = get_agent_config("unknown-model-xyz");
 

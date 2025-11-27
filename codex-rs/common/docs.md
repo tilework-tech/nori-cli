@@ -50,10 +50,11 @@ pub struct CliConfigOverrides {
 
 **Model Presets:**
 
-`model_presets` defines available models by provider with capabilities:
-- Default reasoning effort levels
+`model_presets` in `@/codex-rs/common/src/model_presets.rs` defines available models by provider with capabilities:
+- Default reasoning effort levels (set to Medium for all models)
 - Summary generation support
 - Tool capabilities
+- Claude ACP preset added with display_name "Claude" and description "Anthropic's Claude via Agent Context Protocol" to make Claude model visible in TUI model selection
 
 **Approval Presets:**
 

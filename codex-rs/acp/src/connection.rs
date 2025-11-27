@@ -15,14 +15,18 @@ use std::rc::Rc;
 use std::thread;
 
 use agent_client_protocol as acp;
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use futures::AsyncBufReadExt;
 use futures::io::BufReader;
-use tokio::process::{Child, Command};
+use tokio::process::Child;
+use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-use tracing::{debug, warn};
+use tokio_util::compat::TokioAsyncReadCompatExt;
+use tokio_util::compat::TokioAsyncWriteCompatExt;
+use tracing::debug;
+use tracing::warn;
 
 use crate::registry::AcpAgentConfig;
 
@@ -80,7 +84,10 @@ impl AcpConnection {
 
         // Spawn a dedicated thread with a single-threaded tokio runtime
         let worker_thread = thread::spawn(move || {
-            #[expect(clippy::expect_used, reason = "Runtime creation in dedicated thread is infallible in practice")]
+            #[expect(
+                clippy::expect_used,
+                reason = "Runtime creation in dedicated thread is infallible in practice"
+            )]
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -407,8 +414,8 @@ impl acp::Client for ClientDelegate {
         arguments: acp::ReadTextFileRequest,
     ) -> acp::Result<acp::ReadTextFileResponse> {
         // Read file content
-        let content = std::fs::read_to_string(&arguments.path)
-            .map_err(acp::Error::into_internal_error)?;
+        let content =
+            std::fs::read_to_string(&arguments.path).map_err(acp::Error::into_internal_error)?;
         Ok(acp::ReadTextFileResponse {
             content,
             meta: None,
@@ -537,8 +544,7 @@ mod tests {
         );
         assert!(
             messages.iter().any(|m| m.contains("Test message")),
-            "Should contain test message, got: {:?}",
-            messages
+            "Should contain test message, got: {messages:?}"
         );
         assert_eq!(stop_reason, acp::StopReason::EndTurn);
     }

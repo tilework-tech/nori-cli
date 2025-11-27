@@ -2,6 +2,8 @@
 source: tui-pty-e2e/tests/prompt_flow.rs
 expression: normalize_for_snapshot(session.screen_contents())
 ---
+  To get started, describe a task or try one of these commands:
+
   /init - create an AGENTS.md file with instructions for Codex
   /status - show current session configuration
   /approvals - choose what Codex can do without approval

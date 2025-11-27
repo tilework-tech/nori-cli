@@ -51,4 +51,15 @@ mod tests {
             "gemini-acp model should have a model family"
         );
     }
+
+    #[test]
+    fn test_claude_acp_model_has_family() {
+        use crate::model_family::find_family_for_model;
+
+        let family = find_family_for_model("claude-acp");
+        assert!(
+            family.is_some(),
+            "claude-acp model should have a model family"
+        );
+    }
 }

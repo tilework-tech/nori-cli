@@ -1105,10 +1105,13 @@ async fn stream_acp_internal(
     tx: mpsc::Sender<Result<ResponseEvent>>,
 ) -> Result<()> {
     use agent_client_protocol::SessionUpdate;
-    use codex_acp::translator::{TranslatedEvent, translate_session_update};
-    use codex_protocol::models::{ContentItem, ResponseItem};
+    use codex_acp::translator::TranslatedEvent;
+    use codex_acp::translator::translate_session_update;
+    use codex_protocol::models::ContentItem;
+    use codex_protocol::models::ResponseItem;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
 
     // Spawn ACP connection
     let connection = codex_acp::AcpConnection::spawn(config, cwd)
