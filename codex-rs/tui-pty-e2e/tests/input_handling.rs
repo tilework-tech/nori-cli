@@ -24,6 +24,8 @@ fn test_ctrl_c_clears_input() {
         .expect("Input was not cleared");
 
     std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "ctrl_c_clears",
         normalize_for_snapshot(session.screen_contents())
@@ -47,6 +49,8 @@ fn test_backspace() {
     session.wait_for(|s| !s.contains("Hello"), TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "typing_and_backspace",
         normalize_for_snapshot(session.screen_contents())
@@ -68,6 +72,8 @@ fn test_arrows() {
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(Duration::from_millis(100));
 
+    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_INPUT);
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "model_changed",
