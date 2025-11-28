@@ -530,10 +530,10 @@ mod tests {
         // Should have received responses
         let mut messages = Vec::new();
         while let Ok(update) = rx.try_recv() {
-            if let acp::SessionUpdate::AgentMessageChunk(chunk) = update {
-                if let acp::ContentBlock::Text(text) = chunk.content {
-                    messages.push(text.text);
-                }
+            if let acp::SessionUpdate::AgentMessageChunk(chunk) = update
+                && let acp::ContentBlock::Text(text) = chunk.content
+            {
+                messages.push(text.text);
             }
         }
 

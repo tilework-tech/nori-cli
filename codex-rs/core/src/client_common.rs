@@ -3,6 +3,8 @@ use crate::error::Result;
 use crate::model_family::ModelFamily;
 use crate::protocol::RateLimitSnapshot;
 use crate::protocol::TokenUsage;
+use codex_acp::AcpToolCallEvent;
+use codex_acp::AcpToolCallUpdateEvent;
 use codex_apply_patch::APPLY_PATCH_TOOL_INSTRUCTIONS;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
@@ -193,6 +195,18 @@ fn strip_total_output_header(output: &str) -> Option<&str> {
     Some(remainder)
 }
 
+/// ACP-specific response events.
+///
+/// This enum encapsulates all ACP-related events to minimize changes
+/// to the parent `ResponseEvent` enum.
+#[derive(Debug)]
+pub enum AcpResponseEvent {
+    /// A new tool call has been initiated by the ACP agent
+    ToolCall(AcpToolCallEvent),
+    /// An existing tool call has been updated
+    ToolCallUpdate(AcpToolCallUpdateEvent),
+}
+
 #[derive(Debug)]
 pub enum ResponseEvent {
     Created,
@@ -215,6 +229,8 @@ pub enum ResponseEvent {
         summary_index: i64,
     },
     RateLimits(RateLimitSnapshot),
+    /// ACP-specific events (tool calls, updates, etc.)
+    Acp(AcpResponseEvent),
 }
 
 #[derive(Debug, Serialize)]

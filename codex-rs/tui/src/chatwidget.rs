@@ -774,6 +774,24 @@ impl ChatWidget {
         )));
     }
 
+    fn on_acp_event(&mut self, ev: codex_core::protocol::AcpEventMsg) {
+        use codex_core::protocol::AcpEventMsg;
+        match ev {
+            AcpEventMsg::ToolCall(tool_call) => {
+                // Display on initial tool call (Pending) when we have the title.
+                // Updates may not include the title, so we show it early.
+                if matches!(
+                    tool_call.status,
+                    codex_core::protocol::AcpToolCallStatus::Pending
+                ) && !tool_call.title.is_empty()
+                {
+                    self.flush_answer_stream_with_separator();
+                    self.add_to_history(history_cell::new_acp_tool_call(tool_call.title));
+                }
+            }
+        }
+    }
+
     fn on_get_history_entry_response(
         &mut self,
         event: codex_core::protocol::GetHistoryEntryResponseEvent,
@@ -1682,6 +1700,7 @@ impl ChatWidget {
                 self.on_entered_review_mode(review_request)
             }
             EventMsg::ExitedReviewMode(review) => self.on_exited_review_mode(review),
+            EventMsg::Acp(acp_event) => self.on_acp_event(acp_event),
             EventMsg::RawResponseItem(_)
             | EventMsg::ItemStarted(_)
             | EventMsg::ItemCompleted(_)
