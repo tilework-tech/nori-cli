@@ -3,6 +3,8 @@
 //! These tests verify that tool calls from ACP agents are properly displayed
 //! in the TUI history cells.
 
+use insta::assert_snapshot;
+use tui_pty_e2e::normalize_for_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
@@ -34,14 +36,13 @@ fn test_acp_tool_call_displayed() {
     session
         .wait_for_text("Tool call completed successfully", TIMEOUT)
         .expect("Tool call completion message not found");
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Verify that the tool call title is displayed in the TUI
     // The mock agent sends a tool call with title "Reading configuration file"
-    let screen = session.screen_contents();
-    assert!(
-        screen.contains("Reading configuration file"),
-        "Tool call title 'Reading configuration file' should be displayed in TUI.\nScreen contents:\n{}",
-        screen
+    assert_snapshot!(
+        "tool_call_title",
+        normalize_for_snapshot(session.screen_contents())
     );
 }
 
@@ -75,45 +76,8 @@ fn test_acp_tool_call_status_updates() {
     let screen = session.screen_contents();
 
     // At minimum, the tool call title should be visible
-    assert!(
-        screen.contains("Reading configuration file")
-            || screen.contains("read")
-            || screen.contains("config"),
-        "Tool call information should be displayed.\nScreen contents:\n{}",
-        screen
-    );
-}
-
-/// Test that multiple tool calls can be displayed
-///
-/// This test would verify that if an ACP agent sends multiple tool calls,
-/// they are all displayed appropriately.
-#[test]
-fn test_acp_multiple_tool_calls() {
-    // For now, we only test single tool call - this test documents
-    // that multiple tool calls should be supported in the future
-    let config = SessionConfig::new().with_tool_call();
-    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
-
-    session
-        .wait_for_text("?", TIMEOUT)
-        .expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    session.send_str("test").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    // Verify the tool call completed
-    session
-        .wait_for_text("Tool call completed successfully", TIMEOUT)
-        .expect("Tool call should complete");
-
-    let screen = session.screen_contents();
-    // The tool call should be visible
-    assert!(
-        screen.contains("Reading configuration file"),
-        "Tool call should be visible in screen.\nScreen contents:\n{}",
-        screen
+    assert_snapshot!(
+        "tool_call_completion",
+        normalize_for_snapshot(session.screen_contents())
     );
 }
