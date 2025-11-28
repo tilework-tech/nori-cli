@@ -33,7 +33,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.90
         with:
           targets: ${{ matrix.target }}
-          components: rustfmt, clippy
+          components: clippy
+
+      - name: Install nightly rustfmt
+        run: rustup toolchain install nightly --component rustfmt --profile minimal
 
       # sccache setup
       - name: Install sccache
