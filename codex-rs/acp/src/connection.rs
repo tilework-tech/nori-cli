@@ -80,7 +80,10 @@ impl AcpConnection {
 
         // Spawn a dedicated thread with a single-threaded tokio runtime
         let worker_thread = thread::spawn(move || {
-            #[expect(clippy::expect_used, reason = "Runtime creation in dedicated thread is infallible in practice")]
+            #[expect(
+                clippy::expect_used,
+                reason = "Runtime creation in dedicated thread is infallible in practice"
+            )]
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -407,8 +410,8 @@ impl acp::Client for ClientDelegate {
         arguments: acp::ReadTextFileRequest,
     ) -> acp::Result<acp::ReadTextFileResponse> {
         // Read file content
-        let content = std::fs::read_to_string(&arguments.path)
-            .map_err(acp::Error::into_internal_error)?;
+        let content =
+            std::fs::read_to_string(&arguments.path).map_err(acp::Error::into_internal_error)?;
         Ok(acp::ReadTextFileResponse {
             content,
             meta: None,
