@@ -1,0 +1,12 @@
+---
+source: tui/src/nori_banner.rs
+expression: terminal.backend().to_string()
+---
+ _   _  ___  ____  ___ 
+| \ | |/ _ \|  _ \|_ _|
+|  \| | | | | |_) || | 
+| |\  | |_| |  _ < | | 
+|_| \_|\___/|_| \_\___|
+
+profile: clifford
+🍙 powered by Nori 🍙
