@@ -1,18 +1,6 @@
 name: shell-tool-mcp CI
 
-on:
-  push:
-    paths:
-      - "shell-tool-mcp/**"
-      - ".github/workflows/shell-tool-mcp-ci.yml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-  pull_request:
-    paths:
-      - "shell-tool-mcp/**"
-      - ".github/workflows/shell-tool-mcp-ci.yml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
+on: workflow_dispatch
 
 env:
   NODE_VERSION: 22

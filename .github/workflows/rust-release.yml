@@ -6,10 +6,7 @@
 # ```
 
 name: rust-release
-on:
-  push:
-    tags:
-      - "rust-v*.*.*"
+on: workflow_dispatch
 
 concurrency:
   group: ${{ github.workflow }}
