@@ -1,0 +1,210 @@
+# Automatically sync stable upstream releases into dev branch.
+# Creates a sync branch and draft PR for each new stable release.
+#
+# Manual trigger: gh workflow run upstream-sync.yml
+# With specific tag: gh workflow run upstream-sync.yml -f tag=rust-v0.63.0
+# Dry run: gh workflow run upstream-sync.yml -f dry_run=true
+
+name: upstream-sync
+
+on:
+  schedule:
+    # Daily at 9 AM UTC (reasonable time for review in US timezones)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Specific tag to sync (optional, defaults to latest stable)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run mode (log actions without creating branches/PRs)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  UPSTREAM_REMOTE: https://github.com/openai/codex.git
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch tags
+        run: |
+          git remote add upstream "$UPSTREAM_REMOTE" || git remote set-url upstream "$UPSTREAM_REMOTE"
+          git fetch upstream --tags --force
+
+      - name: Determine target tag
+        id: tag
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            target_tag="${{ inputs.tag }}"
+            echo "Using manually specified tag: $target_tag"
+          else
+            # Find latest stable tag (X.Y.Z only, no alpha/beta/rc)
+            # Pattern: rust-v followed by semver without prerelease suffix
+            target_tag=$(git tag -l 'rust-v*' \
+              | grep -E '^rust-v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -V \
+              | tail -1)
+            echo "Detected latest stable tag: $target_tag"
+          fi
+
+          if [[ -z "$target_tag" ]]; then
+            echo "::error::No stable upstream tag found"
+            exit 1
+          fi
+
+          # Validate tag exists
+          if ! git rev-parse "$target_tag" >/dev/null 2>&1; then
+            echo "::error::Tag $target_tag does not exist"
+            exit 1
+          fi
+
+          # Extract version for branch naming (rust-v0.63.0 -> v0.63.0)
+          version="${target_tag#rust-}"
+          sync_branch="sync/upstream-${version}"
+
+          echo "target_tag=$target_tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sync_branch=$sync_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Check if sync branch already exists
+        id: check
+        run: |
+          set -euo pipefail
+
+          sync_branch="${{ steps.tag.outputs.sync_branch }}"
+
+          # Check if branch exists on origin
+          if git ls-remote --heads origin "$sync_branch" | grep -q "$sync_branch"; then
+            echo "::notice::Sync branch $sync_branch already exists, skipping"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Sync branch $sync_branch does not exist, will create"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update fork/upstream-sync tracking branch
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+
+          target_tag="${{ steps.tag.outputs.target_tag }}"
+          dry_run="${{ inputs.dry_run }}"
+
+          echo "Updating fork/upstream-sync to point to $target_tag"
+
+          if [[ "$dry_run" == "true" ]]; then
+            echo "::notice::DRY RUN: Would update fork/upstream-sync to $target_tag"
+          else
+            # Create or update the tracking branch
+            git branch -f fork/upstream-sync "$target_tag"
+            git push origin fork/upstream-sync --force
+          fi
+
+      - name: Create sync branch
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+
+          target_tag="${{ steps.tag.outputs.target_tag }}"
+          sync_branch="${{ steps.tag.outputs.sync_branch }}"
+          dry_run="${{ inputs.dry_run }}"
+
+          echo "Creating sync branch $sync_branch from $target_tag"
+
+          if [[ "$dry_run" == "true" ]]; then
+            echo "::notice::DRY RUN: Would create branch $sync_branch from $target_tag"
+          else
+            git checkout -b "$sync_branch" "$target_tag"
+            git push origin "$sync_branch"
+          fi
+
+      - name: Create draft PR
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TAG: ${{ steps.tag.outputs.target_tag }}
+          SYNC_BRANCH: ${{ steps.tag.outputs.sync_branch }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          # Count commits between dev and the tag for context
+          commit_count=$(git rev-list --count origin/dev.."$TARGET_TAG" 2>/dev/null || echo "unknown")
+
+          pr_title="Sync upstream $TARGET_TAG"
+
+          # Build PR body using heredoc
+          pr_body=$(cat <<EOF
+          ## Upstream Sync
+
+          This PR syncs changes from upstream release \`$TARGET_TAG\`.
+
+          ### Summary
+
+          - **Upstream tag:** \`$TARGET_TAG\`
+          - **Commits to merge:** ~$commit_count
+          - **Release notes:** [GitHub Release](https://github.com/openai/codex/releases/tag/$TARGET_TAG)
+
+          ### Merge Instructions
+
+          1. Review the changes for conflicts with our ACP fork work
+          2. Resolve any merge conflicts:
+             \`\`\`bash
+             git checkout dev
+             git merge $SYNC_BRANCH --no-ff
+             # Resolve conflicts if any
+             \`\`\`
+          3. Run tests: \`cd codex-rs && cargo test\`
+          4. Update snapshot tests if needed: \`cargo insta review\`
+          5. Mark as ready for review when satisfied
+
+          ### After Merge
+
+          - Delete the \`$SYNC_BRANCH\` branch
+          - Consider tagging a new nori release if significant changes
+          EOF
+          )
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "::notice::DRY RUN: Would create PR with title: $pr_title"
+            echo "PR body would be:"
+            echo "$pr_body"
+          else
+            gh pr create \
+              --base dev \
+              --head "$SYNC_BRANCH" \
+              --title "$pr_title" \
+              --body "$pr_body" \
+              --draft
+
+            echo "::notice::Created draft PR for $TARGET_TAG"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Upstream Sync Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Target tag:** ${{ steps.tag.outputs.target_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Sync branch:** ${{ steps.tag.outputs.sync_branch }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch existed:** ${{ steps.check.outputs.exists }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Dry run:** ${{ inputs.dry_run || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
