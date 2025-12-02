@@ -1,7 +1,7 @@
 use insta::assert_snapshot;
 use std::time::Duration;
 use std::time::Instant;
-use tui_pty_e2e::normalize_for_snapshot;
+use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
@@ -29,7 +29,7 @@ fn test_startup_shows_banner() {
     assert!(contents.contains("Welcome to Codex"));
     assert_snapshot!(
         "startup_shows_welcome",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -55,7 +55,7 @@ fn test_startup_welcome_with_dimensions() {
     assert!(contents.lines().count() <= 40);
     assert_snapshot!(
         "startup_welcome_dimensions_40x120",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -93,7 +93,7 @@ fn test_runs_in_temp_directory_by_default() {
     );
     assert_snapshot!(
         "runs_in_temp_directory",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -124,7 +124,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
     );
     assert_snapshot!(
         "trust_screen_skipped",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 

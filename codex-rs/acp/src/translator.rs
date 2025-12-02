@@ -180,9 +180,10 @@ fn extract_command_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Vec<String
 
     // Add stringified raw_input if present
     if let Some(input) = &tool_call.fields.raw_input
-        && let Ok(args_str) = serde_json::to_string(input) {
-            cmd.push(args_str);
-        }
+        && let Ok(args_str) = serde_json::to_string(input)
+    {
+        cmd.push(args_str);
+    }
 
     cmd
 }
@@ -190,11 +191,7 @@ fn extract_command_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Vec<String
 /// Extract a human-readable reason from the tool call.
 fn extract_reason_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Option<String> {
     // Use the title as a basic description, or fall back to ID
-    let name = tool_call
-        .fields
-        .title
-        .as_deref()
-        .unwrap_or("unknown tool");
+    let name = tool_call.fields.title.as_deref().unwrap_or("unknown tool");
     Some(format!("ACP agent requests permission to use: {name}"))
 }
 

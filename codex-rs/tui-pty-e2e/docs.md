@@ -47,7 +47,9 @@ impl Drop for TuiSession {
 
 The crate exports helper functions for consistent test patterns:
 - `TIMEOUT: Duration` - Standard 5-second timeout constant for use across all tests
+- `TIMEOUT_INPUT: Duration` - 300ms timeout for input stabilization before snapshots
 - `normalize_for_snapshot(contents: String) -> String` - Normalizes dynamic content for snapshot testing (see below)
+- `normalize_for_input_snapshot(contents: String) -> String` - Extends normalization by stripping the startup header block (see below)
 
 **Automatic Test Isolation:**
 
@@ -142,6 +144,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/prompt_flow.rs` | Prompt submission and agent responses |
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
+| `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup and response flow - validates TUI works with ACP wire API and mock agent; includes TDD marker test for approval bridging (`#[ignore]`) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -151,6 +154,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/startup__*.snap` | Various startup screen scenarios (welcome, dimensions, temp directory, trust screen) |
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/input_handling__*.snap` | Input handling scenarios (ctrl-c clear, typing/backspace, model changed) |
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/streaming__submit_input.snap` | Prompt submission and streaming response |
+| `@/codex-rs/tui-pty-e2e/tests/snapshots/acp_mode__*.snap` | ACP mode startup screen |
 
 **Snapshot Testing with Insta:**
 
@@ -163,24 +167,27 @@ Snapshots stored in `@/codex-rs/tui-pty-e2e/tests/snapshots/*.snap` for regressi
 
 **Snapshot Normalization:**
 
-The `normalize_for_snapshot()` helper function exported from `@/codex-rs/tui-pty-e2e/src/lib.rs` ensures stable snapshots across test runs by replacing dynamic content:
+Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable snapshots:
 
-Normalization rules:
+| Function | Use Case |
+|----------|----------|
+| `normalize_for_snapshot()` | General snapshots that should include the startup header |
+| `normalize_for_input_snapshot()` | Input-focused tests where header visibility varies with scroll timing |
+
+**`normalize_for_snapshot()`** - Base normalization rules:
 1. Temp directory paths (`/tmp/.tmpXXXXXX`) → `[TMP_DIR]` placeholder
 2. Random default prompts on lines starting with `› ` → `[DEFAULT_PROMPT]` placeholder
    - Detects specific default prompt patterns: "Find and fix a bug", "Explain this codebase", "Write tests for", etc.
    - Preserves user-entered prompts and UI text like "? for shortcuts"
 
-Implementation in `@/codex-rs/tui-pty-e2e/src/lib.rs:456-488`:
-```rust
-pub fn normalize_for_snapshot(contents: String) -> String {
-    // Replace /tmp/.tmpXXXXXX with [TMP_DIR]
-    // Replace known default prompts with [DEFAULT_PROMPT]
-    // Preserves UI structure and user input
-}
-```
+**`normalize_for_input_snapshot()`** - Extends base normalization by stripping the startup header block:
+- Detects the header block (lines containing `╭──` through the `/review` and `/model` command list)
+- Removes the entire header section to prevent flaky snapshots
+- Used by input handling tests in `@/codex-rs/tui-pty-e2e/tests/input_handling.rs`
 
-This normalization allows snapshot assertions to focus on UI structure and static content rather than ephemeral runtime values. All tests import and use this function consistently: `use tui_pty_e2e::{normalize_for_snapshot, ...};`
+**Why Two Functions:** Terminal render timing can cause the startup header block to scroll partially in or out of the viewport before a snapshot is taken. For tests focused on input handling, the header presence is irrelevant - only the input area matters. By stripping the header, `normalize_for_input_snapshot()` produces deterministic snapshots regardless of scroll state.
+
+This normalization allows snapshot assertions to focus on UI structure and static content rather than ephemeral runtime values.
 
 **PTY Implementation Details:**
 

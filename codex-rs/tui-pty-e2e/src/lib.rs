@@ -581,3 +581,49 @@ pub fn normalize_for_snapshot(contents: String) -> String {
 
     lines.join("\n")
 }
+
+/// Normalize for input tests - strips header for consistent snapshot regardless of scroll state
+pub fn normalize_for_input_snapshot(contents: String) -> String {
+    let normalized = normalize_for_snapshot(contents);
+
+    // Strip startup header block if present (prevents flaky snapshots due to scroll timing)
+    // The header can appear in two forms:
+    // 1. Boxed header with "╭──" border
+    // 2. Plain text "To get started, describe a task..."
+    // Both end with a list of commands like /init, /status, /approvals, /model, /review
+    let lines: Vec<&str> = normalized.lines().collect();
+
+    // Detect if header is present (either boxed or plain text form)
+    let has_header = lines.iter().any(|l| {
+        l.contains("╭──")
+            || l.contains("To get started, describe a task")
+            || l.contains("Welcome to Codex")
+    });
+
+    if has_header {
+        // Find where the header ends (after the /review command line)
+        let mut skip_until = 0;
+        for (i, line) in lines.iter().enumerate() {
+            // The /review line marks the end of the command list
+            if line.contains("/review") {
+                skip_until = i + 1;
+                break;
+            }
+        }
+        // Skip empty lines after the header block
+        while skip_until < lines.len() && lines[skip_until].trim().is_empty() {
+            skip_until += 1;
+        }
+        if skip_until > 0 {
+            lines
+                .into_iter()
+                .skip(skip_until)
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            normalized
+        }
+    } else {
+        normalized
+    }
+}

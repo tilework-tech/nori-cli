@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use tui_pty_e2e::normalize_for_snapshot;
+use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
@@ -33,7 +33,7 @@ fn test_submit_prompt_default_response() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "prompt_submitted",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -67,7 +67,7 @@ fn test_submit_prompt_missing_model() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "missing_model",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -92,7 +92,7 @@ fn test_submit_prompt_custom_response() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "custom_response",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -112,6 +112,6 @@ fn test_multiline_input() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "multiline_input",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }

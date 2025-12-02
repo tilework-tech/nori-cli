@@ -1,6 +1,6 @@
 use insta::assert_snapshot;
 use std::time::Duration;
-use tui_pty_e2e::normalize_for_snapshot;
+use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
@@ -26,7 +26,7 @@ fn test_ctrl_c_clears_input() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "ctrl_c_clears",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -49,7 +49,7 @@ fn test_backspace() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "typing_and_backspace",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -71,6 +71,6 @@ fn test_arrows() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "model_changed",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }

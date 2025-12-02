@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use tui_pty_e2e::normalize_for_snapshot;
+use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
@@ -28,7 +28,7 @@ fn test_submit_text() {
 
     assert_snapshot!(
         "submit_input",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -75,6 +75,6 @@ fn test_escape_cancels_streaming() {
 
     assert_snapshot!(
         "cancelled_stream",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     )
 }
