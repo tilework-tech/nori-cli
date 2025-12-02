@@ -9,6 +9,7 @@ pub mod tracing_setup;
 pub mod translator;
 
 pub use connection::AcpConnection;
+pub use connection::ApprovalRequest;
 pub use registry::AcpAgentConfig;
 pub use registry::AcpProviderInfo;
 pub use registry::get_agent_config;

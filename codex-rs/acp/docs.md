@@ -92,9 +92,28 @@ The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in
 
 - Implements `acp::Client` trait to handle agent requests
 - Routes session updates to registered `mpsc::Sender<SessionUpdate>` channels
-- Auto-approves permission requests (TODO: bridge to codex approval system)
+- Bridges permission requests to Codex approval system via `ApprovalRequest` channel
 - Implements file read (synchronous `std::fs::read_to_string`)
 - Terminal operations return `method_not_found` (not yet supported)
+
+**Approval Bridging:**
+
+The ACP module bridges permission requests to Codex's approval UI:
+
+```
+┌─────────────────────────┐   ApprovalRequest     ┌─────────────────────────┐
+│   ACP Worker Thread     │──────────────────────►│   Main Thread (TUI)     │
+│                         │                       │                         │
+│   ClientDelegate        │                       │   - Display approval UI │
+│   - request_permission()│◄──────────────────────│   - Get user decision   │
+│                         │  ReviewDecision       │   - Send via oneshot    │
+└─────────────────────────┘  (via oneshot)        └─────────────────────────┘
+```
+
+- `ApprovalRequest` bundles the translated `ExecApprovalRequestEvent`, original ACP options, and response channel
+- `AcpConnection::take_approval_receiver()` exposes the receiver for TUI consumption
+- Falls back to auto-approve if approval channel is closed (no UI listening)
+- Falls back to deny if response channel is dropped (UI didn't respond)
 
 **Event Translation (`translator.rs`):**
 
@@ -105,12 +124,23 @@ Bridges between ACP types and codex-protocol types:
 | `response_items_to_content_blocks()` | Converts codex `ResponseItem` to ACP `ContentBlock` for prompts |
 | `text_to_content_block()` | Simple text-to-ContentBlock conversion |
 | `translate_session_update()` | Translates ACP `SessionUpdate` to `TranslatedEvent` enum |
+| `permission_request_to_approval_event()` | Converts ACP `RequestPermissionRequest` to Codex `ExecApprovalRequestEvent` |
+| `review_decision_to_permission_outcome()` | Converts Codex `ReviewDecision` back to ACP `RequestPermissionOutcome` |
 
 `TranslatedEvent` variants:
 - `TextDelta(String)` - Text content from `AgentMessageChunk` or `AgentThoughtChunk`
 - `Completed(StopReason)` - Session completion signal
 
 Non-text content (images, audio, resources) and tool calls are currently dropped with empty vec.
+
+**Approval Translation Details:**
+
+The approval translation maps between Codex's binary approve/deny model and ACP's option-based model:
+
+- `Approved`/`ApprovedForSession` → Finds option with `AllowOnce` or `AllowAlways` kind
+- `Denied`/`Abort` → Finds option with `RejectOnce` or `RejectAlways` kind
+- Falls back to text matching ("allow", "approve", "yes" vs "deny", "reject", "no") if kind-based matching fails
+- Last resort: first option for approve, last option for deny
 
 ### Things to Know
 
@@ -138,5 +168,24 @@ Client advertises these capabilities to agents:
 - `fs.read_text_file: true`
 - `fs.write_text_file: true`
 - `terminal: false`
+
+### Future Work
+
+The following features are marked with TODO comments in the codebase:
+
+**Resume/Fork Integration (connection.rs:343-350):**
+- Accept optional session_id parameter to resume existing sessions
+- Load persisted history from Codex rollout format
+- Send history to agent via session initialization
+
+**Codex-format History Persistence (connection.rs:385-394):**
+- Collect all SessionUpdates during prompts
+- Convert to Codex ResponseItem format using translator functions
+- Write to rollout storage for session resume and history browsing
+
+**History Export for Handoff (connection.rs:220-234):**
+- Export session history in Codex format
+- Enable switching from ACP mode to HTTP mode mid-session
+- Support replaying history through different backends
 
 Created and maintained by Nori.

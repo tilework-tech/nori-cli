@@ -17,6 +17,8 @@ use std::thread;
 use agent_client_protocol as acp;
 use anyhow::Context;
 use anyhow::Result;
+use codex_protocol::approvals::ExecApprovalRequestEvent;
+use codex_protocol::protocol::ReviewDecision;
 use futures::AsyncBufReadExt;
 use futures::io::BufReader;
 use tokio::process::Child;
@@ -29,6 +31,22 @@ use tracing::debug;
 use tracing::warn;
 
 use crate::registry::AcpAgentConfig;
+use crate::translator;
+
+/// An approval request sent from the ACP layer to the UI layer.
+///
+/// When an ACP agent requests permission to perform an operation,
+/// this struct is sent to the UI layer which should display the request
+/// to the user and return their decision via the response channel.
+#[derive(Debug)]
+pub struct ApprovalRequest {
+    /// The translated Codex approval event
+    pub event: ExecApprovalRequestEvent,
+    /// The original ACP permission options for translating the response
+    pub options: Vec<acp::PermissionOption>,
+    /// Channel to send the user's decision back
+    pub response_tx: oneshot::Sender<ReviewDecision>,
+}
 
 /// Minimum supported ACP protocol version
 const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::V1;
@@ -59,6 +77,9 @@ enum AcpCommand {
 pub struct AcpConnection {
     command_tx: mpsc::Sender<AcpCommand>,
     agent_capabilities: acp::AgentCapabilities,
+    /// Channel to receive approval requests from the agent.
+    /// The UI layer should listen on this channel and respond via the oneshot sender.
+    approval_rx: mpsc::Receiver<ApprovalRequest>,
     _worker_thread: thread::JoinHandle<()>,
 }
 
@@ -82,6 +103,9 @@ impl AcpConnection {
         let (init_tx, init_rx) = oneshot::channel();
         let (command_tx, command_rx) = mpsc::channel::<AcpCommand>(32);
 
+        // Create approval channel - sender goes to worker, receiver stays here
+        let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
+
         // Spawn a dedicated thread with a single-threaded tokio runtime
         let worker_thread = thread::spawn(move || {
             #[expect(
@@ -97,7 +121,7 @@ impl AcpConnection {
                 let local = tokio::task::LocalSet::new();
                 local
                     .run_until(async move {
-                        match spawn_connection_internal(&config, &cwd).await {
+                        match spawn_connection_internal(&config, &cwd, approval_tx).await {
                             Ok((inner, capabilities)) => {
                                 let _ = init_tx.send(Ok(capabilities));
                                 run_command_loop(inner, command_rx).await;
@@ -119,6 +143,7 @@ impl AcpConnection {
         Ok(Self {
             command_tx,
             agent_capabilities: capabilities,
+            approval_rx,
             _worker_thread: worker_thread,
         })
     }
@@ -176,6 +201,37 @@ impl AcpConnection {
     pub fn capabilities(&self) -> &acp::AgentCapabilities {
         &self.agent_capabilities
     }
+
+    /// Take ownership of the approval request receiver.
+    ///
+    /// This should be called once by the UI layer to receive approval requests.
+    /// When an ACP agent requests permission, an `ApprovalRequest` will be sent
+    /// through this channel. The UI should:
+    /// 1. Display the request to the user (using `ApprovalRequest::event`)
+    /// 2. Get the user's decision
+    /// 3. Send the decision back via `ApprovalRequest::response_tx`
+    ///
+    /// # Panics
+    /// This method can only be called once. Calling it again will panic.
+    pub fn take_approval_receiver(&mut self) -> mpsc::Receiver<ApprovalRequest> {
+        std::mem::replace(&mut self.approval_rx, mpsc::channel(1).1)
+    }
+
+    // TODO: [Future] History Export for Handoff
+    // Add a method to export session history in Codex format for handoff to HTTP mode:
+    //
+    // ```rust
+    // pub async fn export_history(&self, session_id: &SessionId) -> Result<Vec<ResponseItem>> {
+    //     // 1. Retrieve accumulated history from ACP agent (if supported)
+    //     // 2. Convert ACP format to Codex ResponseItem format
+    //     // 3. Return for use in HTTP mode continuation
+    // }
+    // ```
+    //
+    // This would enable:
+    // - Switching from ACP mode to HTTP mode mid-session
+    // - Continuing a conversation started with one backend using another
+    // - Debugging by replaying history through a different backend
 }
 
 /// Internal connection state that lives on the worker thread.
@@ -194,6 +250,7 @@ struct AcpConnectionInner {
 async fn spawn_connection_internal(
     config: &AcpAgentConfig,
     cwd: &Path,
+    approval_tx: mpsc::Sender<ApprovalRequest>,
 ) -> Result<(AcpConnectionInner, acp::AgentCapabilities)> {
     debug!(
         "Spawning ACP agent: {} {:?} in {}",
@@ -231,7 +288,7 @@ async fn spawn_connection_internal(
     });
 
     // Create client delegate for handling agent requests
-    let client_delegate = Rc::new(ClientDelegate::new());
+    let client_delegate = Rc::new(ClientDelegate::new(cwd.to_path_buf(), approval_tx));
 
     // Establish JSON-RPC connection
     let (connection, io_task) = acp::ClientSideConnection::new(
@@ -300,6 +357,14 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
             AcpCommand::CreateSession { cwd, response_tx } => {
+                // TODO: [Future] Resume/Fork Integration
+                // When creating a session, check if there's an existing session to resume.
+                // This would require:
+                // 1. Accepting an optional session_id parameter to resume
+                // 2. Loading persisted history from Codex rollout format
+                // 3. Sending history to the agent via the session initialization
+                // See: codex-core/src/rollout.rs for the persistence format
+
                 let result = inner
                     .connection
                     .new_session(acp::NewSessionRequest {
@@ -333,6 +398,17 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
                     .map(|r| r.stop_reason)
                     .context("ACP prompt failed");
 
+                // TODO: [Future] Codex-format History Persistence
+                // After a successful prompt, persist the conversation history in Codex's rollout
+                // format. This would enable:
+                // 1. Session resume after restart
+                // 2. History browsing in the TUI
+                // 3. Conversation forking
+                // Implementation would involve:
+                // - Collecting all SessionUpdates received during the prompt
+                // - Converting them to Codex ResponseItem format using translator functions
+                // - Writing to rollout storage (see codex-core/src/rollout.rs)
+
                 inner.client_delegate.unregister_session(&session_id);
                 let _ = response_tx.send(result);
             }
@@ -363,12 +439,18 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
 /// - Terminal operations (stubbed)
 pub struct ClientDelegate {
     sessions: RefCell<HashMap<acp::SessionId, mpsc::Sender<acp::SessionUpdate>>>,
+    /// Working directory for approval events
+    cwd: PathBuf,
+    /// Channel to send approval requests to the UI layer
+    approval_tx: mpsc::Sender<ApprovalRequest>,
 }
 
 impl ClientDelegate {
-    fn new() -> Self {
+    fn new(cwd: PathBuf, approval_tx: mpsc::Sender<ApprovalRequest>) -> Self {
         Self {
             sessions: RefCell::new(HashMap::new()),
+            cwd,
+            approval_tx,
         }
     }
 
@@ -387,18 +469,67 @@ impl acp::Client for ClientDelegate {
         &self,
         arguments: acp::RequestPermissionRequest,
     ) -> acp::Result<acp::RequestPermissionResponse> {
-        // For now, auto-approve all requests by selecting the first option
-        // TODO: Bridge to codex approval system
-        let option_id = arguments
-            .options
-            .first()
-            .map(|opt| opt.id.clone())
-            .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()));
+        // Translate ACP permission request to Codex approval event
+        let event = translator::permission_request_to_approval_event(&arguments, &self.cwd);
 
-        Ok(acp::RequestPermissionResponse {
-            outcome: acp::RequestPermissionOutcome::Selected { option_id },
-            meta: None,
-        })
+        // Create a response channel for the UI to send the decision
+        let (response_tx, response_rx) = oneshot::channel();
+
+        // Send the approval request to the UI layer
+        let approval_request = ApprovalRequest {
+            event,
+            options: arguments.options.clone(),
+            response_tx,
+        };
+
+        if self.approval_tx.send(approval_request).await.is_err() {
+            // If the receiver is dropped (UI not listening), fall back to auto-approve
+            warn!("Approval channel closed, auto-approving permission request");
+            let option_id = arguments
+                .options
+                .first()
+                .map(|opt| opt.id.clone())
+                .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()));
+
+            return Ok(acp::RequestPermissionResponse {
+                outcome: acp::RequestPermissionOutcome::Selected { option_id },
+                meta: None,
+            });
+        }
+
+        // Wait for the UI's decision
+        match response_rx.await {
+            Ok(decision) => {
+                // Translate the Codex ReviewDecision back to ACP outcome
+                let outcome =
+                    translator::review_decision_to_permission_outcome(decision, &arguments.options);
+                Ok(acp::RequestPermissionResponse {
+                    outcome,
+                    meta: None,
+                })
+            }
+            Err(_) => {
+                // Response channel was dropped (UI didn't respond), fall back to deny
+                warn!("Approval response channel dropped, denying permission request");
+                let option_id = arguments
+                    .options
+                    .iter()
+                    .find(|opt| {
+                        matches!(
+                            opt.kind,
+                            acp::PermissionOptionKind::RejectOnce
+                                | acp::PermissionOptionKind::RejectAlways
+                        )
+                    })
+                    .map(|opt| opt.id.clone())
+                    .unwrap_or_else(|| acp::PermissionOptionId::from("deny".to_string()));
+
+                Ok(acp::RequestPermissionResponse {
+                    outcome: acp::RequestPermissionOutcome::Selected { option_id },
+                    meta: None,
+                })
+            }
+        }
     }
 
     async fn write_text_file(

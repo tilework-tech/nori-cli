@@ -142,9 +142,223 @@ pub fn text_to_message_response_item(text: &str) -> ResponseItem {
     }
 }
 
+/// Translate an ACP permission request to a Codex ExecApprovalRequestEvent.
+///
+/// This bridges ACP's permission model (multiple options) to Codex's approval model
+/// (approve/deny). The translation extracts the tool call details and presents them
+/// as a command for approval.
+pub fn permission_request_to_approval_event(
+    request: &acp::RequestPermissionRequest,
+    cwd: &std::path::Path,
+) -> codex_protocol::approvals::ExecApprovalRequestEvent {
+    // Extract command details from the tool call
+    let command = extract_command_from_tool_call(&request.tool_call);
+    let reason = extract_reason_from_tool_call(&request.tool_call);
+
+    codex_protocol::approvals::ExecApprovalRequestEvent {
+        call_id: request.tool_call.id.to_string(),
+        turn_id: String::new(), // ACP doesn't have turn IDs
+        command,
+        cwd: cwd.to_path_buf(),
+        reason,
+        risk: None, // ACP doesn't provide risk assessment
+        parsed_cmd: vec![],
+    }
+}
+
+/// Extract a command representation from an ACP ToolCallUpdate.
+fn extract_command_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Vec<String> {
+    // The tool call contains the tool title and raw_input in fields
+    let mut cmd = Vec::new();
+
+    // Use title as the command name if available
+    if let Some(title) = &tool_call.fields.title {
+        cmd.push(title.clone());
+    } else {
+        cmd.push(tool_call.id.to_string());
+    }
+
+    // Add stringified raw_input if present
+    if let Some(input) = &tool_call.fields.raw_input
+        && let Ok(args_str) = serde_json::to_string(input) {
+            cmd.push(args_str);
+        }
+
+    cmd
+}
+
+/// Extract a human-readable reason from the tool call.
+fn extract_reason_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Option<String> {
+    // Use the title as a basic description, or fall back to ID
+    let name = tool_call
+        .fields
+        .title
+        .as_deref()
+        .unwrap_or("unknown tool");
+    Some(format!("ACP agent requests permission to use: {name}"))
+}
+
+/// Translate a Codex ReviewDecision to an ACP RequestPermissionOutcome.
+///
+/// This maps the binary approve/deny decision to ACP's option-based model.
+/// Uses the PermissionOptionKind to find the appropriate option.
+pub fn review_decision_to_permission_outcome(
+    decision: codex_protocol::protocol::ReviewDecision,
+    options: &[acp::PermissionOption],
+) -> acp::RequestPermissionOutcome {
+    use codex_protocol::protocol::ReviewDecision;
+
+    // Find the appropriate option based on the decision
+    let option_id = match decision {
+        ReviewDecision::Approved | ReviewDecision::ApprovedForSession => {
+            // Look for an "Allow" kind option (AllowOnce or AllowAlways)
+            options
+                .iter()
+                .find(|opt| {
+                    matches!(
+                        opt.kind,
+                        acp::PermissionOptionKind::AllowOnce
+                            | acp::PermissionOptionKind::AllowAlways
+                    )
+                })
+                .or_else(|| {
+                    options.iter().find(|opt| {
+                        let name_lower = opt.name.to_lowercase();
+                        name_lower.contains("allow")
+                            || name_lower.contains("approve")
+                            || name_lower.contains("yes")
+                    })
+                })
+                .map(|opt| opt.id.clone())
+                .unwrap_or_else(|| {
+                    // Default to first option if no clear "allow" option
+                    options
+                        .first()
+                        .map(|opt| opt.id.clone())
+                        .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()))
+                })
+        }
+        ReviewDecision::Denied | ReviewDecision::Abort => {
+            // Look for a "Reject" kind option (RejectOnce or RejectAlways)
+            options
+                .iter()
+                .find(|opt| {
+                    matches!(
+                        opt.kind,
+                        acp::PermissionOptionKind::RejectOnce
+                            | acp::PermissionOptionKind::RejectAlways
+                    )
+                })
+                .or_else(|| {
+                    options.iter().find(|opt| {
+                        let name_lower = opt.name.to_lowercase();
+                        name_lower.contains("deny")
+                            || name_lower.contains("reject")
+                            || name_lower.contains("no")
+                    })
+                })
+                .map(|opt| opt.id.clone())
+                .unwrap_or_else(|| {
+                    // Default to last option if no clear "reject" option
+                    options
+                        .last()
+                        .map(|opt| opt.id.clone())
+                        .unwrap_or_else(|| acp::PermissionOptionId::from("deny".to_string()))
+                })
+        }
+    };
+
+    acp::RequestPermissionOutcome::Selected { option_id }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_protocol::protocol::ReviewDecision;
+
+    #[test]
+    fn test_permission_request_to_approval_event() {
+        let tool_call = acp::ToolCallUpdate {
+            id: acp::ToolCallId::from("call-123".to_string()),
+            fields: acp::ToolCallUpdateFields {
+                kind: None,
+                status: Some(acp::ToolCallStatus::InProgress),
+                title: Some("shell".to_string()),
+                content: None,
+                locations: None,
+                raw_input: Some(serde_json::json!({"command": "ls -la"})),
+                raw_output: None,
+            },
+            meta: None,
+        };
+
+        let request = acp::RequestPermissionRequest {
+            session_id: acp::SessionId::from("session-1".to_string()),
+            tool_call,
+            options: vec![],
+            meta: None,
+        };
+
+        let cwd = std::path::Path::new("/home/user/project");
+        let event = permission_request_to_approval_event(&request, cwd);
+
+        assert_eq!(event.call_id, "call-123");
+        assert_eq!(event.cwd, cwd.to_path_buf());
+        assert!(event.command.contains(&"shell".to_string()));
+        assert!(event.reason.is_some());
+    }
+
+    #[test]
+    fn test_review_decision_to_permission_outcome_approved() {
+        let options = vec![
+            acp::PermissionOption {
+                id: acp::PermissionOptionId::from("allow".to_string()),
+                name: "Allow".to_string(),
+                kind: acp::PermissionOptionKind::AllowOnce,
+                meta: None,
+            },
+            acp::PermissionOption {
+                id: acp::PermissionOptionId::from("deny".to_string()),
+                name: "Deny".to_string(),
+                kind: acp::PermissionOptionKind::RejectOnce,
+                meta: None,
+            },
+        ];
+
+        let outcome = review_decision_to_permission_outcome(ReviewDecision::Approved, &options);
+        match outcome {
+            acp::RequestPermissionOutcome::Selected { option_id } => {
+                assert_eq!(option_id.to_string(), "allow");
+            }
+            _ => panic!("Expected Selected outcome"),
+        }
+    }
+
+    #[test]
+    fn test_review_decision_to_permission_outcome_denied() {
+        let options = vec![
+            acp::PermissionOption {
+                id: acp::PermissionOptionId::from("allow".to_string()),
+                name: "Allow".to_string(),
+                kind: acp::PermissionOptionKind::AllowOnce,
+                meta: None,
+            },
+            acp::PermissionOption {
+                id: acp::PermissionOptionId::from("deny".to_string()),
+                name: "Deny".to_string(),
+                kind: acp::PermissionOptionKind::RejectOnce,
+                meta: None,
+            },
+        ];
+
+        let outcome = review_decision_to_permission_outcome(ReviewDecision::Denied, &options);
+        match outcome {
+            acp::RequestPermissionOutcome::Selected { option_id } => {
+                assert_eq!(option_id.to_string(), "deny");
+            }
+            _ => panic!("Expected Selected outcome"),
+        }
+    }
 
     #[test]
     fn test_text_to_content_block() {
