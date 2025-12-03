@@ -387,16 +387,51 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
                     .client_delegate
                     .register_session(session_id.clone(), update_tx);
 
-                let result = inner
-                    .connection
-                    .prompt(acp::PromptRequest {
-                        session_id: session_id.clone(),
-                        prompt,
-                        meta: None,
-                    })
-                    .await
-                    .map(|r| r.stop_reason)
-                    .context("ACP prompt failed");
+                // Use tokio::select! to allow Cancel commands to be processed while prompting
+                let prompt_future = inner.connection.prompt(acp::PromptRequest {
+                    session_id: session_id.clone(),
+                    prompt,
+                    meta: None,
+                });
+                tokio::pin!(prompt_future);
+
+                let result = loop {
+                    tokio::select! {
+                        prompt_result = &mut prompt_future => {
+                            // Prompt completed normally
+                            break prompt_result
+                                .map(|r| r.stop_reason)
+                                .context("ACP prompt failed");
+                        }
+                        cmd = command_rx.recv() => {
+                            // Received another command while prompting
+                            match cmd {
+                                Some(AcpCommand::Cancel { session_id: cancel_session_id, response_tx: cancel_response_tx }) => {
+                                    // Process the cancel command immediately
+                                    let cancel_result = inner
+                                        .connection
+                                        .cancel(acp::CancelNotification {
+                                            session_id: cancel_session_id,
+                                            meta: None,
+                                        })
+                                        .await
+                                        .context("Failed to cancel ACP session");
+                                    let _ = cancel_response_tx.send(cancel_result);
+                                    // Continue waiting for the prompt to complete (it should stop soon)
+                                }
+                                Some(other_cmd) => {
+                                    // For other commands, we can't process them while prompting
+                                    // This is a limitation - CreateSession during prompt will be dropped
+                                    tracing::warn!("Dropping command received during prompt: {:?}", std::mem::discriminant(&other_cmd));
+                                }
+                                None => {
+                                    // Channel closed, abort
+                                    break Err(anyhow::anyhow!("Command channel closed during prompt"));
+                                }
+                            }
+                        }
+                    }
+                };
 
                 // TODO: [Future] Codex-format History Persistence
                 // After a successful prompt, persist the conversation history in Codex's rollout

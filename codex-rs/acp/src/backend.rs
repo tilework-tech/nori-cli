@@ -19,6 +19,8 @@ use codex_protocol::protocol::Op;
 use codex_protocol::protocol::ReviewDecision;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionConfiguredEvent;
+use codex_protocol::protocol::TurnAbortReason;
+use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::user_input::UserInput;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -154,6 +156,16 @@ impl AcpBackend {
             }
             Op::Interrupt => {
                 self.connection.cancel(&self.session_id).await?;
+                // Send TurnAborted event to notify the TUI that the turn was interrupted
+                let _ = self
+                    .event_tx
+                    .send(Event {
+                        id: id.clone(),
+                        msg: EventMsg::TurnAborted(TurnAbortedEvent {
+                            reason: TurnAbortReason::Interrupted,
+                        }),
+                    })
+                    .await;
             }
             Op::ExecApproval {
                 id: call_id,
