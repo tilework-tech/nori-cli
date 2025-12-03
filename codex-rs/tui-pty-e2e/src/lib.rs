@@ -1,13 +1,81 @@
 use anyhow::Result;
+use owo_colors::OwoColorize;
+use owo_colors::Style;
 use portable_pty::CommandBuilder;
 use portable_pty::PtySize;
 use portable_pty::native_pty_system;
 use std::collections::HashMap;
+use std::io::IsTerminal;
 use std::io::Read;
 use std::io::Write;
+use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
 use vt100::Parser;
+
+/// Debug styles for colored output. Uses owo-colors Style which respects
+/// color settings - when colors are disabled, styles become no-ops.
+struct DebugStyles {
+    bold: Style,
+    dim: Style,
+    red: Style,
+    green: Style,
+    yellow: Style,
+    blue: Style,
+    magenta: Style,
+    cyan: Style,
+}
+
+impl DebugStyles {
+    fn new(with_color: bool) -> Self {
+        if with_color {
+            Self {
+                bold: Style::new().bold(),
+                dim: Style::new().dimmed(),
+                red: Style::new().red(),
+                green: Style::new().green(),
+                yellow: Style::new().yellow(),
+                blue: Style::new().blue(),
+                magenta: Style::new().magenta(),
+                cyan: Style::new().cyan(),
+            }
+        } else {
+            Self {
+                bold: Style::new(),
+                dim: Style::new(),
+                red: Style::new(),
+                green: Style::new(),
+                yellow: Style::new(),
+                blue: Style::new(),
+                magenta: Style::new(),
+                cyan: Style::new(),
+            }
+        }
+    }
+}
+
+static DEBUG_ENABLED: LazyLock<bool> = LazyLock::new(|| std::env::var("DEBUG_TUI_PTY").is_ok());
+
+/// Color is enabled by default when stderr is a terminal, unless NO_COLOR is set
+static DEBUG_STYLES: LazyLock<DebugStyles> = LazyLock::new(|| {
+    let use_color = std::env::var("NO_COLOR").is_err() && std::io::stderr().is_terminal();
+    DebugStyles::new(use_color)
+});
+
+fn debug_enabled() -> bool {
+    *DEBUG_ENABLED
+}
+
+fn styles() -> &'static DebugStyles {
+    &DEBUG_STYLES
+}
+
+fn indent_lines(text: &str, indent: &str) -> String {
+    text.lines()
+        .map(|line| format!("{indent}{line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 #[cfg(unix)]
 /// Helper to set a file descriptor to non-blocking mode
@@ -38,8 +106,20 @@ pub struct TuiSession {
 impl Drop for TuiSession {
     fn drop(&mut self) {
         if std::thread::panicking() {
-            eprintln!("\n=== TUI Screen State at Panic ===");
-            eprintln!("{}", self.screen_contents());
+            let s = styles();
+            let indent = "    ";
+
+            // Header for screen state
+            eprintln!(
+                "\n{}",
+                "=== TUI Screen State at Panic ==="
+                    .style(s.bold)
+                    .style(s.red)
+            );
+
+            // Screen contents with indentation
+            let screen = self.screen_contents();
+            eprintln!("{}", indent_lines(&screen, indent).style(s.cyan));
 
             if let Some(tmpdir) = &self._temp_dir {
                 let log_path = tmpdir.path().join(".codex-acp.log");
@@ -50,11 +130,27 @@ impl Drop for TuiSession {
                 } else {
                     "<failed to read log file>".to_string()
                 };
-                eprintln!("\n=== ACP Tracing Subscriber    ===");
-                eprintln!("{log_tail}");
+
+                // Header for tracing
+                eprintln!(
+                    "\n{}",
+                    "=== ACP Tracing Subscriber    ==="
+                        .style(s.bold)
+                        .style(s.yellow)
+                );
+
+                // Tracing content with indentation
+                eprintln!("{}", indent_lines(&log_tail, indent).style(s.dim));
             }
 
-            eprintln!("=================================\n");
+            // Footer
+            eprintln!(
+                "{}",
+                "================================="
+                    .style(s.bold)
+                    .style(s.red)
+            );
+            eprintln!();
         }
     }
 }
@@ -213,8 +309,14 @@ name = "Mock ACP provider for tests"
         // Create a small buffer for reading
         let mut buf = [0u8; 8192];
 
-        if std::env::var("DEBUG_TUI_PTY").is_ok() {
-            eprintln!("[DEBUG poll] About to call read()...");
+        let debug = debug_enabled();
+        let s = styles();
+
+        if debug {
+            eprintln!(
+                "    {} About to call read()...",
+                "[DEBUG poll]".style(s.blue)
+            );
         }
         let read_start = Instant::now();
 
@@ -223,20 +325,33 @@ name = "Mock ACP provider for tests"
         let read_result = self.reader.read(&mut buf);
         let read_duration = read_start.elapsed();
 
-        if std::env::var("DEBUG_TUI_PTY").is_ok() {
-            eprintln!("[DEBUG poll] read() returned after {:?}", read_duration);
+        if debug {
+            eprintln!(
+                "    {} read() returned after {:?}",
+                "[DEBUG poll]".style(s.blue),
+                read_duration
+            );
         }
 
         match read_result {
             Ok(0) => {
-                if std::env::var("DEBUG_TUI_PTY").is_ok() {
-                    eprintln!("[DEBUG poll] read() returned Ok(0) - EOF/process exited");
+                if debug {
+                    eprintln!(
+                        "    {} read() returned {} - EOF/process exited",
+                        "[DEBUG poll]".style(s.blue),
+                        "Ok(0)".style(s.yellow)
+                    );
                 }
                 Ok(())
             }
             Ok(n) => {
-                if std::env::var("DEBUG_TUI_PTY").is_ok() {
-                    eprintln!("[DEBUG poll] read() returned Ok({}) - {} bytes read", n, n);
+                if debug {
+                    eprintln!(
+                        "    {} read() returned {} - {} bytes read",
+                        "[DEBUG poll]".style(s.blue),
+                        format!("Ok({n})").style(s.green),
+                        n
+                    );
                 }
                 // Intercept and respond to control sequences before parsing
                 let processed = self.intercept_control_sequences(&buf[..n])?;
@@ -244,14 +359,22 @@ name = "Mock ACP provider for tests"
                 Ok(())
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                if std::env::var("DEBUG_TUI_PTY").is_ok() {
-                    eprintln!("[DEBUG poll] read() returned WouldBlock - no data available");
+                if debug {
+                    eprintln!(
+                        "    {} read() returned {} - no data available",
+                        "[DEBUG poll]".style(s.blue),
+                        "WouldBlock".style(s.dim)
+                    );
                 }
                 Ok(())
             }
             Err(e) => {
-                if std::env::var("DEBUG_TUI_PTY").is_ok() {
-                    eprintln!("[DEBUG poll] read() returned Err: {}", e);
+                if debug {
+                    eprintln!(
+                        "    {} read() returned {}",
+                        "[DEBUG poll]".style(s.blue),
+                        format!("Err: {e}").style(s.red)
+                    );
                 }
                 Err(e.into())
             }
@@ -292,10 +415,13 @@ name = "Mock ACP provider for tests"
     where
         F: Fn(&str) -> bool,
     {
-        let debug = std::env::var("DEBUG_TUI_PTY").is_ok();
+        let debug = debug_enabled();
+        let s = styles();
+
         if debug {
             eprintln!(
-                "[DEBUG wait_for] Starting wait_for with timeout {:?}",
+                "{} Starting wait_for with timeout {:?}",
+                "[DEBUG wait_for]".style(s.magenta),
                 timeout
             );
         }
@@ -307,34 +433,41 @@ name = "Mock ACP provider for tests"
             let elapsed = start.elapsed();
             if debug {
                 eprintln!(
-                    "[DEBUG wait_for] Iteration {}, elapsed: {:?}",
-                    iteration, elapsed
+                    "{} Iteration {}, elapsed: {:?}",
+                    "[DEBUG wait_for]".style(s.magenta),
+                    iteration.style(s.cyan),
+                    elapsed
                 );
-                eprintln!("[DEBUG wait_for] Calling poll()...");
+                eprintln!("{} Calling poll()...", "[DEBUG wait_for]".style(s.magenta));
             }
 
             self.poll().map_err(|e| e.to_string())?;
 
             if debug {
-                eprintln!("[DEBUG wait_for] poll() completed");
+                eprintln!("{} poll() completed", "[DEBUG wait_for]".style(s.magenta));
             }
 
             let contents = self.screen_contents();
             if debug {
                 eprintln!(
-                    "[DEBUG wait_for] Screen contents length: {} bytes",
+                    "{} Screen contents length: {} bytes",
+                    "[DEBUG wait_for]".style(s.magenta),
                     contents.len()
                 );
                 eprintln!(
-                    "[DEBUG wait_for] Screen contents preview: {:?}",
-                    &contents.chars().take(100).collect::<String>()
+                    "{} Screen contents preview:",
+                    "[DEBUG wait_for]".style(s.magenta)
                 );
+                let preview: String = contents.chars().take(100).collect();
+                eprintln!("{}", indent_lines(&preview, "        ").style(s.dim));
             }
 
             if pred(&contents) {
                 if debug {
                     eprintln!(
-                        "[DEBUG wait_for] Predicate matched! Success after {:?}",
+                        "{} {} Success after {:?}",
+                        "[DEBUG wait_for]".style(s.magenta),
+                        "Predicate matched!".style(s.green),
                         elapsed
                     );
                 }
@@ -342,24 +475,30 @@ name = "Mock ACP provider for tests"
             }
 
             if debug {
-                eprintln!("[DEBUG wait_for] Predicate did not match");
+                eprintln!(
+                    "{} {}",
+                    "[DEBUG wait_for]".style(s.magenta),
+                    "Predicate did not match".style(s.yellow)
+                );
             }
 
             if start.elapsed() > timeout {
                 if debug {
                     eprintln!(
-                        "[DEBUG wait_for] TIMEOUT REACHED after {:?}",
+                        "{} {} after {:?}",
+                        "[DEBUG wait_for]".style(s.magenta),
+                        "TIMEOUT REACHED".style(s.red),
                         start.elapsed()
                     );
                 }
-                return Err(format!(
-                    "Timeout waiting for condition.\nScreen contents:\n{}",
-                    contents
-                ));
+                return Err("Timeout waiting for condition.".to_string());
             }
 
             if debug {
-                eprintln!("[DEBUG wait_for] Sleeping 50ms before next iteration");
+                eprintln!(
+                    "{} Sleeping 50ms before next iteration",
+                    "[DEBUG wait_for]".style(s.magenta)
+                );
             }
             std::thread::sleep(Duration::from_millis(50));
         }
