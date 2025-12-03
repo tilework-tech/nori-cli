@@ -114,6 +114,35 @@ The ACP module bridges permission requests to Codex's approval UI:
 - Falls back to auto-approve if approval channel is closed (no UI listening)
 - Falls back to deny if response channel is dropped (UI didn't respond)
 
+**TUI Backend Adapter (`backend.rs`):**
+
+The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
+
+```
+┌─────────────────────────┐                      ┌─────────────────────────┐
+│   TUI Event Loop        │  Event channel       │   AcpBackend            │
+│                         │◄─────────────────────│                         │
+│   - spawn_acp_agent()   │  codex_protocol::    │   - spawn()             │
+│   - forwards events     │  Event               │   - submit(Op)          │
+│                         │                      │   - approval handling   │
+│                         │  ─────────────────►  │                         │
+│                         │  Op channel          │                         │
+└─────────────────────────┘                      └─────────────────────────┘
+```
+
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy)
+- `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task
+- `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
+  - `Op::UserInput` → ACP `prompt()`
+  - `Op::Interrupt` → ACP `cancel()`
+  - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
+  - Unsupported ops → Error event sent to TUI
+- `translate_session_update_to_events()`: Converts ACP `SessionUpdate` to `codex_protocol::EventMsg`:
+  - `AgentMessageChunk` → `AgentMessageDelta`
+  - `AgentThoughtChunk` → `AgentReasoningDelta`
+  - `ToolCall` → `ExecCommandBegin`
+  - `ToolCallUpdate(Completed)` → `ExecCommandEnd`
+
 **Event Translation (`translator.rs`):**
 
 Bridges between ACP types and codex-protocol types:

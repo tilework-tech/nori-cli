@@ -11,6 +11,7 @@ The `codex-tui` crate provides the interactive terminal user interface for Codex
 TUI is one of the primary entry points, invoked when running `codex` without a subcommand:
 
 - **Depends on** `codex-core` for conversation management, configuration, and authentication
+- **Depends on** `codex-acp` for ACP agent backend (alternative to HTTP-based LLM providers)
 - **Depends on** `codex-common` for CLI argument parsing and shared utilities
 - **Uses** `codex-protocol` types for events and messages
 - **Integrates** `codex-feedback` for tracing/feedback collection
@@ -33,6 +34,16 @@ The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interacti
 - `app.rs`: Main `App` struct managing application state and event loop
 - `app_event.rs`: Application-level events (key input, model responses, etc.)
 - `tui.rs`: Terminal initialization and restoration
+
+**Agent Spawning (`chatwidget/agent.rs`):**
+
+The TUI supports two backend modes, selected automatically at startup based on model name:
+
+- `spawn_agent()`: Entry point that detects ACP vs HTTP mode via `codex_acp::get_agent_config()`
+- `spawn_acp_agent()`: Uses `AcpBackend` for ACP-registered models (e.g., "mock-model", "claude-acp", "gemini-acp")
+- `spawn_http_agent()`: Uses `codex-core` for HTTP-based LLM providers (OpenAI, Anthropic, etc.)
+
+Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
 
 **UI Components:**
 

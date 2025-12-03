@@ -3316,6 +3316,7 @@ fn acp_stream_error_snapshot() {
         id: "acp-3".into(),
         msg: EventMsg::StreamError(StreamErrorEvent {
             message: "Connection to ACP agent was interrupted".into(),
+            codex_error_info: None,
         }),
     });
 

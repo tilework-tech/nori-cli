@@ -1625,6 +1625,7 @@ dependencies = [
  "base64",
  "chrono",
  "clap",
+ "codex-acp",
  "codex-ansi-escape",
  "codex-app-server-protocol",
  "codex-arg0",
