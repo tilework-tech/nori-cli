@@ -38,9 +38,8 @@ fn test_submit_prompt_default_response() {
 }
 
 #[test]
-#[ignore]
-// TODO: this falls back on an HTTP model.
-// Need to fix this after we have a purely ACP launch mode config in place.
+// Testing that ACP mode with a nonexistent model produces a clear error
+// instead of falling back to HTTP providers
 fn test_submit_prompt_missing_model() {
     let mut session = TuiSession::spawn_with_config(
         18,
@@ -49,20 +48,12 @@ fn test_submit_prompt_missing_model() {
     )
     .expect("Failed to spawn codex");
 
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-
-    // Type prompt
-    session.send_str("Hello").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.wait_for_text("Hello", TIMEOUT).unwrap();
-
-    // Submit
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
+    // When acp.only=true and the model is not registered as an ACP agent,
+    // the TUI should show an error immediately at startup (not after prompt submission).
+    // The error is shown before the TUI even renders the shortcuts prompt.
     session
         .wait_for_text(
-            "Model 'nonexistent' has wire_api=acp but is not registered",
+            "Model 'nonexistent' has acp.only=true but is not registered",
             TIMEOUT,
         )
         .unwrap();

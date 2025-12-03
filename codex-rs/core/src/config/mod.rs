@@ -279,6 +279,11 @@ pub struct Config {
 
     /// OTEL configuration (exporter type, endpoint, headers, etc.).
     pub otel: crate::config::types::OtelConfig,
+
+    /// When `true`, Codex runs in ACP-only mode: if the model is not registered
+    /// in the ACP registry, an error is produced instead of falling back to HTTP.
+    /// This is useful for testing and for deployments that only use ACP agents.
+    pub acp_only: bool,
 }
 
 impl Config {
@@ -719,6 +724,20 @@ pub struct ConfigToml {
     pub experimental_sandbox_command_assessment: Option<bool>,
     /// Preferred OSS provider for local models, e.g. "lmstudio" or "ollama".
     pub oss_provider: Option<String>,
+
+    /// ACP (Agent Control Protocol) configuration section.
+    #[serde(default)]
+    pub acp: Option<AcpConfigToml>,
+}
+
+/// Configuration for ACP (Agent Control Protocol) mode.
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct AcpConfigToml {
+    /// When `true`, Codex runs in ACP-only mode: if the model is not registered
+    /// in the ACP registry, an error is produced instead of falling back to HTTP.
+    /// This is useful for testing and for deployments that only use ACP agents.
+    #[serde(default)]
+    pub only: bool,
 }
 
 impl From<ConfigToml> for UserSavedConfig {
@@ -1271,6 +1290,7 @@ impl Config {
                     exporter,
                 }
             },
+            acp_only: cfg.acp.map(|a| a.only).unwrap_or(false),
         };
         Ok(config)
     }

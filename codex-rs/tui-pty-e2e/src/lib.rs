@@ -153,6 +153,11 @@ impl TuiSession {
                     .as_ref()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_else(|| codex_home.to_string_lossy().into_owned());
+                let acp_section = if config.acp_only {
+                    "\n[acp]\nonly = true\n"
+                } else {
+                    ""
+                };
                 format!(
                     r#"model = "{model}"
 model_provider = "mock_provider"
@@ -162,10 +167,10 @@ trust_level = "trusted"
 
 [model_providers.mock_provider]
 name = "Mock ACP provider for tests"
-# wire_api = "acp"
-"#,
+{acp_section}"#,
                     model = config.model,
-                    cwd = cwd_path
+                    cwd = cwd_path,
+                    acp_section = acp_section
                 )
             });
             std::fs::write(&config_path, config_content)?;
@@ -446,6 +451,9 @@ pub struct SessionConfig {
     /// This prevents the "Snapshots disabled" BackgroundEvent from overwriting
     /// the "Working" status indicator during streaming tests.
     pub git_init: bool,
+    /// When true, require ACP mode and error if model is not registered.
+    /// When false, allow fallback to HTTP providers.
+    pub acp_only: bool,
 }
 
 impl Default for SessionConfig {
@@ -466,7 +474,13 @@ impl SessionConfig {
             cwd: None,
             config_toml: None,
             git_init: true,
+            acp_only: true, // Default to ACP-only mode for tests
         }
+    }
+
+    pub fn with_acp_only(mut self, acp_only: bool) -> Self {
+        self.acp_only = acp_only;
+        self
     }
 
     pub fn with_model(mut self, model: String) -> Self {

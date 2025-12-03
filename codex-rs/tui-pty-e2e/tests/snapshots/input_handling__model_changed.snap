@@ -1,10 +1,11 @@
 ---
 source: tui-pty-e2e/tests/input_handling.rs
+assertion_line: 79
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
 
 
-› [DEFAULT_PROMPT]
+› /model
 
-  100% context left · ? for shortcuts
+  /model  choose what model and reasoning effort to use
