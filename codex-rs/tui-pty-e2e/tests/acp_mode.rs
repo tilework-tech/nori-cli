@@ -84,11 +84,7 @@ fn test_acp_mode_prompt_response_flow() {
 /// 1. Mock agent must support MOCK_AGENT_REQUEST_PERMISSION env var
 /// 2. TUI must listen to AcpConnection::take_approval_receiver()
 /// 3. TUI must display ExecApprovalRequestEvent and send ReviewDecision back
-///
-/// This test is marked #[ignore] until approval bridging is integrated.
-/// Run with: cargo test -p tui-pty-e2e -- --ignored
 #[test]
-#[ignore]
 fn test_acp_approval_request_displayed_in_tui() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
@@ -130,22 +126,21 @@ fn test_acp_approval_request_displayed_in_tui() {
             let contents = session.screen_contents();
             eprintln!("Approval request displayed:\n{}", contents);
 
-            // The approval UI should show options to approve or deny
+            // The approval UI should show:
+            // - "Yes, proceed" for approve
+            // - "No, and tell" for deny/alternative
+            // - The reason from the ACP agent
             assert!(
-                contents.contains("allow")
-                    || contents.contains("approve")
-                    || contents.contains("deny")
-                    || contents.contains("reject"),
-                "Approval UI should show allow/deny options, got: {}",
+                contents.contains("Yes, proceed")
+                    || contents.contains("Yes,")
+                    || contents.contains("No,"),
+                "Approval UI should show Yes/No options, got: {}",
                 contents
             );
         }
         Err(e) => {
-            // Expected to fail until approval bridging is integrated
             panic!(
-                "Approval request not displayed in TUI. \
-                 This is expected until approval bridging is integrated. \
-                 Error: {}. Screen contents:\n{}",
+                "Approval request not displayed in TUI. Error: {}. Screen contents:\n{}",
                 e,
                 session.screen_contents()
             );

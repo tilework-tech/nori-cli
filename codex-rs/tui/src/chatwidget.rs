@@ -493,6 +493,10 @@ impl ChatWidget {
     fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
+        // Flush any queued interrupts (e.g., approval requests) that were deferred
+        // during streaming. This is necessary for ACP mode which doesn't send a
+        // separate AgentMessage event to trigger handle_stream_finished().
+        self.flush_interrupt_queue();
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
@@ -738,21 +742,17 @@ impl ChatWidget {
     }
 
     fn on_exec_approval_request(&mut self, id: String, ev: ExecApprovalRequestEvent) {
-        let id2 = id.clone();
-        let ev2 = ev.clone();
-        self.defer_or_handle(
-            |q| q.push_exec_approval(id, ev),
-            |s| s.handle_exec_approval_now(id2, ev2),
-        );
+        // Approval requests must be handled immediately, not deferred. In ACP mode,
+        // the agent subprocess is blocked waiting for the user's approval decision.
+        // If we defer the approval popup, we create a deadlock: the agent waits for
+        // approval, but TaskComplete (which would flush the queue) won't arrive until
+        // the agent finishes, which won't happen until approval is granted.
+        self.handle_exec_approval_now(id, ev);
     }
 
     fn on_apply_patch_approval_request(&mut self, id: String, ev: ApplyPatchApprovalRequestEvent) {
-        let id2 = id.clone();
-        let ev2 = ev.clone();
-        self.defer_or_handle(
-            |q| q.push_apply_patch_approval(id, ev),
-            |s| s.handle_apply_patch_approval_now(id2, ev2),
-        );
+        // Same as on_exec_approval_request: handle immediately to avoid deadlock.
+        self.handle_apply_patch_approval_now(id, ev);
     }
 
     fn on_elicitation_request(&mut self, ev: ElicitationRequestEvent) {

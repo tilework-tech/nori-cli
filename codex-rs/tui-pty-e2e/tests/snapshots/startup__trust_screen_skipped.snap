@@ -1,7 +1,10 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
-expression: normalize_for_snapshot(session.screen_contents())
+expression: normalize_for_input_snapshot(session.screen_contents())
 ---
+■ Operation 'ListCustomPrompts' is not supported in ACP mode
+
+
 › [DEFAULT_PROMPT]
 
   100% context left · ? for shortcuts

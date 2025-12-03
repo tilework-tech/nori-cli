@@ -1,7 +1,10 @@
 ---
 source: tui-pty-e2e/tests/prompt_flow.rs
-expression: normalize_for_snapshot(session.screen_contents())
+expression: normalize_for_input_snapshot(session.screen_contents())
 ---
+■ Operation 'ListCustomPrompts' is not supported in ACP mode
+
+
 › Line 1
   Line 2
   Line 3

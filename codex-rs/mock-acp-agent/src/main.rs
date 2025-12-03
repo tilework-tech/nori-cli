@@ -20,6 +20,12 @@ enum MockClientRequest {
         path: PathBuf,
         responder: oneshot::Sender<Result<String, acp::Error>>,
     },
+    RequestPermission {
+        session_id: acp::SessionId,
+        tool_call: acp::ToolCallUpdate,
+        options: Vec<acp::PermissionOption>,
+        responder: oneshot::Sender<Result<acp::RequestPermissionResponse, acp::Error>>,
+    },
 }
 
 struct MockAgent {
@@ -116,6 +122,25 @@ impl MockAgent {
             .map_err(|_| acp::Error::internal_error())?;
         rx.await.map_err(|_| acp::Error::internal_error())?
     }
+
+    /// Request permission from the client for a tool call
+    async fn request_permission_via_client(
+        &self,
+        session_id: acp::SessionId,
+        tool_call: acp::ToolCallUpdate,
+        options: Vec<acp::PermissionOption>,
+    ) -> Result<acp::RequestPermissionResponse, acp::Error> {
+        let (tx, rx) = oneshot::channel();
+        self.client_request_tx
+            .send(MockClientRequest::RequestPermission {
+                session_id,
+                tool_call,
+                options,
+                responder: tx,
+            })
+            .map_err(|_| acp::Error::internal_error())?;
+        rx.await.map_err(|_| acp::Error::internal_error())?
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -207,6 +232,83 @@ impl acp::Agent for MockAgent {
             && let Ok(delay) = delay_str.parse::<u64>()
         {
             sleep(Duration::from_millis(delay)).await;
+        }
+
+        // Support requesting permission from client for testing approval bridging
+        if std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+            eprintln!("Mock agent: requesting permission from client");
+
+            // Create a tool call update describing the operation
+            let tool_call_id = acp::ToolCallId("permission-test-001".to_string().into());
+            let tool_call = acp::ToolCallUpdate {
+                id: tool_call_id,
+                fields: acp::ToolCallUpdateFields {
+                    title: Some("Execute shell command".to_string()),
+                    kind: Some(acp::ToolKind::Execute),
+                    status: Some(acp::ToolCallStatus::Pending),
+                    content: Some(vec![acp::ToolCallContent::Content {
+                        content: acp::ContentBlock::Text(acp::TextContent {
+                            text: "echo 'Hello from permission test'".to_string(),
+                            annotations: None,
+                            meta: None,
+                        }),
+                    }]),
+                    locations: None,
+                    raw_input: Some(
+                        json!({"command": "echo", "args": ["Hello from permission test"]}),
+                    ),
+                    raw_output: None,
+                },
+                meta: None,
+            };
+
+            // Create permission options: allow once and reject once
+            let options = vec![
+                acp::PermissionOption {
+                    id: acp::PermissionOptionId("allow".into()),
+                    name: "Allow".to_string(),
+                    kind: acp::PermissionOptionKind::AllowOnce,
+                    meta: None,
+                },
+                acp::PermissionOption {
+                    id: acp::PermissionOptionId("reject".into()),
+                    name: "Reject".to_string(),
+                    kind: acp::PermissionOptionKind::RejectOnce,
+                    meta: None,
+                },
+            ];
+
+            // Request permission from client
+            match self
+                .request_permission_via_client(session_id.clone(), tool_call, options)
+                .await
+            {
+                Ok(response) => {
+                    eprintln!(
+                        "Mock agent: permission response received: {:?}",
+                        response.outcome
+                    );
+                    match response.outcome {
+                        acp::RequestPermissionOutcome::Selected { option_id, .. } => {
+                            let msg = format!("Permission granted with option: {}", option_id);
+                            self.send_text_chunk(session_id.clone(), &msg).await?;
+                        }
+                        _ => {
+                            // Handles Cancelled and any future variants
+                            self.send_text_chunk(
+                                session_id.clone(),
+                                "Permission request was cancelled",
+                            )
+                            .await?;
+                        }
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Mock agent: permission request failed: {}", err);
+                    self.send_text_chunk(session_id.clone(), "Permission request failed")
+                        .await?;
+                }
+            }
         }
 
         // Support sending tool calls for testing ACP tool call display
@@ -408,6 +510,22 @@ async fn main() -> acp::Result<()> {
                                     })
                                     .await
                                     .map(|response| response.content);
+                                let _ = responder.send(result);
+                            }
+                            MockClientRequest::RequestPermission {
+                                session_id,
+                                tool_call,
+                                options,
+                                responder,
+                            } => {
+                                let result = conn
+                                    .request_permission(acp::RequestPermissionRequest {
+                                        session_id,
+                                        tool_call,
+                                        options,
+                                        meta: None,
+                                    })
+                                    .await;
                                 let _ = responder.send(result);
                             }
                         }

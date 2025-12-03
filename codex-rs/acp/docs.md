@@ -97,7 +97,7 @@ The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in
 
 **Approval Bridging:**
 
-The ACP module bridges permission requests to Codex's approval UI:
+The ACP module bridges permission requests to Codex's approval UI. Approval requests are handled **immediately** (not deferred) to avoid deadlocks:
 
 ```
 ┌─────────────────────────┐   ApprovalRequest     ┌─────────────────────────┐
@@ -113,6 +113,7 @@ The ACP module bridges permission requests to Codex's approval UI:
 - `AcpConnection::take_approval_receiver()` exposes the receiver for TUI consumption
 - Falls back to auto-approve if approval channel is closed (no UI listening)
 - Falls back to deny if response channel is dropped (UI didn't respond)
+- **Critical timing**: The agent subprocess blocks waiting for approval. Deferring approval display would deadlock (agent waits for approval, but TaskComplete never arrives until agent finishes)
 
 **TUI Backend Adapter (`backend.rs`):**
 

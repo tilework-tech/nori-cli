@@ -101,6 +101,16 @@ The app uses a tokio-based event loop that multiplexes:
 
 State updates flow through `app_event_sender.rs` channels.
 
+**Interrupt Queueing and Approval Handling:**
+
+Most event types (exec begin/end, MCP calls, elicitation) are queued during active streaming and flushed when streaming completes via `InterruptManager`. However, **approval requests are handled immediately** (not deferred):
+
+- `on_exec_approval_request()` and `on_apply_patch_approval_request()` call their handlers directly
+- This prevents deadlocks in ACP mode where the agent subprocess blocks waiting for approval
+- If approval were deferred, the agent would wait for approval, but TaskComplete (which flushes the queue) wouldn't arrive until the agent finished
+- The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
+- `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
+
 **Color System:**
 
 The `color.rs` and `terminal_palette.rs` modules handle terminal color detection and theming. The app queries terminal colors at startup for theme adaptation.

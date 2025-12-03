@@ -2,8 +2,17 @@
 source: tui-pty-e2e/tests/prompt_flow.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
+  /review - review any changes and find issues
+
+■ Operation 'ListCustomPrompts' is not supported in ACP mode
+
+
 › Hello
 
+
+■ Operation 'AddToHistory' is not supported in ACP mode
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
 
 • Test message 1Test message 2
 

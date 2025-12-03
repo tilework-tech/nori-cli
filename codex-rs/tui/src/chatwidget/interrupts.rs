@@ -11,7 +11,12 @@ use codex_protocol::approvals::ElicitationRequestEvent;
 
 use super::ChatWidget;
 
+/// Interrupts that can be queued during active streaming and flushed later.
+/// Note: ExecApproval and ApplyPatchApproval are now handled immediately
+/// (not deferred) to avoid deadlocks in ACP mode where the agent subprocess
+/// blocks waiting for approval. They remain here for completeness.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum QueuedInterrupt {
     ExecApproval(String, ExecApprovalRequestEvent),
     ApplyPatchApproval(String, ApplyPatchApprovalRequestEvent),
@@ -40,10 +45,16 @@ impl InterruptManager {
         self.queue.is_empty()
     }
 
+    /// Queue an exec approval request. Currently unused since approval requests
+    /// are handled immediately to avoid ACP deadlocks.
+    #[allow(dead_code)]
     pub(crate) fn push_exec_approval(&mut self, id: String, ev: ExecApprovalRequestEvent) {
         self.queue.push_back(QueuedInterrupt::ExecApproval(id, ev));
     }
 
+    /// Queue a patch approval request. Currently unused since approval requests
+    /// are handled immediately to avoid ACP deadlocks.
+    #[allow(dead_code)]
     pub(crate) fn push_apply_patch_approval(
         &mut self,
         id: String,

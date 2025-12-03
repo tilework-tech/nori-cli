@@ -54,6 +54,8 @@ Path: @/codex-rs/mock-acp-agent
 | `MOCK_AGENT_STDERR_COUNT` | Emits N lines of `MOCK_AGENT_STDERR_LINE:{i}` to stderr during prompt |
 | `MOCK_AGENT_RESPONSE` | Custom response text instead of default "Test message 1/2" (added for TUI testing) |
 | `MOCK_AGENT_DELAY_MS` | Millisecond delay before completing stream to simulate realistic streaming (added for TUI testing) |
+| `MOCK_AGENT_REQUEST_PERMISSION` | Triggers a permission request to the client before responding, used for testing ACP approval bridging |
+| `MOCK_AGENT_SEND_TOOL_CALL` | Sends a tool call sequence (pending → in_progress → completed) for testing tool call display |
 
 **Stderr Output for Testing:**
 
@@ -69,6 +71,14 @@ This allows tests to verify stderr capture by checking for known strings.
 **File Read Client Request:**
 
 The agent can request file reads from the client via `conn.read_text_file()`. This exercises bidirectional client<->agent communication. Set `MOCK_AGENT_REQUEST_FILE=/path/to/file` to trigger.
+
+**Permission Request Client Request:**
+
+The agent can request permission from the client via `conn.request_permission()`. When `MOCK_AGENT_REQUEST_PERMISSION` is set:
+- Creates a `ToolCallUpdate` describing a shell command execution
+- Provides two `PermissionOption` choices: "Allow" (`AllowOnce`) and "Reject" (`RejectOnce`)
+- Blocks waiting for the client's response, exercising the full approval bridging flow
+- Sends a confirmation message indicating which option was selected
 
 **Binary Name:**
 

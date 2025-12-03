@@ -21,11 +21,22 @@
 - `LocalBoxFuture` is `!Send`, requiring the dedicated worker thread pattern already in `connection.rs`
 - Test snapshot changes for version numbers are pre-existing upstream issues, not caused by this work
 
-## Critical Changes to Forthcoming Work
+## Approval Bridging - COMPLETED
 
-- **Approval bridging is incomplete**: The `submit()` method handles `Op::ExecApproval` and `Op::PatchApproval` by storing decisions in `pending_approvals`, but the actual bridging logic to forward these to the ACP connection's `ClientDelegate` is not yet wired up
+The approval bridging is now working end-to-end:
+- Permission requests from ACP agents are displayed in the TUI approval popup
+- User decisions are sent back to the agent via `Op::ExecApproval`
+- The TUI handles approval requests immediately (not deferred) to avoid deadlock with blocking agent subprocess
+- E2E test `test_acp_approval_request_displayed_in_tui` passes
+
+Key changes:
+- Modified `tui/src/chatwidget.rs` to handle approval requests immediately
+- Added `MOCK_AGENT_REQUEST_PERMISSION` env var support to mock agent
+- Removed `#[ignore]` from approval bridging E2E test
+
+## Remaining Work
+
 - **MCP servers config**: The plan mentions passing `config.mcp_servers` to `NewSessionRequest`, but this is not yet implemented
 - **Sandbox policy**: Currently read from config but not used - needs to be passed to agent
 - **Error events need refinement**: Currently sends generic error text for unsupported Ops; may need structured error types
-- **E2E tests not yet written**: The plan lists tests in `tui-pty-e2e/tests/acp_mode.rs` that still need implementation
-- **Tool call display**: `ToolCall` and `ToolCallUpdate` translation returns empty vec - needs implementation to show tool execution in TUI
+- **Tool call display**: `ToolCall` and `ToolCallUpdate` translation returns empty vec - needs implementation to show tool execution in TUI (E2E tests exist but fail)

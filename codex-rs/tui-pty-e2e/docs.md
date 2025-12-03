@@ -144,7 +144,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/prompt_flow.rs` | Prompt submission and agent responses |
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
-| `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup and response flow - validates TUI works with ACP wire API and mock agent; includes TDD marker test for approval bridging (`#[ignore]`) |
+| `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -228,6 +228,7 @@ Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_RESPONSE` - Custom response text instead of defaults
 - `MOCK_AGENT_DELAY_MS` - Simulate streaming delays
 - `MOCK_AGENT_STREAM_UNTIL_CANCEL` - Stream until Escape pressed
+- `MOCK_AGENT_REQUEST_PERMISSION` - Trigger permission request to test approval bridging
 
 See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
 

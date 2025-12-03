@@ -38,6 +38,9 @@ fn test_submit_prompt_default_response() {
 }
 
 #[test]
+#[ignore]
+// TODO: this falls back on an HTTP model.
+// Need to fix this after we have a purely ACP launch mode config in place.
 fn test_submit_prompt_missing_model() {
     let mut session = TuiSession::spawn_with_config(
         18,
