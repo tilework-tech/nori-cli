@@ -52,7 +52,6 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
-use tracing;
 
 use crate::config::profile::ConfigProfile;
 use toml::Value as TomlValue;

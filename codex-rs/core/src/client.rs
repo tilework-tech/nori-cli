@@ -35,7 +35,6 @@ use crate::auth::CodexAuth;
 use crate::auth::RefreshTokenError;
 use crate::chat_completions::AggregateStreamExt;
 use crate::chat_completions::stream_chat_completions;
-use crate::client_common::AcpResponseEvent;
 use crate::client_common::Prompt;
 use crate::client_common::Reasoning;
 use crate::client_common::ResponseEvent;
@@ -155,21 +154,6 @@ impl ModelClient {
     }
 
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        // First check if this model is an ACP agent. If so, the agent config
-        // contains embedded provider info and we use the ACP wire protocol.
-        // Otherwise, use the configured HTTP-based provider.
-        if let Ok(acp_config) = codex_acp::get_agent_config(&self.get_model()) {
-            debug!(
-                "Resolved ACP agent: {}, provider: {}, command: {}",
-                &self.get_model(),
-                acp_config.provider_slug,
-                acp_config.command
-            );
-
-            return self.stream_acp(&acp_config, prompt).await;
-        }
-
-        // Non-ACP path: use HTTP-based provider (Responses or Chat API)
         match self.provider.wire_api {
             WireApi::Responses => self.stream_responses(prompt).await,
             WireApi::Chat => {
@@ -208,15 +192,6 @@ impl ModelClient {
                 });
 
                 Ok(ResponseStream { rx_event: rx })
-            }
-            WireApi::Acp => {
-                // This branch should not be reached since ACP models are handled above.
-                // If we get here, it means someone manually configured wire_api: acp
-                // for a model that isn't in the ACP registry.
-                Err(CodexErr::Fatal(format!(
-                    "Model '{}' has wire_api=acp but is not registered in the ACP registry",
-                    &self.config.model
-                )))
             }
         }
     }
@@ -327,44 +302,6 @@ impl ModelClient {
         }
 
         unreachable!("stream_responses_attempt should always return");
-    }
-
-    /// Implementation for ACP (Agent Client Protocol) agents.
-    ///
-    /// This spawns a subprocess agent and communicates via JSON-RPC over stdio.
-    async fn stream_acp(
-        &self,
-        acp_config: &codex_acp::AcpAgentConfig,
-        prompt: &Prompt,
-    ) -> Result<ResponseStream> {
-        // Convert prompt to ACP content blocks
-        let content_blocks = codex_acp::translator::response_items_to_content_blocks(&prompt.input);
-
-        // If there's no content, use the instructions as the prompt
-        let content_blocks = if content_blocks.is_empty() {
-            let instructions = prompt.get_full_instructions(&self.config.model_family);
-            vec![codex_acp::translator::text_to_content_block(&instructions)]
-        } else {
-            content_blocks
-        };
-
-        let cwd = self.config.cwd.clone();
-        let acp_config = acp_config.clone();
-
-        // Create channel for ResponseEvent
-        let (tx, rx) = mpsc::channel::<Result<ResponseEvent>>(32);
-
-        // Spawn a task to manage the ACP connection and prompt
-        tokio::spawn(async move {
-            let result = stream_acp_internal(&acp_config, &cwd, content_blocks, tx.clone()).await;
-
-            if let Err(e) = result {
-                // Send error through channel
-                let _ = tx.send(Err(e)).await;
-            }
-        });
-
-        Ok(ResponseStream { rx_event: rx })
     }
 
     /// Single attempt to start a streaming Responses API call.
@@ -1093,150 +1030,6 @@ async fn stream_from_fixture(
         otel_event_manager,
     ));
     Ok(ResponseStream { rx_event })
-}
-
-/// Internal helper for ACP streaming.
-///
-/// This spawns an ACP connection, creates a session, sends the prompt,
-/// and translates updates to ResponseEvent.
-async fn stream_acp_internal(
-    config: &codex_acp::AcpAgentConfig,
-    cwd: &Path,
-    content_blocks: Vec<agent_client_protocol::ContentBlock>,
-    tx: mpsc::Sender<Result<ResponseEvent>>,
-) -> Result<()> {
-    use agent_client_protocol::SessionUpdate;
-    use codex_acp::translator::TranslatedEvent;
-    use codex_acp::translator::translate_session_update;
-    use codex_protocol::models::ContentItem;
-    use codex_protocol::models::ResponseItem;
-    use std::sync::Arc;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
-
-    // Spawn ACP connection
-    let connection = codex_acp::AcpConnection::spawn(config, cwd)
-        .await
-        .map_err(|e| CodexErr::Fatal(format!("Failed to spawn ACP connection: {e}")))?;
-
-    // Create session
-    let session_id = connection
-        .create_session(cwd)
-        .await
-        .map_err(|e| CodexErr::Fatal(format!("Failed to create ACP session: {e}")))?;
-
-    // Generate a unique message ID for this response
-    let message_id = uuid::Uuid::new_v4().to_string();
-
-    // Track whether we've sent the OutputItemAdded event
-    let item_started = Arc::new(AtomicBool::new(false));
-
-    // Accumulate all text content for the final OutputItemDone event
-    let accumulated_text = Arc::new(tokio::sync::Mutex::new(String::new()));
-
-    // Create channel for session updates
-    let (update_tx, mut update_rx) = mpsc::channel::<SessionUpdate>(32);
-
-    // First, send an OutputItemAdded event to establish the active item
-    // This creates an assistant message that will receive subsequent text deltas
-    let initial_item = ResponseItem::Message {
-        id: Some(message_id.clone()),
-        role: "assistant".to_string(),
-        content: vec![], // Initially empty; text will be accumulated via deltas
-    };
-    let _ = tx
-        .send(Ok(ResponseEvent::OutputItemAdded(initial_item)))
-        .await;
-    item_started.store(true, Ordering::SeqCst);
-
-    // Spawn a task to forward updates while the prompt is running
-    let tx_clone = tx.clone();
-    let accumulated_text_clone = accumulated_text.clone();
-    let forward_task = tokio::spawn(async move {
-        while let Some(update) = update_rx.recv().await {
-            let events = translate_session_update(update);
-            for event in events {
-                match event {
-                    TranslatedEvent::TextDelta(text) => {
-                        // Accumulate text for the final message
-                        {
-                            let mut acc = accumulated_text_clone.lock().await;
-                            acc.push_str(&text);
-                        }
-
-                        // Send text delta event
-                        if tx_clone
-                            .send(Ok(ResponseEvent::OutputTextDelta(text)))
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        }
-                    }
-                    TranslatedEvent::Completed(_) => {
-                        // Completion is handled when the prompt returns
-                    }
-                    TranslatedEvent::ToolCall(tool_call) => {
-                        // Forward tool call event to the client
-                        if tx_clone
-                            .send(Ok(ResponseEvent::Acp(AcpResponseEvent::ToolCall(
-                                tool_call,
-                            ))))
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        }
-                    }
-                    TranslatedEvent::ToolCallUpdate(update) => {
-                        // Forward tool call update event to the client
-                        if tx_clone
-                            .send(Ok(ResponseEvent::Acp(AcpResponseEvent::ToolCallUpdate(
-                                update,
-                            ))))
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // Send prompt and wait for completion
-    let stop_reason = connection
-        .prompt(session_id, content_blocks, update_tx)
-        .await
-        .map_err(|e| CodexErr::Fatal(format!("ACP prompt failed: {e}")))?;
-
-    // Wait for all updates to be forwarded
-    forward_task.await.ok();
-
-    // Get the accumulated text for the final message
-    let final_text = {
-        let acc = accumulated_text.lock().await;
-        acc.clone()
-    };
-
-    // Send OutputItemDone with the completed message
-    let final_item = ResponseItem::Message {
-        id: Some(message_id),
-        role: "assistant".to_string(),
-        content: vec![ContentItem::OutputText { text: final_text }],
-    };
-    let _ = tx.send(Ok(ResponseEvent::OutputItemDone(final_item))).await;
-
-    // Send completion event
-    let _ = tx
-        .send(Ok(ResponseEvent::Completed {
-            response_id: format!("acp-{stop_reason:?}"),
-            token_usage: None,
-        }))
-        .await;
-
-    Ok(())
 }
 
 fn rate_limit_regex() -> &'static Regex {

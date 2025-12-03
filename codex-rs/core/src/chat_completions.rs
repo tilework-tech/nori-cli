@@ -931,11 +931,6 @@ where
                 Poll::Ready(Some(Ok(ResponseEvent::OutputItemAdded(item)))) => {
                     return Poll::Ready(Some(Ok(ResponseEvent::OutputItemAdded(item))));
                 }
-                Poll::Ready(Some(Ok(ResponseEvent::Acp(acp_event)))) => {
-                    // ACP events should not appear in chat completions streams,
-                    // but forward them if they somehow do.
-                    return Poll::Ready(Some(Ok(ResponseEvent::Acp(acp_event))));
-                }
             }
         }
     }

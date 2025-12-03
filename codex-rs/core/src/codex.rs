@@ -2235,7 +2235,7 @@ async fn try_run_turn(
                     sess.send_event(&turn_context, EventMsg::AgentMessageContentDelta(event))
                         .await;
                 } else {
-                    error_or_panic("OutputTextDelta without active item".to_string());
+                    error_or_panic("ReasoningSummaryDelta without active item".to_string());
                 }
             }
             ResponseEvent::ReasoningSummaryDelta {
@@ -2284,123 +2284,6 @@ async fn try_run_turn(
                         .await;
                 } else {
                     error_or_panic("ReasoningRawContentDelta without active item".to_string());
-                }
-            }
-            ResponseEvent::Acp(acp_event) => {
-                // Handle ACP-specific events (tool calls from ACP agents)
-                use crate::client_common::AcpResponseEvent;
-                use codex_protocol::protocol::AcpEventMsg;
-                use codex_protocol::protocol::AcpToolCallEventMsg;
-                use codex_protocol::protocol::AcpToolCallKind;
-                use codex_protocol::protocol::AcpToolCallStatus;
-
-                match acp_event {
-                    AcpResponseEvent::ToolCall(tool_call) => {
-                        let event_msg = AcpToolCallEventMsg {
-                            call_id: tool_call.call_id,
-                            title: tool_call.title,
-                            kind: match tool_call.kind {
-                                codex_acp::AcpToolKind::Read => AcpToolCallKind::Read,
-                                codex_acp::AcpToolKind::Edit => AcpToolCallKind::Edit,
-                                codex_acp::AcpToolKind::Delete => AcpToolCallKind::Delete,
-                                codex_acp::AcpToolKind::Move => AcpToolCallKind::Move,
-                                codex_acp::AcpToolKind::Search => AcpToolCallKind::Search,
-                                codex_acp::AcpToolKind::Execute => AcpToolCallKind::Execute,
-                                codex_acp::AcpToolKind::Think => AcpToolCallKind::Think,
-                                codex_acp::AcpToolKind::Fetch => AcpToolCallKind::Fetch,
-                                codex_acp::AcpToolKind::SwitchMode => AcpToolCallKind::SwitchMode,
-                                codex_acp::AcpToolKind::Other => AcpToolCallKind::Other,
-                            },
-                            status: match tool_call.status {
-                                codex_acp::AcpToolStatus::Pending => AcpToolCallStatus::Pending,
-                                codex_acp::AcpToolStatus::InProgress => {
-                                    AcpToolCallStatus::InProgress
-                                }
-                                codex_acp::AcpToolStatus::Completed => AcpToolCallStatus::Completed,
-                                codex_acp::AcpToolStatus::Failed => AcpToolCallStatus::Failed,
-                            },
-                        };
-                        sess.send_event(
-                            &turn_context,
-                            EventMsg::Acp(AcpEventMsg::ToolCall(event_msg)),
-                        )
-                        .await;
-                    }
-                    AcpResponseEvent::ToolCallUpdate(update) => {
-                        // For updates, we emit the updated state
-                        // The TUI is responsible for merging with previous state
-                        let status = update.status.clone();
-                        if let (Some(status), Some(title)) = (status, update.title.clone()) {
-                            let event_msg = AcpToolCallEventMsg {
-                                call_id: update.call_id.clone(),
-                                title,
-                                kind: update.kind.map_or(AcpToolCallKind::Other, |k| match k {
-                                    codex_acp::AcpToolKind::Read => AcpToolCallKind::Read,
-                                    codex_acp::AcpToolKind::Edit => AcpToolCallKind::Edit,
-                                    codex_acp::AcpToolKind::Delete => AcpToolCallKind::Delete,
-                                    codex_acp::AcpToolKind::Move => AcpToolCallKind::Move,
-                                    codex_acp::AcpToolKind::Search => AcpToolCallKind::Search,
-                                    codex_acp::AcpToolKind::Execute => AcpToolCallKind::Execute,
-                                    codex_acp::AcpToolKind::Think => AcpToolCallKind::Think,
-                                    codex_acp::AcpToolKind::Fetch => AcpToolCallKind::Fetch,
-                                    codex_acp::AcpToolKind::SwitchMode => {
-                                        AcpToolCallKind::SwitchMode
-                                    }
-                                    codex_acp::AcpToolKind::Other => AcpToolCallKind::Other,
-                                }),
-                                status: match status {
-                                    codex_acp::AcpToolStatus::Pending => AcpToolCallStatus::Pending,
-                                    codex_acp::AcpToolStatus::InProgress => {
-                                        AcpToolCallStatus::InProgress
-                                    }
-                                    codex_acp::AcpToolStatus::Completed => {
-                                        AcpToolCallStatus::Completed
-                                    }
-                                    codex_acp::AcpToolStatus::Failed => AcpToolCallStatus::Failed,
-                                },
-                            };
-                            sess.send_event(
-                                &turn_context,
-                                EventMsg::Acp(AcpEventMsg::ToolCall(event_msg)),
-                            )
-                            .await;
-                        } else if let Some(status) = update.status.clone() {
-                            // Only status update - still emit it
-                            let event_msg = AcpToolCallEventMsg {
-                                call_id: update.call_id.clone(),
-                                title: update.title.unwrap_or_default(),
-                                kind: update.kind.map_or(AcpToolCallKind::Other, |k| match k {
-                                    codex_acp::AcpToolKind::Read => AcpToolCallKind::Read,
-                                    codex_acp::AcpToolKind::Edit => AcpToolCallKind::Edit,
-                                    codex_acp::AcpToolKind::Delete => AcpToolCallKind::Delete,
-                                    codex_acp::AcpToolKind::Move => AcpToolCallKind::Move,
-                                    codex_acp::AcpToolKind::Search => AcpToolCallKind::Search,
-                                    codex_acp::AcpToolKind::Execute => AcpToolCallKind::Execute,
-                                    codex_acp::AcpToolKind::Think => AcpToolCallKind::Think,
-                                    codex_acp::AcpToolKind::Fetch => AcpToolCallKind::Fetch,
-                                    codex_acp::AcpToolKind::SwitchMode => {
-                                        AcpToolCallKind::SwitchMode
-                                    }
-                                    codex_acp::AcpToolKind::Other => AcpToolCallKind::Other,
-                                }),
-                                status: match status {
-                                    codex_acp::AcpToolStatus::Pending => AcpToolCallStatus::Pending,
-                                    codex_acp::AcpToolStatus::InProgress => {
-                                        AcpToolCallStatus::InProgress
-                                    }
-                                    codex_acp::AcpToolStatus::Completed => {
-                                        AcpToolCallStatus::Completed
-                                    }
-                                    codex_acp::AcpToolStatus::Failed => AcpToolCallStatus::Failed,
-                                },
-                            };
-                            sess.send_event(
-                                &turn_context,
-                                EventMsg::Acp(AcpEventMsg::ToolCall(event_msg)),
-                            )
-                            .await;
-                        }
-                    }
                 }
             }
         }
