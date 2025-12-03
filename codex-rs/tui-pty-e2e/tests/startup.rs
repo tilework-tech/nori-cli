@@ -3,6 +3,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
+use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;

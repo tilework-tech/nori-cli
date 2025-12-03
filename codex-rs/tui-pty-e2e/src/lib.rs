@@ -736,23 +736,21 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // Strip startup header block if present (prevents flaky snapshots due to scroll timing)
     // The header can appear in two forms:
     // 1. Boxed header with "╭──" border
-    // 2. Plain text "To get started, describe a task..."
-    // Both end with a list of commands like /init, /status, /approvals, /model, /review
+    // 2. Plain text "Powered by Nori AI"
+    // Both end with a nori-ai install command
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
-    let has_header = lines.iter().any(|l| {
-        l.contains("╭──")
-            || l.contains("To get started, describe a task")
-            || l.contains("Welcome to Codex")
-    });
+    let has_header = lines
+        .iter()
+        .any(|l| l.contains("╭──") || l.contains("Powered by Nori AI"));
 
     if has_header {
         // Find where the header ends (after the /review command line)
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
-            // The /review line marks the end of the command list
-            if line.contains("/review") {
+            // The nori-ai install line marks the end of the command list
+            if line.contains("npx nori-ai install") {
                 skip_until = i + 1;
                 break;
             }
