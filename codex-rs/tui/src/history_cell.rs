@@ -562,6 +562,12 @@ pub(crate) fn padded_emoji(emoji: &str) -> String {
 #[derive(Debug)]
 pub struct SessionInfoCell(CompositeHistoryCell);
 
+impl SessionInfoCell {
+    pub(crate) fn new(composite: CompositeHistoryCell) -> Self {
+        Self(composite)
+    }
+}
+
 impl HistoryCell for SessionInfoCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         self.0.display_lines(width)
@@ -581,77 +587,15 @@ pub(crate) fn new_session_info(
     event: SessionConfiguredEvent,
     is_first_event: bool,
 ) -> SessionInfoCell {
-    let SessionConfiguredEvent {
-        model,
-        reasoning_effort,
-        ..
-    } = event;
-    SessionInfoCell(if is_first_event {
-        // Header box rendered as history (so it appears at the very top)
-        let header = SessionHeaderHistoryCell::new(
-            model,
-            reasoning_effort,
-            config.cwd.clone(),
-            crate::version::CODEX_CLI_VERSION,
-        );
-
-        // Help lines below the header (new copy and list)
-        let help_lines: Vec<Line<'static>> = vec![
-            "  To get started, describe a task or try one of these commands:"
-                .dim()
-                .into(),
-            Line::from(""),
-            Line::from(vec![
-                "  ".into(),
-                "/init".into(),
-                " - create an AGENTS.md file with instructions for Codex".dim(),
-            ]),
-            Line::from(vec![
-                "  ".into(),
-                "/status".into(),
-                " - show current session configuration".dim(),
-            ]),
-            Line::from(vec![
-                "  ".into(),
-                "/approvals".into(),
-                " - choose what Codex can do without approval".dim(),
-            ]),
-            Line::from(vec![
-                "  ".into(),
-                "/model".into(),
-                " - choose what model and reasoning effort to use".dim(),
-            ]),
-            Line::from(vec![
-                "  ".into(),
-                "/review".into(),
-                " - review any changes and find issues".dim(),
-            ]),
-        ];
-
-        CompositeHistoryCell {
-            parts: vec![
-                Box::new(header),
-                Box::new(PlainHistoryCell { lines: help_lines }),
-            ],
-        }
-    } else if config.model == model {
-        CompositeHistoryCell { parts: vec![] }
-    } else {
-        let lines = vec![
-            "model changed:".magenta().bold().into(),
-            format!("requested: {}", config.model).into(),
-            format!("used: {model}").into(),
-        ];
-        CompositeHistoryCell {
-            parts: vec![Box::new(PlainHistoryCell { lines })],
-        }
-    })
+    // Use the Nori-branded session header
+    crate::nori::session_header::new_nori_session_info(config, event, is_first_event)
 }
 
 pub(crate) fn new_user_prompt(message: String) -> UserHistoryCell {
     UserHistoryCell { message }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct SessionHeaderHistoryCell {
     version: &'static str,
@@ -660,6 +604,7 @@ struct SessionHeaderHistoryCell {
     directory: PathBuf,
 }
 
+#[allow(dead_code)]
 impl SessionHeaderHistoryCell {
     fn new(
         model: String,

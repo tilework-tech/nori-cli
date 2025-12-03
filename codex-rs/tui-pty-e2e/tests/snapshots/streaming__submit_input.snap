@@ -2,6 +2,14 @@
 source: tui-pty-e2e/tests/streaming.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
+│ profile:   clifford               │
+╰───────────────────────────────────╯
+
+
+  🍙 Powered by Nori AI 🍙
+
+  Run 'npx nori-ai install' to set up Nori AI enhancements
+
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
 
 

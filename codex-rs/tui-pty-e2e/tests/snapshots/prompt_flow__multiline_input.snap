@@ -2,6 +2,24 @@
 source: tui-pty-e2e/tests/prompt_flow.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
+╭───────────────────────────────────╮
+│   _   _  ___  ____  ___           │
+│  | \ | |/ _ \|  _ \|_ _|          │
+│  |  \| | | | | |_) || |           │
+│  | |\  | |_| |  _ < | |           │
+│  |_| \_|\___/|_| \_\___|          │
+│                                   │
+│ version:   v0.0.0                 │
+│ directory: [TMP_DIR] │
+│ agent:     mock-model             │
+│ profile:   clifford               │
+╰───────────────────────────────────╯
+
+
+  🍙 Powered by Nori AI 🍙
+
+  Run 'npx nori-ai install' to set up Nori AI enhancements
+
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
 
 
