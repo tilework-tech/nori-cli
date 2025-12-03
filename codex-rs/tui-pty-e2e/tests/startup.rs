@@ -1,11 +1,11 @@
 use insta::assert_snapshot;
 use std::time::Duration;
 use std::time::Instant;
-use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
+use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
 fn test_startup_shows_banner() {
@@ -23,13 +23,14 @@ fn test_startup_shows_banner() {
     session
         .wait_for_text("Welcome to Codex", TIMEOUT)
         .expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_INPUT);
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
     assert!(contents.contains("Welcome to Codex"));
     assert_snapshot!(
         "startup_shows_welcome",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(contents)
     );
 }
 
@@ -48,14 +49,16 @@ fn test_startup_welcome_with_dimensions() {
     session
         .wait_for_text("OpenAI Codex", TIMEOUT)
         .expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_INPUT);
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify terminal size is respected
     let contents = session.screen_contents();
     assert!(contents.lines().count() <= 40);
+
     assert_snapshot!(
         "startup_welcome_dimensions_40x120",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(contents)
     );
 }
 
@@ -74,7 +77,8 @@ fn test_runs_in_temp_directory_by_default() {
     session
         .wait_for_text("To get started", TIMEOUT)
         .expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_INPUT);
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
 
@@ -93,7 +97,7 @@ fn test_runs_in_temp_directory_by_default() {
     );
     assert_snapshot!(
         "runs_in_temp_directory",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(contents)
     );
 }
 
@@ -105,7 +109,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
     session
         .wait_for_text("›", TIMEOUT)
         .expect("Prompt did not appear");
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
 
@@ -124,7 +128,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
     );
     assert_snapshot!(
         "trust_screen_skipped",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(contents)
     );
 }
 

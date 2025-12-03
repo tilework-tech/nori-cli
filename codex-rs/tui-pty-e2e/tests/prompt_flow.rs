@@ -1,10 +1,11 @@
 use insta::assert_snapshot;
-use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
+use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
 fn test_submit_prompt_default_response() {
@@ -30,7 +31,7 @@ fn test_submit_prompt_default_response() {
         .wait_for_text("Test message 2", TIMEOUT)
         .expect("Did not receive second mock response");
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "prompt_submitted",
         normalize_for_input_snapshot(session.screen_contents())
@@ -67,7 +68,7 @@ fn test_submit_prompt_missing_model() {
         )
         .unwrap();
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "missing_model",
         normalize_for_input_snapshot(session.screen_contents())
@@ -92,7 +93,7 @@ fn test_submit_prompt_custom_response() {
         .wait_for_text("This is a custom test response", TIMEOUT)
         .expect("Did not receive custom response");
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "custom_response",
         normalize_for_input_snapshot(session.screen_contents())
@@ -112,7 +113,7 @@ fn test_multiline_input() {
     session.wait_for_text("Line 2", TIMEOUT).unwrap();
     session.wait_for_text("Line 3", TIMEOUT).unwrap();
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "multiline_input",
         normalize_for_input_snapshot(session.screen_contents())
