@@ -49,6 +49,46 @@ pub struct ModelPreset {
 
 static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
     vec![
+        // TODO:
+        // Pro (gemini-2.5-pro)
+        // Flash (gemini-2.5-flash)
+        // Flash-Lite (gemini-2.5-flash-lite)
+        ModelPreset {
+            id: "mock-acp-agent",
+            model: "mock-model",
+            display_name: "Mock ACP Agent",
+            description: "Mock agent for testing purposes.",
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: &[ReasoningEffortPreset {
+                effort: ReasoningEffort::Medium,
+                description: "Standard mock behavior",
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+        },
+        ModelPreset {
+            id: "gemini-2.5-flash",
+            model: "gemini-2.5-flash",
+            display_name: "Gemini 2.0 Flash Thinking",
+            description: "Google's experimental thinking model.",
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: &[],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+        },
+        ModelPreset {
+            id: "claude-acp",
+            model: "claude-acp",
+            display_name: "Claude",
+            description: "Anthropic's Claude via Agent Context Protocol.",
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: &[],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+        },
         ModelPreset {
             id: "gpt-5.1-codex-max",
             model: "gpt-5.1-codex-max",

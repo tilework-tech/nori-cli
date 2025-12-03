@@ -1,0 +1,14 @@
+---
+source: tui-pty-e2e/tests/streaming.rs
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+› testing!!!
+
+
+■ Conversation interrupted - tell the model what to do differently. Something
+went wrong? Hit `/feedback` to report the issue.
+
+
+› [DEFAULT_PROMPT]
+
+  100% context left · ? for shortcuts

@@ -36,10 +36,10 @@ const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WireApi {
-    /// The Responses API exposed by OpenAI at `/v1/responses`.
+    /// The OpenAI Responses API. This is used by some internal models.
     Responses,
 
-    /// Regular Chat Completions compatible with `/v1/chat/completions`.
+    /// The OpenAI Chat Completions API. This is the default.
     #[default]
     Chat,
 }
@@ -216,7 +216,17 @@ pub const DEFAULT_OLLAMA_PORT: u16 = 11434;
 pub const LMSTUDIO_OSS_PROVIDER_ID: &str = "lmstudio";
 pub const OLLAMA_OSS_PROVIDER_ID: &str = "ollama";
 
+// ACP provider identifiers (used for model inference, not in built_in_model_providers)
+// Actual ACP provider configuration is embedded in AcpAgentConfig from codex_acp::registry
+pub const CLAUDE_ACP_PROVIDER_ID: &str = "claude-acp";
+pub const GEMINI_ACP_PROVIDER_ID: &str = "gemini-acp";
+pub const MOCK_ACP_PROVIDER_ID: &str = "mock-acp";
+
 /// Built-in default provider list.
+///
+/// Note: ACP providers (mock-acp, claude-acp, gemini-acp) are NOT included here.
+/// ACP agent configuration is handled by the `codex_acp::registry` module,
+/// which embeds provider info directly in `AcpAgentConfig` to avoid circular dependencies.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     use ModelProviderInfo as P;
 

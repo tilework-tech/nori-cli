@@ -1,0 +1,17 @@
+[package]
+name = "tui-pty-e2e"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+portable-pty = "0.8"
+vt100 = "0.15"
+insta = "1"
+anyhow = "1"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

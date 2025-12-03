@@ -29,7 +29,11 @@ result
 
 # cli tools
 CLAUDE.md
-.claude/
+# .claude/
+.claude/settings.local.json
+settings.local.json
+.claude/agents/
+.claude/commands/
 AGENTS.override.md
 
 # caches
@@ -85,3 +89,13 @@ CHANGELOG.ignore.md
 # nix related
 .direnv
 .envrc
+
+# git worktrees
+.worktree/
+.worktrees/
+/codex-rs/tui/target/
+/target
+
+# Local code/doc references for ACP work
+/other-repos
+

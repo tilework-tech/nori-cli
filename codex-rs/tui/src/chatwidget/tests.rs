@@ -3061,3 +3061,430 @@ fn chatwidget_tall() {
     .unwrap();
     assert_snapshot!(term.backend().vt100().screen().contents());
 }
+
+// --- Blackbox snapshot tests ---
+// These tests treat the ChatWidget as a black box, sending input through
+// public interfaces and verifying rendered output matches expected snapshots.
+
+/// Blackbox test: type "hello" into the composer and snapshot the result.
+#[test]
+fn blackbox_typing_snapshot() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Set text in the composer (simulating typing)
+    chat.bottom_pane.set_composer_text("hello".to_string());
+
+    // Render to a test terminal
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with typed text");
+
+    assert_snapshot!("blackbox_typing_hello", terminal.backend());
+}
+
+/// Blackbox test: open the /model picker and snapshot the result.
+#[test]
+fn blackbox_model_picker_snapshot() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Open the model picker popup
+    chat.open_model_popup();
+
+    // Render to a test terminal
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with model picker");
+
+    assert_snapshot!("blackbox_model_picker_open", terminal.backend());
+}
+
+// === ACP (Agent Context Protocol) Integration Snapshot Tests ===
+// These tests verify how ACP-style streaming responses render in the TUI.
+// ACP agents communicate via JSON-RPC 2.0 over stdio and produce events
+// that map to the existing protocol types (TextDelta -> AgentMessageDelta, etc.)
+
+/// ACP agents stream text responses character-by-character. This test verifies
+/// that streamed text from an ACP agent renders correctly in the chat history.
+#[test]
+fn acp_streaming_text_response_vt100_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Start task (simulates ACP session initialization)
+    chat.handle_codex_event(Event {
+        id: "acp-1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Build vt100 terminal for visual snapshot
+    let width: u16 = 80;
+    let height: u16 = 30;
+    let backend = VT100Backend::new(width, height);
+    let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+    term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+    // Simulate ACP streaming response - typical agent response with code
+    let acp_response = r#"I'll help you implement that feature.
+
+Here's the code:
+
+```rust
+fn calculate_sum(numbers: &[i32]) -> i32 {
+    numbers.iter().sum()
+}
+```
+
+This function takes a slice of integers and returns their sum using iterator methods."#;
+
+    // Stream in character pairs (simulating ACP notification delivery)
+    let mut chars = acp_response.chars();
+    loop {
+        let mut delta = String::new();
+        match chars.next() {
+            Some(c) => delta.push(c),
+            None => break,
+        }
+        if let Some(c2) = chars.next() {
+            delta.push(c2);
+        }
+
+        chat.handle_codex_event(Event {
+            id: "acp-1".into(),
+            msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent { delta }),
+        });
+
+        // Process commit ticks and drain history
+        loop {
+            chat.on_commit_tick();
+            let mut inserted_any = false;
+            while let Ok(app_ev) = rx.try_recv() {
+                if let AppEvent::InsertHistoryCell(cell) = app_ev {
+                    let lines = cell.display_lines(width);
+                    crate::insert_history::insert_history_lines(&mut term, lines)
+                        .expect("Failed to insert history lines");
+                    inserted_any = true;
+                }
+            }
+            if !inserted_any {
+                break;
+            }
+        }
+    }
+
+    // Finalize stream (simulates ACP session completion)
+    chat.handle_codex_event(Event {
+        id: "acp-1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+    for lines in drain_insert_history(&mut rx) {
+        crate::insert_history::insert_history_lines(&mut term, lines)
+            .expect("Failed to insert final history lines");
+    }
+
+    assert_snapshot!(
+        "acp_streaming_text_response",
+        term.backend().vt100().screen().contents()
+    );
+}
+
+/// ACP agents may stream reasoning before producing their final answer.
+/// This test verifies reasoning + answer rendering from an ACP agent.
+#[test]
+fn acp_reasoning_then_answer_vt100_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_codex_event(Event {
+        id: "acp-2".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    let width: u16 = 80;
+    let height: u16 = 35;
+    let backend = VT100Backend::new(width, height);
+    let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+    term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+    // Stream reasoning first (ACP ReasoningDelta maps to AgentReasoningDelta)
+    let reasoning = "**Analyzing the request**\n\nThe user wants to sort a list. I should consider:\n- Time complexity requirements\n- Whether stability matters\n- Memory constraints";
+
+    for chunk in reasoning.chars().collect::<Vec<_>>().chunks(3) {
+        let delta: String = chunk.iter().collect();
+        chat.handle_codex_event(Event {
+            id: "acp-2".into(),
+            msg: EventMsg::AgentReasoningDelta(AgentReasoningDeltaEvent { delta }),
+        });
+    }
+
+    // Finalize reasoning
+    chat.handle_codex_event(Event {
+        id: "acp-2".into(),
+        msg: EventMsg::AgentReasoning(AgentReasoningEvent {
+            text: reasoning.into(),
+        }),
+    });
+
+    // Now stream the answer
+    let answer = "Based on your requirements, here's a quicksort implementation:\n\n```python\ndef quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    middle = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quicksort(left) + middle + quicksort(right)\n```";
+
+    let mut chars = answer.chars();
+    loop {
+        let mut delta = String::new();
+        match chars.next() {
+            Some(c) => delta.push(c),
+            None => break,
+        }
+        if let Some(c2) = chars.next() {
+            delta.push(c2);
+        }
+
+        chat.handle_codex_event(Event {
+            id: "acp-2".into(),
+            msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent { delta }),
+        });
+
+        loop {
+            chat.on_commit_tick();
+            let mut inserted_any = false;
+            while let Ok(app_ev) = rx.try_recv() {
+                if let AppEvent::InsertHistoryCell(cell) = app_ev {
+                    let lines = cell.display_lines(width);
+                    crate::insert_history::insert_history_lines(&mut term, lines)
+                        .expect("Failed to insert history lines");
+                    inserted_any = true;
+                }
+            }
+            if !inserted_any {
+                break;
+            }
+        }
+    }
+
+    chat.handle_codex_event(Event {
+        id: "acp-2".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+    for lines in drain_insert_history(&mut rx) {
+        crate::insert_history::insert_history_lines(&mut term, lines)
+            .expect("Failed to insert final history lines");
+    }
+
+    assert_snapshot!(
+        "acp_reasoning_then_answer",
+        term.backend().vt100().screen().contents()
+    );
+}
+
+/// ACP agents may encounter errors during execution. This test verifies
+/// that stream errors from an ACP agent render appropriately.
+#[test]
+fn acp_stream_error_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_codex_event(Event {
+        id: "acp-3".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Stream some initial content
+    chat.handle_codex_event(Event {
+        id: "acp-3".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "Let me help you with that...\n\n".into(),
+        }),
+    });
+    chat.on_commit_tick();
+
+    // Then encounter an error (simulates ACP error notification)
+    chat.handle_codex_event(Event {
+        id: "acp-3".into(),
+        msg: EventMsg::StreamError(StreamErrorEvent {
+            message: "Connection to ACP agent was interrupted".into(),
+        }),
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    let combined = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+
+    assert_snapshot!("acp_stream_error", combined);
+}
+
+/// Multi-turn conversation with an ACP agent. This tests that multiple
+/// exchanges render correctly in sequence.
+#[test]
+fn acp_multi_turn_conversation_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // First turn: user asks, agent responds
+    chat.handle_codex_event(Event {
+        id: "acp-4".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    chat.handle_codex_event(Event {
+        id: "acp-4".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "I can help you refactor that function. ".into(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "acp-4".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "First, let me analyze the current implementation.\n".into(),
+        }),
+    });
+    chat.on_commit_tick();
+
+    chat.handle_codex_event(Event {
+        id: "acp-4".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: Some("I can help you refactor that function. First, let me analyze the current implementation.\n".into()),
+        }),
+    });
+
+    // Drain first turn
+    let turn1_cells = drain_insert_history(&mut rx);
+
+    // Second turn: follow-up
+    chat.handle_codex_event(Event {
+        id: "acp-5".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    chat.handle_codex_event(Event {
+        id: "acp-5".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "Here's the refactored version:\n\n```rust\nfn process(data: &str) -> Result<String, Error> {\n    data.parse()\n}\n```\n".into(),
+        }),
+    });
+    chat.on_commit_tick();
+
+    chat.handle_codex_event(Event {
+        id: "acp-5".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    // Drain second turn
+    let turn2_cells = drain_insert_history(&mut rx);
+
+    // Combine both turns
+    let mut combined = String::new();
+    for lines in turn1_cells.iter().chain(turn2_cells.iter()) {
+        combined.push_str(&lines_to_single_string(lines));
+    }
+
+    assert_snapshot!("acp_multi_turn_conversation", combined);
+}
+
+/// ACP agent response with bullet points and nested lists.
+/// Verifies markdown list rendering from ACP streaming.
+#[test]
+fn acp_markdown_list_response_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_codex_event(Event {
+        id: "acp-6".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    let width: u16 = 80;
+    let height: u16 = 40;
+    let backend = VT100Backend::new(width, height);
+    let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+    term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+    let response = r#"Here are the key considerations for your ACP integration:
+
+1. **Protocol Compliance**
+   - Use JSON-RPC 2.0 message format
+   - Handle bidirectional communication
+   - Support session management
+
+2. **Event Handling**
+   - Subscribe to `session/update` notifications
+   - Process `agent_message_chunk` for streaming
+   - Handle `agent_reasoning_chunk` for thinking
+
+3. **Error Recovery**
+   - Implement reconnection logic
+   - Buffer partial messages
+   - Log protocol violations
+
+Would you like me to elaborate on any of these points?"#;
+
+    let mut chars = response.chars();
+    loop {
+        let mut delta = String::new();
+        match chars.next() {
+            Some(c) => delta.push(c),
+            None => break,
+        }
+        if let Some(c2) = chars.next() {
+            delta.push(c2);
+        }
+
+        chat.handle_codex_event(Event {
+            id: "acp-6".into(),
+            msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent { delta }),
+        });
+
+        loop {
+            chat.on_commit_tick();
+            let mut inserted_any = false;
+            while let Ok(app_ev) = rx.try_recv() {
+                if let AppEvent::InsertHistoryCell(cell) = app_ev {
+                    let lines = cell.display_lines(width);
+                    crate::insert_history::insert_history_lines(&mut term, lines)
+                        .expect("Failed to insert history lines");
+                    inserted_any = true;
+                }
+            }
+            if !inserted_any {
+                break;
+            }
+        }
+    }
+
+    chat.handle_codex_event(Event {
+        id: "acp-6".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+    for lines in drain_insert_history(&mut rx) {
+        crate::insert_history::insert_history_lines(&mut term, lines)
+            .expect("Failed to insert final history lines");
+    }
+
+    assert_snapshot!(
+        "acp_markdown_list_response",
+        term.backend().vt100().screen().contents()
+    );
+}

@@ -43,6 +43,9 @@ members = [
     "utils/string",
     "codex-client",
     "codex-api",
+    "acp",
+    "mock-acp-agent",
+    "tui-pty-e2e",
 ]
 resolver = "2"
 
@@ -98,6 +101,7 @@ codex-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
 mcp_test_support = { path = "mcp-server/tests/common" }
+codex-acp = { path = "acp" }
 
 # External
 allocative = "0.3.3"

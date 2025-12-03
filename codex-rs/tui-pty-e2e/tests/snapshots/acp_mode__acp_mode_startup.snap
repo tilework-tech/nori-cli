@@ -1,0 +1,7 @@
+---
+source: tui-pty-e2e/tests/acp_mode.rs
+expression: normalize_for_snapshot(session.screen_contents())
+---
+› [DEFAULT_PROMPT]
+
+  100% context left · ? for shortcuts
