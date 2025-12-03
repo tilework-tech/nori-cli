@@ -12,7 +12,14 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 
-• Read complete.
+• Test message 1Test message 2
+
+• Ran 'Reading configuration file'
+  └ (no output)
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Tool call completed successfully.
 
 
 › [DEFAULT_PROMPT]
