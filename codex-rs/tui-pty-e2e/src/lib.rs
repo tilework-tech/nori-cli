@@ -491,10 +491,7 @@ name = "Mock ACP provider for tests"
                         start.elapsed()
                     );
                 }
-                return Err(format!(
-                    "Timeout waiting for condition.\nScreen contents:\n{}",
-                    contents
-                ));
+                return Err("Timeout waiting for condition.".to_string());
             }
 
             if debug {
