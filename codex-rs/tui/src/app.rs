@@ -21,7 +21,6 @@ use codex_common::model_presets::ModelUpgrade;
 use codex_common::model_presets::all_model_presets;
 use codex_core::AuthManager;
 use codex_core::ConversationManager;
-use codex_core::GEMINI_ACP_PROVIDER_ID;
 use codex_core::config::Config;
 use codex_core::config::edit::ConfigEditsBuilder;
 use codex_core::model_family::find_family_for_model;
@@ -505,13 +504,6 @@ impl App {
             }
             AppEvent::UpdateModel(model) => {
                 self.chat_widget.set_model(&model);
-
-                if model.starts_with("gemini") {
-                    self.config.model_provider_id = GEMINI_ACP_PROVIDER_ID.to_string();
-                } else if self.config.model_provider_id == GEMINI_ACP_PROVIDER_ID {
-                    self.config.model_provider_id = "openai".to_string();
-                }
-
                 self.config.model = model.clone();
                 if let Some(family) = find_family_for_model(&model) {
                     self.config.model_family = family;

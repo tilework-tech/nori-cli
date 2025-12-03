@@ -75,9 +75,7 @@ fn test_acp_tool_call_rendered_in_tui() {
     let tool_call_appeared = session.wait_for(
         |screen| {
             // Look for signs of tool call rendering
-            screen.contains("Calling")
-                || screen.contains("Called")
-                || screen.contains("read_file")
+            screen.contains("Calling") || screen.contains("Called") || screen.contains("read_file")
         },
         Duration::from_secs(10),
     );

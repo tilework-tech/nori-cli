@@ -10,16 +10,16 @@ Path: @/codex-rs/acp
 
 ### How it fits into the larger codebase
 
-- Used by `@/codex-rs/core/src/client.rs` to communicate with ACP-compliant agents via `WireApi::Acp` variant
+- Designed as a parallel crate to `codex-core`, not tightly integrated
 - Uses channel-based streaming pattern (mpsc) consistent with core's `ResponseStream`
-- Provides structured error handling via library's typed error responses that core translates to user-facing messages
+- Provides structured error handling via library's typed error responses
 - TUI and other clients can access captured stderr for displaying agent diagnostic output
+- ACP vs HTTP mode is determined at startup via config, no mid-session switching
 
 ### Model Registry
 
 The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather than provider-centric:
 - `get_agent_config()` accepts model names (e.g., "mock-model", "gemini-2.5-flash", "claude-acp") instead of provider names
-- Called from `@/codex-rs/core/src/client.rs` at the start of `stream()` to check if model is an ACP agent
 - Returns `AcpAgentConfig` containing:
   - `provider_slug`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "gemini-acp", "claude-acp")
   - `command`: Executable path or command name
@@ -34,14 +34,13 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
 ### Embedded Provider Info
 
 ACP providers embed their configuration directly in `AcpAgentConfig` via `AcpProviderInfo`:
-- Avoids circular dependency between `codex-acp` and `codex-core` (core depends on acp, not vice versa)
+- `codex-core` does not depend on `codex-acp` - they are decoupled crates
 - ACP providers are NOT in `built_in_model_providers()` in core - they're self-contained in the registry
 - `AcpProviderInfo` contains:
   - `name`: Display name (e.g., "Gemini ACP")
   - `request_max_retries`: Max request retries (default: 1)
   - `stream_max_retries`: Max stream reconnection attempts (default: 1)
   - `stream_idle_timeout`: Idle timeout for streaming (default: 5 minutes)
-- Core's `client.rs` checks the ACP registry first in `stream()`, using the embedded provider info for ACP models
 
 
 ### Stderr Capture Implementation

@@ -23,7 +23,7 @@ This separation ensures consistent type definitions without circular dependencie
 
 | Module | Contents |
 |--------|----------|
-| `protocol` | `Event`, `Op`, `EventMsg`, `AskForApproval`, session types |
+| `protocol` | `Event`, `Op`, `EventMsg`, `AskForApproval`, session types, turn lifecycle |
 | `models` | `ResponseItem`, `ContentItem`, `LocalShellAction`, etc. |
 | `config_types` | `SandboxMode`, `TrustLevel`, model settings |
 | `user_input` | `UserInput` variants (text, image, file) |

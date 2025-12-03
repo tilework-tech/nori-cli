@@ -34,13 +34,12 @@ const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WireApi {
+    /// The OpenAI Responses API. This is used by some internal models.
+    Responses,
+
     /// The OpenAI Chat Completions API. This is the default.
     #[default]
     Chat,
-    /// The OpenAI Responses API. This is used by some internal models.
-    Responses,
-    /// The Agent Context Protocol. This is used by ACP-compliant agent subprocesses.
-    Acp,
 }
 
 /// Serializable representation of a provider definition.
@@ -203,7 +202,6 @@ impl ModelProviderInfo {
         match self.wire_api {
             WireApi::Responses => format!("{base_url}/responses{query_string}"),
             WireApi::Chat => format!("{base_url}/chat/completions{query_string}"),
-            WireApi::Acp => String::new(), // ACP uses subprocess, not HTTP
         }
     }
 

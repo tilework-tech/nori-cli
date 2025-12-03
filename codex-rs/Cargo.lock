@@ -1128,7 +1128,6 @@ dependencies = [
 name = "codex-core"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol",
  "anyhow",
  "askama",
  "assert_cmd",
@@ -1138,7 +1137,6 @@ dependencies = [
  "base64",
  "bytes",
  "chrono",
- "codex-acp",
  "codex-app-server-protocol",
  "codex-apply-patch",
  "codex-arg0",

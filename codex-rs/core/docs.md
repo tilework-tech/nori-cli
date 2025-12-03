@@ -82,47 +82,13 @@ The `auth/` module manages:
 
 **Model Client Architecture:**
 
-The `client.rs` defines `ModelClient` trait implemented by:
-- Default client for OpenAI-compatible APIs
-- ACP client for Agent Context Protocol agents
+`client.rs` provides `ModelClient` for communicating with HTTP-based model providers. Response streaming uses `ResponseStream` of `ResponseEvent` items.
 
-Response streaming uses `ResponseStream` of `ResponseEvent` items.
+The `WireApi` enum defines two HTTP-based protocols:
+- `WireApi::Responses`: OpenAI Responses API (used by some internal models)
+- `WireApi::Chat`: OpenAI Chat Completions API (the default)
 
-For ACP providers (`wire_api: WireApi::Acp`), the client looks up subprocess configuration via `codex_acp::get_agent_config(self.config.model)` from `@/codex-rs/acp/src/registry.rs`. The registry is **model-centric**: it maps model names (e.g., "mock-model", "gemini-2.5-flash", "claude-acp") to `AcpAgentConfig` structs containing provider identifier, command, and args. This differs from the provider-based approach used for HTTP APIs. ACP providers should not define `env_key` or `env_key_instructions` in their `ModelProviderInfo` entries, as they communicate via subprocess rather than HTTP APIs. Unit test `test_claude_acp_model_has_family()` in `@/codex-rs/core/src/client_acp_tests.rs` verifies that Claude ACP models resolve to a valid model family.
-
-**ACP Streaming Flow (`stream_acp` / `stream_acp_internal`):**
-
-When ACP provider is detected in `stream()`, control passes to `stream_acp()` which:
-
-```
-Client.stream()
-    │
-    ├─► Check ACP registry for model
-    │       │
-    │       ├─► Not found: Continue to HTTP providers
-    │       └─► Found: Call stream_acp(config, prompt)
-    │
-    └─► stream_acp()
-            │
-            ├─► Convert prompt to ACP ContentBlocks via translator
-            ├─► Spawn async task with stream_acp_internal()
-            └─► Return ResponseStream immediately
-
-stream_acp_internal() [in spawned task]:
-    │
-    ├─► AcpConnection::spawn() - Create subprocess & worker thread
-    ├─► connection.create_session()
-    ├─► Send OutputItemAdded event (establishes active_item)
-    ├─► Spawn forward_task for update translation
-    ├─► connection.prompt() - Blocks until completion
-    ├─► Wait for forward_task
-    ├─► Send OutputItemDone with accumulated text
-    └─► Send Completed event
-```
-
-**Critical Invariant - OutputItemAdded First:**
-
-The codex-core event processing expects `OutputItemAdded` before any `OutputTextDelta` events to establish the "active_item" tracking in the TUI. The ACP integration sends an empty assistant message via `OutputItemAdded` at the start, then streams text deltas, then sends `OutputItemDone` with the complete accumulated text.
+ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
 
 **Session Recording:**
 

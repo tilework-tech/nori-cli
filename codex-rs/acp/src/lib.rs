@@ -14,12 +14,6 @@ pub use registry::AcpAgentConfig;
 pub use registry::AcpProviderInfo;
 pub use registry::get_agent_config;
 pub use tracing_setup::init_file_tracing;
-pub use translator::AcpToolCallContent;
-pub use translator::AcpToolCallEvent;
-pub use translator::AcpToolCallLocation;
-pub use translator::AcpToolCallUpdateEvent;
-pub use translator::AcpToolKind;
-pub use translator::AcpToolStatus;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
 

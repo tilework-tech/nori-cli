@@ -1,7 +1,7 @@
 # ACP Integration Design Summary
 
 - `codex-acp` is a parallel crate to `codex-core`, not integrated via shared traits
-- Zero modifications to `codex-core` to ease upstream merge burden
+- Minimal modifications to `codex-core` to ease upstream merge burden
 - ACP vs HTTP mode is determined at startup via config, no mid-session switching
 - TUI/CLI branches once at startup: `if config.acp_agent.is_some() { run_acp_mode() } else { run_http_mode() }`
 - HTTP mode code path remains completely unchanged
@@ -15,4 +15,3 @@
 - `permission_request_to_approval_event()` converts ACP requests to Codex format
 - `review_decision_to_permission_outcome()` converts Codex decisions back to ACP format
 - Fallback behavior: auto-approve if approval channel closed, deny if response channel dropped
-- Model picker stays HTTP-only; ACP agents are not treated as switchable "models"

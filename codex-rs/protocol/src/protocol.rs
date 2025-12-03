@@ -560,9 +560,6 @@ pub enum EventMsg {
     AgentMessageContentDelta(AgentMessageContentDeltaEvent),
     ReasoningContentDelta(ReasoningContentDeltaEvent),
     ReasoningRawContentDelta(ReasoningRawContentDeltaEvent),
-
-    /// ACP-specific events (tool calls from ACP agents).
-    Acp(AcpEventMsg),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
@@ -1555,60 +1552,6 @@ pub enum TurnAbortReason {
     Interrupted,
     Replaced,
     ReviewEnded,
-}
-
-// ────────────────────────────────────────────────────────────────────────────────
-// ACP (Agent Client Protocol) Events
-// ────────────────────────────────────────────────────────────────────────────────
-
-/// Tool call status for ACP tool calls.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum AcpToolCallStatus {
-    Pending,
-    InProgress,
-    Completed,
-    Failed,
-}
-
-/// Tool kind for ACP tool calls.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum AcpToolCallKind {
-    Read,
-    Edit,
-    Delete,
-    Move,
-    Search,
-    Execute,
-    Think,
-    Fetch,
-    SwitchMode,
-    Other,
-}
-
-/// An ACP tool call event for display in the TUI.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
-pub struct AcpToolCallEventMsg {
-    /// Unique ID for this tool call.
-    pub call_id: String,
-    /// Human-readable title for the tool call.
-    pub title: String,
-    /// Category of the tool call.
-    pub kind: AcpToolCallKind,
-    /// Current status of the tool call.
-    pub status: AcpToolCallStatus,
-}
-
-/// ACP-specific events encapsulated in a nested enum.
-///
-/// This pattern minimizes changes to the parent EventMsg enum
-/// while allowing for future ACP event types.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
-#[serde(tag = "acp_type", rename_all = "snake_case")]
-pub enum AcpEventMsg {
-    /// A tool call has been initiated or updated by the ACP agent.
-    ToolCall(AcpToolCallEventMsg),
 }
 
 #[cfg(test)]
