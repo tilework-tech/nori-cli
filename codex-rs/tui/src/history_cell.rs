@@ -977,6 +977,12 @@ pub(crate) fn new_web_search_call(query: String) -> PlainHistoryCell {
     PlainHistoryCell { lines }
 }
 
+/// Create a history cell for an ACP (Agent Client Protocol) tool call.
+pub(crate) fn new_acp_tool_call(title: String) -> PlainHistoryCell {
+    let lines: Vec<Line<'static>> = vec![Line::from(vec![padded_emoji("⚙").into(), title.into()])];
+    PlainHistoryCell { lines }
+}
+
 /// If the first content is an image, return a new cell with the image.
 /// TODO(rgwood-dd): Handle images properly even if they're not the first result.
 fn try_new_completed_mcp_tool_call_with_image_output(

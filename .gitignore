@@ -97,6 +97,5 @@ CHANGELOG.ignore.md
 /target
 
 # Local code/doc references for ACP work
-/agent-client-protocol
-/zed
+/other-repos
 

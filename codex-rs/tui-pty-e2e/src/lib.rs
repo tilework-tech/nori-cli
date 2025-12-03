@@ -488,6 +488,13 @@ impl SessionConfig {
         self
     }
 
+    /// Configure the mock agent to send a tool call sequence during the prompt
+    pub fn with_tool_call(mut self) -> Self {
+        self.mock_agent_env
+            .insert("MOCK_AGENT_SEND_TOOL_CALL".to_string(), "1".to_string());
+        self
+    }
+
     pub fn with_agent_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.mock_agent_env.insert(key.into(), value.into());
         self

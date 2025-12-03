@@ -35,6 +35,7 @@ use crate::auth::CodexAuth;
 use crate::auth::RefreshTokenError;
 use crate::chat_completions::AggregateStreamExt;
 use crate::chat_completions::stream_chat_completions;
+use crate::client_common::AcpResponseEvent;
 use crate::client_common::Prompt;
 use crate::client_common::Reasoning;
 use crate::client_common::ResponseEvent;
@@ -1174,6 +1175,30 @@ async fn stream_acp_internal(
                     }
                     TranslatedEvent::Completed(_) => {
                         // Completion is handled when the prompt returns
+                    }
+                    TranslatedEvent::ToolCall(tool_call) => {
+                        // Forward tool call event to the client
+                        if tx_clone
+                            .send(Ok(ResponseEvent::Acp(AcpResponseEvent::ToolCall(
+                                tool_call,
+                            ))))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                    TranslatedEvent::ToolCallUpdate(update) => {
+                        // Forward tool call update event to the client
+                        if tx_clone
+                            .send(Ok(ResponseEvent::Acp(AcpResponseEvent::ToolCallUpdate(
+                                update,
+                            ))))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
                     }
                 }
             }

@@ -81,6 +81,26 @@ impl MockAgent {
         .await
     }
 
+    /// Send a tool call notification
+    async fn send_tool_call(
+        &self,
+        session_id: acp::SessionId,
+        tool_call: acp::ToolCall,
+    ) -> Result<(), acp::Error> {
+        self.send_update(session_id, acp::SessionUpdate::ToolCall(tool_call))
+            .await
+    }
+
+    /// Send a tool call update notification
+    async fn send_tool_call_update(
+        &self,
+        session_id: acp::SessionId,
+        update: acp::ToolCallUpdate,
+    ) -> Result<(), acp::Error> {
+        self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(update))
+            .await
+    }
+
     async fn read_file_via_client(
         &self,
         session_id: acp::SessionId,
@@ -187,6 +207,83 @@ impl acp::Agent for MockAgent {
             && let Ok(delay) = delay_str.parse::<u64>()
         {
             sleep(Duration::from_millis(delay)).await;
+        }
+
+        // Support sending tool calls for testing ACP tool call display
+        if std::env::var("MOCK_AGENT_SEND_TOOL_CALL").is_ok() {
+            eprintln!("Mock agent: sending tool call sequence");
+
+            // Send initial tool call with pending status
+            let tool_call_id = acp::ToolCallId("test-tool-call-001".to_string().into());
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall {
+                    id: tool_call_id.clone(),
+                    title: "Reading configuration file".to_string(),
+                    kind: acp::ToolKind::Read,
+                    status: acp::ToolCallStatus::Pending,
+                    content: vec![],
+                    locations: vec![],
+                    raw_input: Some(json!({"path": "/etc/config.toml"})),
+                    raw_output: None,
+                    meta: None,
+                },
+            )
+            .await?;
+
+            // Small delay to simulate execution time
+            sleep(Duration::from_millis(50)).await;
+
+            // Send update to in_progress
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate {
+                    id: tool_call_id.clone(),
+                    fields: acp::ToolCallUpdateFields {
+                        title: None,
+                        kind: None,
+                        status: Some(acp::ToolCallStatus::InProgress),
+                        content: None,
+                        locations: None,
+                        raw_input: None,
+                        raw_output: None,
+                    },
+                    meta: None,
+                },
+            )
+            .await?;
+
+            // Small delay
+            sleep(Duration::from_millis(50)).await;
+
+            // Send update to completed with content
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate {
+                    id: tool_call_id.clone(),
+                    fields: acp::ToolCallUpdateFields {
+                        title: None,
+                        kind: None,
+                        status: Some(acp::ToolCallStatus::Completed),
+                        content: Some(vec![acp::ToolCallContent::Content {
+                            content: acp::ContentBlock::Text(acp::TextContent {
+                                text: "Configuration loaded successfully".to_string(),
+                                annotations: None,
+                                meta: None,
+                            }),
+                        }]),
+                        locations: None,
+                        raw_input: None,
+                        raw_output: Some(json!({"success": true, "lines": 42})),
+                    },
+                    meta: None,
+                },
+            )
+            .await?;
+
+            // Send text message after tool call
+            self.send_text_chunk(session_id.clone(), "Tool call completed successfully.")
+                .await?;
         }
 
         if let Ok(file_path) = std::env::var("MOCK_AGENT_REQUEST_FILE") {
