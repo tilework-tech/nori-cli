@@ -1,7 +1,7 @@
 use anyhow::Result;
-use portable_pty::native_pty_system;
 use portable_pty::CommandBuilder;
 use portable_pty::PtySize;
+use portable_pty::native_pty_system;
 use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
@@ -547,7 +547,8 @@ fn codex_binary_path() -> String {
 }
 
 pub const TIMEOUT: Duration = Duration::from_secs(5);
-pub const TIMEOUT_INPUT: Duration = Duration::from_millis(300);
+pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
+pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(500);
 
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {

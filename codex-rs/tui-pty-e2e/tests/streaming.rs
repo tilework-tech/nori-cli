@@ -1,10 +1,11 @@
 use insta::assert_snapshot;
-use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
+use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
 fn test_submit_text() {
@@ -24,8 +25,8 @@ fn test_submit_text() {
 
     std::thread::sleep(TIMEOUT_INPUT);
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "submit_input",
         normalize_for_input_snapshot(session.screen_contents())
@@ -76,6 +77,7 @@ fn test_escape_cancels_streaming() {
         )
         .expect("No interrupt reported");
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "cancelled_stream",
         normalize_for_input_snapshot(session.screen_contents())

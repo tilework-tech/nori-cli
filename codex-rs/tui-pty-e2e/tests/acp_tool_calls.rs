@@ -26,12 +26,13 @@
 //! ```
 
 use std::time::Duration;
-use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
+use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 /// Test that an ACP tool call is rendered in the TUI
 ///
@@ -194,8 +195,7 @@ fn test_acp_tool_call_snapshot() {
         .wait_for_text("Read complete", Duration::from_secs(10))
         .expect("Should receive response");
 
-    std::thread::sleep(TIMEOUT_INPUT);
-
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
         "acp_tool_call_rendered",
         normalize_for_input_snapshot(session.screen_contents())
