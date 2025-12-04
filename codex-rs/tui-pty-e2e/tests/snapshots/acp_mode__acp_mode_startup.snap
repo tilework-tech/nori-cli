@@ -1,8 +1,26 @@
 ---
 source: tui-pty-e2e/tests/acp_mode.rs
+assertion_line: 238
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
-■ Operation 'ListCustomPrompts' is not supported in ACP mode
+╭────────────────────────────╮
+│   _   _  ___  ____  ___    │
+│  | \ | \/ _ \|  _ \|_ _\   │
+│  |  \| | | | | |_) || |    │
+│  | |\  | |_| |  _ < | |    │
+│  \_| \_|\___/\_| \_\___|   │
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 › [DEFAULT_PROMPT]

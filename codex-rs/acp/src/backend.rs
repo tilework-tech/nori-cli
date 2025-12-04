@@ -327,10 +327,12 @@ impl AcpBackend {
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
-            // Send ExecApprovalRequest event to TUI
+            // Send ExecApprovalRequest event to TUI.
+            // Use the call_id as the event wrapper ID so that the TUI can
+            // correctly route the user's decision back to this pending request.
             let _ = event_tx
                 .send(Event {
-                    id: String::new(),
+                    id: request.event.call_id.clone(),
                     msg: EventMsg::ExecApprovalRequest(request.event.clone()),
                 })
                 .await;

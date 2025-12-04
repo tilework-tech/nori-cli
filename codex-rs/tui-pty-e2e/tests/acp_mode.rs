@@ -149,6 +149,78 @@ fn test_acp_approval_request_displayed_in_tui() {
     }
 }
 
+/// Test full approval flow: approve → agent continues → TUI remains functional
+///
+/// This test verifies the complete approval handling cycle:
+/// 1. User sends a prompt that triggers a permission request
+/// 2. Approval UI appears with Yes/No options
+/// 3. User approves by pressing 'y'
+/// 4. Agent receives the approval and continues
+/// 5. Agent sends a continuation message
+/// 6. TUI returns to input state and remains functional
+#[test]
+fn test_acp_approval_full_flow() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt that triggers a permission request
+    session.send_str("Test approval flow").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the approval request to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Yes, proceed") || screen.contains("proceed"),
+            Duration::from_secs(10),
+        )
+        .expect("Approval UI should appear");
+
+    eprintln!(
+        "Approval UI appeared:\n{}",
+        session.screen_contents()
+    );
+
+    // Approve by pressing 'y'
+    session.send_key(Key::Char('y')).unwrap();
+
+    // Wait for the agent to continue after approval
+    // The mock agent sends "Permission granted with option: allow" after approval
+    session
+        .wait_for_text("Permission granted", Duration::from_secs(10))
+        .expect("Agent should continue after approval and send response");
+
+    eprintln!(
+        "Agent continued after approval:\n{}",
+        session.screen_contents()
+    );
+
+    // Verify TUI is back in input state (prompt visible)
+    session
+        .wait_for_text("›", Duration::from_secs(5))
+        .expect("TUI should return to input state");
+
+    // Verify TUI is still functional - can type a new message
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_str("Follow-up message").unwrap();
+
+    // Verify the typed text appears
+    session
+        .wait_for_text("Follow-up message", Duration::from_secs(3))
+        .expect("TUI should remain functional for further input");
+}
+
 /// Test snapshot of ACP mode startup screen
 #[test]
 fn test_acp_mode_startup_snapshot() {
