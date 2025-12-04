@@ -143,7 +143,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
         .wait_for_text("Tool call completed successfully", Duration::from_secs(10))
         .expect("Should receive completion response");
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
 
@@ -156,6 +156,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
         "Completed tool call should show 'Called' or tool title, got:\n{}",
         contents
     );
+    insta::assert_snapshot!("acp_tool_call_echo", normalize_for_input_snapshot(contents));
 }
 
 /// Snapshot test for ACP tool call rendering
@@ -192,7 +193,7 @@ fn test_acp_tool_call_snapshot() {
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
-        "acp_tool_call_rendered",
+        "acp_tool_call_read",
         normalize_for_input_snapshot(session.screen_contents())
     );
 }
