@@ -26,12 +26,13 @@
 //! ```
 
 use std::time::Duration;
-use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
+use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 /// Test that an ACP tool call is rendered in the TUI
 ///
@@ -45,17 +46,13 @@ use tui_pty_e2e::TIMEOUT_INPUT;
 /// - translator.rs must handle SessionUpdate::ToolCall
 /// - core/client.rs must emit EventMsg::McpToolCallBegin
 #[test]
-#[ignore]
-// TODO: reenable these based on the correct MOCK_AGENT_SEND_TOOL_CALL vars
-// and any other fixups to work with the completed mock support
 fn test_acp_tool_call_rendered_in_tui() {
     // Configure mock agent to send a tool call
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
         // Configure mock agent to emit a tool call before responding
-        .with_agent_env("MOCK_AGENT_TOOL_CALL", "read_file")
-        .with_agent_env("MOCK_AGENT_TOOL_CALL_ARGS", r#"{"path":"test.txt"}"#)
-        .with_mock_response("Done with tool call.");
+        // The mock agent checks MOCK_AGENT_SEND_TOOL_CALL (not MOCK_AGENT_TOOL_CALL)
+        .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
@@ -117,17 +114,13 @@ fn test_acp_tool_call_rendered_in_tui() {
 /// 2. The duration is shown
 /// 3. Any output is displayed
 #[test]
-#[ignore]
-// TODO: reenable these based on the correct MOCK_AGENT_SEND_TOOL_CALL vars
-// and any other fixups to work with the completed mock support
 fn test_acp_tool_call_completion_rendered_in_tui() {
     // Configure mock agent to send a tool call with completion
+    // The mock agent sends a hardcoded tool call with title "Reading configuration file"
+    // and final text "Tool call completed successfully."
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
-        .with_agent_env("MOCK_AGENT_TOOL_CALL", "echo")
-        .with_agent_env("MOCK_AGENT_TOOL_CALL_ARGS", r#"{"message":"hello"}"#)
-        .with_agent_env("MOCK_AGENT_TOOL_CALL_RESULT", "hello")
-        .with_mock_response("Tool call completed.");
+        .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
@@ -145,21 +138,25 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
     session.send_key(Key::Enter).unwrap();
 
     // Wait for the mock response which means the tool call has completed
+    // The mock agent sends "Tool call completed successfully." as final text
     session
-        .wait_for_text("Tool call completed", Duration::from_secs(10))
+        .wait_for_text("Tool call completed successfully", Duration::from_secs(10))
         .expect("Should receive completion response");
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
 
-    // After completion, should show "Called" with checkmark and duration
-    // The format is: "✓ Called server.tool_name(...) (Xs)"
+    // After completion, should show "Called" or "Reading" (from title "Reading configuration file")
+    // The format is: "✓ Called server.tool_name(...) (Xs)" or the title display
     assert!(
-        contents.contains("Called") || contents.contains("echo"),
-        "Completed tool call should show 'Called' or tool name, got:\n{}",
+        contents.contains("Called")
+            || contents.contains("Reading")
+            || contents.contains("configuration"),
+        "Completed tool call should show 'Called' or tool title, got:\n{}",
         contents
     );
+    insta::assert_snapshot!("acp_tool_call_echo", normalize_for_input_snapshot(contents));
 }
 
 /// Snapshot test for ACP tool call rendering
@@ -168,12 +165,12 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
 /// to detect any regressions in the display format.
 #[test]
 fn test_acp_tool_call_snapshot() {
+    // Use the correct env var to trigger tool calls
+    // The mock agent sends hardcoded content: title "Reading configuration file"
+    // and final text "Tool call completed successfully."
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
-        .with_agent_env("MOCK_AGENT_TOOL_CALL", "read_file")
-        .with_agent_env("MOCK_AGENT_TOOL_CALL_ARGS", r#"{"path":"test.txt"}"#)
-        .with_agent_env("MOCK_AGENT_TOOL_CALL_RESULT", "file content here")
-        .with_mock_response("Read complete.");
+        .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
@@ -189,15 +186,14 @@ fn test_acp_tool_call_snapshot() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for the response
+    // Wait for the response - mock agent sends "Tool call completed successfully."
     session
-        .wait_for_text("Read complete", Duration::from_secs(10))
+        .wait_for_text("Tool call completed successfully", Duration::from_secs(10))
         .expect("Should receive response");
 
-    std::thread::sleep(TIMEOUT_INPUT);
-
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
-        "acp_tool_call_rendered",
+        "acp_tool_call_read",
         normalize_for_input_snapshot(session.screen_contents())
     );
 }

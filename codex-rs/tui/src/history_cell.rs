@@ -562,6 +562,12 @@ pub(crate) fn padded_emoji(emoji: &str) -> String {
 #[derive(Debug)]
 pub struct SessionInfoCell(CompositeHistoryCell);
 
+impl SessionInfoCell {
+    pub(crate) fn new(composite: CompositeHistoryCell) -> Self {
+        Self(composite)
+    }
+}
+
 impl HistoryCell for SessionInfoCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         self.0.display_lines(width)
@@ -577,6 +583,24 @@ impl HistoryCell for SessionInfoCell {
 }
 
 pub(crate) fn new_session_info(
+    config: &Config,
+    event: SessionConfiguredEvent,
+    is_first_event: bool,
+) -> SessionInfoCell {
+    new_session_info_nori(config, event, is_first_event)
+}
+
+pub(crate) fn new_session_info_nori(
+    config: &Config,
+    event: SessionConfiguredEvent,
+    is_first_event: bool,
+) -> SessionInfoCell {
+    // Use the Nori-branded session header
+    crate::nori::session_header::new_nori_session_info(config, event, is_first_event)
+}
+
+#[allow(dead_code)]
+pub(crate) fn new_session_info_codex(
     config: &Config,
     event: SessionConfiguredEvent,
     is_first_event: bool,

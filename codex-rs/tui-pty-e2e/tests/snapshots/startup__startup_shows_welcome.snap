@@ -1,7 +1,8 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
-expression: normalize_for_input_snapshot(session.screen_contents())
+expression: normalize_for_input_snapshot(contents)
 ---
+                                      
              _._:=++==+,_             
          _=,/*\+/+\=||=_ _"+_         
        ,|*|+**"^`   `"*`"~=~||+       

@@ -1,0 +1,16 @@
+---
+source: tui/src/nori_session_header.rs
+expression: rendered
+---
+╭───────────────────────────────╮
+│   _   _  ___  ____  ___       │
+│  | \ | |/ _ \|  _ \|_ _|      │
+│  |  \| | | | | |_) || |       │
+│  | |\  | |_| |  _ < | |       │
+│  |_| \_|\___/|_| \_\___|      │
+│                               │
+│ version:   v0.1.0             │
+│ directory: /home/user/project │
+│ agent:     claude-sonnet      │
+│ profile:   senior-swe         │
+╰───────────────────────────────╯

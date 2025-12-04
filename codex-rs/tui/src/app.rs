@@ -256,9 +256,7 @@ impl App {
         // the model is not registered in the ACP registry, fail immediately.
         // This prevents showing model migration prompts or other UI for HTTP models
         // that will ultimately fail.
-        if !config.acp_allow_http_fallback
-            && codex_acp::get_agent_config(&config.model).is_err()
-        {
+        if !config.acp_allow_http_fallback && codex_acp::get_agent_config(&config.model).is_err() {
             return Err(color_eyre::eyre::eyre!(
                 "Model '{}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
