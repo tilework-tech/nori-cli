@@ -34,6 +34,10 @@ jobs:
           targets: ${{ matrix.target }}
           components: clippy, rustfmt
 
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
       - name: Compute lockfile hash
         id: lockhash
         working-directory: codex-rs
