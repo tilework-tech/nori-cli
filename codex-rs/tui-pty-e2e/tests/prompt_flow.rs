@@ -1,10 +1,54 @@
 use insta::assert_snapshot;
+use std::time::Duration;
+use std::time::Instant;
 use tui_pty_e2e::normalize_for_input_snapshot;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+
+/// Test that HTTP models produce immediate errors when allow_http_fallback=false.
+///
+/// When HTTP mode is disabled (the default), using an HTTP-only model like
+/// gpt-5.1-codex-mini should produce an immediate error at startup, NOT
+/// after submitting a prompt, and should NOT go through retry loops.
+#[test]
+fn test_http_model_immediate_error_without_retries() {
+    let start = Instant::now();
+
+    let mut session = TuiSession::spawn_with_config(
+        18,
+        80,
+        SessionConfig::new().with_model("gpt-5.1-codex-mini".to_owned()),
+    )
+    .expect("Failed to spawn codex");
+
+    // The error should appear immediately at startup, not after prompt submission
+    session
+        .wait_for_text(
+            "is not registered as an ACP agent",
+            TIMEOUT,
+        )
+        .expect("Should show ACP registration error");
+
+    let elapsed = start.elapsed();
+
+    // Verify the error appeared quickly (< 6 seconds) - proving no retry loops
+    // This accounts for PTY spawn overhead (~4s) but would catch retry loops (10+ seconds)
+    // If there were 5 retries with backoff, this would take 10+ seconds
+    assert!(
+        elapsed < Duration::from_secs(6),
+        "Error took {:?} to appear - suggests retries are happening. Expected immediate error.",
+        elapsed
+    );
+
+    std::thread::sleep(TIMEOUT_INPUT);
+    assert_snapshot!(
+        "http_model_immediate_error",
+        normalize_for_input_snapshot(session.screen_contents())
+    );
+}
 
 #[test]
 fn test_submit_prompt_default_response() {
@@ -33,34 +77,6 @@ fn test_submit_prompt_default_response() {
     std::thread::sleep(TIMEOUT_INPUT);
     assert_snapshot!(
         "prompt_submitted",
-        normalize_for_input_snapshot(session.screen_contents())
-    );
-}
-
-#[test]
-// Testing that ACP mode with a nonexistent model produces a clear error
-// instead of falling back to HTTP providers
-fn test_submit_prompt_missing_model() {
-    let mut session = TuiSession::spawn_with_config(
-        18,
-        80,
-        SessionConfig::new().with_model("nonexistent".to_owned()),
-    )
-    .expect("Failed to spawn codex");
-
-    // When acp.only=true and the model is not registered as an ACP agent,
-    // the TUI should show an error immediately at startup (not after prompt submission).
-    // The error is shown before the TUI even renders the shortcuts prompt.
-    session
-        .wait_for_text(
-            "Model 'nonexistent' has acp.only=true but is not registered",
-            TIMEOUT,
-        )
-        .unwrap();
-
-    std::thread::sleep(TIMEOUT_INPUT);
-    assert_snapshot!(
-        "missing_model",
         normalize_for_input_snapshot(session.screen_contents())
     );
 }

@@ -153,8 +153,8 @@ impl TuiSession {
                     .as_ref()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_else(|| codex_home.to_string_lossy().into_owned());
-                let acp_section = if config.acp_only {
-                    "\n[acp]\nonly = true\n"
+                let acp_section = if config.allow_http_fallback {
+                    "\n[acp]\nallow_http_fallback = true\n"
                 } else {
                     ""
                 };
@@ -451,9 +451,9 @@ pub struct SessionConfig {
     /// This prevents the "Snapshots disabled" BackgroundEvent from overwriting
     /// the "Working" status indicator during streaming tests.
     pub git_init: bool,
-    /// When true, require ACP mode and error if model is not registered.
-    /// When false, allow fallback to HTTP providers.
-    pub acp_only: bool,
+    /// When true, allows falling back to HTTP providers if model is not in ACP registry.
+    /// When false (default), ACP-only mode: unregistered models produce an error.
+    pub allow_http_fallback: bool,
 }
 
 impl Default for SessionConfig {
@@ -474,12 +474,12 @@ impl SessionConfig {
             cwd: None,
             config_toml: None,
             git_init: true,
-            acp_only: true, // Default to ACP-only mode for tests
+            allow_http_fallback: false, // Default to ACP-only mode for tests
         }
     }
 
-    pub fn with_acp_only(mut self, acp_only: bool) -> Self {
-        self.acp_only = acp_only;
+    pub fn with_allow_http_fallback(mut self, allow_http_fallback: bool) -> Self {
+        self.allow_http_fallback = allow_http_fallback;
         self
     }
 

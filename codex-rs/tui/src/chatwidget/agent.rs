@@ -21,9 +21,9 @@ use crate::app_event_sender::AppEventSender;
 /// `UnboundedSender<Op>` used by the UI to submit operations.
 ///
 /// This function detects whether to use ACP mode or HTTP mode based on:
-/// 1. If `acp_only` is set in config, we must use ACP (error if model not registered)
-/// 2. Otherwise, check if the model name matches an ACP agent in the registry
-/// 3. Fall back to HTTP mode only if `acp_only` is not set
+/// 1. If the model is registered in the ACP registry, use ACP mode
+/// 2. If the model is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
+/// 3. If the model is NOT registered and `acp_allow_http_fallback` is false (default), error
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
@@ -31,25 +31,23 @@ pub(crate) fn spawn_agent(
 ) -> UnboundedSender<Op> {
     let acp_agent_result = get_agent_config(&config.model);
 
-    match (config.acp_only, acp_agent_result.is_ok()) {
-        // acp_only=true and model is registered -> use ACP
-        (true, true) => spawn_acp_agent(config, app_event_tx),
+    match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
+        // Model is registered in ACP registry -> use ACP
+        (true, _) => spawn_acp_agent(config, app_event_tx),
 
-        // acp_only=true but model NOT registered -> error, do not fall back to HTTP
-        (true, false) => {
+        // Model NOT registered, but HTTP fallback is allowed -> use HTTP
+        (false, true) => spawn_http_agent(config, app_event_tx, server),
+
+        // Model NOT registered and HTTP fallback NOT allowed -> error
+        (false, false) => {
             let error_msg = format!(
-                "Model '{}' has acp.only=true but is not registered as an ACP agent. \
+                "Model '{}' is not registered as an ACP agent. \
+                 Set acp.allow_http_fallback = true to allow HTTP providers. \
                  Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp",
                 config.model
             );
             spawn_error_agent(error_msg, app_event_tx)
         }
-
-        // acp_only is false, but model IS registered in ACP registry -> use ACP
-        (false, true) => spawn_acp_agent(config, app_event_tx),
-
-        // acp_only is false and model NOT in ACP registry -> use HTTP
-        (false, false) => spawn_http_agent(config, app_event_tx, server),
     }
 }
 
