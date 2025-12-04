@@ -14,6 +14,7 @@ use tokio::time::sleep;
 use tokio_util::compat::TokioAsyncReadCompatExt as _;
 use tokio_util::compat::TokioAsyncWriteCompatExt as _;
 
+#[allow(clippy::large_enum_variant)]
 enum MockClientRequest {
     ReadFile {
         session_id: acp::SessionId,

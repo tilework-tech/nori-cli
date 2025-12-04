@@ -54,6 +54,7 @@ Both backends produce `codex_protocol::Event` for the TUI event loop, enabling u
 - `selection_list.rs`: Generic selection popup widget
 - `shimmer.rs`: Loading animation effects
 - `status_indicator_widget.rs`: Status display
+- `nori/`: Nori-specific branding and customization (see `@/codex-rs/tui/src/nori/docs.md`)
 
 **Input Handling:**
 
