@@ -179,6 +179,19 @@ impl AcpBackend {
             } => {
                 self.handle_exec_approval(&call_id, decision).await;
             }
+            Op::Shutdown => {
+                // Cancel any in-progress session and send ShutdownComplete
+                // to allow the TUI to exit properly
+                debug!("Processing Op::Shutdown in ACP mode");
+                let _ = self.connection.cancel(&self.session_id).await;
+                let _ = self
+                    .event_tx
+                    .send(Event {
+                        id: id.clone(),
+                        msg: EventMsg::ShutdownComplete,
+                    })
+                    .await;
+            }
             // Unsupported operations - send error event per user decision
             Op::Compact
             | Op::Undo
@@ -198,8 +211,7 @@ impl AcpBackend {
             // These ops are internal/context-related, silently ignore
             Op::UserTurn { .. }
             | Op::OverrideTurnContext { .. }
-            | Op::ResolveElicitation { .. }
-            | Op::Shutdown => {
+            | Op::ResolveElicitation { .. } => {
                 debug!("Ignoring internal Op in ACP mode: {}", get_op_name(&op));
             }
             // Catch any new Op variants we haven't handled
@@ -604,6 +616,7 @@ mod tests {
         assert_eq!(get_op_name(&Op::Compact), "Compact");
         assert_eq!(get_op_name(&Op::Undo), "Undo");
         assert_eq!(get_op_name(&Op::UserInput { items: vec![] }), "UserInput");
+        assert_eq!(get_op_name(&Op::Shutdown), "Shutdown");
     }
 
     /// Test that generate_id produces unique IDs.

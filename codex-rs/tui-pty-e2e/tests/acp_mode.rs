@@ -218,6 +218,10 @@ fn test_acp_approval_full_flow() {
         .expect("TUI should remain functional for further input");
 }
 
+// NOTE: Ctrl-C tests cannot be implemented as E2E tests because the PTY
+// environment intercepts Ctrl-C (0x03) as SIGINT before it reaches the TUI.
+// The Op::Shutdown handling is tested via unit tests in acp/src/backend.rs instead.
+
 /// Test snapshot of ACP mode startup screen
 #[test]
 #[ignore] // Flaky: ListCustomPrompts error timing varies between runs
