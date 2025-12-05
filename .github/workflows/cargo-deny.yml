@@ -1,6 +1,9 @@
 name: cargo-deny
 
-on: workflow_dispatch
+on:
+  pull_request: {}
+  push:
+    branches: [main, dev]
 
 jobs:
   cargo-deny:
@@ -16,7 +19,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          rust-version: stable
+          rust-version: nightly
           manifest-path: ./codex-rs/Cargo.toml
+          log-level: warn
+          command: check
+          arguments: --all-features

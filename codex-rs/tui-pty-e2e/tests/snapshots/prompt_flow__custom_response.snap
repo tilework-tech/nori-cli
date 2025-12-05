@@ -2,7 +2,7 @@
 source: tui-pty-e2e/tests/prompt_flow.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
-  /review - review any changes and find issues
+  Run 'npx nori-ai install' to set up Nori AI enhancements
 
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
 

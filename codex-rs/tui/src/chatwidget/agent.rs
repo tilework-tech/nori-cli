@@ -20,19 +20,59 @@ use crate::app_event_sender::AppEventSender;
 /// Spawn the agent bootstrapper and op forwarding loop, returning the
 /// `UnboundedSender<Op>` used by the UI to submit operations.
 ///
-/// This function detects whether to use ACP mode or HTTP mode based on
-/// whether the model name matches an ACP agent in the registry.
+/// This function detects whether to use ACP mode or HTTP mode based on:
+/// 1. If the model is registered in the ACP registry, use ACP mode
+/// 2. If the model is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
+/// 3. If the model is NOT registered and `acp_allow_http_fallback` is false (default), error
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
     server: Arc<ConversationManager>,
 ) -> UnboundedSender<Op> {
-    // Detect ACP mode based on model name
-    if get_agent_config(&config.model).is_ok() {
-        spawn_acp_agent(config, app_event_tx)
-    } else {
-        spawn_http_agent(config, app_event_tx, server)
+    let acp_agent_result = get_agent_config(&config.model);
+
+    match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
+        // Model is registered in ACP registry -> use ACP
+        (true, _) => spawn_acp_agent(config, app_event_tx),
+
+        // Model NOT registered, but HTTP fallback is allowed -> use HTTP
+        (false, true) => spawn_http_agent(config, app_event_tx, server),
+
+        // Model NOT registered and HTTP fallback NOT allowed -> error
+        (false, false) => {
+            let error_msg = format!(
+                "Model '{}' is not registered as an ACP agent. \
+                 Set acp.allow_http_fallback = true to allow HTTP providers. \
+                 Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp",
+                config.model
+            );
+            spawn_error_agent(error_msg, app_event_tx)
+        }
     }
+}
+
+/// Spawn an agent that emits an error and exits after a brief delay.
+///
+/// The delay allows the TUI to render the error message before exiting,
+/// so users can see what went wrong.
+fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> UnboundedSender<Op> {
+    let (codex_op_tx, _codex_op_rx) = unbounded_channel::<Op>();
+
+    tokio::spawn(async move {
+        tracing::error!("{}", error_msg);
+        app_event_tx.send(AppEvent::CodexEvent(Event {
+            id: String::new(),
+            msg: EventMsg::Error(codex_protocol::protocol::ErrorEvent {
+                message: error_msg,
+                codex_error_info: None,
+            }),
+        }));
+        // Brief delay to allow the TUI to render the error before exiting
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        app_event_tx.send(AppEvent::ExitRequest);
+    });
+
+    codex_op_tx
 }
 
 /// Spawn an ACP agent backend.

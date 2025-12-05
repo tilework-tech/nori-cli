@@ -7080,6 +7080,7 @@ dependencies = [
  "anyhow",
  "insta",
  "libc",
+ "owo-colors",
  "portable-pty 0.8.1",
  "tempfile",
  "vt100 0.15.2",
