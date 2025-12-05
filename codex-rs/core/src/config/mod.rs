@@ -3030,6 +3030,7 @@ model_verbosity = "high"
                 tui_notifications: Default::default(),
                 animations: true,
                 otel: OtelConfig::default(),
+                acp_allow_http_fallback: false,
             },
             o3_profile_config
         );
@@ -3103,6 +3104,7 @@ model_verbosity = "high"
             tui_notifications: Default::default(),
             animations: true,
             otel: OtelConfig::default(),
+            acp_allow_http_fallback: false,
         };
 
         assert_eq!(expected_gpt3_profile_config, gpt3_profile_config);
@@ -3191,6 +3193,7 @@ model_verbosity = "high"
             tui_notifications: Default::default(),
             animations: true,
             otel: OtelConfig::default(),
+            acp_allow_http_fallback: false,
         };
 
         assert_eq!(expected_zdr_profile_config, zdr_profile_config);
@@ -3265,6 +3268,7 @@ model_verbosity = "high"
             tui_notifications: Default::default(),
             animations: true,
             otel: OtelConfig::default(),
+            acp_allow_http_fallback: false,
         };
 
         assert_eq!(expected_gpt5_profile_config, gpt5_profile_config);
