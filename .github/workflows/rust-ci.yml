@@ -37,6 +37,8 @@ jobs:
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install coreutils
           docker system prune -af || true
 
       - uses: dtolnay/rust-toolchain@1.90
@@ -50,12 +52,11 @@ jobs:
 
       - name: Compute lockfile hash
         id: lockhash
-        working-directory: codex-rs
         shell: bash
         run: |
           set -euo pipefail
-          echo "hash=$(sha256sum Cargo.lock | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-          echo "toolchain_hash=$(sha256sum rust-toolchain.toml | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "hash=${{ hashFiles('codex-rs/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
+          echo "toolchain_hash=${{ hashFiles('codex-rs/rust-toolchain.toml') }}" >> "$GITHUB_OUTPUT"
 
       # Cache cargo home directory (registry, git deps, etc.)
       - name: Restore cargo home cache
