@@ -107,7 +107,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 ..Default::default()
             },
         }),
-        "claude" | "claude-acp" => Ok(AcpAgentConfig {
+        "claude-4.5" | "claude-acp" => Ok(AcpAgentConfig {
             provider_slug: "claude-acp".to_string(),
             command: "npx".to_string(),
             args: vec!["@zed-industries/claude-code-acp".to_string()],

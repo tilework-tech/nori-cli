@@ -68,7 +68,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             show_in_picker: true,
         },
         ModelPreset {
-            id: "gemini-2.5-flash",
+            id: "gemini-acp",
             model: "gemini-2.5-flash",
             display_name: "Gemini 2.0 Flash Thinking",
             description: "Google's experimental thinking model.",
@@ -80,7 +80,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
         },
         ModelPreset {
             id: "claude-acp",
-            model: "claude-acp",
+            model: "claude-4.5",
             display_name: "Claude",
             description: "Anthropic's Claude via Agent Context Protocol.",
             default_reasoning_effort: ReasoningEffort::Medium,
