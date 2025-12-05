@@ -65,13 +65,16 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
 
     match normalized.as_str() {
         "mock-model" => {
-            // Use full path to mock_acp_agent binary from target directory
-            // This handles both debug and release builds
+            // Resolve path to mock_acp_agent binary relative to current executable.
+            // Test binaries are placed in target/{arch}/{profile}/deps/, while
+            // the mock_acp_agent binary is in target/{arch}/{profile}/.
+            // We need to go up two directories (deps -> profile dir) to find it.
             let exe_path = match std::env::current_exe() {
                 Ok(p) => {
                     let mock_path = p
-                        .parent()
-                        .map(|parent| parent.join("mock_acp_agent"))
+                        .parent() // from test binary to deps/
+                        .and_then(|parent| parent.parent()) // from deps/ to profile dir
+                        .map(|target_dir| target_dir.join("mock_acp_agent"))
                         .unwrap_or_else(|| std::path::PathBuf::from("mock_acp_agent"));
                     tracing::debug!("Mock ACP agent path resolved to: {}", mock_path.display());
                     mock_path
