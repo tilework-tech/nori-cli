@@ -9,6 +9,34 @@ use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
+// Testing that ACP mode with a nonexistent model produces a clear error
+// instead of falling back to HTTP providers
+fn test_startup_error_for_unregistered_model() {
+    let mut session = TuiSession::spawn_with_config(
+        18,
+        80,
+        SessionConfig::new().with_model("nonexistent".to_owned()),
+    )
+    .expect("Failed to spawn codex");
+
+    // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
+    // the TUI should show an error immediately at startup (not after prompt submission).
+    // The error is shown before the TUI even renders the shortcuts prompt.
+    session
+        .wait_for_text(
+            "Model 'nonexistent' is not registered as an ACP agent",
+            TIMEOUT,
+        )
+        .unwrap();
+
+    std::thread::sleep(TIMEOUT_INPUT);
+    assert_snapshot!(
+        "startup_error_unregistered_model",
+        normalize_for_input_snapshot(session.screen_contents())
+    );
+}
+
+#[test]
 fn test_startup_shows_banner() {
     let mut session = TuiSession::spawn_with_config(
         24,

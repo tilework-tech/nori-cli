@@ -249,6 +249,11 @@ impl TuiSession {
                     .as_ref()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_else(|| codex_home.to_string_lossy().into_owned());
+                let acp_section = if config.allow_http_fallback {
+                    "\n[acp]\nallow_http_fallback = true\n"
+                } else {
+                    ""
+                };
                 format!(
                     r#"model = "{model}"
 model_provider = "mock_provider"
@@ -258,10 +263,10 @@ trust_level = "trusted"
 
 [model_providers.mock_provider]
 name = "Mock ACP provider for tests"
-# wire_api = "acp"
-"#,
+{acp_section}"#,
                     model = config.model,
-                    cwd = cwd_path
+                    cwd = cwd_path,
+                    acp_section = acp_section
                 )
             });
             std::fs::write(&config_path, config_content)?;
@@ -585,6 +590,9 @@ pub struct SessionConfig {
     /// This prevents the "Snapshots disabled" BackgroundEvent from overwriting
     /// the "Working" status indicator during streaming tests.
     pub git_init: bool,
+    /// When true, allows falling back to HTTP providers if model is not in ACP registry.
+    /// When false (default), ACP-only mode: unregistered models produce an error.
+    pub allow_http_fallback: bool,
 }
 
 impl Default for SessionConfig {
@@ -605,7 +613,13 @@ impl SessionConfig {
             cwd: None,
             config_toml: None,
             git_init: true,
+            allow_http_fallback: false, // Default to ACP-only mode for tests
         }
+    }
+
+    pub fn with_allow_http_fallback(mut self, allow_http_fallback: bool) -> Self {
+        self.allow_http_fallback = allow_http_fallback;
+        self
     }
 
     pub fn with_model(mut self, model: String) -> Self {

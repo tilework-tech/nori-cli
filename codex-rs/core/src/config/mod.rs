@@ -279,6 +279,11 @@ pub struct Config {
 
     /// OTEL configuration (exporter type, endpoint, headers, etc.).
     pub otel: crate::config::types::OtelConfig,
+
+    /// When `true`, allows falling back to HTTP providers if the model is not
+    /// registered in the ACP registry. When `false` (the default), Codex runs
+    /// in ACP-only mode and produces an error for unregistered models.
+    pub acp_allow_http_fallback: bool,
 }
 
 impl Config {
@@ -719,6 +724,20 @@ pub struct ConfigToml {
     pub experimental_sandbox_command_assessment: Option<bool>,
     /// Preferred OSS provider for local models, e.g. "lmstudio" or "ollama".
     pub oss_provider: Option<String>,
+
+    /// ACP (Agent Control Protocol) configuration section.
+    #[serde(default)]
+    pub acp: Option<AcpConfigToml>,
+}
+
+/// Configuration for ACP (Agent Control Protocol) mode.
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct AcpConfigToml {
+    /// When `true`, allows falling back to HTTP providers if the model is not
+    /// registered in the ACP registry. When `false` (the default), Codex runs
+    /// in ACP-only mode and produces an error for unregistered models.
+    #[serde(default)]
+    pub allow_http_fallback: bool,
 }
 
 impl From<ConfigToml> for UserSavedConfig {
@@ -1271,6 +1290,7 @@ impl Config {
                     exporter,
                 }
             },
+            acp_allow_http_fallback: cfg.acp.map(|a| a.allow_http_fallback).unwrap_or(false),
         };
         Ok(config)
     }
