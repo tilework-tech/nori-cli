@@ -82,7 +82,7 @@ jobs:
         run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
 
       - name: cargo test
-        continue-on-error: true  # TODO: Fix pre-existing test failures in codex-app-server
+        # continue-on-error: true  # TODO: Fix pre-existing test failures in codex-app-server
         run: cargo test --profile ci-test --target ${{ matrix.target }} --all-features
 
       # Save cargo home cache
