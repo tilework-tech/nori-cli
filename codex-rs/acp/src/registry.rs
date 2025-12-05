@@ -65,50 +65,41 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
 
     match normalized.as_str() {
         "mock-model" => {
-            // Resolve path to mock_acp_agent binary relative to current executable.
+            // Resolve path to mock_acp_agent binary.
             //
-            // There are two execution contexts:
-            // 1. Running as `codex` binary (E2E tests spawn codex):
-            //    current_exe = target/{arch}/{profile}/codex
-            //    -> one .parent() reaches the profile dir
-            // 2. Running as test binary (unit tests in deps/):
-            //    current_exe = target/{arch}/{profile}/deps/test_binary
-            //    -> two .parent() calls needed to reach profile dir
-            //
-            // We detect the context by checking if parent directory is named "deps".
-            let exe_path = match std::env::current_exe() {
-                Ok(p) => {
-                    let mock_path = if let Some(parent) = p.parent() {
+            // Priority:
+            // 1. MOCK_ACP_AGENT_BIN environment variable (set by CI)
+            // 2. Relative to current executable (for local development)
+            let exe_path = if let Ok(env_path) = std::env::var("MOCK_ACP_AGENT_BIN") {
+                tracing::debug!(
+                    "Mock ACP agent path from MOCK_ACP_AGENT_BIN: {}",
+                    env_path
+                );
+                std::path::PathBuf::from(env_path)
+            } else {
+                // Fall back to resolving relative to current executable.
+                // This handles both:
+                // - Running as `codex` binary: target/{profile}/codex -> target/{profile}/
+                // - Running as test binary: target/{profile}/deps/test -> target/{profile}/
+                let mock_path = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|parent| {
                         // Check if we're in a "deps" directory (test binary context)
                         let in_deps_dir = parent
                             .file_name()
                             .map(|name| name == "deps")
                             .unwrap_or(false);
 
-                        let profile_dir = if in_deps_dir {
-                            // Test binary: go up two levels (deps -> profile dir)
-                            parent.parent()
+                        if in_deps_dir {
+                            parent.parent().map(|p| p.join("mock_acp_agent"))
                         } else {
-                            // Codex binary: already one level up from profile dir
-                            Some(parent)
-                        };
-
-                        profile_dir
-                            .map(|dir| dir.join("mock_acp_agent"))
-                            .unwrap_or_else(|| std::path::PathBuf::from("mock_acp_agent"))
-                    } else {
-                        std::path::PathBuf::from("mock_acp_agent")
-                    };
-                    tracing::debug!("Mock ACP agent path resolved to: {}", mock_path.display());
-                    mock_path
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to get current_exe for mock-model: {}, falling back to 'mock_acp_agent'",
-                        e
-                    );
-                    std::path::PathBuf::from("mock_acp_agent")
-                }
+                            Some(parent.join("mock_acp_agent"))
+                        }
+                    }))
+                    .flatten()
+                    .unwrap_or_else(|| std::path::PathBuf::from("mock_acp_agent"));
+                tracing::debug!("Mock ACP agent path resolved to: {}", mock_path.display());
+                mock_path
             };
 
             Ok(AcpAgentConfig {

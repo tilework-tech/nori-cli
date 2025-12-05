@@ -82,8 +82,16 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
 
+      # Build mock-acp-agent to a known location for E2E tests
+      - name: Build mock-acp-agent
+        run: |
+          mkdir -p target/mock-acp-out
+          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
+
       - name: cargo test
         # continue-on-error: true  # TODO: Fix pre-existing test failures in codex-app-server
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/codex-rs/target/mock-acp-out/mock_acp_agent
         run: cargo test --profile ci-test --target ${{ matrix.target }} --all-features
 
       # Save cargo home cache
