@@ -1,3 +1,25 @@
+# cli tools
+CLAUDE.md
+settings.local.json
+.claude/settings.local.json
+.claude/agents/
+.claude/commands/
+.claude/**/*.js
+.claude/**/*.js.map
+.claude/**/*.ts
+.claude/**/*.ts.map
+AGENTS.override.md
+AGENTS.md
+
+# nori local details
+.claude/profiles/
+.claude/skills/*noridoc*
+.claude/skills/memorize
+.claude/skills/prompt-analysis
+.claude/skills/recall
+.nori-config.json
+.nori-installed-version
+
 # deps
 # Node.js dependencies
 node_modules
@@ -26,15 +48,6 @@ result
 .zed/
 *.swp
 *~
-
-# cli tools
-CLAUDE.md
-# .claude/
-.claude/settings.local.json
-settings.local.json
-.claude/agents/
-.claude/commands/
-AGENTS.override.md
 
 # caches
 .cache/

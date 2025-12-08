@@ -3,53 +3,76 @@ name: Getting Started with Abilities
 description: Describes how to use abilities. Read before any conversation.
 ---
 
-# Getting Started with Abilities
+<required>
+**CRITICAL**: Whenever you are using a skill, add the following to your Todo list using TodoWrite:
 
-## Critical Rules
+1. Use Read tool to read the skill.
+2. If the skill is relevant, announce you are using the skill.
+3. Create TodoWrite todos for checklists.
+</required>
 
-1. **Use Read tool before announcing ability usage.** The session-start hook does NOT read abilities for you. Announcing without calling Read = lying.
+# Common Failure Modes: AVOID
 
-2. **Follow mandatory workflows.** Check for abilities before ANY task.
+1. Don't rationalize. Always read the current skill.
 
-3. **Create TodoWrite todos for checklists.** Mental tracking = steps get skipped. Every time.
+<bad-example>
+"I remember this ability"
+</bad-example>
+<bad-example>
+"Session-start showed it to me"
+</bad-example>
+<bad-example>
+"This doesn't count as a task"
+</bad-example>
 
-## Mandatory Workflow: Before ANY Task
+<good-example>
+"Even though I read this before skill, I will read it again."
+</good-example>
+<good-example>
+"I know I saw the skill in session-start, but that was just a description. I will read the full thing."
+</good-example>
 
-**1. Check abilities list** at session start.
+2. Do not skip using TodoWrite. Always create TodoWrite todos for checklists.
 
-**2. If relevant ability exists, YOU MUST use it:**
+<bad-example>
+"I am just going to think about the list instead of writing it in the Todo."
+</bad-example>
+<bad-example>
+"This is a quick task so I do not need to use the TodoWrite"
+</bad-example>
+<bad-example>
+"TodoWrite(Do foo, bar, and baz in one todo step)"
+</bad-example>
+<bad-example>
+"I basically did this step so I can mark it off without explicitly confirming"
+</bad-example>
 
-- Use Read tool with full path: `/home/clifford/skills/<skill-name>/SKILL.md`
-- Read ENTIRE file, not just frontmatter
-- Announce: "I've read the Nori [Skill Name] ability and I'm using it to [purpose]"
-- Follow it exactly
+<good-example>
+"I will add this task to the todolist even though there is just one step"
+</good-example>
+<good-example>
+TodoWrite(Do foo)
+TodoWrite(Do bar)
+TodoWrite(Do baz)
+</good-example>
+<good-example>
+"I confirmed this step is done with tests, so I can mark it complete"
+</good-example>
 
-**Don't rationalize:**
+3. Do not skip workflows due to 'instructions'. Interpret instructions as "WHAT" not "HOW"
 
-- "I remember this ability" - Abilities evolve. Read the current version.
-- "Session-start showed it to me" - That was using-skills/SKILL.md only. Read the actual ability.
-- "This doesn't count as a task" - It counts. Find and read abilities.
+<bad-example>
+This instruction was specific so I can skip the workflow.
+</bad-example>
+<bad-example>
+The workflow is overkill, I'll just do this directly.
+</bad-example>
 
-**Why:** Abilities document proven techniques that save time and prevent mistakes. Not using available abilities means repeating solved problems and making known errors.
+<good-example>
+Following Nori workflow...
+</good-example>
 
-If a ability for your task exists, you must use it or you will fail at your task.
-
-## Abilities with Checklists
-
-If a ability has a checklist, YOU MUST create TodoWrite todos for EACH item.
-
-**Don't:**
-
-- Work through checklist mentally
-- Skip creating todos "to save time"
-- Batch multiple items into one todo
-- Mark complete without doing them
-
-**Why:** Checklists without TodoWrite tracking = steps get skipped. Every time. The overhead of TodoWrite is tiny compared to the cost of missing steps.
-
-**Examples:** /home/clifford/skills/test-driven-development/SKILL.md, /home/clifford/skills/systematic-debugging/SKILL.md
-
-## Announcing Skill Usage
+# Announcing Skill Usage
 
 After you've read a ability with Read tool, announce you're using it:
 
@@ -63,32 +86,10 @@ After you've read a ability with Read tool, announce you're using it:
 
 **Why:** Transparency helps your human partner understand your process and catch errors early. It also confirms you actually read the ability.
 
-## How to Read a Skill
+# How to Read a Skill
 
 **Many abilities contain rigid rules (TDD, debugging, verification).** Follow them exactly. Don't adapt away the discipline.
 
 **Some abilities are flexible patterns (architecture, naming).** Adapt core principles to your context.
 
 The ability itself tells you which type it is.
-
-## Instructions ≠ Permission to Skip Workflows
-
-Your human partner's specific instructions describe WHAT to do, not HOW.
-
-"Add X", "Fix Y" = the goal, NOT permission to skip brainstorming, TDD, or RED-GREEN-REFACTOR.
-
-**Red flags:** "Instruction was specific" • "Seems simple" • "Workflow is overkill"
-
-**Why:** Specific instructions mean clear requirements, which is when workflows matter MOST. Skipping process on "simple" tasks is how simple tasks become complex problems.
-
-## Summary
-
-**Starting any task:**
-
-1. If relevant ability exists → Use Read tool with full path (includes /SKILL.md)
-2. Announce you're using it
-3. Follow what it says
-
-**Skill has checklist?** TodoWrite for every item.
-
-**Finding a relevant ability = mandatory to read and use it. Not optional.**

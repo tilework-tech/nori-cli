@@ -1,3 +1,9 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-settings.json"
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "additionalDirectories": [
+      "/home/clifford/Documents/source/nori/cli/.claude/profiles",
+      "/home/clifford/Documents/source/nori/cli/.claude/skills"
+    ]
+  }
 }

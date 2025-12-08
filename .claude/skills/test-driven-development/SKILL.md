@@ -8,6 +8,7 @@ description: Use when implementing any feature or bugfix, before writing impleme
 
 1. Write a failing test (RED phase)
 2. Verify the test fails due to the behavior of the application, and NOT due to the test.
+<system-reminder>If you have more than one test that you need to write, you should write all of them before moving to the GREEN phase.</system-reminder>
 3. Write the minimal amount of code necessary to make the test pass (GREEN phase)
 4. Verify the test now passes due to the behavior of the application.
 5. Refactor the code to clean it up.

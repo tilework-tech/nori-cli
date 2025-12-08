@@ -60,9 +60,11 @@ golangci-lint run --fix
 
 5. Use the Task tool to run type checking and fix issues in a subagent.
 
-6. Confirm that you are not on the main branch. If you are, ask me before proceeding. NEVER push to main without permission.
+6. Use the nori-code-reviewer subagent to do a self review. You do *NOT* have to follow the subagent's suggestions. This is merely a way to get a fresh pair of eyes on the code.
 
-7. Push and create a PR.
+7. Confirm that you are not on the main branch. If you are, ask me before proceeding. NEVER push to main without permission.
+
+8. Push and create a PR.
 
 ```bash
 # Push branch
@@ -83,7 +85,7 @@ EOF
 )"
 ```
 
-8. Make sure the PR branch CI succeeds.
+9. Make sure the PR branch CI succeeds.
 
 ```bash
 # Check if the PR CI succeeded
@@ -93,9 +95,10 @@ gh pr checks
 sleep 60 && gh pr checks
 ```
 
-- If CI did not pass, examine why.
+- If CI did not pass, examine why. If the CI did not start, this is likely due to merge conflicts; merge main, fix conflicts, and try again.
+
 - Make changes as needed, push a new commit, and repeat the process.
 <system-reminder> It is *critical* that you fix any ci issues, EVEN IF YOU DID NOT CAUSE THEM. </system-reminder>
 
 9. Tell me: "I can automatically get review comments, just let me know when to do so."
-   </required>
+</required>
