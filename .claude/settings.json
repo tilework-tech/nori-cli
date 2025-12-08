@@ -4,6 +4,26 @@
     "additionalDirectories": [
       "/home/clifford/Documents/source/nori/cli/.claude/profiles",
       "/home/clifford/Documents/source/nori/cli/.claude/skills"
+    ],
+    "allow": [
+      "Bash(cat)",
+      "Bash(cd)",
+      "Bash(mkdir)",
+      "Bash(tree)",
+      "Bash(cargo build:*)",
+      "Bash(cargo b:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo c:*)",
+      "Bash(cargo clean:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo d:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo r:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo t:*)",
+      "Bash(cargo search:*)"
     ]
   }
 }
