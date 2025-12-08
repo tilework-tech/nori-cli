@@ -583,6 +583,62 @@ impl App {
                     self.config.model_family = family;
                 }
             }
+            AppEvent::SetPendingAgent(model) => {
+                self.chat_widget.set_pending_agent(model);
+            }
+            AppEvent::ClearPendingAgent => {
+                self.chat_widget.clear_pending_agent();
+            }
+            AppEvent::SwitchAgentAndSubmit {
+                model,
+                prompt,
+                image_paths,
+            } => {
+                // Update the model in the config before creating a new session
+                self.config.model = model.clone();
+                if let Some(family) = find_family_for_model(&model) {
+                    self.config.model_family = family;
+                }
+
+                // Create a new session with the new model
+                let summary = session_summary(
+                    self.chat_widget.token_usage(),
+                    self.chat_widget.conversation_id(),
+                );
+                self.shutdown_current_conversation().await;
+
+                // Create new ChatWidget with the updated config and the prompt
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: if prompt.is_empty() { None } else { Some(prompt) },
+                    initial_images: image_paths,
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    feedback: self.feedback.clone(),
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+
+                // Show previous session summary if available
+                if let Some(summary) = summary {
+                    let mut lines: Vec<Line<'static>> = vec![
+                        format!("Switched to agent: {}", model).cyan().into(),
+                        summary.usage_line.clone().into(),
+                    ];
+                    if let Some(command) = summary.resume_command {
+                        let spans = vec!["To continue previous session, run ".into(), command.cyan()];
+                        lines.push(spans.into());
+                    }
+                    self.chat_widget.add_plain_history_lines(lines);
+                } else {
+                    self.chat_widget.add_plain_history_lines(vec![
+                        format!("Switched to agent: {}", model).cyan().into(),
+                    ]);
+                }
+
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::OpenReasoningPopup { model } => {
                 self.chat_widget.open_reasoning_popup(model);
             }

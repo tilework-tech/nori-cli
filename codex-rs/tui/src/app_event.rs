@@ -60,6 +60,24 @@ pub(crate) enum AppEvent {
     /// Update the current model slug in the running app and widget.
     UpdateModel(String),
 
+    /// Set a pending ACP agent selection. The agent will be switched
+    /// when the next prompt is submitted.
+    SetPendingAgent(String),
+
+    /// Clear the pending ACP agent selection.
+    ClearPendingAgent,
+
+    /// Switch to a new ACP agent and submit a prompt.
+    /// This creates a new session with the new model and immediately submits the prompt.
+    SwitchAgentAndSubmit {
+        /// The new model to switch to
+        model: String,
+        /// The prompt text to submit after switching
+        prompt: String,
+        /// Image paths to include with the prompt
+        image_paths: Vec<PathBuf>,
+    },
+
     /// Persist the selected model and reasoning effort to the appropriate config.
     PersistModelSelection {
         model: String,

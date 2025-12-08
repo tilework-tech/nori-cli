@@ -115,6 +115,7 @@ use self::agent::spawn_agent_from_existing;
 mod session_header;
 use self::session_header::SessionHeader;
 use crate::streaming::controller::StreamController;
+use crate::nori::acp_agent_picker::{available_acp_agents, is_acp_agent_model};
 use std::path::Path;
 
 use chrono::Local;
@@ -318,6 +319,8 @@ pub(crate) struct ChatWidget {
     feedback: codex_feedback::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
+    // Pending ACP agent selection (model to switch to on next prompt)
+    pending_agent: Option<String>,
 }
 
 struct UserMessage {
@@ -1260,6 +1263,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1337,6 +1341,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1473,8 +1478,22 @@ impl ChatWidget {
             SlashCommand::Review => {
                 self.open_review_popup();
             }
+            SlashCommand::Agent => {
+                if self.is_acp_mode() {
+                    self.open_agent_popup();
+                } else {
+                    self.add_info_message(
+                        "The /agent command is only available in ACP mode. Use /model to switch models.".to_string(),
+                        None,
+                    );
+                }
+            }
             SlashCommand::Model => {
-                self.open_model_popup();
+                if self.is_acp_mode() {
+                    self.open_acp_model_popup();
+                } else {
+                    self.open_model_popup();
+                }
             }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
@@ -1628,8 +1647,6 @@ impl ChatWidget {
             return;
         }
 
-        let mut items: Vec<UserInput> = Vec::new();
-
         // Special-case: "!cmd" executes a local shell command instead of sending to the model.
         if let Some(stripped) = text.strip_prefix('!') {
             let cmd = stripped.trim();
@@ -1647,6 +1664,19 @@ impl ChatWidget {
             });
             return;
         }
+
+        // Check if there's a pending agent switch.
+        // If so, send an event to the App to switch agents and submit the prompt.
+        if let Some(pending_model) = self.take_pending_agent() {
+            self.app_event_tx.send(AppEvent::SwitchAgentAndSubmit {
+                model: pending_model,
+                prompt: text,
+                image_paths,
+            });
+            return;
+        }
+
+        let mut items: Vec<UserInput> = Vec::new();
 
         if !text.is_empty() {
             items.push(UserInput::Text { text: text.clone() });
@@ -2127,6 +2157,151 @@ impl ChatWidget {
             items,
             ..Default::default()
         });
+    }
+
+    /// Check if the current model is an ACP agent.
+    pub(crate) fn is_acp_mode(&self) -> bool {
+        is_acp_agent_model(&self.config.model)
+    }
+
+    /// Open the ACP agent picker popup.
+    pub(crate) fn open_agent_popup(&mut self) {
+        let current_model = self.config.model.clone();
+        let agents = available_acp_agents();
+
+        if agents.is_empty() {
+            self.add_info_message(
+                "No ACP agents available. Check your configuration.".to_string(),
+                None,
+            );
+            return;
+        }
+
+        let pending = self.pending_agent.clone();
+        let mut items: Vec<SelectionItem> = Vec::new();
+
+        for agent in agents {
+            let is_current = agent.model == current_model;
+            let is_pending = pending.as_ref() == Some(&agent.model);
+            let model_for_action = agent.model.clone();
+
+            let name = if is_pending {
+                format!("{} (pending)", agent.display_name)
+            } else {
+                agent.display_name.clone()
+            };
+
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::SetPendingAgent(model_for_action.clone()));
+            })];
+
+            items.push(SelectionItem {
+                name,
+                description: Some(agent.description),
+                selected_description: if is_current {
+                    Some("This is the currently active agent.".to_string())
+                } else if is_pending {
+                    Some("This agent will be activated on next prompt.".to_string())
+                } else {
+                    Some("Select to switch to this agent on next prompt.".to_string())
+                },
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Select ACP Agent".to_string()),
+            subtitle: Some(
+                "The agent will be switched when you submit your next prompt.".to_string(),
+            ),
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            ..Default::default()
+        });
+    }
+
+    /// Open the ACP model picker popup (shows disabled options).
+    pub(crate) fn open_acp_model_popup(&mut self) {
+        let current_model = self.config.model.clone();
+        let agents = available_acp_agents();
+
+        let items: Vec<SelectionItem> = agents
+            .into_iter()
+            .map(|agent| {
+                let is_current = agent.model == current_model;
+                let name = if is_current {
+                    format!("{} (current)", agent.display_name)
+                } else {
+                    format!("{} (disabled)", agent.display_name)
+                };
+
+                SelectionItem {
+                    name,
+                    description: Some(agent.description),
+                    selected_description: if is_current {
+                        None
+                    } else {
+                        Some(
+                            "Model switching is not yet supported in ACP mode. Use /agent to switch agents."
+                                .to_string(),
+                        )
+                    },
+                    is_current,
+                    // No actions - model switching is disabled in ACP mode
+                    actions: vec![],
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Model Selection (ACP Mode)".to_string()),
+            subtitle: Some(
+                "Model switching is disabled in ACP mode. Use /agent to switch between agents."
+                    .to_string(),
+            ),
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            ..Default::default()
+        });
+    }
+
+    /// Set a pending agent selection.
+    pub(crate) fn set_pending_agent(&mut self, model: String) {
+        // Don't set pending if it's already the current model
+        if model == self.config.model {
+            self.pending_agent = None;
+            self.add_info_message(
+                format!("Already using agent: {}", model),
+                None,
+            );
+            return;
+        }
+
+        self.pending_agent = Some(model.clone());
+        self.add_info_message(
+            format!("Agent '{}' will be activated on next prompt.", model),
+            None,
+        );
+    }
+
+    /// Clear the pending agent selection.
+    pub(crate) fn clear_pending_agent(&mut self) {
+        self.pending_agent = None;
+    }
+
+    /// Get the pending agent model, if any.
+    pub(crate) fn pending_agent(&self) -> Option<&str> {
+        self.pending_agent.as_deref()
+    }
+
+    /// Take and clear the pending agent selection.
+    pub(crate) fn take_pending_agent(&mut self) -> Option<String> {
+        self.pending_agent.take()
     }
 
     /// Open a popup to choose the reasoning effort (stage 2) for the given model.
