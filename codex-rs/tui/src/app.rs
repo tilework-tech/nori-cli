@@ -586,6 +586,12 @@ impl App {
             AppEvent::OpenReasoningPopup { model } => {
                 self.chat_widget.open_reasoning_popup(model);
             }
+            AppEvent::OpenAcpAgentPopup => {
+                self.chat_widget.open_acp_agent_popup();
+            }
+            AppEvent::OpenAcpModelPopup { agent } => {
+                self.chat_widget.open_acp_model_popup(agent);
+            }
             AppEvent::OpenFullAccessConfirmation { preset } => {
                 self.chat_widget.open_full_access_confirmation(preset);
             }

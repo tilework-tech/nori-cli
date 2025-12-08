@@ -122,6 +122,8 @@ use codex_common::approval_presets::ApprovalPreset;
 use codex_common::approval_presets::builtin_approval_presets;
 use codex_common::model_presets::ModelPreset;
 use codex_common::model_presets::builtin_model_presets;
+use crate::nori::agent_picker;
+use crate::nori::agent_registry::{is_acp_model, AcpAgent};
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
 use codex_core::ConversationManager;
@@ -2086,7 +2088,15 @@ impl ChatWidget {
 
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
+    ///
+    /// For ACP mode, this routes to the ACP agent picker instead.
     pub(crate) fn open_model_popup(&mut self) {
+        // Route to ACP agent picker if currently using an ACP model
+        if is_acp_model(&self.config.model) {
+            self.open_acp_agent_popup();
+            return;
+        }
+
         let current_model = self.config.model.clone();
         let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
         let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
@@ -2127,6 +2137,24 @@ impl ChatWidget {
             items,
             ..Default::default()
         });
+    }
+
+    /// Open the ACP agent picker popup.
+    ///
+    /// This shows available ACP agents. For agents with multiple models,
+    /// selecting an agent opens the model variant picker. For agents with
+    /// a single model, selection applies immediately.
+    pub(crate) fn open_acp_agent_popup(&mut self) {
+        let params = agent_picker::build_agent_selection(&self.config.model);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the ACP model variant picker for a specific agent.
+    ///
+    /// This shows available model variants for the selected agent.
+    pub(crate) fn open_acp_model_popup(&mut self, agent: AcpAgent) {
+        let params = agent_picker::build_model_selection(&agent, &self.config.model);
+        self.bottom_pane.show_selection_view(params);
     }
 
     /// Open a popup to choose the reasoning effort (stage 2) for the given model.

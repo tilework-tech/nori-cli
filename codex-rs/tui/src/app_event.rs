@@ -9,6 +9,7 @@ use codex_file_search::FileMatch;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
+use crate::nori::agent_registry::AcpAgent;
 
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
@@ -69,6 +70,14 @@ pub(crate) enum AppEvent {
     /// Open the reasoning selection popup after picking a model.
     OpenReasoningPopup {
         model: ModelPreset,
+    },
+
+    /// Open the ACP agent picker popup.
+    OpenAcpAgentPopup,
+
+    /// Open the ACP model variant picker popup for a specific agent.
+    OpenAcpModelPopup {
+        agent: AcpAgent,
     },
 
     /// Open the confirmation prompt before enabling full access mode.
