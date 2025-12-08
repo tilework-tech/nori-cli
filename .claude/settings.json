@@ -6,10 +6,11 @@
       "/home/clifford/Documents/source/nori/cli/.claude/skills"
     ],
     "allow": [
-      "Bash(cat)",
-      "Bash(cd)",
-      "Bash(mkdir)",
-      "Bash(tree)",
+      "Bash(cat:*)",
+      "Bash(cd:*)",
+      "Bash(git status:*)",
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
       "Bash(cargo build:*)",
       "Bash(cargo b:*)",
       "Bash(cargo check:*)",
