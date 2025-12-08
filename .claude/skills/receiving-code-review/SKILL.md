@@ -94,7 +94,7 @@ If unused: "This endpoint isn't called. Remove it (YAGNI)?"
 
 **Reference finishing-a-development-branch skill (Steps 1-2):**
 
-See `/home/clifford/skills/finishing-a-development-branch/SKILL.md`
+See `/home/clifford/Documents/source/nori/cli/skills/finishing-a-development-branch/SKILL.md`
 
 - [ ] Run tests: `npm test` (or project equivalent)
   - If tests fail, fix before proceeding

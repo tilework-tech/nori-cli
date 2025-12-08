@@ -10,15 +10,18 @@ description: Use this skill to build features that requires modifying a webapp f
 1. Install playwright. Use the SDK that best matches the codebase. Default to python.
   - Write a playwright config file. Make sure you use reporter: 'list' mode.
   - If using python, you *must* use a virtual env.
-2. Write and run a playwright script that lets you interact with the webapp frontend.
-3. Follow these steps in a loop until the bug is fixed:
+2. Check to see if you require authentication. If you do, ask me for credentials.
+<system-reminder>Do NOT use mock mode or test harnesses. You should be testing the real thing.</system-reminder>
+3. Write and run a playwright script that lets you interact with the webapp frontend.
+4. Follow these steps in a loop until the bug is fixed:
   - Add many logs to the server and to the UI. You *MUST* do this on every loop.
   - Start the server and the UI.
-  - Run the playwright script and identify what is happening.
+  - Run the playwright script and identify what is happening. Take screenshots, read logs, do whatever you need to.
   - Update the playwright script.
 <system-reminder>If you get stuck: did you add logs?</system-reminder>
-4. Clean up all background jobs and close any browsers.
-5. Make sure other tests pass.
+5. Run a final demonstration of the playwright browser NOT in headless mode. This is to show me directly what you accomplished.
+6. Clean up all background jobs and close any browsers.
+7. Make sure other tests pass.
 </required>
 
 # Web Application Testing

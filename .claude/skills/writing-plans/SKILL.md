@@ -70,7 +70,7 @@ I will add a unit test that ensures baz behaves like qux...
 You should end EVERY testing plan section by writing:
 
 ```markdown
-NOTE: I will write all tests before I add any implementation behavior.
+NOTE: I will write *all* tests before I add any implementation behavior.
 ```
 
 <system-reminder>Your tests should NOT contain tests for datastructures or

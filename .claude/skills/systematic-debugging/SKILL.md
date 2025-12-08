@@ -192,7 +192,7 @@ You MUST complete each phase before proceeding to the next.
    - Automated test if possible
    - One-off test script if no framework
    - MUST have before fixing
-   - See /home/clifford/skills/test-driven-development for writing proper failing tests
+   - See /home/clifford/Documents/source/nori/cli/skills/test-driven-development for writing proper failing tests
 
 2. **Implement Single Fix**
 
@@ -244,7 +244,7 @@ If you catch yourself thinking:
 - "It's probably X, let me fix that"
 - "I don't fully understand but this might work"
 - "Pattern says X but I'll adapt it differently"
-- "Here are the main problems: [lists fixes without investigation]"
+- "Here are the primary problems: [lists fixes without investigation]"
 - Proposing solutions before tracing data flow
 - **"One more fix attempt" (when already tried 2+)**
 - **Each fix reveals new problem in different place**
