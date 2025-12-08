@@ -530,6 +530,16 @@ name = "Mock ACP provider for tests"
         self.writer.write_all(&key.to_escape_sequence())?;
         self.writer.flush()
     }
+
+    /// Get the path to the ACP log file (if temp directory exists)
+    ///
+    /// This is useful for E2E tests that need to verify subprocess behavior
+    /// by parsing the ACP tracing logs.
+    pub fn acp_log_path(&self) -> Option<std::path::PathBuf> {
+        self._temp_dir
+            .as_ref()
+            .map(|d| d.path().join(".codex-acp.log"))
+    }
 }
 
 /// Sandbox policy for codex session

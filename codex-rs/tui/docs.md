@@ -40,10 +40,20 @@ The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interacti
 The TUI supports two backend modes, selected automatically at startup based on model name:
 
 - `spawn_agent()`: Entry point that detects ACP vs HTTP mode via `codex_acp::get_agent_config()`
-- `spawn_acp_agent()`: Uses `AcpBackend` for ACP-registered models (e.g., "mock-model", "claude-acp", "gemini-acp")
+- `spawn_acp_agent()`: Uses `AcpBackend` for ACP-registered models (e.g., "mock-model", "mock-model-alt", "claude-acp", "gemini-acp")
 - `spawn_http_agent()`: Uses `codex-core` for HTTP-based LLM providers (OpenAI, Anthropic, etc.)
+- `spawn_error_agent()`: Displays error and exits for unregistered models when HTTP fallback is disabled
 
 Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
+
+**ACP Backend Arc Reference Handling:**
+
+In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference after spawning the op forwarding task. This prevents a self-reference deadlock:
+- The op task holds `Arc<AcpBackend>` for submitting operations
+- The backend contains `event_tx` internally
+- The main task waits on `event_rx` for events
+- If the main task also held an Arc reference, dropping the backend would require the main task to exit first, but the main task waits on `event_rx`, which can't close until `event_tx` is dropped
+- Solution: `drop(backend)` after spawning the op task, so when the op channel closes (when `codex_op_rx` closes), the backend is fully dropped, closing `event_tx` and allowing `event_rx` to return `None`
 
 **UI Components:**
 

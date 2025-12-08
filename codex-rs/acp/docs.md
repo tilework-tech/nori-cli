@@ -19,17 +19,17 @@ Path: @/codex-rs/acp
 ### Model Registry
 
 The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather than provider-centric:
-- `get_agent_config()` accepts model names (e.g., "mock-model", "gemini-2.5-flash", "claude-acp") instead of provider names
+- `get_agent_config()` accepts model names (e.g., "mock-model", "mock-model-alt", "gemini-2.5-flash", "claude-acp") instead of provider names
 - Returns `AcpAgentConfig` containing:
-  - `provider_slug`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "gemini-acp", "claude-acp")
+  - `provider_slug`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "mock-acp-alt", "gemini-acp", "claude-acp")
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
   - `provider_info`: Embedded `AcpProviderInfo` with provider configuration (name, retry settings, timeouts)
 - Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-2.5-Flash" → "gemini-2.5-flash")
 - Uses exact matching only (no prefix matching) - each model must be explicitly registered
-- The `provider_slug` field enables future optimization to determine when existing subprocess can be reused vs when new one must be spawned when switching models
-- Claude ACP is registered for both "claude" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
-- Unit test `test_get_claude_model_config()` verifies Claude ACP registry configuration
+- The `provider_slug` field enables subprocess reuse determination when switching models (same slug can reuse, different slug spawns new process)
+- `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
+- Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
 
 ### Embedded Provider Info
 
@@ -86,6 +86,14 @@ The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in
 - Commands sent via `mpsc::Sender<AcpCommand>` to worker thread
 - Responses returned via `oneshot` channels embedded in commands
 - Worker thread spawns subprocess, handles JSON-RPC handshake, runs command loop
+
+**Subprocess Lifecycle Management:**
+
+The `run_command_loop()` function manages agent subprocess cleanup:
+- Runs until the command channel is closed (when `AcpConnection` is dropped)
+- On exit, calls `child.kill()` to terminate the subprocess
+- This prevents orphaned/zombie processes when sessions are switched (e.g., via `/new` command)
+- Logs subprocess PID at spawn via `debug!("ACP agent spawned (pid: {:?})")` for E2E test verification
 
 **ClientDelegate (`connection.rs`):**
 

@@ -43,7 +43,7 @@ pub(crate) fn spawn_agent(
             let error_msg = format!(
                 "Model '{}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp",
+                 Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp",
                 config.model
             );
             spawn_error_agent(error_msg, app_event_tx)
@@ -119,6 +119,12 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSen
                 }
             }
         });
+
+        // Drop our Arc reference - the op task has its own.
+        // This is necessary so that when the op task exits (when codex_op_rx closes),
+        // the backend is fully dropped, which drops event_tx, allowing event_rx
+        // to return None and this task to exit.
+        drop(backend);
 
         // Forward events to TUI
         while let Some(event) = event_rx.recv().await {

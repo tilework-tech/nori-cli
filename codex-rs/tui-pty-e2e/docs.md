@@ -145,6 +145,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
+| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle - verifies subprocess spawning, cleanup on session switch, and different agents use different processes (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -224,6 +225,8 @@ Tests use the model name `"mock-model"` which the ACP registry (`@/codex-rs/acp/
 - `command: <path-to-mock_acp_agent-binary>`
 - `args: []`
 
+An alternate model `"mock-model-alt"` is also registered with `provider_slug: "mock-acp-alt"` for testing agent switching scenarios where different models must spawn different subprocesses.
+
 Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_RESPONSE` - Custom response text instead of defaults
 - `MOCK_AGENT_DELAY_MS` - Simulate streaming delays
@@ -231,6 +234,19 @@ Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_REQUEST_PERMISSION` - Trigger permission request to test approval bridging
 
 See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
+
+**Agent Subprocess Lifecycle Testing (`agent_switching.rs`):**
+
+Linux-only tests that verify ACP subprocess lifecycle management by parsing the `.codex-acp.log` file for PID entries:
+- `acp_log_path()` method on `TuiSession` returns the path to the ACP tracing log file
+- Tests extract PIDs from log lines matching `"ACP agent spawned (pid: Some(...))"`
+- Uses `/proc/{pid}` filesystem to verify process existence and zombie state
+- Key verified behaviors:
+  - Agent subprocess spawns with unique PID
+  - `/new` command spawns new subprocess with different PID
+  - Old subprocess is terminated (not zombie) after session switch
+  - Cleanup happens when session switches, not when individual prompt turns end
+  - Different models (`mock-model` vs `mock-model-alt`) spawn different subprocesses
 
 **Binary Discovery:**
 

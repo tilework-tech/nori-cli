@@ -237,8 +237,8 @@ impl AcpConnection {
 /// Internal connection state that lives on the worker thread.
 struct AcpConnectionInner {
     connection: acp::ClientSideConnection,
-    client_delegate: Rc<ClientDelegate>,
     #[allow(dead_code)]
+    client_delegate: Rc<ClientDelegate>,
     child: Child,
     #[allow(dead_code)]
     io_task: tokio::task::JoinHandle<acp::Result<()>>,
@@ -351,7 +351,10 @@ async fn spawn_connection_internal(
 }
 
 /// Main command loop running on the worker thread.
-async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Receiver<AcpCommand>) {
+async fn run_command_loop(
+    mut inner: AcpConnectionInner,
+    mut command_rx: mpsc::Receiver<AcpCommand>,
+) {
     use acp::Agent;
 
     while let Some(cmd) = command_rx.recv().await {
@@ -462,6 +465,14 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
                 let _ = response_tx.send(result);
             }
         }
+    }
+
+    // Cleanup: terminate the child process when command channel is closed
+    // This happens when the AcpConnection is dropped (e.g., during session switch)
+    debug!("ACP command loop exiting, terminating child process");
+    if let Err(e) = inner.child.kill().await {
+        // Log but don't fail - process may have already exited
+        debug!("Failed to kill ACP agent child process: {}", e);
     }
 }
 

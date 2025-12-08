@@ -111,6 +111,46 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 },
             })
         }
+        "mock-model-alt" => {
+            // Alternate mock model for E2E testing agent switching.
+            // Uses the same binary as mock-model but with a different provider_slug
+            // to verify that different agent configurations spawn separate subprocesses.
+            let exe_path = if let Ok(env_path) = std::env::var("MOCK_ACP_AGENT_BIN") {
+                tracing::debug!("Mock ACP agent path from MOCK_ACP_AGENT_BIN: {}", env_path);
+                std::path::PathBuf::from(env_path)
+            } else {
+                let mock_path = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| {
+                        p.parent().map(|parent| {
+                            let in_deps_dir = parent
+                                .file_name()
+                                .map(|name| name == "deps")
+                                .unwrap_or(false);
+
+                            if in_deps_dir {
+                                parent.parent().map(|p| p.join("mock_acp_agent"))
+                            } else {
+                                Some(parent.join("mock_acp_agent"))
+                            }
+                        })
+                    })
+                    .flatten()
+                    .unwrap_or_else(|| std::path::PathBuf::from("mock_acp_agent"));
+                tracing::debug!("Mock ACP agent path resolved to: {}", mock_path.display());
+                mock_path
+            };
+
+            Ok(AcpAgentConfig {
+                provider_slug: "mock-acp-alt".to_string(),
+                command: exe_path.to_string_lossy().to_string(),
+                args: vec![],
+                provider_info: AcpProviderInfo {
+                    name: "Mock ACP Alt".to_string(),
+                    ..Default::default()
+                },
+            })
+        }
         "gemini-2.5-flash" | "gemini-acp" => Ok(AcpAgentConfig {
             provider_slug: "gemini-acp".to_string(),
             command: "npx".to_string(),
@@ -154,6 +194,21 @@ mod tests {
         assert_eq!(config.provider_info.name, "Mock ACP");
         assert_eq!(config.provider_info.request_max_retries, 1);
         assert_eq!(config.provider_info.stream_max_retries, 1);
+    }
+
+    #[test]
+    fn test_get_mock_model_alt_config() {
+        let config =
+            get_agent_config("mock-model-alt").expect("Should return config for mock-model-alt");
+
+        assert_eq!(config.provider_slug, "mock-acp-alt");
+        assert!(
+            config.command.contains("mock_acp_agent"),
+            "Command should contain 'mock_acp_agent', got: {}",
+            config.command
+        );
+        assert_eq!(config.args, Vec::<String>::new());
+        assert_eq!(config.provider_info.name, "Mock ACP Alt");
     }
 
     #[test]
