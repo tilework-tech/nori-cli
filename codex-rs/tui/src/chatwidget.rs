@@ -318,6 +318,15 @@ pub(crate) struct ChatWidget {
     feedback: codex_feedback::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
+    // Pending agent selection for next prompt submission
+    pending_agent: Option<PendingAgentInfo>,
+}
+
+/// Information about a pending agent switch in ChatWidget.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingAgentInfo {
+    pub model_name: String,
+    pub display_name: String,
 }
 
 struct UserMessage {
@@ -1260,6 +1269,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1337,11 +1347,30 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_agent: None,
         };
 
         widget.prefetch_rate_limits();
 
         widget
+    }
+
+    /// Set a pending agent to switch to on the next prompt submission.
+    pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
+        self.pending_agent = Some(PendingAgentInfo {
+            model_name,
+            display_name,
+        });
+    }
+
+    /// Clear any pending agent selection.
+    pub(crate) fn clear_pending_agent(&mut self) {
+        self.pending_agent = None;
+    }
+
+    /// Check if there's a pending agent selection.
+    pub(crate) fn has_pending_agent(&self) -> bool {
+        self.pending_agent.is_some()
     }
 
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
@@ -1472,6 +1501,9 @@ impl ChatWidget {
             }
             SlashCommand::Review => {
                 self.open_review_popup();
+            }
+            SlashCommand::Agent => {
+                self.open_agent_popup();
             }
             SlashCommand::Model => {
                 self.open_model_popup();
@@ -1625,6 +1657,18 @@ impl ChatWidget {
     fn submit_user_message(&mut self, user_message: UserMessage) {
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
+            return;
+        }
+
+        // Check if there's a pending agent switch - if so, send the message through
+        // the App to trigger the switch first
+        if let Some(pending) = self.pending_agent.take() {
+            self.app_event_tx.send(AppEvent::SubmitWithAgentSwitch {
+                model_name: pending.model_name,
+                display_name: pending.display_name,
+                message_text: text,
+                image_paths,
+            });
             return;
         }
 
@@ -2084,10 +2128,34 @@ impl ChatWidget {
         });
     }
 
+    /// Open the agent picker popup for ACP mode.
+    pub(crate) fn open_agent_popup(&mut self) {
+        let current_model = self.config.model.clone();
+        let params = crate::nori::agent_picker::agent_picker_params(
+            &current_model,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
+    ///
+    /// In ACP mode (when current model is an ACP agent), this shows a disabled
+    /// message directing users to use /agent instead.
     pub(crate) fn open_model_popup(&mut self) {
         let current_model = self.config.model.clone();
+
+        // Check if we're in ACP mode by checking if the current model is registered
+        // in the ACP agent registry
+        if codex_acp::get_agent_config(&current_model).is_ok() {
+            // ACP mode - show disabled model picker
+            let params = crate::nori::agent_picker::acp_model_picker_params();
+            self.bottom_pane.show_selection_view(params);
+            return;
+        }
+
+        // Standard HTTP mode - show normal model picker
         let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
         let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
 

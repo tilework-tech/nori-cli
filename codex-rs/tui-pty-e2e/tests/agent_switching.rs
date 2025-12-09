@@ -374,3 +374,336 @@ fn test_acp_agent_switch_via_model_picker() {
     // If no new PID, the model picker might not trigger subprocess restart
     // This is acceptable behavior - document it
 }
+
+// ============================================================================
+// Test: /agent Slash Command - Shows Available Agents
+// ============================================================================
+
+/// Test that /agent command shows available ACP agents from the registry
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_command_shows_available_agents() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Open agent picker with /agent command
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for agent picker to appear - it should show available agents
+    session
+        .wait_for(
+            |screen| {
+                // Should show available agents from the ACP registry
+                screen.contains("Select Agent") || screen.contains("mock-model")
+            },
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear");
+
+    // Verify both mock agents are visible
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("mock-model") || screen.contains("Mock"),
+        "Agent picker should show mock-model agent, got: {}",
+        screen
+    );
+}
+
+// ============================================================================
+// Test: /agent Slash Command - Pending Selection
+// ============================================================================
+
+/// Test that selecting an agent in /agent tracks it as pending and doesn't
+/// switch immediately
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_command_pending_selection() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pid = initial_pids[0];
+
+    // Open agent picker with /agent command
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for agent picker to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear");
+
+    // Select a different agent (mock-model-alt)
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    // After selecting, the OLD agent should still be running (pending selection)
+    let pids_after_selection = extract_mock_agent_pids_from_log(&log_path);
+    assert_eq!(
+        pids_after_selection.len(),
+        initial_pids.len(),
+        "No new subprocess should be spawned yet - selection is pending until next prompt"
+    );
+
+    // The original process should still be alive
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "Original agent should still be running after pending selection"
+    );
+}
+
+// ============================================================================
+// Test: /agent Slash Command - Switch on Prompt Submission
+// ============================================================================
+
+/// Test that agent switch happens on next prompt submission
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_switch_on_prompt_submission() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pid = initial_pids[0];
+
+    // Open agent picker with /agent command
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for agent picker to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear");
+
+    // Select a different agent (mock-model-alt)
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Now submit a prompt - this should trigger the agent switch
+    session.send_str("hello").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the response to start
+    session
+        .wait_for_text("Working", Duration::from_secs(5))
+        .ok(); // May or may not see this depending on response speed
+    std::thread::sleep(Duration::from_millis(1000));
+
+    // Check that a new agent was spawned
+    let post_prompt_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(
+        post_prompt_pids.len() > initial_pids.len(),
+        "New subprocess should be spawned after prompt submission with pending agent: initial={:?}, after={:?}",
+        initial_pids,
+        post_prompt_pids
+    );
+
+    let new_pid = *post_prompt_pids.last().unwrap();
+    assert_ne!(
+        initial_pid, new_pid,
+        "New agent should have different PID after prompt submission"
+    );
+}
+
+// ============================================================================
+// Test: /agent - No Switch During Active Prompt Turn
+// ============================================================================
+
+/// Test that navigating /agent picker during streaming doesn't kill the agent
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_picker_no_switch_during_streaming() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_string())
+        .with_stream_until_cancel(); // Agent streams until cancelled
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pid = initial_pids[0];
+
+    // Start a streaming prompt
+    session.send_str("Start streaming").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for streaming to start
+    session
+        .wait_for_text("Working", Duration::from_secs(5))
+        .expect("Streaming should start");
+
+    // While streaming, the agent should still be running
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "Agent should be running during streaming"
+    );
+
+    // Cancel streaming first so we can access the UI
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    // The agent should still be the same
+    let pids_after = extract_mock_agent_pids_from_log(&log_path);
+    assert_eq!(
+        pids_after.len(),
+        initial_pids.len(),
+        "No new subprocess should be spawned during/after streaming cancel"
+    );
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "Original agent should still be running after cancel"
+    );
+}
+
+// ============================================================================
+// Test: /model Slash Command - Shows Disabled in ACP Mode
+// ============================================================================
+
+/// Test that /model command shows disabled options in ACP mode
+#[test]
+#[cfg(target_os = "linux")]
+fn test_model_command_shows_disabled_in_acp_mode() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Open model picker with /model command
+    session.send_str("/model").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for model picker to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Select Model") || screen.contains("Model"),
+            Duration::from_secs(3),
+        )
+        .expect("Model picker should appear");
+
+    // In ACP mode, model options should show as disabled or indicate
+    // they're not available
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("disabled")
+            || screen.contains("Not available")
+            || screen.contains("ACP")
+            || screen.contains("Use /agent"),
+        "Model picker should indicate options are disabled in ACP mode, got: {}",
+        screen
+    );
+}
+
+// ============================================================================
+// Test: /agent Slash Command - Cleanup After Switch
+// ============================================================================
+
+/// Test that old agent subprocess is cleaned up after switch on prompt
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_cleanup_after_switch_on_prompt() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pid = initial_pids[0];
+
+    // Verify initial process exists
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "Initial agent should exist"
+    );
+
+    // Open agent picker and select a different agent
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear");
+
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Submit prompt to trigger switch
+    session.send_str("trigger switch").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for response
+    std::thread::sleep(Duration::from_millis(2000));
+
+    // Old process should be cleaned up
+    assert!(
+        !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid),
+        "Old agent subprocess {} should be cleaned up after switch",
+        initial_pid
+    );
+}

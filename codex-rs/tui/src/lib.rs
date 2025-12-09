@@ -103,6 +103,14 @@ pub async fn run_main(
     mut cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
+    // Initialize ACP file tracing for subprocess debugging
+    let acp_log_path = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(".codex-acp.log");
+    if let Err(e) = codex_acp::init_file_tracing(&acp_log_path) {
+        tracing::warn!("Failed to initialize ACP file tracing: {e}");
+    }
+
     let (sandbox_mode, approval_policy) = if cli.full_auto {
         (
             Some(SandboxMode::WorkspaceWrite),

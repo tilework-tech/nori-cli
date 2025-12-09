@@ -228,6 +228,19 @@ pub(crate) struct App {
 
     // One-shot suppression of the next world-writable scan after user confirmation.
     skip_world_writable_scan_once: bool,
+
+    /// Pending agent selection. When set, the agent will switch on the next
+    /// prompt submission. This avoids disrupting active prompt turns.
+    pending_agent: Option<PendingAgentSelection>,
+}
+
+/// Information about a pending agent switch.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingAgentSelection {
+    /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
+    pub model_name: String,
+    /// The display name for the status indicator
+    pub display_name: String,
 }
 
 impl App {
@@ -351,6 +364,7 @@ impl App {
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
+            pending_agent: None,
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -883,6 +897,77 @@ impl App {
                     ));
                 }
             },
+            AppEvent::SetPendingAgent {
+                model_name,
+                display_name,
+            } => {
+                // Store the pending agent selection in both App and ChatWidget
+                self.pending_agent = Some(PendingAgentSelection {
+                    model_name: model_name.clone(),
+                    display_name: display_name.clone(),
+                });
+                // Also set on ChatWidget so it can trigger the switch on prompt submission
+                self.chat_widget
+                    .set_pending_agent(model_name.clone(), display_name.clone());
+                tracing::info!(
+                    "Pending agent set: {} ({}). Will switch on next prompt.",
+                    display_name,
+                    model_name
+                );
+                self.chat_widget.add_info_message(
+                    format!(
+                        "Agent '{}' selected. Will switch on next prompt submission.",
+                        display_name
+                    ),
+                    None,
+                );
+            }
+            AppEvent::ClearPendingAgent => {
+                if self.pending_agent.is_some() {
+                    tracing::info!("Pending agent selection cleared");
+                    self.pending_agent = None;
+                    self.chat_widget.clear_pending_agent();
+                }
+            }
+            AppEvent::SubmitWithAgentSwitch {
+                model_name,
+                display_name,
+                message_text,
+                image_paths,
+            } => {
+                tracing::info!(
+                    "Switching agent to {} ({}) and submitting message",
+                    display_name,
+                    model_name
+                );
+
+                // Clear the pending agent since we're applying it now
+                self.pending_agent = None;
+
+                // Update the model in config
+                self.config.model = model_name.clone();
+
+                // Shutdown current conversation
+                self.shutdown_current_conversation().await;
+
+                // Create the new chat widget with the new config and the message as initial prompt
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: Some(message_text),
+                    initial_images: image_paths,
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    feedback: self.feedback.clone(),
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+
+                self.chat_widget.add_info_message(
+                    format!("Switched to agent: {}", display_name),
+                    None,
+                );
+            }
         }
         Ok(true)
     }
@@ -1072,6 +1157,7 @@ mod tests {
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
+            pending_agent: None,
         }
     }
 
@@ -1109,6 +1195,7 @@ mod tests {
                 pending_update_action: None,
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
+                pending_agent: None,
             },
             rx,
             op_rx,
