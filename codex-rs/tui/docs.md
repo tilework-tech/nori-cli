@@ -130,6 +130,23 @@ Most event types (exec begin/end, MCP calls, elicitation) are queued during acti
 - The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
 - `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
 
+**Pending ExecCell Tracking:**
+
+The `PendingExecCellTracker` (`chatwidget/pending_exec_cells.rs`) prevents duplicate ACP tool call messages in the chat history. The problem it solves:
+
+1. Agent makes a tool call (e.g., `shell`) which creates an ExecCell in `active_cell`
+2. Agent streams text *during* the tool call execution
+3. Streaming text causes `flush_active_cell()`, which would normally push the incomplete ExecCell to history and clear `active_cell`
+4. When `ExecCommandEnd` arrives, `handle_exec_end_now()` would create a *new* ExecCell since `active_cell` is empty
+5. Result: duplicate entries for the same tool call
+
+The tracker intercepts this by:
+- `save_pending()`: Called during flush if the ExecCell has pending (incomplete) call_ids - saves the cell keyed by call_id instead of pushing to history
+- `retrieve()`: Called in `handle_exec_end_now()` - retrieves and removes the saved cell, restoring it to `active_cell` for completion
+- `drain_failed()`: Called in `on_task_complete()` - marks any uncompleted pending cells as failed and returns them for insertion into history
+
+This follows the same encapsulation pattern as `InterruptManager`: self-contained state in its own module file with typed public methods instead of exposing raw data structures.
+
 **ACP File Tracing:**
 
 - The TUI calls `codex_acp::init_file_tracing()` at startup (`tui/src/lib.rs`) to write `.codex-acp.log` in the current directory. Every mock agent logs `ACP agent spawned (pid: ...)` there, which makes the agent-switching tests in `tui-pty-e2e` deterministic and ensures developers can inspect agent subprocess lifecycles during debugging.
