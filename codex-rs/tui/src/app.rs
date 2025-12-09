@@ -37,6 +37,7 @@ use codex_core::protocol::SessionSource;
 use codex_core::protocol::TokenUsage;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::ConversationId;
+use codex_protocol::user_input::UserInput;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
 use crossterm::event::KeyCode;
@@ -228,6 +229,10 @@ pub(crate) struct App {
 
     // One-shot suppression of the next world-writable scan after user confirmation.
     skip_world_writable_scan_once: bool,
+
+    /// Pending agent selection that will be applied on the next prompt submission.
+    /// Contains the provider_slug of the agent to switch to.
+    pending_agent_selection: Option<String>,
 }
 
 impl App {
@@ -351,6 +356,7 @@ impl App {
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
+            pending_agent_selection: None,
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -456,6 +462,9 @@ impl App {
     async fn handle_event(&mut self, tui: &mut tui::Tui, event: AppEvent) -> Result<bool> {
         match event {
             AppEvent::NewSession => {
+                // Clear any pending agent selection when starting a new session
+                self.pending_agent_selection = None;
+
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
@@ -582,6 +591,19 @@ impl App {
                 if let Some(family) = find_family_for_model(&model) {
                     self.config.model_family = family;
                 }
+            }
+            AppEvent::SetPendingAgentSelection { provider_slug } => {
+                self.pending_agent_selection = Some(provider_slug.clone());
+                self.chat_widget.add_info_message(
+                    format!("Agent '{provider_slug}' will be used on next prompt"),
+                    None,
+                );
+            }
+            AppEvent::ClearPendingAgentSelection => {
+                self.pending_agent_selection = None;
+            }
+            AppEvent::SubmitUserMessage { items, text } => {
+                self.handle_submit_user_message(tui, items, text).await;
             }
             AppEvent::OpenReasoningPopup { model } => {
                 self.chat_widget.open_reasoning_popup(model);
@@ -907,6 +929,68 @@ impl App {
         self.config.model_reasoning_effort = effort;
     }
 
+    /// Handle user message submission in ACP mode.
+    /// Checks for pending agent selection and starts a new session if needed.
+    async fn handle_submit_user_message(
+        &mut self,
+        tui: &mut tui::Tui,
+        items: Vec<UserInput>,
+        text: String,
+    ) {
+        // Check if we need to switch agents
+        if let Some(new_agent_slug) = self.pending_agent_selection.take() {
+            // Check if the agent is actually different
+            let current_agent = codex_acp::get_agent_config(&self.config.model)
+                .map(|cfg| cfg.provider_slug)
+                .unwrap_or_default();
+
+            if new_agent_slug != current_agent {
+                // Update config to use new agent
+                self.config.model = new_agent_slug.clone();
+                if let Some(family) = find_family_for_model(&new_agent_slug) {
+                    self.config.model_family = family;
+                }
+
+                // Start a new session with the new agent
+                self.shutdown_current_conversation().await;
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: None,
+                    initial_images: Vec::new(),
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    feedback: self.feedback.clone(),
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+
+                self.chat_widget
+                    .add_info_message(format!("Switched to agent: {new_agent_slug}"), None);
+
+                tui.frame_requester().schedule_frame();
+            }
+        }
+
+        // Now send the user message
+        self.chat_widget.submit_op(Op::UserInput {
+            items: items.clone(),
+        });
+
+        // Persist the text to cross-session message history.
+        if !text.is_empty() {
+            self.chat_widget
+                .submit_op(Op::AddToHistory { text: text.clone() });
+        }
+
+        // Show the text portion in conversation history via InsertHistoryCell event.
+        if !text.is_empty() {
+            self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                crate::history_cell::new_user_prompt(text),
+            )));
+        }
+    }
+
     async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
         match key_event {
             KeyEvent {
@@ -1072,6 +1156,7 @@ mod tests {
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
+            pending_agent_selection: None,
         }
     }
 
@@ -1109,6 +1194,7 @@ mod tests {
                 pending_update_action: None,
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
+                pending_agent_selection: None,
             },
             rx,
             op_rx,

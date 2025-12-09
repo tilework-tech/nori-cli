@@ -60,11 +60,9 @@ fn test_escape_cancels_streaming() {
     // Press Escape to cancel doesn't work?
     session.send_key(Key::Escape).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
-    // Press ctrl-c to cancel doesn't work?
-    // session.send_key(Key::Ctrl('c')).unwrap();
-    // std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
-    std::thread::sleep(TIMEOUT);
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)
     session
@@ -74,7 +72,7 @@ fn test_escape_cancels_streaming() {
         )
         .expect("No interrupt reported");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT);
     assert_snapshot!(
         "cancelled_stream",
         normalize_for_input_snapshot(session.screen_contents())

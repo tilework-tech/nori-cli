@@ -136,6 +136,48 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
     }
 }
 
+/// Returns all available ACP agent configurations.
+///
+/// This is used by the agent picker UI to show available agents.
+/// Each agent has a unique provider_slug for identification.
+pub fn list_available_agents() -> Vec<AcpAgentConfig> {
+    vec![
+        // Mock agent - uses resolved binary path
+        get_agent_config("mock-model").unwrap_or_else(|_| AcpAgentConfig {
+            provider_slug: "mock-acp".to_string(),
+            command: "mock_acp_agent".to_string(),
+            args: vec![],
+            provider_info: AcpProviderInfo {
+                name: "Mock ACP".to_string(),
+                ..Default::default()
+            },
+        }),
+        // Gemini ACP agent
+        AcpAgentConfig {
+            provider_slug: "gemini-acp".to_string(),
+            command: "npx".to_string(),
+            args: vec![
+                "@google/gemini-cli".to_string(),
+                "--experimental-acp".to_string(),
+            ],
+            provider_info: AcpProviderInfo {
+                name: "Gemini ACP".to_string(),
+                ..Default::default()
+            },
+        },
+        // Claude ACP agent
+        AcpAgentConfig {
+            provider_slug: "claude-acp".to_string(),
+            command: "npx".to_string(),
+            args: vec!["@zed-industries/claude-code-acp".to_string()],
+            provider_info: AcpProviderInfo {
+                name: "Claude ACP".to_string(),
+                ..Default::default()
+            },
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,5 +271,57 @@ mod tests {
             err_msg.contains("unknown-model-xyz"),
             "Error message should contain original input"
         );
+    }
+
+    #[test]
+    fn test_list_available_agents_returns_all_agents() {
+        let agents = list_available_agents();
+
+        // Should return at least the known agents
+        assert!(
+            agents.len() >= 3,
+            "Should have at least 3 agents (mock, gemini, claude), got: {}",
+            agents.len()
+        );
+
+        // Should include mock-model agent
+        let mock_agent = agents
+            .iter()
+            .find(|a| a.provider_slug == "mock-acp")
+            .expect("Should include mock-acp agent");
+        assert!(
+            mock_agent.command.contains("mock_acp_agent"),
+            "Mock agent command should contain mock_acp_agent"
+        );
+
+        // Should include gemini agent
+        let gemini_agent = agents
+            .iter()
+            .find(|a| a.provider_slug == "gemini-acp")
+            .expect("Should include gemini-acp agent");
+        assert_eq!(gemini_agent.command, "npx");
+        assert_eq!(gemini_agent.provider_info.name, "Gemini ACP");
+
+        // Should include claude agent
+        let claude_agent = agents
+            .iter()
+            .find(|a| a.provider_slug == "claude-acp")
+            .expect("Should include claude-acp agent");
+        assert_eq!(claude_agent.command, "npx");
+        assert_eq!(claude_agent.provider_info.name, "Claude ACP");
+    }
+
+    #[test]
+    fn test_list_available_agents_has_unique_provider_slugs() {
+        let agents = list_available_agents();
+        let mut seen_slugs = std::collections::HashSet::new();
+
+        for agent in &agents {
+            assert!(
+                seen_slugs.insert(&agent.provider_slug),
+                "Duplicate provider_slug found: {}",
+                agent.provider_slug
+            );
+        }
     }
 }

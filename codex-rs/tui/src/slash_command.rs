@@ -13,6 +13,7 @@ pub enum SlashCommand {
     // DO NOT ALPHA-SORT! Enum order is presentation order in the popup, so
     // more frequently used commands should be listed first.
     Model,
+    Agent,
     Approvals,
     Review,
     New,
@@ -46,6 +47,7 @@ impl SlashCommand {
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Model => "choose what model and reasoning effort to use",
+            SlashCommand::Agent => "switch ACP agent",
             SlashCommand::Approvals => "choose what Codex can do without approval",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Logout => "log out of Codex",
@@ -68,6 +70,7 @@ impl SlashCommand {
             | SlashCommand::Compact
             | SlashCommand::Undo
             | SlashCommand::Model
+            | SlashCommand::Agent
             | SlashCommand::Approvals
             | SlashCommand::Review
             | SlashCommand::Logout => false,
@@ -97,4 +100,20 @@ pub fn built_in_slash_commands() -> Vec<(&'static str, SlashCommand)> {
         .filter(|command| command.is_visible())
         .map(|c| (c.command(), c))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_command_is_available() {
+        let commands = built_in_slash_commands();
+        let agent_cmd = commands.iter().find(|(name, _)| *name == "agent");
+        assert!(
+            agent_cmd.is_some(),
+            "Agent command should be in built_in_slash_commands(). Available: {:?}",
+            commands.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+        );
+    }
 }

@@ -118,6 +118,7 @@ use crate::streaming::controller::StreamController;
 use std::path::Path;
 
 use chrono::Local;
+use codex_acp::list_available_agents;
 use codex_common::approval_presets::ApprovalPreset;
 use codex_common::approval_presets::builtin_approval_presets;
 use codex_common::model_presets::ModelPreset;
@@ -1476,6 +1477,9 @@ impl ChatWidget {
             SlashCommand::Model => {
                 self.open_model_popup();
             }
+            SlashCommand::Agent => {
+                self.open_agent_popup();
+            }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
             }
@@ -1656,24 +1660,34 @@ impl ChatWidget {
             items.push(UserInput::LocalImage { path });
         }
 
-        self.codex_op_tx
-            .send(Op::UserInput { items })
-            .unwrap_or_else(|e| {
-                tracing::error!("failed to send message: {e}");
+        // In ACP mode, route through AppEvent so pending agent selection can be applied.
+        // In non-ACP mode, send directly for efficiency.
+        let is_acp_mode = codex_acp::get_agent_config(&self.config.model).is_ok();
+        if is_acp_mode {
+            self.app_event_tx.send(AppEvent::SubmitUserMessage {
+                items,
+                text,
             });
-
-        // Persist the text to cross-session message history.
-        if !text.is_empty() {
+        } else {
             self.codex_op_tx
-                .send(Op::AddToHistory { text: text.clone() })
+                .send(Op::UserInput { items })
                 .unwrap_or_else(|e| {
-                    tracing::error!("failed to send AddHistory op: {e}");
+                    tracing::error!("failed to send message: {e}");
                 });
-        }
 
-        // Only show the text portion in conversation history.
-        if !text.is_empty() {
-            self.add_to_history(history_cell::new_user_prompt(text));
+            // Persist the text to cross-session message history.
+            if !text.is_empty() {
+                self.codex_op_tx
+                    .send(Op::AddToHistory { text: text.clone() })
+                    .unwrap_or_else(|e| {
+                        tracing::error!("failed to send AddHistory op: {e}");
+                    });
+            }
+
+            // Only show the text portion in conversation history.
+            if !text.is_empty() {
+                self.add_to_history(history_cell::new_user_prompt(text));
+            }
         }
         self.needs_final_message_separator = false;
     }
@@ -2086,8 +2100,24 @@ impl ChatWidget {
 
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
+    ///
+    /// In ACP mode, shows a disabled view with an info message since model
+    /// switching is not supported - use `/agent` instead.
     pub(crate) fn open_model_popup(&mut self) {
         let current_model = self.config.model.clone();
+
+        // In ACP mode, show a disabled view
+        let is_acp_mode = codex_acp::get_agent_config(&current_model).is_ok();
+        if is_acp_mode {
+            self.add_info_message(
+                "Model switching is not available in ACP mode. Use /agent to switch agents."
+                    .to_string(),
+                None,
+            );
+            self.request_redraw();
+            return;
+        }
+
         let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
         let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
 
@@ -2124,6 +2154,49 @@ impl ChatWidget {
                     .to_string(),
             ),
             footer_hint: Some("Press enter to select reasoning effort, or esc to dismiss.".into()),
+            items,
+            ..Default::default()
+        });
+    }
+
+    /// Open a popup to choose the ACP agent.
+    pub(crate) fn open_agent_popup(&mut self) {
+        let current_model = self.config.model.clone();
+        let agents = list_available_agents();
+
+        let mut items: Vec<SelectionItem> = Vec::new();
+        for agent in agents.into_iter() {
+            // Check if this is the current agent by matching model/provider_slug
+            let is_current = codex_acp::get_agent_config(&current_model)
+                .map(|cfg| cfg.provider_slug == agent.provider_slug)
+                .unwrap_or(false);
+
+            let provider_slug = agent.provider_slug.clone();
+            let app_event_tx = self.app_event_tx.clone();
+
+            // Selecting an agent sets a pending selection.
+            // The actual switch happens on next prompt submission.
+            let actions: Vec<SelectionAction> = vec![Box::new(move |_tx| {
+                app_event_tx.send(AppEvent::SetPendingAgentSelection {
+                    provider_slug: provider_slug.clone(),
+                });
+            })];
+
+            let current_suffix = if is_current { " (current)" } else { "" };
+            items.push(SelectionItem {
+                name: format!("{}{}", agent.provider_info.name, current_suffix),
+                description: Some(format!("Provider: {}", agent.provider_slug)),
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Select ACP Agent".to_string()),
+            subtitle: Some("Selection takes effect on next prompt submission".to_string()),
+            footer_hint: Some("Press enter to select, or esc to dismiss.".into()),
             items,
             ..Default::default()
         });

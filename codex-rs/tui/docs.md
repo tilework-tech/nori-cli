@@ -32,7 +32,12 @@ The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interacti
 **Application Core:**
 
 - `app.rs`: Main `App` struct managing application state and event loop
-- `app_event.rs`: Application-level events (key input, model responses, etc.)
+  - Contains `pending_agent_selection: Option<String>` field for deferred agent switching
+  - `handle_submit_user_message()` method applies pending selection before sending prompt
+- `app_event.rs`: Application-level events including:
+  - `SetPendingAgentSelection` - Store agent selection for later application
+  - `ClearPendingAgentSelection` - Cancel pending selection
+  - `SubmitUserMessage` - Intercept prompt submission in ACP mode to check for pending switch
 - `tui.rs`: Terminal initialization and restoration
 
 **Agent Spawning (`chatwidget/agent.rs`):**
@@ -60,8 +65,22 @@ Both backends produce `codex_protocol::Event` for the TUI event loop, enabling u
 
 - `public_widgets/composer_input.rs`: Text input with multi-line support
 - `clipboard_paste.rs`: Clipboard integration
-- `slash_command.rs`: `/command` parsing and execution
+- `slash_command.rs`: `/command` parsing and execution (including `/agent` for ACP mode)
 - `file_search.rs`: Fuzzy file finder
+
+**ACP Agent Switching:**
+
+The `/agent` slash command provides agent switching in ACP mode:
+- Opens a selection popup listing all available ACP agents via `codex_acp::list_available_agents()`
+- Marks the current agent with "(current)" suffix
+- Uses a **pending selection** pattern: selecting an agent sets `pending_agent_selection` but does NOT immediately switch
+- Actual agent switch occurs on next prompt submission via `SubmitUserMessage` event
+- This prevents dropping the active subprocess while users navigate the picker
+
+The `/model` command behaves differently in ACP mode:
+- Detects ACP mode via `codex_acp::get_agent_config()` check
+- Shows info message directing users to `/agent` instead
+- Does not display the standard model picker popup
 
 **Onboarding:**
 

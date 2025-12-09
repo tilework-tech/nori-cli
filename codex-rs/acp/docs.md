@@ -27,9 +27,11 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
   - `provider_info`: Embedded `AcpProviderInfo` with provider configuration (name, retry settings, timeouts)
 - Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-2.5-Flash" → "gemini-2.5-flash")
 - Uses exact matching only (no prefix matching) - each model must be explicitly registered
-- The `provider_slug` field enables future optimization to determine when existing subprocess can be reused vs when new one must be spawned when switching models
+- The `provider_slug` field enables determining when existing subprocess can be reused vs when new one must be spawned when switching models
 - Claude ACP is registered for both "claude" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
+- `list_available_agents()` returns all available ACP agent configurations for UI presentation (used by the `/agent` picker)
 - Unit test `test_get_claude_model_config()` verifies Claude ACP registry configuration
+- Unit tests `test_list_available_agents_*` verify agent enumeration and uniqueness
 
 ### Embedded Provider Info
 

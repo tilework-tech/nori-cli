@@ -13,6 +13,7 @@ use crate::history_cell::HistoryCell;
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol_config_types::ReasoningEffort;
+use codex_protocol::user_input::UserInput;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -59,6 +60,24 @@ pub(crate) enum AppEvent {
 
     /// Update the current model slug in the running app and widget.
     UpdateModel(String),
+
+    /// Set a pending ACP agent selection that will take effect on next prompt submission.
+    SetPendingAgentSelection {
+        provider_slug: String,
+    },
+
+    /// Clear any pending ACP agent selection.
+    /// Reserved for future use when external components need to clear the selection.
+    #[allow(dead_code)]
+    ClearPendingAgentSelection,
+
+    /// Submit user input, possibly applying pending agent selection first.
+    /// This is used in ACP mode to intercept prompt submission.
+    SubmitUserMessage {
+        items: Vec<UserInput>,
+        /// Text portion for history display and persistence.
+        text: String,
+    },
 
     /// Persist the selected model and reasoning effort to the appropriate config.
     PersistModelSelection {

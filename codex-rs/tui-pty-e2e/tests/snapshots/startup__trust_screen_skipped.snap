@@ -1,5 +1,6 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
+assertion_line: 158
 expression: normalize_for_input_snapshot(contents)
 ---
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode

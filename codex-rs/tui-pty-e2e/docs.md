@@ -29,6 +29,8 @@ The main API provides:
 - `wait_for_text(needle, timeout)` - Poll screen until text appears
 - `wait_for(predicate, timeout)` - Poll screen until condition matches
 - `screen_contents()` - Get current terminal screen as string
+- `acp_log_path()` - Get path to the `.codex-acp.log` file for this session
+- `read_acp_log()` - Read the ACP tracing log contents (useful for verifying subprocess behavior)
 
 **Debugging Aids:**
 
@@ -145,6 +147,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
+| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent/model switching: `/agent` picker display, pending selection behavior, subprocess lifecycle during picker navigation, `/model` disabled state in ACP mode |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -231,6 +234,19 @@ Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_REQUEST_PERMISSION` - Trigger permission request to test approval bridging
 
 See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
+
+**Agent Switching Tests:**
+
+The `agent_switching.rs` tests verify the ACP agent/model picker feature:
+- Uses `extract_mock_agent_pids_from_log()` to parse PIDs from ACP tracing logs
+- `process_exists_and_not_zombie()` verifies subprocess lifecycle via `/proc/<pid>/status`
+- Tests verify the "pending selection" pattern where agent changes are deferred until prompt submission
+- Key test cases:
+  - `/agent` picker displays available agents and marks current
+  - Selecting an agent does NOT immediately spawn new subprocess
+  - Prompt submission with pending selection triggers actual switch
+  - Picker navigation during active streaming does not kill subprocess
+  - `/model` command shows disabled state in ACP mode
 
 **Binary Discovery:**
 

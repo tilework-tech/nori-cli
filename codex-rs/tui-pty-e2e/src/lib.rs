@@ -530,6 +530,22 @@ name = "Mock ACP provider for tests"
         self.writer.write_all(&key.to_escape_sequence())?;
         self.writer.flush()
     }
+
+    /// Get the path to the ACP log file for this session.
+    /// Returns None if no temp directory was created.
+    pub fn acp_log_path(&self) -> Option<std::path::PathBuf> {
+        self._temp_dir
+            .as_ref()
+            .map(|dir| dir.path().join(".codex-acp.log"))
+    }
+
+    /// Read the ACP log contents.
+    /// Returns empty string if log doesn't exist or temp dir not available.
+    pub fn read_acp_log(&self) -> String {
+        self.acp_log_path()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .unwrap_or_default()
+    }
 }
 
 /// Sandbox policy for codex session
