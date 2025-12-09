@@ -109,19 +109,9 @@ impl HistoryCell for NoriSessionHeaderCell {
 
         let mut lines: Vec<Line<'static>> = Vec::new();
 
-        // ASCII banner - green and gray colored
+        // ASCII banner - all green
         for banner_line in NORI_BANNER {
-            let mut spans: Vec<Span<'static>> = Vec::new();
-            // Color the letters green, and structural characters gray
-            for ch in banner_line.chars() {
-                let span = if ch.is_alphabetic() || ch == '_' {
-                    Span::from(ch.to_string()).green().bold()
-                } else {
-                    Span::from(ch.to_string()).dark_gray()
-                };
-                spans.push(span);
-            }
-            lines.push(Line::from(spans));
+            lines.push(Line::from(Span::from(*banner_line).green().bold()));
         }
 
         // Empty line after banner
