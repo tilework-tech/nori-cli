@@ -73,6 +73,14 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `slash_command.rs`: `/command` parsing and execution
 - `file_search.rs`: Fuzzy file finder
 
+**ACP Agent Switching:**
+
+- `/agent` now opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.
+- Selecting an agent sends `AppEvent::SetPendingAgent`, so both the App and `ChatWidget` store a `pending_agent` (see `PendingAgentSelection` and `PendingAgentInfo`). The UI informs the user that the switch will happen on the next prompt submission.
+- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model (clearing the pending flag, updating `Config`, shutting down the old conversation, and creating a `ChatWidget` with `expected_model` to filter out leftover events).
+- `/model` now checks `codex_acp::get_agent_config()`; if the workspace is in ACP mode it shows the disabled `acp_model_picker_params()` view that explicitly tells users to use `/agent` instead of selecting models directly.
+- This workflow avoids disrupting active turns and powers the agent-switching verification in `tui-pty-e2e/tests/agent_switching.rs`, including the message-flow and pending-selection tests added in the last commits.
+
 **Onboarding:**
 
 The `onboarding/` module handles first-run experience:
@@ -121,6 +129,23 @@ Most event types (exec begin/end, MCP calls, elicitation) are queued during acti
 - If approval were deferred, the agent would wait for approval, but TaskComplete (which flushes the queue) wouldn't arrive until the agent finished
 - The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
 - `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
+
+**ACP File Tracing:**
+
+- The TUI calls `codex_acp::init_file_tracing()` at startup (`tui/src/lib.rs`) to write `.codex-acp.log` in the current directory. Every mock agent logs `ACP agent spawned (pid: ...)` there, which makes the agent-switching tests in `tui-pty-e2e` deterministic and ensures developers can inspect agent subprocess lifecycles during debugging.
+
+**Agent Switch Event Filtering:**
+
+When switching between ACP agents (e.g., via `/agent` command), `ChatWidget` uses an event filtering mechanism to prevent race conditions:
+
+- `expected_model: Option<String>` in `ChatWidgetInit` specifies which model the widget expects
+- `session_configured_received: bool` tracks whether `SessionConfigured` has arrived from the expected model
+- When `expected_model` is set, `handle_codex_event()` filters events:
+  - All events are ignored until `SessionConfigured` arrives
+  - `SessionConfigured` is only accepted if `event.model` matches `expected_model` (case-insensitive)
+  - Once matching `SessionConfigured` arrives, `session_configured_received` is set to `true` and normal event processing resumes
+- This prevents the OLD agent's final events (completion, shutdown) from being processed by the NEW agent's widget
+- Fresh sessions, resumed sessions, and `/new` command use `expected_model: None` (no filtering)
 
 **Color System:**
 

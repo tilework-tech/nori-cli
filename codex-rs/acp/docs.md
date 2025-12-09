@@ -31,6 +31,14 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
 - `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
 - Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
 
+### Agent Picker Metadata
+
+`list_available_agents()` (also in `acp/src/registry.rs`) returns `Vec<AcpAgentInfo>` so the TUI can render the `/agent` picker:
+- `model_name`, `display_name`, and `description` describe what to present in the selection view.
+- `provider_slug` mirrors the config slug so the UI can explain when different agents reuse the same backend.
+- `codex_tui::nori::agent_picker` consumes these entries to build the selection popup shown by `/agent`, while `/model` uses `acp_model_picker_params()` to surface a disabled message pointing back to `/agent`.
+- Selecting an agent raises `AppEvent::SetPendingAgent`, stores a `PendingAgentSelection`, and defers the actual switch until `AppEvent::SubmitWithAgentSwitch` rebuilds the `ChatWidget` with the new model.
+
 ### Embedded Provider Info
 
 ACP providers embed their configuration directly in `AcpAgentConfig` via `AcpProviderInfo`:

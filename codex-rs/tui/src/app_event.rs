@@ -166,6 +166,28 @@ pub(crate) enum AppEvent {
     OpenFeedbackConsent {
         category: FeedbackCategory,
     },
+
+    /// Set a pending agent selection. The agent switch will happen on the next
+    /// prompt submission to avoid disrupting active prompt turns.
+    SetPendingAgent {
+        /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
+        model_name: String,
+        /// The display name for the status indicator
+        display_name: String,
+    },
+
+    /// Submit a message with a pending agent switch. The agent will be switched
+    /// first, then the message will be submitted to the new agent.
+    SubmitWithAgentSwitch {
+        /// The model name of the agent to switch to
+        model_name: String,
+        /// The display name for the status indicator
+        display_name: String,
+        /// The user message text to submit after switching
+        message_text: String,
+        /// Optional image paths to include with the message
+        image_paths: Vec<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -314,6 +314,7 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         feedback: codex_feedback::CodexFeedback::new(),
+        expected_model: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
     // Basic construction sanity.
@@ -378,6 +379,9 @@ fn make_chatwidget_manual() -> (
         feedback: codex_feedback::CodexFeedback::new(),
         current_rollout_path: None,
         pending_exec_cells: HashMap::new(),
+        pending_agent: None,
+        expected_model: None,
+        session_configured_received: false,
     };
     (widget, rx, op_rx)
 }

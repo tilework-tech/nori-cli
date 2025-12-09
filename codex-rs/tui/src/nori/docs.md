@@ -48,6 +48,12 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 
 The banner uses green+bold for alphabetic characters and dark gray for structural characters (pipes, slashes) to create a two-tone visual effect.
 
+**Agent Picker (`agent_picker.rs`):**
+
+- `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry (model name, display name, description, provider slug) with a `SelectionAction` that sends `AppEvent::SetPendingAgent`.
+- `acp_model_picker_params()` renders the `/model` fallback page that disables selection when ACP mode is active and points the user back to `/agent`.
+- `PendingAgentSelection` holds the selected model/display name pair so the App and `ChatWidget` can store it until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`, at which point the conversation is rebuilt with the new model and the picker view is dismissed.
+
 ### Things to Know
 
 **Profile Display:**

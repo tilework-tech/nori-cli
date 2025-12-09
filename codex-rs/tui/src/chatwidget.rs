@@ -254,6 +254,10 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) feedback: codex_feedback::CodexFeedback,
+    /// Expected model name for this widget. When set, events from other models
+    /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
+    /// with a matching model. This prevents race conditions when switching agents.
+    pub(crate) expected_model: Option<String>,
 }
 
 #[derive(Default)]
@@ -322,6 +326,21 @@ pub(crate) struct ChatWidget {
     // Keyed by call_id so they can be completed when ExecCommandEnd arrives.
     // Stored as Box<dyn HistoryCell> to avoid complex downcasting on flush.
     pending_exec_cells: HashMap<String, Box<dyn HistoryCell>>,
+    // Pending agent selection for next prompt submission
+    pending_agent: Option<PendingAgentInfo>,
+    // Expected model name for agent switch synchronization.
+    // When set, events are ignored until SessionConfigured arrives with this model.
+    expected_model: Option<String>,
+    // Whether SessionConfigured has been received for this widget.
+    // Used with expected_model to filter events from previous agents.
+    session_configured_received: bool,
+}
+
+/// Information about a pending agent switch in ChatWidget.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingAgentInfo {
+    pub model_name: String,
+    pub display_name: String,
 }
 
 struct UserMessage {
@@ -371,6 +390,10 @@ impl ChatWidget {
 
     // --- Small event handlers ---
     fn on_session_configured(&mut self, event: codex_core::protocol::SessionConfiguredEvent) {
+        // Mark that we've received SessionConfigured - this unlocks event processing
+        // when expected_model is set (during agent switching)
+        self.session_configured_received = true;
+
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
         self.conversation_id = Some(event.session_id);
@@ -1231,6 +1254,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             feedback,
+            expected_model,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1285,6 +1309,9 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             pending_exec_cells: HashMap::new(),
+            pending_agent: None,
+            expected_model,
+            session_configured_received: false,
         };
 
         widget.prefetch_rate_limits();
@@ -1307,6 +1334,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             feedback,
+            expected_model,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1363,11 +1391,23 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             pending_exec_cells: HashMap::new(),
+            pending_agent: None,
+            expected_model,
+            // For existing conversations, we've already received SessionConfigured
+            session_configured_received: true,
         };
 
         widget.prefetch_rate_limits();
 
         widget
+    }
+
+    /// Set a pending agent to switch to on the next prompt submission.
+    pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
+        self.pending_agent = Some(PendingAgentInfo {
+            model_name,
+            display_name,
+        });
     }
 
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
@@ -1498,6 +1538,9 @@ impl ChatWidget {
             }
             SlashCommand::Review => {
                 self.open_review_popup();
+            }
+            SlashCommand::Agent => {
+                self.open_agent_popup();
             }
             SlashCommand::Model => {
                 self.open_model_popup();
@@ -1670,6 +1713,18 @@ impl ChatWidget {
             return;
         }
 
+        // Check if there's a pending agent switch - if so, send the message through
+        // the App to trigger the switch first
+        if let Some(pending) = self.pending_agent.take() {
+            self.app_event_tx.send(AppEvent::SubmitWithAgentSwitch {
+                model_name: pending.model_name,
+                display_name: pending.display_name,
+                message_text: text,
+                image_paths,
+            });
+            return;
+        }
+
         let mut items: Vec<UserInput> = Vec::new();
 
         // Special-case: "!cmd" executes a local shell command instead of sending to the model.
@@ -1737,6 +1792,46 @@ impl ChatWidget {
 
     pub(crate) fn handle_codex_event(&mut self, event: Event) {
         let Event { id, msg } = event;
+
+        // When expected_model is set (during agent switching), we need to filter events
+        // to prevent events from the OLD agent from affecting the NEW widget.
+        if let Some(ref expected) = self.expected_model {
+            tracing::debug!(
+                "Event filtering active: expected_model={}, session_configured_received={}",
+                expected,
+                self.session_configured_received
+            );
+            if !self.session_configured_received {
+                // Only process SessionConfigured events, and only if the model matches
+                match &msg {
+                    EventMsg::SessionConfigured(e) => {
+                        if e.model.to_lowercase() != expected.to_lowercase() {
+                            tracing::debug!(
+                                "Ignoring SessionConfigured from wrong model: expected={}, got={}",
+                                expected,
+                                e.model
+                            );
+                            return;
+                        }
+                        tracing::debug!(
+                            "SessionConfigured received with matching model: {}",
+                            e.model
+                        );
+                        // Model matches, proceed with processing
+                    }
+                    // Ignore all other events until SessionConfigured arrives
+                    _ => {
+                        tracing::debug!(
+                            "Ignoring event before SessionConfigured: {:?} (waiting for model={})",
+                            std::mem::discriminant(&msg),
+                            expected
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+
         self.dispatch_event_msg(Some(id), msg, false);
     }
 
@@ -2126,10 +2221,34 @@ impl ChatWidget {
         });
     }
 
+    /// Open the agent picker popup for ACP mode.
+    pub(crate) fn open_agent_popup(&mut self) {
+        let current_model = self.config.model.clone();
+        let params = crate::nori::agent_picker::agent_picker_params(
+            &current_model,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
+    ///
+    /// In ACP mode (when current model is an ACP agent), this shows a disabled
+    /// message directing users to use /agent instead.
     pub(crate) fn open_model_popup(&mut self) {
         let current_model = self.config.model.clone();
+
+        // Check if we're in ACP mode by checking if the current model is registered
+        // in the ACP agent registry
+        if codex_acp::get_agent_config(&current_model).is_ok() {
+            // ACP mode - show disabled model picker
+            let params = crate::nori::agent_picker::acp_model_picker_params();
+            self.bottom_pane.show_selection_view(params);
+            return;
+        }
+
+        // Standard HTTP mode - show normal model picker
         let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
         let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
 

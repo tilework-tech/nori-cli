@@ -10,6 +10,7 @@ use crate::history_cell::HistoryCell;
 use crate::model_migration::ModelMigrationOutcome;
 use crate::model_migration::migration_copy_for_config;
 use crate::model_migration::run_model_migration_prompt;
+use crate::nori::agent_picker::PendingAgentSelection;
 use crate::pager_overlay::Overlay;
 use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::renderable::Renderable;
@@ -228,6 +229,10 @@ pub(crate) struct App {
 
     // One-shot suppression of the next world-writable scan after user confirmation.
     skip_world_writable_scan_once: bool,
+
+    /// Pending agent selection. When set, the agent will switch on the next
+    /// prompt submission. This avoids disrupting active prompt turns.
+    pending_agent: Option<PendingAgentSelection>,
 }
 
 impl App {
@@ -294,6 +299,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     feedback: feedback.clone(),
+                    expected_model: None, // No filtering for fresh sessions
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
@@ -317,6 +323,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     feedback: feedback.clone(),
+                    expected_model: None, // No filtering for resumed sessions
                 };
                 ChatWidget::new_from_existing(
                     init,
@@ -351,6 +358,7 @@ impl App {
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
+            pending_agent: None,
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -470,6 +478,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     feedback: self.feedback.clone(),
+                    expected_model: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 if let Some(summary) = summary {
@@ -883,6 +892,69 @@ impl App {
                     ));
                 }
             },
+            AppEvent::SetPendingAgent {
+                model_name,
+                display_name,
+            } => {
+                // Store the pending agent selection in both App and ChatWidget
+                self.pending_agent = Some(PendingAgentSelection {
+                    model_name: model_name.clone(),
+                    display_name: display_name.clone(),
+                });
+                // Also set on ChatWidget so it can trigger the switch on prompt submission
+                self.chat_widget
+                    .set_pending_agent(model_name.clone(), display_name.clone());
+                tracing::info!(
+                    "Pending agent set: {} ({}). Will switch on next prompt.",
+                    display_name,
+                    model_name
+                );
+                self.chat_widget.add_info_message(
+                    format!(
+                        "Agent '{display_name}' selected. Will switch on next prompt submission."
+                    ),
+                    None,
+                );
+            }
+            AppEvent::SubmitWithAgentSwitch {
+                model_name,
+                display_name,
+                message_text,
+                image_paths,
+            } => {
+                tracing::info!(
+                    "Switching agent to {} ({}) and submitting message",
+                    display_name,
+                    model_name
+                );
+
+                // Clear the pending agent since we're applying it now
+                self.pending_agent = None;
+
+                // Update the model in config
+                self.config.model = model_name.clone();
+
+                // Shutdown current conversation
+                self.shutdown_current_conversation().await;
+
+                // Create the new chat widget with the new config and the message as initial prompt
+                // Set expected_model to filter events from the OLD agent until SessionConfigured
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: Some(message_text),
+                    initial_images: image_paths,
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    feedback: self.feedback.clone(),
+                    expected_model: Some(model_name.clone()),
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+
+                self.chat_widget
+                    .add_info_message(format!("Switched to agent: {display_name}"), None);
+            }
         }
         Ok(true)
     }
@@ -1072,6 +1144,7 @@ mod tests {
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
+            pending_agent: None,
         }
     }
 
@@ -1109,6 +1182,7 @@ mod tests {
                 pending_update_action: None,
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
+                pending_agent: None,
             },
             rx,
             op_rx,
