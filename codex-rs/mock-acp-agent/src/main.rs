@@ -312,6 +312,75 @@ impl acp::Agent for MockAgent {
             }
         }
 
+        // Support interleaved text and tool calls to test for duplicate message bug
+        // This sends text DURING the tool call, which should trigger the bug where
+        // the incomplete ExecCell gets flushed to history, creating duplicates.
+        if std::env::var("MOCK_AGENT_INTERLEAVED_TOOL_CALL").is_ok() {
+            eprintln!("Mock agent: sending interleaved tool call sequence");
+
+            let tool_call_id = acp::ToolCallId("interleaved-tool-001".to_string().into());
+
+            // Step 1: Send tool call (begin)
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall {
+                    id: tool_call_id.clone(),
+                    title: "Executing interleaved command".to_string(),
+                    kind: acp::ToolKind::Execute,
+                    status: acp::ToolCallStatus::Pending,
+                    content: vec![],
+                    locations: vec![],
+                    raw_input: Some(json!({"command": "test"})),
+                    raw_output: None,
+                    meta: None,
+                },
+            )
+            .await?;
+
+            // Small delay to ensure the begin event is processed
+            sleep(Duration::from_millis(50)).await;
+
+            // Step 2: Send text DURING the tool call - this triggers the bug!
+            // When this text arrives, handle_streaming_delta calls flush_active_cell()
+            // which moves the incomplete ExecCell to history.
+            self.send_text_chunk(session_id.clone(), "Processing command...")
+                .await?;
+
+            // Small delay
+            sleep(Duration::from_millis(50)).await;
+
+            // Step 3: Send tool call completion
+            // At this point, the ExecCell is no longer in active_cell, so a new one
+            // will be created, resulting in duplicate entries.
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate {
+                    id: tool_call_id.clone(),
+                    fields: acp::ToolCallUpdateFields {
+                        title: None,
+                        kind: None,
+                        status: Some(acp::ToolCallStatus::Completed),
+                        content: Some(vec![acp::ToolCallContent::Content {
+                            content: acp::ContentBlock::Text(acp::TextContent {
+                                text: "Command completed".to_string(),
+                                annotations: None,
+                                meta: None,
+                            }),
+                        }]),
+                        locations: None,
+                        raw_input: None,
+                        raw_output: Some(json!({"exit_code": 0})),
+                    },
+                    meta: None,
+                },
+            )
+            .await?;
+
+            // Final text
+            self.send_text_chunk(session_id.clone(), "Interleaved test done.")
+                .await?;
+        }
+
         // Support sending tool calls for testing ACP tool call display
         if std::env::var("MOCK_AGENT_SEND_TOOL_CALL").is_ok() {
             eprintln!("Mock agent: sending tool call sequence");

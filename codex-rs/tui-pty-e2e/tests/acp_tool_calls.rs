@@ -159,6 +159,98 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
     insta::assert_snapshot!("acp_tool_call_echo", normalize_for_input_snapshot(contents));
 }
 
+/// Test that ACP tool calls do NOT appear twice (once as Running, once as Ran)
+///
+/// This test verifies that when a tool call completes, there is only ONE entry
+/// in the TUI output, not duplicate entries showing both "Running" and "Ran"
+/// states. The expected behavior is that the "Running" state should be
+/// updated in-place to become "Ran" when the tool call completes.
+///
+/// ## Bug being tested:
+/// When agent text streams while a tool call is active, the incomplete ExecCell
+/// gets flushed to history. Then when the tool call completes, a new ExecCell
+/// is created, resulting in duplicate entries:
+/// 1. "Running ..." (flushed incomplete cell)
+/// 2. "Ran ..." (new completed cell)
+///
+/// This test uses MOCK_AGENT_INTERLEAVED_TOOL_CALL which sends text DURING
+/// the tool call to trigger this exact scenario.
+#[test]
+fn test_acp_tool_call_no_duplicate_messages() {
+    // Configure mock agent to send interleaved text and tool calls
+    // This triggers the bug by sending text DURING the tool call execution
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_INTERLEAVED_TOOL_CALL", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the interleaved tool call
+    session.send_str("Test interleaved").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the final text which means everything completed
+    session
+        .wait_for_text("Interleaved test done", Duration::from_secs(10))
+        .expect("Should receive completion response");
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // Count occurrences of the tool title "Executing interleaved command"
+    // It should appear exactly ONCE (in the completed "Ran" form)
+    let tool_title = "Executing interleaved command";
+    let count = contents.matches(tool_title).count();
+
+    assert_eq!(
+        count, 1,
+        "Tool call '{}' should appear exactly once, but appeared {} times.\n\
+         This indicates duplicate messages (both 'Running' and 'Ran' states visible).\n\
+         Screen contents:\n{}",
+        tool_title, count, contents
+    );
+
+    // Also verify we see "Ran" (completed state)
+    assert!(
+        contents.contains("Ran"),
+        "Should show completed 'Ran' state. Screen contents:\n{}",
+        contents
+    );
+
+    // Verify we don't have both "Running" AND "Ran" for this tool call
+    // (which would indicate duplicates)
+    let has_running = contents
+        .lines()
+        .any(|line| line.contains("Running") && line.contains("Executing interleaved"));
+    let has_ran = contents
+        .lines()
+        .any(|line| line.contains("Ran") && line.contains("Executing interleaved"));
+
+    assert!(
+        !(has_running && has_ran),
+        "Should NOT have both 'Running' and 'Ran' states for the same tool call.\n\
+         This indicates duplicate messages.\n\
+         Screen contents:\n{}",
+        contents
+    );
+
+    // Snapshot for visual verification
+    insta::assert_snapshot!(
+        "acp_tool_call_no_duplicates",
+        normalize_for_input_snapshot(contents)
+    );
+}
+
 /// Snapshot test for ACP tool call rendering
 ///
 /// This captures the exact visual rendering of an ACP tool call

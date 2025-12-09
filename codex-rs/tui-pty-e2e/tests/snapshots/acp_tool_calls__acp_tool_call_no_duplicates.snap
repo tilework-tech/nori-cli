@@ -1,0 +1,28 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+assertion_line: 248
+expression: normalize_for_input_snapshot(contents)
+---
+■ Operation 'ListCustomPrompts' is not supported in ACP mode
+
+
+› Test interleaved
+
+
+■ Operation 'AddToHistory' is not supported in ACP mode
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Test message 1Test message 2
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Processing command...Interleaved test done.
+
+• Ran 'Executing interleaved command'
+  └ (no output)
+
+
+› [DEFAULT_PROMPT]
+
+  100% context left · ? for shortcuts

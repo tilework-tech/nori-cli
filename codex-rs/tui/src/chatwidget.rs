@@ -318,6 +318,10 @@ pub(crate) struct ChatWidget {
     feedback: codex_feedback::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
+    // Pending (incomplete) ExecCells that were flushed before completion.
+    // Keyed by call_id so they can be completed when ExecCommandEnd arrives.
+    // Stored as Box<dyn HistoryCell> to avoid complex downcasting on flush.
+    pending_exec_cells: HashMap<String, Box<dyn HistoryCell>>,
 }
 
 struct UserMessage {
@@ -497,6 +501,18 @@ impl ChatWidget {
         // during streaming. This is necessary for ACP mode which doesn't send a
         // separate AgentMessage event to trigger handle_stream_finished().
         self.flush_interrupt_queue();
+
+        // Flush any pending ExecCells that weren't completed (e.g., due to interruption).
+        // Mark them as failed before flushing.
+        for (_, mut pending_cell) in self.pending_exec_cells.drain() {
+            if let Some(exec) = pending_cell.as_any_mut().downcast_mut::<ExecCell>() {
+                exec.mark_failed();
+            }
+            self.needs_final_message_separator = true;
+            self.app_event_tx
+                .send(AppEvent::InsertHistoryCell(pending_cell));
+        }
+
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
@@ -982,21 +998,29 @@ impl ChatWidget {
         let is_unified_exec_interaction =
             matches!(source, ExecCommandSource::UnifiedExecInteraction);
 
-        let needs_new = self
-            .active_cell
-            .as_ref()
-            .map(|cell| cell.as_any().downcast_ref::<ExecCell>().is_none())
-            .unwrap_or(true);
-        if needs_new {
-            self.flush_active_cell();
-            self.active_cell = Some(Box::new(new_active_exec_command(
-                ev.call_id.clone(),
-                command,
-                parsed,
-                source,
-                None,
-                self.config.animations,
-            )));
+        // First check if there's a pending ExecCell for this call_id
+        // (saved when the incomplete cell was flushed due to streaming)
+        if let Some(pending_cell) = self.pending_exec_cells.remove(&ev.call_id) {
+            // Move the pending cell to active_cell so we can complete it
+            self.active_cell = Some(pending_cell);
+        } else {
+            // Normal flow: check if active_cell is an ExecCell
+            let needs_new = self
+                .active_cell
+                .as_ref()
+                .map(|cell| cell.as_any().downcast_ref::<ExecCell>().is_none())
+                .unwrap_or(true);
+            if needs_new {
+                self.flush_active_cell();
+                self.active_cell = Some(Box::new(new_active_exec_command(
+                    ev.call_id.clone(),
+                    command,
+                    parsed,
+                    source,
+                    None,
+                    self.config.animations,
+                )));
+            }
         }
 
         if let Some(cell) = self
@@ -1260,6 +1284,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_exec_cells: HashMap::new(),
         };
 
         widget.prefetch_rate_limits();
@@ -1337,6 +1362,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_exec_cells: HashMap::new(),
         };
 
         widget.prefetch_rate_limits();
@@ -1595,6 +1621,22 @@ impl ChatWidget {
 
     fn flush_active_cell(&mut self) {
         if let Some(active) = self.active_cell.take() {
+            // Check if this is an incomplete ExecCell that should be saved to pending
+            // instead of being flushed to history. This prevents duplicate entries when
+            // the ExecCommandEnd event arrives later.
+            if let Some(exec_cell) = active.as_any().downcast_ref::<ExecCell>() {
+                if exec_cell.is_active() {
+                    // Get the pending call_ids before we consume the cell
+                    let pending_ids = exec_cell.pending_call_ids();
+                    if !pending_ids.is_empty() {
+                        // Save to pending map using the first pending call_id as key
+                        let key = pending_ids[0].clone();
+                        self.pending_exec_cells.insert(key, active);
+                        return;
+                    }
+                }
+            }
+            // Normal flush path - cell is complete or not an ExecCell
             self.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
         }

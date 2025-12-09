@@ -110,6 +110,15 @@ impl ExecCell {
         self.calls.iter().any(|c| c.output.is_none())
     }
 
+    /// Returns the call_ids of calls that have not yet completed (no output).
+    pub(crate) fn pending_call_ids(&self) -> Vec<String> {
+        self.calls
+            .iter()
+            .filter(|c| c.output.is_none())
+            .map(|c| c.call_id.clone())
+            .collect()
+    }
+
     pub(crate) fn active_start_time(&self) -> Option<Instant> {
         self.calls
             .iter()
