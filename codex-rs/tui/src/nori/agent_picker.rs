@@ -74,28 +74,77 @@ pub fn agent_picker_params(
     }
 }
 
-/// Create selection view parameters for the model picker in ACP mode.
-/// Shows models as disabled with a message to use /agent instead.
-pub fn acp_model_picker_params() -> SelectionViewParams {
-    // In ACP mode, we show a message that models are not directly selectable
-    // and users should use /agent instead
-    let items: Vec<SelectionItem> = vec![SelectionItem {
-        name: "Model switching disabled in ACP mode".to_string(),
-        description: Some("Use /agent to switch between ACP agents".to_string()),
-        is_current: false,
-        actions: vec![],
-        dismiss_on_select: true,
-        ..Default::default()
-    }];
+/// State for ACP model selection, passed to the model picker.
+#[derive(Debug, Clone)]
+pub struct AcpModelState {
+    /// Available models from the agent
+    pub available_models: Vec<crate::app_event::AcpModelInfo>,
+    /// Currently selected model ID
+    pub current_model_id: String,
+}
 
-    SelectionViewParams {
-        title: Some("Select Model".to_string()),
-        subtitle: Some("Not available in ACP mode - use /agent instead".to_string()),
-        footer_hint: Some(Line::from(
-            "Press esc to dismiss, or use /agent to switch agents.",
-        )),
-        items,
-        ..Default::default()
+/// Create selection view parameters for the model picker in ACP mode.
+///
+/// If `model_state` is `Some`, shows the actual available models from the agent.
+/// If `None`, shows a disabled message indicating model switching is not supported.
+pub fn acp_model_picker_params(model_state: Option<&AcpModelState>) -> SelectionViewParams {
+    match model_state {
+        Some(state) if !state.available_models.is_empty() => {
+            // Agent supports model switching - show actual models
+            let items: Vec<SelectionItem> = state
+                .available_models
+                .iter()
+                .map(|model| {
+                    let is_current = model.id == state.current_model_id;
+                    let model_id = model.id.clone();
+                    let display_name = model.display_name.clone();
+
+                    // Create action that sends the model switch event
+                    let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                        tx.send(crate::app_event::AppEvent::SetAcpModel {
+                            model_id: model_id.clone(),
+                            display_name: display_name.clone(),
+                        });
+                    })];
+
+                    SelectionItem {
+                        name: model.display_name.clone(),
+                        description: Some(model.id.clone()),
+                        is_current,
+                        actions,
+                        dismiss_on_select: true,
+                        ..Default::default()
+                    }
+                })
+                .collect();
+
+            SelectionViewParams {
+                title: Some("Select Model".to_string()),
+                subtitle: Some("Switch to a different model in this agent".to_string()),
+                footer_hint: Some(standard_popup_hint_line()),
+                items,
+                ..Default::default()
+            }
+        }
+        _ => {
+            // Agent does not support model switching
+            let items: Vec<SelectionItem> = vec![SelectionItem {
+                name: "Model switching not available".to_string(),
+                description: Some("This agent does not support model switching".to_string()),
+                is_current: false,
+                actions: vec![],
+                dismiss_on_select: true,
+                ..Default::default()
+            }];
+
+            SelectionViewParams {
+                title: Some("Select Model".to_string()),
+                subtitle: Some("Not available for this agent".to_string()),
+                footer_hint: Some(Line::from("Press esc to dismiss.")),
+                items,
+                ..Default::default()
+            }
+        }
     }
 }
 
@@ -132,12 +181,40 @@ mod tests {
     }
 
     #[test]
-    fn test_acp_model_picker_shows_disabled() {
-        let params = acp_model_picker_params();
+    fn test_acp_model_picker_shows_disabled_when_no_models() {
+        let params = acp_model_picker_params(None);
 
         assert!(params.title.is_some());
         assert!(params.subtitle.is_some());
         assert!(params.subtitle.unwrap().contains("Not available"));
+    }
+
+    #[test]
+    fn test_acp_model_picker_shows_models_when_available() {
+        use crate::app_event::AcpModelInfo;
+
+        let state = AcpModelState {
+            available_models: vec![
+                AcpModelInfo {
+                    id: "model-a".to_string(),
+                    display_name: "Model A".to_string(),
+                },
+                AcpModelInfo {
+                    id: "model-b".to_string(),
+                    display_name: "Model B".to_string(),
+                },
+            ],
+            current_model_id: "model-a".to_string(),
+        };
+        let params = acp_model_picker_params(Some(&state));
+
+        assert!(params.title.is_some());
+        assert!(params.subtitle.unwrap().contains("Switch"));
+        assert_eq!(params.items.len(), 2);
+
+        // First model should be current
+        assert!(params.items[0].is_current);
+        assert!(!params.items[1].is_current);
     }
 
     #[test]

@@ -379,6 +379,9 @@ fn make_chatwidget_manual() -> (
         feedback: codex_feedback::CodexFeedback::new(),
         current_rollout_path: None,
         pending_agent: None,
+        expected_model: None,
+        session_configured_received: false,
+        acp_model_state: None,
     };
     (widget, rx, op_rx)
 }

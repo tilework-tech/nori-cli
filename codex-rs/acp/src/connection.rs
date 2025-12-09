@@ -49,13 +49,19 @@ pub struct ApprovalRequest {
 }
 
 /// Minimum supported ACP protocol version
-const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::V1;
+const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
+
+/// Result of creating a session, including optional model state.
+pub struct CreateSessionResult {
+    pub session_id: acp::SessionId,
+    pub model_state: Option<acp::SessionModelState>,
+}
 
 /// Commands sent from the main thread to the ACP worker thread.
 enum AcpCommand {
     CreateSession {
         cwd: PathBuf,
-        response_tx: oneshot::Sender<Result<acp::SessionId>>,
+        response_tx: oneshot::Sender<Result<CreateSessionResult>>,
     },
     Prompt {
         session_id: acp::SessionId,
@@ -65,6 +71,11 @@ enum AcpCommand {
     },
     Cancel {
         session_id: acp::SessionId,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
+    SetModel {
+        session_id: acp::SessionId,
+        model_id: acp::ModelId,
         response_tx: oneshot::Sender<Result<()>>,
     },
 }
@@ -80,6 +91,8 @@ pub struct AcpConnection {
     /// Channel to receive approval requests from the agent.
     /// The UI layer should listen on this channel and respond via the oneshot sender.
     approval_rx: mpsc::Receiver<ApprovalRequest>,
+    /// Current model state from the session (if agent supports model switching).
+    model_state: std::sync::Mutex<Option<acp::SessionModelState>>,
     _worker_thread: thread::JoinHandle<()>,
 }
 
@@ -144,11 +157,15 @@ impl AcpConnection {
             command_tx,
             agent_capabilities: capabilities,
             approval_rx,
+            model_state: std::sync::Mutex::new(None),
             _worker_thread: worker_thread,
         })
     }
 
     /// Create a new session with the agent.
+    ///
+    /// Returns the session ID. Model state (if provided by agent) is stored internally
+    /// and can be accessed via `model_state()`.
     pub async fn create_session(&self, cwd: &Path) -> Result<acp::SessionId> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
@@ -158,7 +175,54 @@ impl AcpConnection {
             })
             .await
             .context("ACP worker thread died")?;
-        response_rx.await.context("ACP worker thread died")?
+
+        let result = response_rx.await.context("ACP worker thread died")??;
+
+        // Store model state if agent provided it
+        if let Ok(mut state) = self.model_state.lock() {
+            *state = result.model_state;
+        }
+
+        Ok(result.session_id)
+    }
+
+    /// Get the current model state from the agent (if supported).
+    ///
+    /// Returns `None` if the agent doesn't support model switching or hasn't
+    /// advertised any models.
+    pub fn model_state(&self) -> Option<acp::SessionModelState> {
+        self.model_state.lock().ok().and_then(|g| g.clone())
+    }
+
+    /// Set the model for the current session.
+    ///
+    /// Returns an error if the agent doesn't support model switching or if
+    /// the model ID is not in the available models list.
+    pub async fn set_model(
+        &self,
+        session_id: &acp::SessionId,
+        model_id: acp::ModelId,
+    ) -> Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::SetModel {
+                session_id: session_id.clone(),
+                model_id: model_id.clone(),
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+
+        response_rx.await.context("ACP worker thread died")??;
+
+        // Update the current model ID in our cached state
+        if let Ok(mut state) = self.model_state.lock() {
+            if let Some(ref mut model_state) = *state {
+                model_state.current_model_id = model_id;
+            }
+        }
+
+        Ok(())
     }
 
     /// Send a prompt to an existing session and receive streaming updates.
@@ -305,24 +369,22 @@ async fn spawn_connection_internal(
     // Perform initialization handshake using the Agent trait
     use acp::Agent;
     let response = connection
-        .initialize(acp::InitializeRequest {
-            protocol_version: acp::VERSION,
-            client_capabilities: acp::ClientCapabilities {
-                fs: acp::FileSystemCapability {
-                    read_text_file: true,
-                    write_text_file: true,
-                    meta: None,
-                },
-                terminal: false, // Not supporting terminals yet
-                meta: None,
-            },
-            client_info: Some(acp::Implementation {
-                name: "codex".to_string(),
-                title: Some("Codex CLI".to_string()),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            }),
-            meta: None,
-        })
+        .initialize(
+            acp::InitializeRequest::new(acp::ProtocolVersion::LATEST)
+                .client_capabilities(
+                    acp::ClientCapabilities::new()
+                        .fs(
+                            acp::FileSystemCapability::new()
+                                .read_text_file(true)
+                                .write_text_file(true),
+                        )
+                        .terminal(false), // Not supporting terminals yet
+                )
+                .client_info(
+                    acp::Implementation::new("codex", env!("CARGO_PKG_VERSION"))
+                        .title("Codex CLI"),
+                ),
+        )
         .await
         .context("ACP initialization failed")?;
 
@@ -370,13 +432,12 @@ async fn run_command_loop(
 
                 let result = inner
                     .connection
-                    .new_session(acp::NewSessionRequest {
-                        mcp_servers: vec![],
-                        cwd,
-                        meta: None,
-                    })
+                    .new_session(acp::NewSessionRequest::new(cwd))
                     .await
-                    .map(|r| r.session_id)
+                    .map(|r| CreateSessionResult {
+                        session_id: r.session_id,
+                        model_state: r.models,
+                    })
                     .context("Failed to create ACP session");
                 let _ = response_tx.send(result);
             }
@@ -391,11 +452,10 @@ async fn run_command_loop(
                     .register_session(session_id.clone(), update_tx);
 
                 // Use tokio::select! to allow Cancel commands to be processed while prompting
-                let prompt_future = inner.connection.prompt(acp::PromptRequest {
-                    session_id: session_id.clone(),
-                    prompt,
-                    meta: None,
-                });
+                let prompt_future =
+                    inner
+                        .connection
+                        .prompt(acp::PromptRequest::new(session_id.clone(), prompt));
                 tokio::pin!(prompt_future);
 
                 let result = loop {
@@ -413,10 +473,7 @@ async fn run_command_loop(
                                     // Process the cancel command immediately
                                     let cancel_result = inner
                                         .connection
-                                        .cancel(acp::CancelNotification {
-                                            session_id: cancel_session_id,
-                                            meta: None,
-                                        })
+                                        .cancel(acp::CancelNotification::new(cancel_session_id))
                                         .await
                                         .context("Failed to cancel ACP session");
                                     let _ = cancel_response_tx.send(cancel_result);
@@ -456,12 +513,22 @@ async fn run_command_loop(
             } => {
                 let result = inner
                     .connection
-                    .cancel(acp::CancelNotification {
-                        session_id,
-                        meta: None,
-                    })
+                    .cancel(acp::CancelNotification::new(session_id))
                     .await
                     .context("Failed to cancel ACP session");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::SetModel {
+                session_id,
+                model_id,
+                response_tx,
+            } => {
+                let result = inner
+                    .connection
+                    .set_session_model(acp::SetSessionModelRequest::new(session_id, model_id))
+                    .await
+                    .map(|_| ())
+                    .context("Failed to set model");
                 let _ = response_tx.send(result);
             }
         }
@@ -534,13 +601,14 @@ impl acp::Client for ClientDelegate {
             let option_id = arguments
                 .options
                 .first()
-                .map(|opt| opt.id.clone())
+                .map(|opt| opt.option_id.clone())
                 .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()));
 
-            return Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Selected { option_id },
-                meta: None,
-            });
+            return Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                    option_id,
+                )),
+            ));
         }
 
         // Wait for the UI's decision
@@ -549,10 +617,7 @@ impl acp::Client for ClientDelegate {
                 // Translate the Codex ReviewDecision back to ACP outcome
                 let outcome =
                     translator::review_decision_to_permission_outcome(decision, &arguments.options);
-                Ok(acp::RequestPermissionResponse {
-                    outcome,
-                    meta: None,
-                })
+                Ok(acp::RequestPermissionResponse::new(outcome))
             }
             Err(_) => {
                 // Response channel was dropped (UI didn't respond), fall back to deny
@@ -567,13 +632,14 @@ impl acp::Client for ClientDelegate {
                                 | acp::PermissionOptionKind::RejectAlways
                         )
                     })
-                    .map(|opt| opt.id.clone())
+                    .map(|opt| opt.option_id.clone())
                     .unwrap_or_else(|| acp::PermissionOptionId::from("deny".to_string()));
 
-                Ok(acp::RequestPermissionResponse {
-                    outcome: acp::RequestPermissionOutcome::Selected { option_id },
-                    meta: None,
-                })
+                Ok(acp::RequestPermissionResponse::new(
+                    acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                        option_id,
+                    )),
+                ))
             }
         }
     }
@@ -593,10 +659,7 @@ impl acp::Client for ClientDelegate {
         // Read file content
         let content =
             std::fs::read_to_string(&arguments.path).map_err(acp::Error::into_internal_error)?;
-        Ok(acp::ReadTextFileResponse {
-            content,
-            meta: None,
-        })
+        Ok(acp::ReadTextFileResponse::new(content))
     }
 
     async fn session_notification(
@@ -693,11 +756,7 @@ mod tests {
 
         // Send prompt and collect updates
         let (tx, mut rx) = mpsc::channel(32);
-        let prompt = vec![acp::ContentBlock::Text(acp::TextContent {
-            text: "Hello".to_string(),
-            annotations: None,
-            meta: None,
-        })];
+        let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))];
 
         let stop_reason = conn
             .prompt(session_id, prompt, tx)

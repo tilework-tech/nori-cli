@@ -955,6 +955,30 @@ impl App {
                 self.chat_widget
                     .add_info_message(format!("Switched to agent: {display_name}"), None);
             }
+            AppEvent::SetAcpModel {
+                model_id,
+                display_name,
+            } => {
+                tracing::info!("Setting ACP model to {} ({})", display_name, model_id);
+                // TODO: Call acp_backend.set_model() when backend reference is available
+                // For now, just log and show a message
+                self.chat_widget.add_info_message(
+                    format!("Model switching to '{display_name}' - not yet implemented"),
+                    None,
+                );
+            }
+            AppEvent::UpdateAcpModelState {
+                available_models,
+                current_model_id,
+            } => {
+                tracing::debug!(
+                    "Updating ACP model state: {} models available, current={}",
+                    available_models.len(),
+                    current_model_id
+                );
+                self.chat_widget
+                    .update_acp_model_state(available_models, current_model_id);
+            }
         }
         Ok(true)
     }

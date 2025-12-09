@@ -110,6 +110,7 @@ use crate::tui::FrameRequester;
 mod interrupts;
 use self::interrupts::InterruptManager;
 mod agent;
+use self::agent::AgentHandle;
 use self::agent::spawn_agent;
 use self::agent::spawn_agent_from_existing;
 mod session_header;
@@ -330,6 +331,9 @@ pub(crate) struct ChatWidget {
     // Whether SessionConfigured has been received for this widget.
     // Used with expected_model to filter events from previous agents.
     session_configured_received: bool,
+    // ACP model state for model switching within an agent.
+    // Populated when the agent supports model switching (via session/set_model).
+    acp_model_state: Option<crate::nori::agent_picker::AcpModelState>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -1234,7 +1238,10 @@ impl ChatWidget {
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-        let codex_op_tx = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
+        let AgentHandle {
+            op_tx: codex_op_tx,
+            acp_backend_rx: _,
+        } = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
 
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
@@ -1287,6 +1294,7 @@ impl ChatWidget {
             pending_agent: None,
             expected_model,
             session_configured_received: false,
+            acp_model_state: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1314,8 +1322,10 @@ impl ChatWidget {
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
 
-        let codex_op_tx =
-            spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
+        let AgentHandle {
+            op_tx: codex_op_tx,
+            acp_backend_rx: _,
+        } = spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
 
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
@@ -1369,6 +1379,7 @@ impl ChatWidget {
             expected_model,
             // For existing conversations, we've already received SessionConfigured
             session_configured_received: true,
+            acp_model_state: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1381,6 +1392,19 @@ impl ChatWidget {
         self.pending_agent = Some(PendingAgentInfo {
             model_name,
             display_name,
+        });
+    }
+
+    /// Update the ACP model state for model switching within an agent.
+    /// Called when the agent supports model switching (via session/set_model).
+    pub(crate) fn update_acp_model_state(
+        &mut self,
+        available_models: Vec<crate::app_event::AcpModelInfo>,
+        current_model_id: String,
+    ) {
+        self.acp_model_state = Some(crate::nori::agent_picker::AcpModelState {
+            available_models,
+            current_model_id,
         });
     }
 
@@ -2200,8 +2224,9 @@ impl ChatWidget {
         // Check if we're in ACP mode by checking if the current model is registered
         // in the ACP agent registry
         if codex_acp::get_agent_config(&current_model).is_ok() {
-            // ACP mode - show disabled model picker
-            let params = crate::nori::agent_picker::acp_model_picker_params();
+            // ACP mode - show model picker with available models from agent
+            let params =
+                crate::nori::agent_picker::acp_model_picker_params(self.acp_model_state.as_ref());
             self.bottom_pane.show_selection_view(params);
             return;
         }

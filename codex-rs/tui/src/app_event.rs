@@ -188,6 +188,33 @@ pub(crate) enum AppEvent {
         /// Optional image paths to include with the message
         image_paths: Vec<PathBuf>,
     },
+
+    /// Switch to a different model within the current ACP agent.
+    /// This uses the ACP session/set_model protocol method.
+    SetAcpModel {
+        /// The model ID to switch to (from the agent's available_models)
+        model_id: String,
+        /// The display name for the status indicator
+        display_name: String,
+    },
+
+    /// Update the available ACP models and current model ID in the widget.
+    /// Sent after session creation when the agent supports model switching.
+    UpdateAcpModelState {
+        /// Available models from the agent
+        available_models: Vec<AcpModelInfo>,
+        /// Currently selected model ID
+        current_model_id: String,
+    },
+}
+
+/// Information about an ACP model, for display in the model picker.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpModelInfo {
+    /// The model ID (e.g., "claude-3-5-sonnet-20241022")
+    pub id: String,
+    /// Human-readable display name
+    pub display_name: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

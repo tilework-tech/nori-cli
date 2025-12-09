@@ -13,12 +13,25 @@ use codex_core::protocol::Op;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 
 use crate::app_event::AppEvent;
+use crate::app_event::AcpModelInfo;
 use crate::app_event_sender::AppEventSender;
 
-/// Spawn the agent bootstrapper and op forwarding loop, returning the
-/// `UnboundedSender<Op>` used by the UI to submit operations.
+/// Handle returned by `spawn_agent` that allows sending ops and accessing
+/// the ACP backend for model switching (if in ACP mode).
+#[allow(dead_code)]
+pub(crate) struct AgentHandle {
+    /// Channel to send ops to the agent.
+    pub op_tx: UnboundedSender<Op>,
+    /// Receiver for the ACP backend (only populated in ACP mode).
+    /// Use `take_acp_backend()` to await and extract the backend.
+    pub acp_backend_rx: Option<oneshot::Receiver<Arc<AcpBackend>>>,
+}
+
+/// Spawn the agent bootstrapper and op forwarding loop, returning an
+/// `AgentHandle` used by the UI to submit operations and access the backend.
 ///
 /// This function detects whether to use ACP mode or HTTP mode based on:
 /// 1. If the model is registered in the ACP registry, use ACP mode
@@ -28,7 +41,7 @@ pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
     server: Arc<ConversationManager>,
-) -> UnboundedSender<Op> {
+) -> AgentHandle {
     let acp_agent_result = get_agent_config(&config.model);
 
     match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
@@ -55,7 +68,7 @@ pub(crate) fn spawn_agent(
 ///
 /// The delay allows the TUI to render the error message before exiting,
 /// so users can see what went wrong.
-fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> UnboundedSender<Op> {
+fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> AgentHandle {
     let (codex_op_tx, _codex_op_rx) = unbounded_channel::<Op>();
 
     tokio::spawn(async move {
@@ -72,15 +85,19 @@ fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> Unbound
         app_event_tx.send(AppEvent::ExitRequest);
     });
 
-    codex_op_tx
+    AgentHandle {
+        op_tx: codex_op_tx,
+        acp_backend_rx: None,
+    }
 }
 
 /// Spawn an ACP agent backend.
 ///
 /// This uses the `codex_acp` crate to spawn an agent subprocess and handle
 /// communication via the Agent Client Protocol.
-fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSender<Op> {
+fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> AgentHandle {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
+    let (backend_tx, backend_rx) = oneshot::channel::<Arc<AcpBackend>>();
 
     tokio::spawn(async move {
         // Create event channel for backend → TUI
@@ -110,6 +127,31 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSen
             }
         };
 
+        // Send backend reference to caller for model switching support
+        let backend_for_caller = Arc::clone(&backend);
+        let _ = backend_tx.send(backend_for_caller);
+
+        // Send model state to TUI if agent supports model switching
+        if backend.supports_model_switching() {
+            if let Some(models) = backend.available_models() {
+                let current_id = backend
+                    .current_model_id()
+                    .map(|id| id.to_string())
+                    .unwrap_or_default();
+                let model_info: Vec<AcpModelInfo> = models
+                    .into_iter()
+                    .map(|m| AcpModelInfo {
+                        id: m.model_id.to_string(),
+                        display_name: m.name,
+                    })
+                    .collect();
+                app_event_tx.send(AppEvent::UpdateAcpModelState {
+                    available_models: model_info,
+                    current_model_id: current_id,
+                });
+            }
+        }
+
         // Forward ops to backend
         let backend_for_ops = Arc::clone(&backend);
         tokio::spawn(async move {
@@ -132,7 +174,10 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSen
         }
     });
 
-    codex_op_tx
+    AgentHandle {
+        op_tx: codex_op_tx,
+        acp_backend_rx: Some(backend_rx),
+    }
 }
 
 /// Spawn an HTTP agent (the original implementation).
@@ -142,7 +187,7 @@ fn spawn_http_agent(
     config: Config,
     app_event_tx: AppEventSender,
     server: Arc<ConversationManager>,
-) -> UnboundedSender<Op> {
+) -> AgentHandle {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
     let app_event_tx_clone = app_event_tx;
@@ -190,7 +235,10 @@ fn spawn_http_agent(
         }
     });
 
-    codex_op_tx
+    AgentHandle {
+        op_tx: codex_op_tx,
+        acp_backend_rx: None,
+    }
 }
 
 /// Spawn agent loops for an existing conversation (e.g., a forked conversation).
@@ -200,7 +248,7 @@ pub(crate) fn spawn_agent_from_existing(
     conversation: std::sync::Arc<CodexConversation>,
     session_configured: codex_core::protocol::SessionConfiguredEvent,
     app_event_tx: AppEventSender,
-) -> UnboundedSender<Op> {
+) -> AgentHandle {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
     let app_event_tx_clone = app_event_tx;
@@ -227,5 +275,8 @@ pub(crate) fn spawn_agent_from_existing(
         }
     });
 
-    codex_op_tx
+    AgentHandle {
+        op_tx: codex_op_tx,
+        acp_backend_rx: None,
+    }
 }

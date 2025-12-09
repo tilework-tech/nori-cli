@@ -344,6 +344,51 @@ impl AcpBackend {
             .await;
     }
 
+    /// Get the available models from the agent (if supported).
+    ///
+    /// Returns `None` if the agent doesn't support model switching.
+    pub fn available_models(&self) -> Option<Vec<acp::ModelInfo>> {
+        self.connection
+            .model_state()
+            .map(|s| s.available_models.clone())
+    }
+
+    /// Get the current model ID from the agent (if supported).
+    ///
+    /// Returns `None` if the agent doesn't support model switching.
+    pub fn current_model_id(&self) -> Option<acp::ModelId> {
+        self.connection.model_state().map(|s| s.current_model_id)
+    }
+
+    /// Check if the agent supports model switching.
+    pub fn supports_model_switching(&self) -> bool {
+        self.connection.model_state().is_some()
+    }
+
+    /// Set the model for the current session.
+    ///
+    /// Returns an error if the model ID is not in the available models list.
+    pub async fn set_model(&self, model_id: acp::ModelId) -> Result<()> {
+        // Validate model is available
+        if let Some(models) = self.available_models() {
+            if !models.iter().any(|m| m.model_id == model_id) {
+                anyhow::bail!(
+                    "Model '{}' not available. Available: {}",
+                    model_id,
+                    models
+                        .iter()
+                        .map(|m| m.model_id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        } else {
+            anyhow::bail!("Agent does not support model switching");
+        }
+
+        self.connection.set_model(&self.session_id, model_id).await
+    }
+
     /// Background task to handle approval requests from the ACP connection.
     async fn run_approval_handler(
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
@@ -427,7 +472,7 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             // Tool calls can be mapped to ExecCommandBegin events
             vec![EventMsg::ExecCommandBegin(
                 codex_protocol::protocol::ExecCommandBeginEvent {
-                    call_id: tool_call.id.to_string(),
+                    call_id: tool_call.tool_call_id.to_string(),
                     process_id: None,
                     turn_id: String::new(),
                     command: vec![tool_call.title.clone()],
@@ -443,7 +488,7 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             if update.fields.status == Some(acp::ToolCallStatus::Completed) {
                 vec![EventMsg::ExecCommandEnd(
                     codex_protocol::protocol::ExecCommandEndEvent {
-                        call_id: update.id.to_string(),
+                        call_id: update.tool_call_id.to_string(),
                         process_id: None,
                         turn_id: String::new(),
                         command: vec![update.fields.title.clone().unwrap_or_default()],
@@ -476,14 +521,9 @@ mod tests {
     /// AgentMessageChunk to AgentMessageDelta events.
     #[test]
     fn test_translate_agent_message_chunk_to_event() {
-        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk {
-            content: acp::ContentBlock::Text(acp::TextContent {
-                text: "Hello from agent".to_string(),
-                annotations: None,
-                meta: None,
-            }),
-            meta: None,
-        });
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Hello from agent")),
+        ));
 
         let events = translate_session_update_to_events(&update);
         assert_eq!(events.len(), 1);
@@ -500,14 +540,9 @@ mod tests {
     /// AgentThoughtChunk to AgentReasoningDelta events.
     #[test]
     fn test_translate_agent_thought_to_reasoning_event() {
-        let update = acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk {
-            content: acp::ContentBlock::Text(acp::TextContent {
-                text: "Thinking about the problem...".to_string(),
-                annotations: None,
-                meta: None,
-            }),
-            meta: None,
-        });
+        let update = acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Thinking about the problem...")),
+        ));
 
         let events = translate_session_update_to_events(&update);
         assert_eq!(events.len(), 1);
@@ -523,17 +558,12 @@ mod tests {
     /// Test that ToolCall updates are translated to ExecCommandBegin events.
     #[test]
     fn test_translate_tool_call_to_exec_command_begin() {
-        let update = acp::SessionUpdate::ToolCall(acp::ToolCall {
-            id: acp::ToolCallId::from("call-123".to_string()),
-            title: "shell".to_string(),
-            kind: acp::ToolKind::Execute,
-            status: acp::ToolCallStatus::InProgress,
-            content: vec![],
-            locations: vec![],
-            raw_input: Some(serde_json::json!({"command": "ls -la"})),
-            raw_output: None,
-            meta: None,
-        });
+        let update = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new("call-123", "shell")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::InProgress)
+                .raw_input(serde_json::json!({"command": "ls -la"})),
+        );
 
         let events = translate_session_update_to_events(&update);
         assert_eq!(events.len(), 1);
@@ -550,19 +580,12 @@ mod tests {
     /// Test that completed ToolCallUpdate is translated to ExecCommandEnd.
     #[test]
     fn test_translate_tool_call_update_completed_to_exec_command_end() {
-        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate {
-            id: acp::ToolCallId::from("call-456".to_string()),
-            fields: acp::ToolCallUpdateFields {
-                kind: None,
-                status: Some(acp::ToolCallStatus::Completed),
-                title: Some("read_file".to_string()),
-                content: None,
-                locations: None,
-                raw_input: None,
-                raw_output: None,
-            },
-            meta: None,
-        });
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-456".to_string()),
+            acp::ToolCallUpdateFields::default()
+                .status(acp::ToolCallStatus::Completed)
+                .title("read_file"),
+        ));
 
         let events = translate_session_update_to_events(&update);
         assert_eq!(events.len(), 1);
@@ -578,16 +601,9 @@ mod tests {
     /// Test that non-text content blocks produce no events.
     #[test]
     fn test_non_text_content_produces_no_events() {
-        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk {
-            content: acp::ContentBlock::Image(acp::ImageContent {
-                data: String::new(),
-                mime_type: "image/png".to_string(),
-                annotations: None,
-                uri: None,
-                meta: None,
-            }),
-            meta: None,
-        });
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Image(acp::ImageContent::new("", "image/png")),
+        ));
 
         let events = translate_session_update_to_events(&update);
         assert!(events.is_empty());
@@ -596,14 +612,9 @@ mod tests {
     /// Test that unsupported session update types produce no events.
     #[test]
     fn test_unsupported_updates_produce_no_events() {
-        let update = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk {
-            content: acp::ContentBlock::Text(acp::TextContent {
-                text: "User message".to_string(),
-                annotations: None,
-                meta: None,
-            }),
-            meta: None,
-        });
+        let update = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("User message")),
+        ));
 
         let events = translate_session_update_to_events(&update);
         assert!(events.is_empty());
