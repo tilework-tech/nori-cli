@@ -21,32 +21,46 @@ pub struct AcpAgentInfo {
 
 /// Get list of all available ACP agents for the agent picker
 pub fn list_available_agents() -> Vec<AcpAgentInfo> {
-    vec![
-        AcpAgentInfo {
+    let mut agents = Vec::new();
+
+    // Mock agents are only available in debug builds (for testing)
+    #[cfg(debug_assertions)]
+    {
+        agents.push(AcpAgentInfo {
             model_name: "mock-model".to_string(),
             display_name: "Mock ACP".to_string(),
             description: "Mock agent for testing".to_string(),
             provider_slug: "mock-acp".to_string(),
-        },
-        AcpAgentInfo {
+        });
+        agents.push(AcpAgentInfo {
             model_name: "mock-model-alt".to_string(),
             display_name: "Mock ACP Alt".to_string(),
             description: "Alternate mock agent for testing".to_string(),
             provider_slug: "mock-acp-alt".to_string(),
-        },
-        AcpAgentInfo {
-            model_name: "gemini-2.5-flash".to_string(),
-            display_name: "Gemini 2.5 Flash".to_string(),
-            description: "Google Gemini via ACP".to_string(),
-            provider_slug: "gemini-acp".to_string(),
-        },
-        AcpAgentInfo {
-            model_name: "claude-4.5".to_string(),
-            display_name: "Claude 4.5".to_string(),
-            description: "Anthropic Claude via ACP".to_string(),
-            provider_slug: "claude-acp".to_string(),
-        },
-    ]
+        });
+    }
+
+    // Production agents (always available)
+    agents.push(AcpAgentInfo {
+        model_name: "claude-acp".to_string(),
+        display_name: "Claude".to_string(),
+        description: "Anthropic Claude via ACP".to_string(),
+        provider_slug: "claude-acp".to_string(),
+    });
+    agents.push(AcpAgentInfo {
+        model_name: "codex-acp".to_string(),
+        display_name: "Codex".to_string(),
+        description: "OpenAI Codex via ACP".to_string(),
+        provider_slug: "codex-acp".to_string(),
+    });
+    agents.push(AcpAgentInfo {
+        model_name: "gemini-acp".to_string(),
+        display_name: "Gemini".to_string(),
+        description: "Google Gemini via ACP".to_string(),
+        provider_slug: "gemini-acp".to_string(),
+    });
+
+    agents
 }
 
 /// Default idle timeout for ACP streaming (5 minutes)
@@ -106,7 +120,52 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
     // Normalize model name: lowercase
     let normalized = model_name.to_lowercase();
 
+    // Try mock agents first (only available in debug builds)
+    #[cfg(debug_assertions)]
+    if let Some(config) = get_mock_agent_config(&normalized) {
+        return Ok(config);
+    }
+
+    // Production agents
     match normalized.as_str() {
+        "gemini-2.5-flash" | "gemini-acp" => Ok(AcpAgentConfig {
+            provider_slug: "gemini-acp".to_string(),
+            command: "npx".to_string(),
+            args: vec![
+                "@google/gemini-cli".to_string(),
+                "--experimental-acp".to_string(),
+            ],
+            provider_info: AcpProviderInfo {
+                name: "Gemini ACP".to_string(),
+                ..Default::default()
+            },
+        }),
+        "claude-4.5" | "claude-acp" => Ok(AcpAgentConfig {
+            provider_slug: "claude-acp".to_string(),
+            command: "npx".to_string(),
+            args: vec!["@zed-industries/claude-code-acp".to_string()],
+            provider_info: AcpProviderInfo {
+                name: "Claude ACP".to_string(),
+                ..Default::default()
+            },
+        }),
+        "codex-acp" => Ok(AcpAgentConfig {
+            provider_slug: "codex-acp".to_string(),
+            command: "npx".to_string(),
+            args: vec!["@zed-industries/codex-acp".to_string()],
+            provider_info: AcpProviderInfo {
+                name: "Codex ACP".to_string(),
+                ..Default::default()
+            },
+        }),
+        _ => anyhow::bail!("Unknown ACP model: {model_name}"),
+    }
+}
+
+/// Get mock agent configuration (only available in debug builds)
+#[cfg(debug_assertions)]
+fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
+    match normalized {
         "mock-model" => {
             // Resolve path to mock_acp_agent binary.
             //
@@ -144,7 +203,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 mock_path
             };
 
-            Ok(AcpAgentConfig {
+            Some(AcpAgentConfig {
                 provider_slug: "mock-acp".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -184,7 +243,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 mock_path
             };
 
-            Ok(AcpAgentConfig {
+            Some(AcpAgentConfig {
                 provider_slug: "mock-acp-alt".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -194,28 +253,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 },
             })
         }
-        "gemini-2.5-flash" | "gemini-acp" => Ok(AcpAgentConfig {
-            provider_slug: "gemini-acp".to_string(),
-            command: "npx".to_string(),
-            args: vec![
-                "@google/gemini-cli".to_string(),
-                "--experimental-acp".to_string(),
-            ],
-            provider_info: AcpProviderInfo {
-                name: "Gemini ACP".to_string(),
-                ..Default::default()
-            },
-        }),
-        "claude-4.5" | "claude-acp" => Ok(AcpAgentConfig {
-            provider_slug: "claude-acp".to_string(),
-            command: "npx".to_string(),
-            args: vec!["@zed-industries/claude-code-acp".to_string()],
-            provider_info: AcpProviderInfo {
-                name: "Claude ACP".to_string(),
-                ..Default::default()
-            },
-        }),
-        _ => anyhow::bail!("Unknown ACP model: {model_name}"),
+        _ => None,
     }
 }
 
@@ -224,6 +262,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(debug_assertions)]
     fn test_get_mock_model_config() {
         let config = get_agent_config("mock-model").expect("Should return config for mock-model");
 
@@ -240,6 +279,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(debug_assertions)]
     fn test_get_mock_model_alt_config() {
         let config =
             get_agent_config("mock-model-alt").expect("Should return config for mock-model-alt");
@@ -279,6 +319,16 @@ mod tests {
     }
 
     #[test]
+    fn test_get_codex_model_config() {
+        let config = get_agent_config("codex-acp").expect("Should return config for codex-acp");
+
+        assert_eq!(config.provider_slug, "codex-acp");
+        assert_eq!(config.command, "npx");
+        assert_eq!(config.args, vec!["@zed-industries/codex-acp"]);
+        assert_eq!(config.provider_info.name, "Codex ACP");
+    }
+
+    #[test]
     fn test_get_unknown_model_returns_error() {
         let result = get_agent_config("unknown-model-xyz");
 
@@ -294,10 +344,6 @@ mod tests {
             get_agent_config("gemini-2.5-flash").is_ok(),
             "Lowercase 'gemini-2.5-flash' should work"
         );
-        assert!(
-            get_agent_config("mock-model").is_ok(),
-            "Lowercase 'mock-model' should work"
-        );
 
         // Should work with mixed case (normalized to lowercase)
         let gemini_result = get_agent_config("Gemini-2.5-Flash");
@@ -311,14 +357,6 @@ mod tests {
             "Should resolve to gemini-acp provider"
         );
 
-        let mock_result = get_agent_config("Mock-Model");
-        assert!(mock_result.is_ok(), "Mixed case 'Mock-Model' should work");
-        assert_eq!(
-            mock_result.unwrap().provider_slug,
-            "mock-acp",
-            "Should resolve to mock-acp provider"
-        );
-
         // Should still reject unknown models
         let unknown_result = get_agent_config("unknown-model-xyz");
         assert!(unknown_result.is_err(), "Unknown model should return error");
@@ -327,5 +365,31 @@ mod tests {
             err_msg.contains("unknown-model-xyz"),
             "Error message should contain original input"
         );
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn test_list_available_agents_debug_build() {
+        let agents = list_available_agents();
+        // Debug build should have 5 agents: mock, mock-alt, claude, codex, gemini
+        assert_eq!(agents.len(), 5, "Debug build should have 5 agents");
+
+        let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
+        assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
+        assert!(names.contains(&"Mock ACP Alt"), "Should have Mock ACP Alt");
+        assert!(names.contains(&"Claude"), "Should have Claude");
+        assert!(names.contains(&"Codex"), "Should have Codex");
+        assert!(names.contains(&"Gemini"), "Should have Gemini");
+    }
+
+    #[test]
+    fn test_list_available_agents_contains_production_agents() {
+        let agents = list_available_agents();
+        let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
+
+        // Production agents should always be present
+        assert!(names.contains(&"Claude"), "Should have Claude");
+        assert!(names.contains(&"Codex"), "Should have Codex");
+        assert!(names.contains(&"Gemini"), "Should have Gemini");
     }
 }

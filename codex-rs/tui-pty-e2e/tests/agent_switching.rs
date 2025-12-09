@@ -853,6 +853,102 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     );
 }
 
+// ============================================================================
+// Test: Agent Picker Shows Correct Agents (Debug Build)
+// ============================================================================
+
+/// Test that the agent picker shows all 5 agents in debug build.
+///
+/// In debug builds, the agent picker should show:
+/// - Mock ACP (mock agent for testing)
+/// - Mock ACP Alt (alternate mock agent for testing)
+/// - Claude (Anthropic Claude via ACP)
+/// - Codex (OpenAI Codex via ACP)
+/// - Gemini (Google Gemini via ACP)
+///
+/// Note: In release builds, only the 3 production agents (Claude, Codex, Gemini)
+/// would be shown. This test validates the debug build behavior.
+#[test]
+#[cfg(target_os = "linux")]
+#[cfg(debug_assertions)]
+fn test_agent_picker_shows_five_agents_in_debug_build() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Open agent picker with /agent command
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for agent picker to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent"),
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear with title");
+
+    // Get screen contents to verify all agents are present
+    let screen = session.screen_contents();
+
+    // Verify all 5 agents are shown in debug build
+    // The display names should NOT include model versions (e.g., "Claude" not "Claude 4.5")
+    assert!(
+        screen.contains("Mock ACP"),
+        "Agent picker should show 'Mock ACP', got: {}",
+        screen
+    );
+    assert!(
+        screen.contains("Mock ACP Alt"),
+        "Agent picker should show 'Mock ACP Alt', got: {}",
+        screen
+    );
+    assert!(
+        screen.contains("Claude") && !screen.contains("Claude 4.5"),
+        "Agent picker should show 'Claude' without model version, got: {}",
+        screen
+    );
+    assert!(
+        screen.contains("Codex"),
+        "Agent picker should show 'Codex', got: {}",
+        screen
+    );
+    assert!(
+        screen.contains("Gemini") && !screen.contains("Gemini 2.5"),
+        "Agent picker should show 'Gemini' without model version, got: {}",
+        screen
+    );
+
+    // Count agents by looking for unique agent entries
+    // Each agent line should be distinct in the picker
+    let agent_count = ["Mock ACP Alt", "Claude", "Codex", "Gemini"]
+        .iter()
+        .filter(|name| screen.contains(*name))
+        .count()
+        + if screen.contains("Mock ACP") && !screen.contains("Mock ACP Alt") {
+            1
+        } else if screen.contains("Mock ACP") {
+            1 // Mock ACP is present (Mock ACP Alt counted separately)
+        } else {
+            0
+        };
+
+    // We should see all 5 agents
+    assert!(
+        agent_count >= 4, // At minimum Claude, Codex, Gemini, and one of the Mocks
+        "Expected at least 4 distinct agents in picker, found approximately: {}. Screen: {}",
+        agent_count,
+        screen
+    );
+}
+
 /// Test that verifies the expected sequence of operations when switching agents
 /// This is a more focused test that checks specific message ordering
 #[test]
