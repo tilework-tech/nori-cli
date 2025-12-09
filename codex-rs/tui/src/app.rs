@@ -883,6 +883,20 @@ impl App {
                     ));
                 }
             },
+            AppEvent::SetPendingAgent {
+                model_name,
+                show_warning,
+            } => {
+                self.chat_widget.set_pending_agent(model_name.clone());
+                if show_warning {
+                    self.chat_widget.add_info_message(
+                        format!(
+                            "Agent will switch to '{model_name}' on your next prompt. Conversation history will be lost."
+                        ),
+                        None,
+                    );
+                }
+            }
         }
         Ok(true)
     }

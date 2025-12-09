@@ -46,6 +46,29 @@ The TUI supports two backend modes, selected automatically at startup based on m
 
 Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
 
+**ACP Agent Switching (`chatwidget/agent.rs`):**
+
+The `spawn_acp_agent()` function runs a loop that supports dynamic agent switching:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    ACP Agent Switch Flow                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│  1. User selects agent in /agent picker → sets pending_agent            │
+│  2. Warning message shown: "history will be lost"                       │
+│  3. User submits next prompt                                            │
+│  4. submit_user_message() detects pending_agent                         │
+│  5. Sends Op::OverrideTurnContext with new model                        │
+│  6. Agent loop detects model change, sets pending_switch                │
+│  7. Sends Op::Shutdown to current backend                               │
+│  8. Waits for ShutdownComplete or event channel close                   │
+│  9. Breaks inner loop, spawns new AcpBackend with new model             │
+│ 10. New ACP subprocess started with new model configuration             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+Key invariant: Agent switching is deferred to the next prompt submission. This ensures the current turn completes before switching, preventing data loss or inconsistent state during active streaming.
+
 **ACP Backend Arc Reference Handling:**
 
 In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference after spawning the op forwarding task. This prevents a self-reference deadlock:
@@ -70,8 +93,22 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 
 - `public_widgets/composer_input.rs`: Text input with multi-line support
 - `clipboard_paste.rs`: Clipboard integration
-- `slash_command.rs`: `/command` parsing and execution
+- `slash_command.rs`: `/command` parsing and execution (includes `/agent` for ACP agent picker)
 - `file_search.rs`: Fuzzy file finder
+
+**Slash Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/model` | Choose model and reasoning effort (HTTP mode) |
+| `/agent` | Choose ACP agent (opens picker, deferred switch) |
+| `/approvals` | Choose approval/sandbox policy |
+| `/new` | Start a new chat session |
+| `/review` | Review current changes |
+| `/diff` | Show git diff |
+| `/status` | Show session configuration and token usage |
+
+The `/agent` command opens a selection popup populated from `codex_acp::list_available_agents()`. Selection sets `pending_agent` which is applied on the next prompt submission.
 
 **Onboarding:**
 
@@ -84,6 +121,20 @@ The `onboarding/` module handles first-run experience:
 
 - `resume_picker.rs`: UI for selecting sessions to resume
 - `session_log.rs`: High-fidelity session event logging
+- `chatwidget/session_header.rs`: Displays current model and pending agent selection
+
+**Pending Agent Selection Pattern:**
+
+The `ChatWidget` maintains a `pending_agent: Option<String>` field that holds a deferred agent selection:
+
+1. User opens `/agent` picker and selects an agent
+2. `SetPendingAgent` event fires, setting `pending_agent` and `session_header.pending_agent`
+3. Warning message displayed: "Agent will switch to '{model}' on your next prompt. Conversation history will be lost."
+4. On next `submit_user_message()`, if `pending_agent.take()` returns a different model:
+   - Sends `Op::OverrideTurnContext` with new model
+   - Sends `AppEvent::UpdateModel` to update UI
+   - Clears `session_header.pending_agent`
+   - Agent loop in `agent.rs` detects model change and restarts backend
 
 ### Things to Know
 

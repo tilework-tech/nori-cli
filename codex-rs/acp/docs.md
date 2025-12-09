@@ -31,6 +31,20 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
 - `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
 - Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
 
+### Agent Picker UI Support
+
+The registry provides `AcpAgentInfo` and `list_available_agents()` for populating the TUI's agent picker:
+
+```rust
+pub struct AcpAgentInfo {
+    pub model_name: &'static str,     // e.g., "mock-model"
+    pub display_name: &'static str,   // e.g., "Mock Agent"
+    pub description: &'static str,    // e.g., "Mock ACP agent for testing"
+}
+```
+
+`AVAILABLE_AGENTS` is a static list of all registered agents. The TUI's `/agent` command calls `list_available_agents()` to populate the selection popup.
+
 ### Embedded Provider Info
 
 ACP providers embed their configuration directly in `AcpAgentConfig` via `AcpProviderInfo`:

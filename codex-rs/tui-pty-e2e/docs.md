@@ -248,6 +248,16 @@ Linux-only tests that verify ACP subprocess lifecycle management by parsing the 
   - Cleanup happens when session switches, not when individual prompt turns end
   - Different models (`mock-model` vs `mock-model-alt`) spawn different subprocesses
 
+**Agent Picker E2E Tests (`agent_switching.rs`):**
+
+Additional tests verify the `/agent` picker UI and deferred switching pattern:
+- `/agent` command opens "Select Agent" picker popup
+- Navigating picker does NOT spawn new subprocess (selection is deferred)
+- Selecting agent sets `pending_agent`, switch happens on next prompt submit
+- Escape preserves pending selection (not cleared on dismiss)
+- Warning message shown about conversation history loss
+- `/model` picker shows disabled message in ACP mode
+
 **Binary Discovery:**
 
 `codex_binary_path()` locates the compiled binary:

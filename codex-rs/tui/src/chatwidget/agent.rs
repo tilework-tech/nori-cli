@@ -79,56 +79,110 @@ fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> Unbound
 ///
 /// This uses the `codex_acp` crate to spawn an agent subprocess and handle
 /// communication via the Agent Client Protocol.
+///
+/// Supports dynamic agent switching via `OverrideTurnContext` - when a model change
+/// is detected, the current backend is shut down and a new one is spawned.
 fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSender<Op> {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
     tokio::spawn(async move {
-        // Create event channel for backend → TUI
-        let (event_tx, mut event_rx) = mpsc::channel(32);
+        let mut current_model = config.model.clone();
+        let mut current_config = config;
 
-        // Create ACP backend config from codex config
-        let acp_config = AcpBackendConfig {
-            model: config.model.clone(),
-            cwd: config.cwd.clone(),
-            approval_policy: config.approval_policy,
-            sandbox_policy: config.sandbox_policy.clone(),
-        };
+        loop {
+            // Create event channel for backend → TUI
+            let (event_tx, mut event_rx) = mpsc::channel(32);
 
-        let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
-            Ok(b) => Arc::new(b),
-            Err(e) => {
-                tracing::error!("failed to spawn ACP backend: {e}");
-                app_event_tx.send(AppEvent::CodexEvent(Event {
-                    id: String::new(),
-                    msg: EventMsg::Error(codex_protocol::protocol::ErrorEvent {
-                        message: format!("Failed to spawn ACP agent: {e}"),
-                        codex_error_info: None,
-                    }),
-                }));
-                app_event_tx.send(AppEvent::ExitRequest);
-                return;
-            }
-        };
+            // Create ACP backend config
+            let acp_config = AcpBackendConfig {
+                model: current_model.clone(),
+                cwd: current_config.cwd.clone(),
+                approval_policy: current_config.approval_policy,
+                sandbox_policy: current_config.sandbox_policy.clone(),
+            };
 
-        // Forward ops to backend
-        let backend_for_ops = Arc::clone(&backend);
-        tokio::spawn(async move {
-            while let Some(op) = codex_op_rx.recv().await {
-                if let Err(e) = backend_for_ops.submit(op).await {
-                    tracing::error!("failed to submit op: {e}");
+            let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
+                Ok(b) => Arc::new(b),
+                Err(e) => {
+                    tracing::error!("failed to spawn ACP backend: {e}");
+                    app_event_tx.send(AppEvent::CodexEvent(Event {
+                        id: String::new(),
+                        msg: EventMsg::Error(codex_protocol::protocol::ErrorEvent {
+                            message: format!("Failed to spawn ACP agent: {e}"),
+                            codex_error_info: None,
+                        }),
+                    }));
+                    app_event_tx.send(AppEvent::ExitRequest);
+                    return;
+                }
+            };
+
+            // Process ops and events until shutdown or model switch
+            let mut pending_switch: Option<String> = None;
+
+            loop {
+                tokio::select! {
+                    // Handle incoming ops
+                    op = codex_op_rx.recv() => {
+                        match op {
+                            Some(Op::OverrideTurnContext { model: Some(ref new_model), .. }) if *new_model != current_model => {
+                                tracing::info!(
+                                    "ACP agent switch requested: {} -> {}",
+                                    current_model,
+                                    new_model
+                                );
+                                pending_switch = Some(new_model.clone());
+                                // Shut down current backend gracefully
+                                let _ = backend.submit(Op::Shutdown).await;
+                            }
+                            Some(op) => {
+                                if let Err(e) = backend.submit(op).await {
+                                    tracing::error!("failed to submit op: {e}");
+                                }
+                            }
+                            None => {
+                                // Op channel closed, shut down
+                                return;
+                            }
+                        }
+                    }
+                    // Handle incoming events from backend
+                    event = event_rx.recv() => {
+                        match event {
+                            Some(e) => {
+                                // Check for ShutdownComplete to trigger model switch
+                                let is_shutdown = matches!(e.msg, EventMsg::ShutdownComplete);
+                                app_event_tx.send(AppEvent::CodexEvent(e));
+
+                                if is_shutdown {
+                                    if let Some(new_model) = pending_switch.take() {
+                                        tracing::info!("Switching ACP agent to: {}", new_model);
+                                        current_model = new_model;
+                                        current_config.model = current_model.clone();
+                                        // Break inner loop to spawn new backend
+                                        break;
+                                    } else {
+                                        // Normal shutdown without switch
+                                        return;
+                                    }
+                                }
+                            }
+                            None => {
+                                // Backend event channel closed
+                                if let Some(new_model) = pending_switch.take() {
+                                    tracing::info!("Switching ACP agent to: {}", new_model);
+                                    current_model = new_model;
+                                    current_config.model = current_model.clone();
+                                    // Break inner loop to spawn new backend
+                                    break;
+                                } else {
+                                    return;
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        });
-
-        // Drop our Arc reference - the op task has its own.
-        // This is necessary so that when the op task exits (when codex_op_rx closes),
-        // the backend is fully dropped, which drops event_tx, allowing event_rx
-        // to return None and this task to exit.
-        drop(backend);
-
-        // Forward events to TUI
-        while let Some(event) = event_rx.recv().await {
-            app_event_tx.send(AppEvent::CodexEvent(event));
         }
     });
 

@@ -6,6 +6,46 @@
 use anyhow::Result;
 use std::time::Duration;
 
+/// Information about an available ACP agent for display in picker UI
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcpAgentInfo {
+    /// Model name used to select this agent (e.g., "mock-model", "gemini-2.5-flash")
+    pub model_name: &'static str,
+    /// User-friendly display name (e.g., "Mock Agent", "Gemini 2.5 Flash")
+    pub display_name: &'static str,
+    /// Description of the agent
+    pub description: &'static str,
+}
+
+/// List of all available ACP agents for the picker UI
+const AVAILABLE_AGENTS: &[AcpAgentInfo] = &[
+    AcpAgentInfo {
+        model_name: "mock-model",
+        display_name: "Mock Agent",
+        description: "Mock ACP agent for testing",
+    },
+    AcpAgentInfo {
+        model_name: "mock-model-alt",
+        display_name: "Mock Agent (Alt)",
+        description: "Alternate mock ACP agent for testing",
+    },
+    AcpAgentInfo {
+        model_name: "gemini-2.5-flash",
+        display_name: "Gemini 2.5 Flash",
+        description: "Google Gemini 2.5 Flash via ACP",
+    },
+    AcpAgentInfo {
+        model_name: "claude-acp",
+        display_name: "Claude ACP",
+        description: "Claude via ACP",
+    },
+];
+
+/// Get list of all available ACP agents for the picker UI
+pub fn list_available_agents() -> &'static [AcpAgentInfo] {
+    AVAILABLE_AGENTS
+}
+
 /// Default idle timeout for ACP streaming (5 minutes)
 const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 

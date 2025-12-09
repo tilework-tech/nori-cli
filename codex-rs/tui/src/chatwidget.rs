@@ -318,6 +318,8 @@ pub(crate) struct ChatWidget {
     feedback: codex_feedback::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
+    // Pending agent selection (will be applied on next prompt submit)
+    pending_agent: Option<String>,
 }
 
 struct UserMessage {
@@ -1260,6 +1262,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1337,6 +1340,7 @@ impl ChatWidget {
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
             current_rollout_path: None,
+            pending_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1475,6 +1479,9 @@ impl ChatWidget {
             }
             SlashCommand::Model => {
                 self.open_model_popup();
+            }
+            SlashCommand::Agent => {
+                self.open_agent_popup();
             }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
@@ -1626,6 +1633,26 @@ impl ChatWidget {
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
             return;
+        }
+
+        // Apply pending agent switch if one is set and different from current
+        if let Some(pending_model) = self.pending_agent.take()
+            && pending_model != self.config.model
+        {
+            // Send model override to backend - this will trigger ACP agent restart
+            self.app_event_tx
+                .send(AppEvent::CodexOp(Op::OverrideTurnContext {
+                    cwd: None,
+                    approval_policy: None,
+                    sandbox_policy: None,
+                    model: Some(pending_model.clone()),
+                    effort: None,
+                    summary: None,
+                }));
+            self.app_event_tx
+                .send(AppEvent::UpdateModel(pending_model.clone()));
+            self.session_header.set_pending_agent(None);
+            tracing::info!("Applied pending ACP agent switch to: {pending_model}");
         }
 
         let mut items: Vec<UserInput> = Vec::new();
@@ -2287,6 +2314,58 @@ impl ChatWidget {
         });
     }
 
+    /// Open a popup to choose the ACP agent.
+    /// Selection is deferred - it only sets `pending_agent` which takes effect on next prompt.
+    pub(crate) fn open_agent_popup(&mut self) {
+        let agents = codex_acp::list_available_agents();
+        let current_model = self.config.model.clone();
+
+        // Determine what's "current" - either the pending selection or the current model
+        let effective_current = self.pending_agent.as_ref().unwrap_or(&current_model);
+
+        let mut items: Vec<SelectionItem> = Vec::new();
+        for agent in agents.iter() {
+            let is_current = agent.model_name == effective_current;
+            let is_same_as_current_model = agent.model_name == current_model;
+
+            let description = if agent.description.is_empty() {
+                None
+            } else {
+                Some(agent.description.to_string())
+            };
+
+            // Create action that sets pending_agent and shows warning
+            let model_name = agent.model_name.to_string();
+            let show_warning = !is_same_as_current_model;
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::SetPendingAgent {
+                    model_name: model_name.clone(),
+                    show_warning,
+                });
+            })];
+
+            items.push(SelectionItem {
+                name: agent.display_name.to_string(),
+                description,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Select Agent".to_string()),
+            subtitle: Some(
+                "Agent will switch on your next prompt. Conversation history will be lost."
+                    .to_string(),
+            ),
+            footer_hint: Some("Press enter to select, or esc to dismiss.".into()),
+            items,
+            ..Default::default()
+        });
+    }
+
     fn reasoning_effort_label(effort: ReasoningEffortConfig) -> &'static str {
         match effort {
             ReasoningEffortConfig::None => "None",
@@ -2774,6 +2853,13 @@ impl ChatWidget {
         self.session_header.set_model(model);
         self.config.model = model.to_string();
     }
+
+    /// Set a pending agent selection. The switch happens on next prompt.
+    pub(crate) fn set_pending_agent(&mut self, model_name: String) {
+        self.pending_agent = Some(model_name.clone());
+        self.session_header.set_pending_agent(Some(model_name));
+    }
+
 
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
         self.add_to_history(history_cell::new_info_event(message, hint));

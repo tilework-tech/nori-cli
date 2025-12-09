@@ -166,6 +166,12 @@ pub(crate) enum AppEvent {
     OpenFeedbackConsent {
         category: FeedbackCategory,
     },
+
+    /// Set a pending ACP agent selection. The actual switch happens on next prompt.
+    SetPendingAgent {
+        model_name: String,
+        show_warning: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
