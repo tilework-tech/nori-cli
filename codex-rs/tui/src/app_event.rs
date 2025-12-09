@@ -176,9 +176,6 @@ pub(crate) enum AppEvent {
         display_name: String,
     },
 
-    /// Clear the pending agent selection (e.g., user cancelled).
-    ClearPendingAgent,
-
     /// Submit a message with a pending agent switch. The agent will be switched
     /// first, then the message will be submitted to the new agent.
     SubmitWithAgentSwitch {

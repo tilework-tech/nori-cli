@@ -122,6 +122,19 @@ Most event types (exec begin/end, MCP calls, elicitation) are queued during acti
 - The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
 - `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
 
+**Agent Switch Event Filtering:**
+
+When switching between ACP agents (e.g., via `/agent` command), `ChatWidget` uses an event filtering mechanism to prevent race conditions:
+
+- `expected_model: Option<String>` in `ChatWidgetInit` specifies which model the widget expects
+- `session_configured_received: bool` tracks whether `SessionConfigured` has arrived from the expected model
+- When `expected_model` is set, `handle_codex_event()` filters events:
+  - All events are ignored until `SessionConfigured` arrives
+  - `SessionConfigured` is only accepted if `event.model` matches `expected_model` (case-insensitive)
+  - Once matching `SessionConfigured` arrives, `session_configured_received` is set to `true` and normal event processing resumes
+- This prevents the OLD agent's final events (completion, shutdown) from being processed by the NEW agent's widget
+- Fresh sessions, resumed sessions, and `/new` command use `expected_model: None` (no filtering)
+
 **Color System:**
 
 The `color.rs` and `terminal_palette.rs` modules handle terminal color detection and theming. The app queries terminal colors at startup for theme adaptation.

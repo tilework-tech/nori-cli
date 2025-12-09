@@ -254,6 +254,10 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) feedback: codex_feedback::CodexFeedback,
+    /// Expected model name for this widget. When set, events from other models
+    /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
+    /// with a matching model. This prevents race conditions when switching agents.
+    pub(crate) expected_model: Option<String>,
 }
 
 #[derive(Default)]
@@ -320,6 +324,12 @@ pub(crate) struct ChatWidget {
     current_rollout_path: Option<PathBuf>,
     // Pending agent selection for next prompt submission
     pending_agent: Option<PendingAgentInfo>,
+    // Expected model name for agent switch synchronization.
+    // When set, events are ignored until SessionConfigured arrives with this model.
+    expected_model: Option<String>,
+    // Whether SessionConfigured has been received for this widget.
+    // Used with expected_model to filter events from previous agents.
+    session_configured_received: bool,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -376,6 +386,10 @@ impl ChatWidget {
 
     // --- Small event handlers ---
     fn on_session_configured(&mut self, event: codex_core::protocol::SessionConfiguredEvent) {
+        // Mark that we've received SessionConfigured - this unlocks event processing
+        // when expected_model is set (during agent switching)
+        self.session_configured_received = true;
+
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
         self.conversation_id = Some(event.session_id);
@@ -1216,6 +1230,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             feedback,
+            expected_model,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1270,6 +1285,8 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             pending_agent: None,
+            expected_model,
+            session_configured_received: false,
         };
 
         widget.prefetch_rate_limits();
@@ -1292,6 +1309,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             feedback,
+            expected_model,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1348,6 +1366,9 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             pending_agent: None,
+            expected_model,
+            // For existing conversations, we've already received SessionConfigured
+            session_configured_received: true,
         };
 
         widget.prefetch_rate_limits();
@@ -1361,16 +1382,6 @@ impl ChatWidget {
             model_name,
             display_name,
         });
-    }
-
-    /// Clear any pending agent selection.
-    pub(crate) fn clear_pending_agent(&mut self) {
-        self.pending_agent = None;
-    }
-
-    /// Check if there's a pending agent selection.
-    pub(crate) fn has_pending_agent(&self) -> bool {
-        self.pending_agent.is_some()
     }
 
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
@@ -1739,6 +1750,46 @@ impl ChatWidget {
 
     pub(crate) fn handle_codex_event(&mut self, event: Event) {
         let Event { id, msg } = event;
+
+        // When expected_model is set (during agent switching), we need to filter events
+        // to prevent events from the OLD agent from affecting the NEW widget.
+        if let Some(ref expected) = self.expected_model {
+            tracing::debug!(
+                "Event filtering active: expected_model={}, session_configured_received={}",
+                expected,
+                self.session_configured_received
+            );
+            if !self.session_configured_received {
+                // Only process SessionConfigured events, and only if the model matches
+                match &msg {
+                    EventMsg::SessionConfigured(e) => {
+                        if e.model.to_lowercase() != expected.to_lowercase() {
+                            tracing::debug!(
+                                "Ignoring SessionConfigured from wrong model: expected={}, got={}",
+                                expected,
+                                e.model
+                            );
+                            return;
+                        }
+                        tracing::debug!(
+                            "SessionConfigured received with matching model: {}",
+                            e.model
+                        );
+                        // Model matches, proceed with processing
+                    }
+                    // Ignore all other events until SessionConfigured arrives
+                    _ => {
+                        tracing::debug!(
+                            "Ignoring event before SessionConfigured: {:?} (waiting for model={})",
+                            std::mem::discriminant(&msg),
+                            expected
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+
         self.dispatch_event_msg(Some(id), msg, false);
     }
 

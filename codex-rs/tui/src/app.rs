@@ -10,6 +10,7 @@ use crate::history_cell::HistoryCell;
 use crate::model_migration::ModelMigrationOutcome;
 use crate::model_migration::migration_copy_for_config;
 use crate::model_migration::run_model_migration_prompt;
+use crate::nori::agent_picker::PendingAgentSelection;
 use crate::pager_overlay::Overlay;
 use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::renderable::Renderable;
@@ -234,15 +235,6 @@ pub(crate) struct App {
     pending_agent: Option<PendingAgentSelection>,
 }
 
-/// Information about a pending agent switch.
-#[derive(Debug, Clone)]
-pub(crate) struct PendingAgentSelection {
-    /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
-    pub model_name: String,
-    /// The display name for the status indicator
-    pub display_name: String,
-}
-
 impl App {
     async fn shutdown_current_conversation(&mut self) {
         if let Some(conversation_id) = self.chat_widget.conversation_id() {
@@ -307,6 +299,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     feedback: feedback.clone(),
+                    expected_model: None, // No filtering for fresh sessions
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
@@ -330,6 +323,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     feedback: feedback.clone(),
+                    expected_model: None, // No filtering for resumed sessions
                 };
                 ChatWidget::new_from_existing(
                     init,
@@ -484,6 +478,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     feedback: self.feedback.clone(),
+                    expected_model: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 if let Some(summary) = summary {
@@ -916,18 +911,10 @@ impl App {
                 );
                 self.chat_widget.add_info_message(
                     format!(
-                        "Agent '{}' selected. Will switch on next prompt submission.",
-                        display_name
+                        "Agent '{display_name}' selected. Will switch on next prompt submission."
                     ),
                     None,
                 );
-            }
-            AppEvent::ClearPendingAgent => {
-                if self.pending_agent.is_some() {
-                    tracing::info!("Pending agent selection cleared");
-                    self.pending_agent = None;
-                    self.chat_widget.clear_pending_agent();
-                }
             }
             AppEvent::SubmitWithAgentSwitch {
                 model_name,
@@ -951,6 +938,7 @@ impl App {
                 self.shutdown_current_conversation().await;
 
                 // Create the new chat widget with the new config and the message as initial prompt
+                // Set expected_model to filter events from the OLD agent until SessionConfigured
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: self.config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -960,13 +948,12 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     feedback: self.feedback.clone(),
+                    expected_model: Some(model_name.clone()),
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
 
-                self.chat_widget.add_info_message(
-                    format!("Switched to agent: {}", display_name),
-                    None,
-                );
+                self.chat_widget
+                    .add_info_message(format!("Switched to agent: {display_name}"), None);
             }
         }
         Ok(true)

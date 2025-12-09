@@ -4,8 +4,8 @@
 //! Agent selection is tracked as "pending" and the actual switch happens
 //! on the next prompt submission to avoid disrupting active prompt turns.
 
-use codex_acp::list_available_agents;
 use codex_acp::AcpAgentInfo;
+use codex_acp::list_available_agents;
 use ratatui::text::Line;
 
 use crate::app_event::AppEvent;
@@ -15,8 +15,11 @@ use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 
-/// Event for pending agent selection
+/// Information about a pending agent selection.
+/// This struct is stored in the App to track which agent should be switched to
+/// when the user submits their next prompt.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PendingAgentSelection {
     /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
     pub model_name: String,
@@ -88,13 +91,16 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
     SelectionViewParams {
         title: Some("Select Model".to_string()),
         subtitle: Some("Not available in ACP mode - use /agent instead".to_string()),
-        footer_hint: Some(Line::from("Press esc to dismiss, or use /agent to switch agents.")),
+        footer_hint: Some(Line::from(
+            "Press esc to dismiss, or use /agent to switch agents.",
+        )),
         items,
         ..Default::default()
     }
 }
 
 /// Get information about an agent by model name
+#[allow(dead_code)]
 pub fn get_agent_info(model_name: &str) -> Option<AcpAgentInfo> {
     let normalized = model_name.to_lowercase();
     list_available_agents()

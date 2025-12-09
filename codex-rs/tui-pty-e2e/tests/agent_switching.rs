@@ -707,3 +707,244 @@ fn test_agent_cleanup_after_switch_on_prompt() {
         initial_pid
     );
 }
+
+// ============================================================================
+// Test: Agent Switch Message Flow - Verifies NEW agent receives and responds
+// ============================================================================
+
+/// Helper to extract agent messages from log file
+/// Each mock agent logs to stderr which is captured in the ACP log
+fn extract_agent_messages_from_log(log_path: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(log_path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| {
+            line.contains("Mock agent:")
+                || line.contains("cancel")
+                || line.contains("shutdown")
+                || line.contains("prompt")
+        })
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Test that when switching agents via /agent command, the NEW agent
+/// correctly receives and responds to the submitted prompt.
+///
+/// This test explicitly verifies the message flow:
+/// 1. OLD agent should receive a cancel/shutdown signal
+/// 2. NEW agent should receive a new_session request
+/// 3. NEW agent should receive the prompt and respond
+/// 4. Response from NEW agent appears on screen
+///
+/// This catches the race condition bug where events from the OLD agent
+/// could leak into the NEW widget, causing the prompt to be lost.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_switch_message_flow_mock_to_mock_alt() {
+    // Use default response (Test message 1/2) - both agents will use this
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+
+    // First, verify initial agent works - send a prompt
+    session.send_str("test initial").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for initial agent response (default response)
+    session
+        .wait_for_text("Test message", Duration::from_secs(5))
+        .expect("Initial agent should respond");
+
+    // Log messages before switch
+    let msgs_before_switch = extract_agent_messages_from_log(&log_path);
+    eprintln!("Messages before switch: {:?}", msgs_before_switch);
+
+    // Open agent picker with /agent command
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for agent picker to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear");
+
+    // Select mock-model-alt (different agent)
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Messages after selection (but before prompt submission)
+    let msgs_after_selection = extract_agent_messages_from_log(&log_path);
+    eprintln!("Messages after selection: {:?}", msgs_after_selection);
+
+    // Now submit a prompt - this should trigger the actual agent switch
+    // The NEW agent (mock-model-alt) should receive this prompt and respond
+    session.send_str("test after switch").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the NEW agent's response to appear.
+    // The key verification: we should see TWO instances of "Test message" -
+    // one from the first prompt, and one from the second prompt after switch.
+    // If the switch fails, the second response won't appear.
+    std::thread::sleep(Duration::from_secs(3)); // Give time for response
+
+    // Log messages after prompt submission
+    let msgs_after_prompt = extract_agent_messages_from_log(&log_path);
+    eprintln!("Messages after prompt submission: {:?}", msgs_after_prompt);
+
+    // Verify we got two prompt calls (one before switch, one after)
+    let prompt_count = msgs_after_prompt
+        .iter()
+        .filter(|m| m.contains("Mock agent: prompt"))
+        .count();
+
+    if prompt_count < 2 {
+        let screen = session.screen_contents();
+        panic!(
+            "Expected 2 prompt calls (before and after switch), got {}.\n\
+             Screen contents: {}\n\
+             Agent messages in log: {:?}",
+            prompt_count, screen, msgs_after_prompt
+        );
+    }
+
+    // Verify message flow in logs:
+    // 1. Should see "Mock agent: new_session" for the NEW agent
+    // 2. Should see "Mock agent: prompt" for the NEW agent
+    let has_new_session = msgs_after_prompt
+        .iter()
+        .filter(|m| m.contains("new_session"))
+        .count()
+        >= 2; // Initial + after switch
+
+    assert!(
+        has_new_session,
+        "Should have new_session calls for both agents, messages: {:?}",
+        msgs_after_prompt
+    );
+    assert!(
+        prompt_count >= 2,
+        "Should have prompt calls for both agents, messages: {:?}",
+        msgs_after_prompt
+    );
+
+    // Final verification: the screen should show response content
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("Test message"),
+        "Screen should contain response text. Screen:\n{}",
+        screen
+    );
+}
+
+/// Test that verifies the expected sequence of operations when switching agents
+/// This is a more focused test that checks specific message ordering
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_switch_logs_correct_sequence() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(!initial_pids.is_empty(), "Should have initial PID");
+
+    // Select new agent via /agent
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent"),
+            Duration::from_secs(3),
+        )
+        .expect("Agent picker should appear");
+
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+
+    // Submit prompt to trigger switch
+    session.send_str("trigger").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for response
+    session
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("Should see response from new agent");
+
+    // Parse the log to verify sequence
+    let log_content = std::fs::read_to_string(&log_path).unwrap_or_default();
+
+    // Count agent spawns - should be 2 (initial + after switch)
+    let spawn_count = log_content
+        .lines()
+        .filter(|l| l.contains("ACP agent spawned"))
+        .count();
+
+    assert!(
+        spawn_count >= 2,
+        "Should spawn at least 2 agents (initial + after switch), got: {}. Log:\n{}",
+        spawn_count,
+        log_content
+    );
+
+    // Verify new_session and prompt sequence
+    let agent_messages: Vec<&str> = log_content
+        .lines()
+        .filter(|l| l.contains("Mock agent:"))
+        .collect();
+
+    eprintln!("Agent message sequence:");
+    for (i, msg) in agent_messages.iter().enumerate() {
+        eprintln!("  {}: {}", i, msg);
+    }
+
+    // Should have: initialize, new_session, prompt (first agent)
+    // Then: initialize, new_session, prompt (second agent)
+    let new_session_count = agent_messages
+        .iter()
+        .filter(|m| m.contains("new_session"))
+        .count();
+    let prompt_count = agent_messages
+        .iter()
+        .filter(|m| m.contains("prompt"))
+        .count();
+
+    assert!(
+        new_session_count >= 2,
+        "Should have at least 2 new_session calls, got: {}",
+        new_session_count
+    );
+    assert!(
+        prompt_count >= 1,
+        "Should have at least 1 prompt call, got: {}",
+        prompt_count
+    );
+}

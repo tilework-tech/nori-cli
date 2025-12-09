@@ -145,7 +145,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
-| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle - verifies subprocess spawning, cleanup on session switch, and different agents use different processes (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -237,7 +237,9 @@ See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
 
 **Agent Subprocess Lifecycle Testing (`agent_switching.rs`):**
 
-Linux-only tests that verify ACP subprocess lifecycle management by parsing the `.codex-acp.log` file for PID entries:
+Linux-only tests that verify ACP subprocess lifecycle management and event isolation:
+
+*Subprocess Management Tests:*
 - `acp_log_path()` method on `TuiSession` returns the path to the ACP tracing log file
 - Tests extract PIDs from log lines matching `"ACP agent spawned (pid: Some(...))"`
 - Uses `/proc/{pid}` filesystem to verify process existence and zombie state
@@ -247,6 +249,11 @@ Linux-only tests that verify ACP subprocess lifecycle management by parsing the 
   - Old subprocess is terminated (not zombie) after session switch
   - Cleanup happens when session switches, not when individual prompt turns end
   - Different models (`mock-model` vs `mock-model-alt`) spawn different subprocesses
+
+*Event Isolation Tests:*
+- `extract_agent_messages_from_log()` helper parses `Mock agent:` log entries from ACP log file
+- `test_agent_switch_message_flow_mock_to_mock_alt` verifies that after switching agents, the NEW agent receives and responds to prompts (catches race conditions where OLD agent events could leak)
+- `test_agent_switch_logs_correct_sequence` verifies the expected log sequence during agent switch: agent receives prompt, logs receipt, sends response
 
 **Binary Discovery:**
 
