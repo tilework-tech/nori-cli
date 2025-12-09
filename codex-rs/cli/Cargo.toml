@@ -15,32 +15,51 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[features]
+default = ["full"]
+
+# Full build with all features (original behavior)
+full = [
+    "app-server",
+    "mcp-server",
+    "exec-mode",
+    "cloud-tasks",
+    "http-providers",
+    "responses-proxy",
+]
+
+# Minimal ACP-only build: CLI + TUI + ACP
+minimal = []
+
+# Optional CLI modes
+app-server = ["dep:codex-app-server"]
+mcp-server = ["dep:codex-mcp-server"]
+exec-mode = ["dep:codex-exec"]
+cloud-tasks = ["dep:codex-cloud-tasks"]
+
+# Legacy HTTP provider support (OpenAI, ChatGPT login, etc.)
+http-providers = ["dep:codex-chatgpt", "dep:codex-login", "dep:codex-rmcp-client"]
+responses-proxy = ["dep:codex-responses-api-proxy"]
+
 [dependencies]
+# === Always required (core CLI + TUI + ACP) ===
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 codex-acp = { workspace = true }
-codex-app-server = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
-codex-chatgpt = { workspace = true }
-codex-cloud-tasks = { path = "../cloud-tasks" }
 codex-common = { workspace = true, features = ["cli"] }
 codex-core = { workspace = true }
-codex-exec = { workspace = true }
 codex-execpolicy = { workspace = true }
-codex-login = { workspace = true }
-codex-mcp-server = { workspace = true }
 codex-process-hardening = { workspace = true }
 codex-protocol = { workspace = true }
-codex-responses-api-proxy = { workspace = true }
-codex-rmcp-client = { workspace = true }
 codex-stdio-to-uds = { workspace = true }
 codex-tui = { workspace = true }
 ctor = { workspace = true }
 libc = { workspace = true }
 owo-colors = { workspace = true }
-regex-lite = { workspace = true}
+regex-lite = { workspace = true }
 serde_json = { workspace = true }
 supports-color = { workspace = true }
 toml = { workspace = true }
@@ -52,6 +71,16 @@ tokio = { workspace = true, features = [
     "signal",
 ] }
 tracing = { workspace = true }
+
+# === Feature-gated optional dependencies ===
+codex-app-server = { workspace = true, optional = true }
+codex-chatgpt = { workspace = true, optional = true }
+codex-cloud-tasks = { path = "../cloud-tasks", optional = true }
+codex-exec = { workspace = true, optional = true }
+codex-login = { workspace = true, optional = true }
+codex-mcp-server = { workspace = true, optional = true }
+codex-responses-api-proxy = { workspace = true, optional = true }
+codex-rmcp-client = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 codex_windows_sandbox = { package = "codex-windows-sandbox", path = "../windows-sandbox-rs" }

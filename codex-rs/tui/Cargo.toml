@@ -13,6 +13,14 @@ name = "codex_tui"
 path = "src/lib.rs"
 
 [features]
+default = ["http-fallback", "sentry"]
+
+# Enable HTTP API fallback when ACP model not found
+http-fallback = ["dep:codex-backend-client", "dep:codex-login"]
+
+# Sentry error reporting
+sentry = ["dep:codex-feedback"]
+
 # Enable vt100-based tests (emulator) when running with `--features vt100-tests`.
 vt100-tests = []
 # Gate verbose debug logging inside the TUI implementation.
@@ -31,17 +39,21 @@ codex-acp = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
-codex-backend-client = { workspace = true }
 codex-common = { workspace = true, features = [
     "cli",
     "elapsed",
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
-codex-feedback = { workspace = true }
 codex-file-search = { workspace = true }
-codex-login = { workspace = true }
 codex-protocol = { workspace = true }
+
+# Feature-gated optional dependencies (HTTP fallback)
+codex-backend-client = { workspace = true, optional = true }
+codex-login = { workspace = true, optional = true }
+
+# Feature-gated optional dependencies (telemetry)
+codex-feedback = { workspace = true, optional = true }
 color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["bracketed-paste", "event-stream"] }
 derive_more = { workspace = true, features = ["is_variant"] }

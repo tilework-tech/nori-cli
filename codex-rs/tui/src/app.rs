@@ -303,6 +303,7 @@ impl App {
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
+            #[cfg(feature = "http-fallback")]
             ResumeSelection::Resume(path) => {
                 let resumed = conversation_manager
                     .resume_conversation_from_rollout(
@@ -330,6 +331,12 @@ impl App {
                     resumed.conversation,
                     resumed.session_configured,
                 )
+            }
+            #[cfg(not(feature = "http-fallback"))]
+            ResumeSelection::Resume(_path) => {
+                anyhow::bail!(
+                    "Session resume is not available in this build. HTTP fallback is required."
+                );
             }
         };
 

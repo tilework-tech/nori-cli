@@ -113,6 +113,7 @@ mod pending_exec_cells;
 use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
 use self::agent::spawn_agent;
+#[cfg(feature = "http-fallback")]
 use self::agent::spawn_agent_from_existing;
 mod session_header;
 use self::session_header::SessionHeader;
@@ -1316,6 +1317,7 @@ impl ChatWidget {
     }
 
     /// Create a ChatWidget attached to an existing conversation (e.g., a fork).
+    #[cfg(feature = "http-fallback")]
     pub(crate) fn new_from_existing(
         common: ChatWidgetInit,
         conversation: std::sync::Arc<codex_core::CodexConversation>,

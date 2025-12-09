@@ -3,8 +3,10 @@ use std::sync::Arc;
 use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
 use codex_acp::get_agent_config;
+#[cfg(feature = "http-fallback")]
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
+#[cfg(feature = "http-fallback")]
 use codex_core::NewConversation;
 use codex_core::config::Config;
 use codex_core::protocol::Event;
@@ -24,6 +26,7 @@ use crate::app_event_sender::AppEventSender;
 /// 1. If the model is registered in the ACP registry, use ACP mode
 /// 2. If the model is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
 /// 3. If the model is NOT registered and `acp_allow_http_fallback` is false (default), error
+#[cfg(feature = "http-fallback")]
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
@@ -48,6 +51,31 @@ pub(crate) fn spawn_agent(
             );
             spawn_error_agent(error_msg, app_event_tx)
         }
+    }
+}
+
+/// Spawn the agent bootstrapper and op forwarding loop, returning the
+/// `UnboundedSender<Op>` used by the UI to submit operations.
+///
+/// ACP-only version: HTTP fallback is not available.
+#[cfg(not(feature = "http-fallback"))]
+pub(crate) fn spawn_agent(
+    config: Config,
+    app_event_tx: AppEventSender,
+    _server: Arc<ConversationManager>,
+) -> UnboundedSender<Op> {
+    let acp_agent_result = get_agent_config(&config.model);
+
+    if acp_agent_result.is_ok() {
+        spawn_acp_agent(config, app_event_tx)
+    } else {
+        let error_msg = format!(
+            "Model '{}' is not registered as an ACP agent. \
+             HTTP fallback is not available in this build. \
+             Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp",
+            config.model
+        );
+        spawn_error_agent(error_msg, app_event_tx)
     }
 }
 
@@ -138,6 +166,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSen
 /// Spawn an HTTP agent (the original implementation).
 ///
 /// This uses `codex_core` to communicate with LLM providers via HTTP APIs.
+#[cfg(feature = "http-fallback")]
 fn spawn_http_agent(
     config: Config,
     app_event_tx: AppEventSender,
@@ -196,6 +225,7 @@ fn spawn_http_agent(
 /// Spawn agent loops for an existing conversation (e.g., a forked conversation).
 /// Sends the provided `SessionConfiguredEvent` immediately, then forwards subsequent
 /// events and accepts Ops for submission.
+#[cfg(feature = "http-fallback")]
 pub(crate) fn spawn_agent_from_existing(
     conversation: std::sync::Arc<CodexConversation>,
     session_configured: codex_core::protocol::SessionConfiguredEvent,

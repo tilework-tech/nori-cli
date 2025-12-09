@@ -1,5 +1,6 @@
 pub mod debug_sandbox;
 mod exit_status;
+#[cfg(feature = "http-providers")]
 pub mod login;
 
 use clap::Parser;

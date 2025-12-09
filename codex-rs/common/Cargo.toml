@@ -11,15 +11,23 @@ workspace = true
 clap = { workspace = true, features = ["derive", "wrap_help"], optional = true }
 codex-app-server-protocol = { workspace = true }
 codex-core = { workspace = true }
-codex-lmstudio = { workspace = true }
-codex-ollama = { workspace = true }
 codex-protocol = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 
+# Feature-gated optional dependencies (OSS providers)
+codex-lmstudio = { workspace = true, optional = true }
+codex-ollama = { workspace = true, optional = true }
+
 [features]
+default = ["oss-providers"]
+
 # Separate feature so that `clap` is not a mandatory dependency.
-cli = ["clap", "serde", "toml"]
+cli = ["dep:clap", "dep:serde", "dep:toml"]
+
+# Local OSS model providers (Ollama, LM Studio)
+oss-providers = ["dep:codex-ollama", "dep:codex-lmstudio"]
+
 elapsed = []
 sandbox_summary = []

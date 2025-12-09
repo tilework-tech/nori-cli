@@ -295,6 +295,7 @@ impl App {
     }
 
     /// Fork the conversation using provided history and switch UI/state accordingly.
+    #[cfg(feature = "http-fallback")]
     async fn fork_and_switch_to_new_conversation(
         &mut self,
         tui: &mut tui::Tui,
@@ -315,7 +316,22 @@ impl App {
         }
     }
 
+    /// Fork is not available without HTTP fallback.
+    #[cfg(not(feature = "http-fallback"))]
+    async fn fork_and_switch_to_new_conversation(
+        &mut self,
+        _tui: &mut tui::Tui,
+        _ev: ConversationPathResponseEvent,
+        _nth_user_message: usize,
+        _prefill: String,
+    ) {
+        tracing::error!(
+            "Conversation forking is not available in this build. HTTP fallback is required."
+        );
+    }
+
     /// Thin wrapper around ConversationManager::fork_conversation.
+    #[cfg(feature = "http-fallback")]
     async fn perform_fork(
         &self,
         path: PathBuf,
@@ -328,6 +344,7 @@ impl App {
     }
 
     /// Install a forked conversation into the ChatWidget and update UI to reflect selection.
+    #[cfg(feature = "http-fallback")]
     fn install_forked_conversation(
         &mut self,
         tui: &mut tui::Tui,

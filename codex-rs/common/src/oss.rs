@@ -1,10 +1,13 @@
 //! OSS provider utilities shared between TUI and exec.
 
+#[cfg(feature = "oss-providers")]
 use codex_core::LMSTUDIO_OSS_PROVIDER_ID;
+#[cfg(feature = "oss-providers")]
 use codex_core::OLLAMA_OSS_PROVIDER_ID;
 use codex_core::config::Config;
 
 /// Returns the default model for a given OSS provider.
+#[cfg(feature = "oss-providers")]
 pub fn get_default_model_for_oss_provider(provider_id: &str) -> Option<&'static str> {
     match provider_id {
         LMSTUDIO_OSS_PROVIDER_ID => Some(codex_lmstudio::DEFAULT_OSS_MODEL),
@@ -13,7 +16,15 @@ pub fn get_default_model_for_oss_provider(provider_id: &str) -> Option<&'static 
     }
 }
 
+/// Returns the default model for a given OSS provider.
+/// Stub version when OSS providers are not compiled in.
+#[cfg(not(feature = "oss-providers"))]
+pub fn get_default_model_for_oss_provider(_provider_id: &str) -> Option<&'static str> {
+    None
+}
+
 /// Ensures the specified OSS provider is ready (models downloaded, service reachable).
+#[cfg(feature = "oss-providers")]
 pub async fn ensure_oss_provider_ready(
     provider_id: &str,
     config: &Config,
@@ -36,7 +47,18 @@ pub async fn ensure_oss_provider_ready(
     Ok(())
 }
 
-#[cfg(test)]
+/// Ensures the specified OSS provider is ready.
+/// Stub version when OSS providers are not compiled in.
+#[cfg(not(feature = "oss-providers"))]
+pub async fn ensure_oss_provider_ready(
+    _provider_id: &str,
+    _config: &Config,
+) -> Result<(), std::io::Error> {
+    // OSS providers not available in this build
+    Ok(())
+}
+
+#[cfg(all(test, feature = "oss-providers"))]
 mod tests {
     use super::*;
 
