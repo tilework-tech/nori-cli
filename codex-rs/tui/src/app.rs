@@ -482,6 +482,26 @@ impl App {
                 }
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::NewSessionWithPrompt { prompt, images } => {
+                // Agent switching: start new session with the pending prompt
+                self.shutdown_current_conversation().await;
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: if prompt.is_empty() {
+                        None
+                    } else {
+                        Some(prompt)
+                    },
+                    initial_images: images,
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    feedback: self.feedback.clone(),
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::InsertHistoryCell(cell) => {
                 let cell: Arc<dyn HistoryCell> = cell.into();
                 if let Some(Overlay::Transcript(t)) = &mut self.overlay {

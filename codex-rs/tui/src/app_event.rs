@@ -22,6 +22,12 @@ pub(crate) enum AppEvent {
     /// Start a new session.
     NewSession,
 
+    /// Start a new session with an initial prompt (used for agent switching).
+    NewSessionWithPrompt {
+        prompt: String,
+        images: Vec<PathBuf>,
+    },
+
     /// Request to exit the application gracefully.
     ExitRequest,
 

@@ -273,6 +273,9 @@ pub(crate) struct ChatWidget {
     auth_manager: Arc<AuthManager>,
     session_header: SessionHeader,
     initial_user_message: Option<UserMessage>,
+    /// The model that was configured when this session started.
+    /// Used to detect when an agent switch requires a new session.
+    original_model: String,
     token_info: Option<TokenUsageInfo>,
     rate_limit_snapshot: Option<RateLimitSnapshotDisplay>,
     rate_limit_warnings: RateLimitWarningState,
@@ -1228,11 +1231,12 @@ impl ChatWidget {
             active_cell: None,
             config: config.clone(),
             auth_manager,
-            session_header: SessionHeader::new(config.model),
+            session_header: SessionHeader::new(config.model.clone()),
             initial_user_message: create_initial_user_message(
                 initial_prompt.unwrap_or_default(),
                 initial_images,
             ),
+            original_model: config.model,
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
@@ -1305,11 +1309,12 @@ impl ChatWidget {
             active_cell: None,
             config: config.clone(),
             auth_manager,
-            session_header: SessionHeader::new(config.model),
+            session_header: SessionHeader::new(config.model.clone()),
             initial_user_message: create_initial_user_message(
                 initial_prompt.unwrap_or_default(),
                 initial_images,
             ),
+            original_model: config.model,
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
@@ -1476,6 +1481,9 @@ impl ChatWidget {
             SlashCommand::Model => {
                 self.open_model_popup();
             }
+            SlashCommand::Agent => {
+                self.open_agent_popup();
+            }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
             }
@@ -1625,6 +1633,21 @@ impl ChatWidget {
     fn submit_user_message(&mut self, user_message: UserMessage) {
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
+            return;
+        }
+
+        // Check if the model/agent has changed since the session started.
+        // If so, trigger a new session with this prompt (agent switching).
+        if self.config.model != self.original_model {
+            tracing::info!(
+                "Agent changed from {} to {}, triggering new session",
+                self.original_model,
+                self.config.model
+            );
+            self.app_event_tx.send(AppEvent::NewSessionWithPrompt {
+                prompt: text,
+                images: image_paths,
+            });
             return;
         }
 
@@ -2124,6 +2147,49 @@ impl ChatWidget {
                     .to_string(),
             ),
             footer_hint: Some("Press enter to select reasoning effort, or esc to dismiss.".into()),
+            items,
+            ..Default::default()
+        });
+    }
+
+    /// Open a popup to choose an ACP agent.
+    /// Selection sets a pending agent that takes effect on next prompt submission.
+    pub(crate) fn open_agent_popup(&mut self) {
+        let current_model = self.config.model.clone();
+        let agents = codex_acp::available_agents();
+
+        let mut items: Vec<SelectionItem> = Vec::new();
+        for agent in agents.into_iter() {
+            let is_current = agent.model_name == current_model;
+            let description = if agent.description.is_empty() {
+                None
+            } else {
+                Some(agent.description.clone())
+            };
+
+            let model_for_action = agent.model_name.clone();
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                // Update the model in the config. The agent switch will happen
+                // when the next prompt is submitted (detected by comparing
+                // config.model with original_model in submit_user_message).
+                tx.send(AppEvent::UpdateModel(model_for_action.clone()));
+                tracing::info!("Selected agent: {} (pending until next prompt)", model_for_action);
+            })];
+
+            items.push(SelectionItem {
+                name: agent.display_name.clone(),
+                description,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Select Agent".to_string()),
+            subtitle: Some("Agent change takes effect on next prompt submission".to_string()),
+            footer_hint: Some(standard_popup_hint_line()),
             items,
             ..Default::default()
         });

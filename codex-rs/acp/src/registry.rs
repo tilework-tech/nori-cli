@@ -48,6 +48,43 @@ pub struct AcpAgentConfig {
     pub provider_info: AcpProviderInfo,
 }
 
+/// Information about an available ACP agent for display in UI
+#[derive(Debug, Clone)]
+pub struct AcpAgentInfo {
+    /// Model name/identifier used to select this agent (e.g., "mock-model", "gemini-2.5-flash")
+    pub model_name: String,
+    /// Human-readable display name (e.g., "Mock ACP", "Gemini ACP")
+    pub display_name: String,
+    /// Optional description of the agent
+    pub description: String,
+}
+
+/// Returns a list of all available ACP agents
+pub fn available_agents() -> Vec<AcpAgentInfo> {
+    vec![
+        AcpAgentInfo {
+            model_name: "mock-model".to_string(),
+            display_name: "Mock ACP".to_string(),
+            description: "Mock ACP agent for testing".to_string(),
+        },
+        AcpAgentInfo {
+            model_name: "mock-model-alt".to_string(),
+            display_name: "Mock ACP Alt".to_string(),
+            description: "Alternate mock ACP agent for testing".to_string(),
+        },
+        AcpAgentInfo {
+            model_name: "gemini-2.5-flash".to_string(),
+            display_name: "Gemini ACP".to_string(),
+            description: "Google Gemini via ACP".to_string(),
+        },
+        AcpAgentInfo {
+            model_name: "claude-4.5".to_string(),
+            display_name: "Claude ACP".to_string(),
+            description: "Claude via ACP".to_string(),
+        },
+    ]
+}
+
 /// Get ACP agent configuration for a given model name
 ///
 /// # Arguments

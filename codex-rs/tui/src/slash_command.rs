@@ -12,6 +12,7 @@ use strum_macros::IntoStaticStr;
 pub enum SlashCommand {
     // DO NOT ALPHA-SORT! Enum order is presentation order in the popup, so
     // more frequently used commands should be listed first.
+    Agent,
     Model,
     Approvals,
     Review,
@@ -35,6 +36,7 @@ impl SlashCommand {
     /// User-visible description shown in the popup.
     pub fn description(self) -> &'static str {
         match self {
+            SlashCommand::Agent => "switch to a different ACP agent",
             SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Codex",
@@ -68,6 +70,7 @@ impl SlashCommand {
             | SlashCommand::Compact
             | SlashCommand::Undo
             | SlashCommand::Model
+            | SlashCommand::Agent
             | SlashCommand::Approvals
             | SlashCommand::Review
             | SlashCommand::Logout => false,
