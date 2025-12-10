@@ -136,7 +136,9 @@ mod tests {
     #[cfg(not(feature = "feedback"))]
     fn feedback_hidden_when_feedback_feature_disabled() {
         let commands = built_in_slash_commands();
-        let has_feedback = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Feedback);
+        let has_feedback = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
         assert!(
             !has_feedback,
             "/feedback should be hidden when feedback feature is disabled"
@@ -147,7 +149,9 @@ mod tests {
     #[cfg(feature = "feedback")]
     fn feedback_visible_when_feedback_feature_enabled() {
         let commands = built_in_slash_commands();
-        let has_feedback = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Feedback);
+        let has_feedback = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
         assert!(
             has_feedback,
             "/feedback should be visible when feedback feature is enabled"

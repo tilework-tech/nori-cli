@@ -77,9 +77,31 @@ mod terminal_palette;
 mod text_formatting;
 mod tui;
 mod ui_consts;
+
+// Upstream OpenAI/Codex update modules (only included with upstream-updates feature)
+// The update_action module is available in all builds for the UpdateAction type
+// The update_prompt and updates modules are only for release builds
+#[cfg(feature = "upstream-updates")]
 pub mod update_action;
+#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
 mod update_prompt;
+#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
 mod updates;
+
+// Nori-specific update modules (only when NOT using upstream-updates)
+// Re-export as pub mod for external access to UpdateAction type
+#[cfg(not(feature = "upstream-updates"))]
+pub mod update_action {
+    pub use super::nori::update_action::*;
+}
+
+// Re-export the appropriate update prompt functions based on feature (release builds only)
+#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
+pub(crate) use update_prompt::{UpdatePromptOutcome, run_update_prompt_if_needed};
+
+#[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
+pub(crate) use nori::update_prompt::{UpdatePromptOutcome, run_update_prompt_if_needed};
+
 mod version;
 
 mod wrapping;
@@ -388,11 +410,9 @@ async fn run_ratatui_app(
 
     #[cfg(not(debug_assertions))]
     {
-        use crate::update_prompt::UpdatePromptOutcome;
-
         let skip_update_prompt = cli.prompt.as_ref().is_some_and(|prompt| !prompt.is_empty());
         if !skip_update_prompt {
-            match update_prompt::run_update_prompt_if_needed(&mut tui, &initial_config).await? {
+            match run_update_prompt_if_needed(&mut tui, &initial_config).await? {
                 UpdatePromptOutcome::Continue => {}
                 UpdatePromptOutcome::RunUpdate(action) => {
                     crate::tui::restore()?;

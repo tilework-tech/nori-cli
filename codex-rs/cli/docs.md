@@ -75,15 +75,28 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 | `full` | All features | Complete legacy binary |
 | `app-server` | `codex-app-server` | `app-server` subcommand |
 | `cloud-tasks` | `codex-cloud-tasks` | `cloud` subcommand |
-| `login` | `codex-login` | `login`/`logout` subcommands |
+| `login` | `codex-login`, `codex-tui/login` | `login`/`logout` subcommands + TUI login |
+| `feedback` | `codex-tui/feedback` | Sentry feedback in TUI |
+| `backend-client` | `codex-tui/backend-client` | Cloud tasks backend client |
+| `upstream-updates` | `codex-tui/upstream-updates` | OpenAI update mechanism (vs Nori's) |
 | `mcp-server` | `codex-mcp-server`, `codex-rmcp-client` | `mcp`, `mcp-server` subcommands |
 | `chatgpt` | `codex-chatgpt` | `apply` subcommand |
 | `responses-api-proxy` | `codex-responses-api-proxy` | `responses-api-proxy` subcommand |
 
+**Feature Propagation to TUI:**
+
+Several CLI features propagate to the TUI crate for coordinated behavior:
+- `login` -> `codex-tui/login`: Enables login screens and `/login` command in TUI
+- `feedback` -> `codex-tui/feedback`: Enables Sentry feedback and `/feedback` command
+- `backend-client` -> `codex-tui/backend-client`: Enables cloud tasks backend
+- `upstream-updates` -> `codex-tui/upstream-updates`: Uses OpenAI update system instead of Nori's
+
+Without these features, the TUI uses Nori-specific alternatives (e.g., GitHub Discussions for feedback, GitHub releases for updates).
+
 Build examples:
 ```bash
-cargo build -p codex-cli                    # Minimal (TUI + exec + ACP only)
-cargo build -p codex-cli --features full    # All functionality
+cargo build -p codex-cli                    # Minimal (TUI + exec + ACP only, Nori updates)
+cargo build -p codex-cli --features full    # All functionality (OpenAI-compatible)
 cargo build -p codex-cli --features login,mcp-server  # Selective
 ```
 

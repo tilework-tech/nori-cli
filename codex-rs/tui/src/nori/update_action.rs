@@ -29,6 +29,11 @@ impl UpdateAction {
     }
 }
 
+/// Returns the update action for the current installation.
+///
+/// Unlike the upstream version which returns `None` for unknown installations,
+/// this always returns `Some()` because Nori supports a manual update fallback
+/// that directs users to GitHub releases.
 #[cfg(not(debug_assertions))]
 pub(crate) fn get_update_action() -> Option<UpdateAction> {
     let managed_by_npm = std::env::var_os("NORI_MANAGED_BY_NPM").is_some();

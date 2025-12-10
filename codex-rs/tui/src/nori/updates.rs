@@ -151,14 +151,6 @@ pub async fn dismiss_version(config: &Config, version: &str) -> anyhow::Result<(
     Ok(())
 }
 
-// Silence unused warning for UpdateAction import - it's used via crate::nori::update_action
-#[allow(dead_code)]
-const _: () = {
-    fn _use_update_action() {
-        let _ = UpdateAction::NpmGlobalLatest;
-    }
-};
-
 #[cfg(test)]
 mod tests {
     use super::*;

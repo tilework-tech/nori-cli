@@ -23,6 +23,9 @@ full = [
     "app-server",
     "cloud-tasks",
     "login",
+    "feedback",
+    "backend-client",
+    "upstream-updates",
     "mcp-server",
     "chatgpt",
     "responses-api-proxy",
@@ -34,8 +37,17 @@ app-server = ["dep:codex-app-server"]
 # Cloud tasks command
 cloud-tasks = ["dep:codex-cloud-tasks"]
 
-# Login/logout commands
-login = ["dep:codex-login"]
+# Login/logout commands - propagate to TUI
+login = ["dep:codex-login", "codex-tui/login"]
+
+# Feedback feature - propagate to TUI
+feedback = ["codex-tui/feedback"]
+
+# Backend client feature - propagate to TUI
+backend-client = ["codex-tui/backend-client"]
+
+# Upstream updates feature - propagate to TUI
+upstream-updates = ["codex-tui/upstream-updates"]
 
 # MCP server functionality
 mcp-server = ["dep:codex-mcp-server", "dep:codex-rmcp-client"]
