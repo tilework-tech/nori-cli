@@ -280,9 +280,12 @@ pub async fn run_main(
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_filter(env_filter());
 
+    #[cfg(feature = "feedback")]
     let feedback = codex_feedback::CodexFeedback::new();
+    #[cfg(feature = "feedback")]
     let targets = Targets::new().with_default(tracing::Level::TRACE);
 
+    #[cfg(feature = "feedback")]
     let feedback_layer = tracing_subscriber::fmt::layer()
         .with_writer(feedback.make_writer())
         .with_ansi(false)
@@ -320,19 +323,29 @@ pub async fn run_main(
             tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
         );
 
+        #[cfg(feature = "feedback")]
         let _ = tracing_subscriber::registry()
             .with(file_layer)
             .with(feedback_layer)
             .with(otel_layer)
             .try_init();
+        #[cfg(not(feature = "feedback"))]
+        let _ = tracing_subscriber::registry()
+            .with(file_layer)
+            .with(otel_layer)
+            .try_init();
     } else {
+        #[cfg(feature = "feedback")]
         let _ = tracing_subscriber::registry()
             .with(file_layer)
             .with(feedback_layer)
             .try_init();
+        #[cfg(not(feature = "feedback"))]
+        let _ = tracing_subscriber::registry().with(file_layer).try_init();
     };
 
-    run_ratatui_app(
+    #[cfg(feature = "feedback")]
+    return run_ratatui_app(
         cli,
         config,
         overrides,
@@ -341,7 +354,12 @@ pub async fn run_main(
         feedback,
     )
     .await
-    .map_err(|err| std::io::Error::other(err.to_string()))
+    .map_err(|err| std::io::Error::other(err.to_string()));
+
+    #[cfg(not(feature = "feedback"))]
+    return run_ratatui_app(cli, config, overrides, cli_kv_overrides, active_profile)
+        .await
+        .map_err(|err| std::io::Error::other(err.to_string()));
 }
 
 async fn run_ratatui_app(
@@ -350,7 +368,7 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
-    feedback: codex_feedback::CodexFeedback,
+    #[cfg(feature = "feedback")] feedback: codex_feedback::CodexFeedback,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -504,6 +522,7 @@ async fn run_ratatui_app(
 
     let Cli { prompt, images, .. } = cli;
 
+    #[cfg(feature = "feedback")]
     let app_result = App::run(
         &mut tui,
         auth_manager,
@@ -513,6 +532,17 @@ async fn run_ratatui_app(
         images,
         resume_selection,
         feedback,
+    )
+    .await;
+    #[cfg(not(feature = "feedback"))]
+    let app_result = App::run(
+        &mut tui,
+        auth_manager,
+        config,
+        active_profile,
+        prompt,
+        images,
+        resume_selection,
     )
     .await;
 

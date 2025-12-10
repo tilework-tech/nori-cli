@@ -346,6 +346,7 @@ impl App {
             initial_images: Vec::new(),
             enhanced_keys_supported: self.enhanced_keys_supported,
             auth_manager: self.auth_manager.clone(),
+            #[cfg(feature = "feedback")]
             feedback: self.feedback.clone(),
             expected_model: None, // No filtering for backtracked conversations
         };

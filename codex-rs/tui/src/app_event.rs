@@ -157,12 +157,14 @@ pub(crate) enum AppEvent {
     FullScreenApprovalRequest(ApprovalRequest),
 
     /// Open the feedback note entry overlay after the user selects a category.
+    #[cfg(feature = "feedback")]
     OpenFeedbackNote {
         category: FeedbackCategory,
         include_logs: bool,
     },
 
     /// Open the upload consent popup for feedback after selecting a category.
+    #[cfg(feature = "feedback")]
     OpenFeedbackConsent {
         category: FeedbackCategory,
     },

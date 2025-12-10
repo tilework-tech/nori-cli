@@ -219,6 +219,7 @@ pub(crate) struct App {
 
     // Esc-backtracking state grouped
     pub(crate) backtrack: crate::app_backtrack::BacktrackState,
+    #[cfg(feature = "feedback")]
     pub(crate) feedback: codex_feedback::CodexFeedback,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
@@ -253,7 +254,7 @@ impl App {
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
-        feedback: codex_feedback::CodexFeedback,
+        #[cfg(feature = "feedback")] feedback: codex_feedback::CodexFeedback,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -298,6 +299,7 @@ impl App {
                     initial_images: initial_images.clone(),
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
+                    #[cfg(feature = "feedback")]
                     feedback: feedback.clone(),
                     expected_model: None, // No filtering for fresh sessions
                 };
@@ -322,6 +324,7 @@ impl App {
                     initial_images: initial_images.clone(),
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
+                    #[cfg(feature = "feedback")]
                     feedback: feedback.clone(),
                     expected_model: None, // No filtering for resumed sessions
                 };
@@ -354,6 +357,7 @@ impl App {
             has_emitted_history_lines: false,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
+            #[cfg(feature = "feedback")]
             feedback: feedback.clone(),
             pending_update_action: None,
             suppress_shutdown_complete: false,
@@ -477,6 +481,7 @@ impl App {
                     initial_images: Vec::new(),
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
+                    #[cfg(feature = "feedback")]
                     feedback: self.feedback.clone(),
                     expected_model: None, // No filtering for /new command
                 };
@@ -611,12 +616,14 @@ impl App {
                     failed_scan,
                 );
             }
+            #[cfg(feature = "feedback")]
             AppEvent::OpenFeedbackNote {
                 category,
                 include_logs,
             } => {
                 self.chat_widget.open_feedback_note(category, include_logs);
             }
+            #[cfg(feature = "feedback")]
             AppEvent::OpenFeedbackConsent { category } => {
                 self.chat_widget.open_feedback_consent(category);
             }
@@ -947,6 +954,7 @@ impl App {
                     initial_images: image_paths,
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
+                    #[cfg(feature = "feedback")]
                     feedback: self.feedback.clone(),
                     expected_model: Some(model_name.clone()),
                 };
@@ -1140,6 +1148,7 @@ mod tests {
             enhanced_keys_supported: false,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
+            #[cfg(feature = "feedback")]
             feedback: codex_feedback::CodexFeedback::new(),
             pending_update_action: None,
             suppress_shutdown_complete: false,
@@ -1178,6 +1187,7 @@ mod tests {
                 enhanced_keys_supported: false,
                 commit_anim_running: Arc::new(AtomicBool::new(false)),
                 backtrack: BacktrackState::default(),
+                #[cfg(feature = "feedback")]
                 feedback: codex_feedback::CodexFeedback::new(),
                 pending_update_action: None,
                 suppress_shutdown_complete: false,

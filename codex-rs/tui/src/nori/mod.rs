@@ -5,3 +5,6 @@
 
 pub(crate) mod agent_picker;
 pub(crate) mod session_header;
+
+#[cfg(not(feature = "feedback"))]
+pub(crate) mod feedback;

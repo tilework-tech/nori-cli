@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codex_app_server_protocol::AuthMode;
+#[cfg(feature = "backend-client")]
 use codex_backend_client::Client as BackendClient;
 use codex_core::config::Config;
 use codex_core::config::types::Notifications;
@@ -255,6 +256,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) initial_images: Vec<PathBuf>,
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
+    #[cfg(feature = "feedback")]
     pub(crate) feedback: codex_feedback::CodexFeedback,
     /// Expected model name for this widget. When set, events from other models
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
@@ -321,6 +323,7 @@ pub(crate) struct ChatWidget {
 
     last_rendered_width: std::cell::Cell<Option<usize>>,
     // Feedback sink for /feedback
+    #[cfg(feature = "feedback")]
     feedback: codex_feedback::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
@@ -419,6 +422,7 @@ impl ChatWidget {
         }
     }
 
+    #[cfg(feature = "feedback")]
     pub(crate) fn open_feedback_note(
         &mut self,
         category: crate::app_event::FeedbackCategory,
@@ -442,6 +446,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    #[cfg(feature = "feedback")]
     pub(crate) fn open_feedback_consent(&mut self, category: crate::app_event::FeedbackCategory) {
         let params = crate::bottom_pane::feedback_upload_consent_params(
             self.app_event_tx.clone(),
@@ -1249,6 +1254,7 @@ impl ChatWidget {
             initial_images,
             enhanced_keys_supported,
             auth_manager,
+            #[cfg(feature = "feedback")]
             feedback,
             expected_model,
         } = common;
@@ -1302,6 +1308,7 @@ impl ChatWidget {
             pre_review_token_info: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
+            #[cfg(feature = "feedback")]
             feedback,
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
@@ -1329,6 +1336,7 @@ impl ChatWidget {
             initial_images,
             enhanced_keys_supported,
             auth_manager,
+            #[cfg(feature = "feedback")]
             feedback,
             expected_model,
         } = common;
@@ -1384,6 +1392,7 @@ impl ChatWidget {
             pre_review_token_info: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
+            #[cfg(feature = "feedback")]
             feedback,
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
@@ -1506,12 +1515,19 @@ impl ChatWidget {
             return;
         }
         match cmd {
+            #[cfg(feature = "feedback")]
             SlashCommand::Feedback => {
                 // Step 1: pick a category (UI built in feedback_view)
                 let params =
                     crate::bottom_pane::feedback_selection_params(self.app_event_tx.clone());
                 self.bottom_pane.show_selection_view(params);
                 self.request_redraw();
+            }
+            #[cfg(not(feature = "feedback"))]
+            SlashCommand::Feedback => {
+                // Show Nori-specific feedback message instead
+                use crate::nori::feedback;
+                self.add_info_message(feedback::feedback_message().to_string(), None);
             }
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
@@ -2087,6 +2103,7 @@ impl ChatWidget {
         }
     }
 
+    #[cfg(feature = "backend-client")]
     fn prefetch_rate_limits(&mut self) {
         self.stop_rate_limit_poller();
 
@@ -2112,6 +2129,11 @@ impl ChatWidget {
         });
 
         self.rate_limit_poller = Some(handle);
+    }
+
+    #[cfg(not(feature = "backend-client"))]
+    fn prefetch_rate_limits(&mut self) {
+        // Rate limit prefetching requires backend-client feature
     }
 
     fn lower_cost_preset(&self) -> Option<ModelPreset> {
@@ -3358,6 +3380,7 @@ fn extract_first_bold(s: &str) -> Option<String> {
     None
 }
 
+#[cfg(feature = "backend-client")]
 async fn fetch_rate_limits(base_url: String, auth: CodexAuth) -> Option<RateLimitSnapshot> {
     match BackendClient::from_auth(base_url, &auth).await {
         Ok(client) => match client.get_rate_limits().await {

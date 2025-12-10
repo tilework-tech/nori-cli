@@ -1,3 +1,4 @@
+#[cfg(feature = "login")]
 mod auth;
 pub mod onboarding_screen;
 mod trust_directory;
