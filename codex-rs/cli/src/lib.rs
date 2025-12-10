@@ -1,5 +1,6 @@
 pub mod debug_sandbox;
 mod exit_status;
+#[cfg(feature = "login")]
 pub mod login;
 
 use clap::Parser;

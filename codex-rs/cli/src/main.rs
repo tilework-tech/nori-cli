@@ -1,25 +1,34 @@
-use clap::Args;
 use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
 use clap_complete::generate;
 use codex_acp::init_file_tracing;
 use codex_arg0::arg0_dispatch_or_else;
+#[cfg(feature = "chatgpt")]
 use codex_chatgpt::apply_command::ApplyCommand;
+#[cfg(feature = "chatgpt")]
 use codex_chatgpt::apply_command::run_apply_command;
 use codex_cli::LandlockCommand;
 use codex_cli::SeatbeltCommand;
 use codex_cli::WindowsCommand;
+#[cfg(feature = "login")]
 use codex_cli::login::read_api_key_from_stdin;
+#[cfg(feature = "login")]
 use codex_cli::login::run_login_status;
+#[cfg(feature = "login")]
 use codex_cli::login::run_login_with_api_key;
+#[cfg(feature = "login")]
 use codex_cli::login::run_login_with_chatgpt;
+#[cfg(feature = "login")]
 use codex_cli::login::run_login_with_device_code;
+#[cfg(feature = "login")]
 use codex_cli::login::run_logout;
+#[cfg(feature = "cloud-tasks")]
 use codex_cloud_tasks::Cli as CloudTasksCli;
 use codex_common::CliConfigOverrides;
 use codex_exec::Cli as ExecCli;
 use codex_execpolicy::ExecPolicyCheckCommand;
+#[cfg(feature = "responses-api-proxy")]
 use codex_responses_api_proxy::Args as ResponsesApiProxyArgs;
 use codex_tui::AppExitInfo;
 use codex_tui::Cli as TuiCli;
@@ -28,10 +37,12 @@ use owo_colors::OwoColorize;
 use std::path::PathBuf;
 use supports_color::Stream;
 
+#[cfg(feature = "mcp-server")]
 mod mcp_cmd;
 #[cfg(not(windows))]
 mod wsl_paths;
 
+#[cfg(feature = "mcp-server")]
 use crate::mcp_cmd::McpCli;
 
 use codex_core::config::Config;
@@ -74,18 +85,23 @@ enum Subcommand {
     Exec(ExecCli),
 
     /// Manage login.
+    #[cfg(feature = "login")]
     Login(LoginCommand),
 
     /// Remove stored authentication credentials.
+    #[cfg(feature = "login")]
     Logout(LogoutCommand),
 
     /// [experimental] Run Codex as an MCP server and manage MCP servers.
+    #[cfg(feature = "mcp-server")]
     Mcp(McpCli),
 
     /// [experimental] Run the Codex MCP server (stdio transport).
+    #[cfg(feature = "mcp-server")]
     McpServer,
 
     /// [experimental] Run the app server or related tooling.
+    #[cfg(feature = "app-server")]
     AppServer(AppServerCommand),
 
     /// Generate shell completion scripts.
@@ -100,6 +116,7 @@ enum Subcommand {
     Execpolicy(ExecpolicyCommand),
 
     /// Apply the latest diff produced by Codex agent as a `git apply` to your local working tree.
+    #[cfg(feature = "chatgpt")]
     #[clap(visible_alias = "a")]
     Apply(ApplyCommand),
 
@@ -107,10 +124,12 @@ enum Subcommand {
     Resume(ResumeCommand),
 
     /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
+    #[cfg(feature = "cloud-tasks")]
     #[clap(name = "cloud", alias = "cloud-tasks")]
     Cloud(CloudTasksCli),
 
     /// Internal: run the responses API proxy.
+    #[cfg(feature = "responses-api-proxy")]
     #[clap(hide = true)]
     ResponsesApiProxy(ResponsesApiProxyArgs),
 
@@ -181,6 +200,7 @@ enum ExecpolicySubcommand {
     Check(ExecPolicyCheckCommand),
 }
 
+#[cfg(feature = "login")]
 #[derive(Debug, Parser)]
 struct LoginCommand {
     #[clap(skip)]
@@ -216,18 +236,21 @@ struct LoginCommand {
     action: Option<LoginSubcommand>,
 }
 
+#[cfg(feature = "login")]
 #[derive(Debug, clap::Subcommand)]
 enum LoginSubcommand {
     /// Show login status.
     Status,
 }
 
+#[cfg(feature = "login")]
 #[derive(Debug, Parser)]
 struct LogoutCommand {
     #[clap(skip)]
     config_overrides: CliConfigOverrides,
 }
 
+#[cfg(feature = "app-server")]
 #[derive(Debug, Parser)]
 struct AppServerCommand {
     /// Omit to run the app server; specify a subcommand for tooling.
@@ -235,6 +258,7 @@ struct AppServerCommand {
     subcommand: Option<AppServerSubcommand>,
 }
 
+#[cfg(feature = "app-server")]
 #[derive(Debug, clap::Subcommand)]
 enum AppServerSubcommand {
     /// [experimental] Generate TypeScript bindings for the app server protocol.
@@ -244,7 +268,8 @@ enum AppServerSubcommand {
     GenerateJsonSchema(GenerateJsonSchemaCommand),
 }
 
-#[derive(Debug, Args)]
+#[cfg(feature = "app-server")]
+#[derive(Debug, clap::Args)]
 struct GenerateTsCommand {
     /// Output directory where .ts files will be written
     #[arg(short = 'o', long = "out", value_name = "DIR")]
@@ -255,7 +280,8 @@ struct GenerateTsCommand {
     prettier: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[cfg(feature = "app-server")]
+#[derive(Debug, clap::Args)]
 struct GenerateJsonSchemaCommand {
     /// Output directory where the schema bundle will be written
     #[arg(short = 'o', long = "out", value_name = "DIR")]
@@ -458,14 +484,17 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             );
             codex_exec::run_main(exec_cli, codex_linux_sandbox_exe).await?;
         }
+        #[cfg(feature = "mcp-server")]
         Some(Subcommand::McpServer) => {
             codex_mcp_server::run_main(codex_linux_sandbox_exe, root_config_overrides).await?;
         }
+        #[cfg(feature = "mcp-server")]
         Some(Subcommand::Mcp(mut mcp_cli)) => {
             // Propagate any root-level config overrides (e.g. `-c key=value`).
             prepend_config_flags(&mut mcp_cli.config_overrides, root_config_overrides.clone());
             mcp_cli.run().await?;
         }
+        #[cfg(feature = "app-server")]
         Some(Subcommand::AppServer(app_server_cli)) => match app_server_cli.subcommand {
             None => {
                 codex_app_server::run_main(codex_linux_sandbox_exe, root_config_overrides).await?;
@@ -497,6 +526,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let exit_info = codex_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
+        #[cfg(feature = "login")]
         Some(Subcommand::Login(mut login_cli)) => {
             prepend_config_flags(
                 &mut login_cli.config_overrides,
@@ -528,6 +558,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 }
             }
         }
+        #[cfg(feature = "login")]
         Some(Subcommand::Logout(mut logout_cli)) => {
             prepend_config_flags(
                 &mut logout_cli.config_overrides,
@@ -538,6 +569,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         Some(Subcommand::Completion(completion_cli)) => {
             print_completion(completion_cli);
         }
+        #[cfg(feature = "cloud-tasks")]
         Some(Subcommand::Cloud(mut cloud_cli)) => {
             prepend_config_flags(
                 &mut cloud_cli.config_overrides,
@@ -583,6 +615,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         Some(Subcommand::Execpolicy(ExecpolicyCommand { sub })) => match sub {
             ExecpolicySubcommand::Check(cmd) => run_execpolicycheck(cmd)?,
         },
+        #[cfg(feature = "chatgpt")]
         Some(Subcommand::Apply(mut apply_cli)) => {
             prepend_config_flags(
                 &mut apply_cli.config_overrides,
@@ -590,6 +623,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             );
             run_apply_command(apply_cli, None).await?;
         }
+        #[cfg(feature = "responses-api-proxy")]
         Some(Subcommand::ResponsesApiProxy(args)) => {
             tokio::task::spawn_blocking(move || codex_responses_api_proxy::run_main(args))
                 .await??;
