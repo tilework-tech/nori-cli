@@ -220,7 +220,7 @@ pub(crate) struct App {
     // Esc-backtracking state grouped
     pub(crate) backtrack: crate::app_backtrack::BacktrackState,
     #[cfg(feature = "feedback")]
-    pub(crate) feedback: codex_feedback::CodexFeedback,
+    pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
 
@@ -254,7 +254,7 @@ impl App {
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
-        #[cfg(feature = "feedback")] feedback: codex_feedback::CodexFeedback,
+        #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -1149,7 +1149,7 @@ mod tests {
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
             #[cfg(feature = "feedback")]
-            feedback: codex_feedback::CodexFeedback::new(),
+            feedback: crate::feedback_compat::CodexFeedback::new(),
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
@@ -1188,7 +1188,7 @@ mod tests {
                 commit_anim_running: Arc::new(AtomicBool::new(false)),
                 backtrack: BacktrackState::default(),
                 #[cfg(feature = "feedback")]
-                feedback: codex_feedback::CodexFeedback::new(),
+                feedback: crate::feedback_compat::CodexFeedback::new(),
                 pending_update_action: None,
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,

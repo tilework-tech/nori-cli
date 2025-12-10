@@ -82,6 +82,7 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 | `mcp-server` | `codex-mcp-server`, `codex-rmcp-client` | `mcp`, `mcp-server` subcommands |
 | `chatgpt` | `codex-chatgpt` | `apply` subcommand |
 | `responses-api-proxy` | `codex-responses-api-proxy` | `responses-api-proxy` subcommand |
+| `oss-providers` | `codex-tui/oss-providers`, `codex-common/oss-providers` | Ollama/LM Studio local model support |
 
 **Feature Propagation to TUI:**
 
@@ -90,8 +91,9 @@ Several CLI features propagate to the TUI crate for coordinated behavior:
 - `feedback` -> `codex-tui/feedback`: Enables Sentry feedback and `/feedback` command
 - `backend-client` -> `codex-tui/backend-client`: Enables cloud tasks backend
 - `upstream-updates` -> `codex-tui/upstream-updates`: Uses OpenAI update system instead of Nori's
+- `oss-providers` -> `codex-tui/oss-providers` -> `codex-common/oss-providers`: Enables Ollama/LM Studio local model support
 
-Without these features, the TUI uses Nori-specific alternatives (e.g., GitHub Discussions for feedback, GitHub releases for updates).
+Without these features, the TUI uses Nori-specific alternatives (e.g., GitHub Discussions for feedback, GitHub releases for updates). For OSS providers, the `codex-common` crate provides stub implementations that return `None` or errors when the feature is disabled.
 
 Build examples:
 ```bash

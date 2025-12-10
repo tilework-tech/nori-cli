@@ -314,7 +314,7 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         #[cfg(feature = "feedback")]
-        feedback: codex_feedback::CodexFeedback::new(),
+        feedback: crate::feedback_compat::CodexFeedback::new(),
         expected_model: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
@@ -378,7 +378,7 @@ fn make_chatwidget_manual() -> (
         needs_final_message_separator: false,
         last_rendered_width: std::cell::Cell::new(None),
         #[cfg(feature = "feedback")]
-        feedback: codex_feedback::CodexFeedback::new(),
+        feedback: crate::feedback_compat::CodexFeedback::new(),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
         pending_agent: None,

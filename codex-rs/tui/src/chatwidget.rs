@@ -257,7 +257,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     #[cfg(feature = "feedback")]
-    pub(crate) feedback: codex_feedback::CodexFeedback,
+    pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Expected model name for this widget. When set, events from other models
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching model. This prevents race conditions when switching agents.
@@ -324,7 +324,7 @@ pub(crate) struct ChatWidget {
     last_rendered_width: std::cell::Cell<Option<usize>>,
     // Feedback sink for /feedback
     #[cfg(feature = "feedback")]
-    feedback: codex_feedback::CodexFeedback,
+    feedback: crate::feedback_compat::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
     // Tracks incomplete ExecCells that were flushed before completion.

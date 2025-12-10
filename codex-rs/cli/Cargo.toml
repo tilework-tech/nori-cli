@@ -29,6 +29,7 @@ full = [
     "mcp-server",
     "chatgpt",
     "responses-api-proxy",
+    "oss-providers",
 ]
 
 # App server functionality
@@ -40,7 +41,8 @@ cloud-tasks = ["dep:codex-cloud-tasks"]
 # Login/logout commands - propagate to TUI
 login = ["dep:codex-login", "codex-tui/login"]
 
-# Feedback feature - propagate to TUI
+# Feedback feature - propagate to TUI (legacy OpenAI Sentry feedback)
+# Future Nori feedback: https://github.com/tilework-tech/nori-cli/issues
 feedback = ["codex-tui/feedback"]
 
 # Backend client feature - propagate to TUI
@@ -48,6 +50,9 @@ backend-client = ["codex-tui/backend-client"]
 
 # Upstream updates feature - propagate to TUI
 upstream-updates = ["codex-tui/upstream-updates"]
+
+# OSS providers (Ollama, LM Studio) - propagate to TUI and codex-common
+oss-providers = ["codex-tui/oss-providers", "codex-common/oss-providers"]
 
 # MCP server functionality
 mcp-server = ["dep:codex-mcp-server", "dep:codex-rmcp-client"]

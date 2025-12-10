@@ -106,12 +106,22 @@ The TUI crate uses Cargo feature flags to enable modular builds with two primary
 | `feedback` | `codex-feedback` | Sentry feedback integration |
 | `backend-client` | `codex-backend-client` | Cloud tasks backend client |
 | `upstream-updates` | - | OpenAI/Codex update checking mechanism |
+| `oss-providers` | `codex-common/oss-providers` | Ollama/LM Studio local model support |
 
 Feature gating patterns:
 - Import gating: `#[cfg(feature = "backend-client")] use codex_backend_client::Client`
 - Struct field gating: `#[cfg(feature = "feedback")] feedback: CodexFeedback`
 - Function parameter gating: `#[cfg(feature = "feedback")] feedback: CodexFeedback` in `App::run()`
 - Enum variant gating: `AppEvent::Feedback` only exists with `feedback` feature
+- Compatibility module pattern: `feedback_compat.rs` provides stub types when `feedback` feature is disabled
+
+**Feedback Compatibility Layer:**
+
+The `feedback_compat.rs` module provides API-compatible types when the `feedback` feature is disabled:
+- **With `feedback` enabled:** Re-exports `CodexFeedback` and `CodexLogSnapshot` from `codex_feedback`
+- **With `feedback` disabled:** Provides stub implementations with no-op behavior (e.g., `upload_feedback()` returns `Ok(())`, `make_writer()` returns a writer that discards output)
+
+This pattern allows TUI code to use feedback types unconditionally without `#[cfg]` attributes at every call site. The stub structure is designed as a placeholder for future Nori-specific feedback functionality.
 
 **Update System Selection:**
 

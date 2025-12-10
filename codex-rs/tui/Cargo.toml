@@ -15,8 +15,8 @@ path = "src/lib.rs"
 [features]
 default = []
 
-# Full feature set - enables all upstream functionality
-full = ["login", "feedback", "backend-client", "upstream-updates"]
+# Full feature set - enables all upstream/legacy functionality
+full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers"]
 
 # Enable vt100-based tests (emulator) when running with `--features vt100-tests`.
 vt100-tests = []
@@ -26,7 +26,8 @@ debug-logs = []
 # ChatGPT/API login functionality
 login = ["dep:codex-login"]
 
-# Feedback to Sentry
+# Feedback to Sentry (legacy OpenAI feedback system)
+# Future Nori feedback: https://github.com/tilework-tech/nori-cli/issues
 feedback = ["dep:codex-feedback"]
 
 # Backend client for cloud tasks
@@ -34,6 +35,9 @@ backend-client = ["dep:codex-backend-client"]
 
 # Upstream (OpenAI) update checking
 upstream-updates = []
+
+# OSS providers (Ollama, LM Studio) - forwarded to codex-common
+oss-providers = ["codex-common/oss-providers"]
 
 [lints]
 workspace = true

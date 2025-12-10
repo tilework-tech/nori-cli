@@ -29,7 +29,7 @@ Common is a utility dependency for TUI, exec, and CLI:
 | `fuzzy_match` | always | Nucleo-based fuzzy matching |
 | `model_presets` | always | Available model definitions |
 | `approval_presets` | always | Approval + sandbox combinations |
-| `oss` | always | OSS provider utilities |
+| `oss` | always (stubs without `oss-providers`) | OSS provider utilities |
 | `elapsed` | `elapsed` | Duration formatting |
 
 ### Things to Know
@@ -67,6 +67,12 @@ The `oss` module handles:
 - Model availability checking
 - Default model selection per provider
 - Provider health verification (`ensure_oss_provider_ready()`)
+
+The module uses conditional compilation based on the `oss-providers` feature:
+- **With feature enabled:** Full provider support via `codex-ollama` and `codex-lmstudio` crates
+- **With feature disabled:** Stub implementations that return `None` from `get_default_model_for_oss_provider()` and errors from `ensure_oss_provider_ready()` for known providers
+
+This follows the crate's pattern of providing API-compatible stubs when optional functionality is disabled.
 
 **Format Env Display:**
 

@@ -47,6 +47,9 @@ pub mod custom_terminal;
 mod diff_render;
 mod exec_cell;
 mod exec_command;
+// Feedback compatibility layer - provides stubs when feedback feature is disabled
+// See feedback_compat.rs for future Nori feedback integration notes
+mod feedback_compat;
 mod file_search;
 mod frames;
 mod get_git_diff;
@@ -308,7 +311,7 @@ pub async fn run_main(
         .with_filter(env_filter());
 
     #[cfg(feature = "feedback")]
-    let feedback = codex_feedback::CodexFeedback::new();
+    let feedback = crate::feedback_compat::CodexFeedback::new();
     #[cfg(feature = "feedback")]
     let targets = Targets::new().with_default(tracing::Level::TRACE);
 
@@ -395,7 +398,7 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
-    #[cfg(feature = "feedback")] feedback: codex_feedback::CodexFeedback,
+    #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
