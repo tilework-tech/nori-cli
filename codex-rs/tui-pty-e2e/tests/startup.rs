@@ -80,6 +80,8 @@ fn test_startup_welcome_with_dimensions() {
         .expect("Prompt did not appear");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify terminal size is respected
     let contents = session.screen_contents();

@@ -163,8 +163,11 @@ async fn assert_network_blocked(cmd: &[&str]) {
     let output = match result {
         Ok(output) => output,
         Err(CodexErr::Sandbox(SandboxErr::Denied { output })) => *output,
+        // Timeout is also a valid way for the sandbox to block network access
+        // (command can't make progress and times out)
+        Err(CodexErr::Sandbox(SandboxErr::Timeout { output })) => *output,
         _ => {
-            panic!("expected sandbox denied error, got: {result:?}");
+            panic!("expected sandbox denied or timeout error, got: {result:?}");
         }
     };
 

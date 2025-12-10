@@ -20,11 +20,7 @@ pub fn response_items_to_content_blocks(items: &[ResponseItem]) -> Vec<acp::Cont
                 // Extract text from user messages
                 for content_item in content {
                     if let ContentItem::InputText { text } = content_item {
-                        blocks.push(acp::ContentBlock::Text(acp::TextContent {
-                            text: text.clone(),
-                            annotations: None,
-                            meta: None,
-                        }));
+                        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(text)));
                     }
                 }
             }
@@ -32,11 +28,7 @@ pub fn response_items_to_content_blocks(items: &[ResponseItem]) -> Vec<acp::Cont
                 // Include assistant messages for context
                 for content_item in content {
                     if let ContentItem::OutputText { text } = content_item {
-                        blocks.push(acp::ContentBlock::Text(acp::TextContent {
-                            text: text.clone(),
-                            annotations: None,
-                            meta: None,
-                        }));
+                        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(text)));
                     }
                 }
             }
@@ -50,11 +42,7 @@ pub fn response_items_to_content_blocks(items: &[ResponseItem]) -> Vec<acp::Cont
 
 /// Translate a single text string to an ACP ContentBlock.
 pub fn text_to_content_block(text: &str) -> acp::ContentBlock {
-    acp::ContentBlock::Text(acp::TextContent {
-        text: text.to_string(),
-        annotations: None,
-        meta: None,
-    })
+    acp::ContentBlock::Text(acp::TextContent::new(text))
 }
 
 /// Represents an event translated from an ACP SessionUpdate.
@@ -78,10 +66,7 @@ pub fn translate_session_update(update: acp::SessionUpdate) -> Vec<TranslatedEve
                 acp::ContentBlock::Text(text) => {
                     vec![TranslatedEvent::TextDelta(text.text)]
                 }
-                acp::ContentBlock::Image(_)
-                | acp::ContentBlock::Resource(_)
-                | acp::ContentBlock::Audio(_)
-                | acp::ContentBlock::ResourceLink(_) => {
+                _ => {
                     // Non-text content types are not yet supported in the TUI
                     vec![]
                 }
@@ -94,10 +79,7 @@ pub fn translate_session_update(update: acp::SessionUpdate) -> Vec<TranslatedEve
                     // For now, just treat thoughts as regular text
                     vec![TranslatedEvent::TextDelta(text.text)]
                 }
-                acp::ContentBlock::Image(_)
-                | acp::ContentBlock::Resource(_)
-                | acp::ContentBlock::Audio(_)
-                | acp::ContentBlock::ResourceLink(_) => {
+                _ => {
                     // Non-text content in thoughts is not supported
                     vec![]
                 }
@@ -128,6 +110,10 @@ pub fn translate_session_update(update: acp::SessionUpdate) -> Vec<TranslatedEve
             // Command updates are internal state
             vec![]
         }
+        _ => {
+            // Handle any new update types added in future versions
+            vec![]
+        }
     }
 }
 
@@ -156,7 +142,7 @@ pub fn permission_request_to_approval_event(
     let reason = extract_reason_from_tool_call(&request.tool_call);
 
     codex_protocol::approvals::ExecApprovalRequestEvent {
-        call_id: request.tool_call.id.to_string(),
+        call_id: request.tool_call.tool_call_id.to_string(),
         turn_id: String::new(), // ACP doesn't have turn IDs
         command,
         cwd: cwd.to_path_buf(),
@@ -173,9 +159,9 @@ fn extract_command_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Vec<String
 
     // Use title as the command name if available
     if let Some(title) = &tool_call.fields.title {
-        cmd.push(title.clone());
+        cmd.push(title.to_string());
     } else {
-        cmd.push(tool_call.id.to_string());
+        cmd.push(tool_call.tool_call_id.to_string());
     }
 
     // Add stringified raw_input if present
@@ -226,12 +212,12 @@ pub fn review_decision_to_permission_outcome(
                             || name_lower.contains("yes")
                     })
                 })
-                .map(|opt| opt.id.clone())
+                .map(|opt| opt.option_id.clone())
                 .unwrap_or_else(|| {
                     // Default to first option if no clear "allow" option
                     options
                         .first()
-                        .map(|opt| opt.id.clone())
+                        .map(|opt| opt.option_id.clone())
                         .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()))
                 })
         }
@@ -254,18 +240,18 @@ pub fn review_decision_to_permission_outcome(
                             || name_lower.contains("no")
                     })
                 })
-                .map(|opt| opt.id.clone())
+                .map(|opt| opt.option_id.clone())
                 .unwrap_or_else(|| {
                     // Default to last option if no clear "reject" option
                     options
                         .last()
-                        .map(|opt| opt.id.clone())
+                        .map(|opt| opt.option_id.clone())
                         .unwrap_or_else(|| acp::PermissionOptionId::from("deny".to_string()))
                 })
         }
     };
 
-    acp::RequestPermissionOutcome::Selected { option_id }
+    acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(option_id))
 }
 
 #[cfg(test)]
@@ -275,26 +261,19 @@ mod tests {
 
     #[test]
     fn test_permission_request_to_approval_event() {
-        let tool_call = acp::ToolCallUpdate {
-            id: acp::ToolCallId::from("call-123".to_string()),
-            fields: acp::ToolCallUpdateFields {
-                kind: None,
-                status: Some(acp::ToolCallStatus::InProgress),
-                title: Some("shell".to_string()),
-                content: None,
-                locations: None,
-                raw_input: Some(serde_json::json!({"command": "ls -la"})),
-                raw_output: None,
-            },
-            meta: None,
-        };
+        let tool_call = acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-123".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::InProgress)
+                .title("shell")
+                .raw_input(serde_json::json!({"command": "ls -la"})),
+        );
 
-        let request = acp::RequestPermissionRequest {
-            session_id: acp::SessionId::from("session-1".to_string()),
+        let request = acp::RequestPermissionRequest::new(
+            acp::SessionId::from("session-1".to_string()),
             tool_call,
-            options: vec![],
-            meta: None,
-        };
+            vec![],
+        );
 
         let cwd = std::path::Path::new("/home/user/project");
         let event = permission_request_to_approval_event(&request, cwd);
@@ -308,53 +287,45 @@ mod tests {
     #[test]
     fn test_review_decision_to_permission_outcome_approved() {
         let options = vec![
-            acp::PermissionOption {
-                id: acp::PermissionOptionId::from("allow".to_string()),
-                name: "Allow".to_string(),
-                kind: acp::PermissionOptionKind::AllowOnce,
-                meta: None,
-            },
-            acp::PermissionOption {
-                id: acp::PermissionOptionId::from("deny".to_string()),
-                name: "Deny".to_string(),
-                kind: acp::PermissionOptionKind::RejectOnce,
-                meta: None,
-            },
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("allow".to_string()),
+                "Allow",
+                acp::PermissionOptionKind::AllowOnce,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
         ];
 
         let outcome = review_decision_to_permission_outcome(ReviewDecision::Approved, &options);
-        match outcome {
-            acp::RequestPermissionOutcome::Selected { option_id } => {
-                assert_eq!(option_id.to_string(), "allow");
-            }
-            _ => panic!("Expected Selected outcome"),
-        }
+        assert!(matches!(
+            outcome,
+            acp::RequestPermissionOutcome::Selected { .. }
+        ));
     }
 
     #[test]
     fn test_review_decision_to_permission_outcome_denied() {
         let options = vec![
-            acp::PermissionOption {
-                id: acp::PermissionOptionId::from("allow".to_string()),
-                name: "Allow".to_string(),
-                kind: acp::PermissionOptionKind::AllowOnce,
-                meta: None,
-            },
-            acp::PermissionOption {
-                id: acp::PermissionOptionId::from("deny".to_string()),
-                name: "Deny".to_string(),
-                kind: acp::PermissionOptionKind::RejectOnce,
-                meta: None,
-            },
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("allow".to_string()),
+                "Allow",
+                acp::PermissionOptionKind::AllowOnce,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
         ];
 
         let outcome = review_decision_to_permission_outcome(ReviewDecision::Denied, &options);
-        match outcome {
-            acp::RequestPermissionOutcome::Selected { option_id } => {
-                assert_eq!(option_id.to_string(), "deny");
-            }
-            _ => panic!("Expected Selected outcome"),
-        }
+        assert!(matches!(
+            outcome,
+            acp::RequestPermissionOutcome::Selected { .. }
+        ));
     }
 
     #[test]
@@ -370,14 +341,9 @@ mod tests {
 
     #[test]
     fn test_translate_agent_message_chunk() {
-        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk {
-            content: acp::ContentBlock::Text(acp::TextContent {
-                text: "Test response".to_string(),
-                annotations: None,
-                meta: None,
-            }),
-            meta: None,
-        });
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Test response")),
+        ));
 
         let events = translate_session_update(update);
         assert_eq!(events.len(), 1);

@@ -76,6 +76,8 @@ pub fn agent_picker_params(
 
 /// Create selection view parameters for the model picker in ACP mode.
 /// Shows models as disabled with a message to use /agent instead.
+///
+/// This is the fallback when model state is not available.
 pub fn acp_model_picker_params() -> SelectionViewParams {
     // In ACP mode, we show a message that models are not directly selectable
     // and users should use /agent instead
@@ -94,6 +96,71 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
         footer_hint: Some(Line::from(
             "Press esc to dismiss, or use /agent to switch agents.",
         )),
+        items,
+        ..Default::default()
+    }
+}
+
+/// Create selection view parameters for the ACP model picker with actual models.
+///
+/// This function creates a picker showing models available from the ACP agent.
+#[cfg(feature = "unstable")]
+pub fn acp_model_picker_params_with_models(
+    models: &[crate::app_event::AcpModelInfo],
+    current_model_id: Option<&str>,
+) -> SelectionViewParams {
+    if models.is_empty() {
+        // No models available - show a message
+        let items: Vec<SelectionItem> = vec![SelectionItem {
+            name: "No models available".to_string(),
+            description: Some("The ACP agent did not provide any models".to_string()),
+            is_current: false,
+            actions: vec![],
+            dismiss_on_select: true,
+            ..Default::default()
+        }];
+
+        return SelectionViewParams {
+            title: Some("Select Model".to_string()),
+            subtitle: Some("No models available from agent".to_string()),
+            footer_hint: Some(Line::from("Press esc to dismiss.")),
+            items,
+            ..Default::default()
+        };
+    }
+
+    let items: Vec<SelectionItem> = models
+        .iter()
+        .map(|model| {
+            let is_current = current_model_id
+                .map(|id| id == model.model_id)
+                .unwrap_or(false);
+            let model_id = model.model_id.clone();
+            let display_name = model.display_name.clone();
+
+            // Create action that sends the SetAcpModel event
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::SetAcpModel {
+                    model_id: model_id.clone(),
+                    display_name: display_name.clone(),
+                });
+            })];
+
+            SelectionItem {
+                name: model.display_name.clone(),
+                description: model.description.clone(),
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Select Model".to_string()),
+        subtitle: Some("Select a model for this ACP agent".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
         items,
         ..Default::default()
     }

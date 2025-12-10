@@ -112,6 +112,8 @@ use self::interrupts::InterruptManager;
 mod pending_exec_cells;
 use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
+#[cfg(feature = "unstable")]
+pub(crate) use self::agent::AcpAgentHandle;
 use self::agent::spawn_agent;
 use self::agent::spawn_agent_from_existing;
 mod session_header;
@@ -334,6 +336,9 @@ pub(crate) struct ChatWidget {
     // Whether SessionConfigured has been received for this widget.
     // Used with expected_model to filter events from previous agents.
     session_configured_received: bool,
+    // ACP agent handle for model switching (only present in ACP mode)
+    #[cfg(feature = "unstable")]
+    acp_handle: Option<AcpAgentHandle>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -1254,12 +1259,12 @@ impl ChatWidget {
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-        let codex_op_tx = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
+        let spawn_result = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
 
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
-            codex_op_tx,
+            codex_op_tx: spawn_result.op_tx,
             bottom_pane: BottomPane::new(BottomPaneParams {
                 frame_requester,
                 app_event_tx,
@@ -1308,6 +1313,8 @@ impl ChatWidget {
             pending_agent: None,
             expected_model,
             session_configured_received: false,
+            #[cfg(feature = "unstable")]
+            acp_handle: spawn_result.acp_handle,
         };
 
         widget.prefetch_rate_limits();
@@ -1391,6 +1398,9 @@ impl ChatWidget {
             expected_model,
             // For existing conversations, we've already received SessionConfigured
             session_configured_received: true,
+            // No ACP handle for existing conversations (they are HTTP mode only)
+            #[cfg(feature = "unstable")]
+            acp_handle: None,
         };
 
         widget.prefetch_rate_limits();
@@ -2230,15 +2240,56 @@ impl ChatWidget {
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
     ///
-    /// In ACP mode (when current model is an ACP agent), this shows a disabled
-    /// message directing users to use /agent instead.
+    /// In ACP mode (when current model is an ACP agent), this fetches available
+    /// models from the agent and shows them for selection.
     pub(crate) fn open_model_popup(&mut self) {
         let current_model = self.config.model.clone();
 
         // Check if we're in ACP mode by checking if the current model is registered
         // in the ACP agent registry
         if codex_acp::get_agent_config(&current_model).is_ok() {
-            // ACP mode - show disabled model picker
+            #[cfg(feature = "unstable")]
+            {
+                // ACP mode with unstable features - try to get model state from the agent
+                if let Some(handle) = self.acp_handle.clone() {
+                    let app_event_tx = self.app_event_tx.clone();
+                    tokio::spawn(async move {
+                        if let Some(model_state) = handle.get_model_state().await {
+                            let models: Vec<crate::app_event::AcpModelInfo> = model_state
+                                .available_models
+                                .iter()
+                                .map(|m| {
+                                    let display_name = if m.name.is_empty() {
+                                        m.model_id.to_string()
+                                    } else {
+                                        m.name.clone()
+                                    };
+                                    crate::app_event::AcpModelInfo {
+                                        model_id: m.model_id.to_string(),
+                                        display_name,
+                                        description: m.description.clone(),
+                                    }
+                                })
+                                .collect();
+                            let current_model_id =
+                                model_state.current_model_id.map(|id| id.to_string());
+                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                                models,
+                                current_model_id,
+                            });
+                        } else {
+                            // Failed to get model state - show empty picker with explanation
+                            tracing::warn!("Failed to get ACP model state");
+                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                                models: vec![],
+                                current_model_id: None,
+                            });
+                        }
+                    });
+                    return;
+                }
+            }
+            // ACP mode but no handle or unstable not enabled - show disabled model picker
             let params = crate::nori::agent_picker::acp_model_picker_params();
             self.bottom_pane.show_selection_view(params);
             return;
@@ -2284,6 +2335,56 @@ impl ChatWidget {
             items,
             ..Default::default()
         });
+    }
+
+    /// Open the ACP model picker with fetched models.
+    #[cfg(feature = "unstable")]
+    pub(crate) fn open_acp_model_picker(
+        &mut self,
+        models: Vec<crate::app_event::AcpModelInfo>,
+        current_model_id: Option<String>,
+    ) {
+        let params = crate::nori::agent_picker::acp_model_picker_params_with_models(
+            &models,
+            current_model_id.as_deref(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Set the ACP model via the agent handle.
+    #[cfg(feature = "unstable")]
+    pub(crate) fn set_acp_model(&mut self, model_id: String, display_name: String) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            let model_id_for_result = model_id.clone();
+            let display_name_for_result = display_name.clone();
+            tokio::spawn(async move {
+                match handle.set_model(model_id).await {
+                    Ok(()) => {
+                        app_event_tx.send(AppEvent::AcpModelSetResult {
+                            success: true,
+                            model_id: model_id_for_result,
+                            display_name: display_name_for_result,
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        app_event_tx.send(AppEvent::AcpModelSetResult {
+                            success: false,
+                            model_id: model_id_for_result,
+                            display_name: display_name_for_result,
+                            error: Some(e.to_string()),
+                        });
+                    }
+                }
+            });
+            self.add_info_message(format!("Switching to model: {display_name}..."), None);
+        } else {
+            self.add_info_message(
+                "No ACP agent handle available for model switching".to_string(),
+                None,
+            );
+        }
     }
 
     /// Open a popup to choose the reasoning effort (stage 2) for the given model.

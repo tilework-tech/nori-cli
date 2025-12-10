@@ -955,6 +955,37 @@ impl App {
                 self.chat_widget
                     .add_info_message(format!("Switched to agent: {display_name}"), None);
             }
+            #[cfg(feature = "unstable")]
+            AppEvent::OpenAcpModelPicker {
+                models,
+                current_model_id,
+            } => {
+                self.chat_widget
+                    .open_acp_model_picker(models, current_model_id);
+            }
+            #[cfg(feature = "unstable")]
+            AppEvent::SetAcpModel {
+                model_id,
+                display_name,
+            } => {
+                self.chat_widget.set_acp_model(model_id, display_name);
+            }
+            #[cfg(feature = "unstable")]
+            AppEvent::AcpModelSetResult {
+                success,
+                model_id: _,
+                display_name,
+                error,
+            } => {
+                if success {
+                    self.chat_widget
+                        .add_info_message(format!("Model switched to: {display_name}"), None);
+                } else {
+                    let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
+                    self.chat_widget
+                        .add_info_message(format!("Failed to switch model: {error_msg}"), None);
+                }
+            }
         }
         Ok(true)
     }

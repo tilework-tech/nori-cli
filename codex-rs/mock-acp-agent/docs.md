@@ -20,7 +20,8 @@ Path: @/codex-rs/mock-acp-agent
 
 **Entry Point:** `main()` in `@/mock-acp-agent/src/main.rs`
 
-- Uses `agent_client_protocol` crate for protocol implementation
+- Uses `agent_client_protocol` v0.9 crate with `unstable` feature for model switching support
+- Uses builder patterns for protocol types (e.g., `ToolCall::new()`, `ModelInfo::new()`)
 - Runs on single-threaded tokio runtime with `LocalSet` for `!Send` futures
 - Communicates via stdin/stdout with newline-delimited JSON-RPC messages
 
@@ -29,9 +30,10 @@ Path: @/codex-rs/mock-acp-agent
 | Method | Behavior |
 |--------|----------|
 | `initialize` | Returns mock capabilities, emits "Mock agent: initialize" to stderr |
-| `new_session` | Generates incrementing session IDs |
+| `new_session` | Generates incrementing session IDs, returns `session_model_state` with 3 test models |
 | `prompt` | Sends two text chunks, optionally reads files via client |
 | `cancel` | Sets flag to stop streaming |
+| `set_session_model` | Updates the current model ID in the session |
 
 **Internal Architecture:**
 
@@ -79,6 +81,15 @@ The agent can request permission from the client via `conn.request_permission()`
 - Provides two `PermissionOption` choices: "Allow" (`AllowOnce`) and "Reject" (`RejectOnce`)
 - Blocks waiting for the client's response, exercising the full approval bridging flow
 - Sends a confirmation message indicating which option was selected
+
+**Model State for Testing:**
+
+The agent provides test models in `session_model_state` for model switching tests:
+- `mock-model-1` (default): "Mock Model 1"
+- `mock-model-2`: "Mock Model 2"
+- `mock-model-3`: "Mock Model 3"
+
+The current model ID is tracked internally and updated via `set_session_model()`.
 
 **Binary Name:**
 

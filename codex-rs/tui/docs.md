@@ -75,11 +75,29 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 
 **ACP Agent Switching:**
 
-- `/agent` now opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.
+- `/agent` opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.
 - Selecting an agent sends `AppEvent::SetPendingAgent`, so both the App and `ChatWidget` store a `pending_agent` (see `PendingAgentSelection` and `PendingAgentInfo`). The UI informs the user that the switch will happen on the next prompt submission.
 - When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model (clearing the pending flag, updating `Config`, shutting down the old conversation, and creating a `ChatWidget` with `expected_model` to filter out leftover events).
-- `/model` now checks `codex_acp::get_agent_config()`; if the workspace is in ACP mode it shows the disabled `acp_model_picker_params()` view that explicitly tells users to use `/agent` instead of selecting models directly.
-- This workflow avoids disrupting active turns and powers the agent-switching verification in `tui-pty-e2e/tests/agent_switching.rs`, including the message-flow and pending-selection tests added in the last commits.
+- This workflow avoids disrupting active turns and powers the agent-switching verification in `tui-pty-e2e/tests/agent_switching.rs`.
+
+**ACP Model Switching (Unstable Feature):**
+
+When the `unstable` feature is enabled, `/model` in ACP mode allows switching between models provided by the ACP agent:
+
+- `ChatWidget` stores an optional `acp_handle: Option<AcpAgentHandle>` (only present in ACP mode)
+- `AcpAgentHandle` in `chatwidget/agent.rs` provides async methods: `get_model_state()` and `set_model()`
+- When `/model` is invoked in ACP mode:
+  1. `open_model_popup()` detects ACP mode via `codex_acp::get_agent_config()`
+  2. If `acp_handle` exists, it asynchronously fetches model state via `handle.get_model_state()`
+  3. Sends `AppEvent::OpenAcpModelPicker` with available models and current selection
+  4. `App` calls `ChatWidget::open_acp_model_picker()` to display the selection popup
+  5. User selection sends `AppEvent::SetAcpModel { model_id, display_name }`
+  6. `ChatWidget::set_acp_model()` calls `handle.set_model()` asynchronously
+  7. Success/failure reported via `AppEvent::AcpModelSetResult`
+
+Key difference from agent switching: Model switching preserves conversation history (uses ACP's `session/set_model`), while agent switching rebuilds the entire session.
+
+When the `unstable` feature is disabled, `/model` in ACP mode shows a disabled picker via `acp_model_picker_params()` directing users to use `/agent`.
 
 **Onboarding:**
 

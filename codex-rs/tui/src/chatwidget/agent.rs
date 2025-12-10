@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
+#[cfg(feature = "unstable")]
+use codex_acp::AcpModelState;
 use codex_acp::get_agent_config;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
@@ -13,12 +15,76 @@ use codex_core::protocol::Op;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 
-/// Spawn the agent bootstrapper and op forwarding loop, returning the
-/// `UnboundedSender<Op>` used by the UI to submit operations.
+/// Command for controlling the ACP agent.
+#[cfg(feature = "unstable")]
+pub(crate) enum AcpModelCommand {
+    /// Get the current model state (available models and current selection)
+    GetModelState {
+        response_tx: oneshot::Sender<AcpModelState>,
+    },
+    /// Set the active model
+    SetModel {
+        model_id: String,
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+}
+
+/// Handle for communicating with an ACP agent.
+///
+/// This handle provides access to model switching operations in addition
+/// to the standard Op channel.
+#[cfg(feature = "unstable")]
+#[derive(Clone)]
+pub(crate) struct AcpAgentHandle {
+    model_cmd_tx: mpsc::UnboundedSender<AcpModelCommand>,
+}
+
+#[cfg(feature = "unstable")]
+impl AcpAgentHandle {
+    /// Get the current model state from the ACP agent.
+    pub async fn get_model_state(&self) -> Option<AcpModelState> {
+        let (response_tx, response_rx) = oneshot::channel();
+        if self
+            .model_cmd_tx
+            .send(AcpModelCommand::GetModelState { response_tx })
+            .is_err()
+        {
+            return None;
+        }
+        response_rx.await.ok()
+    }
+
+    /// Set the active model in the ACP agent.
+    pub async fn set_model(&self, model_id: String) -> anyhow::Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.model_cmd_tx
+            .send(AcpModelCommand::SetModel {
+                model_id,
+                response_tx,
+            })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+    }
+}
+
+/// Result of spawning an agent, which may include an ACP handle for model control.
+pub(crate) struct SpawnAgentResult {
+    /// The Op sender for submitting operations to the agent.
+    pub op_tx: UnboundedSender<Op>,
+    /// Optional ACP handle for model control (only present in ACP mode).
+    #[cfg(feature = "unstable")]
+    pub acp_handle: Option<AcpAgentHandle>,
+}
+
+/// Spawn the agent bootstrapper and op forwarding loop, returning a result
+/// that includes the Op sender and optionally an ACP handle for model control.
 ///
 /// This function detects whether to use ACP mode or HTTP mode based on:
 /// 1. If the model is registered in the ACP registry, use ACP mode
@@ -28,7 +94,7 @@ pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
     server: Arc<ConversationManager>,
-) -> UnboundedSender<Op> {
+) -> SpawnAgentResult {
     let acp_agent_result = get_agent_config(&config.model);
 
     match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
@@ -36,7 +102,14 @@ pub(crate) fn spawn_agent(
         (true, _) => spawn_acp_agent(config, app_event_tx),
 
         // Model NOT registered, but HTTP fallback is allowed -> use HTTP
-        (false, true) => spawn_http_agent(config, app_event_tx, server),
+        (false, true) => {
+            let op_tx = spawn_http_agent(config, app_event_tx, server);
+            SpawnAgentResult {
+                op_tx,
+                #[cfg(feature = "unstable")]
+                acp_handle: None,
+            }
+        }
 
         // Model NOT registered and HTTP fallback NOT allowed -> error
         (false, false) => {
@@ -46,7 +119,12 @@ pub(crate) fn spawn_agent(
                  Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp",
                 config.model
             );
-            spawn_error_agent(error_msg, app_event_tx)
+            let op_tx = spawn_error_agent(error_msg, app_event_tx);
+            SpawnAgentResult {
+                op_tx,
+                #[cfg(feature = "unstable")]
+                acp_handle: None,
+            }
         }
     }
 }
@@ -79,8 +157,15 @@ fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> Unbound
 ///
 /// This uses the `codex_acp` crate to spawn an agent subprocess and handle
 /// communication via the Agent Client Protocol.
-fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSender<Op> {
+fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
+
+    // Create the model command channel for model switching operations
+    #[cfg(feature = "unstable")]
+    let (model_cmd_tx, mut model_cmd_rx) = unbounded_channel::<AcpModelCommand>();
+
+    #[cfg(feature = "unstable")]
+    let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
 
     tokio::spawn(async move {
         // Create event channel for backend → TUI
@@ -120,10 +205,33 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSen
             }
         });
 
-        // Drop our Arc reference - the op task has its own.
-        // This is necessary so that when the op task exits (when codex_op_rx closes),
-        // the backend is fully dropped, which drops event_tx, allowing event_rx
-        // to return None and this task to exit.
+        // Handle model commands in a separate task
+        #[cfg(feature = "unstable")]
+        {
+            let backend_for_model = Arc::clone(&backend);
+            tokio::spawn(async move {
+                while let Some(cmd) = model_cmd_rx.recv().await {
+                    match cmd {
+                        AcpModelCommand::GetModelState { response_tx } => {
+                            let state = backend_for_model.model_state();
+                            let _ = response_tx.send(state);
+                        }
+                        AcpModelCommand::SetModel {
+                            model_id,
+                            response_tx,
+                        } => {
+                            let model_id = codex_acp::ModelId::from(model_id);
+                            let result = backend_for_model.set_model(&model_id).await;
+                            let _ = response_tx.send(result);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Drop our Arc reference - the op and model tasks have their own.
+        // This is necessary so that when these tasks exit, the backend is fully dropped,
+        // which drops event_tx, allowing event_rx to return None and this task to exit.
         drop(backend);
 
         // Forward events to TUI
@@ -132,7 +240,11 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> UnboundedSen
         }
     });
 
-    codex_op_tx
+    SpawnAgentResult {
+        op_tx: codex_op_tx,
+        #[cfg(feature = "unstable")]
+        acp_handle,
+    }
 }
 
 /// Spawn an HTTP agent (the original implementation).

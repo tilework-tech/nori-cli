@@ -14,6 +14,18 @@ use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol_config_types::ReasoningEffort;
 
+/// Information about an available ACP model.
+#[cfg(feature = "unstable")]
+#[derive(Debug, Clone)]
+pub(crate) struct AcpModelInfo {
+    /// The model ID (used for switching)
+    pub model_id: String,
+    /// Human-readable display name
+    pub display_name: String,
+    /// Optional description
+    pub description: Option<String>,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
@@ -187,6 +199,39 @@ pub(crate) enum AppEvent {
         message_text: String,
         /// Optional image paths to include with the message
         image_paths: Vec<PathBuf>,
+    },
+
+    /// Open the ACP model picker popup with available models from the agent.
+    #[cfg(feature = "unstable")]
+    OpenAcpModelPicker {
+        /// Available models from the ACP agent
+        models: Vec<AcpModelInfo>,
+        /// Currently selected model ID
+        current_model_id: Option<String>,
+    },
+
+    /// Set the active model in the ACP agent.
+    #[cfg(feature = "unstable")]
+    SetAcpModel {
+        /// The model ID to switch to
+        model_id: String,
+        /// The display name for UI feedback
+        display_name: String,
+    },
+
+    /// Result of setting the ACP model.
+    #[cfg(feature = "unstable")]
+    AcpModelSetResult {
+        /// Whether the model was set successfully
+        success: bool,
+        /// The model that was set (on success) or attempted (on failure).
+        /// Kept for logging/debugging even though not currently used in UI.
+        #[allow(dead_code)]
+        model_id: String,
+        /// The display name for UI feedback
+        display_name: String,
+        /// Error message on failure
+        error: Option<String>,
     },
 }
 

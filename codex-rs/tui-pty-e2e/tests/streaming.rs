@@ -73,7 +73,7 @@ fn test_escape_cancels_streaming() {
 
     std::thread::sleep(TIMEOUT);
     assert_snapshot!(
-        "cancelled_stream",
+        "escape_cancelled_stream",
         normalize_for_input_snapshot(session.screen_contents())
     )
 }
@@ -102,11 +102,9 @@ fn test_ctrl_c_cancels_streaming() {
         .wait_for_text("Working", TIMEOUT)
         .expect("Streaming did not start");
 
-    // Press ctrl-c to cancel doesn't work?
     session.send_key(Key::Ctrl('c')).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
-    std::thread::sleep(TIMEOUT);
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)
     session
@@ -118,7 +116,7 @@ fn test_ctrl_c_cancels_streaming() {
 
     std::thread::sleep(TIMEOUT);
     assert_snapshot!(
-        "cancelled_stream",
+        "ctrl_c_cancelled_stream",
         normalize_for_input_snapshot(session.screen_contents())
     )
 }

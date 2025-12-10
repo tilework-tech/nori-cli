@@ -5,7 +5,7 @@ Path: @/codex-rs/acp
 ## Overview
 
 - Implements Agent Context Protocol (ACP) for Codex to communicate with external AI agent subprocesses
-- Uses the official `agent-client-protocol` v0.7 library instead of any custom JSON-RPC implementation
+- Uses the official `agent-client-protocol` library with optional `unstable` feature for model switching
 - Exports `init_file_tracing()` for file-based structured logging at DEBUG level
 
 ### How it fits into the larger codebase
@@ -36,8 +36,42 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
 `list_available_agents()` (also in `acp/src/registry.rs`) returns `Vec<AcpAgentInfo>` so the TUI can render the `/agent` picker:
 - `model_name`, `display_name`, and `description` describe what to present in the selection view.
 - `provider_slug` mirrors the config slug so the UI can explain when different agents reuse the same backend.
-- `codex_tui::nori::agent_picker` consumes these entries to build the selection popup shown by `/agent`, while `/model` uses `acp_model_picker_params()` to surface a disabled message pointing back to `/agent`.
+- `codex_tui::nori::agent_picker` consumes these entries to build the selection popup shown by `/agent`.
 - Selecting an agent raises `AppEvent::SetPendingAgent`, stores a `PendingAgentSelection`, and defers the actual switch until `AppEvent::SubmitWithAgentSwitch` rebuilds the `ChatWidget` with the new model.
+
+### Model Switching (Unstable Feature)
+
+When the `unstable` feature is enabled, ACP supports runtime model switching within a session:
+
+- `AcpModelState` tracks the current model ID and available models from the agent
+- State is populated from `NewSessionResponse.models` when a session is created
+- `AcpConnection::set_model()` sends `session/set_model` to the ACP agent
+- `AcpBackend::set_model()` exposes model switching to the TUI layer
+
+The model state flow:
+
+```
+┌─────────────────────────┐     NewSessionResponse.models   ┌─────────────────────────┐
+│   AcpConnection         │◄────────────────────────────────│   ACP Agent             │
+│                         │                                 │                         │
+│   model_state: Arc<     │   set_session_model             │   - session_model_state │
+│     RwLock<AcpModel     │────────────────────────────────►│   - available_models    │
+│     State>>             │                                 │                         │
+└─────────────────────────┘                                 └─────────────────────────┘
+         ▲
+         │ get_model_state() / set_model()
+         │
+┌─────────────────────────┐
+│   TUI (AcpAgentHandle)  │
+│   - /model command      │
+│   - OpenAcpModelPicker  │
+│   - SetAcpModel event   │
+└─────────────────────────┘
+```
+
+Re-exported types under `unstable`:
+- `SessionModelState`, `ModelInfo`, `ModelId`: Model information from agent
+- `SetSessionModelRequest`, `SetSessionModelResponse`: Protocol messages for switching
 
 ### Embedded Provider Info
 
@@ -84,11 +118,14 @@ The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in
 │   - spawn()             │  ────────────────►  │  AcpConnectionInner     │
 │   - create_session()    │  CreateSession      │  - ClientDelegate       │
 │   - prompt()            │  Prompt             │  - run_command_loop()   │
-│   - cancel()            │  Cancel             │                         │
+│   - cancel()            │  Cancel             │  - model_state Arc      │
+│   - set_model() [unst]  │  SetModel [unstable]│                         │
 │                         │  ◄────────────────  │                         │
 │                         │  oneshot responses  │                         │
 └─────────────────────────┘                     └─────────────────────────┘
 ```
+
+Model state is stored in `Arc<RwLock<AcpModelState>>` shared between the main thread and worker thread for thread-safe access.
 
 - `AcpConnection::spawn()` creates dedicated thread with `LocalSet` for `!Send` futures
 - Commands sent via `mpsc::Sender<AcpCommand>` to worker thread
@@ -154,6 +191,8 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
   - `Op::Interrupt` → ACP `cancel()`
   - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
   - Unsupported ops → Error event sent to TUI
+- `AcpBackend::model_state()`: Returns current model state (available models and current selection)
+- `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching
 - `translate_session_update_to_events()`: Converts ACP `SessionUpdate` to `codex_protocol::EventMsg`:
   - `AgentMessageChunk` → `AgentMessageDelta`
   - `AgentThoughtChunk` → `AgentReasoningDelta`

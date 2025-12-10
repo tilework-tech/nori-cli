@@ -2,7 +2,7 @@
 
 use std::cell::Cell;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use agent_client_protocol::Client as _;
 use agent_client_protocol::{self as acp};
@@ -56,14 +56,7 @@ impl MockAgent {
     ) -> Result<(), acp::Error> {
         let (tx, rx) = oneshot::channel();
         self.session_update_tx
-            .send((
-                acp::SessionNotification {
-                    session_id,
-                    update,
-                    meta: None,
-                },
-                tx,
-            ))
+            .send((acp::SessionNotification::new(session_id, update), tx))
             .map_err(|_| acp::Error::internal_error())?;
         rx.await.map_err(|_| acp::Error::internal_error())?;
         Ok(())
@@ -76,14 +69,9 @@ impl MockAgent {
     ) -> Result<(), acp::Error> {
         self.send_update(
             session_id,
-            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk {
-                content: acp::ContentBlock::Text(acp::TextContent {
-                    annotations: None,
-                    text: text.to_string(),
-                    meta: None,
-                }),
-                meta: None,
-            }),
+            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(acp::ContentBlock::Text(
+                acp::TextContent::new(text),
+            ))),
         )
         .await
     }
@@ -155,17 +143,8 @@ impl acp::Agent for MockAgent {
         }
 
         eprintln!("Mock agent: initialize");
-        Ok(acp::InitializeResponse {
-            protocol_version: acp::V1,
-            agent_capabilities: acp::AgentCapabilities::default(),
-            auth_methods: Vec::new(),
-            agent_info: Some(acp::Implementation {
-                name: "mock-agent".to_string(),
-                title: Some("Mock Agent".to_string()),
-                version: "0.1.0".to_string(),
-            }),
-            meta: None,
-        })
+        Ok(acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
+            .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))
     }
 
     async fn authenticate(
@@ -182,21 +161,37 @@ impl acp::Agent for MockAgent {
         let session_id = self.next_session_id.get();
         self.next_session_id.set(session_id + 1);
         eprintln!("Mock agent: new_session id={}", session_id);
-        Ok(acp::NewSessionResponse {
-            session_id: acp::SessionId(session_id.to_string().into()),
-            modes: None,
-            meta: None,
-        })
+
+        // Include model state with available models for testing model switching
+        let session_model_state = acp::SessionModelState::new(
+            acp::ModelId::new("mock-model-default"),
+            vec![
+                acp::ModelInfo::new(
+                    acp::ModelId::new("mock-model-default"),
+                    "Mock Default Model",
+                )
+                .description("The default mock model"),
+                acp::ModelInfo::new(acp::ModelId::new("mock-model-fast"), "Mock Fast Model")
+                    .description("A faster mock model variant"),
+                acp::ModelInfo::new(
+                    acp::ModelId::new("mock-model-powerful"),
+                    "Mock Powerful Model",
+                )
+                .description("A more powerful mock model variant"),
+            ],
+        );
+
+        Ok(
+            acp::NewSessionResponse::new(acp::SessionId::new(session_id.to_string()))
+                .models(session_model_state),
+        )
     }
 
     async fn load_session(
         &self,
         _arguments: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
-        Ok(acp::LoadSessionResponse {
-            modes: None,
-            meta: None,
-        })
+        Ok(acp::LoadSessionResponse::new())
     }
 
     async fn prompt(
@@ -240,43 +235,33 @@ impl acp::Agent for MockAgent {
             eprintln!("Mock agent: requesting permission from client");
 
             // Create a tool call update describing the operation
-            let tool_call_id = acp::ToolCallId("permission-test-001".to_string().into());
-            let tool_call = acp::ToolCallUpdate {
-                id: tool_call_id,
-                fields: acp::ToolCallUpdateFields {
-                    title: Some("Execute shell command".to_string()),
-                    kind: Some(acp::ToolKind::Execute),
-                    status: Some(acp::ToolCallStatus::Pending),
-                    content: Some(vec![acp::ToolCallContent::Content {
-                        content: acp::ContentBlock::Text(acp::TextContent {
-                            text: "echo 'Hello from permission test'".to_string(),
-                            annotations: None,
-                            meta: None,
-                        }),
-                    }]),
-                    locations: None,
-                    raw_input: Some(
-                        json!({"command": "echo", "args": ["Hello from permission test"]}),
-                    ),
-                    raw_output: None,
-                },
-                meta: None,
-            };
+            let tool_call_id = acp::ToolCallId::new("permission-test-001");
+            let tool_call = acp::ToolCallUpdate::new(
+                tool_call_id,
+                acp::ToolCallUpdateFields::new()
+                    .title("Execute shell command")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                        acp::ContentBlock::Text(acp::TextContent::new(
+                            "echo 'Hello from permission test'",
+                        )),
+                    ))])
+                    .raw_input(json!({"command": "echo", "args": ["Hello from permission test"]})),
+            );
 
             // Create permission options: allow once and reject once
             let options = vec![
-                acp::PermissionOption {
-                    id: acp::PermissionOptionId("allow".into()),
-                    name: "Allow".to_string(),
-                    kind: acp::PermissionOptionKind::AllowOnce,
-                    meta: None,
-                },
-                acp::PermissionOption {
-                    id: acp::PermissionOptionId("reject".into()),
-                    name: "Reject".to_string(),
-                    kind: acp::PermissionOptionKind::RejectOnce,
-                    meta: None,
-                },
+                acp::PermissionOption::new(
+                    acp::PermissionOptionId::new("allow"),
+                    "Allow",
+                    acp::PermissionOptionKind::AllowOnce,
+                ),
+                acp::PermissionOption::new(
+                    acp::PermissionOptionId::new("reject"),
+                    "Reject",
+                    acp::PermissionOptionKind::RejectOnce,
+                ),
             ];
 
             // Request permission from client
@@ -290,8 +275,9 @@ impl acp::Agent for MockAgent {
                         response.outcome
                     );
                     match response.outcome {
-                        acp::RequestPermissionOutcome::Selected { option_id, .. } => {
-                            let msg = format!("Permission granted with option: {}", option_id);
+                        acp::RequestPermissionOutcome::Selected(selected) => {
+                            let msg =
+                                format!("Permission granted with option: {}", selected.option_id);
                             self.send_text_chunk(session_id.clone(), &msg).await?;
                         }
                         _ => {
@@ -318,22 +304,15 @@ impl acp::Agent for MockAgent {
         if std::env::var("MOCK_AGENT_INTERLEAVED_TOOL_CALL").is_ok() {
             eprintln!("Mock agent: sending interleaved tool call sequence");
 
-            let tool_call_id = acp::ToolCallId("interleaved-tool-001".to_string().into());
+            let tool_call_id = acp::ToolCallId::new("interleaved-tool-001");
 
             // Step 1: Send tool call (begin)
             self.send_tool_call(
                 session_id.clone(),
-                acp::ToolCall {
-                    id: tool_call_id.clone(),
-                    title: "Executing interleaved command".to_string(),
-                    kind: acp::ToolKind::Execute,
-                    status: acp::ToolCallStatus::Pending,
-                    content: vec![],
-                    locations: vec![],
-                    raw_input: Some(json!({"command": "test"})),
-                    raw_output: None,
-                    meta: None,
-                },
+                acp::ToolCall::new(tool_call_id.clone(), "Executing interleaved command")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"command": "test"})),
             )
             .await?;
 
@@ -354,25 +333,15 @@ impl acp::Agent for MockAgent {
             // will be created, resulting in duplicate entries.
             self.send_tool_call_update(
                 session_id.clone(),
-                acp::ToolCallUpdate {
-                    id: tool_call_id.clone(),
-                    fields: acp::ToolCallUpdateFields {
-                        title: None,
-                        kind: None,
-                        status: Some(acp::ToolCallStatus::Completed),
-                        content: Some(vec![acp::ToolCallContent::Content {
-                            content: acp::ContentBlock::Text(acp::TextContent {
-                                text: "Command completed".to_string(),
-                                annotations: None,
-                                meta: None,
-                            }),
-                        }]),
-                        locations: None,
-                        raw_input: None,
-                        raw_output: Some(json!({"exit_code": 0})),
-                    },
-                    meta: None,
-                },
+                acp::ToolCallUpdate::new(
+                    tool_call_id.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new("Command completed")),
+                        ))])
+                        .raw_output(json!({"exit_code": 0})),
+                ),
             )
             .await?;
 
@@ -386,20 +355,13 @@ impl acp::Agent for MockAgent {
             eprintln!("Mock agent: sending tool call sequence");
 
             // Send initial tool call with pending status
-            let tool_call_id = acp::ToolCallId("test-tool-call-001".to_string().into());
+            let tool_call_id = acp::ToolCallId::new("test-tool-call-001");
             self.send_tool_call(
                 session_id.clone(),
-                acp::ToolCall {
-                    id: tool_call_id.clone(),
-                    title: "Reading configuration file".to_string(),
-                    kind: acp::ToolKind::Read,
-                    status: acp::ToolCallStatus::Pending,
-                    content: vec![],
-                    locations: vec![],
-                    raw_input: Some(json!({"path": "/etc/config.toml"})),
-                    raw_output: None,
-                    meta: None,
-                },
+                acp::ToolCall::new(tool_call_id.clone(), "Reading configuration file")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "/etc/config.toml"})),
             )
             .await?;
 
@@ -409,19 +371,10 @@ impl acp::Agent for MockAgent {
             // Send update to in_progress
             self.send_tool_call_update(
                 session_id.clone(),
-                acp::ToolCallUpdate {
-                    id: tool_call_id.clone(),
-                    fields: acp::ToolCallUpdateFields {
-                        title: None,
-                        kind: None,
-                        status: Some(acp::ToolCallStatus::InProgress),
-                        content: None,
-                        locations: None,
-                        raw_input: None,
-                        raw_output: None,
-                    },
-                    meta: None,
-                },
+                acp::ToolCallUpdate::new(
+                    tool_call_id.clone(),
+                    acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::InProgress),
+                ),
             )
             .await?;
 
@@ -431,25 +384,17 @@ impl acp::Agent for MockAgent {
             // Send update to completed with content
             self.send_tool_call_update(
                 session_id.clone(),
-                acp::ToolCallUpdate {
-                    id: tool_call_id.clone(),
-                    fields: acp::ToolCallUpdateFields {
-                        title: None,
-                        kind: None,
-                        status: Some(acp::ToolCallStatus::Completed),
-                        content: Some(vec![acp::ToolCallContent::Content {
-                            content: acp::ContentBlock::Text(acp::TextContent {
-                                text: "Configuration loaded successfully".to_string(),
-                                annotations: None,
-                                meta: None,
-                            }),
-                        }]),
-                        locations: None,
-                        raw_input: None,
-                        raw_output: Some(json!({"success": true, "lines": 42})),
-                    },
-                    meta: None,
-                },
+                acp::ToolCallUpdate::new(
+                    tool_call_id.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "Configuration loaded successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"success": true, "lines": 42})),
+                ),
             )
             .await?;
 
@@ -488,20 +433,14 @@ impl acp::Agent for MockAgent {
                 sleep(Duration::from_millis(10)).await;
             }
 
-            return Ok(acp::PromptResponse {
-                stop_reason: if self.cancel_requested.get() {
-                    acp::StopReason::Cancelled
-                } else {
-                    acp::StopReason::EndTurn
-                },
-                meta: None,
-            });
+            return Ok(acp::PromptResponse::new(if self.cancel_requested.get() {
+                acp::StopReason::Cancelled
+            } else {
+                acp::StopReason::EndTurn
+            }));
         }
 
-        Ok(acp::PromptResponse {
-            stop_reason: acp::StopReason::EndTurn,
-            meta: None,
-        })
+        Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
     }
 
     async fn cancel(&self, _args: acp::CancelNotification) -> Result<(), acp::Error> {
@@ -517,8 +456,20 @@ impl acp::Agent for MockAgent {
         Ok(acp::SetSessionModeResponse::default())
     }
 
+    async fn set_session_model(
+        &self,
+        args: acp::SetSessionModelRequest,
+    ) -> Result<acp::SetSessionModelResponse, acp::Error> {
+        eprintln!("Mock agent: set_session_model to {:?}", args.model_id);
+        // Accept any model switch request - in a real agent, this would
+        // validate the model_id against available models.
+        Ok(acp::SetSessionModelResponse::default())
+    }
+
     async fn ext_method(&self, _args: acp::ExtRequest) -> Result<acp::ExtResponse, acp::Error> {
-        Ok(serde_json::value::to_raw_value(&json!({}))?.into())
+        Ok(acp::ExtResponse::new(Arc::from(
+            serde_json::value::to_raw_value(&json!({}))?,
+        )))
     }
 
     async fn ext_notification(&self, _args: acp::ExtNotification) -> Result<(), acp::Error> {
@@ -545,10 +496,10 @@ async fn main() -> acp::Result<()> {
                     tokio::task::spawn_local(fut);
                 });
 
-            let conn = Rc::new(conn);
+            let conn = std::rc::Rc::new(conn);
 
             {
-                let conn = Rc::clone(&conn);
+                let conn = std::rc::Rc::clone(&conn);
                 tokio::task::spawn_local(async move {
                     while let Some((session_notification, tx)) = update_rx.recv().await {
                         if let Err(e) = conn.session_notification(session_notification).await {
@@ -561,7 +512,7 @@ async fn main() -> acp::Result<()> {
             }
 
             {
-                let conn = Rc::clone(&conn);
+                let conn = std::rc::Rc::clone(&conn);
                 tokio::task::spawn_local(async move {
                     while let Some(request) = client_request_rx.recv().await {
                         match request {
@@ -571,13 +522,7 @@ async fn main() -> acp::Result<()> {
                                 responder,
                             } => {
                                 let result = conn
-                                    .read_text_file(acp::ReadTextFileRequest {
-                                        session_id,
-                                        path,
-                                        line: None,
-                                        limit: None,
-                                        meta: None,
-                                    })
+                                    .read_text_file(acp::ReadTextFileRequest::new(session_id, path))
                                     .await
                                     .map(|response| response.content);
                                 let _ = responder.send(result);
@@ -589,12 +534,9 @@ async fn main() -> acp::Result<()> {
                                 responder,
                             } => {
                                 let result = conn
-                                    .request_permission(acp::RequestPermissionRequest {
-                                        session_id,
-                                        tool_call,
-                                        options,
-                                        meta: None,
-                                    })
+                                    .request_permission(acp::RequestPermissionRequest::new(
+                                        session_id, tool_call, options,
+                                    ))
                                     .await;
                                 let _ = responder.send(result);
                             }

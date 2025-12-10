@@ -12,6 +12,7 @@ pub mod translator;
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
 pub use connection::AcpConnection;
+pub use connection::AcpModelState;
 pub use connection::ApprovalRequest;
 pub use registry::AcpAgentConfig;
 pub use registry::AcpAgentInfo;
@@ -34,3 +35,15 @@ pub use agent_client_protocol::PromptRequest;
 pub use agent_client_protocol::PromptResponse;
 pub use agent_client_protocol::SessionNotification;
 pub use agent_client_protocol::SessionUpdate;
+
+// Re-export model-related types (unstable feature)
+#[cfg(feature = "unstable")]
+pub use agent_client_protocol::ModelId;
+#[cfg(feature = "unstable")]
+pub use agent_client_protocol::ModelInfo;
+#[cfg(feature = "unstable")]
+pub use agent_client_protocol::SessionModelState;
+#[cfg(feature = "unstable")]
+pub use agent_client_protocol::SetSessionModelRequest;
+#[cfg(feature = "unstable")]
+pub use agent_client_protocol::SetSessionModelResponse;
