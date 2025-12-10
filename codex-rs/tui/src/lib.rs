@@ -94,6 +94,11 @@ mod updates;
 pub mod update_action {
     pub use super::nori::update_action::*;
 }
+// Re-export Nori updates module (release builds only)
+#[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
+mod updates {
+    pub use super::nori::updates::*;
+}
 
 // Re-export the appropriate update prompt functions based on feature (release builds only)
 #[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
