@@ -105,10 +105,14 @@ mod updates {
 
 // Re-export the appropriate update prompt functions based on feature (release builds only)
 #[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
-pub(crate) use update_prompt::{UpdatePromptOutcome, run_update_prompt_if_needed};
+pub(crate) use update_prompt::UpdatePromptOutcome;
+#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
+pub(crate) use update_prompt::run_update_prompt_if_needed;
 
 #[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
-pub(crate) use nori::update_prompt::{UpdatePromptOutcome, run_update_prompt_if_needed};
+pub(crate) use nori::update_prompt::UpdatePromptOutcome;
+#[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
+pub(crate) use nori::update_prompt::run_update_prompt_if_needed;
 
 mod version;
 
