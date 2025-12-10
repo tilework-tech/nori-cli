@@ -43,43 +43,54 @@ impl WidgetRef for &TrustDirectoryWidget {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
         let mut column = ColumnRenderable::new();
 
+        #[cfg(feature = "openai-branding")]
+        let product_name = "Codex";
+        #[cfg(not(feature = "openai-branding"))]
+        let product_name = "Nori";
+
         column.push(Line::from(vec![
             "> ".into(),
-            "You are running Codex in ".bold(),
+            format!("You are running {product_name} in ").bold(),
             self.cwd.to_string_lossy().to_string().into(),
         ]));
         column.push("");
 
         let guidance = if self.is_git_repo {
-            "Since this folder is version controlled, you may wish to allow Codex to work in this folder without asking for approval."
+            format!(
+                "Since this folder is version controlled, you may wish to allow {product_name} to work in this folder without asking for approval."
+            )
         } else {
-            "Since this folder is not version controlled, we recommend requiring approval of all edits and commands."
+            "Since this folder is not version controlled, we recommend requiring approval of all edits and commands.".to_string()
         };
 
         column.push(
-            Paragraph::new(guidance.to_string())
+            Paragraph::new(guidance)
                 .wrap(Wrap { trim: true })
                 .inset(Insets::tlbr(0, 2, 0, 0)),
         );
         column.push("");
 
-        let mut options: Vec<(&str, TrustDirectorySelection)> = Vec::new();
+        let mut options: Vec<(String, TrustDirectorySelection)> = Vec::new();
         if self.is_git_repo {
             options.push((
-                "Yes, allow Codex to work in this folder without asking for approval",
+                format!(
+                    "Yes, allow {product_name} to work in this folder without asking for approval"
+                ),
                 TrustDirectorySelection::Trust,
             ));
             options.push((
-                "No, ask me to approve edits and commands",
+                "No, ask me to approve edits and commands".to_string(),
                 TrustDirectorySelection::DontTrust,
             ));
         } else {
             options.push((
-                "Allow Codex to work in this folder without asking for approval",
+                format!(
+                    "Allow {product_name} to work in this folder without asking for approval"
+                ),
                 TrustDirectorySelection::Trust,
             ));
             options.push((
-                "Require approval of edits and commands",
+                "Require approval of edits and commands".to_string(),
                 TrustDirectorySelection::DontTrust,
             ));
         }
@@ -87,7 +98,7 @@ impl WidgetRef for &TrustDirectoryWidget {
         for (idx, (text, selection)) in options.iter().enumerate() {
             column.push(selection_option_row(
                 idx,
-                text.to_string(),
+                text.clone(),
                 self.highlighted == *selection,
             ));
         }
@@ -216,6 +227,8 @@ mod tests {
         assert_eq!(widget.selection, Some(TrustDirectorySelection::DontTrust));
     }
 
+    // Snapshot depends on branding text - only run when openai-branding is enabled
+    #[cfg(feature = "openai-branding")]
     #[test]
     fn renders_snapshot_for_git_repo() {
         let codex_home = TempDir::new().expect("temp home");

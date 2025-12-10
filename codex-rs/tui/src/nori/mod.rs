@@ -5,3 +5,11 @@
 
 pub(crate) mod agent_picker;
 pub(crate) mod session_header;
+
+// Nori update system (only in release builds)
+#[cfg(not(debug_assertions))]
+pub(crate) mod update_action;
+#[cfg(not(debug_assertions))]
+pub(crate) mod update_prompt;
+#[cfg(not(debug_assertions))]
+pub(crate) mod updates;

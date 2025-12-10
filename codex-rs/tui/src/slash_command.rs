@@ -34,6 +34,7 @@ pub enum SlashCommand {
 
 impl SlashCommand {
     /// User-visible description shown in the popup.
+    #[cfg(feature = "openai-branding")]
     pub fn description(self) -> &'static str {
         match self {
             SlashCommand::Agent => "switch between available ACP agents",
@@ -51,6 +52,30 @@ impl SlashCommand {
             SlashCommand::Approvals => "choose what Codex can do without approval",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Logout => "log out of Codex",
+            SlashCommand::Rollout => "print the rollout file path",
+            SlashCommand::TestApproval => "test approval request",
+        }
+    }
+
+    /// User-visible description shown in the popup (Nori branding).
+    #[cfg(not(feature = "openai-branding"))]
+    pub fn description(self) -> &'static str {
+        match self {
+            SlashCommand::Agent => "switch between available ACP agents",
+            SlashCommand::Feedback => "send logs to maintainers",
+            SlashCommand::New => "start a new chat during a conversation",
+            SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
+            SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
+            SlashCommand::Review => "review my current changes and find issues",
+            SlashCommand::Undo => "ask Nori to undo a turn",
+            SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
+            SlashCommand::Diff => "show git diff (including untracked files)",
+            SlashCommand::Mention => "mention a file",
+            SlashCommand::Status => "show current session configuration and token usage",
+            SlashCommand::Model => "choose what model and reasoning effort to use",
+            SlashCommand::Approvals => "choose what Nori can do without approval",
+            SlashCommand::Mcp => "list configured MCP tools",
+            SlashCommand::Logout => "log out of Nori",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
         }
@@ -89,6 +114,9 @@ impl SlashCommand {
     fn is_visible(self) -> bool {
         match self {
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
+            // Logout requires http-fallback feature (login functionality)
+            #[cfg(not(feature = "http-fallback"))]
+            SlashCommand::Logout => false,
             _ => true,
         }
     }

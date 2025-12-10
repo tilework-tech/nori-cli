@@ -16,9 +16,10 @@ path = "src/lib.rs"
 workspace = true
 
 [features]
-default = ["full"]
+# Default: minimal Nori build (ACP-only, Nori branding)
+default = []
 
-# Full build with all features (original behavior)
+# Full OpenAI Codex build with all features (original behavior)
 full = [
     "app-server",
     "mcp-server",
@@ -26,10 +27,16 @@ full = [
     "cloud-tasks",
     "http-providers",
     "responses-proxy",
+    "openai-branding",
+    "sentry",
 ]
 
-# Minimal ACP-only build: CLI + TUI + ACP
-minimal = []
+# OpenAI/Codex branding - propagates to TUI
+# When disabled, uses Nori branding instead
+openai-branding = ["codex-tui/openai-branding"]
+
+# Sentry error reporting / feedback collection - propagates to TUI
+sentry = ["codex-tui/sentry"]
 
 # Optional CLI modes
 app-server = ["dep:codex-app-server"]
@@ -38,7 +45,12 @@ exec-mode = ["dep:codex-exec"]
 cloud-tasks = ["dep:codex-cloud-tasks"]
 
 # Legacy HTTP provider support (OpenAI, ChatGPT login, etc.)
-http-providers = ["dep:codex-chatgpt", "dep:codex-login", "dep:codex-rmcp-client"]
+http-providers = [
+    "dep:codex-chatgpt",
+    "dep:codex-login",
+    "dep:codex-rmcp-client",
+    "codex-tui/http-fallback",
+]
 responses-proxy = ["dep:codex-responses-api-proxy"]
 
 [dependencies]

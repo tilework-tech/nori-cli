@@ -74,11 +74,20 @@ impl WidgetRef for &WelcomeWidget {
             lines.extend(frame.lines().map(Into::into));
             lines.push("".into());
         }
+        #[cfg(feature = "openai-branding")]
         lines.push(Line::from(vec![
             "  ".into(),
             "Welcome to ".into(),
             "Codex".bold(),
             ", OpenAI's command-line coding agent".into(),
+        ]));
+
+        #[cfg(not(feature = "openai-branding"))]
+        lines.push(Line::from(vec![
+            "  ".into(),
+            "Welcome to ".into(),
+            "Nori".bold(),
+            ", your AI-powered coding assistant".into(),
         ]));
 
         Paragraph::new(lines)
@@ -148,6 +157,56 @@ mod tests {
         assert_ne!(
             before, after,
             "expected ctrl+. to switch welcome animation variant"
+        );
+    }
+
+    /// Helper to extract text content from a buffer.
+    fn buffer_to_string(buf: &Buffer) -> String {
+        let mut result = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                result.push_str(buf[(x, y)].symbol());
+            }
+            result.push('\n');
+        }
+        result
+    }
+
+    #[test]
+    #[cfg(not(feature = "openai-branding"))]
+    fn welcome_shows_nori_branding_when_feature_disabled() {
+        let widget = WelcomeWidget::new(false, FrameRequester::test_dummy(), false);
+        let area = Rect::new(0, 0, 80, 5);
+        let mut buf = Buffer::empty(area);
+        (&widget).render(area, &mut buf);
+
+        let content = buffer_to_string(&buf);
+        assert!(
+            content.contains("Nori"),
+            "expected welcome to contain 'Nori', got: {content}"
+        );
+        assert!(
+            !content.contains("OpenAI"),
+            "expected welcome to NOT contain 'OpenAI' when feature disabled, got: {content}"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "openai-branding")]
+    fn welcome_shows_openai_branding_when_feature_enabled() {
+        let widget = WelcomeWidget::new(false, FrameRequester::test_dummy(), false);
+        let area = Rect::new(0, 0, 80, 5);
+        let mut buf = Buffer::empty(area);
+        (&widget).render(area, &mut buf);
+
+        let content = buffer_to_string(&buf);
+        assert!(
+            content.contains("Codex"),
+            "expected welcome to contain 'Codex', got: {content}"
+        );
+        assert!(
+            content.contains("OpenAI"),
+            "expected welcome to contain 'OpenAI' when feature enabled, got: {content}"
         );
     }
 }

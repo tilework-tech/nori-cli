@@ -47,6 +47,7 @@ pub mod custom_terminal;
 mod diff_render;
 mod exec_cell;
 mod exec_command;
+mod feedback_compat;
 mod file_search;
 mod frames;
 mod get_git_diff;
@@ -57,6 +58,7 @@ pub mod live_wrap;
 mod markdown;
 mod markdown_render;
 mod markdown_stream;
+#[cfg(feature = "openai-branding")]
 mod model_migration;
 mod nori;
 pub mod onboarding;
@@ -280,7 +282,7 @@ pub async fn run_main(
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_filter(env_filter());
 
-    let feedback = codex_feedback::CodexFeedback::new();
+    let feedback = crate::feedback_compat::CodexFeedback::new();
     let targets = Targets::new().with_default(tracing::Level::TRACE);
 
     let feedback_layer = tracing_subscriber::fmt::layer()
@@ -350,7 +352,7 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
-    feedback: codex_feedback::CodexFeedback,
+    feedback: crate::feedback_compat::CodexFeedback,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -370,19 +372,41 @@ async fn run_ratatui_app(
 
     #[cfg(not(debug_assertions))]
     {
-        use crate::update_prompt::UpdatePromptOutcome;
-
         let skip_update_prompt = cli.prompt.as_ref().is_some_and(|prompt| !prompt.is_empty());
         if !skip_update_prompt {
-            match update_prompt::run_update_prompt_if_needed(&mut tui, &initial_config).await? {
-                UpdatePromptOutcome::Continue => {}
-                UpdatePromptOutcome::RunUpdate(action) => {
-                    crate::tui::restore()?;
-                    return Ok(AppExitInfo {
-                        token_usage: codex_core::protocol::TokenUsage::default(),
-                        conversation_id: None,
-                        update_action: Some(action),
-                    });
+            // Use Nori update prompt when openai-branding is disabled
+            #[cfg(not(feature = "openai-branding"))]
+            {
+                use crate::nori::update_prompt::UpdatePromptOutcome;
+                match nori::update_prompt::run_update_prompt_if_needed(&mut tui, &initial_config)
+                    .await?
+                {
+                    UpdatePromptOutcome::Continue => {}
+                    UpdatePromptOutcome::RunUpdate(action) => {
+                        crate::tui::restore()?;
+                        return Ok(AppExitInfo {
+                            token_usage: codex_core::protocol::TokenUsage::default(),
+                            conversation_id: None,
+                            update_action: Some(crate::update_action::UpdateAction::from(action)),
+                        });
+                    }
+                }
+            }
+
+            // Use OpenAI/Codex update prompt when openai-branding is enabled
+            #[cfg(feature = "openai-branding")]
+            {
+                use crate::update_prompt::UpdatePromptOutcome;
+                match update_prompt::run_update_prompt_if_needed(&mut tui, &initial_config).await? {
+                    UpdatePromptOutcome::Continue => {}
+                    UpdatePromptOutcome::RunUpdate(action) => {
+                        crate::tui::restore()?;
+                        return Ok(AppExitInfo {
+                            token_usage: codex_core::protocol::TokenUsage::default(),
+                            conversation_id: None,
+                            update_action: Some(action),
+                        });
+                    }
                 }
             }
         }

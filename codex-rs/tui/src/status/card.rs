@@ -32,7 +32,9 @@ use super::rate_limits::StatusRateLimitValue;
 use super::rate_limits::compose_rate_limit_data;
 use super::rate_limits::format_status_limit_summary;
 use super::rate_limits::render_status_limit_progress_bar;
+#[cfg(feature = "openai-branding")]
 use crate::wrapping::RtOptions;
+#[cfg(feature = "openai-branding")]
 use crate::wrapping::word_wrap_lines;
 use codex_core::AuthManager;
 
@@ -285,9 +287,15 @@ impl StatusHistoryCell {
 impl HistoryCell for StatusHistoryCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
+
+        #[cfg(feature = "openai-branding")]
+        let product_name = "OpenAI Codex";
+        #[cfg(not(feature = "openai-branding"))]
+        let product_name = "Nori CLI";
+
         lines.push(Line::from(vec![
             Span::from(format!("{}>_ ", FieldFormatter::INDENT)).dim(),
-            Span::from("OpenAI Codex").bold(),
+            Span::from(product_name).bold(),
             Span::from(" ").dim(),
             Span::from(format!("(v{CODEX_CLI_VERSION})")).dim(),
         ]));
@@ -298,6 +306,7 @@ impl HistoryCell for StatusHistoryCell {
             return Vec::new();
         }
 
+        #[cfg(feature = "openai-branding")]
         let account_value = self.account.as_ref().map(|account| match account {
             StatusAccountDisplay::ChatGpt { email, plan } => match (email, plan) {
                 (Some(email), Some(plan)) => format!("{email} ({plan})"),
@@ -308,6 +317,17 @@ impl HistoryCell for StatusHistoryCell {
             StatusAccountDisplay::ApiKey => {
                 "API key configured (run codex login to use ChatGPT)".to_string()
             }
+        });
+
+        #[cfg(not(feature = "openai-branding"))]
+        let account_value = self.account.as_ref().map(|account| match account {
+            StatusAccountDisplay::ChatGpt { email, plan } => match (email, plan) {
+                (Some(email), Some(plan)) => format!("{email} ({plan})"),
+                (Some(email), None) => email.clone(),
+                (None, Some(plan)) => plan.clone(),
+                (None, None) => "ACP".to_string(),
+            },
+            StatusAccountDisplay::ApiKey => "API key configured".to_string(),
         });
 
         let mut labels: Vec<String> =
@@ -332,22 +352,26 @@ impl HistoryCell for StatusHistoryCell {
         let formatter = FieldFormatter::from_labels(labels.iter().map(String::as_str));
         let value_width = formatter.value_width(available_inner_width);
 
-        let note_first_line = Line::from(vec![
-            Span::from("Visit ").cyan(),
-            "https://chatgpt.com/codex/settings/usage"
-                .cyan()
-                .underlined(),
-            Span::from(" for up-to-date").cyan(),
-        ]);
-        let note_second_line = Line::from(vec![
-            Span::from("information on rate limits and credits").cyan(),
-        ]);
-        let note_lines = word_wrap_lines(
-            [note_first_line, note_second_line],
-            RtOptions::new(available_inner_width),
-        );
-        lines.extend(note_lines);
-        lines.push(Line::from(Vec::<Span<'static>>::new()));
+        // Only show ChatGPT settings URL when openai-branding is enabled
+        #[cfg(feature = "openai-branding")]
+        {
+            let note_first_line = Line::from(vec![
+                Span::from("Visit ").cyan(),
+                "https://chatgpt.com/codex/settings/usage"
+                    .cyan()
+                    .underlined(),
+                Span::from(" for up-to-date").cyan(),
+            ]);
+            let note_second_line = Line::from(vec![
+                Span::from("information on rate limits and credits").cyan(),
+            ]);
+            let note_lines = word_wrap_lines(
+                [note_first_line, note_second_line],
+                RtOptions::new(available_inner_width),
+            );
+            lines.extend(note_lines);
+            lines.push(Line::from(Vec::<Span<'static>>::new()));
+        }
 
         let mut model_spans = vec![Span::from(self.model_name.clone())];
         if !self.model_details.is_empty() {

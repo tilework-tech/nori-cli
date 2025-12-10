@@ -95,6 +95,57 @@ The `onboarding/` module handles first-run experience:
 
 ### Things to Know
 
+**Feature Flags:**
+
+The TUI crate uses Cargo feature flags to control branding and optional functionality:
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `openai-branding` | Off | Enables OpenAI/Codex branding throughout the UI |
+| `http-fallback` | On | Enables HTTP API fallback when ACP model not found |
+| `sentry` | On | Enables Sentry error reporting via `codex-feedback` |
+
+**Branding System (`openai-branding` feature):**
+
+When `openai-branding` is **disabled** (Nori builds), the TUI uses:
+- Welcome text: "Welcome to Nori, your AI-powered coding assistant"
+- Product name: "Nori" / "Nori CLI" in status cards and trust screens
+- GitHub issues: `tilework-tech/nori-cli` repository
+- Update checking: Nori's GitHub releases (`nori/updates.rs`)
+- Update commands: `npm install -g nori-ai-cli`, `cargo install nori-cli`
+- Animation frames: Excludes Codex/OpenAI branded animation variants
+- Slash command descriptions: Reference "Nori" instead of "Codex"
+
+When `openai-branding` is **enabled** (OpenAI builds), the TUI uses:
+- Welcome text: "Welcome to Codex, OpenAI's command-line coding agent"
+- Product name: "OpenAI Codex" in status cards
+- GitHub issues: `openai/codex` repository
+- Update checking: OpenAI's npm registry (`updates.rs`)
+- Update commands: `npm install -g @openai/codex`, `brew upgrade codex`
+- Animation frames: Includes Codex/OpenAI branded variants
+- Model migration prompts: GPT model upgrade prompts (e.g., GPT-4o -> GPT-5.1)
+
+**Feature-Gated Code Locations:**
+
+- `onboarding/welcome.rs`: Welcome screen text
+- `onboarding/trust_directory.rs`: Trust prompt product name
+- `frames.rs`: Animation variant selection
+- `update_action.rs`: Update command arguments
+- `slash_command.rs`: Command descriptions
+- `status/card.rs`: Product name in status display
+- `bottom_pane/feedback_view.rs`: GitHub issue URLs
+- `app.rs`: Model migration prompt logic (OpenAI-only)
+- `lib.rs`: Update prompt routing
+
+**Nori Update System (`nori/` subdirectory):**
+
+When `openai-branding` is disabled, update checking uses the Nori-specific implementation:
+- `nori/updates.rs`: Checks `tilework-tech/nori-cli` GitHub releases
+- `nori/update_action.rs`: Defines Nori-specific update commands
+- `nori/update_prompt.rs`: Renders the update prompt UI
+- Version info cached in `~/.codex/nori-version.json`
+- Only active in release builds (`#[cfg(not(debug_assertions))]`)
+
 **Rendering Patterns:**
 
 The crate uses Ratatui's `Stylize` trait for concise styling:

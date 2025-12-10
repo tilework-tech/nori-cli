@@ -13,13 +13,21 @@ name = "codex_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["http-fallback", "sentry"]
+# Default: minimal Nori build (ACP-only, Nori branding, no telemetry)
+default = []
+
+# Full OpenAI Codex build with all features
+full = ["http-fallback", "sentry", "openai-branding"]
 
 # Enable HTTP API fallback when ACP model not found
 http-fallback = ["dep:codex-backend-client", "dep:codex-login"]
 
-# Sentry error reporting
+# Sentry error reporting / feedback collection
 sentry = ["dep:codex-feedback"]
+
+# OpenAI/Codex branding (welcome text, URLs, animation frames, model migration prompts)
+# When disabled, uses Nori branding instead
+openai-branding = []
 
 # Enable vt100-based tests (emulator) when running with `--features vt100-tests`.
 vt100-tests = []

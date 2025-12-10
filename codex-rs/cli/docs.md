@@ -71,6 +71,50 @@ These translate to `-c features.<name>=true/false` config overrides.
 
 ### Things to Know
 
+**Cargo Feature Flags:**
+
+The CLI crate uses feature flags to control which components are included in the build:
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `full` | Yes (default) | Includes all features below |
+| `minimal` | No | ACP-only build with CLI + TUI + Sentry, no HTTP fallback or OpenAI branding |
+| `openai-branding` | In `full` | Propagates OpenAI/Codex branding to TUI |
+| `app-server` | In `full` | Includes `codex app-server` subcommand |
+| `mcp-server` | In `full` | Includes `codex mcp-server` subcommand |
+| `exec-mode` | In `full` | Includes `codex exec` subcommand |
+| `cloud-tasks` | In `full` | Includes `codex cloud` subcommand |
+| `http-providers` | In `full` | Legacy HTTP provider support (enables `codex-tui/http-fallback`) |
+| `responses-proxy` | In `full` | Responses API proxy support |
+
+**Build Configurations:**
+
+```bash
+# Full OpenAI/Codex build (default)
+cargo build --release
+
+# Minimal Nori ACP-only build
+cargo build --release --no-default-features --features minimal
+```
+
+The `minimal` feature is designed for Nori CLI builds that use ACP agents exclusively:
+- Enables Sentry error reporting (`codex-tui/sentry`)
+- Does NOT enable HTTP fallback (no OpenAI API calls)
+- Does NOT enable OpenAI branding (uses Nori branding)
+- Excludes optional subcommands (app-server, mcp-server, exec, cloud, responses-proxy)
+
+**Feature Propagation:**
+
+The `openai-branding` feature propagates to `codex-tui`:
+```toml
+openai-branding = ["codex-tui/openai-branding"]
+```
+
+The `http-providers` feature enables HTTP fallback in TUI:
+```toml
+http-providers = ["...", "codex-tui/http-fallback"]
+```
+
 **Sandbox Debugging:**
 
 The `debug_sandbox` module (in `debug_sandbox/`) provides:

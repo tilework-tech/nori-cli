@@ -27,14 +27,18 @@ use super::popup_consts::standard_popup_hint_line;
 use super::textarea::TextArea;
 use super::textarea::TextAreaState;
 
+#[cfg(feature = "openai-branding")]
 const BASE_BUG_ISSUE_URL: &str =
     "https://github.com/openai/codex/issues/new?template=2-bug-report.yml";
+
+#[cfg(not(feature = "openai-branding"))]
+const BASE_BUG_ISSUE_URL: &str = "https://github.com/tilework-tech/nori-cli/issues/new";
 
 /// Minimal input overlay to collect an optional feedback note, then upload
 /// both logs and rollout with classification + metadata.
 pub(crate) struct FeedbackNoteView {
     category: FeedbackCategory,
-    snapshot: codex_feedback::CodexLogSnapshot,
+    snapshot: crate::feedback_compat::CodexLogSnapshot,
     rollout_path: Option<PathBuf>,
     app_event_tx: AppEventSender,
     include_logs: bool,
@@ -48,7 +52,7 @@ pub(crate) struct FeedbackNoteView {
 impl FeedbackNoteView {
     pub(crate) fn new(
         category: FeedbackCategory,
-        snapshot: codex_feedback::CodexLogSnapshot,
+        snapshot: crate::feedback_compat::CodexLogSnapshot,
         rollout_path: Option<PathBuf>,
         app_event_tx: AppEventSender,
         include_logs: bool,
@@ -507,7 +511,7 @@ mod tests {
     fn make_view(category: FeedbackCategory) -> FeedbackNoteView {
         let (tx_raw, _rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let snapshot = codex_feedback::CodexFeedback::new().snapshot(None);
+        let snapshot = crate::feedback_compat::CodexFeedback::new().snapshot(None);
         FeedbackNoteView::new(category, snapshot, None, tx, true)
     }
 
@@ -542,10 +546,17 @@ mod tests {
     #[test]
     fn issue_url_available_for_bug_bad_result_and_other() {
         let bug_url = issue_url_for_category(FeedbackCategory::Bug, "thread-1");
+        #[cfg(feature = "openai-branding")]
         assert!(
             bug_url
                 .as_deref()
                 .is_some_and(|url| url.contains("template=2-bug-report"))
+        );
+        #[cfg(not(feature = "openai-branding"))]
+        assert!(
+            bug_url
+                .as_deref()
+                .is_some_and(|url| url.contains("tilework-tech/nori-cli"))
         );
 
         let bad_result_url = issue_url_for_category(FeedbackCategory::BadResult, "thread-2");

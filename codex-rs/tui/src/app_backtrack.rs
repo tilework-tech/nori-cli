@@ -1,4 +1,5 @@
 use std::any::TypeId;
+#[cfg(feature = "http-fallback")]
 use std::path::PathBuf;
 use std::sync::Arc;
 

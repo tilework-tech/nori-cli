@@ -7,8 +7,11 @@ use crate::diff_render::DiffSummary;
 use crate::exec_command::strip_bash_lc_and_escape;
 use crate::file_search::FileSearchManager;
 use crate::history_cell::HistoryCell;
+#[cfg(feature = "openai-branding")]
 use crate::model_migration::ModelMigrationOutcome;
+#[cfg(feature = "openai-branding")]
 use crate::model_migration::migration_copy_for_config;
+#[cfg(feature = "openai-branding")]
 use crate::model_migration::run_model_migration_prompt;
 use crate::nori::agent_picker::PendingAgentSelection;
 use crate::pager_overlay::Overlay;
@@ -20,9 +23,9 @@ use crate::tui::TuiEvent;
 use crate::update_action::UpdateAction;
 use codex_ansi_escape::ansi_escape_line;
 use codex_app_server_protocol::AuthMode;
-use codex_common::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG;
-use codex_common::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
+#[cfg(feature = "openai-branding")]
 use codex_common::model_presets::ModelUpgrade;
+#[cfg(feature = "openai-branding")]
 use codex_common::model_presets::all_model_presets;
 use codex_core::AuthManager;
 use codex_core::ConversationManager;
@@ -39,6 +42,7 @@ use codex_core::protocol::TokenUsage;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::ConversationId;
 use color_eyre::eyre::Result;
+#[cfg(feature = "http-fallback")]
 use color_eyre::eyre::WrapErr;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -59,7 +63,9 @@ use tokio::sync::mpsc::unbounded_channel;
 #[cfg(not(debug_assertions))]
 use crate::history_cell::UpdateAvailableHistoryCell;
 
+#[cfg(feature = "openai-branding")]
 const GPT_5_1_MIGRATION_AUTH_MODES: [AuthMode; 2] = [AuthMode::ChatGPT, AuthMode::ApiKey];
+#[cfg(feature = "openai-branding")]
 const GPT_5_1_CODEX_MIGRATION_AUTH_MODES: [AuthMode; 1] = [AuthMode::ChatGPT];
 
 #[derive(Debug, Clone)]
@@ -92,6 +98,7 @@ struct SessionSummary {
     resume_command: Option<String>,
 }
 
+#[cfg(feature = "openai-branding")]
 fn should_show_model_migration_prompt(
     current_model: &str,
     target_model: &str,
@@ -107,12 +114,15 @@ fn should_show_model_migration_prompt(
         .any(|preset| preset.model == current_model)
 }
 
+#[cfg(feature = "openai-branding")]
 fn migration_prompt_hidden(config: &Config, migration_config_key: &str) -> Option<bool> {
     match migration_config_key {
-        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => {
+        codex_common::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => {
             config.notices.hide_gpt_5_1_codex_max_migration_prompt
         }
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => config.notices.hide_gpt5_1_migration_prompt,
+        codex_common::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => {
+            config.notices.hide_gpt5_1_migration_prompt
+        }
         _ => None,
     }
 }
@@ -123,74 +133,85 @@ async fn handle_model_migration_prompt_if_needed(
     app_event_tx: &AppEventSender,
     auth_mode: Option<AuthMode>,
 ) -> Option<AppExitInfo> {
-    let upgrade = all_model_presets()
-        .iter()
-        .find(|preset| preset.model == config.model)
-        .and_then(|preset| preset.upgrade.as_ref());
-
-    if let Some(ModelUpgrade {
-        id: target_model,
-        reasoning_effort_mapping,
-        migration_config_key,
-    }) = upgrade
+    // Model migration prompts are OpenAI/GPT-specific. Skip when openai-branding is disabled.
+    #[cfg(not(feature = "openai-branding"))]
     {
-        if !migration_prompt_allows_auth_mode(auth_mode, migration_config_key) {
-            return None;
-        }
-
-        let target_model = target_model.to_string();
-        let hide_prompt_flag = migration_prompt_hidden(config, migration_config_key);
-        if !should_show_model_migration_prompt(&config.model, &target_model, hide_prompt_flag) {
-            return None;
-        }
-
-        let prompt_copy = migration_copy_for_config(migration_config_key);
-        match run_model_migration_prompt(tui, prompt_copy).await {
-            ModelMigrationOutcome::Accepted => {
-                app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
-                    migration_config: migration_config_key.to_string(),
-                });
-                config.model = target_model.to_string();
-                if let Some(family) = find_family_for_model(&target_model) {
-                    config.model_family = family;
-                }
-
-                let mapped_effort = if let Some(reasoning_effort_mapping) = reasoning_effort_mapping
-                    && let Some(reasoning_effort) = config.model_reasoning_effort
-                {
-                    reasoning_effort_mapping
-                        .get(&reasoning_effort)
-                        .cloned()
-                        .or(config.model_reasoning_effort)
-                } else {
-                    config.model_reasoning_effort
-                };
-
-                config.model_reasoning_effort = mapped_effort;
-
-                app_event_tx.send(AppEvent::UpdateModel(target_model.clone()));
-                app_event_tx.send(AppEvent::UpdateReasoningEffort(mapped_effort));
-                app_event_tx.send(AppEvent::PersistModelSelection {
-                    model: target_model.clone(),
-                    effort: mapped_effort,
-                });
-            }
-            ModelMigrationOutcome::Rejected => {
-                app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
-                    migration_config: migration_config_key.to_string(),
-                });
-            }
-            ModelMigrationOutcome::Exit => {
-                return Some(AppExitInfo {
-                    token_usage: TokenUsage::default(),
-                    conversation_id: None,
-                    update_action: None,
-                });
-            }
-        }
+        let _ = (tui, config, app_event_tx, auth_mode);
+        return None;
     }
 
-    None
+    #[cfg(feature = "openai-branding")]
+    {
+        let upgrade = all_model_presets()
+            .iter()
+            .find(|preset| preset.model == config.model)
+            .and_then(|preset| preset.upgrade.as_ref());
+
+        if let Some(ModelUpgrade {
+            id: target_model,
+            reasoning_effort_mapping,
+            migration_config_key,
+        }) = upgrade
+        {
+            if !migration_prompt_allows_auth_mode(auth_mode, migration_config_key) {
+                return None;
+            }
+
+            let target_model = target_model.to_string();
+            let hide_prompt_flag = migration_prompt_hidden(config, migration_config_key);
+            if !should_show_model_migration_prompt(&config.model, &target_model, hide_prompt_flag) {
+                return None;
+            }
+
+            let prompt_copy = migration_copy_for_config(migration_config_key);
+            match run_model_migration_prompt(tui, prompt_copy).await {
+                ModelMigrationOutcome::Accepted => {
+                    app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
+                        migration_config: migration_config_key.to_string(),
+                    });
+                    config.model = target_model.to_string();
+                    if let Some(family) = find_family_for_model(&target_model) {
+                        config.model_family = family;
+                    }
+
+                    let mapped_effort = if let Some(reasoning_effort_mapping) =
+                        reasoning_effort_mapping
+                        && let Some(reasoning_effort) = config.model_reasoning_effort
+                    {
+                        reasoning_effort_mapping
+                            .get(&reasoning_effort)
+                            .cloned()
+                            .or(config.model_reasoning_effort)
+                    } else {
+                        config.model_reasoning_effort
+                    };
+
+                    config.model_reasoning_effort = mapped_effort;
+
+                    app_event_tx.send(AppEvent::UpdateModel(target_model.clone()));
+                    app_event_tx.send(AppEvent::UpdateReasoningEffort(mapped_effort));
+                    app_event_tx.send(AppEvent::PersistModelSelection {
+                        model: target_model.clone(),
+                        effort: mapped_effort,
+                    });
+                }
+                ModelMigrationOutcome::Rejected => {
+                    app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
+                        migration_config: migration_config_key.to_string(),
+                    });
+                }
+                ModelMigrationOutcome::Exit => {
+                    return Some(AppExitInfo {
+                        token_usage: TokenUsage::default(),
+                        conversation_id: None,
+                        update_action: None,
+                    });
+                }
+            }
+        }
+
+        None
+    }
 }
 
 pub(crate) struct App {
@@ -219,7 +240,7 @@ pub(crate) struct App {
 
     // Esc-backtracking state grouped
     pub(crate) backtrack: crate::app_backtrack::BacktrackState,
-    pub(crate) feedback: codex_feedback::CodexFeedback,
+    pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
 
@@ -253,7 +274,7 @@ impl App {
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
-        feedback: codex_feedback::CodexFeedback,
+        feedback: crate::feedback_compat::CodexFeedback,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -334,9 +355,9 @@ impl App {
             }
             #[cfg(not(feature = "http-fallback"))]
             ResumeSelection::Resume(_path) => {
-                anyhow::bail!(
+                return Err(color_eyre::eyre::eyre!(
                     "Session resume is not available in this build. HTTP fallback is required."
-                );
+                ));
             }
         };
 
@@ -839,6 +860,7 @@ impl App {
                     ));
                 }
             }
+            #[cfg(feature = "openai-branding")]
             AppEvent::PersistModelMigrationPromptAcknowledged { migration_config } => {
                 if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
                     .set_hide_model_migration_prompt(&migration_config, true)
@@ -1075,14 +1097,20 @@ impl App {
     }
 }
 
+#[cfg(feature = "openai-branding")]
 fn migration_prompt_allowed_auth_modes(migration_config_key: &str) -> Option<&'static [AuthMode]> {
     match migration_config_key {
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => Some(&GPT_5_1_MIGRATION_AUTH_MODES),
-        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => Some(&GPT_5_1_CODEX_MIGRATION_AUTH_MODES),
+        codex_common::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => {
+            Some(&GPT_5_1_MIGRATION_AUTH_MODES)
+        }
+        codex_common::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => {
+            Some(&GPT_5_1_CODEX_MIGRATION_AUTH_MODES)
+        }
         _ => None,
     }
 }
 
+#[cfg(feature = "openai-branding")]
 fn migration_prompt_allows_auth_mode(
     auth_mode: Option<AuthMode>,
     migration_config_key: &str,
@@ -1121,6 +1149,10 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
+    #[cfg(feature = "openai-branding")]
+    use codex_common::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
+    #[cfg(feature = "openai-branding")]
+    use codex_common::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG;
 
     fn make_test_app() -> App {
         let (chat_widget, app_event_tx, _rx, _op_rx) = make_chatwidget_manual_with_sender();
@@ -1147,7 +1179,7 @@ mod tests {
             enhanced_keys_supported: false,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
-            feedback: codex_feedback::CodexFeedback::new(),
+            feedback: crate::feedback_compat::CodexFeedback::new(),
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
@@ -1185,7 +1217,7 @@ mod tests {
                 enhanced_keys_supported: false,
                 commit_anim_running: Arc::new(AtomicBool::new(false)),
                 backtrack: BacktrackState::default(),
-                feedback: codex_feedback::CodexFeedback::new(),
+                feedback: crate::feedback_compat::CodexFeedback::new(),
                 pending_update_action: None,
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
@@ -1196,6 +1228,7 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "openai-branding")]
     #[test]
     fn model_migration_prompt_only_shows_for_deprecated_models() {
         assert!(should_show_model_migration_prompt("gpt-5", "gpt-5.1", None));
@@ -1221,6 +1254,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "openai-branding")]
     #[test]
     fn model_migration_prompt_respects_hide_flag_and_self_target() {
         assert!(!should_show_model_migration_prompt(
@@ -1381,6 +1415,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "openai-branding")]
     #[test]
     fn gpt5_migration_allows_api_key_and_chatgpt() {
         assert!(migration_prompt_allows_auth_mode(
@@ -1393,6 +1428,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "openai-branding")]
     #[test]
     fn gpt_5_1_codex_max_migration_limits_to_chatgpt() {
         assert!(migration_prompt_allows_auth_mode(
@@ -1405,6 +1441,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "openai-branding")]
     #[test]
     fn other_migrations_block_api_key() {
         assert!(!migration_prompt_allows_auth_mode(

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codex_app_server_protocol::AuthMode;
+#[cfg(feature = "http-fallback")]
 use codex_backend_client::Client as BackendClient;
 use codex_core::config::Config;
 use codex_core::config::types::Notifications;
@@ -256,7 +257,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) initial_images: Vec<PathBuf>,
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
-    pub(crate) feedback: codex_feedback::CodexFeedback,
+    pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Expected model name for this widget. When set, events from other models
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching model. This prevents race conditions when switching agents.
@@ -322,7 +323,7 @@ pub(crate) struct ChatWidget {
 
     last_rendered_width: std::cell::Cell<Option<usize>>,
     // Feedback sink for /feedback
-    feedback: codex_feedback::CodexFeedback,
+    feedback: crate::feedback_compat::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
     // Tracks incomplete ExecCells that were flushed before completion.
@@ -3360,6 +3361,7 @@ fn extract_first_bold(s: &str) -> Option<String> {
     None
 }
 
+#[cfg(feature = "http-fallback")]
 async fn fetch_rate_limits(base_url: String, auth: CodexAuth) -> Option<RateLimitSnapshot> {
     match BackendClient::from_auth(base_url, &auth).await {
         Ok(client) => match client.get_rate_limits().await {
@@ -3374,6 +3376,11 @@ async fn fetch_rate_limits(base_url: String, auth: CodexAuth) -> Option<RateLimi
             None
         }
     }
+}
+
+#[cfg(not(feature = "http-fallback"))]
+async fn fetch_rate_limits(_base_url: String, _auth: CodexAuth) -> Option<RateLimitSnapshot> {
+    None
 }
 
 #[cfg(test)]

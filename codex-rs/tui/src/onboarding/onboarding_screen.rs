@@ -11,11 +11,15 @@ use ratatui::style::Color;
 use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
 
+#[cfg(feature = "http-fallback")]
 use codex_app_server_protocol::AuthMode;
+#[cfg(feature = "http-fallback")]
 use codex_protocol::config_types::ForcedLoginMethod;
 
 use crate::LoginStatus;
+#[cfg(feature = "http-fallback")]
 use crate::onboarding::auth::AuthModeWidget;
+#[cfg(feature = "http-fallback")]
 use crate::onboarding::auth::SignInState;
 use crate::onboarding::trust_directory::TrustDirectorySelection;
 use crate::onboarding::trust_directory::TrustDirectoryWidget;
@@ -25,11 +29,13 @@ use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use color_eyre::eyre::Result;
 use std::sync::Arc;
+#[cfg(feature = "http-fallback")]
 use std::sync::RwLock;
 
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Welcome(WelcomeWidget),
+    #[cfg(feature = "http-fallback")]
     Auth(AuthModeWidget),
     TrustDirectory(TrustDirectoryWidget),
 }
@@ -71,6 +77,7 @@ pub(crate) struct OnboardingResult {
 }
 
 impl OnboardingScreen {
+    #[allow(unused_variables)]
     pub(crate) fn new(tui: &mut Tui, args: OnboardingScreenArgs) -> Self {
         let OnboardingScreenArgs {
             show_trust_screen,
@@ -80,9 +87,12 @@ impl OnboardingScreen {
             config,
         } = args;
         let cwd = config.cwd.clone();
+        #[cfg(feature = "http-fallback")]
         let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
+        #[cfg(feature = "http-fallback")]
         let forced_login_method = config.forced_login_method;
         let codex_home = config.codex_home;
+        #[cfg(feature = "http-fallback")]
         let cli_auth_credentials_store_mode = config.cli_auth_credentials_store_mode;
         let mut steps: Vec<Step> = Vec::new();
         steps.push(Step::Welcome(WelcomeWidget::new(
@@ -90,6 +100,7 @@ impl OnboardingScreen {
             tui.frame_requester(),
             config.animations,
         )));
+        #[cfg(feature = "http-fallback")]
         if show_login_screen {
             let highlighted_mode = match forced_login_method {
                 Some(ForcedLoginMethod::Api) => AuthMode::ApiKey,
@@ -166,9 +177,17 @@ impl OnboardingScreen {
     }
 
     fn is_auth_in_progress(&self) -> bool {
-        self.steps.iter().any(|step| {
-            matches!(step, Step::Auth(_)) && matches!(step.get_step_state(), StepState::InProgress)
-        })
+        #[cfg(feature = "http-fallback")]
+        {
+            self.steps.iter().any(|step| {
+                matches!(step, Step::Auth(_))
+                    && matches!(step.get_step_state(), StepState::InProgress)
+            })
+        }
+        #[cfg(not(feature = "http-fallback"))]
+        {
+            false
+        }
     }
 
     pub(crate) fn is_done(&self) -> bool {
@@ -319,6 +338,7 @@ impl KeyboardHandler for Step {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match self {
             Step::Welcome(widget) => widget.handle_key_event(key_event),
+            #[cfg(feature = "http-fallback")]
             Step::Auth(widget) => widget.handle_key_event(key_event),
             Step::TrustDirectory(widget) => widget.handle_key_event(key_event),
         }
@@ -327,6 +347,7 @@ impl KeyboardHandler for Step {
     fn handle_paste(&mut self, pasted: String) {
         match self {
             Step::Welcome(_) => {}
+            #[cfg(feature = "http-fallback")]
             Step::Auth(widget) => widget.handle_paste(pasted),
             Step::TrustDirectory(widget) => widget.handle_paste(pasted),
         }
@@ -337,6 +358,7 @@ impl StepStateProvider for Step {
     fn get_step_state(&self) -> StepState {
         match self {
             Step::Welcome(w) => w.get_step_state(),
+            #[cfg(feature = "http-fallback")]
             Step::Auth(w) => w.get_step_state(),
             Step::TrustDirectory(w) => w.get_step_state(),
         }
@@ -349,6 +371,7 @@ impl WidgetRef for Step {
             Step::Welcome(widget) => {
                 widget.render_ref(area, buf);
             }
+            #[cfg(feature = "http-fallback")]
             Step::Auth(widget) => {
                 widget.render_ref(area, buf);
             }
@@ -367,6 +390,7 @@ pub(crate) async fn run_onboarding_app(
 
     let mut onboarding_screen = OnboardingScreen::new(tui, args);
     // One-time guard to fully clear the screen after ChatGPT login success message is shown
+    #[cfg(feature = "http-fallback")]
     let mut did_full_clear_after_success = false;
 
     tui.draw(u16::MAX, |frame| {
@@ -386,6 +410,7 @@ pub(crate) async fn run_onboarding_app(
                     onboarding_screen.handle_paste(text);
                 }
                 TuiEvent::Draw => {
+                    #[cfg(feature = "http-fallback")]
                     if !did_full_clear_after_success
                         && onboarding_screen.steps.iter().any(|step| {
                             if let Step::Auth(w) = step {

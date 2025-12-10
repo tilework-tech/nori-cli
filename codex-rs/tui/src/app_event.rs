@@ -130,6 +130,7 @@ pub(crate) enum AppEvent {
     PersistRateLimitSwitchPromptHidden,
 
     /// Persist the acknowledgement flag for the model migration prompt.
+    #[cfg(feature = "openai-branding")]
     PersistModelMigrationPromptAcknowledged {
         migration_config: String,
     },

@@ -1,21 +1,36 @@
 /// Update action the CLI should perform after the TUI exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateAction {
-    /// Update via `npm install -g @openai/codex@latest`.
+    /// Update via `npm install -g @openai/codex@latest` (OpenAI) or `npm install -g nori-ai-cli` (Nori).
     NpmGlobalLatest,
-    /// Update via `bun install -g @openai/codex@latest`.
+    /// Update via `bun install -g @openai/codex@latest` (OpenAI) or `bun install -g nori-ai-cli` (Nori).
     BunGlobalLatest,
     /// Update via `brew upgrade codex`.
     BrewUpgrade,
+    /// Update via `cargo install nori-cli`.
+    CargoInstall,
 }
 
 impl UpdateAction {
     /// Returns the list of command-line arguments for invoking the update.
+    #[cfg(feature = "openai-branding")]
     pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
         match self {
             UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "@openai/codex"]),
             UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "@openai/codex"]),
             UpdateAction::BrewUpgrade => ("brew", &["upgrade", "codex"]),
+            UpdateAction::CargoInstall => ("cargo", &["install", "nori-cli"]),
+        }
+    }
+
+    /// Returns the list of command-line arguments for invoking the update.
+    #[cfg(not(feature = "openai-branding"))]
+    pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
+        match self {
+            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "nori-ai-cli"]),
+            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "nori-ai-cli"]),
+            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "nori"]),
+            UpdateAction::CargoInstall => ("cargo", &["install", "nori-cli"]),
         }
     }
 
@@ -24,6 +39,22 @@ impl UpdateAction {
         let (command, args) = self.command_args();
         shlex::try_join(std::iter::once(command).chain(args.iter().copied()))
             .unwrap_or_else(|_| format!("{command} {}", args.join(" ")))
+    }
+}
+
+/// Convert from Nori's internal UpdateAction to the public UpdateAction.
+#[cfg(all(not(debug_assertions), not(feature = "openai-branding")))]
+impl From<crate::nori::update_action::UpdateAction> for UpdateAction {
+    fn from(action: crate::nori::update_action::UpdateAction) -> Self {
+        match action {
+            crate::nori::update_action::UpdateAction::NpmGlobalLatest => {
+                UpdateAction::NpmGlobalLatest
+            }
+            crate::nori::update_action::UpdateAction::BunGlobalLatest => {
+                UpdateAction::BunGlobalLatest
+            }
+            crate::nori::update_action::UpdateAction::CargoInstall => UpdateAction::CargoInstall,
+        }
     }
 }
 

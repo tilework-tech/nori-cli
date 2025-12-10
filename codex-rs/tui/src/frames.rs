@@ -45,7 +45,9 @@ macro_rules! frames_for {
 }
 
 pub(crate) const FRAMES_DEFAULT: [&str; 36] = frames_for!("default");
+#[cfg(feature = "openai-branding")]
 pub(crate) const FRAMES_CODEX: [&str; 36] = frames_for!("codex");
+#[cfg(feature = "openai-branding")]
 pub(crate) const FRAMES_OPENAI: [&str; 36] = frames_for!("openai");
 pub(crate) const FRAMES_BLOCKS: [&str; 36] = frames_for!("blocks");
 pub(crate) const FRAMES_DOTS: [&str; 36] = frames_for!("dots");
@@ -55,10 +57,23 @@ pub(crate) const FRAMES_VBARS: [&str; 36] = frames_for!("vbars");
 pub(crate) const FRAMES_SHAPES: [&str; 36] = frames_for!("shapes");
 pub(crate) const FRAMES_SLUG: [&str; 36] = frames_for!("slug");
 
+#[cfg(feature = "openai-branding")]
 pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
     &FRAMES_DEFAULT,
     &FRAMES_CODEX,
     &FRAMES_OPENAI,
+    &FRAMES_BLOCKS,
+    &FRAMES_DOTS,
+    &FRAMES_HASH,
+    &FRAMES_HBARS,
+    &FRAMES_VBARS,
+    &FRAMES_SHAPES,
+    &FRAMES_SLUG,
+];
+
+#[cfg(not(feature = "openai-branding"))]
+pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
+    &FRAMES_DEFAULT,
     &FRAMES_BLOCKS,
     &FRAMES_DOTS,
     &FRAMES_HASH,
