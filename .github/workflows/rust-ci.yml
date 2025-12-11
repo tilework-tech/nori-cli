@@ -27,7 +27,7 @@ jobs:
             name: macOS checks
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       # Free disk space on Linux runners to prevent "No space left on device" errors
       - name: Free disk space
