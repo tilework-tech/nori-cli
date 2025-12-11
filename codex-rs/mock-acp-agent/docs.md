@@ -58,6 +58,10 @@ Path: @/codex-rs/mock-acp-agent
 | `MOCK_AGENT_DELAY_MS` | Millisecond delay before completing stream to simulate realistic streaming (added for TUI testing) |
 | `MOCK_AGENT_REQUEST_PERMISSION` | Triggers a permission request to the client before responding, used for testing ACP approval bridging |
 | `MOCK_AGENT_SEND_TOOL_CALL` | Sends a tool call sequence (pending → in_progress → completed) for testing tool call display |
+| `MOCK_AGENT_WRITE_FILE` | Path to write via client's `fs/write_text_file` method - combines with `MOCK_AGENT_WRITE_CONTENT` to test file write implementation; on success, sends `
+File written successfully
+` and reads back file to verify |
+| `MOCK_AGENT_WRITE_CONTENT` | Content to write when `MOCK_AGENT_WRITE_FILE` is set (defaults to "default content") |
 
 **Stderr Output for Testing:**
 
@@ -94,5 +98,14 @@ The current model ID is tracked internally and updated via `set_session_model()`
 **Binary Name:**
 
 Cargo renames hyphens to underscores in binary names, so the built artifact is `mock_acp_agent` (not `mock-acp-agent`). Tests in `@/codex-rs/acp/tests/integration.rs` use `mock_agent_binary_path()` helper to locate it.
+
+
+**Output Formatting for TUI Testing:**
+
+The agent wraps success/failure messages with newlines to prevent text wrapping issues in TUI tests:
+- File write success: `"\nFile written successfully\n"` followed by `"\nVerified content:\n{content}\n"`
+- File write failure: `"\nFailed to write file: {error}\n"`
+
+This formatting ensures test assertions don't break when terminal width causes line wrapping (e.g., 80-column TUI terminals). Without the newlines, long messages could wrap mid-line and break string matching in test assertions.
 
 Created and maintained by Nori.

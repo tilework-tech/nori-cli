@@ -21,6 +21,12 @@ enum MockClientRequest {
         path: PathBuf,
         responder: oneshot::Sender<Result<String, acp::Error>>,
     },
+    WriteFile {
+        session_id: acp::SessionId,
+        path: PathBuf,
+        content: String,
+        responder: oneshot::Sender<Result<(), acp::Error>>,
+    },
     RequestPermission {
         session_id: acp::SessionId,
         tool_call: acp::ToolCallUpdate,
@@ -106,6 +112,25 @@ impl MockAgent {
             .send(MockClientRequest::ReadFile {
                 session_id,
                 path,
+                responder: tx,
+            })
+            .map_err(|_| acp::Error::internal_error())?;
+        rx.await.map_err(|_| acp::Error::internal_error())?
+    }
+
+    /// Write a file via the client's fs/write_text_file method
+    async fn write_file_via_client(
+        &self,
+        session_id: acp::SessionId,
+        path: PathBuf,
+        content: String,
+    ) -> Result<(), acp::Error> {
+        let (tx, rx) = oneshot::channel();
+        self.client_request_tx
+            .send(MockClientRequest::WriteFile {
+                session_id,
+                path,
+                content,
                 responder: tx,
             })
             .map_err(|_| acp::Error::internal_error())?;
@@ -424,6 +449,39 @@ impl acp::Agent for MockAgent {
             }
         }
 
+        // Support writing files via fs/write_text_file for testing file write implementation
+        if let Ok(file_path) = std::env::var("MOCK_AGENT_WRITE_FILE") {
+            let content = std::env::var("MOCK_AGENT_WRITE_CONTENT")
+                .unwrap_or_else(|_| "default content".to_string());
+            eprintln!(
+                "Mock agent: requesting file write: {} with {} bytes",
+                file_path,
+                content.len()
+            );
+            match self
+                .write_file_via_client(session_id.clone(), PathBuf::from(&file_path), content)
+                .await
+            {
+                Ok(()) => {
+                    self.send_text_chunk(session_id.clone(), "\nFile written successfully\n")
+                        .await?;
+
+                    // Optionally read back the file to verify the write
+                    if let Ok(read_content) = self
+                        .read_file_via_client(session_id.clone(), PathBuf::from(&file_path))
+                        .await
+                    {
+                        let msg = format!("\nVerified content:\n{}\n", read_content);
+                        self.send_text_chunk(session_id.clone(), &msg).await?;
+                    }
+                }
+                Err(err) => {
+                    let msg = format!("\nFailed to write file: {}\n", err);
+                    self.send_text_chunk(session_id.clone(), &msg).await?;
+                }
+            }
+        }
+
         if std::env::var("MOCK_AGENT_STREAM_UNTIL_CANCEL").is_ok() {
             let mut iterations = 0usize;
             while !self.cancel_requested.get() && iterations < 10_000 {
@@ -525,6 +583,20 @@ async fn main() -> acp::Result<()> {
                                     .read_text_file(acp::ReadTextFileRequest::new(session_id, path))
                                     .await
                                     .map(|response| response.content);
+                                let _ = responder.send(result);
+                            }
+                            MockClientRequest::WriteFile {
+                                session_id,
+                                path,
+                                content,
+                                responder,
+                            } => {
+                                let result = conn
+                                    .write_text_file(acp::WriteTextFileRequest::new(
+                                        session_id, path, content,
+                                    ))
+                                    .await
+                                    .map(|_response| ());
                                 let _ = responder.send(result);
                             }
                             MockClientRequest::RequestPermission {

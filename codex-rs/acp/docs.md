@@ -147,6 +147,25 @@ The `run_command_loop()` function manages agent subprocess cleanup:
 - Bridges permission requests to Codex approval system via `ApprovalRequest` channel
 - Implements file read (synchronous `std::fs::read_to_string`)
 - Terminal operations return `method_not_found` (not yet supported)
+- Implements file write (`write_text_file`) with relative path resolution and security boundaries
+
+**File Write Implementation:**
+
+The `write_text_file` method implements file creation and modification for ACP agents with security boundaries:
+
+1. **Relative Path Resolution**: Paths like `file.txt` are resolved against the workspace directory (`cwd`) before validation, so agents can use simple relative paths for workspace files
+
+2. **Security Boundaries**: Application-level path restrictions (temporary until OS-level sandboxing is deployed):
+   - Workspace writes: Any path within or under the workspace directory
+   - Temporary writes: Any path under `/tmp` directory  
+   - System paths: All other paths are rejected with an error
+
+3. **Auto-create Directories**: Parent directories are created automatically using `std::fs::create_dir_all` when needed
+
+4. **Atomicity**: Not currently atomic - partial writes can occur if interrupted
+
+The path validation canonicalizes paths to prevent symlink-based directory traversal attacks.
+
 
 **Approval Bridging:**
 

@@ -1,19 +1,19 @@
 ---
-source: tui-pty-e2e/tests/streaming.rs
+source: tui-pty-e2e/tests/acp_file_operations.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
 
 
-› testing!!!
+› Create snapshot file
 
 
 ■ Operation 'AddToHistory' is not supported in ACP mode
 
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 
-■ Conversation interrupted - tell the model what to do differently. Something
-went wrong? Hit `/feedback` to report the issue.
+• Test message 1Test message 2File written successfullyVerified content:
+  Snapshot test content
 
 
 › [DEFAULT_PROMPT]
