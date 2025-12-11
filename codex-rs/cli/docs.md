@@ -10,13 +10,8 @@ The `codex-cli` crate is the main multitool binary that provides the `codex` com
 
 This crate is the primary entry point that ties together all other crates:
 
-- **Dispatches to** `codex-tui` for interactive mode (default, no subcommand)
-- **Dispatches to** `codex-exec` for `codex exec` non-interactive execution
-- **Dispatches to** `codex-mcp-server` for `codex mcp-server`
-- **Dispatches to** `codex-app-server` for `codex app-server`
-- **Dispatches to** `codex-cloud-tasks` for `codex cloud` browsing
-- **Uses** `codex-login` for authentication flows
-- **Uses** `codex-chatgpt` for the `codex apply` command
+- **Always included:** `codex-tui`, `codex-exec`, `codex-acp`, `codex-core` (minimal build)
+- **Optional via features:** `codex-mcp-server`, `codex-app-server`, `codex-cloud-tasks`, `codex-login`, `codex-chatgpt`, `codex-responses-api-proxy`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 
 ### Core Implementation
@@ -38,20 +33,20 @@ match subcommand {
 
 **Subcommands:**
 
-| Subcommand | Alias | Description |
-|------------|-------|-------------|
-| `exec` | `e` | Run Codex non-interactively |
-| `login` | | Manage authentication |
-| `logout` | | Remove stored credentials |
-| `mcp` | | Manage MCP server configurations |
-| `mcp-server` | | Run as MCP server (stdio) |
-| `app-server` | | Run app server (JSON-RPC stdio) |
-| `resume` | | Resume previous session |
-| `apply` | `a` | Apply latest Codex diff to working tree |
-| `sandbox` | `debug` | Test sandbox enforcement |
-| `cloud` | | Browse Codex Cloud tasks |
-| `completion` | | Generate shell completions |
-| `features` | | List feature flags |
+| Subcommand | Alias | Description | Required Feature |
+|------------|-------|-------------|------------------|
+| `exec` | `e` | Run Codex non-interactively | (always) |
+| `login` | | Manage authentication | `login` |
+| `logout` | | Remove stored credentials | `login` |
+| `mcp` | | Manage MCP server configurations | `mcp-server` |
+| `mcp-server` | | Run as MCP server (stdio) | `mcp-server` |
+| `app-server` | | Run app server (JSON-RPC stdio) | `app-server` |
+| `resume` | | Resume previous session | (always) |
+| `apply` | `a` | Apply latest Codex diff to working tree | `chatgpt` |
+| `sandbox` | `debug` | Test sandbox enforcement | (always) |
+| `cloud` | | Browse Codex Cloud tasks | `cloud-tasks` |
+| `completion` | | Generate shell completions | (always) |
+| `features` | | List feature flags | (always) |
 
 **Feature Toggles:**
 
@@ -70,6 +65,44 @@ These translate to `-c features.<name>=true/false` config overrides.
 - `codex resume`: Show session picker
 
 ### Things to Know
+
+**Cargo Feature Flags (Compile-time):**
+
+The CLI uses Cargo features to enable optional functionality. By default (`default = []`), only core functionality is included (TUI, exec, ACP). Optional features can be enabled individually or via the `full` meta-feature:
+
+| Feature | Dependencies | Enables |
+|---------|--------------|---------|
+| `full` | All features | Complete legacy binary |
+| `app-server` | `codex-app-server` | `app-server` subcommand |
+| `cloud-tasks` | `codex-cloud-tasks` | `cloud` subcommand |
+| `login` | `codex-login`, `codex-tui/login` | `login`/`logout` subcommands + TUI login |
+| `feedback` | `codex-tui/feedback` | Sentry feedback in TUI |
+| `backend-client` | `codex-tui/backend-client` | Cloud tasks backend client |
+| `upstream-updates` | `codex-tui/upstream-updates` | OpenAI update mechanism (vs Nori's) |
+| `mcp-server` | `codex-mcp-server`, `codex-rmcp-client` | `mcp`, `mcp-server` subcommands |
+| `chatgpt` | `codex-chatgpt` | `apply` subcommand |
+| `responses-api-proxy` | `codex-responses-api-proxy` | `responses-api-proxy` subcommand |
+| `oss-providers` | `codex-tui/oss-providers`, `codex-common/oss-providers` | Ollama/LM Studio local model support |
+
+**Feature Propagation to TUI:**
+
+Several CLI features propagate to the TUI crate for coordinated behavior:
+- `login` -> `codex-tui/login`: Enables login screens and `/login` command in TUI
+- `feedback` -> `codex-tui/feedback`: Enables Sentry feedback and `/feedback` command
+- `backend-client` -> `codex-tui/backend-client`: Enables cloud tasks backend
+- `upstream-updates` -> `codex-tui/upstream-updates`: Uses OpenAI update system instead of Nori's
+- `oss-providers` -> `codex-tui/oss-providers` -> `codex-common/oss-providers`: Enables Ollama/LM Studio local model support
+
+Without these features, the TUI uses Nori-specific alternatives (e.g., GitHub Discussions for feedback, GitHub releases for updates). For OSS providers, the `codex-common` crate provides stub implementations that return `None` or errors when the feature is disabled.
+
+Build examples:
+```bash
+cargo build -p codex-cli                    # Minimal (TUI + exec + ACP only, Nori updates)
+cargo build -p codex-cli --features full    # All functionality (OpenAI-compatible)
+cargo build -p codex-cli --features login,mcp-server  # Selective
+```
+
+Feature-gated code uses `#[cfg(feature = "...")]` on imports, enum variants, match arms, and struct definitions in `main.rs`. Integration tests that require specific features use `required-features` in `Cargo.toml` (e.g., MCP tests require `mcp-server`).
 
 **Sandbox Debugging:**
 

@@ -23,8 +23,22 @@
       "Bash(cargo search:*)"
     ],
     "additionalDirectories": [
-      "~/Documents/source/nori/cli/.claude/profiles",
-      "~/Documents/source/nori/cli/.claude/skills"
-    ]
+      ".claude/profiles",
+      ".claude/skills"
+    ],
+    "sandbox": {
+      "filesystem": {
+        "read": {
+          "allowOnly": [
+            "~/.cargo/bin/sccache"
+          ]
+        },
+        "write": {
+          "allowOnly": [
+            "~/.cache/sccache"
+          ]
+        }
+      }
+    }
   }
 }

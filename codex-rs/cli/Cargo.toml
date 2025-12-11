@@ -15,26 +15,74 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[features]
+default = []
+
+# Full feature set - enables all legacy functionality
+full = [
+    "app-server",
+    "cloud-tasks",
+    "login",
+    "feedback",
+    "backend-client",
+    "upstream-updates",
+    "mcp-server",
+    "chatgpt",
+    "responses-api-proxy",
+    "oss-providers",
+]
+
+# App server functionality
+app-server = ["dep:codex-app-server"]
+
+# Cloud tasks command
+cloud-tasks = ["dep:codex-cloud-tasks"]
+
+# Login/logout commands - propagate to TUI
+login = ["dep:codex-login", "codex-tui/login"]
+
+# Feedback feature - propagate to TUI (legacy OpenAI Sentry feedback)
+# Future Nori feedback: https://github.com/tilework-tech/nori-cli/issues
+feedback = ["codex-tui/feedback"]
+
+# Backend client feature - propagate to TUI
+backend-client = ["codex-tui/backend-client"]
+
+# Upstream updates feature - propagate to TUI
+upstream-updates = ["codex-tui/upstream-updates"]
+
+# OSS providers (Ollama, LM Studio) - propagate to TUI and codex-common
+oss-providers = ["codex-tui/oss-providers", "codex-common/oss-providers"]
+
+# MCP server functionality
+mcp-server = ["dep:codex-mcp-server", "dep:codex-rmcp-client"]
+
+# ChatGPT/apply command
+chatgpt = ["dep:codex-chatgpt"]
+
+# Responses API proxy
+responses-api-proxy = ["dep:codex-responses-api-proxy"]
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 codex-acp = { workspace = true }
-codex-app-server = { workspace = true }
+codex-app-server = { workspace = true, optional = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
-codex-chatgpt = { workspace = true }
-codex-cloud-tasks = { path = "../cloud-tasks" }
+codex-chatgpt = { workspace = true, optional = true }
+codex-cloud-tasks = { path = "../cloud-tasks", optional = true }
 codex-common = { workspace = true, features = ["cli"] }
 codex-core = { workspace = true }
 codex-exec = { workspace = true }
 codex-execpolicy = { workspace = true }
-codex-login = { workspace = true }
-codex-mcp-server = { workspace = true }
+codex-login = { workspace = true, optional = true }
+codex-mcp-server = { workspace = true, optional = true }
 codex-process-hardening = { workspace = true }
 codex-protocol = { workspace = true }
-codex-responses-api-proxy = { workspace = true }
-codex-rmcp-client = { workspace = true }
+codex-responses-api-proxy = { workspace = true, optional = true }
+codex-rmcp-client = { workspace = true, optional = true }
 codex-stdio-to-uds = { workspace = true }
 codex-tui = { workspace = true }
 ctor = { workspace = true }
@@ -62,3 +110,12 @@ assert_matches = { workspace = true }
 predicates = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+
+# Integration tests that require the mcp-server feature
+[[test]]
+name = "mcp_add_remove"
+required-features = ["mcp-server"]
+
+[[test]]
+name = "mcp_list"
+required-features = ["mcp-server"]

@@ -89,6 +89,10 @@ impl SlashCommand {
     fn is_visible(self) -> bool {
         match self {
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
+            #[cfg(not(feature = "login"))]
+            SlashCommand::Logout => false,
+            #[cfg(not(feature = "feedback"))]
+            SlashCommand::Feedback => false,
             _ => true,
         }
     }
@@ -100,4 +104,57 @@ pub fn built_in_slash_commands() -> Vec<(&'static str, SlashCommand)> {
         .filter(|command| command.is_visible())
         .map(|c| (c.command(), c))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(not(feature = "login"))]
+    fn logout_hidden_when_login_feature_disabled() {
+        let commands = built_in_slash_commands();
+        let has_logout = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Logout);
+        assert!(
+            !has_logout,
+            "/logout should be hidden when login feature is disabled"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "login")]
+    fn logout_visible_when_login_feature_enabled() {
+        let commands = built_in_slash_commands();
+        let has_logout = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Logout);
+        assert!(
+            has_logout,
+            "/logout should be visible when login feature is enabled"
+        );
+    }
+
+    #[test]
+    #[cfg(not(feature = "feedback"))]
+    fn feedback_hidden_when_feedback_feature_disabled() {
+        let commands = built_in_slash_commands();
+        let has_feedback = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
+        assert!(
+            !has_feedback,
+            "/feedback should be hidden when feedback feature is disabled"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "feedback")]
+    fn feedback_visible_when_feedback_feature_enabled() {
+        let commands = built_in_slash_commands();
+        let has_feedback = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
+        assert!(
+            has_feedback,
+            "/feedback should be visible when feedback feature is enabled"
+        );
+    }
 }

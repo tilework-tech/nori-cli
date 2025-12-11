@@ -313,7 +313,8 @@ async fn helpers_are_available_and_do_not_panic() {
         initial_images: Vec::new(),
         enhanced_keys_supported: false,
         auth_manager,
-        feedback: codex_feedback::CodexFeedback::new(),
+        #[cfg(feature = "feedback")]
+        feedback: crate::feedback_compat::CodexFeedback::new(),
         expected_model: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
@@ -376,7 +377,8 @@ fn make_chatwidget_manual() -> (
         pre_review_token_info: None,
         needs_final_message_separator: false,
         last_rendered_width: std::cell::Cell::new(None),
-        feedback: codex_feedback::CodexFeedback::new(),
+        #[cfg(feature = "feedback")]
+        feedback: crate::feedback_compat::CodexFeedback::new(),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
         pending_agent: None,
@@ -1749,6 +1751,7 @@ fn single_reasoning_option_skips_selection() {
     );
 }
 
+#[cfg(feature = "feedback")]
 #[test]
 fn feedback_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
@@ -1760,6 +1763,7 @@ fn feedback_selection_popup_snapshot() {
     assert_snapshot!("feedback_selection_popup", popup);
 }
 
+#[cfg(feature = "feedback")]
 #[test]
 fn feedback_upload_consent_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();

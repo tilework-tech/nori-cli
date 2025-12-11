@@ -13,6 +13,11 @@ name = "codex_tui"
 path = "src/lib.rs"
 
 [features]
+default = []
+
+# Full feature set - enables all upstream/legacy functionality
+full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers"]
+
 # Enable vt100-based tests (emulator) when running with `--features vt100-tests`.
 vt100-tests = []
 # Gate verbose debug logging inside the TUI implementation.
@@ -20,6 +25,22 @@ debug-logs = []
 # Enable unstable ACP features like model switching.
 default = ["unstable"]
 unstable = ["codex-acp/unstable"]
+
+# ChatGPT/API login functionality
+login = ["dep:codex-login"]
+
+# Feedback to Sentry (legacy OpenAI feedback system)
+# Future Nori feedback: https://github.com/tilework-tech/nori-cli/issues
+feedback = ["dep:codex-feedback"]
+
+# Backend client for cloud tasks
+backend-client = ["dep:codex-backend-client"]
+
+# Upstream (OpenAI) update checking
+upstream-updates = []
+
+# OSS providers (Ollama, LM Studio) - forwarded to codex-common
+oss-providers = ["codex-common/oss-providers"]
 
 [lints]
 workspace = true
@@ -34,16 +55,16 @@ codex-acp = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
-codex-backend-client = { workspace = true }
+codex-backend-client = { workspace = true, optional = true }
 codex-common = { workspace = true, features = [
     "cli",
     "elapsed",
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
-codex-feedback = { workspace = true }
+codex-feedback = { workspace = true, optional = true }
 codex-file-search = { workspace = true }
-codex-login = { workspace = true }
+codex-login = { workspace = true, optional = true }
 codex-protocol = { workspace = true }
 color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["bracketed-paste", "event-stream"] }

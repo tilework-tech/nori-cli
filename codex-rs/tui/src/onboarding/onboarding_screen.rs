@@ -11,11 +11,15 @@ use ratatui::style::Color;
 use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
 
+#[cfg(feature = "login")]
 use codex_app_server_protocol::AuthMode;
+#[cfg(feature = "login")]
 use codex_protocol::config_types::ForcedLoginMethod;
 
 use crate::LoginStatus;
+#[cfg(feature = "login")]
 use crate::onboarding::auth::AuthModeWidget;
+#[cfg(feature = "login")]
 use crate::onboarding::auth::SignInState;
 use crate::onboarding::trust_directory::TrustDirectorySelection;
 use crate::onboarding::trust_directory::TrustDirectoryWidget;
@@ -25,11 +29,13 @@ use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use color_eyre::eyre::Result;
 use std::sync::Arc;
+#[cfg(feature = "login")]
 use std::sync::RwLock;
 
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Welcome(WelcomeWidget),
+    #[cfg(feature = "login")]
     Auth(AuthModeWidget),
     TrustDirectory(TrustDirectoryWidget),
 }
@@ -90,6 +96,7 @@ impl OnboardingScreen {
             tui.frame_requester(),
             config.animations,
         )));
+        #[cfg(feature = "login")]
         if show_login_screen {
             let highlighted_mode = match forced_login_method {
                 Some(ForcedLoginMethod::Api) => AuthMode::ApiKey,
@@ -109,6 +116,8 @@ impl OnboardingScreen {
                 animations_enabled: config.animations,
             }))
         }
+        #[cfg(not(feature = "login"))]
+        let _ = (show_login_screen, auth_manager);
         let is_git_repo = get_git_repo_root(&cwd).is_some();
         let highlighted = if is_git_repo {
             TrustDirectorySelection::Trust
@@ -166,9 +175,17 @@ impl OnboardingScreen {
     }
 
     fn is_auth_in_progress(&self) -> bool {
-        self.steps.iter().any(|step| {
-            matches!(step, Step::Auth(_)) && matches!(step.get_step_state(), StepState::InProgress)
-        })
+        #[cfg(feature = "login")]
+        {
+            self.steps.iter().any(|step| {
+                matches!(step, Step::Auth(_))
+                    && matches!(step.get_step_state(), StepState::InProgress)
+            })
+        }
+        #[cfg(not(feature = "login"))]
+        {
+            false
+        }
     }
 
     pub(crate) fn is_done(&self) -> bool {
@@ -319,6 +336,7 @@ impl KeyboardHandler for Step {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match self {
             Step::Welcome(widget) => widget.handle_key_event(key_event),
+            #[cfg(feature = "login")]
             Step::Auth(widget) => widget.handle_key_event(key_event),
             Step::TrustDirectory(widget) => widget.handle_key_event(key_event),
         }
@@ -327,6 +345,7 @@ impl KeyboardHandler for Step {
     fn handle_paste(&mut self, pasted: String) {
         match self {
             Step::Welcome(_) => {}
+            #[cfg(feature = "login")]
             Step::Auth(widget) => widget.handle_paste(pasted),
             Step::TrustDirectory(widget) => widget.handle_paste(pasted),
         }
@@ -337,6 +356,7 @@ impl StepStateProvider for Step {
     fn get_step_state(&self) -> StepState {
         match self {
             Step::Welcome(w) => w.get_step_state(),
+            #[cfg(feature = "login")]
             Step::Auth(w) => w.get_step_state(),
             Step::TrustDirectory(w) => w.get_step_state(),
         }
@@ -349,6 +369,7 @@ impl WidgetRef for Step {
             Step::Welcome(widget) => {
                 widget.render_ref(area, buf);
             }
+            #[cfg(feature = "login")]
             Step::Auth(widget) => {
                 widget.render_ref(area, buf);
             }
@@ -386,6 +407,7 @@ pub(crate) async fn run_onboarding_app(
                     onboarding_screen.handle_paste(text);
                 }
                 TuiEvent::Draw => {
+                    #[cfg(feature = "login")]
                     if !did_full_clear_after_success
                         && onboarding_screen.steps.iter().any(|step| {
                             if let Step::Auth(w) = step {
@@ -416,6 +438,8 @@ pub(crate) async fn run_onboarding_app(
                         let _ = tui.terminal.clear();
                         did_full_clear_after_success = true;
                     }
+                    #[cfg(not(feature = "login"))]
+                    let _ = did_full_clear_after_success;
                     let _ = tui.draw(u16::MAX, |frame| {
                         frame.render_widget_ref(&onboarding_screen, frame.area());
                     });

@@ -28,8 +28,11 @@ mod footer;
 mod list_selection_view;
 mod prompt_args;
 pub(crate) use list_selection_view::SelectionViewParams;
+#[cfg(feature = "feedback")]
 mod feedback_view;
+#[cfg(feature = "feedback")]
 pub(crate) use feedback_view::feedback_selection_params;
+#[cfg(feature = "feedback")]
 pub(crate) use feedback_view::feedback_upload_consent_params;
 mod paste_burst;
 pub mod popup_consts;
@@ -37,6 +40,7 @@ mod queued_user_messages;
 mod scroll_state;
 mod selection_popup_common;
 mod textarea;
+#[cfg(feature = "feedback")]
 pub(crate) use feedback_view::FeedbackNoteView;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

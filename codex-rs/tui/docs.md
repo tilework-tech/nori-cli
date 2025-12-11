@@ -14,9 +14,9 @@ TUI is one of the primary entry points, invoked when running `codex` without a s
 - **Depends on** `codex-acp` for ACP agent backend (alternative to HTTP-based LLM providers)
 - **Depends on** `codex-common` for CLI argument parsing and shared utilities
 - **Uses** `codex-protocol` types for events and messages
-- **Integrates** `codex-feedback` for tracing/feedback collection
+- **Optionally integrates** `codex-feedback`, `codex-login`, `codex-backend-client` via feature flags
 
-The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interactive mode.
+The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interactive mode. Feature flags propagate from CLI to TUI for coordinated modular builds.
 
 ### Core Implementation
 
@@ -102,7 +102,7 @@ When the `unstable` feature is disabled, `/model` in ACP mode shows a disabled p
 **Onboarding:**
 
 The `onboarding/` module handles first-run experience:
-- Login screen (ChatGPT OAuth or API key)
+- Login screen (ChatGPT OAuth or API key) - requires `login` feature
 - Trust screen (directory permission settings)
 - Windows WSL setup instructions
 
@@ -112,6 +112,43 @@ The `onboarding/` module handles first-run experience:
 - `session_log.rs`: High-fidelity session event logging
 
 ### Things to Know
+
+**Feature Flags Architecture:**
+
+The TUI crate uses Cargo feature flags to enable modular builds with two primary modes:
+
+| Feature | Optional Dep | Description |
+|---------|-------------|-------------|
+| `full` | - | Meta-feature enabling all optional features |
+| `login` | `codex-login` | ChatGPT/API login functionality |
+| `feedback` | `codex-feedback` | Sentry feedback integration |
+| `backend-client` | `codex-backend-client` | Cloud tasks backend client |
+| `upstream-updates` | - | OpenAI/Codex update checking mechanism |
+| `oss-providers` | `codex-common/oss-providers` | Ollama/LM Studio local model support |
+
+Feature gating patterns:
+- Import gating: `#[cfg(feature = "backend-client")] use codex_backend_client::Client`
+- Struct field gating: `#[cfg(feature = "feedback")] feedback: CodexFeedback`
+- Function parameter gating: `#[cfg(feature = "feedback")] feedback: CodexFeedback` in `App::run()`
+- Enum variant gating: `AppEvent::Feedback` only exists with `feedback` feature
+- Compatibility module pattern: `feedback_compat.rs` provides stub types when `feedback` feature is disabled
+
+**Feedback Compatibility Layer:**
+
+The `feedback_compat.rs` module provides API-compatible types when the `feedback` feature is disabled:
+- **With `feedback` enabled:** Re-exports `CodexFeedback` and `CodexLogSnapshot` from `codex_feedback`
+- **With `feedback` disabled:** Provides stub implementations with no-op behavior (e.g., `upload_feedback()` returns `Ok(())`, `make_writer()` returns a writer that discards output)
+
+This pattern allows TUI code to use feedback types unconditionally without `#[cfg]` attributes at every call site. The stub structure is designed as a placeholder for future Nori-specific feedback functionality.
+
+**Update System Selection:**
+
+The update checking system is selected at compile time via `upstream-updates`:
+- With `upstream-updates`: Uses `update_action.rs`, `updates.rs`, `update_prompt.rs` from `@/codex-rs/tui/src/`
+- Without `upstream-updates`: Uses Nori-specific versions from `@/codex-rs/tui/src/nori/`
+- Re-exports in `lib.rs` provide unified access: `pub mod update_action` re-exports from either location
+
+Update modules are only compiled in release builds (`#[cfg(not(debug_assertions))]`) to avoid unnecessary checks during development.
 
 **Rendering Patterns:**
 

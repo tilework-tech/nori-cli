@@ -1179,6 +1179,8 @@ dependencies = [
  "codex-protocol",
  "once_cell",
  "serde",
+ "tempfile",
+ "tokio",
  "toml",
 ]
 
