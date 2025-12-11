@@ -21,6 +21,7 @@ use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionConfiguredEvent;
 use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
+use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::user_input::UserInput;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -464,6 +465,12 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         acp::SessionUpdate::ToolCall(tool_call) => {
             // Format command with tool name and input arguments for better display
             let command = format_tool_call_command(&tool_call.title, tool_call.raw_input.as_ref());
+            // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
+            let parsed_cmd = classify_tool_to_parsed_command(
+                &tool_call.title,
+                Some(&tool_call.kind),
+                tool_call.raw_input.as_ref(),
+            );
             vec![EventMsg::ExecCommandBegin(
                 codex_protocol::protocol::ExecCommandBeginEvent {
                     call_id: tool_call.tool_call_id.to_string(),
@@ -471,7 +478,7 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                     turn_id: String::new(),
                     command: vec![command],
                     cwd: PathBuf::new(),
-                    parsed_cmd: vec![],
+                    parsed_cmd,
                     source: codex_protocol::protocol::ExecCommandSource::Agent,
                     interaction_input: None,
                 },
@@ -484,6 +491,12 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                 let aggregated_output = extract_tool_output(&update.fields);
                 let title = update.fields.title.clone().unwrap_or_default();
                 let command = format_tool_call_command(&title, update.fields.raw_input.as_ref());
+                // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
+                let parsed_cmd = classify_tool_to_parsed_command(
+                    &title,
+                    update.fields.kind.as_ref(),
+                    update.fields.raw_input.as_ref(),
+                );
 
                 vec![EventMsg::ExecCommandEnd(
                     codex_protocol::protocol::ExecCommandEndEvent {
@@ -492,7 +505,7 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                         turn_id: String::new(),
                         command: vec![command],
                         cwd: PathBuf::new(),
-                        parsed_cmd: vec![],
+                        parsed_cmd,
                         source: codex_protocol::protocol::ExecCommandSource::Agent,
                         interaction_input: None,
                         stdout: String::new(),
@@ -705,6 +718,172 @@ fn format_raw_output(raw_output: &serde_json::Value, title: Option<&str>) -> Opt
     None
 }
 
+/// Classify a tool call into ParsedCommand variants based on ACP ToolKind.
+///
+/// This enables the TUI to render tool calls appropriately:
+/// - `Read`, `ListFiles`, `Search` → "Exploring" mode with compact, grouped display
+/// - `Unknown` → "Command" mode with full command text display
+///
+/// # ACP ToolKind mappings:
+/// - `Read` → `ParsedCommand::Read` (exploring)
+/// - `Search` → `ParsedCommand::Search` (exploring)
+/// - `Edit`, `Delete`, `Move`, `Execute`, `Fetch` → `ParsedCommand::Unknown` (command)
+/// - `Think`, `Other` → `ParsedCommand::Unknown` (command)
+fn classify_tool_to_parsed_command(
+    title: &str,
+    kind: Option<&acp::ToolKind>,
+    raw_input: Option<&serde_json::Value>,
+) -> Vec<ParsedCommand> {
+    match kind {
+        // Read operations → Exploring mode
+        Some(acp::ToolKind::Read) => {
+            let path = raw_input
+                .and_then(|i| {
+                    i.get("path")
+                        .or_else(|| i.get("file_path"))
+                        .or_else(|| i.get("file"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("file");
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.to_string());
+            vec![ParsedCommand::Read {
+                cmd: title.to_string(),
+                name,
+                path: std::path::PathBuf::from(path),
+            }]
+        }
+
+        // Search operations → Exploring mode
+        Some(acp::ToolKind::Search) => {
+            let query = raw_input
+                .and_then(|i| i.get("pattern").or_else(|| i.get("query")))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let path = raw_input
+                .and_then(|i| i.get("path").or_else(|| i.get("directory")))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            vec![ParsedCommand::Search {
+                cmd: title.to_string(),
+                query,
+                path,
+            }]
+        }
+
+        // Edit, Delete, Move → Command mode (mutating operations)
+        Some(acp::ToolKind::Edit | acp::ToolKind::Delete | acp::ToolKind::Move) => {
+            vec![ParsedCommand::Unknown {
+                cmd: format_tool_call_command(title, raw_input),
+            }]
+        }
+
+        // Execute → Command mode (shell/terminal operations)
+        Some(acp::ToolKind::Execute) => {
+            vec![ParsedCommand::Unknown {
+                cmd: format_tool_call_command(title, raw_input),
+            }]
+        }
+
+        // Fetch → Command mode (external data retrieval)
+        Some(acp::ToolKind::Fetch) => {
+            vec![ParsedCommand::Unknown {
+                cmd: format_tool_call_command(title, raw_input),
+            }]
+        }
+
+        // Think → Command mode (internal reasoning)
+        Some(acp::ToolKind::Think) => {
+            vec![ParsedCommand::Unknown {
+                cmd: format_tool_call_command(title, raw_input),
+            }]
+        }
+
+        // Other or unknown → Command mode (fallback)
+        Some(acp::ToolKind::Other) | None => {
+            // Try to infer from title as fallback
+            classify_tool_by_title(title, raw_input)
+        }
+
+        // Catch any future ToolKind variants
+        #[allow(unreachable_patterns)]
+        _ => {
+            vec![ParsedCommand::Unknown {
+                cmd: format_tool_call_command(title, raw_input),
+            }]
+        }
+    }
+}
+
+/// Fallback classification based on tool title when ToolKind is not available.
+///
+/// Uses heuristics to detect common tool patterns.
+fn classify_tool_by_title(title: &str, raw_input: Option<&serde_json::Value>) -> Vec<ParsedCommand> {
+    let title_lower = title.to_lowercase();
+
+    // List/Glob operations → Exploring mode
+    if title_lower.contains("list")
+        || title_lower.contains("glob")
+        || title_lower.contains("ls")
+        || title_lower == "find"
+        || title_lower.contains("find files")
+    {
+        let path = raw_input
+            .and_then(|i| i.get("path").or_else(|| i.get("directory")))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        return vec![ParsedCommand::ListFiles {
+            cmd: title.to_string(),
+            path,
+        }];
+    }
+
+    // Search/Grep operations → Exploring mode
+    if title_lower.contains("search") || title_lower.contains("grep") {
+        let query = raw_input
+            .and_then(|i| i.get("pattern").or_else(|| i.get("query")))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let path = raw_input
+            .and_then(|i| i.get("path"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        return vec![ParsedCommand::Search {
+            cmd: title.to_string(),
+            query,
+            path,
+        }];
+    }
+
+    // Read operations → Exploring mode
+    if title_lower.contains("read") || title_lower == "file" {
+        let path = raw_input
+            .and_then(|i| {
+                i.get("path")
+                    .or_else(|| i.get("file_path"))
+                    .or_else(|| i.get("file"))
+            })
+            .and_then(|v| v.as_str())
+            .unwrap_or("file");
+        let name = std::path::Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string());
+        return vec![ParsedCommand::Read {
+            cmd: title.to_string(),
+            name,
+            path: std::path::PathBuf::from(path),
+        }];
+    }
+
+    // Default: Command mode
+    vec![ParsedCommand::Unknown {
+        cmd: format_tool_call_command(title, raw_input),
+    }]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -908,5 +1087,295 @@ mod tests {
         assert_ne!(id2, id3);
         assert!(id1.starts_with("acp-"));
         assert!(id2.starts_with("acp-"));
+    }
+
+    // ==================== Tool Classification Tests ====================
+
+    /// Test that ToolKind::Read produces ParsedCommand::Read (Exploring mode).
+    #[test]
+    fn test_classify_tool_kind_read() {
+        let parsed = classify_tool_to_parsed_command(
+            "Read File",
+            Some(&acp::ToolKind::Read),
+            Some(&serde_json::json!({"path": "src/main.rs"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Read { cmd, name, path } => {
+                assert_eq!(cmd, "Read File");
+                assert_eq!(name, "main.rs");
+                assert_eq!(path.to_string_lossy(), "src/main.rs");
+            }
+            _ => panic!("Expected ParsedCommand::Read"),
+        }
+    }
+
+    /// Test that ToolKind::Search produces ParsedCommand::Search (Exploring mode).
+    #[test]
+    fn test_classify_tool_kind_search() {
+        let parsed = classify_tool_to_parsed_command(
+            "Search Files",
+            Some(&acp::ToolKind::Search),
+            Some(&serde_json::json!({"pattern": "TODO", "path": "src/"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Search { cmd, query, path } => {
+                assert_eq!(cmd, "Search Files");
+                assert_eq!(query.as_deref(), Some("TODO"));
+                assert_eq!(path.as_deref(), Some("src/"));
+            }
+            _ => panic!("Expected ParsedCommand::Search"),
+        }
+    }
+
+    /// Test that ToolKind::Execute produces ParsedCommand::Unknown (Command mode).
+    #[test]
+    fn test_classify_tool_kind_execute() {
+        let parsed = classify_tool_to_parsed_command(
+            "Terminal",
+            Some(&acp::ToolKind::Execute),
+            Some(&serde_json::json!({"command": "git status"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Unknown { cmd } => {
+                assert_eq!(cmd, "Terminal(git status)");
+            }
+            _ => panic!("Expected ParsedCommand::Unknown"),
+        }
+    }
+
+    /// Test that ToolKind::Edit produces ParsedCommand::Unknown (Command mode).
+    #[test]
+    fn test_classify_tool_kind_edit() {
+        let parsed = classify_tool_to_parsed_command(
+            "Edit File",
+            Some(&acp::ToolKind::Edit),
+            Some(&serde_json::json!({"path": "src/lib.rs"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Unknown { cmd } => {
+                assert!(cmd.contains("Edit File"));
+            }
+            _ => panic!("Expected ParsedCommand::Unknown"),
+        }
+    }
+
+    /// Test that ToolKind::Delete produces ParsedCommand::Unknown (Command mode).
+    #[test]
+    fn test_classify_tool_kind_delete() {
+        let parsed = classify_tool_to_parsed_command(
+            "Delete File",
+            Some(&acp::ToolKind::Delete),
+            Some(&serde_json::json!({"path": "temp.txt"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Unknown { .. } => {}
+            _ => panic!("Expected ParsedCommand::Unknown"),
+        }
+    }
+
+    /// Test that ToolKind::Move produces ParsedCommand::Unknown (Command mode).
+    #[test]
+    fn test_classify_tool_kind_move() {
+        let parsed = classify_tool_to_parsed_command(
+            "Move File",
+            Some(&acp::ToolKind::Move),
+            Some(&serde_json::json!({"from": "a.txt", "to": "b.txt"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Unknown { .. } => {}
+            _ => panic!("Expected ParsedCommand::Unknown"),
+        }
+    }
+
+    /// Test that ToolKind::Fetch produces ParsedCommand::Unknown (Command mode).
+    #[test]
+    fn test_classify_tool_kind_fetch() {
+        let parsed = classify_tool_to_parsed_command(
+            "Fetch URL",
+            Some(&acp::ToolKind::Fetch),
+            Some(&serde_json::json!({"url": "https://example.com"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Unknown { .. } => {}
+            _ => panic!("Expected ParsedCommand::Unknown"),
+        }
+    }
+
+    /// Test that ToolKind::Think produces ParsedCommand::Unknown (Command mode).
+    #[test]
+    fn test_classify_tool_kind_think() {
+        let parsed = classify_tool_to_parsed_command(
+            "Think",
+            Some(&acp::ToolKind::Think),
+            None,
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Unknown { .. } => {}
+            _ => panic!("Expected ParsedCommand::Unknown"),
+        }
+    }
+
+    /// Test title-based fallback for ToolKind::Other with "list" in title.
+    #[test]
+    fn test_classify_fallback_list_by_title() {
+        let parsed = classify_tool_to_parsed_command(
+            "List Directory",
+            Some(&acp::ToolKind::Other),
+            Some(&serde_json::json!({"path": "src/"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::ListFiles { cmd, path } => {
+                assert_eq!(cmd, "List Directory");
+                assert_eq!(path.as_deref(), Some("src/"));
+            }
+            _ => panic!("Expected ParsedCommand::ListFiles"),
+        }
+    }
+
+    /// Test title-based fallback for ToolKind::Other with "grep" in title.
+    #[test]
+    fn test_classify_fallback_grep_by_title() {
+        let parsed = classify_tool_to_parsed_command(
+            "Grep Files",
+            Some(&acp::ToolKind::Other),
+            Some(&serde_json::json!({"pattern": "error", "path": "logs/"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Search { cmd, query, path } => {
+                assert_eq!(cmd, "Grep Files");
+                assert_eq!(query.as_deref(), Some("error"));
+                assert_eq!(path.as_deref(), Some("logs/"));
+            }
+            _ => panic!("Expected ParsedCommand::Search"),
+        }
+    }
+
+    /// Test title-based fallback for ToolKind::Other with "read" in title.
+    #[test]
+    fn test_classify_fallback_read_by_title() {
+        let parsed = classify_tool_to_parsed_command(
+            "Read Config",
+            Some(&acp::ToolKind::Other),
+            Some(&serde_json::json!({"file_path": "config.toml"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Read { cmd, name, .. } => {
+                assert_eq!(cmd, "Read Config");
+                assert_eq!(name, "config.toml");
+            }
+            _ => panic!("Expected ParsedCommand::Read"),
+        }
+    }
+
+    /// Test that None kind falls back to title-based classification.
+    #[test]
+    fn test_classify_none_kind_fallback() {
+        let parsed = classify_tool_to_parsed_command(
+            "Search Code",
+            None,
+            Some(&serde_json::json!({"query": "fn main"})),
+        );
+        assert_eq!(parsed.len(), 1);
+        match &parsed[0] {
+            ParsedCommand::Search { cmd, query, .. } => {
+                assert_eq!(cmd, "Search Code");
+                assert_eq!(query.as_deref(), Some("fn main"));
+            }
+            _ => panic!("Expected ParsedCommand::Search"),
+        }
+    }
+
+    /// Test that ToolCall with Read kind generates parsed_cmd in ExecCommandBegin.
+    #[test]
+    fn test_tool_call_read_generates_exploring_parsed_cmd() {
+        let update = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(acp::ToolCallId::from("call-read".to_string()), "Read File")
+                .kind(acp::ToolKind::Read)
+                .status(acp::ToolCallStatus::InProgress)
+                .raw_input(serde_json::json!({"path": "src/lib.rs"})),
+        );
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandBegin(begin) => {
+                assert_eq!(begin.parsed_cmd.len(), 1);
+                match &begin.parsed_cmd[0] {
+                    ParsedCommand::Read { name, .. } => {
+                        assert_eq!(name, "lib.rs");
+                    }
+                    _ => panic!("Expected ParsedCommand::Read"),
+                }
+            }
+            _ => panic!("Expected ExecCommandBegin event"),
+        }
+    }
+
+    /// Test that ToolCall with Execute kind generates command-mode parsed_cmd.
+    #[test]
+    fn test_tool_call_execute_generates_command_parsed_cmd() {
+        let update = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(acp::ToolCallId::from("call-exec".to_string()), "Terminal")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::InProgress)
+                .raw_input(serde_json::json!({"command": "cargo test"})),
+        );
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandBegin(begin) => {
+                assert_eq!(begin.parsed_cmd.len(), 1);
+                match &begin.parsed_cmd[0] {
+                    ParsedCommand::Unknown { cmd } => {
+                        assert!(cmd.contains("cargo test"));
+                    }
+                    _ => panic!("Expected ParsedCommand::Unknown"),
+                }
+            }
+            _ => panic!("Expected ExecCommandBegin event"),
+        }
+    }
+
+    /// Test that ToolCallUpdate with Read kind generates exploring parsed_cmd in ExecCommandEnd.
+    #[test]
+    fn test_tool_call_update_read_generates_exploring_parsed_cmd() {
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-read-end".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::Completed)
+                .title("Read File")
+                .kind(acp::ToolKind::Read)
+                .raw_input(serde_json::json!({"path": "Cargo.toml"})),
+        ));
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandEnd(end) => {
+                assert_eq!(end.parsed_cmd.len(), 1);
+                match &end.parsed_cmd[0] {
+                    ParsedCommand::Read { name, .. } => {
+                        assert_eq!(name, "Cargo.toml");
+                    }
+                    _ => panic!("Expected ParsedCommand::Read"),
+                }
+            }
+            _ => panic!("Expected ExecCommandEnd event"),
+        }
     }
 }
