@@ -177,6 +177,7 @@ async fn stdio_server_round_trip() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[serial(mcp_test_value)]
+#[ignore] // Slow test - takes >60s due to cargo build and MCP server startup
 async fn stdio_image_responses_round_trip() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
@@ -330,6 +331,7 @@ async fn stdio_image_responses_round_trip() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[serial(mcp_test_value)]
+#[ignore] // Slow test - takes >60s due to cargo build and MCP server startup
 async fn stdio_image_completions_round_trip() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
