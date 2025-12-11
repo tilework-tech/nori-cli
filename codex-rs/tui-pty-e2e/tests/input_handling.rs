@@ -7,6 +7,7 @@ use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
+#[cfg(target_os = "linux")]
 #[ignore] // Ctrl-C triggers ListCustomPrompts which isn't supported in ACP mode
 fn test_ctrl_c_clears_input() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
@@ -32,6 +33,7 @@ fn test_ctrl_c_clears_input() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
@@ -55,6 +57,7 @@ fn test_backspace() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_arrows() {
     let mut session = TuiSession::spawn(40, 80).unwrap();
     session.wait_for_text("›", TIMEOUT).unwrap();

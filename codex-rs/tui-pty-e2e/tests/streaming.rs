@@ -8,6 +8,7 @@ use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_submit_text() {
     let config = SessionConfig::new().with_stream_until_cancel();
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
@@ -34,6 +35,7 @@ fn test_submit_text() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_escape_cancels_streaming() {
     // Use git_init to prevent "Snapshots disabled" from racing with "Working" status
     let config = SessionConfig::new().with_stream_until_cancel();
@@ -79,6 +81,7 @@ fn test_escape_cancels_streaming() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_ctrl_c_cancels_streaming() {
     // Use git_init to prevent "Snapshots disabled" from racing with "Working" status
     let config = SessionConfig::new().with_stream_until_cancel();

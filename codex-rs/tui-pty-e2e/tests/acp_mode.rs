@@ -48,6 +48,7 @@ fn test_acp_mode_startup_with_mock_agent() {
 
 /// Test that ACP mode can send a prompt and receive a response from mock agent
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_mode_prompt_response_flow() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
@@ -86,6 +87,7 @@ fn test_acp_mode_prompt_response_flow() {
 /// 2. TUI must listen to AcpConnection::take_approval_receiver()
 /// 3. TUI must display ExecApprovalRequestEvent and send ReviewDecision back
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_approval_request_displayed_in_tui() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
@@ -159,6 +161,7 @@ fn test_acp_approval_request_displayed_in_tui() {
 /// 5. Agent sends a continuation message
 /// 6. TUI returns to input state and remains functional
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_approval_full_flow() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())

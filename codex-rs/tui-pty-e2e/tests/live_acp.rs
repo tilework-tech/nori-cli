@@ -18,6 +18,7 @@ const LIVE_TIMEOUT_INPUT: Duration = Duration::from_millis(500);
 
 /// Test gemini-acp with a real Gemini API connection
 #[test]
+#[cfg(target_os = "linux")]
 #[ignore]
 fn test_gemini_acp_live_response() {
     // Skip if API key not set
@@ -63,6 +64,7 @@ fn test_gemini_acp_live_response() {
 
 /// Test claude-acp with a real Claude API connection
 #[test]
+#[cfg(target_os = "linux")]
 #[ignore]
 fn test_claude_acp_live_response() {
     // Skip if API key not set

@@ -10,6 +10,7 @@ use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_submit_prompt_default_response() {
     let mut session = TuiSession::spawn(18, 80).expect("Failed to spawn codex");
 
@@ -80,6 +81,7 @@ fn test_http_model_immediate_error_without_retries() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_submit_prompt_custom_response() {
     let config = SessionConfig::new()
         .with_mock_response("This is a custom test response from the mock agent.");

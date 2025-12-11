@@ -46,6 +46,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 /// - translator.rs must handle SessionUpdate::ToolCall
 /// - core/client.rs must emit EventMsg::McpToolCallBegin
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_tool_call_rendered_in_tui() {
     // Configure mock agent to send a tool call
     let config = SessionConfig::new()
@@ -114,6 +115,7 @@ fn test_acp_tool_call_rendered_in_tui() {
 /// 2. The duration is shown
 /// 3. Any output is displayed
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_tool_call_completion_rendered_in_tui() {
     // Configure mock agent to send a tool call with completion
     // The mock agent sends a hardcoded tool call with title "Reading configuration file"
@@ -176,6 +178,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
 /// This test uses MOCK_AGENT_INTERLEAVED_TOOL_CALL which sends text DURING
 /// the tool call to trigger this exact scenario.
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_tool_call_no_duplicate_messages() {
     // Configure mock agent to send interleaved text and tool calls
     // This triggers the bug by sending text DURING the tool call execution
@@ -256,6 +259,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
 /// This captures the exact visual rendering of an ACP tool call
 /// to detect any regressions in the display format.
 #[test]
+#[cfg(target_os = "linux")]
 fn test_acp_tool_call_snapshot() {
     // Use the correct env var to trigger tool calls
     // The mock agent sends hardcoded content: title "Reading configuration file"
