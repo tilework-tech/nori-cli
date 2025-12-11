@@ -463,7 +463,7 @@ impl acp::Agent for MockAgent {
                 .await
             {
                 Ok(()) => {
-                    self.send_text_chunk(session_id.clone(), "File written successfully")
+                    self.send_text_chunk(session_id.clone(), "\nFile written successfully\n")
                         .await?;
 
                     // Optionally read back the file to verify the write
@@ -471,12 +471,12 @@ impl acp::Agent for MockAgent {
                         .read_file_via_client(session_id.clone(), PathBuf::from(&file_path))
                         .await
                     {
-                        let msg = format!("Verified content: {}", read_content);
+                        let msg = format!("\nVerified content:\n{}\n", read_content);
                         self.send_text_chunk(session_id.clone(), &msg).await?;
                     }
                 }
                 Err(err) => {
-                    let msg = format!("Failed to write file: {}", err);
+                    let msg = format!("\nFailed to write file: {}\n", err);
                     self.send_text_chunk(session_id.clone(), &msg).await?;
                 }
             }

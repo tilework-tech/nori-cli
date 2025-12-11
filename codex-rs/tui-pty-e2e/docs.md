@@ -146,6 +146,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
 | `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - 8 comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace/tmp allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**

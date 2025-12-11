@@ -706,6 +706,13 @@ impl acp::Client for ClientDelegate {
     ) -> acp::Result<acp::WriteTextFileResponse> {
         let path = &arguments.path;
 
+        // Resolve relative paths against the working directory
+        let resolved_path = if path.is_relative() {
+            self.cwd.join(path)
+        } else {
+            path.to_path_buf()
+        };
+
         // TEMPORARY PATH RESTRICTION:
         // This application-level path check provides basic safety until the ACP agent
         // subprocess is launched with OS-level sandboxing (Seatbelt on macOS, Landlock
@@ -716,7 +723,7 @@ impl acp::Client for ClientDelegate {
         // For now, restrict writes to:
         // 1. Within the working directory (typical workspace operations)
         // 2. Within /tmp (temporary files, common for agent workflows)
-        let allowed = if let Ok(canonical) = path.canonicalize() {
+        let allowed = if let Ok(canonical) = resolved_path.canonicalize() {
             let in_cwd = self
                 .cwd
                 .canonicalize()
@@ -727,7 +734,7 @@ impl acp::Client for ClientDelegate {
         } else {
             // Path doesn't exist yet - check if parent is within allowed directories
             // This handles the case of creating new files
-            if let Some(parent) = path.parent() {
+            if let Some(parent) = resolved_path.parent() {
                 if let Ok(canonical_parent) = parent.canonicalize() {
                     let in_cwd = self
                         .cwd
@@ -737,8 +744,8 @@ impl acp::Client for ClientDelegate {
                     let in_tmp = canonical_parent.starts_with("/tmp");
                     in_cwd || in_tmp
                 } else {
-                    // Parent also doesn't exist - only allow if path starts with cwd or /tmp
-                    path.starts_with(&self.cwd) || path.starts_with("/tmp")
+                    // Parent also doesn't exist - only allow if resolved path starts with cwd or /tmp
+                    resolved_path.starts_with(&self.cwd) || resolved_path.starts_with("/tmp")
                 }
             } else {
                 false
@@ -749,19 +756,19 @@ impl acp::Client for ClientDelegate {
             return Err(acp::Error::invalid_params().data(format!(
                 "Write restricted to working directory ({}) or /tmp. Path: {}",
                 self.cwd.display(),
-                path.display()
+                resolved_path.display()
             )));
         }
         // END TEMPORARY PATH RESTRICTION
 
         // Create parent directories if they don't exist
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(acp::Error::into_internal_error)?;
-            }
+        if let Some(parent) = resolved_path.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent).map_err(acp::Error::into_internal_error)?;
         }
 
-        std::fs::write(path, &arguments.content).map_err(acp::Error::into_internal_error)?;
+        std::fs::write(&resolved_path, &arguments.content).map_err(acp::Error::into_internal_error)?;
         Ok(acp::WriteTextFileResponse::new())
     }
 
