@@ -12,7 +12,10 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 
-• Test message 1Test message 2File written successfullyVerified content:
+• Test message 1Test message 2
+  File written successfully
+
+  Verified content:
   Snapshot test content
 
 

@@ -483,8 +483,7 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                 // Extract output from tool call content and raw_output
                 let aggregated_output = extract_tool_output(&update.fields);
                 let title = update.fields.title.clone().unwrap_or_default();
-                let command =
-                    format_tool_call_command(&title, update.fields.raw_input.as_ref());
+                let command = format_tool_call_command(&title, update.fields.raw_input.as_ref());
 
                 vec![EventMsg::ExecCommandEnd(
                     codex_protocol::protocol::ExecCommandEndEvent {
@@ -534,7 +533,10 @@ fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String
 
     // Try to extract the most relevant argument based on tool type
     // Note: Order matters - more specific matches should come first
-    if title_lower.contains("search") || title_lower.contains("find") || title_lower.contains("grep") {
+    if title_lower.contains("search")
+        || title_lower.contains("find")
+        || title_lower.contains("grep")
+    {
         // For search operations, show the pattern/query
         let pattern = input
             .get("pattern")
@@ -559,21 +561,21 @@ fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String
             .get("command")
             .or_else(|| input.get("cmd"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(str::to_string)
     } else if title_lower.contains("list") || title_lower.contains("ls") {
         // For list operations, show the path
         input
             .get("path")
             .or_else(|| input.get("directory"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(str::to_string)
     } else if title_lower.contains("write") || title_lower.contains("edit") {
         // For write operations, show the path
         input
             .get("path")
             .or_else(|| input.get("file_path"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(str::to_string)
     } else if title_lower.contains("read") || title_lower.contains("file") {
         // For file read operations, show the path
         input
@@ -581,7 +583,7 @@ fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String
             .or_else(|| input.get("file_path"))
             .or_else(|| input.get("file"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(str::to_string)
     } else {
         // Generic fallback: try common argument names
         input
@@ -590,7 +592,7 @@ fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String
             .or_else(|| input.get("query"))
             .or_else(|| input.get("name"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(str::to_string)
     }
 }
 
@@ -603,23 +605,21 @@ fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
     // Extract text content from the content field
     if let Some(content) = &fields.content {
         for item in content {
-            if let acp::ToolCallContent::Content(c) = item {
-                if let acp::ContentBlock::Text(text) = &c.content {
-                    if !text.text.is_empty() {
-                        output_parts.push(text.text.clone());
-                    }
-                }
+            if let acp::ToolCallContent::Content(c) = item
+                && let acp::ContentBlock::Text(text) = &c.content
+                && !text.text.is_empty()
+            {
+                output_parts.push(text.text.clone());
             }
         }
     }
 
     // If no text content, try to extract meaningful info from raw_output
-    if output_parts.is_empty() {
-        if let Some(raw_output) = &fields.raw_output {
-            if let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref()) {
-                output_parts.push(output_str);
-            }
-        }
+    if output_parts.is_empty()
+        && let Some(raw_output) = &fields.raw_output
+        && let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref())
+    {
+        output_parts.push(output_str);
     }
 
     output_parts.join("\n")
@@ -627,17 +627,17 @@ fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
 
 /// Format raw_output JSON into a human-readable string based on tool type.
 fn format_raw_output(raw_output: &serde_json::Value, title: Option<&str>) -> Option<String> {
-    let title_lower = title.map(|t| t.to_lowercase()).unwrap_or_default();
+    let title_lower = title.map(str::to_lowercase).unwrap_or_default();
 
     // Try to provide meaningful summaries based on common output patterns
     if let Some(obj) = raw_output.as_object() {
         // Check for line count (common in read operations)
-        if let Some(lines) = obj.get("lines").and_then(|v| v.as_u64()) {
+        if let Some(lines) = obj.get("lines").and_then(serde_json::Value::as_u64) {
             return Some(format!("Read {lines} lines"));
         }
 
         // Check for file count (common in find/search operations)
-        if let Some(count) = obj.get("count").and_then(|v| v.as_u64()) {
+        if let Some(count) = obj.get("count").and_then(serde_json::Value::as_u64) {
             if title_lower.contains("find") || title_lower.contains("search") {
                 return Some(format!("Found {count} files"));
             }
@@ -647,11 +647,7 @@ fn format_raw_output(raw_output: &serde_json::Value, title: Option<&str>) -> Opt
         // Check for files array
         if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
             let count = files.len();
-            let file_list: Vec<&str> = files
-                .iter()
-                .filter_map(|f| f.as_str())
-                .take(5)
-                .collect();
+            let file_list: Vec<&str> = files.iter().filter_map(|f| f.as_str()).take(5).collect();
             if count > 5 {
                 return Some(format!(
                     "Found {} files\n{}...",
@@ -664,7 +660,7 @@ fn format_raw_output(raw_output: &serde_json::Value, title: Option<&str>) -> Opt
         }
 
         // Check for exit_code (common in shell operations)
-        if let Some(exit_code) = obj.get("exit_code").and_then(|v| v.as_i64()) {
+        if let Some(exit_code) = obj.get("exit_code").and_then(serde_json::Value::as_i64) {
             // Look for stdout/output
             let output = obj
                 .get("stdout")
@@ -682,28 +678,28 @@ fn format_raw_output(raw_output: &serde_json::Value, title: Option<&str>) -> Opt
         }
 
         // Check for success boolean
-        if let Some(success) = obj.get("success").and_then(|v| v.as_bool()) {
-            if !success {
-                if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
-                    return Some(format!("Failed: {error}"));
-                }
-                return Some("Operation failed".to_string());
+        if let Some(success) = obj.get("success").and_then(serde_json::Value::as_bool)
+            && !success
+        {
+            if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
+                return Some(format!("Failed: {error}"));
             }
+            return Some("Operation failed".to_string());
         }
     }
 
     // For arrays, show count
-    if let Some(arr) = raw_output.as_array() {
-        if !arr.is_empty() {
-            return Some(format!("{} items", arr.len()));
-        }
+    if let Some(arr) = raw_output.as_array()
+        && !arr.is_empty()
+    {
+        return Some(format!("{} items", arr.len()));
     }
 
     // For strings, return directly
-    if let Some(s) = raw_output.as_str() {
-        if !s.is_empty() {
-            return Some(s.to_string());
-        }
+    if let Some(s) = raw_output.as_str()
+        && !s.is_empty()
+    {
+        return Some(s.to_string());
     }
 
     None
