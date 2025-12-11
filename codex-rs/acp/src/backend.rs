@@ -11,6 +11,7 @@ use std::sync::Arc;
 use agent_client_protocol as acp;
 use anyhow::Result;
 use codex_protocol::ConversationId;
+use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
@@ -21,7 +22,6 @@ use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionConfiguredEvent;
 use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
-use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::user_input::UserInput;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -820,7 +820,10 @@ fn classify_tool_to_parsed_command(
 /// Fallback classification based on tool title when ToolKind is not available.
 ///
 /// Uses heuristics to detect common tool patterns.
-fn classify_tool_by_title(title: &str, raw_input: Option<&serde_json::Value>) -> Vec<ParsedCommand> {
+fn classify_tool_by_title(
+    title: &str,
+    raw_input: Option<&serde_json::Value>,
+) -> Vec<ParsedCommand> {
     let title_lower = title.to_lowercase();
 
     // List/Glob operations → Exploring mode
@@ -1211,11 +1214,7 @@ mod tests {
     /// Test that ToolKind::Think produces ParsedCommand::Unknown (Command mode).
     #[test]
     fn test_classify_tool_kind_think() {
-        let parsed = classify_tool_to_parsed_command(
-            "Think",
-            Some(&acp::ToolKind::Think),
-            None,
-        );
+        let parsed = classify_tool_to_parsed_command("Think", Some(&acp::ToolKind::Think), None);
         assert_eq!(parsed.len(), 1);
         match &parsed[0] {
             ParsedCommand::Unknown { .. } => {}
