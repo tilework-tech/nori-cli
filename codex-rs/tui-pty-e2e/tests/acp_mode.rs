@@ -238,7 +238,10 @@ fn test_acp_write_text_file() {
         .with_model("mock-model".to_owned())
         // Configure mock agent to write to hello.py with new content
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "hello.py")
-        .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "print('Modified by ACP agent!')");
+        .with_agent_env(
+            "MOCK_AGENT_WRITE_CONTENT",
+            "print('Modified by ACP agent!')",
+        );
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
