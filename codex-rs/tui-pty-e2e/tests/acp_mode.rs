@@ -65,8 +65,13 @@ fn test_acp_mode_prompt_response_flow() {
 
     // Send a test prompt
     session.send_str("Test ACP prompt").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Test ACP prompt", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the mock response
     session
@@ -104,8 +109,13 @@ fn test_acp_approval_request_displayed_in_tui() {
 
     // Send a prompt that triggers a permission request
     session.send_str("Run a shell command").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Run a shell command", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the approval request to appear
     // The TUI should display something like "ACP agent requests permission"
@@ -176,8 +186,13 @@ fn test_acp_approval_full_flow() {
 
     // Send a prompt that triggers a permission request
     session.send_str("Test approval flow").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Test approval flow", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the approval request to appear
     session
