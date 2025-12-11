@@ -14,8 +14,8 @@ expression: normalize_for_input_snapshot(contents)
 
 • Test message 1Test message 2
 
-• Ran 'Reading configuration file(/etc/config.toml)'
-  └ Configuration loaded successfully
+• Explored
+  └ Read config.toml
 
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 

@@ -76,10 +76,7 @@ fn test_acp_tool_call_rendered_in_tui() {
     let tool_call_appeared = session.wait_for(
         |screen| {
             // Look for signs of tool call rendering
-            screen.contains("Calling")
-                || screen.contains("Called")
-                || screen.contains("read_file")
-                || screen.contains("Reading")
+            screen.contains("Explored")
         },
         Duration::from_secs(10),
     );
@@ -91,9 +88,7 @@ fn test_acp_tool_call_rendered_in_tui() {
 
             // The tool call should display with the tool name
             assert!(
-                contents.contains("read_file")
-                    || contents.contains("Calling")
-                    || contents.contains("Reading"),
+                contents.contains("Explored") && contents.contains("Read config.toml"),
                 "Tool call should show tool name or 'Calling' prefix, got:\n{}",
                 contents
             );
@@ -152,9 +147,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
     // After completion, should show "Called" or "Reading" (from title "Reading configuration file")
     // The format is: "✓ Called server.tool_name(...) (Xs)" or the title display
     assert!(
-        contents.contains("Called")
-            || contents.contains("Reading")
-            || contents.contains("configuration"),
+        contents.contains("Explored"),
         "Completed tool call should show 'Called' or tool title, got:\n{}",
         contents
     );
