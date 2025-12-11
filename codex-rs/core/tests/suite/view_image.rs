@@ -62,7 +62,10 @@ async fn user_turn_with_local_image_attaches_image() -> anyhow::Result<()> {
     if let Some(parent) = abs_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let image = ImageBuffer::from_pixel(4096, 1024, Rgba([20u8, 40, 60, 255]));
+    // Use a small image that doesn't require resizing to avoid slow image
+    // processing on CI runners (the view_image_tool_attaches_local_image test
+    // already covers the resize code path).
+    let image = ImageBuffer::from_pixel(1024, 512, Rgba([20u8, 40, 60, 255]));
     image.save(&abs_path)?;
 
     let response = sse(vec![
@@ -116,12 +119,11 @@ async fn user_turn_with_local_image_attaches_image() -> anyhow::Result<()> {
     let decoded = BASE64_STANDARD
         .decode(encoded)
         .expect("image data decodes from base64 for request");
-    let resized = load_from_memory(&decoded).expect("load resized image");
-    let (width, height) = resized.dimensions();
-    assert!(width <= 2048);
-    assert!(height <= 768);
-    assert!(width < 4096);
-    assert!(height < 1024);
+    let processed = load_from_memory(&decoded).expect("load processed image");
+    let (width, height) = processed.dimensions();
+    // Image should be unchanged since it's within MAX_WIDTH x MAX_HEIGHT bounds
+    assert_eq!(width, 1024);
+    assert_eq!(height, 512);
 
     Ok(())
 }
