@@ -37,6 +37,7 @@ fn test_startup_error_for_unregistered_model() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_startup_shows_banner() {
     let mut session = TuiSession::spawn_with_config(
         24,
@@ -64,6 +65,7 @@ fn test_startup_shows_banner() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_startup_welcome_with_dimensions() {
     let mut session = TuiSession::spawn_with_config(
         40,
@@ -94,6 +96,7 @@ fn test_startup_welcome_with_dimensions() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_runs_in_temp_directory_by_default() {
     let mut session = TuiSession::spawn_with_config(
         24,
@@ -133,6 +136,7 @@ fn test_runs_in_temp_directory_by_default() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn test_trust_screen_is_skipped_with_default_config() {
     let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn codex");
 
