@@ -66,8 +66,13 @@ fn test_acp_tool_call_rendered_in_tui() {
 
     // Send a prompt that triggers the tool call
     session.send_str("Read a file for me").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Read a file for me", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for tool call to appear in TUI
     // The tool call should render like: "• Calling acp.read_file(...)"
@@ -134,8 +139,13 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
 
     // Send a prompt
     session.send_str("Echo hello").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Echo hello", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the mock response which means the tool call has completed
     // The mock agent sends "Tool call completed successfully." as final text
@@ -195,8 +205,13 @@ fn test_acp_tool_call_no_duplicate_messages() {
 
     // Send a prompt to trigger the interleaved tool call
     session.send_str("Test interleaved").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Test interleaved", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the final text which means everything completed
     session
@@ -275,8 +290,13 @@ fn test_acp_tool_call_snapshot() {
 
     // Send prompt to trigger tool call
     session.send_str("Read test.txt").unwrap();
+    // Wait for typed text to appear before sending Enter (required for macOS PTY timing)
+    session
+        .wait_for_text("Read test.txt", TIMEOUT)
+        .expect("Typed text should appear");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the response - mock agent sends "Tool call completed successfully."
     session
