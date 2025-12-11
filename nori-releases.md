@@ -104,13 +104,75 @@ git push origin dev
 
 ## Downstream Nori Releases
 
-For now we will maintain our own separate versioning scheme, to avoid blocking
-on the upstream releases for our release tagging.
+We maintain our own separate versioning scheme (`nori-vX.Y.Z`) to avoid blocking
+on upstream releases for our release tagging.
 
-For example for nori-v0.2.0 or similar:
+### Automated Release Workflow (Recommended)
 
-git checkout main
-git merge dev --no-ff
+The `nori-release.yml` GitHub Actions workflow automates the entire release process:
+
+1. **Validates** the version format and ensures the tag doesn't exist
+2. **Runs tests** on the dev branch (optional, can be skipped)
+3. **Creates a git tag** `nori-vX.Y.Z` on the dev branch
+4. **Builds native binaries** for all platforms:
+   - Linux x86_64
+   - Linux ARM64
+   - macOS x86_64
+   - macOS ARM64
+5. **Publishes to npm** as `nori-ai-cli`
+6. **Creates a GitHub Release** with changelog and binary artifacts
+
+#### Usage
+
+```bash
+# Dry run first (recommended) - builds everything but doesn't publish
+gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
+
+# Actual release
+gh workflow run nori-release.yml -f version=0.2.0
+
+# Skip tests if needed (use with caution)
+gh workflow run nori-release.yml -f version=0.2.0 -f skip_tests=true
+```
+
+#### Workflow Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `version` | Yes | - | Release version (e.g., `0.2.0` or `0.2.0-alpha.1`) |
+| `dry_run` | No | `false` | Build and stage without publishing |
+| `skip_tests` | No | `false` | Skip running tests before release |
+
+#### npm Package
+
+- **Package name:** `nori-ai-cli`
+- **Stable releases:** Published with `latest` tag
+- **Pre-releases:** Published with `next` tag (e.g., `0.2.0-alpha.1`)
+
+```bash
+# Install stable version
+npm install -g nori-ai-cli
+
+# Install pre-release
+npm install -g nori-ai-cli@next
+```
+
+#### Required Secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `NPM_TOKEN` | npm authentication token for publishing |
+| `PAT_NORI_RELEASE` | GitHub PAT for pushing tags (optional, falls back to GITHUB_TOKEN) |
+
+### Manual Release (Legacy)
+
+For manual releases without the workflow:
+
+```bash
+git checkout dev
 git tag -a nori-v0.2.0 -m "Nori release 0.2.0"
-git push origin main --tags
+git push origin nori-v0.2.0
+```
+
+Note: Manual releases will not automatically publish to npm or create GitHub releases.
 

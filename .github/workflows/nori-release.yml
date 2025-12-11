@@ -1,0 +1,644 @@
+# Nori Release Workflow
+#
+# This workflow creates a tagged release on the dev branch and publishes
+# the nori-ai-cli package to npm.
+#
+# Usage:
+#   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
+#   gh workflow run nori-release.yml -f version=0.2.0
+#
+name: Nori Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.2.0 - no "v" prefix)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Perform a dry run without publishing or tagging'
+        required: false
+        default: false
+        type: boolean
+      skip_tests:
+        description: 'Skip running tests (use with caution)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  NPM_PACKAGE_NAME: "nori-ai-cli"
+  TAG_PREFIX: "nori-v"
+
+jobs:
+  # ============================================================================
+  # VALIDATION
+  # ============================================================================
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag_name: ${{ steps.validate.outputs.tag_name }}
+      is_prerelease: ${{ steps.validate.outputs.is_prerelease }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Validate version and check tag
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
+
+          # Validate semver format (X.Y.Z or X.Y.Z-alpha.N, X.Y.Z-beta.N, etc.)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z]+\.[0-9]+)?$'; then
+            echo "::error::Invalid version format: $VERSION"
+            echo "Expected format: X.Y.Z or X.Y.Z-alpha.N"
+            exit 1
+          fi
+
+          # Check if tag already exists
+          if git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG_NAME already exists"
+            exit 1
+          fi
+
+          # Determine if this is a prerelease
+          IS_PRERELEASE="false"
+          if echo "$VERSION" | grep -qE '-'; then
+            IS_PRERELEASE="true"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+
+          echo "## Release Validation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`$VERSION\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | \`$TAG_NAME\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pre-release | $IS_PRERELEASE |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dry Run | ${{ inputs.dry_run }} |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # RUN TESTS (optional)
+  # ============================================================================
+  test:
+    name: Run Tests
+    needs: validate
+    if: ${{ !inputs.skip_tests }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          df -h
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: "1.90.0"
+          components: clippy
+
+      - name: Run cargo check
+        working-directory: codex-rs
+        run: cargo check --all-targets
+
+      - name: Run cargo clippy
+        working-directory: codex-rs
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run cargo test
+        working-directory: codex-rs
+        run: cargo test --workspace
+
+  # ============================================================================
+  # CREATE TAG
+  # ============================================================================
+  tag:
+    name: Create Release Tag
+    needs: [validate, test]
+    # Run even if tests were skipped
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+          fetch-depth: 0
+          token: ${{ secrets.PAT_NORI_RELEASE || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update Cargo.toml version
+        if: ${{ !inputs.dry_run }}
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+
+          # Update the workspace version in codex-rs/Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" codex-rs/Cargo.toml
+
+          # Verify the change
+          grep "^version = " codex-rs/Cargo.toml
+
+          # Commit the version update
+          git add codex-rs/Cargo.toml
+          git commit -m "chore: bump version to $VERSION"
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
+          VERSION="${{ needs.validate.outputs.version }}"
+
+          git tag -a "$TAG_NAME" -m "Nori release $VERSION"
+          git push origin dev
+          git push origin "$TAG_NAME"
+
+          echo "## Tag Created" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Created and pushed tag: \`$TAG_NAME\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry run - show what would be tagged
+        if: ${{ inputs.dry_run }}
+        run: |
+          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
+          COMMIT_SHA=$(git rev-parse HEAD)
+
+          echo "## Dry Run - Tag Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Would create tag: \`$TAG_NAME\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "On commit: \`$COMMIT_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # BUILD NATIVE BINARIES
+  # ============================================================================
+  build-native:
+    name: Build Native (${{ matrix.target }})
+    needs: [validate, tag]
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            artifact-name: linux-x86_64
+            cross: false
+          - os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            artifact-name: linux-arm64
+            cross: true
+          - os: macos-14
+            target: aarch64-apple-darwin
+            artifact-name: darwin-arm64
+            cross: false
+          - os: macos-14
+            target: x86_64-apple-darwin
+            artifact-name: darwin-x86_64
+            cross: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.dry_run && 'dev' || needs.validate.outputs.tag_name }}
+
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          df -h
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: "1.90.0"
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Configure cross-compilation (Linux ARM64)
+        if: matrix.cross
+        run: |
+          mkdir -p .cargo
+          cat >> .cargo/config.toml << 'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+
+      - name: Build release binaries
+        working-directory: codex-rs
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
+        run: |
+          cargo build --release --target ${{ matrix.target }} -p codex-cli
+
+          # List built artifacts
+          ls -la target/${{ matrix.target }}/release/
+
+      - name: Prepare artifacts
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          ARTIFACT_NAME="${{ matrix.artifact-name }}"
+
+          mkdir -p artifacts/vendor/$TARGET/codex
+
+          # Copy the main binary
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            cp codex-rs/target/$TARGET/release/codex.exe artifacts/vendor/$TARGET/codex/
+          else
+            cp codex-rs/target/$TARGET/release/codex artifacts/vendor/$TARGET/codex/
+            chmod +x artifacts/vendor/$TARGET/codex/codex
+          fi
+
+          # Create artifact info
+          echo "$VERSION" > artifacts/VERSION
+          echo "$TARGET" > artifacts/TARGET
+
+          ls -la artifacts/vendor/$TARGET/codex/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.artifact-name }}
+          path: artifacts/
+          retention-days: 7
+
+  # ============================================================================
+  # STAGE NPM PACKAGES
+  # ============================================================================
+  stage-npm:
+    name: Stage npm Package
+    needs: [validate, build-native]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.dry_run && 'dev' || needs.validate.outputs.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: native-artifacts/
+          merge-multiple: false
+
+      - name: Organize vendor directory
+        run: |
+          mkdir -p vendor
+
+          # Merge all platform artifacts into vendor directory
+          for artifact_dir in native-artifacts/native-*/; do
+            if [[ -d "$artifact_dir/vendor" ]]; then
+              cp -r "$artifact_dir/vendor/"* vendor/
+            fi
+          done
+
+          echo "## Vendor Directory Contents" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          find vendor -type f | head -20 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create npm package
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          PACKAGE_NAME="${{ env.NPM_PACKAGE_NAME }}"
+
+          mkdir -p dist/npm
+
+          # Create the package directory
+          STAGING_DIR="dist/staging"
+          mkdir -p "$STAGING_DIR/bin"
+          mkdir -p "$STAGING_DIR/vendor"
+
+          # Copy the CLI launcher
+          cp codex-cli/bin/codex.js "$STAGING_DIR/bin/"
+
+          # Copy vendor binaries
+          cp -r vendor/* "$STAGING_DIR/vendor/"
+
+          # Copy README
+          cp README.md "$STAGING_DIR/" 2>/dev/null || echo "No README.md found"
+
+          # Create package.json for nori-ai-cli
+          cat > "$STAGING_DIR/package.json" << EOF
+          {
+            "name": "$PACKAGE_NAME",
+            "version": "$VERSION",
+            "description": "Nori AI CLI - A fork of OpenAI Codex with ACP support",
+            "license": "Apache-2.0",
+            "bin": {
+              "nori": "bin/codex.js",
+              "nori-ai": "bin/codex.js"
+            },
+            "type": "module",
+            "engines": {
+              "node": ">=16"
+            },
+            "files": [
+              "bin",
+              "vendor"
+            ],
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/tilework-tech/nori-cli.git"
+            },
+            "keywords": [
+              "nori",
+              "ai",
+              "cli",
+              "codex",
+              "acp"
+            ],
+            "homepage": "https://github.com/tilework-tech/nori-cli#readme",
+            "bugs": {
+              "url": "https://github.com/tilework-tech/nori-cli/issues"
+            }
+          }
+          EOF
+
+          # Pack the package
+          cd "$STAGING_DIR"
+          npm pack --pack-destination ../npm
+
+          # List the created package
+          echo "## Created npm Package" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -la ../npm/ >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: dist/npm/*.tgz
+          retention-days: 7
+
+  # ============================================================================
+  # PUBLISH TO NPM
+  # ============================================================================
+  publish-npm:
+    name: Publish to npm
+    needs: [validate, stage-npm]
+    if: ${{ !failure() && !cancelled() && !inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    environment: npm-publish
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: dist/
+
+      - name: Check if version already published
+        id: check-published
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          PACKAGE_NAME="${{ env.NPM_PACKAGE_NAME }}"
+
+          # Check if this version is already published
+          if npm view "$PACKAGE_NAME@$VERSION" version 2>/dev/null; then
+            echo "::error::Version $VERSION is already published to npm"
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "Version $VERSION is not yet published"
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          IS_PRERELEASE="${{ needs.validate.outputs.is_prerelease }}"
+
+          # Find the tarball
+          TARBALL=$(ls dist/*.tgz | head -1)
+
+          if [[ -z "$TARBALL" ]]; then
+            echo "::error::No tarball found in dist/"
+            exit 1
+          fi
+
+          echo "Publishing $TARBALL"
+
+          # Determine npm tag
+          NPM_TAG="latest"
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            NPM_TAG="next"
+          fi
+
+          # Publish with appropriate tag
+          npm publish "$TARBALL" --tag "$NPM_TAG" --access public
+
+          echo "## npm Publish Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`${{ env.NPM_PACKAGE_NAME }}@$VERSION\` with tag \`$NPM_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Install with:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "npm install -g ${{ env.NPM_PACKAGE_NAME }}@$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # CREATE GITHUB RELEASE
+  # ============================================================================
+  create-release:
+    name: Create GitHub Release
+    needs: [validate, build-native, publish-npm]
+    if: ${{ !failure() && !cancelled() && !inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.tag_name }}
+          fetch-depth: 0
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: release-artifacts/
+
+      - name: Download npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: release-artifacts/npm/
+
+      - name: Prepare release assets
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          mkdir -p release-assets
+
+          # Create platform-specific archives
+          for artifact_dir in release-artifacts/native-*/; do
+            PLATFORM=$(basename "$artifact_dir" | sed 's/native-//')
+
+            if [[ -d "$artifact_dir/vendor" ]]; then
+              # Find the target directory
+              for target_dir in "$artifact_dir/vendor/"*/; do
+                TARGET=$(basename "$target_dir")
+
+                # Create archive
+                ARCHIVE_NAME="nori-${VERSION}-${PLATFORM}.tar.gz"
+                tar -czvf "release-assets/$ARCHIVE_NAME" -C "$target_dir" .
+
+                echo "Created: $ARCHIVE_NAME"
+              done
+            fi
+          done
+
+          # Copy npm tarball
+          cp release-artifacts/npm/*.tgz release-assets/ 2>/dev/null || true
+
+          ls -la release-assets/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
+
+          # Try to generate changelog with git-cliff if available
+          if command -v git-cliff &> /dev/null; then
+            git-cliff --latest --strip header > CHANGELOG_RELEASE.md
+          else
+            # Fallback: generate simple changelog from commits
+            echo "## What's Changed" > CHANGELOG_RELEASE.md
+            echo "" >> CHANGELOG_RELEASE.md
+
+            # Get previous tag
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+            if [[ -n "$PREV_TAG" ]]; then
+              git log --pretty=format:"* %s (%h)" "$PREV_TAG"..HEAD >> CHANGELOG_RELEASE.md
+            else
+              git log --pretty=format:"* %s (%h)" -20 >> CHANGELOG_RELEASE.md
+            fi
+          fi
+
+          echo "" >> CHANGELOG_RELEASE.md
+          echo "" >> CHANGELOG_RELEASE.md
+          echo "## Installation" >> CHANGELOG_RELEASE.md
+          echo "" >> CHANGELOG_RELEASE.md
+          echo '```bash' >> CHANGELOG_RELEASE.md
+          echo "npm install -g ${{ env.NPM_PACKAGE_NAME }}@$VERSION" >> CHANGELOG_RELEASE.md
+          echo '```' >> CHANGELOG_RELEASE.md
+
+          cat CHANGELOG_RELEASE.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag_name }}
+          name: "Nori ${{ needs.validate.outputs.version }}"
+          body_path: CHANGELOG_RELEASE.md
+          draft: false
+          prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
+
+          echo "## Release Complete!" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Item | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`$VERSION\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | \`$TAG_NAME\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm | \`${{ env.NPM_PACKAGE_NAME }}@$VERSION\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GitHub Release | [$TAG_NAME](https://github.com/${{ github.repository }}/releases/tag/$TAG_NAME) |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # DRY RUN SUMMARY
+  # ============================================================================
+  dry-run-summary:
+    name: Dry Run Summary
+    needs: [validate, stage-npm]
+    if: ${{ !failure() && !cancelled() && inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: dist/
+
+      - name: Dry run summary
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
+          IS_PRERELEASE="${{ needs.validate.outputs.is_prerelease }}"
+
+          echo "## Dry Run Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The following would have been created:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Item | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Git Tag | \`$TAG_NAME\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm Package | \`${{ env.NPM_PACKAGE_NAME }}@$VERSION\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm Tag | \`$([ \"$IS_PRERELEASE\" == \"true\" ] && echo \"next\" || echo \"latest\")\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pre-release | $IS_PRERELEASE |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Staged Package" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -la dist/ >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "To perform the actual release, run without \`dry_run\`:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "gh workflow run nori-release.yml -f version=$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
