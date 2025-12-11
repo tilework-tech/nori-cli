@@ -100,7 +100,10 @@ fn test_acp_edit_existing_file() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "hello.py")
-        .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "print('Modified by ACP agent!')");
+        .with_agent_env(
+            "MOCK_AGENT_WRITE_CONTENT",
+            "print('Modified by ACP agent!')",
+        );
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
@@ -381,10 +384,10 @@ fn test_acp_multiple_file_writes() {
     // This test verifies that the first write succeeded and the session
     // remains stable and ready for more input. A full multiple-write test
     // would require extending the mock agent to support multiple paths.
-    
+
     // Verify session is still functional by typing another message
     session.send_str("Session still active").unwrap();
-    
+
     session
         .wait_for_text("Session still active", Duration::from_secs(3))
         .expect("Session should remain functional after write");

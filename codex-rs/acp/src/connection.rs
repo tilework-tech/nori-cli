@@ -768,7 +768,8 @@ impl acp::Client for ClientDelegate {
             std::fs::create_dir_all(parent).map_err(acp::Error::into_internal_error)?;
         }
 
-        std::fs::write(&resolved_path, &arguments.content).map_err(acp::Error::into_internal_error)?;
+        std::fs::write(&resolved_path, &arguments.content)
+            .map_err(acp::Error::into_internal_error)?;
         Ok(acp::WriteTextFileResponse::new())
     }
 
