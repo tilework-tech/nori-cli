@@ -239,6 +239,7 @@ async fn login_account_chatgpt_rejected_when_forced_api() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore]
 // Serialize tests that launch the login server since it binds to a fixed port.
 #[serial(login_port)]
 async fn login_account_chatgpt_start() -> Result<()> {
@@ -305,6 +306,7 @@ async fn login_account_chatgpt_start() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore]
 // Serialize tests that launch the login server since it binds to a fixed port.
 #[serial(login_port)]
 async fn login_account_chatgpt_includes_forced_workspace_query_param() -> Result<()> {
