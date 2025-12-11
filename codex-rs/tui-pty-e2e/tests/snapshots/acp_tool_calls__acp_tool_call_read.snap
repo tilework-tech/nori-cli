@@ -10,14 +10,14 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 ■ Operation 'AddToHistory' is not supported in ACP mode
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Test message 1Test message 2
 
-• Ran 'Reading configuration file'
-  └ (no output)
+• Ran 'Reading configuration file(/etc/config.toml)'
+  └ Configuration loaded successfully
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Tool call completed successfully.
 

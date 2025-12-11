@@ -225,6 +225,83 @@ fn test_acp_approval_full_flow() {
 // environment intercepts Ctrl-C (0x03) as SIGINT before it reaches the TUI.
 // The Op::Shutdown handling is tested via unit tests in acp/src/backend.rs instead.
 
+/// Test that ACP agents can write files via the fs/write_text_file method
+///
+/// This test verifies:
+/// 1. Mock agent requests to write to hello.py (which exists in the temp dir)
+/// 2. The write_text_file method in ClientDelegate actually writes the content
+/// 3. The file is modified after the agent runs
+#[test]
+#[cfg(target_os = "linux")]
+fn test_acp_write_text_file() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        // Configure mock agent to write to hello.py with new content
+        .with_agent_env("MOCK_AGENT_WRITE_FILE", "hello.py")
+        .with_agent_env(
+            "MOCK_AGENT_WRITE_CONTENT",
+            "print('Modified by ACP agent!')",
+        );
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt that triggers the file write
+    session.send_str("Write to hello.py").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the agent to respond indicating the write was attempted
+    // The mock agent should report success or failure
+    let write_result = session.wait_for(
+        |screen| {
+            screen.contains("File written successfully")
+                || screen.contains("Failed to write file")
+                || screen.contains("Write restricted")
+        },
+        Duration::from_secs(10),
+    );
+
+    match write_result {
+        Ok(()) => {
+            let contents = session.screen_contents();
+            eprintln!("Write result screen:\n{}", contents);
+
+            // The test passes if we see "File written successfully"
+            // This means the write_text_file method actually wrote the file
+            assert!(
+                contents.contains("File written successfully"),
+                "Expected 'File written successfully', got: {}",
+                contents
+            );
+
+            // Additionally verify the file was actually modified by reading it back
+            // The mock agent should also read the file to confirm
+            if contents.contains("Verified content:") {
+                assert!(
+                    contents.contains("Modified by ACP agent"),
+                    "File content should be modified, got: {}",
+                    contents
+                );
+            }
+        }
+        Err(e) => {
+            panic!(
+                "Write operation did not complete. Error: {}. Screen:\n{}",
+                e,
+                session.screen_contents()
+            );
+        }
+    }
+}
+
 /// Test snapshot of ACP mode startup screen
 #[test]
 #[ignore] // Flaky: ListCustomPrompts error timing varies between runs

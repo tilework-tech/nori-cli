@@ -462,13 +462,14 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             }
         }
         acp::SessionUpdate::ToolCall(tool_call) => {
-            // Tool calls can be mapped to ExecCommandBegin events
+            // Format command with tool name and input arguments for better display
+            let command = format_tool_call_command(&tool_call.title, tool_call.raw_input.as_ref());
             vec![EventMsg::ExecCommandBegin(
                 codex_protocol::protocol::ExecCommandBeginEvent {
                     call_id: tool_call.tool_call_id.to_string(),
                     process_id: None,
                     turn_id: String::new(),
-                    command: vec![tool_call.title.clone()],
+                    command: vec![command],
                     cwd: PathBuf::new(),
                     parsed_cmd: vec![],
                     source: codex_protocol::protocol::ExecCommandSource::Agent,
@@ -479,19 +480,24 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         acp::SessionUpdate::ToolCallUpdate(update) => {
             // Tool call updates can be mapped based on status
             if update.fields.status == Some(acp::ToolCallStatus::Completed) {
+                // Extract output from tool call content and raw_output
+                let aggregated_output = extract_tool_output(&update.fields);
+                let title = update.fields.title.clone().unwrap_or_default();
+                let command = format_tool_call_command(&title, update.fields.raw_input.as_ref());
+
                 vec![EventMsg::ExecCommandEnd(
                     codex_protocol::protocol::ExecCommandEndEvent {
                         call_id: update.tool_call_id.to_string(),
                         process_id: None,
                         turn_id: String::new(),
-                        command: vec![update.fields.title.clone().unwrap_or_default()],
+                        command: vec![command],
                         cwd: PathBuf::new(),
                         parsed_cmd: vec![],
                         source: codex_protocol::protocol::ExecCommandSource::Agent,
                         interaction_input: None,
                         stdout: String::new(),
                         stderr: String::new(),
-                        aggregated_output: String::new(),
+                        aggregated_output,
                         exit_code: 0,
                         duration: std::time::Duration::ZERO,
                         formatted_output: String::new(),
@@ -504,6 +510,199 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         // Other update types don't have direct event mappings
         _ => vec![],
     }
+}
+
+/// Format a tool call command with its input arguments for display.
+///
+/// Creates a display string like "Read(path/to/file.rs)" or "Terminal(git status)"
+fn format_tool_call_command(title: &str, raw_input: Option<&serde_json::Value>) -> String {
+    let args = raw_input
+        .and_then(|input| extract_display_args(title, input))
+        .unwrap_or_default();
+
+    if args.is_empty() {
+        title.to_string()
+    } else {
+        format!("{title}({args})")
+    }
+}
+
+/// Extract display-friendly arguments from raw_input based on tool type.
+fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String> {
+    let title_lower = title.to_lowercase();
+
+    // Try to extract the most relevant argument based on tool type
+    // Note: Order matters - more specific matches should come first
+    if title_lower.contains("search")
+        || title_lower.contains("find")
+        || title_lower.contains("grep")
+    {
+        // For search operations, show the pattern/query
+        let pattern = input
+            .get("pattern")
+            .or_else(|| input.get("query"))
+            .or_else(|| input.get("glob"))
+            .and_then(|v| v.as_str());
+        let path = input.get("path").and_then(|v| v.as_str());
+
+        match (pattern, path) {
+            (Some(p), Some(dir)) => Some(format!("{p} in {dir}")),
+            (Some(p), None) => Some(p.to_string()),
+            (None, Some(dir)) => Some(dir.to_string()),
+            (None, None) => None,
+        }
+    } else if title_lower.contains("terminal")
+        || title_lower.contains("shell")
+        || title_lower.contains("bash")
+        || title_lower.contains("exec")
+    {
+        // For shell commands, show the command
+        input
+            .get("command")
+            .or_else(|| input.get("cmd"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    } else if title_lower.contains("list") || title_lower.contains("ls") {
+        // For list operations, show the path
+        input
+            .get("path")
+            .or_else(|| input.get("directory"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    } else if title_lower.contains("write") || title_lower.contains("edit") {
+        // For write operations, show the path
+        input
+            .get("path")
+            .or_else(|| input.get("file_path"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    } else if title_lower.contains("read") || title_lower.contains("file") {
+        // For file read operations, show the path
+        input
+            .get("path")
+            .or_else(|| input.get("file_path"))
+            .or_else(|| input.get("file"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    } else {
+        // Generic fallback: try common argument names
+        input
+            .get("path")
+            .or_else(|| input.get("command"))
+            .or_else(|| input.get("query"))
+            .or_else(|| input.get("name"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    }
+}
+
+/// Extract tool output from ToolCallUpdateFields for display.
+///
+/// Returns a formatted string containing the tool's output content.
+fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
+    let mut output_parts: Vec<String> = Vec::new();
+
+    // Extract text content from the content field
+    if let Some(content) = &fields.content {
+        for item in content {
+            if let acp::ToolCallContent::Content(c) = item
+                && let acp::ContentBlock::Text(text) = &c.content
+                && !text.text.is_empty()
+            {
+                output_parts.push(text.text.clone());
+            }
+        }
+    }
+
+    // If no text content, try to extract meaningful info from raw_output
+    if output_parts.is_empty()
+        && let Some(raw_output) = &fields.raw_output
+        && let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref())
+    {
+        output_parts.push(output_str);
+    }
+
+    output_parts.join("\n")
+}
+
+/// Format raw_output JSON into a human-readable string based on tool type.
+fn format_raw_output(raw_output: &serde_json::Value, title: Option<&str>) -> Option<String> {
+    let title_lower = title.map(str::to_lowercase).unwrap_or_default();
+
+    // Try to provide meaningful summaries based on common output patterns
+    if let Some(obj) = raw_output.as_object() {
+        // Check for line count (common in read operations)
+        if let Some(lines) = obj.get("lines").and_then(serde_json::Value::as_u64) {
+            return Some(format!("Read {lines} lines"));
+        }
+
+        // Check for file count (common in find/search operations)
+        if let Some(count) = obj.get("count").and_then(serde_json::Value::as_u64) {
+            if title_lower.contains("find") || title_lower.contains("search") {
+                return Some(format!("Found {count} files"));
+            }
+            return Some(format!("{count} matches"));
+        }
+
+        // Check for files array
+        if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
+            let count = files.len();
+            let file_list: Vec<&str> = files.iter().filter_map(|f| f.as_str()).take(5).collect();
+            if count > 5 {
+                return Some(format!(
+                    "Found {} files\n{}...",
+                    count,
+                    file_list.join("\n")
+                ));
+            } else if !file_list.is_empty() {
+                return Some(format!("Found {} files\n{}", count, file_list.join("\n")));
+            }
+        }
+
+        // Check for exit_code (common in shell operations)
+        if let Some(exit_code) = obj.get("exit_code").and_then(serde_json::Value::as_i64) {
+            // Look for stdout/output
+            let output = obj
+                .get("stdout")
+                .or_else(|| obj.get("output"))
+                .and_then(|v| v.as_str());
+            if let Some(out) = output {
+                if exit_code != 0 {
+                    return Some(format!("Exit code: {exit_code}\n{out}"));
+                }
+                return Some(out.to_string());
+            }
+            if exit_code != 0 {
+                return Some(format!("Exit code: {exit_code}"));
+            }
+        }
+
+        // Check for success boolean
+        if let Some(success) = obj.get("success").and_then(serde_json::Value::as_bool)
+            && !success
+        {
+            if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
+                return Some(format!("Failed: {error}"));
+            }
+            return Some("Operation failed".to_string());
+        }
+    }
+
+    // For arrays, show count
+    if let Some(arr) = raw_output.as_array()
+        && !arr.is_empty()
+    {
+        return Some(format!("{} items", arr.len()));
+    }
+
+    // For strings, return directly
+    if let Some(s) = raw_output.as_str()
+        && !s.is_empty()
+    {
+        return Some(s.to_string());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -564,7 +763,8 @@ mod tests {
         match &events[0] {
             EventMsg::ExecCommandBegin(begin) => {
                 assert_eq!(begin.call_id, "call-123");
-                assert!(begin.command.contains(&"shell".to_string()));
+                // Command now includes formatted arguments
+                assert_eq!(begin.command[0], "shell(ls -la)");
             }
             _ => panic!("Expected ExecCommandBegin event"),
         }
@@ -589,6 +789,80 @@ mod tests {
             }
             _ => panic!("Expected ExecCommandEnd event"),
         }
+    }
+
+    /// Test that ToolCallUpdate with content extracts the output text.
+    #[test]
+    fn test_extract_tool_output_from_content() {
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-789".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::Completed)
+                .title("read_file")
+                .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                    acp::ContentBlock::Text(acp::TextContent::new("File contents here")),
+                ))]),
+        ));
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandEnd(end) => {
+                assert_eq!(end.aggregated_output, "File contents here");
+            }
+            _ => panic!("Expected ExecCommandEnd event"),
+        }
+    }
+
+    /// Test that ToolCallUpdate with raw_output extracts meaningful info.
+    #[test]
+    fn test_extract_tool_output_from_raw_output() {
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-read".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::Completed)
+                .title("read_file")
+                .raw_output(serde_json::json!({"lines": 42})),
+        ));
+
+        let events = translate_session_update_to_events(&update);
+        match &events[0] {
+            EventMsg::ExecCommandEnd(end) => {
+                assert_eq!(end.aggregated_output, "Read 42 lines");
+            }
+            _ => panic!("Expected ExecCommandEnd event"),
+        }
+    }
+
+    /// Test that tool command is formatted with path argument.
+    #[test]
+    fn test_format_tool_call_command_with_path() {
+        let cmd = format_tool_call_command(
+            "Read File",
+            Some(&serde_json::json!({"path": "src/main.rs"})),
+        );
+        assert_eq!(cmd, "Read File(src/main.rs)");
+    }
+
+    /// Test that shell command is formatted with command argument.
+    #[test]
+    fn test_format_tool_call_command_shell() {
+        let cmd = format_tool_call_command(
+            "Terminal",
+            Some(&serde_json::json!({"command": "git status"})),
+        );
+        assert_eq!(cmd, "Terminal(git status)");
+    }
+
+    /// Test that search command is formatted with pattern and path.
+    #[test]
+    fn test_format_tool_call_command_search() {
+        let cmd = format_tool_call_command(
+            "Find Files",
+            Some(&serde_json::json!({"pattern": "*.rs", "path": "src/"})),
+        );
+        assert_eq!(cmd, "Find Files(*.rs in src/)");
     }
 
     /// Test that non-text content blocks produce no events.

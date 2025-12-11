@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/acp_tool_calls.rs
-assertion_line: 248
 expression: normalize_for_input_snapshot(contents)
 ---
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
@@ -19,8 +18,8 @@ expression: normalize_for_input_snapshot(contents)
 
 • Processing command...Interleaved test done.
 
-• Ran 'Executing interleaved command'
-  └ (no output)
+• Ran 'Executing interleaved command(test)'
+  └ Command completed
 
 
 › [DEFAULT_PROMPT]
