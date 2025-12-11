@@ -19,8 +19,8 @@ expression: normalize_for_input_snapshot(contents)
 
 • Processing command...Interleaved test done.
 
-• Ran 'Executing interleaved command'
-  └ (no output)
+• Ran Executing interleaved command(test)
+  └ Command completed
 
 
 › [DEFAULT_PROMPT]

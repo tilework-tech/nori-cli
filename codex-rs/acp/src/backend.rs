@@ -462,13 +462,14 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             }
         }
         acp::SessionUpdate::ToolCall(tool_call) => {
-            // Tool calls can be mapped to ExecCommandBegin events
+            // Format command with title and arguments for better display
+            let command_display = format_acp_tool_command(&tool_call.title, &tool_call.raw_input);
             vec![EventMsg::ExecCommandBegin(
                 codex_protocol::protocol::ExecCommandBeginEvent {
                     call_id: tool_call.tool_call_id.to_string(),
                     process_id: None,
                     turn_id: String::new(),
-                    command: vec![tool_call.title.clone()],
+                    command: vec![command_display],
                     cwd: PathBuf::new(),
                     parsed_cmd: vec![],
                     source: codex_protocol::protocol::ExecCommandSource::Agent,
@@ -479,22 +480,29 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         acp::SessionUpdate::ToolCallUpdate(update) => {
             // Tool call updates can be mapped based on status
             if update.fields.status == Some(acp::ToolCallStatus::Completed) {
+                // Format command with title and arguments
+                let command_display = format_acp_tool_command(
+                    update.fields.title.as_deref().unwrap_or("Tool"),
+                    &update.fields.raw_input,
+                );
+                // Extract output from content and raw_output fields
+                let output = format_acp_tool_output(&update.fields.content, &update.fields.raw_output);
                 vec![EventMsg::ExecCommandEnd(
                     codex_protocol::protocol::ExecCommandEndEvent {
                         call_id: update.tool_call_id.to_string(),
                         process_id: None,
                         turn_id: String::new(),
-                        command: vec![update.fields.title.clone().unwrap_or_default()],
+                        command: vec![command_display],
                         cwd: PathBuf::new(),
                         parsed_cmd: vec![],
                         source: codex_protocol::protocol::ExecCommandSource::Agent,
                         interaction_input: None,
                         stdout: String::new(),
                         stderr: String::new(),
-                        aggregated_output: String::new(),
+                        aggregated_output: output.clone(),
                         exit_code: 0,
                         duration: std::time::Duration::ZERO,
-                        formatted_output: String::new(),
+                        formatted_output: output,
                     },
                 )]
             } else {
@@ -503,6 +511,179 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         }
         // Other update types don't have direct event mappings
         _ => vec![],
+    }
+}
+
+/// Format an ACP tool call command for display.
+///
+/// Converts a tool title and raw_input into a readable format like:
+/// - "Read File(/path/to/file.txt)"
+/// - "Terminal(git status)"
+/// - "Search(pattern in /path)"
+fn format_acp_tool_command(title: &str, raw_input: &Option<serde_json::Value>) -> String {
+    let args_summary = raw_input.as_ref().map(summarize_raw_input).unwrap_or_default();
+
+    if args_summary.is_empty() {
+        title.to_string()
+    } else {
+        format!("{title}({args_summary})")
+    }
+}
+
+/// Summarize raw_input JSON into a brief human-readable string.
+///
+/// Extracts key arguments like file paths, commands, or patterns to create
+/// a concise representation suitable for display.
+fn summarize_raw_input(input: &serde_json::Value) -> String {
+    if let Some(obj) = input.as_object() {
+        // Common patterns for various tool types
+        // File operations: look for "path", "file_path", "file"
+        if let Some(path) = obj
+            .get("path")
+            .or_else(|| obj.get("file_path"))
+            .or_else(|| obj.get("file"))
+            .and_then(serde_json::Value::as_str)
+        {
+            return path.to_string();
+        }
+
+        // Terminal/shell operations: look for "command", "cmd"
+        if let Some(cmd) = obj
+            .get("command")
+            .or_else(|| obj.get("cmd"))
+            .and_then(serde_json::Value::as_str)
+        {
+            return cmd.to_string();
+        }
+
+        // Search operations: look for "query", "pattern"
+        if let Some(query) = obj
+            .get("query")
+            .or_else(|| obj.get("pattern"))
+            .and_then(serde_json::Value::as_str)
+        {
+            if let Some(search_path) = obj.get("path").and_then(serde_json::Value::as_str) {
+                return format!("{query} in {search_path}");
+            }
+            return query.to_string();
+        }
+
+        // For objects with few keys, show all as "key=value" pairs
+        if obj.len() <= 2 {
+            let pairs: Vec<String> = obj
+                .iter()
+                .filter_map(|(k, v)| {
+                    let value_str = match v {
+                        serde_json::Value::String(s) => Some(s.clone()),
+                        serde_json::Value::Number(n) => Some(n.to_string()),
+                        serde_json::Value::Bool(b) => Some(b.to_string()),
+                        _ => None,
+                    };
+                    value_str.map(|vs| format!("{k}={vs}"))
+                })
+                .collect();
+            if !pairs.is_empty() {
+                return pairs.join(", ");
+            }
+        }
+
+        // Fallback: compact JSON representation (truncated if too long)
+        let json_str = serde_json::to_string(input).unwrap_or_default();
+        if json_str.len() > 60 {
+            format!("{}...", &json_str[..57])
+        } else {
+            json_str
+        }
+    } else if let Some(s) = input.as_str() {
+        s.to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// Format tool output from ACP content and raw_output fields.
+///
+/// Extracts meaningful output text from the tool call result to display
+/// in the TUI as the command output.
+fn format_acp_tool_output(
+    content: &Option<Vec<acp::ToolCallContent>>,
+    raw_output: &Option<serde_json::Value>,
+) -> String {
+    let mut output_parts: Vec<String> = Vec::new();
+
+    // Extract text from content blocks
+    if let Some(content_items) = content {
+        for item in content_items {
+            if let acp::ToolCallContent::Content(c) = item
+                && let acp::ContentBlock::Text(text) = &c.content
+                && !text.text.is_empty()
+            {
+                output_parts.push(text.text.clone());
+            }
+        }
+    }
+
+    // If no text content, try to summarize raw_output
+    if output_parts.is_empty()
+        && let Some(raw) = raw_output
+    {
+        let summary = summarize_raw_output(raw);
+        if !summary.is_empty() {
+            output_parts.push(summary);
+        }
+    }
+
+    output_parts.join("\n")
+}
+
+/// Summarize raw_output JSON into a human-readable result string.
+fn summarize_raw_output(output: &serde_json::Value) -> String {
+    if let Some(obj) = output.as_object() {
+        // Look for common result fields - check success first as it may have additional info
+        if let Some(success) = obj.get("success").and_then(serde_json::Value::as_bool) {
+            if success {
+                // Check for additional info
+                if let Some(lines) = obj.get("lines").and_then(serde_json::Value::as_u64) {
+                    return format!("Success: {lines} lines");
+                }
+                return "Success".to_string();
+            } else {
+                if let Some(error) = obj.get("error").and_then(serde_json::Value::as_str) {
+                    return format!("Failed: {error}");
+                }
+                return "Failed".to_string();
+            }
+        }
+        // Check for standalone metrics without success flag
+        if let Some(lines) = obj.get("lines").and_then(serde_json::Value::as_u64) {
+            return format!("Read {lines} lines");
+        }
+        if let Some(files) = obj.get("files").and_then(serde_json::Value::as_array) {
+            let count = files.len();
+            return format!("Found {count} files");
+        }
+        if let Some(matches) = obj.get("matches").and_then(serde_json::Value::as_u64) {
+            return format!("Found {matches} matches");
+        }
+        if let Some(exit_code) = obj.get("exit_code").and_then(serde_json::Value::as_i64) {
+            if exit_code == 0 {
+                return "Completed successfully".to_string();
+            } else {
+                return format!("Exited with code {exit_code}");
+            }
+        }
+
+        // Fallback: compact JSON (truncated)
+        let json_str = serde_json::to_string(output).unwrap_or_default();
+        if json_str.len() > 100 {
+            format!("{}...", &json_str[..97])
+        } else {
+            json_str
+        }
+    } else if let Some(s) = output.as_str() {
+        s.to_string()
+    } else {
+        String::new()
     }
 }
 
@@ -564,7 +745,9 @@ mod tests {
         match &events[0] {
             EventMsg::ExecCommandBegin(begin) => {
                 assert_eq!(begin.call_id, "call-123");
-                assert!(begin.command.contains(&"shell".to_string()));
+                // Command should now be formatted with arguments
+                assert!(begin.command[0].contains("shell"));
+                assert!(begin.command[0].contains("ls -la"));
             }
             _ => panic!("Expected ExecCommandBegin event"),
         }
@@ -577,7 +760,9 @@ mod tests {
             acp::ToolCallId::from("call-456".to_string()),
             acp::ToolCallUpdateFields::new()
                 .status(acp::ToolCallStatus::Completed)
-                .title("read_file"),
+                .title("read_file")
+                .raw_input(serde_json::json!({"path": "/etc/config.toml"}))
+                .raw_output(serde_json::json!({"success": true, "lines": 42})),
         ));
 
         let events = translate_session_update_to_events(&update);
@@ -586,9 +771,94 @@ mod tests {
         match &events[0] {
             EventMsg::ExecCommandEnd(end) => {
                 assert_eq!(end.call_id, "call-456");
+                // Command should include the file path
+                assert!(end.command[0].contains("read_file"));
+                assert!(end.command[0].contains("/etc/config.toml"));
+                // Output should summarize the result
+                assert!(end.aggregated_output.contains("42"));
             }
             _ => panic!("Expected ExecCommandEnd event"),
         }
+    }
+
+    /// Test that tool call output with content blocks is properly formatted.
+    #[test]
+    fn test_translate_tool_call_update_with_content() {
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-789".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::Completed)
+                .title("read_file")
+                .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                    acp::ContentBlock::Text(acp::TextContent::new("File content here")),
+                ))]),
+        ));
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandEnd(end) => {
+                assert_eq!(end.call_id, "call-789");
+                // Output should contain the content text
+                assert_eq!(end.aggregated_output, "File content here");
+            }
+            _ => panic!("Expected ExecCommandEnd event"),
+        }
+    }
+
+    /// Test format_acp_tool_command with various input types.
+    #[test]
+    fn test_format_acp_tool_command() {
+        // Test with file path
+        let cmd = format_acp_tool_command(
+            "Read File",
+            &Some(serde_json::json!({"path": "/etc/config.toml"})),
+        );
+        assert_eq!(cmd, "Read File(/etc/config.toml)");
+
+        // Test with command
+        let cmd = format_acp_tool_command(
+            "Terminal",
+            &Some(serde_json::json!({"command": "git status"})),
+        );
+        assert_eq!(cmd, "Terminal(git status)");
+
+        // Test with no input
+        let cmd = format_acp_tool_command("Tool", &None);
+        assert_eq!(cmd, "Tool");
+
+        // Test with query and path
+        let cmd = format_acp_tool_command(
+            "Search",
+            &Some(serde_json::json!({"query": "TODO", "path": "/src"})),
+        );
+        // path takes priority over query in current implementation
+        assert_eq!(cmd, "Search(/src)");
+    }
+
+    /// Test summarize_raw_output with various output types.
+    #[test]
+    fn test_summarize_raw_output() {
+        // Test with lines count
+        let output = summarize_raw_output(&serde_json::json!({"lines": 42}));
+        assert_eq!(output, "Read 42 lines");
+
+        // Test with success
+        let output = summarize_raw_output(&serde_json::json!({"success": true}));
+        assert_eq!(output, "Success");
+
+        // Test with success and lines
+        let output = summarize_raw_output(&serde_json::json!({"success": true, "lines": 100}));
+        assert_eq!(output, "Success: 100 lines");
+
+        // Test with exit_code
+        let output = summarize_raw_output(&serde_json::json!({"exit_code": 0}));
+        assert_eq!(output, "Completed successfully");
+
+        // Test with non-zero exit_code
+        let output = summarize_raw_output(&serde_json::json!({"exit_code": 1}));
+        assert_eq!(output, "Exited with code 1");
     }
 
     /// Test that non-text content blocks produce no events.

@@ -16,7 +16,7 @@ expression: normalize_for_snapshot(session.screen_contents())
 
 • Test message 1Test message 2
 
-⚙ Reading configuration file
+⚙ Reading configuration file(/etc/config.toml)
 
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 
