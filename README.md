@@ -1,3 +1,11 @@
+<!-- NORI FORK NOTICE -->
+> **Note:** This is a Nori fork of openai/codex with ACP (Agent Context Protocol) features.
+> Our `main` branch is NOT compatible with upstream `main` - it contains Nori-specific
+> modifications. Upstream sync is handled via release tags through the `upstream-sync` workflow.
+> See [nori-releases.md](./nori-releases.md) for branching details.
+
+---
+
 <p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
 
 <p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.

@@ -1,4 +1,4 @@
-# Automatically sync stable upstream releases into dev branch.
+# Automatically sync stable upstream releases into main branch.
 # Creates a sync branch and draft PR for each new stable release.
 #
 # Manual trigger: gh workflow run upstream-sync.yml
@@ -203,8 +203,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Count commits between dev and the tag for context
-          commit_count=$(git rev-list --count origin/dev.."$TARGET_TAG" 2>/dev/null || echo "unknown")
+          # Count commits between main and the tag for context
+          commit_count=$(git rev-list --count origin/main.."$TARGET_TAG" 2>/dev/null || echo "unknown")
 
           pr_title="Sync upstream $TARGET_TAG"
 
@@ -237,7 +237,7 @@ jobs:
           1. Review the changes for conflicts with our ACP fork work
           2. Resolve any merge conflicts:
              \`\`\`bash
-             git checkout dev
+             git checkout main
              git merge $SYNC_BRANCH --no-ff
              # Resolve conflicts if any
              \`\`\`
@@ -259,7 +259,7 @@ jobs:
           else
             gh pr create \
               --repo "${{ github.repository }}" \
-              --base dev \
+              --base main \
               --head "$SYNC_BRANCH" \
               --title "$pr_title" \
               --body "$pr_body" \

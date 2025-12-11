@@ -2,6 +2,11 @@
 
 Path: @/
 
+> **Fork Notice:** This is a Nori fork of openai/codex. Our `main` branch is NOT
+> compatible with upstream `main` - it contains Nori-specific ACP features.
+> Upstream synchronization is managed via the `upstream-sync` workflow using release tags.
+> See [nori-releases.md](./nori-releases.md) for branching strategy details.
+
 ### Overview
 
 This repository contains the Codex CLI, a local coding agent from OpenAI that runs on your computer. It provides AI-assisted coding capabilities through a terminal-based interface, with support for multiple model providers, sandboxed command execution, and IDE integration. The primary implementation is in Rust (`codex-rs`), with supporting TypeScript components for Node.js distribution.

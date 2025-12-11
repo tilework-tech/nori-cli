@@ -2,7 +2,7 @@ name: rust-ci
 on:
   pull_request: {}
   push:
-    branches: [main, dev]
+    branches: [main]
 
 jobs:
   checks:
