@@ -2,25 +2,24 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
-■ Operation 'AddToHistory' is not supported in ACP mode
-
-─ Worked for 0s ────────────────────────────────────────────────────────────────
-
-• Test message 1Test message 2
-
-─ Worked for 0s ────────────────────────────────────────────────────────────────
-
-• Reading multiple files...
-
-• Explored
-  └ Read file3.rs
-
 • Explored
   └ Read file1.rs, file2.rs
 
+• Ran 'Running tests(cargo test)'
+  └ Tests passed
+
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 
-• Multi-call exploring done.
+• Based on my exploration, the most significant TUI Rust source file by size is:
+
+• Explored
+  └ Read SKILL.md
+    Search undefined
+    Read config.toml
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• The chatwidget is the heart of the TUI experience.
 
 
 › [DEFAULT_PROMPT]

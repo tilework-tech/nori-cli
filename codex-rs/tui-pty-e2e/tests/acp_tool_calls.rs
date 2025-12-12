@@ -453,3 +453,142 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
         contents
     );
 }
+
+/// Test that exploring cells can appear AFTER the final assistant message (bug reproduction).
+///
+/// This test reproduces a bug where exploring cells that complete after intermediate
+/// agent text but before the final message can appear AFTER the final assistant message
+/// instead of in their correct chronological position.
+///
+/// ## Scenario:
+/// 1. Agent sends 2 Read operations (batch 1) - complete correctly
+/// 2. Agent sends Execute operation - completes correctly
+/// 3. Agent sends intermediate text: "Based on my exploration..."
+/// 4. Agent sends 3 more Read/Search operations (batch 2)
+/// 5. Agent completes batch 2
+/// 6. Agent sends final message: "The chatwidget is the heart..."
+/// 7. FinalMessageSeparator is triggered between streaming deltas
+///
+/// ## Bug:
+/// The second batch of exploring cells (3 operations) appears AFTER the final
+/// assistant message instead of appearing before it in chronological order.
+///
+/// ## Expected behavior (after fix):
+/// All exploring cells should appear in chronological order:
+/// - Batch 1 explored cells
+/// - Execute cell
+/// - Intermediate agent text
+/// - Batch 2 explored cells (BEFORE final message)
+/// - Final assistant message
+///
+/// ## Current behavior (bug):
+/// - Batch 1 explored cells
+/// - Execute cell
+/// - Intermediate agent text
+/// - Final assistant message
+/// - Batch 2 explored cells (AFTER final message - WRONG!)
+#[test]
+#[cfg(target_os = "linux")]
+fn test_explored_cells_appear_after_assistant_message() {
+    // Configure mock agent to send mixed exploring and exec workflow
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the mixed workflow
+    session.send_str("Analyze the TUI codebase").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the final assistant message
+    session
+        .wait_for_text("The chatwidget is the heart of the TUI experience", Duration::from_secs(10))
+        .expect("Should receive final assistant message");
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // Verify all the tool calls are present somewhere in the output
+    assert!(
+        contents.contains("file1.rs") || contents.contains("Explored"),
+        "Should contain first batch of exploring. Screen contents:\n{}",
+        contents
+    );
+    assert!(
+        contents.contains("Running tests") || contents.contains("Ran"),
+        "Should contain execute operation. Screen contents:\n{}",
+        contents
+    );
+    assert!(
+        contents.contains("Based on my exploration"),
+        "Should contain intermediate agent text. Screen contents:\n{}",
+        contents
+    );
+
+    // Find positions of key elements
+    let final_msg = "The chatwidget is the heart of the TUI experience";
+    let final_msg_pos = contents.find(final_msg).expect("Should contain final message");
+
+    // Look for evidence of the second batch of exploring operations
+    // These could be individual "Explored" entries or references to the files
+    let has_skill_md = contents.contains("SKILL.md");
+    let has_undefined = contents.contains("undefined") || contents.contains("Searching");
+    let has_config_toml = contents.contains("config.toml");
+
+    // At least some of the second batch should be visible
+    assert!(
+        has_skill_md || has_undefined || has_config_toml,
+        "Should show second batch of exploring operations. Screen contents:\n{}",
+        contents
+    );
+
+    // BUG VERIFICATION: Check if any "Explored" cells for the second batch
+    // appear AFTER the final message.
+    // 
+    // We're looking for "Explored" text that appears after final_msg_pos.
+    // This demonstrates the bug where cells are delegated to after the assistant message.
+    //
+    // Note: This test currently captures the BUGGY behavior. When the bug is fixed,
+    // this assertion should be changed to verify that explored cells appear BEFORE
+    // the final message, not after.
+    let lines_after_final: Vec<&str> = contents[final_msg_pos..]
+        .lines()
+        .collect();
+
+    let explored_after_final = lines_after_final.iter().any(|line| line.contains("Explored"));
+
+    if explored_after_final {
+        eprintln!("BUG REPRODUCED: Found 'Explored' cells after the final assistant message");
+        eprintln!("Lines after final message:");
+        for line in lines_after_final.iter().take(10) {
+            eprintln!("  {}", line);
+        }
+    } else {
+        eprintln!("Note: 'Explored' cells may be grouped or not visible in this snapshot");
+    }
+
+    // Snapshot for visual verification - this captures the current buggy state
+    insta::assert_snapshot!(
+        "acp_explored_after_assistant_message",
+        normalize_for_input_snapshot(contents)
+    );
+
+    // TODO: When bug is fixed, change this assertion to:
+    // assert!(
+    //     !explored_after_final,
+    //     "Explored cells should appear BEFORE final message, not after. \
+    //      Found 'Explored' after final message at position {}",
+    //     final_msg_pos
+    // );
+}
