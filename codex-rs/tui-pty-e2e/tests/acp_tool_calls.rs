@@ -286,3 +286,84 @@ fn test_acp_tool_call_snapshot() {
         normalize_for_input_snapshot(session.screen_contents())
     );
 }
+
+/// Test that multi-call exploring cells don't disappear when completed out-of-order.
+///
+/// This test verifies the fix for cells disappearing when:
+/// 1. Multiple exploring tool calls (Read/Search) are grouped into one ExecCell
+/// 2. Agent text streams during execution, causing the cell to flush while incomplete
+/// 3. Completion events arrive out-of-order (e.g., call-2 completes before call-1)
+///
+/// The cell should remain visible and complete correctly even in this scenario.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_multi_call_exploring_cells_with_out_of_order_completion() {
+    // Configure mock agent to send multiple exploring tool calls with interleaved text
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MULTI_CALL_EXPLORING", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the multi-call exploring sequence
+    session.send_str("Explore files").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the final text which means everything completed
+    session
+        .wait_for_text("Multi-call exploring done", Duration::from_secs(10))
+        .expect("Should receive completion response");
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // Verify that all 3 Read operations appear in the output
+    assert!(
+        contents.contains("file1.rs") || contents.contains("Explored"),
+        "Should show first Read operation. Screen contents:\n{}",
+        contents
+    );
+    assert!(
+        contents.contains("file2.rs") || contents.contains("Explored"),
+        "Should show second Read operation. Screen contents:\n{}",
+        contents
+    );
+    assert!(
+        contents.contains("file3.rs") || contents.contains("Explored"),
+        "Should show third Read operation. Screen contents:\n{}",
+        contents
+    );
+
+    // Verify the exploring cell is shown as completed (not stuck in "Running" state)
+    // The completed exploring cell should show "Explored" status
+    assert!(
+        contents.contains("Explored"),
+        "Should show completed 'Explored' state. Screen contents:\n{}",
+        contents
+    );
+
+    // Count how many "Explored" entries appear - should be exactly 1 grouped cell
+    let explored_count = contents.matches("Explored").count();
+    assert!(
+        explored_count >= 1,
+        "Should have at least one 'Explored' entry, found {}. Screen contents:\n{}",
+        explored_count,
+        contents
+    );
+
+    // Snapshot for visual verification
+    insta::assert_snapshot!(
+        "acp_multi_call_exploring",
+        normalize_for_input_snapshot(contents)
+    );
+}

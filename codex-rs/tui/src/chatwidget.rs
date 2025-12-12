@@ -1071,7 +1071,19 @@ impl ChatWidget {
                 }
             };
             cell.complete_call(&ev.call_id, output, ev.duration);
-            if cell.should_flush() {
+            
+            // After completing a call, check if this cell still has pending calls.
+            // If so, it needs to go back into the pending tracker because another
+            // ExecCommandEnd event may arrive later for the remaining calls.
+            if cell.is_active() {
+                let pending_ids = cell.pending_call_ids();
+                if !pending_ids.is_empty() {
+                    // Take the active_cell and save it back to pending tracker
+                    if let Some(active) = self.active_cell.take() {
+                        self.pending_exec_cells.save_pending(pending_ids, active);
+                    }
+                }
+            } else if cell.should_flush() {
                 self.flush_active_cell();
             }
         }
@@ -1695,9 +1707,9 @@ impl ChatWidget {
                 // Get the pending call_ids before we consume the cell
                 let pending_ids = exec_cell.pending_call_ids();
                 if !pending_ids.is_empty() {
-                    // Save to pending map using the first pending call_id as key
-                    let key = pending_ids[0].clone();
-                    self.pending_exec_cells.save_pending(key, active);
+                    // Save to pending map with ALL pending call_ids
+                    // This allows the cell to be retrieved when any of them completes
+                    self.pending_exec_cells.save_pending(pending_ids, active);
                     return;
                 }
             }
