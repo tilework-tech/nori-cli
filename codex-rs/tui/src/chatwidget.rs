@@ -1083,7 +1083,10 @@ impl ChatWidget {
                         self.pending_exec_cells.save_pending(pending_ids, active);
                     }
                 }
-            } else if cell.should_flush() {
+            } else {
+                // Cell is fully completed - flush it to history immediately.
+                // This ensures exploring cells appear in the correct chronological position,
+                // not delayed until TaskComplete drains pending cells.
                 self.flush_active_cell();
             }
         }

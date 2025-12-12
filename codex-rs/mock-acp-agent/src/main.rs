@@ -611,9 +611,11 @@ impl acp::Agent for MockAgent {
             )
             .await?;
 
-            // Final text
-            self.send_text_chunk(session_id.clone(), "Multi-call exploring done.")
-                .await?;
+            // Final text (unless suppressed for testing)
+            if std::env::var("MOCK_AGENT_NO_FINAL_TEXT").is_err() {
+                self.send_text_chunk(session_id.clone(), "Multi-call exploring done.")
+                    .await?;
+            }
             
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }

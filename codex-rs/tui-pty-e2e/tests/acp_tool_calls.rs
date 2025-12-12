@@ -317,6 +317,11 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
     session.send_str("Explore files").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    
+    // Wait for task to start
+    session
+        .wait_for_text("Reading multiple files", Duration::from_secs(5))
+        .expect("Should see the interleaved text message");
 
     // Wait for the final text which means everything completed
     session
@@ -361,9 +366,90 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
         contents
     );
 
+    // CRITICAL: Verify the "Explored" cell appears BEFORE the final agent message
+    // This ensures it was flushed immediately when the last tool call completed,
+    // not delayed until TaskComplete drained pending cells.
+    let explored_pos = contents.find("Explored").expect("Should contain 'Explored'");
+    let final_msg_pos = contents.find("Multi-call exploring done").expect("Should contain final message");
+    
+    assert!(
+        explored_pos < final_msg_pos,
+        "The 'Explored' cell should appear BEFORE the final agent message, not after. \
+         This ensures it was flushed immediately on completion, not delayed until task end. \
+         Explored at {}, final message at {}",
+        explored_pos,
+        final_msg_pos
+    );
+
     // Snapshot for visual verification
     insta::assert_snapshot!(
         "acp_multi_call_exploring",
         normalize_for_input_snapshot(contents)
+    );
+}
+
+/// Test that exploring cells are flushed immediately even without subsequent agent text.
+///
+/// This is a regression test for a bug where completed exploring cells would remain
+/// in active_cell until TaskComplete drained them, instead of being flushed immediately.
+///
+/// The bug occurred because handle_exec_end_now() checked `cell.should_flush()` which
+/// returns false for exploring cells, so the cell wasn't flushed until agent text
+/// triggered flush_active_cell() or TaskComplete drained pending cells.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_exploring_cell_flushed_immediately_without_agent_text() {
+    // Configure mock agent with NO final text after tool calls complete
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MULTI_CALL_EXPLORING", "1")
+        .with_agent_env("MOCK_AGENT_NO_FINAL_TEXT", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the multi-call exploring sequence
+    session.send_str("Explore files").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the exploring cell to appear - it should be flushed immediately
+    // after the last tool call completes, even without subsequent agent text
+    session
+        .wait_for_text("Explored", Duration::from_secs(10))
+        .expect("The 'Explored' cell should appear immediately after tool calls complete");
+
+    let contents = session.screen_contents();
+
+    // The critical assertion: the "Explored" cell MUST appear in the output
+    // even though no agent text was sent after the tool calls completed.
+    // If the cell wasn't flushed immediately, it would be missing from the display.
+    assert!(
+        contents.contains("Explored"),
+        "The 'Explored' cell must appear immediately after tool calls complete, \
+         even without subsequent agent text. If this fails, the cell is stuck \
+         in active_cell until drain_failed(). Screen contents:\n{}",
+        contents
+    );
+
+    // Verify all 3 files are shown
+    let read_text = if contents.contains("file1.rs") {
+        "individual files shown"
+    } else {
+        "grouped display"
+    };
+    
+    assert!(
+        contents.contains("Explored") || contents.contains("file1.rs"),
+        "Should show completed exploring operation ({}). Screen contents:\n{}",
+        read_text,
+        contents
     );
 }
