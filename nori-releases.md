@@ -107,43 +107,69 @@ git push origin dev
 We maintain our own separate versioning scheme (`nori-vX.Y.Z`) to avoid blocking
 on upstream releases for our release tagging.
 
-### Automated Release Workflow (Recommended)
+**Important:** The release workflow does NOT modify the codebase. You must update
+`codex-rs/Cargo.toml` to the release version before creating a tag.
 
-The `nori-release.yml` GitHub Actions workflow automates the entire release process:
+### Release Process
 
-1. **Validates** the version format and ensures the tag doesn't exist
-2. **Runs tests** on the dev branch (optional, can be skipped)
-3. **Creates a git tag** `nori-vX.Y.Z` on the dev branch
-4. **Builds native binaries** for all platforms:
-   - Linux x86_64
-   - Linux ARM64
-   - macOS x86_64
-   - macOS ARM64
-5. **Publishes to npm** as `nori-ai-cli`
-6. **Creates a GitHub Release** with changelog and binary artifacts
+#### Option 1: Tag Push (Preferred - Automatic)
 
-#### Usage
+This is the fastest path for releases:
 
 ```bash
+# 1. Update Cargo.toml version in a PR, then merge to dev
+#    (Do this in a separate PR before releasing)
+sed -i 's/^version = ".*"/version = "0.2.0"/' codex-rs/Cargo.toml
+git add codex-rs/Cargo.toml
+git commit -m "chore: bump version to 0.2.0"
+# Create PR, get review, merge to dev
+
+# 2. Create and push tag (triggers automatic release)
+git checkout dev && git pull
+git tag -a nori-v0.2.0 -m "Release 0.2.0"
+git push origin nori-v0.2.0
+```
+
+The workflow automatically triggers on tag push and:
+1. Validates tag matches `codex-rs/Cargo.toml` version
+2. Runs tests
+3. Builds native binaries for all 4 platforms
+4. Publishes to npm as `nori-ai-cli`
+5. Creates GitHub Release with changelog
+
+#### Option 2: Manual Dispatch (Fallback)
+
+Use this when you need more control or want to test first:
+
+```bash
+# Ensure Cargo.toml version is already updated to match
+# Then trigger the workflow:
+
 # Dry run first (recommended) - builds everything but doesn't publish
 gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
 
 # Actual release
 gh workflow run nori-release.yml -f version=0.2.0
-
-# Skip tests if needed (use with caution)
-gh workflow run nori-release.yml -f version=0.2.0 -f skip_tests=true
 ```
 
-#### Workflow Inputs
+### Workflow Inputs (Manual Dispatch)
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `version` | Yes | - | Release version (e.g., `0.2.0` or `0.2.0-alpha.1`) |
-| `dry_run` | No | `false` | Build and stage without publishing |
-| `skip_tests` | No | `false` | Skip running tests before release |
+| `dry_run` | No | `false` | Build and stage without publishing or tagging |
 
-#### npm Package
+### Version Validation
+
+The workflow **always** validates that the tag version matches `codex-rs/Cargo.toml`.
+If they don't match, the workflow fails with an error:
+
+```
+❌ Version mismatch: tag=0.2.0, Cargo.toml=0.1.0
+Update codex-rs/Cargo.toml to version 0.2.0 before releasing
+```
+
+### npm Package
 
 - **Package name:** `nori-ai-cli`
 - **Stable releases:** Published with `latest` tag
@@ -157,22 +183,18 @@ npm install -g nori-ai-cli
 npm install -g nori-ai-cli@next
 ```
 
-#### Required Secrets
+### Required Secrets
 
 | Secret | Purpose |
 |--------|---------|
 | `NPM_TOKEN` | npm authentication token for publishing |
 | `PAT_NORI_RELEASE` | GitHub PAT for pushing tags (optional, falls back to GITHUB_TOKEN) |
 
-### Manual Release (Legacy)
+### Build Targets
 
-For manual releases without the workflow:
-
-```bash
-git checkout dev
-git tag -a nori-v0.2.0 -m "Nori release 0.2.0"
-git push origin nori-v0.2.0
-```
-
-Note: Manual releases will not automatically publish to npm or create GitHub releases.
+The workflow builds native binaries for:
+- Linux x86_64 (`x86_64-unknown-linux-gnu`)
+- Linux ARM64 (`aarch64-unknown-linux-gnu`)
+- macOS x86_64 (`x86_64-apple-darwin`)
+- macOS ARM64 (`aarch64-apple-darwin`)
 
