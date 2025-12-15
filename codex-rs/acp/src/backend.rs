@@ -488,9 +488,14 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             // Tool call updates can be mapped based on status
             if update.fields.status == Some(acp::ToolCallStatus::Completed) {
                 // Extract output from tool call content and raw_output
-                let aggregated_output = extract_tool_output(&update.fields);
+                let aggregated_output = extract_tool_output_enhanced(&update.fields);
                 let title = update.fields.title.clone().unwrap_or_default();
-                let command = format_tool_call_command(&title, update.fields.raw_input.as_ref());
+                // Format command for post-approval display (e.g., "Edited file.rs (+6 -5)")
+                let command = format_completed_tool_command(
+                    &title,
+                    update.fields.kind.as_ref(),
+                    update.fields.raw_input.as_ref(),
+                );
                 // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
                 let parsed_cmd = classify_tool_to_parsed_command(
                     &title,
@@ -537,6 +542,134 @@ fn format_tool_call_command(title: &str, raw_input: Option<&serde_json::Value>) 
         title.to_string()
     } else {
         format!("{title}({args})")
+    }
+}
+
+/// Format the command string for post-approval display.
+///
+/// Produces human-readable output like:
+/// - "Edited file.rs (+6 -5)" for edit operations
+/// - "Wrote file.rs" for write operations
+/// - "Deleted file.rs" for delete operations
+/// - "Ran git status" for execute operations
+fn format_completed_tool_command(
+    title: &str,
+    kind: Option<&acp::ToolKind>,
+    raw_input: Option<&serde_json::Value>,
+) -> String {
+    // Note: ACP ToolKind doesn't have a Write variant - write operations
+    // typically come through as Edit or Other with title-based detection
+    match kind {
+        Some(acp::ToolKind::Edit) => {
+            let file_path = extract_file_path(raw_input).unwrap_or_else(|| "file".to_string());
+            // Check if this is a write (has content) vs edit (has old_string)
+            if raw_input
+                .and_then(|i| i.get("old_string"))
+                .and_then(|v| v.as_str())
+                .is_some()
+            {
+                let (added, removed) = calculate_diff_stats(raw_input);
+                format!(
+                    "Edited {} (+{} -{})",
+                    shorten_path(&file_path),
+                    added,
+                    removed
+                )
+            } else {
+                format!("Wrote {}", shorten_path(&file_path))
+            }
+        }
+        Some(acp::ToolKind::Delete) => {
+            let file_path = extract_file_path(raw_input).unwrap_or_else(|| "file".to_string());
+            format!("Deleted {}", shorten_path(&file_path))
+        }
+        Some(acp::ToolKind::Move) => {
+            let from = raw_input
+                .and_then(|i| i.get("from").or_else(|| i.get("source")))
+                .and_then(|v| v.as_str());
+            let to = raw_input
+                .and_then(|i| i.get("to").or_else(|| i.get("destination")))
+                .and_then(|v| v.as_str());
+            match (from, to) {
+                (Some(f), Some(t)) => {
+                    format!("Moved {} → {}", shorten_path(f), shorten_path(t))
+                }
+                _ => format!("Ran {}", title),
+            }
+        }
+        Some(acp::ToolKind::Execute) => {
+            let cmd = raw_input
+                .and_then(|i| i.get("command"))
+                .and_then(|v| v.as_str())
+                .map(|c| truncate_str(c, 50))
+                .unwrap_or_else(|| title.to_string());
+            format!("Ran {}", cmd)
+        }
+        _ => {
+            // Check title for write-like operations
+            let title_lower = title.to_lowercase();
+            if title_lower.contains("write") && raw_input.and_then(|i| i.get("content")).is_some() {
+                let file_path =
+                    extract_file_path(raw_input).unwrap_or_else(|| "file".to_string());
+                format!("Wrote {}", shorten_path(&file_path))
+            } else {
+                format_tool_call_command(title, raw_input)
+            }
+        }
+    }
+}
+
+/// Calculate added/removed line counts from edit parameters.
+///
+/// Uses a simple set-based diff to count lines that differ between old and new.
+fn calculate_diff_stats(raw_input: Option<&serde_json::Value>) -> (usize, usize) {
+    raw_input
+        .and_then(|input| {
+            let old = input.get("old_string")?.as_str()?;
+            let new = input.get("new_string")?.as_str()?;
+
+            let old_lines: std::collections::HashSet<_> = old.lines().collect();
+            let new_lines: std::collections::HashSet<_> = new.lines().collect();
+
+            let added = new_lines.difference(&old_lines).count();
+            let removed = old_lines.difference(&new_lines).count();
+
+            // Ensure at least some change is shown if strings differ
+            if added == 0 && removed == 0 && old != new {
+                Some((1, 1))
+            } else {
+                Some((added, removed))
+            }
+        })
+        .unwrap_or((0, 0))
+}
+
+/// Extract file path from raw_input JSON, checking common field names.
+fn extract_file_path(raw_input: Option<&serde_json::Value>) -> Option<String> {
+    raw_input
+        .and_then(|i| {
+            i.get("file_path")
+                .or_else(|| i.get("path"))
+                .or_else(|| i.get("file"))
+        })
+        .and_then(|v| v.as_str())
+        .map(String::from)
+}
+
+/// Shorten a file path to just the filename for display.
+fn shorten_path(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string())
+}
+
+/// Truncate a string to a maximum length, adding "..." if truncated.
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
     }
 }
 
@@ -636,6 +769,60 @@ fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
     }
 
     output_parts.join("\n")
+}
+
+/// Enhanced tool output extraction for post-approval display.
+///
+/// Falls back to basic extraction, but provides better summaries for
+/// operations like edit/write that typically have no output.
+fn extract_tool_output_enhanced(fields: &acp::ToolCallUpdateFields) -> String {
+    // First try the existing extraction
+    let base_output = extract_tool_output(fields);
+    if !base_output.is_empty() {
+        return base_output;
+    }
+
+    // For edit operations with no output, provide a summary
+    if let Some(acp::ToolKind::Edit) = fields.kind.as_ref() {
+        let file_path = extract_file_path(fields.raw_input.as_ref())
+            .unwrap_or_else(|| "file".to_string());
+        // Check if this is a write (has content) vs edit (has old_string)
+        if fields
+            .raw_input
+            .as_ref()
+            .and_then(|i| i.get("old_string"))
+            .is_some()
+        {
+            return format!("Applied edit to {}", shorten_path(&file_path));
+        } else {
+            return format!("Wrote {}", shorten_path(&file_path));
+        }
+    }
+
+    // For delete operations with no output
+    if let Some(acp::ToolKind::Delete) = fields.kind.as_ref() {
+        let file_path = extract_file_path(fields.raw_input.as_ref())
+            .unwrap_or_else(|| "file".to_string());
+        return format!("Deleted {}", shorten_path(&file_path));
+    }
+
+    // Check title for write-like operations
+    if let Some(title) = &fields.title {
+        let title_lower = title.to_lowercase();
+        if title_lower.contains("write")
+            && fields
+                .raw_input
+                .as_ref()
+                .and_then(|i| i.get("content"))
+                .is_some()
+        {
+            let file_path = extract_file_path(fields.raw_input.as_ref())
+                .unwrap_or_else(|| "file".to_string());
+            return format!("Wrote {}", shorten_path(&file_path));
+        }
+    }
+
+    String::new()
 }
 
 /// Format raw_output JSON into a human-readable string based on tool type.
@@ -1373,6 +1560,206 @@ mod tests {
                     }
                     _ => panic!("Expected ParsedCommand::Read"),
                 }
+            }
+            _ => panic!("Expected ExecCommandEnd event"),
+        }
+    }
+
+    // ==================== Post-Approval Formatting Tests ====================
+
+    #[test]
+    fn test_format_completed_tool_command_edit() {
+        let raw_input = serde_json::json!({
+            "file_path": "/home/user/src/main.rs",
+            "old_string": "fn old() {}",
+            "new_string": "fn new() {\n    bar();\n}"
+        });
+
+        let result = format_completed_tool_command(
+            "Edit",
+            Some(&acp::ToolKind::Edit),
+            Some(&raw_input),
+        );
+
+        assert!(result.starts_with("Edited main.rs"));
+        assert!(result.contains("(+"));
+        assert!(result.contains("-"));
+    }
+
+    #[test]
+    fn test_format_completed_tool_command_write_via_title() {
+        // Write operations come through with title containing "write" and content field
+        let raw_input = serde_json::json!({
+            "path": "/tmp/output.txt",
+            "content": "file contents"
+        });
+
+        let result = format_completed_tool_command(
+            "Write",
+            None, // No ToolKind, relies on title-based detection
+            Some(&raw_input),
+        );
+
+        assert_eq!(result, "Wrote output.txt");
+    }
+
+    #[test]
+    fn test_format_completed_tool_command_write_via_edit_kind() {
+        // Write operations can also come through as Edit kind without old_string
+        let raw_input = serde_json::json!({
+            "path": "/tmp/output.txt",
+            "content": "file contents"
+        });
+
+        let result = format_completed_tool_command(
+            "Edit",
+            Some(&acp::ToolKind::Edit),
+            Some(&raw_input),
+        );
+
+        assert_eq!(result, "Wrote output.txt");
+    }
+
+    #[test]
+    fn test_format_completed_tool_command_delete() {
+        let raw_input = serde_json::json!({
+            "file_path": "/tmp/old_file.txt"
+        });
+
+        let result = format_completed_tool_command(
+            "Delete",
+            Some(&acp::ToolKind::Delete),
+            Some(&raw_input),
+        );
+
+        assert_eq!(result, "Deleted old_file.txt");
+    }
+
+    #[test]
+    fn test_format_completed_tool_command_move() {
+        let raw_input = serde_json::json!({
+            "from": "/src/old.rs",
+            "to": "/src/new.rs"
+        });
+
+        let result = format_completed_tool_command(
+            "Move",
+            Some(&acp::ToolKind::Move),
+            Some(&raw_input),
+        );
+
+        assert_eq!(result, "Moved old.rs → new.rs");
+    }
+
+    #[test]
+    fn test_format_completed_tool_command_execute() {
+        let raw_input = serde_json::json!({
+            "command": "cargo test --release"
+        });
+
+        let result = format_completed_tool_command(
+            "Terminal",
+            Some(&acp::ToolKind::Execute),
+            Some(&raw_input),
+        );
+
+        assert_eq!(result, "Ran cargo test --release");
+    }
+
+    #[test]
+    fn test_calculate_diff_stats() {
+        let input = serde_json::json!({
+            "old_string": "line1\nline2\nline3",
+            "new_string": "line1\nline2_modified\nline3\nline4"
+        });
+
+        let (added, removed) = calculate_diff_stats(Some(&input));
+        // line2_modified and line4 are new, line2 is removed
+        assert!(added >= 1);
+        assert!(removed >= 1);
+    }
+
+    #[test]
+    fn test_calculate_diff_stats_no_change() {
+        let input = serde_json::json!({
+            "old_string": "same content",
+            "new_string": "same content"
+        });
+
+        let (added, removed) = calculate_diff_stats(Some(&input));
+        assert_eq!(added, 0);
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn test_shorten_path() {
+        assert_eq!(shorten_path("/home/user/project/file.rs"), "file.rs");
+        assert_eq!(shorten_path("relative/path/to/file.txt"), "file.txt");
+        assert_eq!(shorten_path("file.txt"), "file.txt");
+    }
+
+    #[test]
+    fn test_truncate_str() {
+        assert_eq!(truncate_str("short", 10), "short");
+        assert_eq!(truncate_str("this is a longer string", 10), "this is...");
+    }
+
+    #[test]
+    fn test_extract_file_path() {
+        let input = serde_json::json!({"file_path": "/path/file.rs"});
+        assert_eq!(extract_file_path(Some(&input)), Some("/path/file.rs".to_string()));
+
+        let input2 = serde_json::json!({"path": "/other/path.txt"});
+        assert_eq!(extract_file_path(Some(&input2)), Some("/other/path.txt".to_string()));
+
+        assert_eq!(extract_file_path(None), None);
+    }
+
+    #[test]
+    fn test_tool_call_update_edit_shows_formatted_command() {
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-edit-end".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::Completed)
+                .title("Edit")
+                .kind(acp::ToolKind::Edit)
+                .raw_input(serde_json::json!({
+                    "file_path": "/src/lib.rs",
+                    "old_string": "old code",
+                    "new_string": "new code\nwith more lines"
+                })),
+        ));
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandEnd(end) => {
+                // Command should be "Edited lib.rs (+X -Y)" not "Edit"
+                assert!(end.command[0].starts_with("Edited lib.rs"));
+                assert!(end.command[0].contains("(+"));
+            }
+            _ => panic!("Expected ExecCommandEnd event"),
+        }
+    }
+
+    #[test]
+    fn test_tool_call_update_execute_shows_ran_command() {
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("call-exec-end".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .status(acp::ToolCallStatus::Completed)
+                .title("Terminal")
+                .kind(acp::ToolKind::Execute)
+                .raw_input(serde_json::json!({"command": "cargo build"})),
+        ));
+
+        let events = translate_session_update_to_events(&update);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            EventMsg::ExecCommandEnd(end) => {
+                assert_eq!(end.command[0], "Ran cargo build");
             }
             _ => panic!("Expected ExecCommandEnd event"),
         }
