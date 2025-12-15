@@ -75,10 +75,12 @@ fn test_escape_cancels_streaming() {
         )
         .expect("No interrupt reported");
 
-    session.wait_for(
-        |contents| !contents.contains("• Streaming..."),
-        Duration::from_secs(10)
-    ).expect("Streaming did not finish");
+    session
+        .wait_for(
+            |contents| !contents.contains("• Streaming..."),
+            Duration::from_secs(10),
+        )
+        .expect("Streaming did not finish");
 
     assert_snapshot!(
         "escape_cancelled_stream",
@@ -124,10 +126,12 @@ fn test_ctrl_c_cancels_streaming() {
         )
         .expect("No interrupt reported");
 
-    session.wait_for(
-        |contents| !contents.contains("• Streaming..."),
-        Duration::from_secs(10)
-    ).expect("Streaming did not finish");
+    session
+        .wait_for(
+            |contents| !contents.contains("• Streaming..."),
+            Duration::from_secs(10),
+        )
+        .expect("Streaming did not finish");
 
     assert_snapshot!(
         "ctrl_c_cancelled_stream",
