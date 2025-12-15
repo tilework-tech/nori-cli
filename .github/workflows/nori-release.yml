@@ -144,6 +144,10 @@ jobs:
           toolchain: "1.90.0"
           components: clippy
 
+      - name: Run cargo build
+        working-directory: codex-rs
+        run: cargo build
+
       - name: Run cargo check
         working-directory: codex-rs
         run: cargo check --all-targets
