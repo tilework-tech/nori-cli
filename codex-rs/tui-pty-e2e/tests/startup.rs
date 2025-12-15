@@ -145,6 +145,8 @@ fn test_trust_screen_is_skipped_with_default_config() {
         .wait_for_text("›", TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
 

@@ -63,6 +63,15 @@ The `config/` module handles:
 
 ### Things to Know
 
+**Test Suite Configuration:**
+
+The integration test suite in `@/codex-rs/core/tests/suite` includes timing-sensitive tests that are excluded from normal CI runs to improve reliability:
+
+- `tool_parallelism.rs`: Tests parallel tool execution with strict timing requirements (<750ms threshold). The `read_file_tools_run_in_parallel` test is marked `#[ignore]` to prevent CI timeouts.
+- `rmcp_client.rs`: Tests remote MCP server communication. Both `streamable_http_tool_call_round_trip` and `streamable_http_with_oauth_round_trip` are marked `#[ignore]` as they take >60 seconds due to cargo builds and HTTP server startup.
+
+These tests remain available for explicit execution via `cargo test -- --ignored` but are skipped during routine test runs to prevent false failures from system load or timing variance.
+
 **Sandbox Enforcement:**
 
 Sandboxing is enforced through `safety.rs` and `sandboxing/`:

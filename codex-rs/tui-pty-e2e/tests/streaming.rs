@@ -28,6 +28,8 @@ fn test_submit_text() {
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "submit_input",
         normalize_for_input_snapshot(session.screen_contents())

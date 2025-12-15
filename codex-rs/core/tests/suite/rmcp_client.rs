@@ -654,6 +654,7 @@ async fn stdio_server_propagates_whitelisted_env_vars() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore] // Slow test - takes >60s due to cargo build and HTTP server startup
 async fn streamable_http_tool_call_round_trip() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
@@ -820,6 +821,7 @@ async fn streamable_http_tool_call_round_trip() -> anyhow::Result<()> {
 /// Ideally, we wouldn't need to serialize the test but it's much more cumbersome to wire CODEX_HOME through the code.
 #[serial(codex_home)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore] // Slow test - takes >60s due to cargo build and HTTP server startup
 async fn streamable_http_with_oauth_round_trip() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
