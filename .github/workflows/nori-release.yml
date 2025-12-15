@@ -1,21 +1,23 @@
 # Nori Release Workflow
 #
-# This workflow creates releases for nori-ai-cli and publishes to npm.
-# Supports both automatic tag push and manual dispatch triggers.
+# This workflow builds and publishes nori-ai-cli releases to npm.
+# It is triggered by tag pushes created via the create_nori_release script.
 #
-# IMPORTANT: Version in codex-rs/Cargo.toml must match the tag version.
-# The workflow validates this but does NOT modify the codebase.
+# The script creates "synthetic commits" - release tags point to commits that
+# exist only for the release (not on any branch), with Cargo.toml updated to
+# the release version. This keeps the dev branch's Cargo.toml at a placeholder.
 #
-# Usage (automatic - preferred):
-#   # 1. Update Cargo.toml version in a PR, merge to dev
-#   # 2. Create and push tag
-#   git checkout dev && git pull
-#   git tag -a nori-v0.2.0 -m "Release 0.2.0"
-#   git push origin nori-v0.2.0
+# Usage:
+#   # Create a release (from local machine with gh CLI authenticated)
+#   ./scripts/create_nori_release --publish-release      # stable release
+#   ./scripts/create_nori_release --publish-alpha        # alpha release
+#   ./scripts/create_nori_release --version 0.3.0        # specific version
+#   ./scripts/create_nori_release --dry-run --publish-release  # preview
 #
-# Usage (manual dispatch):
-#   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true  # test
-#   gh workflow run nori-release.yml -f version=0.2.0                  # release
+# The script pushes the tag, which triggers this workflow automatically.
+#
+# For testing the build process without releasing:
+#   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
 #
 name: Nori Release
 
@@ -26,13 +28,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., 0.2.0 - no "v" prefix)'
+        description: 'Version to test build (e.g., 0.2.0) - dry run only'
         required: true
         type: string
       dry_run:
-        description: 'Perform a dry run without publishing or tagging'
+        description: 'Dry run mode (builds but does not publish)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 env:
@@ -53,14 +55,9 @@ jobs:
       tag_name: ${{ steps.validate.outputs.tag_name }}
       is_prerelease: ${{ steps.validate.outputs.is_prerelease }}
       is_tag_push: ${{ steps.validate.outputs.is_tag_push }}
+      checkout_ref: ${{ steps.validate.outputs.checkout_ref }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref || 'dev' }}
-          fetch-depth: 0
-
-      - name: Validate version and check tag
+      - name: Validate version and determine refs
         id: validate
         run: |
           IS_TAG_PUSH="false"
@@ -69,12 +66,16 @@ jobs:
             # Extract version from tag name (nori-v0.2.0 -> 0.2.0)
             VERSION="${GITHUB_REF_NAME#${{ env.TAG_PREFIX }}}"
             TAG_NAME="${GITHUB_REF_NAME}"
+            CHECKOUT_REF="${GITHUB_REF}"
           else
             VERSION="${{ inputs.version }}"
             TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
+            # For dispatch dry run, checkout dev branch
+            CHECKOUT_REF="dev"
           fi
 
           echo "is_tag_push=$IS_TAG_PUSH" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
 
           # Validate semver format (X.Y.Z or X.Y.Z-alpha.N, X.Y.Z-beta.N, etc.)
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z]+\.[0-9]+)?$'; then
@@ -82,23 +83,6 @@ jobs:
             echo "Expected format: X.Y.Z or X.Y.Z-alpha.N"
             exit 1
           fi
-
-          # For dispatch: check if tag already exists
-          if [[ "$IS_TAG_PUSH" == "false" ]]; then
-            if git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
-              echo "::error::Tag $TAG_NAME already exists"
-              exit 1
-            fi
-          fi
-
-          # Validate tag matches Cargo.toml version
-          CARGO_VERSION=$(grep -m1 '^version' codex-rs/Cargo.toml | sed -E 's/version *= *"([^"]+)".*/\1/')
-          if [[ "$VERSION" != "$CARGO_VERSION" ]]; then
-            echo "::error::Version mismatch: tag=$VERSION, Cargo.toml=$CARGO_VERSION"
-            echo "Update codex-rs/Cargo.toml to version $VERSION before releasing"
-            exit 1
-          fi
-          echo "✅ Tag and Cargo.toml agree ($VERSION)"
 
           # Determine if this is a prerelease
           IS_PRERELEASE="false"
@@ -118,7 +102,10 @@ jobs:
           echo "| Tag | \`$TAG_NAME\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pre-release | $IS_PRERELEASE |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Dry Run | ${{ inputs.dry_run || 'false' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Checkout Ref | \`$CHECKOUT_REF\` |" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "| Mode | Dry Run (build test only) |" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ============================================================================
   # RUN TESTS
@@ -131,7 +118,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'push' && github.ref || 'dev' }}
+          ref: ${{ needs.validate.outputs.checkout_ref }}
 
       - name: Free disk space
         run: |
@@ -161,58 +148,11 @@ jobs:
         run: cargo test --workspace
 
   # ============================================================================
-  # CREATE TAG (only for workflow_dispatch)
-  # ============================================================================
-  tag:
-    name: Create Release Tag
-    needs: [validate, test]
-    # Only run for workflow_dispatch (tag push already has the tag)
-    if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: dev
-          fetch-depth: 0
-          token: ${{ secrets.PAT_NORI_RELEASE || secrets.GITHUB_TOKEN }}
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create and push tag
-        if: ${{ !inputs.dry_run }}
-        run: |
-          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
-          VERSION="${{ needs.validate.outputs.version }}"
-
-          git tag -a "$TAG_NAME" -m "Nori release $VERSION"
-          git push origin "$TAG_NAME"
-
-          echo "## Tag Created" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Created and pushed tag: \`$TAG_NAME\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Dry run - show what would be tagged
-        if: ${{ inputs.dry_run }}
-        run: |
-          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
-          COMMIT_SHA=$(git rev-parse HEAD)
-
-          echo "## Dry Run - Tag Preview" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Would create tag: \`$TAG_NAME\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "On commit: \`$COMMIT_SHA\`" >> "$GITHUB_STEP_SUMMARY"
-
-  # ============================================================================
   # BUILD NATIVE BINARIES
   # ============================================================================
   build-native:
     name: Build Native (${{ matrix.target }})
-    needs: [validate, test, tag]
-    # Run if tests passed and (tag job succeeded OR was skipped due to tag push)
+    needs: [validate, test]
     if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
@@ -236,24 +176,10 @@ jobs:
             cross: false
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Determine checkout ref
-        id: checkout-ref
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            # Tag push: checkout the tag
-            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ inputs.dry_run }}" == "true" ]]; then
-            # Dry run: checkout dev
-            echo "ref=dev" >> "$GITHUB_OUTPUT"
-          else
-            # Dispatch release: checkout the newly created tag
-            echo "ref=${{ needs.validate.outputs.tag_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.checkout-ref.outputs.ref }}
+          ref: ${{ needs.validate.outputs.checkout_ref }}
 
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
@@ -330,21 +256,10 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Determine checkout ref
-        id: checkout-ref
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ inputs.dry_run }}" == "true" ]]; then
-            echo "ref=dev" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=${{ needs.validate.outputs.tag_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.checkout-ref.outputs.ref }}
+          ref: ${{ needs.validate.outputs.checkout_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -456,13 +371,13 @@ jobs:
           retention-days: 7
 
   # ============================================================================
-  # PUBLISH TO NPM
+  # PUBLISH TO NPM (only for tag push, not dry run)
   # ============================================================================
   publish-npm:
     name: Publish to npm
     needs: [validate, stage-npm]
-    # Publish for tag push, or dispatch without dry_run
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || !inputs.dry_run) }}
+    # Only publish for actual tag pushes, not workflow_dispatch (which is dry run only)
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     environment: npm-publish
     steps:
@@ -530,13 +445,13 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
-  # CREATE GITHUB RELEASE
+  # CREATE GITHUB RELEASE (only for tag push)
   # ============================================================================
   create-release:
     name: Create GitHub Release
     needs: [validate, build-native, publish-npm]
-    # Create release for tag push, or dispatch without dry_run
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || !inputs.dry_run) }}
+    # Only create release for actual tag pushes
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -648,12 +563,12 @@ jobs:
           echo "| GitHub Release | [$TAG_NAME](https://github.com/${{ github.repository }}/releases/tag/$TAG_NAME) |" >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
-  # DRY RUN SUMMARY (only for workflow_dispatch with dry_run=true)
+  # DRY RUN SUMMARY (only for workflow_dispatch)
   # ============================================================================
   dry-run-summary:
     name: Dry Run Summary
     needs: [validate, stage-npm]
-    if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Download npm package
@@ -670,7 +585,7 @@ jobs:
 
           echo "## Dry Run Complete" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "The following would have been created:" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build test successful! The following would be created in a real release:" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Item | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
@@ -684,7 +599,7 @@ jobs:
           ls -la dist/ >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "To perform the actual release, run without \`dry_run\`:" >> "$GITHUB_STEP_SUMMARY"
+          echo "To create an actual release, use the release script:" >> "$GITHUB_STEP_SUMMARY"
           echo '```bash' >> "$GITHUB_STEP_SUMMARY"
-          echo "gh workflow run nori-release.yml -f version=$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "./scripts/create_nori_release --version $VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

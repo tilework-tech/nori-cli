@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""
+Create a Nori release using synthetic commits.
+
+This script creates release tags without modifying the dev branch's Cargo.toml.
+Instead, it creates a synthetic commit (via GitHub API) that contains the
+version update, and tags that commit.
+
+Usage:
+    # Dry run to see next version
+    ./scripts/create_nori_release --dry-run --publish-release
+
+    # Create next stable release (bumps minor version)
+    ./scripts/create_nori_release --publish-release
+
+    # Create next alpha release
+    ./scripts/create_nori_release --publish-alpha
+
+    # Create specific version
+    ./scripts/create_nori_release --version 0.3.0
+"""
+
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+
+REPO = "tilework-tech/nori-cli"
+BRANCH_REF = "heads/dev"
+CARGO_TOML_PATH = "codex-rs/Cargo.toml"
+TAG_PREFIX = "nori-v"
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Create a tagged Nori release using synthetic commits."
+    )
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Print the version that would be used and exit before making changes.",
+    )
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--publish-alpha",
+        action="store_true",
+        help="Publish the next alpha release for the upcoming minor version.",
+    )
+    group.add_argument(
+        "--publish-release",
+        action="store_true",
+        help="Publish the next stable release by bumping the minor version.",
+    )
+    group.add_argument(
+        "--version",
+        metavar="VERSION",
+        help="Publish a specific version (e.g., 0.3.0 or 0.3.0-alpha.1).",
+    )
+
+    args = parser.parse_args(argv[1:])
+    if not (args.publish_alpha or args.publish_release or args.version):
+        parser.error("Must specify --publish-alpha, --publish-release, or --version.")
+    return args
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+
+    try:
+        if args.version:
+            version = args.version.lstrip("v")
+            # Validate version format
+            if not re.match(r"^\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?$", version):
+                raise ReleaseError(f"Invalid version format: {version}")
+        else:
+            version = determine_version(args)
+
+        tag_name = f"{TAG_PREFIX}{version}"
+
+        # Check if tag already exists
+        if tag_exists(tag_name):
+            raise ReleaseError(f"Tag {tag_name} already exists")
+
+        print(f"Publishing version {version}")
+        print(f"Tag name: {tag_name}")
+
+        if args.dry_run:
+            print("\n[DRY RUN] Would perform the following:")
+            print(f"  1. Fetch dev branch head")
+            print(f"  2. Create synthetic commit with Cargo.toml version = {version}")
+            print(f"  3. Create annotated tag {tag_name}")
+            print(f"  4. Push tag to origin")
+            return 0
+
+        print("Fetching branch head...")
+        base_commit = get_branch_head()
+        print(f"Base commit: {base_commit}")
+
+        print("Fetching commit tree...")
+        base_tree = get_commit_tree(base_commit)
+        print(f"Base tree: {base_tree}")
+
+        print("Fetching Cargo.toml...")
+        current_contents = fetch_file_contents(base_commit)
+
+        print("Updating version in Cargo.toml...")
+        updated_contents = replace_version(current_contents, version)
+
+        print("Creating blob...")
+        blob_sha = create_blob(updated_contents)
+        print(f"Blob SHA: {blob_sha}")
+
+        print("Creating tree...")
+        tree_sha = create_tree(base_tree, blob_sha)
+        print(f"Tree SHA: {tree_sha}")
+
+        print("Creating commit...")
+        commit_sha = create_commit(version, tree_sha, base_commit)
+        print(f"Commit SHA: {commit_sha}")
+
+        print("Creating tag...")
+        tag_sha = create_tag(version, commit_sha)
+        print(f"Tag SHA: {tag_sha}")
+
+        print("Creating tag ref...")
+        create_tag_ref(version, tag_sha)
+
+        print("\n" + "=" * 60)
+        print(f"✅ Release {version} created successfully!")
+        print(f"   Tag: {tag_name}")
+        print(f"   Commit: {commit_sha[:12]}")
+        print("")
+        print("The nori-release workflow will now automatically:")
+        print("  1. Run tests")
+        print("  2. Build native binaries for all platforms")
+        print("  3. Publish to npm as nori-ai-cli")
+        print("  4. Create GitHub Release")
+        print("=" * 60)
+
+    except ReleaseError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+class ReleaseError(RuntimeError):
+    pass
+
+
+def run_gh_api(
+    endpoint: str, *, method: str = "GET", payload: dict | None = None
+) -> dict:
+    """Execute a GitHub API call using the gh CLI."""
+    command = [
+        "gh",
+        "api",
+        endpoint,
+        "--method",
+        method,
+        "-H",
+        "Accept: application/vnd.github+json",
+    ]
+    json_payload = None
+    if payload is not None:
+        json_payload = json.dumps(payload)
+        command.extend(["-H", "Content-Type: application/json", "--input", "-"])
+
+    result = subprocess.run(command, text=True, capture_output=True, input=json_payload)
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or "gh api call failed"
+        raise ReleaseError(message)
+    try:
+        return json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as error:
+        raise ReleaseError("Failed to parse response from gh api.") from error
+
+
+def tag_exists(tag_name: str) -> bool:
+    """Check if a tag already exists."""
+    try:
+        run_gh_api(f"/repos/{REPO}/git/refs/tags/{tag_name}")
+        return True
+    except ReleaseError:
+        return False
+
+
+def get_branch_head() -> str:
+    """Get the SHA of the dev branch head."""
+    response = run_gh_api(f"/repos/{REPO}/git/refs/{BRANCH_REF}")
+    try:
+        return response["object"]["sha"]
+    except KeyError as error:
+        raise ReleaseError("Unable to determine branch head.") from error
+
+
+def get_commit_tree(commit_sha: str) -> str:
+    """Get the tree SHA for a commit."""
+    response = run_gh_api(f"/repos/{REPO}/git/commits/{commit_sha}")
+    try:
+        return response["tree"]["sha"]
+    except KeyError as error:
+        raise ReleaseError("Commit response missing tree SHA.") from error
+
+
+def fetch_file_contents(ref_sha: str) -> str:
+    """Fetch the contents of Cargo.toml at a specific ref."""
+    response = run_gh_api(f"/repos/{REPO}/contents/{CARGO_TOML_PATH}?ref={ref_sha}")
+    try:
+        encoded_content = response["content"].replace("\n", "")
+        encoding = response.get("encoding", "")
+    except KeyError as error:
+        raise ReleaseError("Failed to fetch Cargo.toml contents.") from error
+
+    if encoding != "base64":
+        raise ReleaseError(f"Unexpected Cargo.toml encoding: {encoding}")
+
+    try:
+        return base64.b64decode(encoded_content).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as error:
+        raise ReleaseError("Failed to decode Cargo.toml contents.") from error
+
+
+def replace_version(contents: str, version: str) -> str:
+    """Replace the version in Cargo.toml contents."""
+    updated, matches = re.subn(
+        r'^version = "[^"]+"',
+        f'version = "{version}"',
+        contents,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if matches != 1:
+        raise ReleaseError("Unable to update version in Cargo.toml.")
+    return updated
+
+
+def create_blob(content: str) -> str:
+    """Create a blob with the given content."""
+    response = run_gh_api(
+        f"/repos/{REPO}/git/blobs",
+        method="POST",
+        payload={"content": content, "encoding": "utf-8"},
+    )
+    try:
+        return response["sha"]
+    except KeyError as error:
+        raise ReleaseError("Blob creation response missing SHA.") from error
+
+
+def create_tree(base_tree_sha: str, blob_sha: str) -> str:
+    """Create a tree with the updated Cargo.toml."""
+    response = run_gh_api(
+        f"/repos/{REPO}/git/trees",
+        method="POST",
+        payload={
+            "base_tree": base_tree_sha,
+            "tree": [
+                {
+                    "path": CARGO_TOML_PATH,
+                    "mode": "100644",
+                    "type": "blob",
+                    "sha": blob_sha,
+                }
+            ],
+        },
+    )
+    try:
+        return response["sha"]
+    except KeyError as error:
+        raise ReleaseError("Tree creation response missing SHA.") from error
+
+
+def create_commit(version: str, tree_sha: str, parent_sha: str) -> str:
+    """Create a commit with the version update."""
+    response = run_gh_api(
+        f"/repos/{REPO}/git/commits",
+        method="POST",
+        payload={
+            "message": f"Release {version}",
+            "tree": tree_sha,
+            "parents": [parent_sha],
+        },
+    )
+    try:
+        return response["sha"]
+    except KeyError as error:
+        raise ReleaseError("Commit creation response missing SHA.") from error
+
+
+def create_tag(version: str, commit_sha: str) -> str:
+    """Create an annotated tag."""
+    tag_name = f"{TAG_PREFIX}{version}"
+    response = run_gh_api(
+        f"/repos/{REPO}/git/tags",
+        method="POST",
+        payload={
+            "tag": tag_name,
+            "message": f"Nori release {version}",
+            "object": commit_sha,
+            "type": "commit",
+        },
+    )
+    try:
+        return response["sha"]
+    except KeyError as error:
+        raise ReleaseError("Tag creation response missing SHA.") from error
+
+
+def create_tag_ref(version: str, tag_sha: str) -> None:
+    """Create a ref for the tag."""
+    tag_ref = f"refs/tags/{TAG_PREFIX}{version}"
+    run_gh_api(
+        f"/repos/{REPO}/git/refs",
+        method="POST",
+        payload={"ref": tag_ref, "sha": tag_sha},
+    )
+
+
+def determine_version(args: argparse.Namespace) -> str:
+    """Determine the next version based on existing releases."""
+    latest_version = get_latest_release_version()
+
+    if latest_version is None:
+        # No existing releases, start at 0.1.0
+        if args.publish_release:
+            return "0.1.0"
+        else:
+            return "0.1.0-alpha.1"
+
+    major, minor, patch = parse_semver(latest_version)
+    next_minor_version = format_version(major, minor + 1, 0)
+
+    if args.publish_release:
+        return next_minor_version
+
+    # For alpha releases, find the highest alpha number
+    alpha_prefix = f"{next_minor_version}-alpha."
+    releases = list_releases()
+    highest_alpha = 0
+    found_alpha = False
+
+    for release in releases:
+        tag = release.get("tag_name", "")
+        candidate = strip_tag_prefix(tag)
+        if candidate and candidate.startswith(alpha_prefix):
+            suffix = candidate[len(alpha_prefix) :]
+            try:
+                alpha_number = int(suffix)
+            except ValueError:
+                continue
+            highest_alpha = max(highest_alpha, alpha_number)
+            found_alpha = True
+
+    if found_alpha:
+        return f"{alpha_prefix}{highest_alpha + 1}"
+    return f"{alpha_prefix}1"
+
+
+def get_latest_release_version() -> str | None:
+    """Get the version of the latest stable release."""
+    try:
+        response = run_gh_api(f"/repos/{REPO}/releases/latest")
+        tag = response.get("tag_name")
+        return strip_tag_prefix(tag)
+    except ReleaseError:
+        # No releases yet
+        return None
+
+
+def list_releases() -> list[dict]:
+    """List all releases."""
+    try:
+        response = run_gh_api(f"/repos/{REPO}/releases?per_page=100")
+        if not isinstance(response, list):
+            return []
+        return response
+    except ReleaseError:
+        return []
+
+
+def strip_tag_prefix(tag: str | None) -> str | None:
+    """Remove the tag prefix from a tag name."""
+    if not tag:
+        return None
+    if not tag.startswith(TAG_PREFIX):
+        return None
+    return tag[len(TAG_PREFIX) :]
+
+
+def parse_semver(version: str) -> tuple[int, int, int]:
+    """Parse a semver version string into components."""
+    # Strip any prerelease suffix for base version
+    base_version = version.split("-")[0]
+    parts = base_version.split(".")
+    if len(parts) != 3:
+        raise ReleaseError(f"Unexpected version format: {version}")
+    try:
+        return int(parts[0]), int(parts[1]), int(parts[2])
+    except ValueError as error:
+        raise ReleaseError(
+            f"Version components must be integers: {version}"
+        ) from error
+
+
+def format_version(major: int, minor: int, patch: int) -> str:
+    """Format version components into a version string."""
+    return f"{major}.{minor}.{patch}"
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

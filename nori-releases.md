@@ -107,67 +107,74 @@ git push origin dev
 We maintain our own separate versioning scheme (`nori-vX.Y.Z`) to avoid blocking
 on upstream releases for our release tagging.
 
-**Important:** The release workflow does NOT modify the codebase. You must update
-`codex-rs/Cargo.toml` to the release version before creating a tag.
+### How It Works: Synthetic Commits
 
-### Release Process
+Nori uses "synthetic commits" for releases, similar to upstream OpenAI/Codex:
 
-#### Option 1: Tag Push (Preferred - Automatic)
-
-This is the fastest path for releases:
-
-```bash
-# 1. Update Cargo.toml version in a PR, then merge to dev
-#    (Do this in a separate PR before releasing)
-sed -i 's/^version = ".*"/version = "0.2.0"/' codex-rs/Cargo.toml
-git add codex-rs/Cargo.toml
-git commit -m "chore: bump version to 0.2.0"
-# Create PR, get review, merge to dev
-
-# 2. Create and push tag (triggers automatic release)
-git checkout dev && git pull
-git tag -a nori-v0.2.0 -m "Release 0.2.0"
-git push origin nori-v0.2.0
+```
+dev branch:  ──●──●──●──●──●──●──●──  (Cargo.toml = placeholder, e.g., "0.0.0")
+                              │
+                              │ script creates synthetic commit via GitHub API
+                              ▼
+              [synthetic commit with Cargo.toml = "0.2.0"]
+                              │
+                              ▼
+                         nori-v0.2.0 (tag)
 ```
 
-The workflow automatically triggers on tag push and:
-1. Validates tag matches `codex-rs/Cargo.toml` version
+**Key benefits:**
+- The `dev` branch's `Cargo.toml` never needs manual version bumps
+- Release tags point to immutable snapshots with the correct version
+- No "version bump" PRs cluttering git history
+- Version is derived from existing releases automatically
+
+### Creating Releases
+
+Use the `create_nori_release` script to create releases:
+
+```bash
+# Preview what would happen (recommended first)
+./scripts/create_nori_release --dry-run --publish-release
+
+# Create next stable release (auto-increments minor version)
+./scripts/create_nori_release --publish-release
+
+# Create next alpha release
+./scripts/create_nori_release --publish-alpha
+
+# Create a specific version
+./scripts/create_nori_release --version 0.3.0
+./scripts/create_nori_release --version 0.3.0-alpha.1
+```
+
+The script:
+1. Determines the next version (or uses the one you specify)
+2. Creates a synthetic commit via GitHub API with updated `Cargo.toml`
+3. Creates an annotated tag pointing to that commit
+4. Pushes the tag, which triggers the CI workflow
+
+**Requirements:**
+- GitHub CLI (`gh`) must be installed and authenticated
+- You need push access to the repository
+
+### What Happens After Tag Push
+
+The `nori-release.yml` workflow automatically:
+1. Validates the tag format
 2. Runs tests
 3. Builds native binaries for all 4 platforms
 4. Publishes to npm as `nori-ai-cli`
-5. Creates GitHub Release with changelog
+5. Creates a GitHub Release with changelog and artifacts
 
-#### Option 2: Manual Dispatch (Fallback)
+### Testing the Build (Dry Run)
 
-Use this when you need more control or want to test first:
+To test the build process without creating a release:
 
 ```bash
-# Ensure Cargo.toml version is already updated to match
-# Then trigger the workflow:
-
-# Dry run first (recommended) - builds everything but doesn't publish
 gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
-
-# Actual release
-gh workflow run nori-release.yml -f version=0.2.0
 ```
 
-### Workflow Inputs (Manual Dispatch)
-
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `version` | Yes | - | Release version (e.g., `0.2.0` or `0.2.0-alpha.1`) |
-| `dry_run` | No | `false` | Build and stage without publishing or tagging |
-
-### Version Validation
-
-The workflow **always** validates that the tag version matches `codex-rs/Cargo.toml`.
-If they don't match, the workflow fails with an error:
-
-```
-❌ Version mismatch: tag=0.2.0, Cargo.toml=0.1.0
-Update codex-rs/Cargo.toml to version 0.2.0 before releasing
-```
+This builds everything but doesn't publish or create tags.
 
 ### npm Package
 
@@ -188,7 +195,6 @@ npm install -g nori-ai-cli@next
 | Secret | Purpose |
 |--------|---------|
 | `NPM_TOKEN` | npm authentication token for publishing |
-| `PAT_NORI_RELEASE` | GitHub PAT for pushing tags (optional, falls back to GITHUB_TOKEN) |
 
 ### Build Targets
 
@@ -197,4 +203,15 @@ The workflow builds native binaries for:
 - Linux ARM64 (`aarch64-unknown-linux-gnu`)
 - macOS x86_64 (`x86_64-apple-darwin`)
 - macOS ARM64 (`aarch64-apple-darwin`)
+
+### Version Numbering
+
+The script automatically determines the next version:
+
+| Current Latest | `--publish-release` | `--publish-alpha` |
+|----------------|---------------------|-------------------|
+| None           | `0.1.0`             | `0.1.0-alpha.1`   |
+| `0.1.0`        | `0.2.0`             | `0.2.0-alpha.1`   |
+| `0.2.0-alpha.3`| `0.3.0`             | `0.3.0-alpha.1`   |
+| `0.2.0`        | `0.3.0`             | `0.3.0-alpha.1`   |
 
