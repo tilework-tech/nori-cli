@@ -932,9 +932,7 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
         .iter()
         .filter(|name| screen.contains(*name))
         .count()
-        + if screen.contains("Mock ACP") && !screen.contains("Mock ACP Alt") {
-            1
-        } else if screen.contains("Mock ACP") {
+        + if screen.contains("Mock ACP") {
             1 // Mock ACP is present (Mock ACP Alt counted separately)
         } else {
             0
