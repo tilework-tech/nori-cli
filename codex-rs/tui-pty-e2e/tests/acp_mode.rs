@@ -316,7 +316,6 @@ fn test_acp_mode_startup_snapshot() {
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
         "acp_mode_startup",
         normalize_for_input_snapshot(session.screen_contents())

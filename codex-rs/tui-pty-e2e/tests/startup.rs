@@ -53,7 +53,6 @@ fn test_startup_shows_banner() {
     session
         .wait_for_text("Welcome to Codex", TIMEOUT)
         .expect("Prompt did not appear");
-
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
@@ -80,9 +79,6 @@ fn test_startup_welcome_with_dimensions() {
     session
         .wait_for_text("Powered by Nori AI", TIMEOUT)
         .expect("Prompt did not appear");
-
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify terminal size is respected
@@ -111,7 +107,6 @@ fn test_runs_in_temp_directory_by_default() {
     session
         .wait_for_text("Powered by Nori AI", TIMEOUT)
         .expect("Prompt did not appear");
-
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();

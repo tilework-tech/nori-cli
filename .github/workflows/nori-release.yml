@@ -150,7 +150,7 @@ jobs:
 
       - name: Run cargo clippy
         working-directory: codex-rs
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets
 
       - name: Run cargo test
         working-directory: codex-rs

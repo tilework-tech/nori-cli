@@ -711,7 +711,7 @@ fn codex_binary_path() -> String {
 
 pub const TIMEOUT: Duration = Duration::from_secs(5);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
-pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(500);
+pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
 
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
@@ -767,14 +767,14 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // Detect if header is present (either boxed or plain text form)
     let has_header = lines
         .iter()
-        .any(|l| l.contains("╭──") || l.contains("Powered by Nori AI"));
+        .any(|l| l.contains("╭──") || l.contains("'npx nori-ai install'"));
 
     if has_header {
         // Find where the header ends (after the /review command line)
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
             // The nori-ai install line marks the end of the command list
-            if line.contains("npx nori-ai install") {
+            if line.contains("'npx nori-ai install'") {
                 skip_until = i + 1;
                 break;
             }

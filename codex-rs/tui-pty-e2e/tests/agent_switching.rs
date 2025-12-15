@@ -13,6 +13,7 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 
 // ============================================================================
@@ -408,6 +409,7 @@ fn test_agent_command_shows_available_agents() {
             Duration::from_secs(3),
         )
         .expect("Agent picker should appear");
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify both mock agents are visible
     let screen = session.screen_contents();
@@ -632,6 +634,7 @@ fn test_model_command_shows_disabled_in_acp_mode() {
             Duration::from_secs(3),
         )
         .expect("Model picker should appear");
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // In ACP mode, model options should show as disabled or indicate
     // they're not available
@@ -843,6 +846,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
         "Should have prompt calls for both agents, messages: {:?}",
         msgs_after_prompt
     );
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Final verification: the screen should show response content
     let screen = session.screen_contents();

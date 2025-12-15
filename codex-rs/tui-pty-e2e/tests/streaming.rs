@@ -1,4 +1,5 @@
 use insta::assert_snapshot;
+use std::time::Duration;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
@@ -61,11 +62,10 @@ fn test_escape_cancels_streaming() {
         .wait_for_text("Working", TIMEOUT)
         .expect("Streaming did not start");
 
-    // Press Escape to cancel doesn't work?
+    std::thread::sleep(TIMEOUT);
     session.send_key(Key::Escape).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
-    std::thread::sleep(TIMEOUT);
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)
     session
@@ -75,7 +75,11 @@ fn test_escape_cancels_streaming() {
         )
         .expect("No interrupt reported");
 
-    std::thread::sleep(TIMEOUT);
+    session.wait_for(
+        |contents| !contents.contains("• Streaming..."),
+        Duration::from_secs(10)
+    ).expect("Streaming did not finish");
+
     assert_snapshot!(
         "escape_cancelled_stream",
         normalize_for_input_snapshot(session.screen_contents())
@@ -107,6 +111,7 @@ fn test_ctrl_c_cancels_streaming() {
         .wait_for_text("Working", TIMEOUT)
         .expect("Streaming did not start");
 
+    std::thread::sleep(TIMEOUT);
     session.send_key(Key::Ctrl('c')).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -119,7 +124,11 @@ fn test_ctrl_c_cancels_streaming() {
         )
         .expect("No interrupt reported");
 
-    std::thread::sleep(TIMEOUT);
+    session.wait_for(
+        |contents| !contents.contains("• Streaming..."),
+        Duration::from_secs(10)
+    ).expect("Streaming did not finish");
+
     assert_snapshot!(
         "ctrl_c_cancelled_stream",
         normalize_for_input_snapshot(session.screen_contents())
