@@ -53,7 +53,10 @@ fn sanitize_directory(lines: Vec<String>) -> Vec<String> {
     lines
         .into_iter()
         .map(|line| {
-            if let (Some(dir_pos), Some(pipe_idx)) = (line.find("Directory: "), line.rfind('│')) {
+            // Sanitize directory paths
+            let line = if let (Some(dir_pos), Some(pipe_idx)) =
+                (line.find("Directory: "), line.rfind('│'))
+            {
                 let prefix = &line[..dir_pos + "Directory: ".len()];
                 let suffix = &line[pipe_idx..];
                 let content_width = pipe_idx.saturating_sub(dir_pos + "Directory: ".len());
@@ -67,7 +70,35 @@ fn sanitize_directory(lines: Vec<String>) -> Vec<String> {
                 rebuilt
             } else {
                 line
+            };
+
+            // Sanitize version strings: (vX.Y.Z) or (vX.Y.Z-prerelease.N) -> (v0.0.0)
+            // This ensures snapshots don't break when the release version changes
+            if let Some(start) = line.find("(v") {
+                if let Some(rel_end) = line[start..].find(')') {
+                    let end = start + rel_end + 1;
+                    let version_str = &line[start..end];
+                    // Verify it looks like a version: (vX.Y.Z) or (vX.Y.Z-something.N)
+                    let inner = &version_str[2..version_str.len() - 1]; // strip "(v" and ")"
+                    let is_version = inner.chars().next().map_or(false, |c| c.is_ascii_digit())
+                        && inner.contains('.');
+                    if is_version {
+                        let replacement = "(v0.0.0)";
+                        let old_len = version_str.len();
+                        let new_len = replacement.len();
+                        let mut result = String::new();
+                        result.push_str(&line[..start]);
+                        result.push_str(replacement);
+                        // Preserve spacing for box alignment
+                        if old_len > new_len {
+                            result.push_str(&" ".repeat(old_len - new_len));
+                        }
+                        result.push_str(&line[end..]);
+                        return result;
+                    }
+                }
             }
+            line
         })
         .collect()
 }

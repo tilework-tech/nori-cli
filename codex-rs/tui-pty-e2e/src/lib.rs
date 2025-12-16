@@ -711,7 +711,7 @@ fn codex_binary_path() -> String {
 
 pub const TIMEOUT: Duration = Duration::from_secs(5);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
-pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(500);
+pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
 
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
@@ -729,6 +729,74 @@ pub fn normalize_for_snapshot(contents: String) -> String {
             }
         }
     }
+
+    // Sanitize version strings: vX.Y.Z or vX.Y.Z-prerelease.N -> v0.0.0
+    // This handles versions in the banner (e.g., "version:   v0.1.0")
+    let lines: Vec<String> = normalized
+        .lines()
+        .map(|line| {
+            let mut line = line.to_string();
+
+            // Sanitize bare version strings after "version:" label
+            if let Some(start) = line.find("version:") {
+                // Find "v" followed by digits after the "version:" label
+                if let Some(v_pos) = line[start..].find(" v") {
+                    let v_start = start + v_pos + 1; // Position of 'v'
+                    // Find the end of the version string (space or end of line)
+                    let rest = &line[v_start..];
+                    let v_end = rest
+                        .find(char::is_whitespace)
+                        .map_or(line.len(), |pos| v_start + pos);
+
+                    let version_str = &line[v_start..v_end];
+                    // Verify it looks like a version: vX.Y.Z
+                    if version_str.len() > 1 {
+                        let inner = &version_str[1..]; // strip "v"
+                        let is_version = inner.chars().next().is_some_and(|c| c.is_ascii_digit())
+                            && inner.contains('.');
+
+                        if is_version {
+                            let replacement = "v0.0.0";
+                            line.replace_range(v_start..v_end, replacement);
+                        }
+                    }
+                }
+            }
+
+            // Sanitize profile lines: "profile:   something" -> "profile:   [PROF]"
+            // This ensures snapshots don't break when the Nori profile changes
+            if let Some(start) = line.find("profile:") {
+                let label_end = start + "profile:".len();
+                // Find where the profile value starts (after spaces)
+                let rest = &line[label_end..];
+                if let Some(val_offset) = rest.find(|c: char| !c.is_whitespace()) {
+                    let val_start = label_end + val_offset;
+                    // Find the end of the content region (border character or end of line)
+                    // We need to replace value + trailing spaces to ensure consistent width
+                    let val_rest = &line[val_start..];
+                    let region_end = val_rest.find('│').map_or(line.len(), |pos| val_start + pos);
+
+                    // Calculate padding to maintain consistent width
+                    let region_width = region_end - val_start;
+                    let replacement = "[PROF]";
+                    if region_width >= replacement.len() {
+                        let padded = format!(
+                            "{}{}",
+                            replacement,
+                            " ".repeat(region_width - replacement.len())
+                        );
+                        line.replace_range(val_start..region_end, &padded);
+                    } else {
+                        // Region too small for replacement, just use [PROF]
+                        line.replace_range(val_start..region_end, replacement);
+                    }
+                }
+            }
+
+            line
+        })
+        .collect();
+    normalized = lines.join("\n");
 
     // Replace dynamic prompt text on lines starting with ›
     let lines: Vec<String> = normalized
@@ -767,14 +835,14 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // Detect if header is present (either boxed or plain text form)
     let has_header = lines
         .iter()
-        .any(|l| l.contains("╭──") || l.contains("Powered by Nori AI"));
+        .any(|l| l.contains("╭──") || l.contains("'npx nori-ai install'"));
 
     if has_header {
         // Find where the header ends (after the /review command line)
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
             // The nori-ai install line marks the end of the command list
-            if line.contains("npx nori-ai install") {
+            if line.contains("'npx nori-ai install'") {
                 skip_until = i + 1;
                 break;
             }

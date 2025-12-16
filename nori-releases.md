@@ -104,13 +104,122 @@ git push origin dev
 
 ## Downstream Nori Releases
 
-For now we will maintain our own separate versioning scheme, to avoid blocking
-on the upstream releases for our release tagging.
+We maintain our own separate versioning scheme (`nori-vX.Y.Z`) to avoid blocking
+on upstream releases for our release tagging.
 
-For example for nori-v0.2.0 or similar:
+### How It Works: Synthetic Commits
 
-git checkout main
-git merge dev --no-ff
-git tag -a nori-v0.2.0 -m "Nori release 0.2.0"
-git push origin main --tags
+Nori uses "synthetic commits" for releases, similar to upstream OpenAI/Codex:
+
+```
+dev branch:  ──●──●──●──●──●──●──●──  (Cargo.toml = placeholder, e.g., "0.0.0")
+                              │
+                              │ script creates synthetic commit via GitHub API
+                              ▼
+              [synthetic commit with Cargo.toml = "0.2.0"]
+                              │
+                              ▼
+                         nori-v0.2.0 (tag)
+```
+
+**Key benefits:**
+- The `dev` branch's `Cargo.toml` never needs manual version bumps
+- Release tags point to immutable snapshots with the correct version
+- No "version bump" PRs cluttering git history
+- Version is derived from existing releases automatically
+
+### Creating Releases
+
+Use the `create_nori_release` script to create releases:
+
+```bash
+# Preview what would happen (recommended first)
+./scripts/create_nori_release --dry-run --publish-release
+
+# Create next stable release (auto-increments minor version)
+./scripts/create_nori_release --publish-release
+
+# Create next alpha release
+./scripts/create_nori_release --publish-alpha
+
+# Create a specific version
+./scripts/create_nori_release --version 0.3.0
+./scripts/create_nori_release --version 0.3.0-alpha.1
+```
+
+The script:
+1. Determines the next version (or uses the one you specify)
+2. Creates a synthetic commit via GitHub API with updated `Cargo.toml`
+3. Creates an annotated tag pointing to that commit
+4. Pushes the tag, which triggers the CI workflow
+
+**Requirements:**
+- GitHub CLI (`gh`) must be installed and authenticated
+- You need push access to the repository
+
+### What Happens After Tag Push
+
+The `nori-release.yml` workflow automatically:
+1. Validates the tag format
+2. Runs tests
+3. Builds native binaries for all 4 platforms
+4. Publishes to npm as `nori-ai-cli`
+5. Creates a GitHub Release with changelog and artifacts
+
+### Testing the Build (Dry Run)
+
+To test the build process without creating a release:
+
+```bash
+gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
+```
+
+This builds everything but doesn't publish or create tags.
+
+To skip tests during a dry run (for faster iteration on build issues):
+
+```bash
+gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true -f skip_tests=true
+```
+
+Note: Tests are always run for actual releases (tag pushes). The `skip_tests` flag only works with `workflow_dispatch` dry runs.
+
+### npm Package
+
+- **Package name:** `nori-ai-cli`
+- **Stable releases:** Published with `latest` tag
+- **Pre-releases:** Published with `next` tag (e.g., `0.2.0-alpha.1`)
+
+```bash
+# Install stable version
+npm install -g nori-ai-cli
+
+# Install pre-release
+npm install -g nori-ai-cli@next
+```
+
+### Required Secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `NPM_TOKEN` | npm authentication token for publishing |
+
+### Build Targets
+
+The workflow builds native binaries for:
+- Linux x86_64 (`x86_64-unknown-linux-gnu`)
+- Linux ARM64 (`aarch64-unknown-linux-gnu`)
+- macOS x86_64 (`x86_64-apple-darwin`)
+- macOS ARM64 (`aarch64-apple-darwin`)
+
+### Version Numbering
+
+The script automatically determines the next version:
+
+| Current Latest | `--publish-release` | `--publish-alpha` |
+|----------------|---------------------|-------------------|
+| None           | `0.1.0`             | `0.1.0-alpha.1`   |
+| `0.1.0`        | `0.2.0`             | `0.2.0-alpha.1`   |
+| `0.2.0-alpha.3`| `0.3.0`             | `0.3.0-alpha.1`   |
+| `0.2.0`        | `0.3.0`             | `0.3.0-alpha.1`   |
 

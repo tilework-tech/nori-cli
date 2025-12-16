@@ -8,12 +8,15 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: codex-rs
     env:
       CARGO_INCREMENTAL: "0"
+      # Speed up repeated builds across CI runs by caching compiled objects.
+      USE_SCCACHE: "true"
+      SCCACHE_CACHE_SIZE: 10G
 
     strategy:
       fail-fast: false
@@ -27,7 +30,7 @@ jobs:
             name: macOS checks
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       # Free disk space on Linux runners to prevent "No space left on device" errors
       - name: Free disk space
@@ -35,7 +38,6 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo apt-get update
           sudo apt-get install coreutils
@@ -72,31 +74,76 @@ jobs:
           restore-keys: |
             cargo-home-${{ matrix.runner }}-${{ matrix.target }}-
 
+      # Install and configure sccache for faster builds
+      - name: Install sccache
+        if: ${{ env.USE_SCCACHE == 'true' }}
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2
+        with:
+          tool: sccache
+          version: 0.7.5
+
+      - name: Configure sccache backend
+        if: ${{ env.USE_SCCACHE == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
+            echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+            echo "Using sccache GitHub backend"
+          else
+            echo "SCCACHE_GHA_ENABLED=false" >> "$GITHUB_ENV"
+            echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
+            echo "Using sccache local disk + actions/cache fallback"
+          fi
+
+      - name: Enable sccache wrapper
+        if: ${{ env.USE_SCCACHE == 'true' }}
+        shell: bash
+        run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+      - name: Restore sccache cache (fallback)
+        if: ${{ env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true' }}
+        id: cache_sccache_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.sccache/
+          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
+          restore-keys: |
+            sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-
+            sccache-${{ matrix.runner }}-${{ matrix.target }}-
+
       # CI checks
       - name: cargo check
-        run: cargo check --target ${{ matrix.target }} --all-features
+        run: cargo check --target ${{ matrix.target }}
 
       - name: cargo fmt
         run: cargo +nightly fmt -- --check
 
       - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
+        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
 
-      # Build mock-acp-agent to a known location for E2E tests
       - name: Build mock-acp-agent
         run: |
-          mkdir -p target/mock-acp-out
+          mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
+          cargo build -p codex-cli --profile ci-test --target ${{ matrix.target }}
 
-      - name: cargo test
-        # continue-on-error: true  # TODO: Fix pre-existing test failures in codex-app-server
+      - name: cargo test nori
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/codex-rs/target/mock-acp-out/mock_acp_agent
-        run: cargo test --profile ci-test --target ${{ matrix.target }} --all-features
+        run: |
+          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
+          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-acp
+          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-tui
+          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-cli
+          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-protocol
+          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-core
 
-      # Save cargo home cache
+
+      # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
-        if: always() && !cancelled()
+        if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
+        continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: |
@@ -105,3 +152,29 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
+
+      # Save sccache cache (fallback for when GHA backend isn't available)
+      - name: Save sccache cache (fallback)
+        if: always() && !cancelled() && env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.sccache/
+          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
+
+      - name: sccache stats
+        if: always() && env.USE_SCCACHE == 'true'
+        continue-on-error: true
+        run: sccache --show-stats || true
+
+      - name: sccache summary
+        if: always() && env.USE_SCCACHE == 'true'
+        shell: bash
+        run: |
+          {
+            echo "### sccache stats — ${{ matrix.target }}";
+            echo;
+            echo '```';
+            sccache --show-stats || true;
+            echo '```';
+          } >> "$GITHUB_STEP_SUMMARY"

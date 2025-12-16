@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/streaming.rs
-assertion_line: 118
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
