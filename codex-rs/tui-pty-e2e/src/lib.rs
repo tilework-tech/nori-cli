@@ -730,6 +730,66 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         }
     }
 
+    // Sanitize version strings: vX.Y.Z or vX.Y.Z-prerelease.N -> v0.0.0
+    // This handles versions in the banner (e.g., "version:   v0.1.0")
+    let lines: Vec<String> = normalized
+        .lines()
+        .map(|line| {
+            let mut line = line.to_string();
+
+            // Sanitize bare version strings after "version:" label
+            if let Some(start) = line.find("version:") {
+                // Find "v" followed by digits after the "version:" label
+                if let Some(v_pos) = line[start..].find(" v") {
+                    let v_start = start + v_pos + 1; // Position of 'v'
+                    // Find the end of the version string (space or end of line)
+                    let rest = &line[v_start..];
+                    let v_end = rest
+                        .find(char::is_whitespace)
+                        .map_or(line.len(), |pos| v_start + pos);
+
+                    let version_str = &line[v_start..v_end];
+                    // Verify it looks like a version: vX.Y.Z
+                    if version_str.len() > 1 {
+                        let inner = &version_str[1..]; // strip "v"
+                        let is_version = inner.chars().next().map_or(false, |c| c.is_ascii_digit())
+                            && inner.contains('.');
+
+                        if is_version {
+                            let replacement = "v0.0.0";
+                            line.replace_range(v_start..v_end, replacement);
+                        }
+                    }
+                }
+            }
+
+            // Sanitize profile lines: "profile:   something" -> "profile:   [PROF]"
+            // This ensures snapshots don't break when the Nori profile changes
+            if let Some(start) = line.find("profile:") {
+                let label_end = start + "profile:".len();
+                // Find where the profile value starts (after spaces)
+                let rest = &line[label_end..];
+                if let Some(val_offset) = rest.find(|c: char| !c.is_whitespace()) {
+                    let val_start = label_end + val_offset;
+                    // Find the end of the profile value (whitespace or end of line)
+                    let val_rest = &line[val_start..];
+                    let val_end = val_rest
+                        .find(char::is_whitespace)
+                        .map_or(line.len(), |pos| val_start + pos);
+
+                    let profile_value = &line[val_start..val_end];
+                    if !profile_value.is_empty() {
+                        let replacement = "[PROF]";
+                        line.replace_range(val_start..val_end, replacement);
+                    }
+                }
+            }
+
+            line
+        })
+        .collect();
+    normalized = lines.join("\n");
+
     // Replace dynamic prompt text on lines starting with ›
     let lines: Vec<String> = normalized
         .lines()

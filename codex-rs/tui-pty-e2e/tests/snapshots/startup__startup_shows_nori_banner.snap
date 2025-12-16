@@ -11,5 +11,5 @@ expression: "normalize_for_input_snapshot(lines.collect::<Vec<&str>>()[1..12].jo
 │ version:   v0.0.0          │
 │ directory: [TMP_DIR] │
 │ agent:     mock-model      │
-│ profile:   none            │
+│ profile:   [PROF]            │
 ╰────────────────────────────╯
