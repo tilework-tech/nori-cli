@@ -1,21 +1,31 @@
 {
-  "name": "@openai/codex",
+  "name": "nori-ai-cli",
   "version": "0.0.0-dev",
+  "description": "Nori AI CLI - An AI-powered coding assistant",
   "license": "Apache-2.0",
   "bin": {
-    "codex": "bin/codex.js"
+    "nori": "bin/nori.js",
+    "nori-ai-cli": "bin/nori.js"
   },
   "type": "module",
   "engines": {
     "node": ">=16"
   },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
   "files": [
     "bin",
     "vendor"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openai/codex.git",
+    "url": "git+https://github.com/tilework-tech/nori-cli.git",
     "directory": "codex-cli"
   }
 }

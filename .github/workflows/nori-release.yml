@@ -225,21 +225,21 @@ jobs:
           TARGET="${{ matrix.target }}"
           ARTIFACT_NAME="${{ matrix.artifact-name }}"
 
-          mkdir -p artifacts/vendor/$TARGET/codex
+          mkdir -p artifacts/vendor/$TARGET/nori
 
           # Copy the main binary
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cp codex-rs/target/$TARGET/release/codex.exe artifacts/vendor/$TARGET/codex/
+            cp codex-rs/target/$TARGET/release/codex.exe artifacts/vendor/$TARGET/nori/nori.exe
           else
-            cp codex-rs/target/$TARGET/release/codex artifacts/vendor/$TARGET/codex/
-            chmod +x artifacts/vendor/$TARGET/codex/codex
+            cp codex-rs/target/$TARGET/release/codex artifacts/vendor/$TARGET/nori/nori
+            chmod +x artifacts/vendor/$TARGET/nori/nori
           fi
 
           # Create artifact info
           echo "$VERSION" > artifacts/VERSION
           echo "$TARGET" > artifacts/TARGET
 
-          ls -la artifacts/vendor/$TARGET/codex/
+          ls -la artifacts/vendor/$TARGET/nori/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -309,50 +309,54 @@ jobs:
           mkdir -p "$STAGING_DIR/vendor"
 
           # Copy the CLI launcher
-          cp codex-cli/bin/codex.js "$STAGING_DIR/bin/"
+          cp codex-cli/bin/nori.js "$STAGING_DIR/bin/"
 
           # Copy vendor binaries
           cp -r vendor/* "$STAGING_DIR/vendor/"
 
           # Copy README
-          cp README.md "$STAGING_DIR/" 2>/dev/null || echo "No README.md found"
+          # cp README.md "$STAGING_DIR/" 2>/dev/null || echo "No README.md found"
 
-          # Create package.json for nori-ai-cli
-          cat > "$STAGING_DIR/package.json" << EOF
-          {
-            "name": "$PACKAGE_NAME",
-            "version": "$VERSION",
-            "description": "Nori AI CLI - A fork of OpenAI Codex with ACP support",
-            "license": "Apache-2.0",
-            "bin": {
-              "nori": "bin/codex.js",
-              "nori-ai": "bin/codex.js"
-            },
-            "type": "module",
-            "engines": {
-              "node": ">=16"
-            },
-            "files": [
-              "bin",
-              "vendor"
-            ],
-            "repository": {
-              "type": "git",
-              "url": "git+https://github.com/tilework-tech/nori-cli.git"
-            },
-            "keywords": [
-              "nori",
-              "ai",
-              "cli",
-              "codex",
-              "acp"
-            ],
-            "homepage": "https://github.com/tilework-tech/nori-cli#readme",
-            "bugs": {
-              "url": "https://github.com/tilework-tech/nori-cli/issues"
-            }
-          }
-          EOF
+          # Copy package.json and update version for release
+          cp codex-cli/package.json "$STAGING_DIR/package.json"
+          cd "$STAGING_DIR"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          cd -
+          # cat > "$STAGING_DIR/package.json" << EOF
+          # {
+          #   "name": "$PACKAGE_NAME",
+          #   "version": "$VERSION",
+          #   "description": "Nori AI CLI - A fork of OpenAI Codex with ACP support",
+          #   "license": "Apache-2.0",
+          #   "bin": {
+          #     "nori": "bin/codex.js",
+          #     "nori-ai": "bin/codex.js"
+          #   },
+          #   "type": "module",
+          #   "engines": {
+          #     "node": ">=16"
+          #   },
+          #   "files": [
+          #     "bin",
+          #     "vendor"
+          #   ],
+          #   "repository": {
+          #     "type": "git",
+          #     "url": "git+https://github.com/tilework-tech/nori-cli.git"
+          #   },
+          #   "keywords": [
+          #     "nori",
+          #     "ai",
+          #     "cli",
+          #     "codex",
+          #     "acp"
+          #   ],
+          #   "homepage": "https://github.com/tilework-tech/nori-cli#readme",
+          #   "bugs": {
+          #     "url": "https://github.com/tilework-tech/nori-cli/issues"
+          #   }
+          # }
+          # EOF
 
           # Pack the package
           cd "$STAGING_DIR"
