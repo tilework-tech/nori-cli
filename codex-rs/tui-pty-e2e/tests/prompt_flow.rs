@@ -73,7 +73,7 @@ fn test_http_model_immediate_error_without_retries() {
         elapsed
     );
 
-    std::thread::sleep(TIMEOUT_INPUT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "http_model_immediate_error",
         normalize_for_input_snapshot(session.screen_contents())
