@@ -130,6 +130,8 @@ jobs:
     needs: validate
     if: ${{ needs.validate.outputs.skip_tests != 'true' }}
     runs-on: ubuntu-24.04
+    env:
+      MUSL_TARGET: x86_64-unknown-linux-musl
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -141,33 +143,39 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android || true
           df -h
 
+      - name: Install musl tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.90.0"
+          targets: ${{ env.MUSL_TARGET }}
           components: clippy
 
       - name: cargo check
         working-directory: codex-rs
-        run: cargo check --all-targets
+        run: cargo check --target ${{ env.MUSL_TARGET }} --all-targets
 
       - name: cargo clippy
         working-directory: codex-rs
-        run: cargo clippy --all-targets # needs all features to avoid unused import/var/etc errors
+        run: cargo clippy --target ${{ env.MUSL_TARGET }} --all-targets # needs all features to avoid unused import/var/etc errors
 
       - name: cargo build
         working-directory: codex-rs
-        run: cargo build -p codex-cli && cargo build -p mock-acp-agent
+        run: cargo build --target ${{ env.MUSL_TARGET }} -p codex-cli && cargo build --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
 
       - name: cargo test
         working-directory: codex-rs
         run: |
-          cargo test --package tui-pty-e2e
-          cargo test --package codex-acp
-          cargo test --package codex-tui
-          cargo test --package codex-cli
-          cargo test --package codex-protocol
-          cargo test --package codex-core
+          cargo test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
+          cargo test --target ${{ env.MUSL_TARGET }} --package codex-acp
+          cargo test --target ${{ env.MUSL_TARGET }} --package codex-tui
+          cargo test --target ${{ env.MUSL_TARGET }} --package codex-cli
+          cargo test --target ${{ env.MUSL_TARGET }} --package codex-protocol
+          cargo test --target ${{ env.MUSL_TARGET }} --package codex-core
 
   # ============================================================================
   # BUILD NATIVE BINARIES
@@ -181,10 +189,10 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-musl
             artifact-name: linux-x86_64
           - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-musl
             artifact-name: linux-arm64
           - os: macos-14
             target: aarch64-apple-darwin
@@ -204,6 +212,12 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
           df -h
+
+      - name: Install musl tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
