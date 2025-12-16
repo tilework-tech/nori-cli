@@ -1,5 +1,11 @@
 # Nori CLI
 
+[![CI](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml/badge.svg?branch=dev)](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml)
+[![npm version](https://img.shields.io/npm/v/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
+[![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
+[![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/dev/LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/tilework-tech/nori-cli)](https://github.com/tilework-tech/nori-cli/releases/latest)
+
 A multi-provider AI coding agent that runs locally on your computer.
 
 ```bash
@@ -45,11 +51,11 @@ nori
 
 Nori supports multiple AI providers via the Agent Context Protocol:
 
-| Provider | Model | Setup |
-|----------|-------|-------|
-| Claude | Anthropic Claude | `npx @zed-industries/claude-code-acp` (default) |
-| Gemini | Google Gemini | `npx @google/gemini-cli --experimental-acp` |
-| Codex | OpenAI | `npx @zed-industries/codex-acp` |
+| Provider | Model            | Setup                                           |
+| -------- | ---------------- | ----------------------------------------------- |
+| Claude   | Anthropic Claude | `npx @zed-industries/claude-code-acp` (default) |
+| Gemini   | Google Gemini    | `npx @google/gemini-cli --experimental-acp`     |
+| Codex    | OpenAI           | `npx @zed-industries/codex-acp`                 |
 
 Switch providers during a session with the `/agent` command.
 
