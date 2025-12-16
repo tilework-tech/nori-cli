@@ -315,7 +315,7 @@ jobs:
           cp -r vendor/* "$STAGING_DIR/vendor/"
 
           # Copy README
-          # cp README.md "$STAGING_DIR/" 2>/dev/null || echo "No README.md found"
+          cp README.md "$STAGING_DIR/" 2>/dev/null || echo "No README.md found"
 
           # Copy package.json and update version for release
           cp codex-cli/package.json "$STAGING_DIR/package.json"
