@@ -184,19 +184,15 @@ jobs:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             artifact-name: linux-x86_64
-            cross: false
-          - os: ubuntu-24.04
+          - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             artifact-name: linux-arm64
-            cross: true
           - os: macos-14
             target: aarch64-apple-darwin
             artifact-name: darwin-arm64
-            cross: false
           - os: macos-14
             target: x86_64-apple-darwin
             artifact-name: darwin-x86_64
-            cross: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -216,25 +212,8 @@ jobs:
           toolchain: "1.90.0"
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Configure cross-compilation (Linux ARM64)
-        if: matrix.cross
-        run: |
-          mkdir -p .cargo
-          cat >> .cargo/config.toml << 'EOF'
-          [target.aarch64-unknown-linux-gnu]
-          linker = "aarch64-linux-gnu-gcc"
-          EOF
-
       - name: Build release binaries
         working-directory: codex-rs
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
         run: |
           cargo build --release --target ${{ matrix.target }} -p codex-cli
 
