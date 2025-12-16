@@ -752,7 +752,7 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                     // Verify it looks like a version: vX.Y.Z
                     if version_str.len() > 1 {
                         let inner = &version_str[1..]; // strip "v"
-                        let is_version = inner.chars().next().map_or(false, |c| c.is_ascii_digit())
+                        let is_version = inner.chars().next().is_some_and(|c| c.is_ascii_digit())
                             && inner.contains('.');
 
                         if is_version {

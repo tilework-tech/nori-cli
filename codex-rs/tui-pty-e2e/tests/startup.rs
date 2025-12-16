@@ -155,6 +155,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
     );
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
