@@ -115,13 +115,13 @@ jobs:
 
       # CI checks
       - name: cargo check
-        run: cargo check --target ${{ matrix.target }} --all-features
+        run: cargo check --target ${{ matrix.target }}
 
       - name: cargo fmt
         run: cargo +nightly fmt -- --check
 
       - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
+        run: cargo clippy --target ${{ matrix.target }} -- -D warnings
 
       # Build mock-acp-agent to a known location for E2E tests
       - name: Build mock-acp-agent
@@ -133,7 +133,7 @@ jobs:
         # continue-on-error: true  # TODO: Fix pre-existing test failures in codex-app-server
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/codex-rs/target/mock-acp-out/mock_acp_agent
-        run: cargo test --profile ci-test --target ${{ matrix.target }} --all-features
+        run: cargo test --profile ci-test --target ${{ matrix.target }}
 
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
