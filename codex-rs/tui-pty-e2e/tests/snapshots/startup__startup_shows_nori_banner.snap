@@ -1,10 +1,15 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
-expression: normalize_for_input_snapshot(session.screen_contents())
+expression: "normalize_for_input_snapshot(lines.collect::<Vec<&str>>()[1..12].join(\"\\n\"))"
 ---
-■ Operation 'ListCustomPrompts' is not supported in ACP mode
-
-
-› [DEFAULT_PROMPT]
-
-  100% context left · ? for shortcuts
+│   _   _  ___  ____  ___    │
+│  | \ | \/ _ \|  _ \|_ _\   │
+│  |  \| | | | | |_) || |    │
+│  | |\  | |_| |  _ < | |    │
+│  \_| \_|\___/\_| \_\___|   │
+│                            │
+│ version:   v0.0.0          │
+│ directory: [TMP_DIR] │
+│ agent:     mock-model      │
+│ profile:   none            │
+╰────────────────────────────╯
