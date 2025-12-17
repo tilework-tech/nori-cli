@@ -20,7 +20,7 @@ fn test_acp_mode_startup_with_mock_agent() {
     let config = SessionConfig::new().with_model("mock-model".to_owned());
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for the main prompt to appear (indicated by the chevron character)
     session
@@ -55,7 +55,7 @@ fn test_acp_mode_prompt_response_flow() {
         .with_mock_response("Hello from ACP mock agent!");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -95,7 +95,7 @@ fn test_acp_approval_request_displayed_in_tui() {
         .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -168,7 +168,7 @@ fn test_acp_approval_full_flow() {
         .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -244,7 +244,7 @@ fn test_acp_write_text_file() {
         );
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -309,7 +309,7 @@ fn test_acp_mode_startup_snapshot() {
     let config = SessionConfig::new().with_model("mock-model".to_owned());
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)

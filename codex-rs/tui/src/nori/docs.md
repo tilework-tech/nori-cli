@@ -113,4 +113,26 @@ update_prompt.rs, updates.rs        -> #[cfg(all(not(feature = "upstream-updates
 
 The `lib.rs` re-export logic ensures `UpdateAction` type is always available via `codex_tui::update_action::UpdateAction` regardless of which update system is compiled.
 
+**Config Adapter (`config_adapter.rs`):**
+
+Provides integration between the Nori config system (from `@/codex-rs/acp/src/config/`) and the TUI:
+- `get_nori_home()`: Delegates to `codex_acp::config::find_nori_home()` - the canonical source for the Nori home path (`~/.nori/cli`)
+- `setup_nori_config_environment()`: Sets `CODEX_HOME` env var to redirect codex-core's config loading to the Nori location
+- `load_nori_config()`: Loads `NoriConfig` directly from `~/.nori/cli/config.toml`
+
+This ensures a single source of truth for path resolution: `codex_acp::config::find_nori_home()`.
+
+**Onboarding Module (`onboarding/`):**
+
+Provides Nori-branded first-launch onboarding flow:
+- `first_launch.rs`: First-launch detection via `~/.nori/cli/config.toml` existence
+  - `is_first_launch(nori_home)`: Returns true if `config.toml` doesn't exist
+  - `mark_first_launch_complete(nori_home)`: Creates minimal config file
+  - Note: `nori_home` parameter expects the full path (`~/.nori/cli`), not `~/.nori`
+- `welcome.rs`: ASCII banner welcome screen with Nori branding
+- `trust_directory.rs`: Directory trust prompt (persists to codex-core's trust system)
+- `onboarding_screen.rs`: Orchestrates the multi-step onboarding flow
+
+The onboarding screen uses `get_nori_home()` from `config_adapter` to get the canonical path, ensuring consistency with the ACP config module.
+
 Created and maintained by Nori.

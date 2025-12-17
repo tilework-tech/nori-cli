@@ -1,15 +1,11 @@
 ---
 source: tui/src/nori/session_header.rs
+assertion_line: 282
 expression: rendered
 ---
 ╭───────────────────────────────╮
-│   _   _  ___  ____  ___       │
-│  | \ | \/ _ \|  _ \|_ _\      │
-│  |  \| | | | | |_) || |       │
-│  | |\  | |_| |  _ < | |       │
-│  \_| \_|\___/\_| \_\___|      │
+│ Nori v0.1.0                   │
 │                               │
-│ version:   v0.1.0             │
 │ directory: /home/user/project │
 │ agent:     claude-sonnet      │
 │ profile:   senior-swe         │

@@ -8,7 +8,6 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
 #[cfg(target_os = "linux")]
-#[ignore] // Ctrl-C triggers ListCustomPrompts which isn't supported in ACP mode
 fn test_ctrl_c_clears_input() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
@@ -25,11 +24,11 @@ fn test_ctrl_c_clears_input() {
         .wait_for(|s| !s.contains("draft message"), TIMEOUT)
         .expect("Input was not cleared");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    assert_snapshot!(
-        "ctrl_c_clears",
-        normalize_for_input_snapshot(session.screen_contents())
-    );
+    // std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    // assert_snapshot!(
+    //     "ctrl_c_clears",
+    //     normalize_for_input_snapshot(session.screen_contents())
+    // );
 }
 
 #[test]

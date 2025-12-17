@@ -233,11 +233,14 @@ impl TuiSession {
         // Set TERM to enable terminal features
         cmd.env("TERM", "xterm-256color");
 
-        // Set CODEX_HOME to temp directory if we have one, so logs and config
-        // go to the temp directory instead of trying to write to ~/.codex
+        // Set CODEX_HOME and NORI_HOME to temp directory if we have one, so logs
+        // and config go to the temp directory instead of trying to write to
+        // ~/.codex or ~/.nori/cli
         if let Some(temp) = &temp_dir {
             let codex_home = temp.path();
             cmd.env("CODEX_HOME", codex_home.to_str().unwrap());
+            // Also set NORI_HOME for nori-config feature support
+            cmd.env("NORI_HOME", codex_home.to_str().unwrap());
 
             // Write config.toml to CODEX_HOME
             let config_path = codex_home.join("config.toml");

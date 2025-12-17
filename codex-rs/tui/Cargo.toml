@@ -13,7 +13,7 @@ name = "codex_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["unstable"]
+default = ["unstable", "nori-config"]
 
 # Full feature set - enables all upstream/legacy functionality
 full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers"]
@@ -24,6 +24,10 @@ vt100-tests = []
 debug-logs = []
 # Enable unstable ACP features like model switching.
 unstable = ["codex-acp/unstable"]
+
+# Use Nori's simplified ACP-only config (~/.nori/cli/config.toml)
+# When enabled, uses minimal config from codex-acp instead of codex-core
+nori-config = []
 
 # ChatGPT/API login functionality
 login = ["dep:codex-login"]

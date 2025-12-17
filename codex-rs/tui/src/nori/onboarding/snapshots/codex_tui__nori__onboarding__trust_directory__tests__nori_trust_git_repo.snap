@@ -1,0 +1,15 @@
+---
+source: tui/src/nori/onboarding/trust_directory.rs
+assertion_line: 352
+expression: output
+---
+> You are running Nori in /workspace/project
+
+  Since this folder is version controlled, you may wish to allow Nori
+  to work in this folder without asking for approval.
+
+› 1. Yes, allow Nori to work in this folder without asking for
+     approval
+  2. No, ask me to approve edits and commands
+
+  Press enter to continue

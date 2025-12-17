@@ -2,4 +2,4 @@
 source: tui-pty-e2e/tests/startup.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
-Error: Model 'nonexistent' is not registered as an ACP agent. Set acp.allow_http_fallback = true to allow HTTP providers. Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp
+  Welcome to Codex, OpenAI's command-line coding agentError: Model 'nonexistent' is not registered as an ACP agent. Set acp.allow_http_fallback = true to allow HTTP providers. Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp

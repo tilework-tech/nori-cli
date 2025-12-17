@@ -44,6 +44,7 @@ impl KeyboardHandler for WelcomeWidget {
 }
 
 impl WelcomeWidget {
+    #[allow(dead_code)]
     pub(crate) fn new(
         is_logged_in: bool,
         request_frame: FrameRequester,

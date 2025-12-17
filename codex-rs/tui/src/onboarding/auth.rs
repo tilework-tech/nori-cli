@@ -463,6 +463,7 @@ impl AuthModeWidget {
         true
     }
 
+    #[allow(dead_code)]
     fn handle_api_key_entry_paste(&mut self, pasted: String) -> bool {
         let trimmed = pasted.trim();
         if trimmed.is_empty() {

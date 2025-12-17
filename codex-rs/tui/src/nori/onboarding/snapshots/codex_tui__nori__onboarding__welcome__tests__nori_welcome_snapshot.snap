@@ -1,0 +1,18 @@
+---
+source: tui/src/nori/onboarding/welcome.rs
+assertion_line: 219
+expression: output
+---
+  _   _  ___  ____  ___
+ | \ | |/ _ \|  _ \|_ _|
+ |  \| | | | | |_) || |
+ | |\  | |_| |  _ < | |
+ |_| \_|\___/|_| \_\___|
+
+
+  Welcome to Nori, your AI coding assistant
+
+  Let's get you set up...
+
+
+  Press Enter to continue

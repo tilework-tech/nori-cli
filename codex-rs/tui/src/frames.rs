@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::time::Duration;
 
 // Embed animation frames for each variant at compile time.
@@ -44,6 +46,7 @@ macro_rules! frames_for {
     };
 }
 
+// Animation frame constants - currently unused but kept for future animation features
 pub(crate) const FRAMES_DEFAULT: [&str; 36] = frames_for!("default");
 pub(crate) const FRAMES_CODEX: [&str; 36] = frames_for!("codex");
 pub(crate) const FRAMES_OPENAI: [&str; 36] = frames_for!("openai");
