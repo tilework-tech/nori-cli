@@ -221,6 +221,22 @@ After completing a call, the handler decides whether to keep the cell visible or
 
 This ensures exploring cells remain visible during streaming instead of disappearing into `pending_exec_cells`.
 
+**ExecCell Lifecycle Tracing:**
+
+The TUI provides detailed tracing for debugging ExecCell state transitions:
+
+```bash
+RUST_LOG=tui_event_flow=debug,cell_flushing=debug,pending_exec_cells=debug cargo run
+```
+
+| Target | What it logs |
+|--------|-------------|
+| `tui_event_flow` | Event reception (`on_exec_command_begin`, `on_exec_command_end`) with cell state |
+| `cell_flushing` | `flush_active_cell` decisions (save to pending vs flush to history) |
+| `pending_exec_cells` | `save_pending`, `retrieve`, `drain_failed` operations with call_id mappings |
+
+Combined with `acp_event_flow` from the ACP backend, these enable full end-to-end debugging of tool call display issues. See `@/codex-rs/tui/src/chatwidget/EXEC_CELL_LIFECYCLE.md` for comprehensive documentation.
+
 **ACP File Tracing:**
 
 - The TUI calls `codex_acp::init_file_tracing()` at startup (`tui/src/lib.rs`) to write `.codex-acp.log` in the current directory. Every mock agent logs `ACP agent spawned (pid: ...)` there, which makes the agent-switching tests in `tui-pty-e2e` deterministic and ensures developers can inspect agent subprocess lifecycles during debugging.
