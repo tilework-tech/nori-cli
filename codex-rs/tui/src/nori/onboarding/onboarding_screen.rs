@@ -37,6 +37,7 @@ use super::NoriTrustDirectoryWidget;
 use super::NoriWelcomeWidget;
 use super::is_first_launch;
 use super::mark_first_launch_complete;
+use crate::nori::config_adapter::get_nori_home;
 
 /// Steps in the Nori onboarding flow.
 #[allow(clippy::large_enum_variant)]
@@ -92,9 +93,8 @@ impl NoriOnboardingScreen {
         } = args;
 
         let cwd = config.cwd.clone();
-        // TODO: This should use the Nori-specific home directory
-        // For now we delegate to codex_home as a placeholder
-        let nori_home = config.codex_home;
+        // Use Nori-specific home directory (~/.nori/cli) from the canonical config source
+        let nori_home = get_nori_home().unwrap_or_else(|_| config.codex_home.clone());
 
         let mut steps: Vec<NoriStep> = Vec::new();
 

@@ -17,10 +17,7 @@ mod onboarding_screen;
 mod trust_directory;
 mod welcome;
 
-// Re-exports for the Nori onboarding module - some are currently unused but
-// kept for API completeness and future use
-#[allow(unused_imports)]
-pub(crate) use first_launch::find_nori_home;
+// Re-exports for the Nori onboarding module
 pub(crate) use first_launch::is_first_launch;
 pub(crate) use first_launch::mark_first_launch_complete;
 #[allow(unused_imports)]
