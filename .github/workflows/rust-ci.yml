@@ -32,17 +32,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Free disk space on Linux runners to prevent "No space left on device" errors
-      - name: Free disk space
-        if: runner.os == 'Linux'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo apt-get update
-          sudo apt-get install coreutils
-          docker system prune -af || true
-
       - uses: dtolnay/rust-toolchain@1.90
         with:
           targets: ${{ matrix.target }}
@@ -50,6 +39,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
+          targets: ${{ matrix.target }}
           components: rustfmt
 
       - name: Compute lockfile hash

@@ -18,10 +18,10 @@ switch (platform) {
   case "android":
     switch (arch) {
       case "x64":
-        targetTriple = "x86_64-unknown-linux-gnu";
+        targetTriple = "x86_64-unknown-linux-musl";
         break;
       case "arm64":
-        targetTriple = "aarch64-unknown-linux-gnu";
+        targetTriple = "aarch64-unknown-linux-musl";
         break;
       default:
         break;

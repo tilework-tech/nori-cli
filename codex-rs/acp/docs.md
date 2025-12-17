@@ -84,6 +84,40 @@ ACP providers embed their configuration directly in `AcpAgentConfig` via `AcpPro
   - `stream_max_retries`: Max stream reconnection attempts (default: 1)
   - `stream_idle_timeout`: Idle timeout for streaming (default: 5 minutes)
 
+### Nori Config Path Resolution
+
+The `config` module (`@/codex-rs/acp/src/config/`) provides the **canonical source of truth** for Nori home path resolution:
+
+```
+┌─────────────────────────────┐
+│  codex_acp::config module   │  <-- Single source of truth
+│  - find_nori_home()         │
+│  - NORI_HOME_ENV            │
+│  - NORI_HOME_DIR            │
+└─────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────┐     ┌─────────────────────────────┐
+│  TUI config_adapter.rs      │     │  TUI onboarding module      │
+│  - get_nori_home()          │     │  - first_launch.rs          │
+│  - setup_nori_config_env()  │     │  - onboarding_screen.rs     │
+└─────────────────────────────┘     └─────────────────────────────┘
+```
+
+Key exports from `@/codex-rs/acp/src/config/loader.rs`:
+- `find_nori_home()`: Returns `~/.nori/cli` or `$NORI_HOME` if set
+- `NORI_HOME_ENV`: Environment variable name (`"NORI_HOME"`)
+- `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
+- `CONFIG_FILE`: Config filename (`"config.toml"`)
+
+Consumers of these paths:
+- `@/codex-rs/tui/src/nori/config_adapter.rs`: `get_nori_home()` delegates to `find_nori_home()`
+- `@/codex-rs/tui/src/nori/onboarding/`: Uses `get_nori_home()` for first-launch detection and config file creation
+
+Path semantics:
+- `nori_home` always refers to `~/.nori/cli` (the full path)
+- Config file lives at `{nori_home}/config.toml` (i.e., `~/.nori/cli/config.toml`)
+
 
 ### Stderr Capture Implementation
 

@@ -87,4 +87,9 @@ pub struct Cli {
 
     #[clap(skip)]
     pub config_overrides: CliConfigOverrides,
+
+    /// Skip the first-launch welcome screen.
+    /// Use this flag to bypass the initial Nori welcome message on first launch.
+    #[arg(long = "skip-welcome", default_value_t = false)]
+    pub skip_welcome: bool,
 }

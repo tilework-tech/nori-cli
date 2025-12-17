@@ -31,8 +31,8 @@ fn test_gemini_acp_live_response() {
         .with_model("gemini-acp".to_owned())
         .with_config_toml(generate_live_config("gemini-acp"));
 
-    let mut session = TuiSession::spawn_with_config(24, 80, config)
-        .expect("Failed to spawn codex with gemini-acp");
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with gemini-acp");
 
     session
         .wait_for_text("? for shortcuts", LIVE_TIMEOUT)
@@ -77,8 +77,8 @@ fn test_claude_acp_live_response() {
         .with_model("claude-acp".to_owned())
         .with_config_toml(generate_live_config("claude-acp"));
 
-    let mut session = TuiSession::spawn_with_config(24, 80, config)
-        .expect("Failed to spawn codex with claude-acp");
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with claude-acp");
 
     session
         .wait_for_text("? for shortcuts", LIVE_TIMEOUT)

@@ -32,7 +32,9 @@ use std::sync::Arc;
 #[cfg(feature = "login")]
 use std::sync::RwLock;
 
+// Old Codex onboarding step enum - kept for reference but replaced by Nori onboarding
 #[allow(clippy::large_enum_variant)]
+#[allow(dead_code)]
 enum Step {
     Welcome(WelcomeWidget),
     #[cfg(feature = "login")]
@@ -42,6 +44,7 @@ enum Step {
 
 pub(crate) trait KeyboardHandler {
     fn handle_key_event(&mut self, key_event: KeyEvent);
+    #[allow(dead_code)]
     fn handle_paste(&mut self, _pasted: String) {}
 }
 
@@ -63,6 +66,8 @@ pub(crate) struct OnboardingScreen {
     should_exit: bool,
 }
 
+// Old Codex onboarding types - kept for reference but replaced by Nori onboarding
+#[allow(dead_code)]
 pub(crate) struct OnboardingScreenArgs {
     pub show_trust_screen: bool,
     pub show_login_screen: bool,
@@ -71,12 +76,14 @@ pub(crate) struct OnboardingScreenArgs {
     pub config: Config,
 }
 
+#[allow(dead_code)]
 pub(crate) struct OnboardingResult {
     pub directory_trust_decision: Option<TrustDirectorySelection>,
     pub should_exit: bool,
 }
 
 impl OnboardingScreen {
+    #[allow(dead_code)]
     pub(crate) fn new(tui: &mut Tui, args: OnboardingScreenArgs) -> Self {
         let OnboardingScreenArgs {
             show_trust_screen,
@@ -86,9 +93,12 @@ impl OnboardingScreen {
             config,
         } = args;
         let cwd = config.cwd.clone();
+        #[allow(unused_variables)]
         let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
+        #[allow(unused_variables)]
         let forced_login_method = config.forced_login_method;
         let codex_home = config.codex_home;
+        #[allow(unused_variables)]
         let cli_auth_credentials_store_mode = config.cli_auth_credentials_store_mode;
         let mut steps: Vec<Step> = Vec::new();
         steps.push(Step::Welcome(WelcomeWidget::new(
@@ -188,6 +198,7 @@ impl OnboardingScreen {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn is_done(&self) -> bool {
         self.is_done
             || !self
@@ -196,6 +207,7 @@ impl OnboardingScreen {
                 .any(|step| matches!(step.get_step_state(), StepState::InProgress))
     }
 
+    #[allow(dead_code)]
     pub fn directory_trust_decision(&self) -> Option<TrustDirectorySelection> {
         self.steps
             .iter()
@@ -209,6 +221,7 @@ impl OnboardingScreen {
             .flatten()
     }
 
+    #[allow(dead_code)]
     pub fn should_exit(&self) -> bool {
         self.should_exit
     }
@@ -380,6 +393,7 @@ impl WidgetRef for Step {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_onboarding_app(
     args: OnboardingScreenArgs,
     tui: &mut Tui,
@@ -388,6 +402,7 @@ pub(crate) async fn run_onboarding_app(
 
     let mut onboarding_screen = OnboardingScreen::new(tui, args);
     // One-time guard to fully clear the screen after ChatGPT login success message is shown
+    #[allow(unused_mut, unused_variables)]
     let mut did_full_clear_after_success = false;
 
     tui.draw(u16::MAX, |frame| {

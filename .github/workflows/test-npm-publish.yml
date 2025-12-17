@@ -1,0 +1,78 @@
+# Minimal npm publish test workflow
+# For iteratively debugging OIDC trusted publishing
+#
+# Usage:
+#   gh workflow run test-npm-publish.yml -f run_id=20286536329 -f version=0.0.9
+#
+name: Test npm Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run ID to download npm-package artifact from'
+        required: true
+        type: string
+      version:
+        description: 'Version to publish (e.g., 0.0.9)'
+        required: true
+        type: string
+      npm_tag:
+        description: 'npm tag (latest, next, etc.)'
+        required: false
+        default: 'next'
+        type: string
+
+jobs:
+  publish:
+    name: Test Publish
+    runs-on: ubuntu-24.04
+    environment: npm-publish
+    permissions:
+      contents: read
+      actions: read     # Required to download artifacts from other runs
+      id-token: write   # Required for OIDC trusted publishing
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Show npm version
+        run: |
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+
+      - name: Download npm package artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist
+          gh run download ${{ inputs.run_id }} --name npm-package --dir dist/
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Contents of dist/:"
+          ls -la dist/
+          echo ""
+          echo "Tarball contents:"
+          tar -tzvf dist/*.tgz | head -20
+
+      - name: Publish to npm (dry-run first)
+        run: |
+          TARBALL="./$(ls dist/*.tgz | head -1)"
+          echo "Would publish: $TARBALL"
+          echo "npm tag: ${{ inputs.npm_tag }}"
+          echo ""
+          echo "Dry run:"
+          npm publish "$TARBALL" --tag "${{ inputs.npm_tag }}" --access public --dry-run
+
+      - name: Publish to npm
+        run: |
+          TARBALL="./$(ls dist/*.tgz | head -1)"
+          echo "Publishing: $TARBALL"
+          npm publish "$TARBALL" --tag "${{ inputs.npm_tag }}" --access public --verbose

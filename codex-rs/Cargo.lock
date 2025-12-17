@@ -873,6 +873,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "codex-protocol",
+ "dirs",
  "futures",
  "pretty_assertions",
  "serde",
@@ -883,6 +884,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tokio-util",
+ "toml",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -1681,6 +1683,7 @@ dependencies = [
  "unicode-width 0.2.1",
  "url",
  "vt100 0.16.2",
+ "which",
 ]
 
 [[package]]

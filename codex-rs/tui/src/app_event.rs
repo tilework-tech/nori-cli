@@ -55,6 +55,7 @@ pub(crate) enum AppEvent {
     },
 
     /// Result of refreshing rate limits
+    #[allow(dead_code)]
     RateLimitSnapshotFetched(RateLimitSnapshot),
 
     /// Result of computing a `/diff` command.
@@ -237,6 +238,7 @@ pub(crate) enum AppEvent {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FeedbackCategory {
     BadResult,

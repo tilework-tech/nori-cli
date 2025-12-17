@@ -56,7 +56,7 @@ fn test_acp_tool_call_rendered_in_tui() {
         .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -120,7 +120,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
         .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -180,7 +180,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
         .with_agent_env("MOCK_AGENT_INTERLEAVED_TOOL_CALL", "1");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -262,7 +262,7 @@ fn test_acp_tool_call_snapshot() {
         .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)

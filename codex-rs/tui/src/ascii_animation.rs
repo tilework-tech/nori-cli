@@ -18,10 +18,12 @@ pub(crate) struct AsciiAnimation {
 }
 
 impl AsciiAnimation {
+    #[allow(dead_code)]
     pub(crate) fn new(request_frame: FrameRequester) -> Self {
         Self::with_variants(request_frame, ALL_VARIANTS, 0)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn with_variants(
         request_frame: FrameRequester,
         variants: &'static [&'static [&'static str]],

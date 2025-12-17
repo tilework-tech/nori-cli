@@ -49,6 +49,7 @@ fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
         .collect()
 }
 
+#[allow(clippy::collapsible_if, clippy::unnecessary_map_or)]
 fn sanitize_directory(lines: Vec<String>) -> Vec<String> {
     lines
         .into_iter()

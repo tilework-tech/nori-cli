@@ -233,15 +233,18 @@ impl TuiSession {
         // Set TERM to enable terminal features
         cmd.env("TERM", "xterm-256color");
 
-        // Set CODEX_HOME to temp directory if we have one, so logs and config
-        // go to the temp directory instead of trying to write to ~/.codex
+        // Set CODEX_HOME and NORI_HOME to temp directory if we have one, so logs
+        // and config go to the temp directory instead of trying to write to
+        // ~/.codex or ~/.nori/cli
         if let Some(temp) = &temp_dir {
             let codex_home = temp.path();
             cmd.env("CODEX_HOME", codex_home.to_str().unwrap());
+            // Also set NORI_HOME for nori-config feature support
+            cmd.env("NORI_HOME", codex_home.to_str().unwrap());
 
-            // Write config.toml to CODEX_HOME
+            // Write config.toml to CODEX_HOME (unless explicitly empty for first-launch testing)
             let config_path = codex_home.join("config.toml");
-            let config_content = config.config_toml.unwrap_or_else(|| {
+            let config_content = config.config_toml.clone().unwrap_or_else(|| {
                 // Generate default config with model, trusted project path,
                 // and mock_provider that doesn't require OpenAI auth
                 let cwd_path = config
@@ -269,12 +272,50 @@ name = "Mock ACP provider for tests"
                     acp_section = acp_section
                 )
             });
-            std::fs::write(&config_path, config_content)?;
+            // Only write config file if content is non-empty. Empty string means
+            // "no config file" which is needed to test the first-launch welcome screen.
+            if !config_content.is_empty() {
+                std::fs::write(&config_path, config_content)?;
+            }
         }
 
         // Pass through mock agent env vars
         for (key, value) in config.mock_agent_env {
             cmd.env(&key, &value);
+        }
+
+        // Build PATH: filter excluded binaries, then prepend extra directories
+        if !config.extra_path.is_empty() || !config.exclude_binaries.is_empty() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+
+            // Filter out directories containing excluded binaries
+            let filtered_dirs: Vec<&str> = if config.exclude_binaries.is_empty() {
+                current_path.split(':').collect()
+            } else {
+                current_path
+                    .split(':')
+                    .filter(|dir| {
+                        !config
+                            .exclude_binaries
+                            .iter()
+                            .any(|binary| std::path::Path::new(dir).join(binary).exists())
+                    })
+                    .collect()
+            };
+
+            // Prepend extra directories
+            let extra_paths: Vec<String> = config
+                .extra_path
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+
+            let new_path = if extra_paths.is_empty() {
+                filtered_dirs.join(":")
+            } else {
+                format!("{}:{}", extra_paths.join(":"), filtered_dirs.join(":"))
+            };
+            cmd.env("PATH", new_path);
         }
 
         // Disable color codes for easier parsing
@@ -603,6 +644,11 @@ pub struct SessionConfig {
     /// When true, allows falling back to HTTP providers if model is not in ACP registry.
     /// When false (default), ACP-only mode: unregistered models produce an error.
     pub allow_http_fallback: bool,
+    /// Extra directories to prepend to PATH when spawning the process.
+    pub extra_path: Vec<std::path::PathBuf>,
+    /// Binary names to exclude from PATH (filters out directories containing these binaries).
+    /// Useful for testing behavior when certain commands are "not installed".
+    pub exclude_binaries: Vec<String>,
 }
 
 impl Default for SessionConfig {
@@ -624,6 +670,8 @@ impl SessionConfig {
             config_toml: None,
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
+            extra_path: Vec::new(),
+            exclude_binaries: Vec::new(),
         }
     }
 
@@ -695,6 +743,19 @@ impl SessionConfig {
         self.git_init = false;
         self
     }
+
+    /// Add an extra directory to prepend to PATH when spawning the process.
+    pub fn with_extra_path(mut self, path: std::path::PathBuf) -> Self {
+        self.extra_path.push(path);
+        self
+    }
+
+    /// Exclude directories containing a specific binary from PATH.
+    /// Useful for testing behavior when certain commands are "not installed".
+    pub fn with_excluded_binary(mut self, binary_name: impl Into<String>) -> Self {
+        self.exclude_binaries.push(binary_name.into());
+        self
+    }
 }
 
 /// Get path to codex binary
@@ -713,84 +774,77 @@ pub const TIMEOUT: Duration = Duration::from_secs(5);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
 pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
 
+/// Replace a dynamic value after a marker, preserving box alignment
+fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<String> {
+    let start = line.find(marker)?;
+    let val_start = start + marker.len();
+    let rest = &line[val_start..];
+
+    // Skip leading whitespace to find where value begins
+    let val_offset = rest.find(|c: char| !c.is_whitespace()).unwrap_or(0);
+    let val_start = val_start + val_offset;
+
+    // Find value end (next whitespace) and region end (│ border or EOL)
+    let rest = &line[val_start..];
+    let val_end = rest
+        .find(char::is_whitespace)
+        .map_or(line.len(), |pos| val_start + pos);
+    let region_end = rest.find('│').map_or(line.len(), |pos| val_start + pos);
+
+    // Check that we have a non-empty value
+    if val_start >= val_end {
+        return None;
+    }
+
+    // Replace value with placeholder, padding to maintain width
+    let mut result = line.to_string();
+    let region_width = region_end - val_start;
+    if region_width >= replacement.len() {
+        let padded = format!(
+            "{}{}",
+            replacement,
+            " ".repeat(region_width - replacement.len())
+        );
+        result.replace_range(val_start..region_end, &padded);
+    } else {
+        result.replace_range(val_start..val_end, replacement);
+    }
+    Some(result)
+}
+
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = contents;
 
-    // Replace /tmp/.tmpXXXXXX or /tmp/claude/.tmpXXXXXX with placeholder
+    // Replace temp directories: /tmp/claude/.tmpXXXXXX or /tmp/.tmpXXXXXX -> [TMP_DIR]
     for pattern in &["/tmp/claude/.tmp", "/tmp/.tmp"] {
         while let Some(start) = normalized.find(pattern) {
-            if let Some(end) = normalized[start..].find(char::is_whitespace) {
-                normalized.replace_range(start..start + end, "[TMP_DIR]");
-            } else {
-                // Handle case where path is at end of string
-                normalized.replace_range(start.., "[TMP_DIR]");
-                break;
-            }
+            let end = normalized[start..]
+                .find(|c: char| c.is_whitespace() || c == '│')
+                .map_or(normalized.len(), |pos| start + pos);
+            normalized.replace_range(start..end, "[TMP_DIR]");
         }
     }
 
-    // Sanitize version strings: vX.Y.Z or vX.Y.Z-prerelease.N -> v0.0.0
-    // This handles versions in the banner (e.g., "version:   v0.1.0")
+    // Per-line replacements
     let lines: Vec<String> = normalized
         .lines()
         .map(|line| {
             let mut line = line.to_string();
 
-            // Sanitize bare version strings after "version:" label
-            if let Some(start) = line.find("version:") {
-                // Find "v" followed by digits after the "version:" label
-                if let Some(v_pos) = line[start..].find(" v") {
-                    let v_start = start + v_pos + 1; // Position of 'v'
-                    // Find the end of the version string (space or end of line)
-                    let rest = &line[v_start..];
-                    let v_end = rest
-                        .find(char::is_whitespace)
-                        .map_or(line.len(), |pos| v_start + pos);
-
-                    let version_str = &line[v_start..v_end];
-                    // Verify it looks like a version: vX.Y.Z
-                    if version_str.len() > 1 {
-                        let inner = &version_str[1..]; // strip "v"
-                        let is_version = inner.chars().next().is_some_and(|c| c.is_ascii_digit())
-                            && inner.contains('.');
-
-                        if is_version {
-                            let replacement = "v0.0.0";
-                            line.replace_range(v_start..v_end, replacement);
-                        }
-                    }
-                }
+            // Version: "Nori vX.Y.Z-prerelease" -> "Nori v0.0.0"
+            // Only replace if it looks like a version (digit after "Nori v")
+            let is_version = line
+                .find("Nori v")
+                .and_then(|pos| line.chars().nth(pos + 6))
+                .is_some_and(|c| c.is_ascii_digit());
+            if is_version && let Some(result) = replace_after_marker(&line, "Nori ", "v0.0.0") {
+                line = result;
             }
 
-            // Sanitize profile lines: "profile:   something" -> "profile:   [PROF]"
-            // This ensures snapshots don't break when the Nori profile changes
-            if let Some(start) = line.find("profile:") {
-                let label_end = start + "profile:".len();
-                // Find where the profile value starts (after spaces)
-                let rest = &line[label_end..];
-                if let Some(val_offset) = rest.find(|c: char| !c.is_whitespace()) {
-                    let val_start = label_end + val_offset;
-                    // Find the end of the content region (border character or end of line)
-                    // We need to replace value + trailing spaces to ensure consistent width
-                    let val_rest = &line[val_start..];
-                    let region_end = val_rest.find('│').map_or(line.len(), |pos| val_start + pos);
-
-                    // Calculate padding to maintain consistent width
-                    let region_width = region_end - val_start;
-                    let replacement = "[PROF]";
-                    if region_width >= replacement.len() {
-                        let padded = format!(
-                            "{}{}",
-                            replacement,
-                            " ".repeat(region_width - replacement.len())
-                        );
-                        line.replace_range(val_start..region_end, &padded);
-                    } else {
-                        // Region too small for replacement, just use [PROF]
-                        line.replace_range(val_start..region_end, replacement);
-                    }
-                }
+            // Profile: "profile:   value" -> "profile:   [PROF]"
+            if let Some(result) = replace_after_marker(&line, "profile:", "[PROF]") {
+                line = result;
             }
 
             line
@@ -829,22 +883,29 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // The header can appear in two forms:
     // 1. Boxed header with "╭──" border
     // 2. Plain text "Powered by Nori AI"
-    // Both end with a nori-ai install command
+    // The header ends with either:
+    // - nori-ai install command (when nori-ai is not installed)
+    // - "Powered by Nori AI" line (when nori-ai is already installed)
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
-    let has_header = lines
-        .iter()
-        .any(|l| l.contains("╭──") || l.contains("'npx nori-ai install'"));
+    let has_header = lines.iter().any(|l| {
+        l.contains("╭──") || l.contains("Powered by Nori AI") || l.contains("'npx nori-ai install'")
+    });
 
     if has_header {
-        // Find where the header ends (after the /review command line)
+        // Find where the header ends
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
-            // The nori-ai install line marks the end of the command list
+            // The nori-ai install line marks the end of the command list (if present)
             if line.contains("'npx nori-ai install'") {
                 skip_until = i + 1;
                 break;
+            }
+            // If no install line, use "Powered by Nori AI" as the end marker
+            if line.contains("Powered by Nori AI") {
+                skip_until = i + 1;
+                // Don't break yet - install line may follow
             }
         }
         // Skip empty lines after the header block

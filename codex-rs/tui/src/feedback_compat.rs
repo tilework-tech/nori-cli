@@ -17,6 +17,7 @@ pub use codex_feedback::CodexFeedback;
 pub use codex_feedback::CodexLogSnapshot;
 
 #[cfg(not(feature = "feedback"))]
+#[allow(dead_code)]
 mod stub {
     use std::io::Write;
 
@@ -81,8 +82,10 @@ mod stub {
 }
 
 #[cfg(not(feature = "feedback"))]
+#[allow(unused_imports)]
 pub use stub::CodexFeedback;
 #[cfg(not(feature = "feedback"))]
+#[allow(unused_imports)]
 pub use stub::CodexLogSnapshot;
 
 #[cfg(test)]
