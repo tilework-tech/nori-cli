@@ -25,6 +25,8 @@ tokio-util = { workspace = true, features = ["compat"] }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+toml = { workspace = true }
+dirs = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

@@ -1,8 +1,8 @@
 # Nori Config Redesign Implementation Plan
 
-**Goal:** Create a minimal, standalone config system in the ACP module for ACP-only mode, stored in `~/.nori-cli/config.toml` with no mentions of codex/chatgpt/openai.
+**Goal:** Create a minimal, standalone config system in the ACP module for ACP-only mode, stored in `~/.nori/cli/config.toml` with no mentions of codex/chatgpt/openai.
 
-**Architecture:** A new `config` submodule in `codex-rs/acp/` provides `NoriConfig` - a simplified config struct for ACP-only operations. The TUI opts in via a feature flag `nori-config`. When enabled, the TUI loads `~/.nori-cli/config.toml` instead of `~/.codex/config.toml`. The ACP config reuses types from `codex-protocol` where possible to avoid duplication.
+**Architecture:** A new `config` submodule in `codex-rs/acp/` provides `NoriConfig` - a simplified config struct for ACP-only operations. The TUI opts in via a feature flag `nori-config`. When enabled, the TUI loads `~/.nori/cli/config.toml` instead of `~/.codex/config.toml`. The ACP config reuses types from `codex-protocol` where possible to avoid duplication.
 
 **Tech Stack:** Rust, serde, toml, codex-protocol (for shared types like SandboxMode)
 
@@ -11,9 +11,9 @@
 ## Testing Plan
 
 I will add unit tests that ensure:
-1. `NoriConfig` correctly loads from a TOML file at `~/.nori-cli/config.toml`
+1. `NoriConfig` correctly loads from a TOML file at `~/.nori/cli/config.toml`
 2. Default values are applied when fields are missing
-3. The `find_nori_home()` function correctly identifies `~/.nori-cli` or respects `NORI_HOME` env var
+3. The `find_nori_home()` function correctly identifies `~/.nori/cli` or respects `NORI_HOME` env var
 4. CLI overrides work with `NoriConfigOverrides`
 5. Invalid TOML produces helpful error messages
 
@@ -53,7 +53,7 @@ Write a test that:
 - Sets `NORI_HOME` env var to a temp path
 - Calls `find_nori_home()`
 - Expects it to return the env var path
-- Unsets env var, expects `~/.nori-cli`
+- Unsets env var, expects `~/.nori/cli`
 
 ### Step 1.4: Run test to verify it fails
 
@@ -75,12 +75,12 @@ use std::path::PathBuf;
 pub const NORI_HOME_ENV: &str = "NORI_HOME";
 
 /// Default Nori home directory name
-pub const NORI_HOME_DIR: &str = ".nori-cli";
+pub const NORI_HOME_DIR: &str = ".nori/cli";
 
 /// Config file name
 pub const CONFIG_FILE: &str = "config.toml";
 
-/// Find the Nori home directory (~/.nori-cli or $NORI_HOME)
+/// Find the Nori home directory (~/.nori/cli or $NORI_HOME)
 pub fn find_nori_home() -> Result<PathBuf> {
     if let Ok(env_home) = std::env::var(NORI_HOME_ENV) {
         return Ok(PathBuf::from(env_home));
@@ -104,7 +104,7 @@ Expected: Test passes
 ### Step 1.7: Commit
 
 ```bash
-git add -A && git commit -m "feat(acp): Add find_nori_home for ~/.nori-cli config location"
+git add -A && git commit -m "feat(acp): Add find_nori_home for ~/.nori/cli config location"
 ```
 
 ---
@@ -220,7 +220,7 @@ pub struct NoriConfig {
     /// Enable TUI notifications
     pub notifications: bool,
 
-    /// Nori home directory (~/.nori-cli)
+    /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
     /// Current working directory
@@ -238,7 +238,7 @@ impl Default for NoriConfig {
             approval_policy: ApprovalPolicy::OnRequest,
             animations: true,
             notifications: true,
-            nori_home: PathBuf::from(".nori-cli"),
+            nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
         }
@@ -285,7 +285,7 @@ cargo test -p codex-acp load_config_from_file
 
 ```rust
 impl NoriConfig {
-    /// Load configuration from ~/.nori-cli/config.toml
+    /// Load configuration from ~/.nori/cli/config.toml
     pub fn load() -> Result<Self> {
         Self::load_with_overrides(NoriConfigOverrides::default())
     }
@@ -346,7 +346,7 @@ cargo test -p codex-acp load_config_from_file
 ### Step 3.5: Commit
 
 ```bash
-git add -A && git commit -m "feat(acp): Implement NoriConfig::load() from ~/.nori-cli/config.toml"
+git add -A && git commit -m "feat(acp): Implement NoriConfig::load() from ~/.nori/cli/config.toml"
 ```
 
 ---
@@ -608,7 +608,7 @@ git add -A && git commit -m "chore(acp): Remove codex/openai/chatgpt references 
 
 ## Edge Cases
 
-1. **Missing config file**: When `~/.nori-cli/config.toml` doesn't exist, use all defaults. Do not error.
+1. **Missing config file**: When `~/.nori/cli/config.toml` doesn't exist, use all defaults. Do not error.
 
 2. **Invalid TOML syntax**: Provide clear error message with file path and parse error details.
 
@@ -634,14 +634,14 @@ git add -A && git commit -m "chore(acp): Remove codex/openai/chatgpt references 
 2. **Should MCP server config be included in the minimal config?**
    - Recommendation: Yes, but as optional. MCP servers are useful for tools but not required for basic operation.
 
-3. **Should there be a migration path from ~/.codex/config.toml to ~/.nori-cli/config.toml?**
+3. **Should there be a migration path from ~/.codex/config.toml to ~/.nori/cli/config.toml?**
    - Recommendation: No automatic migration. Users should manually create a new config. This is cleaner.
 
-4. **Should the history file also move to ~/.nori-cli/?**
-   - Recommendation: Yes, `~/.nori-cli/history.jsonl` for consistency.
+4. **Should the history file also move to ~/.nori/cli/?**
+   - Recommendation: Yes, `~/.nori/cli/history.jsonl` for consistency.
 
 5. **What about log files?**
-   - Recommendation: `~/.nori-cli/log/` for consistency.
+   - Recommendation: `~/.nori/cli/log/` for consistency.
 
 ---
 

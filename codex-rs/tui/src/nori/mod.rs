@@ -6,6 +6,9 @@
 pub(crate) mod agent_picker;
 pub(crate) mod session_header;
 
+#[cfg(feature = "nori-config")]
+pub(crate) mod config_adapter;
+
 #[cfg(not(feature = "feedback"))]
 pub(crate) mod feedback;
 

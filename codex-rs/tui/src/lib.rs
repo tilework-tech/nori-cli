@@ -137,10 +137,21 @@ pub async fn run_main(
     mut cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
+    // When nori-config feature is enabled, set up the Nori config environment
+    // This redirects config loading to ~/.nori/cli instead of ~/.codex
+    #[cfg(feature = "nori-config")]
+    {
+        #[allow(clippy::print_stderr)]
+        if let Err(e) = nori::config_adapter::setup_nori_config_environment() {
+            eprintln!("Error setting up Nori config environment: {e}");
+            std::process::exit(1);
+        }
+    }
+
     // Initialize ACP file tracing for subprocess debugging
     let acp_log_path = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".codex-acp.log");
+        .join(".nori-acp.log");
     if let Err(e) = codex_acp::init_file_tracing(&acp_log_path) {
         tracing::warn!("Failed to initialize ACP file tracing: {e}");
     }
