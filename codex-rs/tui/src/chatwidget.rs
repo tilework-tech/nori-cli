@@ -1027,7 +1027,7 @@ impl ChatWidget {
             .map(|cell| {
                 let exec_cell = cell.as_any().downcast_ref::<ExecCell>();
                 let is_exec = exec_cell.is_some();
-                let is_active = exec_cell.map(|e| e.is_active()).unwrap_or(false);
+                let is_active = exec_cell.map(ExecCell::is_active).unwrap_or(false);
                 let should_flush = exec_cell.map(|exec| !exec.is_active()).unwrap_or(true);
                 (should_flush, is_exec, is_active)
             })

@@ -105,10 +105,6 @@ impl ExecCell {
         }
     }
 
-    pub(crate) fn should_flush(&self) -> bool {
-        !self.is_exploring_cell() && self.calls.iter().all(|c| c.output.is_some())
-    }
-
     pub(crate) fn mark_failed(&mut self) {
         for call in self.calls.iter_mut() {
             if call.output.is_none() {
