@@ -3,8 +3,10 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
+#[allow(unused_imports)]
 use std::time::Duration;
 
+#[allow(unused_imports)]
 use codex_app_server_protocol::AuthMode;
 #[cfg(feature = "backend-client")]
 use codex_backend_client::Client as BackendClient;
@@ -128,6 +130,7 @@ use codex_common::approval_presets::builtin_approval_presets;
 use codex_common::model_presets::ModelPreset;
 use codex_common::model_presets::builtin_model_presets;
 use codex_core::AuthManager;
+#[allow(unused_imports)]
 use codex_core::CodexAuth;
 use codex_core::ConversationManager;
 use codex_core::protocol::AskForApproval;

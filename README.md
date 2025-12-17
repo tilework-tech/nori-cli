@@ -4,7 +4,7 @@
 [![npm version](https://img.shields.io/npm/v/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/dev/LICENSE)
 
-**One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and OpenAI seamlessly—all from your terminal.
+**One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and Codex. All from the same native CLI.
 
 <!-- TODO: Add TUI screenshot here -->
 <!-- ![Nori TUI Screenshot](assets/screenshot.png) -->
@@ -37,21 +37,16 @@ Switch between AI providers with the `/agent` command:
 
 ## Features
 
-- **Multi-provider** — Claude, Gemini, and OpenAI via the Agent Context Protocol
-- **Sandboxed execution** — Commands run in OS-level security sandboxes
-- **MCP integration** — Connect to Model Context Protocol servers for extended tools
-- **Session persistence** — Save and resume conversations with `nori resume`
-
-## Documentation
-
-- [Getting Started](docs/getting-started.md)
-- [Configuration](docs/config.md)
-- [Sandbox & Security](docs/sandbox.md)
-- [MCP Integration](docs/config.md#mcp-integration)
+- **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
+- **Sandboxed execution**: Commands run in OS-level security sandboxes
+- **Coming Soon!**
+    - **MCP integration**: Connect to Model Context Protocol servers for extended tools
+    - **Session persistence**: Save and resume conversations with `nori resume`
+    - **Multi-agent orchestration**: Alternate between multiple agent sessions
 
 ## Attribution
 
-Nori CLI is built on [OpenAI Codex CLI](https://github.com/openai/codex).
+Nori CLI is built on the great work within [OpenAI Codex CLI](https://github.com/openai/codex).
 
 ## License
 

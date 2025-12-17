@@ -29,6 +29,7 @@ use std::path::PathBuf;
 use tracing::error;
 use tracing_appender::non_blocking;
 use tracing_subscriber::EnvFilter;
+#[allow(unused_imports)]
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::prelude::*;
 

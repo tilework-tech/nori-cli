@@ -896,9 +896,9 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
-    let has_header = lines
-        .iter()
-        .any(|l| l.contains("╭──") || l.contains("Powered by Nori AI"));
+    let has_header = lines.iter().any(|l| {
+        l.contains("╭──") || l.contains("Powered by Nori AI") || l.contains("'npx nori-ai install'")
+    });
 
     if has_header {
         // Find where the header ends

@@ -75,7 +75,7 @@ async fn list_models_returns_all_models_with_large_limit() -> Result<()> {
                 },
             ],
             default_reasoning_effort: ReasoningEffort::Medium,
-            is_default: true,
+            is_default: false,
         },
         Model {
             id: "gpt-5.1-codex".to_string(),
