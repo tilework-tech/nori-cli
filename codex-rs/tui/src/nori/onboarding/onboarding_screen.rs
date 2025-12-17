@@ -13,6 +13,7 @@ use std::sync::Arc;
 use codex_core::AuthManager;
 use codex_core::config::Config;
 use codex_core::git_info::get_git_repo_root;
+use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -22,21 +23,20 @@ use ratatui::prelude::Widget;
 use ratatui::style::Color;
 use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
-use color_eyre::eyre::Result;
 
 use crate::LoginStatus;
+use crate::onboarding::TrustDirectorySelection;
 use crate::onboarding::onboarding_screen::KeyboardHandler;
 use crate::onboarding::onboarding_screen::StepState;
 use crate::onboarding::onboarding_screen::StepStateProvider;
-use crate::onboarding::TrustDirectorySelection;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
 
-use super::is_first_launch;
-use super::mark_first_launch_complete;
 use super::NoriTrustDirectoryWidget;
 use super::NoriWelcomeWidget;
+use super::is_first_launch;
+use super::mark_first_launch_complete;
 
 /// Steps in the Nori onboarding flow.
 #[allow(clippy::large_enum_variant)]
@@ -174,15 +174,13 @@ impl NoriOnboardingScreen {
 
     /// Get the user's directory trust decision.
     pub fn directory_trust_decision(&self) -> Option<TrustDirectorySelection> {
-        self.steps
-            .iter()
-            .find_map(|step| {
-                if let NoriStep::TrustDirectory(widget) = step {
-                    widget.selection
-                } else {
-                    None
-                }
-            })
+        self.steps.iter().find_map(|step| {
+            if let NoriStep::TrustDirectory(widget) = step {
+                widget.selection
+            } else {
+                None
+            }
+        })
     }
 
     /// Check if the user requested to exit.

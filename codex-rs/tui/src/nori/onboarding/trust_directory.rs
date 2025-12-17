@@ -22,10 +22,10 @@ use ratatui::widgets::WidgetRef;
 use ratatui::widgets::Wrap;
 
 use crate::key_hint;
+use crate::onboarding::TrustDirectorySelection;
 use crate::onboarding::onboarding_screen::KeyboardHandler;
 use crate::onboarding::onboarding_screen::StepState;
 use crate::onboarding::onboarding_screen::StepStateProvider;
-use crate::onboarding::TrustDirectorySelection;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;

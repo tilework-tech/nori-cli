@@ -11,8 +11,8 @@ use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
-use ratatui::widgets::WidgetRef;
 use ratatui::widgets::Widget;
+use ratatui::widgets::WidgetRef;
 use ratatui::widgets::Wrap;
 
 use crate::onboarding::onboarding_screen::KeyboardHandler;
@@ -157,10 +157,7 @@ mod tests {
             output.contains("Welcome to"),
             "Should contain welcome message"
         );
-        assert!(
-            output.contains("Nori"),
-            "Should contain Nori product name"
-        );
+        assert!(output.contains("Nori"), "Should contain Nori product name");
         assert!(
             output.contains("AI coding assistant"),
             "Should contain description"
@@ -172,18 +169,9 @@ mod tests {
         let widget = NoriWelcomeWidget::new();
         let output = render_widget(&widget, 80, 20);
 
-        assert!(
-            output.contains("Press"),
-            "Should contain press instruction"
-        );
-        assert!(
-            output.contains("Enter"),
-            "Should contain Enter key"
-        );
-        assert!(
-            output.contains("continue"),
-            "Should contain continue text"
-        );
+        assert!(output.contains("Press"), "Should contain press instruction");
+        assert!(output.contains("Enter"), "Should contain Enter key");
+        assert!(output.contains("continue"), "Should contain continue text");
     }
 
     #[test]

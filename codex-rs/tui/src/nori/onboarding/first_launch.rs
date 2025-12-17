@@ -18,9 +18,8 @@ pub(crate) fn find_nori_home() -> io::Result<PathBuf> {
         }
     }
 
-    let home = dirs::home_dir().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "Could not find home directory")
-    })?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Could not find home directory"))?;
 
     Ok(home.join(".nori"))
 }
