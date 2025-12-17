@@ -1,6 +1,4 @@
 use insta::assert_snapshot;
-use std::time::Duration;
-use std::time::Instant;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
