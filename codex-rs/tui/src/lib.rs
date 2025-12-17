@@ -81,6 +81,10 @@ mod text_formatting;
 mod tui;
 mod ui_consts;
 
+/// Default model for ACP-only mode when no model is specified via CLI or config.
+/// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
+const DEFAULT_ACP_MODEL: &str = "claude-4.5";
+
 // Upstream OpenAI/Codex update modules (only included with upstream-updates feature)
 // The update_action module is available in all builds for the UpdateAction type
 // The update_prompt and updates modules are only for release builds
@@ -137,10 +141,21 @@ pub async fn run_main(
     mut cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
+    // When nori-config feature is enabled, set up the Nori config environment
+    // This redirects config loading to ~/.nori/cli instead of ~/.codex
+    #[cfg(feature = "nori-config")]
+    {
+        #[allow(clippy::print_stderr)]
+        if let Err(e) = nori::config_adapter::setup_nori_config_environment() {
+            eprintln!("Error setting up Nori config environment: {e}");
+            std::process::exit(1);
+        }
+    }
+
     // Initialize ACP file tracing for subprocess debugging
     let acp_log_path = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".codex-acp.log");
+        .join(".nori-acp.log");
     if let Err(e) = codex_acp::init_file_tracing(&acp_log_path) {
         tracing::warn!("Failed to initialize ACP file tracing: {e}");
     }
@@ -227,7 +242,8 @@ pub async fn run_main(
         None
     };
 
-    // When using `--oss`, let the bootstrapper pick the model based on selected provider
+    // When using `--oss`, let the bootstrapper pick the model based on selected provider.
+    // Otherwise, default to Claude for ACP-only mode (overrides upstream gpt-5.1-codex default).
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
     } else if cli.oss {
@@ -237,7 +253,7 @@ pub async fn run_main(
             .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
             .map(std::borrow::ToOwned::to_owned)
     } else {
-        None // No model specified, will use the default.
+        Some(DEFAULT_ACP_MODEL.to_string()) // Use Claude as default for ACP mode
     };
 
     // canonicalize the cwd

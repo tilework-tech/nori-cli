@@ -1,13 +1,23 @@
-//! Agent Context Protocol (ACP) implementation for Codex
+//! Agent Context Protocol (ACP) implementation for Nori CLI
 //!
 //! This crate provides JSON-RPC 2.0-based communication with ACP-compliant
 //! agent subprocesses over stdin/stdout (capturing stderr logs).
+//!
+//! It also provides the Nori configuration system for ACP-only mode,
+//! loading settings from `~/.nori/cli/config.toml`.
 
 pub mod backend;
+pub mod config;
 pub mod connection;
 pub mod registry;
 pub mod tracing_setup;
 pub mod translator;
+
+// Re-export config types for convenience
+pub use config::ApprovalPolicy;
+pub use config::NoriConfig;
+pub use config::NoriConfigOverrides;
+pub use config::find_nori_home;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
