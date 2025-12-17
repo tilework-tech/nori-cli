@@ -13,6 +13,7 @@ use anyhow::Result;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
+#[cfg(debug_assertions)]
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
@@ -194,7 +195,7 @@ impl AcpBackend {
                     })
                     .await;
             }
-            // Unsupported operations - send error event per user decision
+            // Unsupported operations - only show error in debug builds
             Op::Compact
             | Op::Undo
             | Op::GetHistoryEntryRequest { .. }
@@ -205,6 +206,7 @@ impl AcpBackend {
             | Op::RunUserShellCommand { .. } => {
                 let op_name = get_op_name(&op);
                 warn!("Unsupported Op in ACP mode: {op_name}");
+                #[cfg(debug_assertions)]
                 self.send_error(&format!(
                     "Operation '{op_name}' is not supported in ACP mode"
                 ))
@@ -216,10 +218,11 @@ impl AcpBackend {
             | Op::ResolveElicitation { .. } => {
                 debug!("Ignoring internal Op in ACP mode: {}", get_op_name(&op));
             }
-            // Catch any new Op variants we haven't handled
+            // Catch any new Op variants we haven't handled - only show error in debug builds
             _ => {
                 let op_name = get_op_name(&op);
                 warn!("Unknown Op in ACP mode: {op_name}");
+                #[cfg(debug_assertions)]
                 self.send_error(&format!(
                     "Operation '{op_name}' is not supported in ACP mode"
                 ))
@@ -332,7 +335,8 @@ impl AcpBackend {
         }
     }
 
-    /// Send an error event to the TUI.
+    /// Send an error event to the TUI (only used in debug builds).
+    #[cfg(debug_assertions)]
     async fn send_error(&self, message: &str) {
         let _ = self
             .event_tx
