@@ -201,21 +201,132 @@ When we retrieve a pending cell and there's ANOTHER incomplete cell in `active_c
 the `flush_active_cell()` call saves that other cell back to pending. But since its
 completion event might have already been processed, it gets stuck.
 
-## Fix Options
+## Fixes Applied
 
-### Option A: Don't flush when retrieving from pending
-If we're about to set active_cell from a pending cell, we shouldn't have anything
-in active_cell (since streaming should have flushed it). If there is something,
-it might be another pending cell that was restored - we should handle it differently.
+### Fix 1: Complete ALL matching call_ids (DONE)
+Changed `complete_call()` to complete ALL calls with matching call_id, not just
+the last one. This prevents duplicate call_ids from leaving cells stuck as "active".
 
-### Option B: Track "already completed" call_ids
-Keep a set of call_ids that have already been completed. When flushing an incomplete
-cell to pending, check if any of its call_ids have already been completed. If so,
-don't save to pending.
+### Fix 2: Reject duplicate call_ids in with_added_call (DONE)
+Added check in `with_added_call()` to reject calls with duplicate call_ids.
 
-### Option C: Complete all matching calls when retrieving
-When we retrieve a cell from pending and move to active_cell, check if there are
-any other pending completion events for this cell's call_ids.
+### Fix 3: Don't flush incomplete ExecCells during streaming (DONE)
+Both `handle_streaming_delta()` and `add_boxed_history()` now check if the
+active ExecCell is incomplete before flushing. If `is_active()` returns true,
+the cell stays in active_cell instead of being saved to pending.
+
+## Remaining Bug: Cell Re-saved Immediately After Retrieval
+
+### Observed Behavior (from .codex-acp.log)
+
+```
+15:40:58.344878Z retrieve: found... call_id=toolu_01YUzurZmApey2q4r1Qf9nzz found=true
+15:40:58.344925Z flush_active_cell: incomplete ExecCell, saving to pending pending_call_ids=["toolu_01YUzurZmApey2q4r1Qf9nzz"]
+```
+
+The SAME cell that was just retrieved is immediately saved back to pending!
+This happens because:
+
+1. Cell is retrieved from pending_exec_cells
+2. `flush_active_cell()` is called (to preserve any existing active_cell)
+3. Retrieved cell is set as active_cell
+4. `complete_call()` is called on the cell
+5. BUT: Another event arrives and triggers `flush_active_cell()` BEFORE the
+   cell is fully complete, saving it back to pending
+
+### The Cascading Effect
+
+When multiple tool calls complete in rapid succession, this pattern cascades:
+
+```
+1. ExecEnd(A) arrives
+   - Retrieve CellA from pending
+   - flush_active_cell() (nothing there)
+   - active_cell = CellA
+   - complete_call(A) - but CellA has call B still pending!
+
+2. ExecEnd(B) arrives (before CellA is flushed to history)
+   - Retrieve CellB from pending (if it exists) OR check active_cell
+   - flush_active_cell() - CellA is STILL incomplete (call B not done!)
+   - CellA gets saved to pending AGAIN
+   - But ExecEnd(A) already happened, so CellA has no more completion events
+
+3. CellA is now stuck in pending until drain_failed()
+```
+
+### User-Visible Symptoms
+
+1. Explored cells "flicker" - briefly appear, then disappear
+2. Multiple cells reappear at the END of the assistant turn
+3. The `drain_failed: drained_count=3` log shows 3 cells were stuck
+
+### Screen Output Pattern
+
+```
+─ Worked for 2s ───────────────────────────────────────────────────────────
+
+• Following Nori workflow...
+
+<MULTIPLE EXPLORED CELLS BRIEFLY FLICKER HERE>
+• Explored
+  └ Read file
+
+─ Worked for 15s ──────────────────────────────────────────────────────────
+
+• I've read the using-skills ability...
+
+<THE STUCK CELLS REAPPEAR AT THE END VIA drain_failed>
+• Explored
+  └ Search history.*cell|exec.*cell in /home/...
+
+• Explored
+  └ Read SKILL.md
+
+• Explored
+  └ Read render.rs, file
+```
+
+### Root Cause Analysis
+
+The fundamental problem is that `handle_exec_end_now` uses this pattern:
+
+```rust
+if let Some(pending_cell) = self.pending_exec_cells.retrieve(&ev.call_id) {
+    self.flush_active_cell();  // <-- Can re-save a different incomplete cell!
+    self.active_cell = Some(pending_cell);
+    // ... complete the call ...
+}
+```
+
+When completing call A on a cell that also has call B pending:
+- After completing A, the cell is still "active" (B is pending)
+- If ExecEnd(B) arrives and there's a DIFFERENT cell in pending for B...
+- We retrieve that cell and call flush_active_cell()
+- The cell with completed-A-but-pending-B gets saved to pending
+- But A's ExecEnd was already processed! No event will retrieve it again.
+
+### Proposed Fix Options
+
+**Option A: Don't flush when the active cell will be replaced**
+If we're about to replace active_cell with a retrieved pending cell, AND the
+current active_cell is an incomplete ExecCell, don't save it to pending.
+Instead, check if any of its pending call_ids match call_ids that have already
+been completed (need to track completed call_ids).
+
+**Option B: Track completed call_ids globally**
+Keep a `HashSet<String>` of call_ids that have received ExecEnd events.
+Before saving a cell to pending, filter out any call_ids that are in this set.
+If all call_ids have been completed, send the cell to history instead.
+
+**Option C: Process all pending completions atomically**
+When retrieving a cell from pending, check if any OTHER pending ExecEnd events
+exist for the same cell's call_ids. If so, complete them all before allowing
+the cell to be flushed again.
+
+**Option D: Defer the flush_active_cell call**
+Instead of calling flush_active_cell() immediately when retrieving from pending,
+defer it until after the completion is applied. Only flush if the cell is STILL
+incomplete after completion.
 
 ## Tracing Targets
 
