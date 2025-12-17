@@ -163,7 +163,56 @@ Each ExecCell tracks multiple tool calls:
    - Cell only appears when drain_failed() runs at TaskComplete
 ```
 
-## The Root Cause
+## The Root Cause (RESOLVED)
+
+**Primary Issue: Duplicate ExecCommandBegin Events from ACP**
+
+The ACP protocol emits multiple `ToolCall` events for the same `call_id` as details become available:
+
+```
+seq=16: ExecCommandBegin call_id=toolu_016g7... title="Read File" (generic)
+seq=17: ExecCommandBegin call_id=toolu_016g7... title="Read /home/.../SKILL.md" (detailed)
+```
+
+This caused a cascade of problems in the TUI:
+1. First Begin creates ExecCell A in active_cell
+2. Second Begin (same call_id) triggers "rejecting duplicate call_id" in `with_added_call`
+3. This creates a NEW ExecCell, causing the OLD one to be flushed to pending
+4. Subsequent Read operations can't merge because they also get duplicate Begins
+5. Cells get stuck in pending_exec_cells and only appear at drain_failed
+
+**Fix Applied (acp/src/backend.rs):**
+
+Two-layer deduplication:
+
+1. **At the source** - Skip generic ToolCall events that don't have `raw_input`:
+```rust
+// In translate_session_update_to_events, for SessionUpdate::ToolCall:
+if tool_call.raw_input.is_none() {
+    // Skip generic placeholder, wait for detailed event
+    return vec![];
+}
+```
+
+2. **Safety net** - Track emitted call_ids in the dispatch loop:
+```rust
+let mut emitted_begin_call_ids: HashSet<String> = HashSet::new();
+if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
+    if emitted_begin_call_ids.contains(&begin_ev.call_id) {
+        continue;  // Skip any remaining duplicates
+    }
+    emitted_begin_call_ids.insert(begin_ev.call_id.clone());
+}
+```
+
+This ensures:
+- Only detailed events (with file paths, commands, etc.) are emitted
+- Each call_id gets exactly one ExecCommandBegin event
+- The TUI receives complete information for display
+
+---
+
+## Historical Analysis (for reference)
 
 There are TWO issues identified:
 
@@ -330,7 +379,31 @@ incomplete after completion.
 
 ## Tracing Targets
 
-- `cell_flushing` - All cell state transitions
-- `pending_exec_cells` - PendingExecCellTracker operations
+### TUI-side tracing
+- `cell_flushing` - All cell state transitions (flush_active_cell, handle_exec_*_now)
+- `pending_exec_cells` - PendingExecCellTracker operations (save_pending, retrieve, drain_failed)
+- `tui_event_flow` - Event reception in the TUI (on_agent_message_delta, on_exec_command_begin, on_exec_command_end)
 
-Enable with: `RUST_LOG=cell_flushing=debug,pending_exec_cells=debug`
+### ACP-side tracing
+- `acp_event_flow` - Event emission from ACP backend (translate_session_update_to_events, dispatch loop)
+
+### Enable all event flow tracing
+
+```bash
+RUST_LOG=acp_event_flow=debug,tui_event_flow=debug,cell_flushing=debug,pending_exec_cells=debug
+```
+
+### Capture to file for analysis
+
+```bash
+RUST_LOG=acp_event_flow=debug,tui_event_flow=debug,cell_flushing=debug,pending_exec_cells=debug \
+  codex 2>&1 | tee event_flow.log
+```
+
+### What to look for in the logs
+
+1. **Event sequence**: Events should arrive in order (seq=1, 2, 3...)
+2. **Interleaving**: Look for `AgentMessageDelta` events arriving between `ExecCommandBegin` and `ExecCommandEnd`
+3. **State at reception**: Check `has_active_cell`, `active_cell_is_exec`, `pending_exec_count` at each event
+4. **Cell flushing**: Track when cells are saved to pending vs flushed to history
+5. **call_id correlation**: Match `ExecCommandBegin` and `ExecCommandEnd` by call_id

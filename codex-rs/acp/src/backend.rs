@@ -284,9 +284,34 @@ impl AcpBackend {
             let event_tx_clone = event_tx.clone();
             let id_for_updates = id_clone.clone();
             let update_handler = tokio::spawn(async move {
+                let mut event_sequence: u64 = 0;
+                // Track call_ids that have already had ExecCommandBegin emitted.
+                // The ACP protocol can emit multiple ToolCall events for the same call_id
+                // as details become available, but the TUI expects exactly one Begin per call_id.
+                let mut emitted_begin_call_ids: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
                 while let Some(update) = update_rx.recv().await {
                     let events = translate_session_update_to_events(&update);
                     for event_msg in events {
+                        // Deduplicate ExecCommandBegin events - only emit the first one per call_id
+                        if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
+                            if emitted_begin_call_ids.contains(&begin_ev.call_id) {
+                                debug!(
+                                    target: "acp_event_flow",
+                                    call_id = %begin_ev.call_id,
+                                    "ACP dispatch: skipping duplicate ExecCommandBegin"
+                                );
+                                continue;
+                            }
+                            emitted_begin_call_ids.insert(begin_ev.call_id.clone());
+                        }
+                        event_sequence += 1;
+                        debug!(
+                            target: "acp_event_flow",
+                            seq = event_sequence,
+                            event_type = get_event_msg_type(&event_msg),
+                            "ACP dispatch: sending event to TUI"
+                        );
                         let _ = event_tx_clone
                             .send(Event {
                                 id: id_for_updates.clone(),
@@ -295,6 +320,11 @@ impl AcpBackend {
                             .await;
                     }
                 }
+                debug!(
+                    target: "acp_event_flow",
+                    total_events = event_sequence,
+                    "ACP dispatch: update stream completed"
+                );
             });
 
             // Send the prompt
@@ -437,11 +467,36 @@ fn get_op_name(op: &Op) -> &'static str {
     }
 }
 
+/// Get a human-readable name for an EventMsg variant
+fn get_event_msg_type(msg: &EventMsg) -> &'static str {
+    match msg {
+        EventMsg::SessionConfigured(_) => "SessionConfigured",
+        EventMsg::TaskStarted(_) => "TaskStarted",
+        EventMsg::TaskComplete(_) => "TaskComplete",
+        EventMsg::AgentMessageDelta(_) => "AgentMessageDelta",
+        EventMsg::AgentReasoningDelta(_) => "AgentReasoningDelta",
+        EventMsg::ExecCommandBegin(_) => "ExecCommandBegin",
+        EventMsg::ExecCommandEnd(_) => "ExecCommandEnd",
+        EventMsg::ExecApprovalRequest(_) => "ExecApprovalRequest",
+        EventMsg::TurnAborted(_) => "TurnAborted",
+        EventMsg::Error(_) => "Error",
+        EventMsg::ShutdownComplete => "ShutdownComplete",
+        _ => "Other",
+    }
+}
+
 /// Translate an ACP SessionUpdate to codex_protocol::EventMsg variants.
 fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventMsg> {
     match update {
         acp::SessionUpdate::AgentMessageChunk(chunk) => {
             if let acp::ContentBlock::Text(text) = &chunk.content {
+                debug!(
+                    target: "acp_event_flow",
+                    event_type = "AgentMessageChunk",
+                    delta_len = text.text.len(),
+                    delta_preview = %truncate_for_log(&text.text, 50),
+                    "ACP -> TUI: streaming text delta"
+                );
                 vec![EventMsg::AgentMessageDelta(
                     codex_protocol::protocol::AgentMessageDeltaEvent {
                         delta: text.text.clone(),
@@ -453,6 +508,12 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         }
         acp::SessionUpdate::AgentThoughtChunk(chunk) => {
             if let acp::ContentBlock::Text(text) = &chunk.content {
+                debug!(
+                    target: "acp_event_flow",
+                    event_type = "AgentThoughtChunk",
+                    delta_len = text.text.len(),
+                    "ACP -> TUI: reasoning delta"
+                );
                 vec![EventMsg::AgentReasoningDelta(
                     codex_protocol::protocol::AgentReasoningDeltaEvent {
                         delta: text.text.clone(),
@@ -463,6 +524,27 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             }
         }
         acp::SessionUpdate::ToolCall(tool_call) => {
+            // Skip Begin events that don't have useful display information.
+            // The ACP protocol emits multiple ToolCall events for the same call_id:
+            // 1. First event: generic (title="Read File", raw_input={} or partial)
+            // 2. Second event: detailed (title="Read /path/to/file.rs", raw_input={path: "..."})
+            // We only want to emit the detailed one to avoid duplicate Begin events in the TUI.
+            let display_args = tool_call
+                .raw_input
+                .as_ref()
+                .and_then(|input| extract_display_args(&tool_call.title, input));
+            if display_args.is_none() {
+                debug!(
+                    target: "acp_event_flow",
+                    event_type = "ToolCall",
+                    call_id = %tool_call.tool_call_id,
+                    title = %tool_call.title,
+                    has_raw_input = tool_call.raw_input.is_some(),
+                    "ACP: skipping generic ToolCall (no display args), waiting for detailed event"
+                );
+                return vec![];
+            }
+
             // Format command with tool name and input arguments for better display
             let command = format_tool_call_command(&tool_call.title, tool_call.raw_input.as_ref());
             // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
@@ -470,6 +552,17 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                 &tool_call.title,
                 Some(&tool_call.kind),
                 tool_call.raw_input.as_ref(),
+            );
+            debug!(
+                target: "acp_event_flow",
+                event_type = "ToolCall",
+                call_id = %tool_call.tool_call_id,
+                title = %tool_call.title,
+                kind = ?tool_call.kind,
+                command = %command,
+                parsed_cmd_count = parsed_cmd.len(),
+                has_raw_input = tool_call.raw_input.is_some(),
+                "ACP -> TUI: ExecCommandBegin (tool call started)"
             );
             vec![EventMsg::ExecCommandBegin(
                 codex_protocol::protocol::ExecCommandBeginEvent {
@@ -486,7 +579,16 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         }
         acp::SessionUpdate::ToolCallUpdate(update) => {
             // Tool call updates can be mapped based on status
-            if update.fields.status == Some(acp::ToolCallStatus::Completed) {
+            let status = update.fields.status;
+            debug!(
+                target: "acp_event_flow",
+                event_type = "ToolCallUpdate",
+                call_id = %update.tool_call_id,
+                status = ?status,
+                title = ?update.fields.title,
+                "ACP: tool call update received"
+            );
+            if status == Some(acp::ToolCallStatus::Completed) {
                 // Extract output from tool call content and raw_output
                 let aggregated_output = extract_tool_output(&update.fields);
                 let title = update.fields.title.clone().unwrap_or_default();
@@ -498,6 +600,15 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                     update.fields.raw_input.as_ref(),
                 );
 
+                debug!(
+                    target: "acp_event_flow",
+                    event_type = "ToolCallUpdate",
+                    call_id = %update.tool_call_id,
+                    title = %title,
+                    command = %command,
+                    output_len = aggregated_output.len(),
+                    "ACP -> TUI: ExecCommandEnd (tool call completed)"
+                );
                 vec![EventMsg::ExecCommandEnd(
                     codex_protocol::protocol::ExecCommandEndEvent {
                         call_id: update.tool_call_id.to_string(),
@@ -521,7 +632,23 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             }
         }
         // Other update types don't have direct event mappings
-        _ => vec![],
+        other => {
+            debug!(
+                target: "acp_event_flow",
+                event_type = ?std::mem::discriminant(other),
+                "ACP: unhandled update type (no event emitted)"
+            );
+            vec![]
+        }
+    }
+}
+
+/// Truncate a string for logging purposes
+fn truncate_for_log(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
     }
 }
 

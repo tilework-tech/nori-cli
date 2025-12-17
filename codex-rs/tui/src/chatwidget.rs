@@ -474,6 +474,14 @@ impl ChatWidget {
     }
 
     fn on_agent_message_delta(&mut self, delta: String) {
+        debug!(
+            target: "tui_event_flow",
+            delta_len = delta.len(),
+            delta_preview = %truncate_for_log(&delta, 50),
+            has_active_cell = self.active_cell.is_some(),
+            active_cell_is_exec = self.active_cell.as_ref().map(|c| c.as_any().downcast_ref::<ExecCell>().is_some()).unwrap_or(false),
+            "TUI received: AgentMessageDelta"
+        );
         self.handle_streaming_delta(delta);
     }
 
@@ -809,6 +817,16 @@ impl ChatWidget {
     }
 
     fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {
+        debug!(
+            target: "tui_event_flow",
+            call_id = %ev.call_id,
+            command = ?ev.command,
+            source = ?ev.source,
+            has_active_cell = self.active_cell.is_some(),
+            active_cell_is_exec = self.active_cell.as_ref().map(|c| c.as_any().downcast_ref::<ExecCell>().is_some()).unwrap_or(false),
+            pending_exec_count = self.pending_exec_cells.len(),
+            "TUI received: ExecCommandBegin"
+        );
         self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
@@ -846,6 +864,16 @@ impl ChatWidget {
     }
 
     fn on_exec_command_end(&mut self, ev: ExecCommandEndEvent) {
+        debug!(
+            target: "tui_event_flow",
+            call_id = %ev.call_id,
+            exit_code = ev.exit_code,
+            output_len = ev.aggregated_output.len(),
+            has_active_cell = self.active_cell.is_some(),
+            active_cell_is_exec = self.active_cell.as_ref().map(|c| c.as_any().downcast_ref::<ExecCell>().is_some()).unwrap_or(false),
+            pending_exec_count = self.pending_exec_cells.len(),
+            "TUI received: ExecCommandEnd"
+        );
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
     }
@@ -3615,6 +3643,15 @@ const EXAMPLE_PROMPTS: [&str; 6] = [
 
 // Extract the first bold (Markdown) element in the form **...** from `s`.
 // Returns the inner text if found; otherwise `None`.
+/// Truncate a string for logging purposes.
+fn truncate_for_log(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.replace('\n', "\\n")
+    } else {
+        format!("{}...", s[..max_len].replace('\n', "\\n"))
+    }
+}
+
 fn extract_first_bold(s: &str) -> Option<String> {
     let bytes = s.as_bytes();
     let mut i = 0usize;

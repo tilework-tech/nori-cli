@@ -136,6 +136,11 @@ impl PendingExecCellTracker {
         cell
     }
 
+    /// Returns the number of cells currently pending.
+    pub(crate) fn len(&self) -> usize {
+        self.cells.len()
+    }
+
     /// Drains all pending cells, marking them as failed.
     ///
     /// Called on task completion to clean up any cells that weren't completed
