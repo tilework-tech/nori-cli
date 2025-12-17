@@ -529,17 +529,23 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
             // 1. First event: generic (title="Read File", raw_input={} or partial)
             // 2. Second event: detailed (title="Read /path/to/file.rs", raw_input={path: "..."})
             // We only want to emit the detailed one to avoid duplicate Begin events in the TUI.
+            //
+            // Check for useful info in EITHER:
+            // - raw_input (has path, command, pattern, etc.)
+            // - title itself (contains an absolute path like "Read /home/...")
             let display_args = tool_call
                 .raw_input
                 .as_ref()
                 .and_then(|input| extract_display_args(&tool_call.title, input));
-            if display_args.is_none() {
+            let title_has_path = title_contains_useful_info(&tool_call.title);
+            if display_args.is_none() && !title_has_path {
                 debug!(
                     target: "acp_event_flow",
                     event_type = "ToolCall",
                     call_id = %tool_call.tool_call_id,
                     title = %tool_call.title,
                     has_raw_input = tool_call.raw_input.is_some(),
+                    title_has_path = title_has_path,
                     "ACP: skipping generic ToolCall (no display args), waiting for detailed event"
                 );
                 return vec![];
@@ -650,6 +656,43 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len])
     }
+}
+
+/// Check if a tool call title contains useful display information.
+///
+/// Some ACP providers include the path/command directly in the title
+/// (e.g., "Read /home/user/file.rs" or "`git status`") rather than in raw_input.
+/// This function detects such cases so we don't skip them.
+fn title_contains_useful_info(title: &str) -> bool {
+    // Check for absolute paths (Unix or Windows style)
+    if title.contains(" /") || title.contains(" C:\\") || title.contains(" ~") {
+        return true;
+    }
+    // Check for backtick-quoted commands (e.g., "`git status`")
+    if title.contains('`') {
+        return true;
+    }
+    // Check for patterns that suggest it's not a generic title
+    // Generic titles are typically just the tool name like "Read File", "Terminal", "Search"
+    let generic_patterns = [
+        "Read File",
+        "Read file",
+        "Terminal",
+        "Search",
+        "Grep",
+        "Glob",
+        "List",
+        "Write",
+        "Edit",
+    ];
+    for pattern in &generic_patterns {
+        if title == *pattern {
+            return false;
+        }
+    }
+    // If the title is longer than typical generic names and contains a space,
+    // it likely has useful info
+    title.len() > 15 && title.contains(' ')
 }
 
 /// Format a tool call command with its input arguments for display.
