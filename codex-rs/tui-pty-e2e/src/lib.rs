@@ -242,9 +242,9 @@ impl TuiSession {
             // Also set NORI_HOME for nori-config feature support
             cmd.env("NORI_HOME", codex_home.to_str().unwrap());
 
-            // Write config.toml to CODEX_HOME
+            // Write config.toml to CODEX_HOME (unless explicitly empty for first-launch testing)
             let config_path = codex_home.join("config.toml");
-            let config_content = config.config_toml.unwrap_or_else(|| {
+            let config_content = config.config_toml.clone().unwrap_or_else(|| {
                 // Generate default config with model, trusted project path,
                 // and mock_provider that doesn't require OpenAI auth
                 let cwd_path = config
@@ -272,7 +272,11 @@ name = "Mock ACP provider for tests"
                     acp_section = acp_section
                 )
             });
-            std::fs::write(&config_path, config_content)?;
+            // Only write config file if content is non-empty. Empty string means
+            // "no config file" which is needed to test the first-launch welcome screen.
+            if !config_content.is_empty() {
+                std::fs::write(&config_path, config_content)?;
+            }
         }
 
         // Pass through mock agent env vars
@@ -280,15 +284,37 @@ name = "Mock ACP provider for tests"
             cmd.env(&key, &value);
         }
 
-        // Prepend extra directories to PATH if specified
-        if !config.extra_path.is_empty() {
+        // Build PATH: filter excluded binaries, then prepend extra directories
+        if !config.extra_path.is_empty() || !config.exclude_binaries.is_empty() {
             let current_path = std::env::var("PATH").unwrap_or_default();
+
+            // Filter out directories containing excluded binaries
+            let filtered_dirs: Vec<&str> = if config.exclude_binaries.is_empty() {
+                current_path.split(':').collect()
+            } else {
+                current_path
+                    .split(':')
+                    .filter(|dir| {
+                        !config
+                            .exclude_binaries
+                            .iter()
+                            .any(|binary| std::path::Path::new(dir).join(binary).exists())
+                    })
+                    .collect()
+            };
+
+            // Prepend extra directories
             let extra_paths: Vec<String> = config
                 .extra_path
                 .iter()
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect();
-            let new_path = format!("{}:{}", extra_paths.join(":"), current_path);
+
+            let new_path = if extra_paths.is_empty() {
+                filtered_dirs.join(":")
+            } else {
+                format!("{}:{}", extra_paths.join(":"), filtered_dirs.join(":"))
+            };
             cmd.env("PATH", new_path);
         }
 
@@ -620,6 +646,9 @@ pub struct SessionConfig {
     pub allow_http_fallback: bool,
     /// Extra directories to prepend to PATH when spawning the process.
     pub extra_path: Vec<std::path::PathBuf>,
+    /// Binary names to exclude from PATH (filters out directories containing these binaries).
+    /// Useful for testing behavior when certain commands are "not installed".
+    pub exclude_binaries: Vec<String>,
 }
 
 impl Default for SessionConfig {
@@ -642,6 +671,7 @@ impl SessionConfig {
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
             extra_path: Vec::new(),
+            exclude_binaries: Vec::new(),
         }
     }
 
@@ -717,6 +747,13 @@ impl SessionConfig {
     /// Add an extra directory to prepend to PATH when spawning the process.
     pub fn with_extra_path(mut self, path: std::path::PathBuf) -> Self {
         self.extra_path.push(path);
+        self
+    }
+
+    /// Exclude directories containing a specific binary from PATH.
+    /// Useful for testing behavior when certain commands are "not installed".
+    pub fn with_excluded_binary(mut self, binary_name: impl Into<String>) -> Self {
+        self.exclude_binaries.push(binary_name.into());
         self
     }
 }

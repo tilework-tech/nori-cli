@@ -162,7 +162,12 @@ fn test_trust_screen_is_skipped_with_default_config() {
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
     // with the expected branding elements when nori-ai is NOT installed
-    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        80,
+        SessionConfig::default().with_excluded_binary("nori-ai"),
+    )
+    .expect("Failed to spawn");
 
     // Wait for the Nori branding to appear (the "Powered by Nori AI" line)
     session

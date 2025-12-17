@@ -290,18 +290,19 @@ fn test_acp_write_system_path_denied() {
     );
 }
 
-/// Test that writes to /tmp are allowed
+/// Test that writes to /tmp/claude are allowed
 ///
 /// This verifies:
-/// 1. /tmp is an explicitly allowed write location
-/// 2. Files can be created in /tmp
+/// 1. /tmp/claude is an explicitly allowed write location (sandbox-safe)
+/// 2. Files can be created in /tmp/claude
 /// 3. Content is written correctly
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_write_to_tmp_allowed() {
+    // Note: The sandbox allows writes to /tmp/claude/, not arbitrary /tmp/ paths
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
-        .with_agent_env("MOCK_AGENT_WRITE_FILE", "/tmp/acp_test_file.txt")
+        .with_agent_env("MOCK_AGENT_WRITE_FILE", "/tmp/claude/acp_test_file.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Temporary file content");
 
     let mut session =
@@ -313,8 +314,8 @@ fn test_acp_write_to_tmp_allowed() {
 
     std::thread::sleep(TIMEOUT_INPUT);
 
-    // Send prompt to trigger /tmp write
-    session.send_str("Write to /tmp").unwrap();
+    // Send prompt to trigger /tmp/claude write
+    session.send_str("Write to /tmp/claude").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 

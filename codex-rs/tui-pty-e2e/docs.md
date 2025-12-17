@@ -68,7 +68,9 @@ By default, each session creates a `config.toml` in the temp directory with:
 - `trust_level = "trusted"` for the working directory - Skips trust approval screen
 - `wire_api = "acp"` - Routes through ACP registry for model resolution
 
-Custom config.toml content can be provided via `SessionConfig::with_config_toml(content)`
+Custom config.toml content can be provided via `SessionConfig::with_config_toml(content)`.
+
+**Important:** To test the first-launch welcome screen (which requires NO config file to exist), pass an empty string: `.with_config_toml("")`. The harness only writes the config file if the content is non-empty
 
 **Architecture:**
 
@@ -106,9 +108,10 @@ Builder pattern for test environment setup:
 - `with_agent_env(key, value)` - Pass custom env vars to mock agent
 - `with_approval_policy(policy)` - Set approval policy (defaults to `OnFailure`)
 - `without_approval_policy()` - Remove approval policy to test trust screen
-- `with_config_toml(content)` - Provide custom config.toml content (overrides default generation)
+- `with_config_toml(content)` - Provide custom config.toml content (overrides default generation). Pass `""` (empty string) to prevent config file creation entirely (enables first-launch welcome screen testing)
+- `with_excluded_binary(binary_name)` - Exclude directories containing a specific binary from PATH (useful for testing behavior when certain commands appear "not installed")
 - `cwd` field - Optional working directory (auto-created temp directory if None)
-- `config_toml` field - Optional custom config.toml content (None generates default)
+- `config_toml` field - Optional custom config.toml content (None generates default, `Some("")` prevents file creation)
 
 **Approval Policy:** `ApprovalPolicy` enum controls when codex asks for command approval:
 - `Untrusted` - Only run trusted commands without approval
@@ -120,6 +123,15 @@ By default, all spawned sessions use `ApprovalPolicy::OnFailure` which:
 - Skips the trust directory approval screen at startup
 - Allows tests to run without manual intervention
 - Sets both `--ask-for-approval on-failure` and `--sandbox workspace-write` flags
+
+**Binary Exclusion for Test Isolation:**
+
+Tests that need to verify behavior when certain binaries are "not installed" use `with_excluded_binary()`:
+```rust
+SessionConfig::default().with_excluded_binary("nori-ai")
+```
+
+This filters PATH to remove directories containing the specified binary, ensuring the test sees the expected behavior regardless of what's installed on the developer's machine
 
 ### Things to Know
 
@@ -146,7 +158,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
 | `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
-| `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - 8 comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace/tmp allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace and `/tmp/claude/` allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -278,6 +290,14 @@ Two opt-in E2E tests in `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` validate inte
 - Use 30-second timeout vs 5-second standard timeout to account for network latency and model processing time
 - Generate dynamic config.toml with `wire_api = "acp"` to route through ACP registry
 - Verify basic response reception without requiring specific output text
+
+**Sandbox Write Restrictions:**
+
+When testing file write operations, the sandbox only allows writes to specific locations:
+- Workspace directory (the temp directory created by the test harness)
+- `/tmp/claude/` subdirectory (NOT arbitrary `/tmp/` paths)
+
+Tests that write to `/tmp` must use `/tmp/claude/` as the base path. This mirrors the production sandbox behavior.
 
 **Known Limitations:**
 
