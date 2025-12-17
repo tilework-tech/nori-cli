@@ -137,6 +137,7 @@ impl PendingExecCellTracker {
     }
 
     /// Returns the number of cells currently pending.
+    #[allow(dead_code)]
     pub(crate) fn len(&self) -> usize {
         self.cells.len()
     }

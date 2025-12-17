@@ -477,14 +477,6 @@ impl ChatWidget {
     }
 
     fn on_agent_message_delta(&mut self, delta: String) {
-        debug!(
-            target: "tui_event_flow",
-            delta_len = delta.len(),
-            delta_preview = %truncate_for_log(&delta, 50),
-            has_active_cell = self.active_cell.is_some(),
-            active_cell_is_exec = self.active_cell.as_ref().map(|c| c.as_any().downcast_ref::<ExecCell>().is_some()).unwrap_or(false),
-            "TUI received: AgentMessageDelta"
-        );
         self.handle_streaming_delta(delta);
     }
 
@@ -820,16 +812,6 @@ impl ChatWidget {
     }
 
     fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {
-        debug!(
-            target: "tui_event_flow",
-            call_id = %ev.call_id,
-            command = ?ev.command,
-            source = ?ev.source,
-            has_active_cell = self.active_cell.is_some(),
-            active_cell_is_exec = self.active_cell.as_ref().map(|c| c.as_any().downcast_ref::<ExecCell>().is_some()).unwrap_or(false),
-            pending_exec_count = self.pending_exec_cells.len(),
-            "TUI received: ExecCommandBegin"
-        );
         self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
@@ -867,16 +849,6 @@ impl ChatWidget {
     }
 
     fn on_exec_command_end(&mut self, ev: ExecCommandEndEvent) {
-        debug!(
-            target: "tui_event_flow",
-            call_id = %ev.call_id,
-            exit_code = ev.exit_code,
-            output_len = ev.aggregated_output.len(),
-            has_active_cell = self.active_cell.is_some(),
-            active_cell_is_exec = self.active_cell.as_ref().map(|c| c.as_any().downcast_ref::<ExecCell>().is_some()).unwrap_or(false),
-            pending_exec_count = self.pending_exec_cells.len(),
-            "TUI received: ExecCommandEnd"
-        );
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
     }
@@ -1024,35 +996,19 @@ impl ChatWidget {
         // while active_cell renders separately at the bottom. Flushing incomplete
         // ExecCells would move them to pending_exec_cells, making them invisible
         // until task completion.
-        let (should_flush, is_exec, is_active) = self
+        let should_flush = self
             .active_cell
             .as_ref()
             .map(|cell| {
-                let exec_cell = cell.as_any().downcast_ref::<ExecCell>();
-                let is_exec = exec_cell.is_some();
-                let is_active = exec_cell.map(ExecCell::is_active).unwrap_or(false);
-                let should_flush = exec_cell.map(|exec| !exec.is_active()).unwrap_or(true);
-                (should_flush, is_exec, is_active)
+                cell.as_any()
+                    .downcast_ref::<ExecCell>()
+                    .map(|exec| !exec.is_active())
+                    .unwrap_or(true)
             })
-            .unwrap_or((true, false, false));
-
-        tracing::debug!(
-            target: "cell_flushing",
-            has_active_cell = self.active_cell.is_some(),
-            is_exec_cell = is_exec,
-            exec_is_active = is_active,
-            should_flush = should_flush,
-            delta_len = delta.len(),
-            "handle_streaming_delta: deciding whether to flush active cell"
-        );
+            .unwrap_or(true);
 
         if should_flush {
             self.flush_active_cell();
-        } else {
-            tracing::debug!(
-                target: "cell_flushing",
-                "handle_streaming_delta: keeping incomplete ExecCell in active_cell (remains visible)"
-            );
         }
 
         if self.stream_controller.is_none() {
@@ -1077,20 +1033,8 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_exec_end_now(&mut self, ev: ExecCommandEndEvent) {
-        tracing::debug!(
-            target: "cell_flushing",
-            call_id = %ev.call_id,
-            exit_code = ev.exit_code,
-            "handle_exec_end_now: processing completion event"
-        );
-
         let running = self.running_commands.remove(&ev.call_id);
         if self.suppressed_exec_calls.remove(&ev.call_id) {
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                "handle_exec_end_now: call was suppressed, ignoring"
-            );
             return;
         }
         let (command, parsed, source) = match running {
@@ -1107,11 +1051,6 @@ impl ChatWidget {
         // First check if there's a pending ExecCell for this call_id
         // (saved when the incomplete cell was flushed due to streaming)
         if let Some(pending_cell) = self.pending_exec_cells.retrieve(&ev.call_id) {
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                "handle_exec_end_now: found cell in pending_exec_cells, moving to active_cell"
-            );
             // Preserve any existing active_cell before replacing with pending cell.
             // This ensures cells aren't lost when multiple ExecCells exist concurrently
             // (e.g., when a new tool call begins after text streaming flushes an incomplete cell).
@@ -1125,14 +1064,6 @@ impl ChatWidget {
                 .as_ref()
                 .map(|cell| cell.as_any().downcast_ref::<ExecCell>().is_none())
                 .unwrap_or(true);
-
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                has_active_cell = self.active_cell.is_some(),
-                needs_new_cell = needs_new,
-                "handle_exec_end_now: no pending cell found, checking active_cell"
-            );
 
             if needs_new {
                 self.flush_active_cell();
@@ -1169,16 +1100,6 @@ impl ChatWidget {
 
             let is_active = cell.is_active();
             let is_exploring = cell.is_exploring_cell();
-            let pending_ids = cell.pending_call_ids();
-
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                cell_is_active = is_active,
-                cell_is_exploring = is_exploring,
-                pending_call_ids = ?pending_ids,
-                "handle_exec_end_now: call completed, deciding cell disposition"
-            );
 
             // After completing a call, decide whether to keep the cell or flush it:
             //
@@ -1192,19 +1113,7 @@ impl ChatWidget {
             // 3. If cell is fully complete AND is NOT an exploring cell, flush it
             //    to history immediately.
             if !is_active && !is_exploring {
-                tracing::debug!(
-                    target: "cell_flushing",
-                    call_id = %ev.call_id,
-                    "handle_exec_end_now: cell complete and not exploring, flushing to history"
-                );
                 self.flush_active_cell();
-            } else {
-                tracing::debug!(
-                    target: "cell_flushing",
-                    call_id = %ev.call_id,
-                    reason = if is_active { "still has pending calls" } else { "exploring cell (allows grouping)" },
-                    "handle_exec_end_now: keeping cell in active_cell"
-                );
             }
         }
     }
@@ -1274,14 +1183,6 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
-        tracing::debug!(
-            target: "cell_flushing",
-            call_id = %ev.call_id,
-            command = ?ev.command,
-            source = ?ev.source,
-            "handle_exec_begin_now: processing begin event"
-        );
-
         // Ensure the status indicator is visible while the command runs.
         self.running_commands.insert(
             ev.call_id.clone(),
@@ -1309,23 +1210,12 @@ impl ChatWidget {
             self.last_unified_wait = None;
         }
         if should_suppress_unified_wait {
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                "handle_exec_begin_now: suppressing unified wait interaction"
-            );
             self.suppressed_exec_calls.insert(ev.call_id);
             return;
         }
         let interaction_input = ev.interaction_input.clone();
 
         // Check if we can add this call to an existing ExecCell
-        let has_active_exec = self
-            .active_cell
-            .as_ref()
-            .map(|c| c.as_any().downcast_ref::<ExecCell>().is_some())
-            .unwrap_or(false);
-
         if let Some(cell) = self
             .active_cell
             .as_mut()
@@ -1338,20 +1228,8 @@ impl ChatWidget {
                 interaction_input.clone(),
             )
         {
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                pending_call_ids = ?new_exec.pending_call_ids(),
-                "handle_exec_begin_now: added call to existing ExecCell"
-            );
             *cell = new_exec;
         } else {
-            tracing::debug!(
-                target: "cell_flushing",
-                call_id = %ev.call_id,
-                has_active_exec = has_active_exec,
-                "handle_exec_begin_now: creating new ExecCell (flushing any existing active_cell)"
-            );
             self.flush_active_cell();
 
             self.active_cell = Some(Box::new(new_active_exec_command(
@@ -1860,11 +1738,6 @@ impl ChatWidget {
                 // Get the pending call_ids before we consume the cell
                 let pending_ids = exec_cell.pending_call_ids();
                 if !pending_ids.is_empty() {
-                    tracing::debug!(
-                        target: "cell_flushing",
-                        pending_call_ids = ?pending_ids,
-                        "flush_active_cell: incomplete ExecCell, saving to pending_exec_cells"
-                    );
                     // Save to pending map with ALL pending call_ids
                     // This allows the cell to be retrieved when any of them completes
                     self.pending_exec_cells.save_pending(pending_ids, active);
@@ -1872,17 +1745,8 @@ impl ChatWidget {
                 }
             }
             // Normal flush path - cell is complete or not an ExecCell
-            tracing::debug!(
-                target: "cell_flushing",
-                "flush_active_cell: flushing cell to history (InsertHistoryCell)"
-            );
             self.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
-        } else {
-            tracing::debug!(
-                target: "cell_flushing",
-                "flush_active_cell: no active cell to flush"
-            );
         }
     }
 
@@ -3647,6 +3511,7 @@ const EXAMPLE_PROMPTS: [&str; 6] = [
 // Extract the first bold (Markdown) element in the form **...** from `s`.
 // Returns the inner text if found; otherwise `None`.
 /// Truncate a string for logging purposes.
+#[allow(dead_code)]
 fn truncate_for_log(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.replace('\n', "\\n")
