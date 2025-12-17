@@ -1,8 +1,11 @@
 //! Nori-branded session header component for the TUI.
 //!
 //! This module provides the Nori session header that appears at the start
-//! of every session, displaying the NORI ASCII banner, version info,
+//! of every session, displaying the Nori title, version info,
 //! agent details, and Nori profile information.
+//!
+//! The session header uses a simple "Nori" text title (the ASCII art banner
+//! is reserved for the first-launch welcome screen).
 
 use crate::exec_command::relativize_to_home;
 use crate::history_cell::CompositeHistoryCell;
@@ -23,15 +26,6 @@ use unicode_width::UnicodeWidthStr;
 
 /// Maximum inner width for the Nori session header card.
 const NORI_HEADER_MAX_INNER_WIDTH: usize = 60;
-
-/// ASCII art banner for NORI - text-based block letters
-const NORI_BANNER: &[&str] = &[
-    r"  _   _  ___  ____  ___ ",
-    r" | \ | \/ _ \|  _ \|_ _\",
-    r" |  \| | | | | |_) || | ",
-    r" | |\  | |_| |  _ < | | ",
-    r" \_| \_|\___/\_| \_\___|",
-];
 
 /// Nori config file structure (partial - only what we need)
 #[derive(Debug, Deserialize, Default)]
@@ -109,19 +103,14 @@ impl HistoryCell for NoriSessionHeaderCell {
 
         let mut lines: Vec<Line<'static>> = Vec::new();
 
-        // ASCII banner - all green
-        for banner_line in NORI_BANNER {
-            lines.push(Line::from(Span::from(*banner_line).green().bold()));
-        }
-
-        // Empty line after banner
-        lines.push(Line::from(""));
-
-        // Version line
+        // Simple "Nori" title (ASCII art is reserved for the first-launch welcome screen)
         lines.push(Line::from(vec![
-            Span::from("version:   ").dim(),
-            Span::from(format!("v{}", self.version)),
+            Span::from("Nori").green().bold(),
+            Span::from(format!(" v{}", self.version)).dim(),
         ]));
+
+        // Empty line after title
+        lines.push(Line::from(""));
 
         // Directory line
         let dir_max_width = inner_width.saturating_sub(11); // "directory: " is 11 chars
@@ -212,20 +201,20 @@ mod tests {
     }
 
     #[test]
-    fn nori_banner_renders_correctly() {
+    fn nori_header_renders_correctly() {
         let cell = NoriSessionHeaderCell::new("test-agent".to_string(), PathBuf::from("/tmp/test"));
 
         let lines = cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
 
-        // Should contain NORI ASCII banner (checking for a unique pattern from the banner)
+        // Should contain simple "Nori" title (not ASCII art)
         assert!(
-            rendered.contains("|_) || |"),
-            "Banner should contain NORI ASCII art"
+            rendered.contains("Nori"),
+            "Header should contain Nori title"
         );
 
-        // Should contain version
-        assert!(rendered.contains("version:"), "Should show version label");
+        // Should contain version in the title line
+        assert!(rendered.contains(" v"), "Should show version prefix");
 
         // Should contain directory
         assert!(
