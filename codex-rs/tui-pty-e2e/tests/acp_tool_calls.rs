@@ -358,10 +358,14 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
     );
 
     // Count how many "Explored" entries appear - should be exactly 1 grouped cell
+    // All 3 Read operations are grouped into a single cell because incomplete ExecCells
+    // are NOT flushed during streaming text. The text "Reading multiple files..." arrives
+    // while calls 1 & 2 are still pending, but the cell stays in active_cell. Call 3 then
+    // joins via with_added_call(), resulting in one cell with all 3 Read operations.
     let explored_count = contents.matches("Explored").count();
     assert!(
-        explored_count >= 1,
-        "Should have at least one 'Explored' entry, found {}. Screen contents:\n{}",
+        explored_count == 1,
+        "Should have one 'Explored' entry (all calls grouped), found {}. Screen contents:\n{}",
         explored_count,
         contents
     );

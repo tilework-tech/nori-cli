@@ -6,6 +6,7 @@
 //! arrives, preventing duplicate entries in history.
 
 use std::collections::HashMap;
+use tracing::debug;
 
 use crate::exec_cell::ExecCell;
 use crate::history_cell::HistoryCell;
@@ -46,11 +47,24 @@ impl PendingExecCellTracker {
     /// * `cell` - The incomplete cell to save.
     pub(crate) fn save_pending(&mut self, call_ids: Vec<String>, cell: Box<dyn HistoryCell>) {
         if call_ids.is_empty() {
+            debug!(
+                target: "pending_exec_cells",
+                "save_pending called with empty call_ids, ignoring"
+            );
             return;
         }
 
         // Use the first call_id as the primary key
         let primary_key = call_ids[0].clone();
+
+        debug!(
+            target: "pending_exec_cells",
+            call_ids = ?call_ids,
+            primary_key = %primary_key,
+            total_pending_before = self.cells.len(),
+            "save_pending: storing cell with {} call_ids",
+            call_ids.len()
+        );
 
         // Map all call_ids to this primary key
         for id in &call_ids {
@@ -59,7 +73,14 @@ impl PendingExecCellTracker {
         }
 
         // Store the cell under the primary key
-        self.cells.insert(primary_key, cell);
+        self.cells.insert(primary_key.clone(), cell);
+
+        debug!(
+            target: "pending_exec_cells",
+            primary_key = %primary_key,
+            total_pending_after = self.cells.len(),
+            "save_pending: cell stored successfully"
+        );
     }
 
     /// Retrieves and removes a pending cell by call_id.
@@ -70,14 +91,49 @@ impl PendingExecCellTracker {
     /// This works for any call_id associated with the cell, not just the primary key.
     /// When retrieved, all call_ids for this cell are invalidated.
     pub(crate) fn retrieve(&mut self, call_id: &str) -> Option<Box<dyn HistoryCell>> {
+        debug!(
+            target: "pending_exec_cells",
+            call_id = %call_id,
+            total_pending = self.cells.len(),
+            "retrieve: looking up cell"
+        );
+
         // Look up the primary key for this call_id
-        let primary_key = self.call_id_to_primary.remove(call_id)?;
+        let primary_key = match self.call_id_to_primary.remove(call_id) {
+            Some(pk) => pk,
+            None => {
+                debug!(
+                    target: "pending_exec_cells",
+                    call_id = %call_id,
+                    "retrieve: no mapping found for call_id"
+                );
+                return None;
+            }
+        };
+
+        debug!(
+            target: "pending_exec_cells",
+            call_id = %call_id,
+            primary_key = %primary_key,
+            "retrieve: found primary key, removing all mappings"
+        );
 
         // Remove all other mappings to this primary key
         self.call_id_to_primary.retain(|_, pk| pk != &primary_key);
 
         // Remove and return the cell
-        self.cells.remove(&primary_key)
+        let cell = self.cells.remove(&primary_key);
+
+        debug!(
+            target: "pending_exec_cells",
+            call_id = %call_id,
+            primary_key = %primary_key,
+            found = cell.is_some(),
+            total_pending_after = self.cells.len(),
+            "retrieve: completed"
+        );
+
+        cell
     }
 
     /// Drains all pending cells, marking them as failed.
@@ -85,19 +141,40 @@ impl PendingExecCellTracker {
     /// Called on task completion to clean up any cells that weren't completed
     /// (e.g., due to interruption). Returns the cells for insertion into history.
     pub(crate) fn drain_failed(&mut self) -> Vec<Box<dyn HistoryCell>> {
+        let count = self.cells.len();
+        debug!(
+            target: "pending_exec_cells",
+            count = count,
+            "drain_failed: draining all pending cells"
+        );
+
         // Clear the call_id mappings
         self.call_id_to_primary.clear();
 
         // Drain and mark all cells as failed
-        self.cells
+        let cells: Vec<_> = self
+            .cells
             .drain()
-            .map(|(_, mut cell)| {
+            .map(|(key, mut cell)| {
+                debug!(
+                    target: "pending_exec_cells",
+                    primary_key = %key,
+                    "drain_failed: marking cell as failed"
+                );
                 if let Some(exec) = cell.as_any_mut().downcast_mut::<ExecCell>() {
                     exec.mark_failed();
                 }
                 cell
             })
-            .collect()
+            .collect();
+
+        debug!(
+            target: "pending_exec_cells",
+            drained_count = cells.len(),
+            "drain_failed: completed"
+        );
+
+        cells
     }
 }
 

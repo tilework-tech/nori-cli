@@ -47,6 +47,16 @@ impl ExecCell {
         source: ExecCommandSource,
         interaction_input: Option<String>,
     ) -> Option<Self> {
+        // Reject duplicate call_ids - each call_id should only appear once per cell
+        if self.calls.iter().any(|c| c.call_id == call_id) {
+            tracing::warn!(
+                target: "cell_flushing",
+                call_id = %call_id,
+                "with_added_call: rejecting duplicate call_id"
+            );
+            return None;
+        }
+
         let call = ExecCall {
             call_id,
             command,
@@ -73,10 +83,25 @@ impl ExecCell {
         output: CommandOutput,
         duration: Duration,
     ) {
-        if let Some(call) = self.calls.iter_mut().rev().find(|c| c.call_id == call_id) {
-            call.output = Some(output);
-            call.duration = Some(duration);
-            call.start_time = None;
+        // Complete ALL calls with the matching call_id, not just one.
+        // This is defensive - duplicates shouldn't exist, but if they do,
+        // we don't want stale pending entries causing cells to get stuck.
+        let mut completed_count = 0;
+        for call in self.calls.iter_mut() {
+            if call.call_id == call_id && call.output.is_none() {
+                call.output = Some(output.clone());
+                call.duration = Some(duration);
+                call.start_time = None;
+                completed_count += 1;
+            }
+        }
+        if completed_count > 1 {
+            tracing::warn!(
+                target: "cell_flushing",
+                call_id = %call_id,
+                completed_count = completed_count,
+                "complete_call: completed multiple calls with same call_id (duplicates existed)"
+            );
         }
     }
 
