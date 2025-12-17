@@ -43,7 +43,7 @@ Each ExecCell tracks multiple tool calls:
 ## State Diagram
 
 ```
-                            
+
                             +------------------+
                             |   (invisible)    |
                             | pending_exec_    |
@@ -106,7 +106,7 @@ Each ExecCell tracks multiple tool calls:
    - flush_active_cell sends to history
 ```
 
-### Scenario 3: Streaming Interleaves with Tool Calls (THE BUG SCENARIO)
+### Scenario 3: Streaming Interleaves with Tool Calls
 
 ```
 1. ExecBegin(call_id=A, cmd=Read file1.txt)
@@ -114,268 +114,200 @@ Each ExecCell tracks multiple tool calls:
 
 2. StreamingDelta("Some text...")
    - Check: active_cell is ExecCell with is_active()=true
-   - FIX: should_flush = false, keep cell in active_cell
-   - OLD BUG: would flush incomplete cell to pending_exec_cells (invisible!)
+   - should_flush = false, keep cell in active_cell
 
 3. ExecEnd(call_id=A)
-   - Check pending_exec_cells for A: NOT FOUND (if we kept in active_cell)
    - Find in active_cell
    - Complete call A
    - Flush to history
 ```
 
-### Scenario 4: Multiple Cells, Complex Interleaving (PROBLEMATIC)
+---
+
+## ACP Tool Event Handling
+
+This section documents the ACP (Agent Client Protocol) tool event behavior and how
+the TUI handles it. This is critical knowledge for anyone working on tool call
+display or debugging cell lifecycle issues.
+
+### ACP ToolCall Event Behavior
+
+**Critical Discovery**: The ACP protocol emits **multiple ToolCall events** for the
+same `call_id` as details become available during streaming:
 
 ```
-1. ExecBegin(call_id=A)
-   - active_cell = CellA{pending: [A]}
-
-2. flush_active_cell() [from streaming or other event]
-   - CellA is incomplete, save to pending_exec_cells
-   - pending = {A: CellA}
-   - active_cell = None
-
-3. ExecBegin(call_id=B)
-   - active_cell = CellB{pending: [B]}
-
-4. flush_active_cell() [from streaming]
-   - CellB is incomplete, save to pending_exec_cells
-   - pending = {A: CellA, B: CellB}
-   - active_cell = None
-
-5. ExecEnd(call_id=A)
-   - Retrieve CellA from pending
-   - flush_active_cell() <-- This is called but active_cell should be None!
-   - active_cell = CellA
-   - Complete A in CellA
-   - If CellA still active, it stays in active_cell
-
-6. ExecEnd(call_id=B)
-   - Check pending for B: Found CellB
-   - flush_active_cell() <-- This flushes CellA to pending again!
-   - active_cell = CellB
-   - Complete B in CellB
-   - CellB may be flushed to history
-
-7. PROBLEM: CellA is now stuck in pending_exec_cells!
-   - It was re-saved at step 6
-   - No more ExecEnd events for A (already processed at step 5)
-   - Cell only appears when drain_failed() runs at TaskComplete
+Event 1 (early): ToolCall { call_id="toolu_123", title="Read File", raw_input={} }
+Event 2 (later): ToolCall { call_id="toolu_123", title="Read /home/.../file.rs", raw_input={path: "..."} }
 ```
 
-## The Root Cause (RESOLVED)
+This happens because:
+1. The LLM starts generating a tool call, and ACP emits a placeholder event immediately
+2. As more tokens stream in, ACP emits updated events with more details
+3. The final event contains the complete information (title with path, raw_input with arguments)
 
-**Primary Issue: Duplicate ExecCommandBegin Events from ACP**
+### Why This Caused Problems
 
-The ACP protocol emits multiple `ToolCall` events for the same `call_id` as details become available:
+Without filtering, the TUI would receive both events and try to create cells for each:
 
-```
-seq=16: ExecCommandBegin call_id=toolu_016g7... title="Read File" (generic)
-seq=17: ExecCommandBegin call_id=toolu_016g7... title="Read /home/.../SKILL.md" (detailed)
-```
+1. First ToolCall → Creates ExecCell A in `active_cell`
+2. Second ToolCall (same call_id) → `with_added_call` rejects duplicate → Creates NEW cell
+3. Old cell A gets flushed to `pending_exec_cells`
+4. When ExecEnd arrives, cell A was already "processed" but is stuck in pending
+5. Cell only reappears at `drain_failed()` when the turn completes
 
-This caused a cascade of problems in the TUI:
-1. First Begin creates ExecCell A in active_cell
-2. Second Begin (same call_id) triggers "rejecting duplicate call_id" in `with_added_call`
-3. This creates a NEW ExecCell, causing the OLD one to be flushed to pending
-4. Subsequent Read operations can't merge because they also get duplicate Begins
-5. Cells get stuck in pending_exec_cells and only appear at drain_failed
+### The Solution: Two-Layer Filtering
 
-**Fix Applied (acp/src/backend.rs):**
+The fix is implemented in `acp/src/backend.rs` with two layers:
 
-Two-layer deduplication:
+#### Layer 1: Skip Generic Events (Primary Filter)
 
-1. **At the source** - Skip generic ToolCall events that don't have `raw_input`:
+In `translate_session_update_to_events()`, we skip ToolCall events that don't have
+useful display information:
+
 ```rust
-// In translate_session_update_to_events, for SessionUpdate::ToolCall:
-if tool_call.raw_input.is_none() {
-    // Skip generic placeholder, wait for detailed event
-    return vec![];
+acp::SessionUpdate::ToolCall(tool_call) => {
+    // Check for useful display info in raw_input
+    let display_args = tool_call
+        .raw_input
+        .as_ref()
+        .and_then(|input| extract_display_args(&tool_call.title, input));
+
+    // Check for useful info in the title itself (some providers put path there)
+    let title_has_path = title_contains_useful_info(&tool_call.title);
+
+    // Skip if NEITHER has useful info
+    if display_args.is_none() && !title_has_path {
+        // Skip this generic placeholder event
+        return vec![];
+    }
+
+    // Emit the event with complete information
+    // ...
 }
 ```
 
-2. **Safety net** - Track emitted call_ids in the dispatch loop:
+**Why check both?**
+- Some ACP providers put the path/command in `raw_input` (e.g., `{path: "/home/user/file.rs"}`)
+- Other providers put it in the title itself (e.g., `"Read /home/user/file.rs"`)
+- We need to detect either case to avoid skipping legitimate detailed events
+
+#### Layer 2: Dispatch-Loop Deduplication (Safety Net)
+
+Even with Layer 1, edge cases could still allow duplicates through. The dispatch
+loop tracks emitted call_ids and skips any that were already sent:
+
 ```rust
 let mut emitted_begin_call_ids: HashSet<String> = HashSet::new();
-if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
-    if emitted_begin_call_ids.contains(&begin_ev.call_id) {
-        continue;  // Skip any remaining duplicates
+
+while let Some(update) = update_rx.recv().await {
+    let events = translate_session_update_to_events(&update);
+    for event_msg in events {
+        // Safety net: skip duplicate ExecCommandBegin events
+        if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
+            if emitted_begin_call_ids.contains(&begin_ev.call_id) {
+                continue;  // Skip duplicate
+            }
+            emitted_begin_call_ids.insert(begin_ev.call_id.clone());
+        }
+        // ... send event to TUI
     }
-    emitted_begin_call_ids.insert(begin_ev.call_id.clone());
 }
 ```
 
-This ensures:
-- Only detailed events (with file paths, commands, etc.) are emitted
-- Each call_id gets exactly one ExecCommandBegin event
-- The TUI receives complete information for display
+### The `title_contains_useful_info()` Function
+
+This function detects when a title contains actionable information even if `raw_input`
+doesn't have extractable arguments:
+
+```rust
+fn title_contains_useful_info(title: &str) -> bool {
+    // Check for absolute paths (Unix or Windows style)
+    if title.contains(" /") || title.contains(" C:\\") || title.contains(" ~") {
+        return true;
+    }
+
+    // Check for backtick-quoted commands (e.g., "`git status`")
+    if title.contains('`') {
+        return true;
+    }
+
+    // Known generic titles that should be skipped
+    let generic_patterns = [
+        "Read File", "Read file", "Terminal", "Search",
+        "Grep", "Glob", "List", "Write", "Edit",
+    ];
+    for pattern in &generic_patterns {
+        if title == *pattern {
+            return false;
+        }
+    }
+
+    // Long titles with spaces likely contain useful info
+    title.len() > 15 && title.contains(' ')
+}
+```
+
+### Guidelines for Handling ACP Events
+
+When working with ACP tool events, follow these principles:
+
+1. **Never trust a single ToolCall event** - The first event for a call_id is often incomplete
+2. **Filter early** - Skip events at the translation layer, not in the TUI
+3. **Use multiple signals** - Check both `raw_input` and title for useful information
+4. **Have a safety net** - Track emitted call_ids to catch any duplicates that slip through
+5. **Log thoroughly** - Use the `acp_event_flow` tracing target to debug event issues
+
+### Tool Display Information Extraction
+
+The `extract_display_args()` function extracts human-readable arguments based on tool type:
+
+| Tool Type | Checked Fields | Output Format |
+|-----------|---------------|---------------|
+| Search/Grep | pattern, query, path | `{pattern} in {path}` |
+| Terminal/Shell | command, cmd | `{command}` |
+| List/LS | path, directory | `{path}` |
+| Write/Edit | path, file_path | `{path}` |
+| Read/File | path, file_path, file | `{path}` |
+| Generic | path, command, query, name | First non-null value |
+
+This enables the TUI to show `"Read File(src/main.rs)"` instead of just `"Read File"`.
+
+### Tool Classification for Exploring vs Command Mode
+
+The `classify_tool_to_parsed_command()` function maps ACP ToolKind to TUI rendering modes:
+
+| ACP ToolKind | ParsedCommand | TUI Mode |
+|--------------|---------------|----------|
+| `Read` | `ParsedCommand::Read` | Exploring (compact) |
+| `Search` | `ParsedCommand::Search` | Exploring (compact) |
+| `Other` with "list"/"glob"/"ls" in title | `ParsedCommand::ListFiles` | Exploring (compact) |
+| `Execute`, `Edit`, `Delete`, `Move`, `Fetch`, `Think` | `ParsedCommand::Unknown` | Command (full display) |
+
+This enables the TUI to group and collapse read-only operations while showing
+mutating operations prominently.
 
 ---
 
-## Historical Analysis (for reference)
+## TUI-Side Safeguards
 
-There are TWO issues identified:
+In addition to ACP-side filtering, the TUI has safeguards to prevent cell lifecycle issues:
 
-### Issue 1: Duplicate Call IDs in a Single Cell
+### Fix 1: Complete ALL Matching Call IDs
 
-From log analysis, we see: `pending_call_ids=["toolu_016...", "toolu_016..."]`
-
-The same call_id appears TWICE in a single cell's pending list. This can happen if:
-- The same ExecBegin event is processed twice
-- `with_added_call` doesn't check for duplicate call_ids
-
-When `complete_call` is called:
-```rust
-if let Some(call) = self.calls.iter_mut().rev().find(|c| c.call_id == call_id) {
-    call.output = Some(output);  // Only completes the LAST matching call!
-}
-```
-
-It uses `.rev().find()` which finds only the LAST call with that ID, leaving the
-FIRST duplicate entry still pending. This causes `is_active()` to return true
-even after the completion event was processed.
-
-### Issue 2: Flushing Active Cell During Pending Retrieval
-
-In `handle_exec_end_now`:
-
-```rust
-if let Some(pending_cell) = self.pending_exec_cells.retrieve(&ev.call_id) {
-    self.flush_active_cell();  // <-- THIS CAN SAVE ANOTHER CELL TO PENDING
-    self.active_cell = Some(pending_cell);
-}
-```
-
-When we retrieve a pending cell and there's ANOTHER incomplete cell in `active_cell`,
-the `flush_active_cell()` call saves that other cell back to pending. But since its
-completion event might have already been processed, it gets stuck.
-
-## Fixes Applied
-
-### Fix 1: Complete ALL matching call_ids (DONE)
 Changed `complete_call()` to complete ALL calls with matching call_id, not just
 the last one. This prevents duplicate call_ids from leaving cells stuck as "active".
 
-### Fix 2: Reject duplicate call_ids in with_added_call (DONE)
+### Fix 2: Reject Duplicate Call IDs in `with_added_call`
+
 Added check in `with_added_call()` to reject calls with duplicate call_ids.
 
-### Fix 3: Don't flush incomplete ExecCells during streaming (DONE)
+### Fix 3: Don't Flush Incomplete ExecCells During Streaming
+
 Both `handle_streaming_delta()` and `add_boxed_history()` now check if the
 active ExecCell is incomplete before flushing. If `is_active()` returns true,
-the cell stays in active_cell instead of being saved to pending.
+the cell stays in `active_cell` instead of being saved to pending.
 
-## Remaining Bug: Cell Re-saved Immediately After Retrieval
-
-### Observed Behavior (from .codex-acp.log)
-
-```
-15:40:58.344878Z retrieve: found... call_id=toolu_01YUzurZmApey2q4r1Qf9nzz found=true
-15:40:58.344925Z flush_active_cell: incomplete ExecCell, saving to pending pending_call_ids=["toolu_01YUzurZmApey2q4r1Qf9nzz"]
-```
-
-The SAME cell that was just retrieved is immediately saved back to pending!
-This happens because:
-
-1. Cell is retrieved from pending_exec_cells
-2. `flush_active_cell()` is called (to preserve any existing active_cell)
-3. Retrieved cell is set as active_cell
-4. `complete_call()` is called on the cell
-5. BUT: Another event arrives and triggers `flush_active_cell()` BEFORE the
-   cell is fully complete, saving it back to pending
-
-### The Cascading Effect
-
-When multiple tool calls complete in rapid succession, this pattern cascades:
-
-```
-1. ExecEnd(A) arrives
-   - Retrieve CellA from pending
-   - flush_active_cell() (nothing there)
-   - active_cell = CellA
-   - complete_call(A) - but CellA has call B still pending!
-
-2. ExecEnd(B) arrives (before CellA is flushed to history)
-   - Retrieve CellB from pending (if it exists) OR check active_cell
-   - flush_active_cell() - CellA is STILL incomplete (call B not done!)
-   - CellA gets saved to pending AGAIN
-   - But ExecEnd(A) already happened, so CellA has no more completion events
-
-3. CellA is now stuck in pending until drain_failed()
-```
-
-### User-Visible Symptoms
-
-1. Explored cells "flicker" - briefly appear, then disappear
-2. Multiple cells reappear at the END of the assistant turn
-3. The `drain_failed: drained_count=3` log shows 3 cells were stuck
-
-### Screen Output Pattern
-
-```
-─ Worked for 2s ───────────────────────────────────────────────────────────
-
-• Following Nori workflow...
-
-<MULTIPLE EXPLORED CELLS BRIEFLY FLICKER HERE>
-• Explored
-  └ Read file
-
-─ Worked for 15s ──────────────────────────────────────────────────────────
-
-• I've read the using-skills ability...
-
-<THE STUCK CELLS REAPPEAR AT THE END VIA drain_failed>
-• Explored
-  └ Search history.*cell|exec.*cell in /home/...
-
-• Explored
-  └ Read SKILL.md
-
-• Explored
-  └ Read render.rs, file
-```
-
-### Root Cause Analysis
-
-The fundamental problem is that `handle_exec_end_now` uses this pattern:
-
-```rust
-if let Some(pending_cell) = self.pending_exec_cells.retrieve(&ev.call_id) {
-    self.flush_active_cell();  // <-- Can re-save a different incomplete cell!
-    self.active_cell = Some(pending_cell);
-    // ... complete the call ...
-}
-```
-
-When completing call A on a cell that also has call B pending:
-- After completing A, the cell is still "active" (B is pending)
-- If ExecEnd(B) arrives and there's a DIFFERENT cell in pending for B...
-- We retrieve that cell and call flush_active_cell()
-- The cell with completed-A-but-pending-B gets saved to pending
-- But A's ExecEnd was already processed! No event will retrieve it again.
-
-### Proposed Fix Options
-
-**Option A: Don't flush when the active cell will be replaced**
-If we're about to replace active_cell with a retrieved pending cell, AND the
-current active_cell is an incomplete ExecCell, don't save it to pending.
-Instead, check if any of its pending call_ids match call_ids that have already
-been completed (need to track completed call_ids).
-
-**Option B: Track completed call_ids globally**
-Keep a `HashSet<String>` of call_ids that have received ExecEnd events.
-Before saving a cell to pending, filter out any call_ids that are in this set.
-If all call_ids have been completed, send the cell to history instead.
-
-**Option C: Process all pending completions atomically**
-When retrieving a cell from pending, check if any OTHER pending ExecEnd events
-exist for the same cell's call_ids. If so, complete them all before allowing
-the cell to be flushed again.
-
-**Option D: Defer the flush_active_cell call**
-Instead of calling flush_active_cell() immediately when retrieving from pending,
-defer it until after the completion is applied. Only flush if the cell is STILL
-incomplete after completion.
+---
 
 ## Tracing Targets
 
@@ -403,7 +335,8 @@ RUST_LOG=acp_event_flow=debug,tui_event_flow=debug,cell_flushing=debug,pending_e
 ### What to look for in the logs
 
 1. **Event sequence**: Events should arrive in order (seq=1, 2, 3...)
-2. **Interleaving**: Look for `AgentMessageDelta` events arriving between `ExecCommandBegin` and `ExecCommandEnd`
-3. **State at reception**: Check `has_active_cell`, `active_cell_is_exec`, `pending_exec_count` at each event
-4. **Cell flushing**: Track when cells are saved to pending vs flushed to history
-5. **call_id correlation**: Match `ExecCommandBegin` and `ExecCommandEnd` by call_id
+2. **Skipped events**: Look for "skipping generic ToolCall" messages - these should be the placeholder events
+3. **Duplicate detection**: Look for "skipping duplicate ExecCommandBegin" - these are the safety net catches
+4. **State at reception**: Check `has_active_cell`, `active_cell_is_exec`, `pending_exec_count` at each event
+5. **Cell flushing**: Track when cells are saved to pending vs flushed to history
+6. **call_id correlation**: Match `ExecCommandBegin` and `ExecCommandEnd` by call_id
