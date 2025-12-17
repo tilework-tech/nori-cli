@@ -124,6 +124,8 @@ pub mod test_backend;
 use crate::onboarding::TrustDirectorySelection;
 use crate::onboarding::onboarding_screen::OnboardingScreenArgs;
 use crate::onboarding::onboarding_screen::run_onboarding_app;
+use crate::nori::onboarding::NoriOnboardingScreenArgs;
+use crate::nori::onboarding::run_nori_onboarding_app;
 use crate::tui::Tui;
 pub use cli::Cli;
 pub use markdown_render::render_markdown_text;
@@ -452,10 +454,11 @@ async fn run_ratatui_app(
         should_show_onboarding(login_status, &initial_config, should_show_trust_screen);
 
     let config = if should_show_onboarding {
-        let onboarding_result = run_onboarding_app(
-            OnboardingScreenArgs {
-                show_login_screen: should_show_login_screen(login_status, &initial_config),
+        // Use Nori-branded onboarding flow
+        let onboarding_result = run_nori_onboarding_app(
+            NoriOnboardingScreenArgs {
                 show_trust_screen: should_show_trust_screen,
+                skip_welcome: cli.skip_welcome,
                 login_status,
                 auth_manager: auth_manager.clone(),
                 config: initial_config.clone(),
