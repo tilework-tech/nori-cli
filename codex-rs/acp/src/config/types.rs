@@ -300,7 +300,10 @@ mod tests {
         };
 
         let config = toml.resolve().unwrap();
-        assert!(matches!(config.transport, McpServerTransportConfig::Stdio { .. }));
+        assert!(matches!(
+            config.transport,
+            McpServerTransportConfig::Stdio { .. }
+        ));
         assert!(config.enabled);
     }
 

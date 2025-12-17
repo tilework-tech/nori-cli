@@ -1,9 +1,13 @@
 //! Configuration loading for Nori CLI
 
-use super::types::{
-    ApprovalPolicy, McpServerConfig, NoriConfig, NoriConfigOverrides, NoriConfigToml, DEFAULT_MODEL,
-};
-use anyhow::{Context, Result};
+use super::types::ApprovalPolicy;
+use super::types::DEFAULT_MODEL;
+use super::types::McpServerConfig;
+use super::types::NoriConfig;
+use super::types::NoriConfigOverrides;
+use super::types::NoriConfigToml;
+use anyhow::Context;
+use anyhow::Result;
 use codex_protocol::config_types::SandboxMode;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -119,9 +123,7 @@ fn resolve_mcp_servers(
             }
             Err(e) => {
                 return Err(anyhow::anyhow!(
-                    "Invalid MCP server configuration '{}': {}",
-                    name,
-                    e
+                    "Invalid MCP server configuration '{name}': {e}"
                 ));
             }
         }

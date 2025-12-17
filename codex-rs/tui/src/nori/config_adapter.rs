@@ -5,7 +5,10 @@
 //! the TUI loads configuration from `~/.nori/cli/config.toml` instead of
 //! `~/.codex/config.toml`.
 
-use codex_acp::config::{find_nori_home, NoriConfig, NoriConfigOverrides, NORI_HOME_ENV};
+use codex_acp::config::NORI_HOME_ENV;
+use codex_acp::config::NoriConfig;
+use codex_acp::config::NoriConfigOverrides;
+use codex_acp::config::find_nori_home;
 use std::path::PathBuf;
 
 /// Get the Nori home directory path.
@@ -60,7 +63,9 @@ pub fn load_nori_config() -> anyhow::Result<NoriConfig> {
 }
 
 /// Load Nori configuration with CLI overrides.
-pub fn load_nori_config_with_overrides(overrides: NoriConfigOverrides) -> anyhow::Result<NoriConfig> {
+pub fn load_nori_config_with_overrides(
+    overrides: NoriConfigOverrides,
+) -> anyhow::Result<NoriConfig> {
     NoriConfig::load_with_overrides(overrides)
 }
 

@@ -6,10 +6,10 @@
 mod loader;
 mod types;
 
-pub use loader::find_nori_home;
 pub use loader::CONFIG_FILE;
 pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
+pub use loader::find_nori_home;
 pub use types::ApprovalPolicy;
 pub use types::McpServerConfig;
 pub use types::McpServerTransportConfig;
