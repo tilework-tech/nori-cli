@@ -17,10 +17,15 @@ mod onboarding_screen;
 mod trust_directory;
 mod welcome;
 
+// Re-exports for the Nori onboarding module - some are currently unused but
+// kept for API completeness and future use
+#[allow(unused_imports)]
 pub(crate) use first_launch::find_nori_home;
 pub(crate) use first_launch::is_first_launch;
 pub(crate) use first_launch::mark_first_launch_complete;
+#[allow(unused_imports)]
 pub(crate) use onboarding_screen::NoriOnboardingResult;
+#[allow(unused_imports)]
 pub(crate) use onboarding_screen::NoriOnboardingScreen;
 pub(crate) use onboarding_screen::NoriOnboardingScreenArgs;
 pub(crate) use onboarding_screen::run_nori_onboarding_app;
@@ -28,4 +33,5 @@ pub(crate) use trust_directory::NoriTrustDirectoryWidget;
 pub(crate) use welcome::NoriWelcomeWidget;
 
 // Re-export the selection enum for compatibility
+#[allow(unused_imports)]
 pub(crate) use crate::onboarding::TrustDirectorySelection;

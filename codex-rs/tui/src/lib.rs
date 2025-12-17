@@ -124,8 +124,6 @@ pub mod test_backend;
 use crate::nori::onboarding::NoriOnboardingScreenArgs;
 use crate::nori::onboarding::run_nori_onboarding_app;
 use crate::onboarding::TrustDirectorySelection;
-use crate::onboarding::onboarding_screen::OnboardingScreenArgs;
-use crate::onboarding::onboarding_screen::run_onboarding_app;
 use crate::tui::Tui;
 pub use cli::Cli;
 pub use markdown_render::render_markdown_text;

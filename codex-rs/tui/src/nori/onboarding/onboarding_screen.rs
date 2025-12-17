@@ -54,8 +54,10 @@ pub(crate) struct NoriOnboardingScreenArgs {
     /// Whether to skip the first-launch welcome (--skip-welcome flag).
     pub skip_welcome: bool,
     /// Current login status (unused in Nori but kept for API compatibility).
+    #[allow(dead_code)]
     pub login_status: LoginStatus,
     /// Auth manager (unused in Nori but kept for API compatibility).
+    #[allow(dead_code)]
     pub auth_manager: Arc<AuthManager>,
     /// Application configuration.
     pub config: Config,
@@ -92,7 +94,7 @@ impl NoriOnboardingScreen {
         let cwd = config.cwd.clone();
         // TODO: This should use the Nori-specific home directory
         // For now we delegate to codex_home as a placeholder
-        let nori_home = config.codex_home.clone();
+        let nori_home = config.codex_home;
 
         let mut steps: Vec<NoriStep> = Vec::new();
 

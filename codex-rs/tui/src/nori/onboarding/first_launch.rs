@@ -11,11 +11,12 @@ use std::path::PathBuf;
 /// Returns the path to the Nori configuration directory.
 ///
 /// Uses `NORI_HOME` environment variable if set, otherwise defaults to `~/.nori`.
+#[allow(dead_code)]
 pub(crate) fn find_nori_home() -> io::Result<PathBuf> {
-    if let Ok(val) = std::env::var("NORI_HOME") {
-        if !val.is_empty() {
-            return Ok(PathBuf::from(val));
-        }
+    if let Ok(val) = std::env::var("NORI_HOME")
+        && !val.is_empty()
+    {
+        return Ok(PathBuf::from(val));
     }
 
     let home = dirs::home_dir()
