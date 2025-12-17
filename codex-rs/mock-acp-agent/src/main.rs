@@ -336,8 +336,11 @@ impl acp::Agent for MockAgent {
             sleep(Duration::from_millis(30)).await;
 
             // Send intermediate agent text
-            self.send_text_chunk(session_id.clone(), "Based on my exploration, the most significant TUI Rust source file by size is:")
-                .await?;
+            self.send_text_chunk(
+                session_id.clone(),
+                "Based on my exploration, the most significant TUI Rust source file by size is:",
+            )
+            .await?;
 
             sleep(Duration::from_millis(30)).await;
 
@@ -405,9 +408,7 @@ impl acp::Agent for MockAgent {
                     acp::ToolCallUpdateFields::new()
                         .status(acp::ToolCallStatus::Completed)
                         .content(vec![acp::ToolCallContent::Content(acp::Content::new(
-                            acp::ContentBlock::Text(acp::TextContent::new(
-                                "Found 5 matches",
-                            )),
+                            acp::ContentBlock::Text(acp::TextContent::new("Found 5 matches")),
                         ))])
                         .raw_output(json!({"matches": 5})),
                 ),
@@ -435,8 +436,11 @@ impl acp::Agent for MockAgent {
             sleep(Duration::from_millis(30)).await;
 
             // Final agent message - this triggers FinalMessageSeparator
-            self.send_text_chunk(session_id.clone(), "The chatwidget is the heart of the TUI experience.")
-                .await?;
+            self.send_text_chunk(
+                session_id.clone(),
+                "The chatwidget is the heart of the TUI experience.",
+            )
+            .await?;
 
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
@@ -821,7 +825,7 @@ impl acp::Agent for MockAgent {
                 self.send_text_chunk(session_id.clone(), "Multi-call exploring done.")
                     .await?;
             }
-            
+
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 

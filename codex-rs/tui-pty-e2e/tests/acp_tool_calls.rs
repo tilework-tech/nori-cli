@@ -317,7 +317,7 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
     session.send_str("Explore files").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
-    
+
     // Wait for task to start
     session
         .wait_for_text("Reading multiple files", Duration::from_secs(5))
@@ -369,9 +369,13 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
     // CRITICAL: Verify the "Explored" cell appears BEFORE the final agent message
     // This ensures it was flushed immediately when the last tool call completed,
     // not delayed until TaskComplete drained pending cells.
-    let explored_pos = contents.find("Explored").expect("Should contain 'Explored'");
-    let final_msg_pos = contents.find("Multi-call exploring done").expect("Should contain final message");
-    
+    let explored_pos = contents
+        .find("Explored")
+        .expect("Should contain 'Explored'");
+    let final_msg_pos = contents
+        .find("Multi-call exploring done")
+        .expect("Should contain final message");
+
     assert!(
         explored_pos < final_msg_pos,
         "The 'Explored' cell should appear BEFORE the final agent message, not after. \
@@ -445,7 +449,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
     } else {
         "grouped display"
     };
-    
+
     assert!(
         contents.contains("Explored") || contents.contains("file1.rs"),
         "Should show completed exploring operation ({}). Screen contents:\n{}",
@@ -512,7 +516,10 @@ fn test_explored_cells_appear_after_assistant_message() {
 
     // Wait for the final assistant message
     session
-        .wait_for_text("The chatwidget is the heart of the TUI experience", Duration::from_secs(10))
+        .wait_for_text(
+            "The chatwidget is the heart of the TUI experience",
+            Duration::from_secs(10),
+        )
         .expect("Should receive final assistant message");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -538,7 +545,9 @@ fn test_explored_cells_appear_after_assistant_message() {
 
     // Find positions of key elements
     let final_msg = "The chatwidget is the heart of the TUI experience";
-    let final_msg_pos = contents.find(final_msg).expect("Should contain final message");
+    let final_msg_pos = contents
+        .find(final_msg)
+        .expect("Should contain final message");
 
     // Look for evidence of the second batch of exploring operations
     // These could be individual "Explored" entries or references to the files
@@ -555,18 +564,18 @@ fn test_explored_cells_appear_after_assistant_message() {
 
     // BUG VERIFICATION: Check if any "Explored" cells for the second batch
     // appear AFTER the final message.
-    // 
+    //
     // We're looking for "Explored" text that appears after final_msg_pos.
     // This demonstrates the bug where cells are delegated to after the assistant message.
     //
     // Note: This test currently captures the BUGGY behavior. When the bug is fixed,
     // this assertion should be changed to verify that explored cells appear BEFORE
     // the final message, not after.
-    let lines_after_final: Vec<&str> = contents[final_msg_pos..]
-        .lines()
-        .collect();
+    let lines_after_final: Vec<&str> = contents[final_msg_pos..].lines().collect();
 
-    let explored_after_final = lines_after_final.iter().any(|line| line.contains("Explored"));
+    let explored_after_final = lines_after_final
+        .iter()
+        .any(|line| line.contains("Explored"));
 
     if explored_after_final {
         eprintln!("BUG REPRODUCED: Found 'Explored' cells after the final assistant message");

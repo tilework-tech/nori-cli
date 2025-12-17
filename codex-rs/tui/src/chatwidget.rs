@@ -988,7 +988,24 @@ impl ChatWidget {
     #[inline]
     fn handle_streaming_delta(&mut self, delta: String) {
         // Before streaming agent content, flush any active exec cell group.
-        self.flush_active_cell();
+        // EXCEPT: Don't flush incomplete ExecCells - they should remain visible in
+        // active_cell during streaming. Streaming content goes to history (scrollback),
+        // while active_cell renders separately at the bottom. Flushing incomplete
+        // ExecCells would move them to pending_exec_cells, making them invisible
+        // until task completion.
+        let should_flush = self
+            .active_cell
+            .as_ref()
+            .map(|cell| {
+                cell.as_any()
+                    .downcast_ref::<ExecCell>()
+                    .map(|exec| !exec.is_active())
+                    .unwrap_or(true)
+            })
+            .unwrap_or(true);
+        if should_flush {
+            self.flush_active_cell();
+        }
 
         if self.stream_controller.is_none() {
             if self.needs_final_message_separator {
@@ -1030,6 +1047,10 @@ impl ChatWidget {
         // First check if there's a pending ExecCell for this call_id
         // (saved when the incomplete cell was flushed due to streaming)
         if let Some(pending_cell) = self.pending_exec_cells.retrieve(&ev.call_id) {
+            // Preserve any existing active_cell before replacing with pending cell.
+            // This ensures cells aren't lost when multiple ExecCells exist concurrently
+            // (e.g., when a new tool call begins after text streaming flushes an incomplete cell).
+            self.flush_active_cell();
             // Move the pending cell to active_cell so we can complete it
             self.active_cell = Some(pending_cell);
         } else {
@@ -1071,24 +1092,22 @@ impl ChatWidget {
                 }
             };
             cell.complete_call(&ev.call_id, output, ev.duration);
-            
-            // After completing a call, check if this cell still has pending calls.
-            // If so, it needs to go back into the pending tracker because another
-            // ExecCommandEnd event may arrive later for the remaining calls.
-            if cell.is_active() {
-                let pending_ids = cell.pending_call_ids();
-                if !pending_ids.is_empty() {
-                    // Take the active_cell and save it back to pending tracker
-                    if let Some(active) = self.active_cell.take() {
-                        self.pending_exec_cells.save_pending(pending_ids, active);
-                    }
-                }
-            } else {
-                // Cell is fully completed - flush it to history immediately.
-                // This ensures exploring cells appear in the correct chronological position,
-                // not delayed until TaskComplete drains pending cells.
+
+            // After completing a call, decide whether to keep the cell or flush it:
+            //
+            // 1. If cell still has pending calls (is_active), KEEP IT IN active_cell
+            //    so it remains visible during streaming. Previously it was saved to
+            //    pending_exec_cells which made it invisible - that was the bug.
+            //
+            // 2. If cell is fully complete AND is an exploring cell, keep it in
+            //    active_cell to allow grouping with subsequent exploring commands.
+            //
+            // 3. If cell is fully complete AND is NOT an exploring cell, flush it
+            //    to history immediately.
+            if !cell.is_active() && !cell.is_exploring_cell() {
                 self.flush_active_cell();
             }
+            // Otherwise cell stays in active_cell (remains visible, allows grouping)
         }
     }
 

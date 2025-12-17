@@ -54,7 +54,8 @@ impl PendingExecCellTracker {
 
         // Map all call_ids to this primary key
         for id in &call_ids {
-            self.call_id_to_primary.insert(id.clone(), primary_key.clone());
+            self.call_id_to_primary
+                .insert(id.clone(), primary_key.clone());
         }
 
         // Store the cell under the primary key
