@@ -32,10 +32,15 @@ pub fn get_nori_home() -> anyhow::Result<PathBuf> {
 pub fn setup_nori_config_environment() -> anyhow::Result<()> {
     let nori_home = find_nori_home()?;
 
-    // Create the directory if it doesn't exist
-    if !nori_home.exists() {
-        std::fs::create_dir_all(&nori_home)?;
-    }
+    // Create the directory and all parent directories if they don't exist
+    // create_dir_all is idempotent - safe to call even if directory exists
+    std::fs::create_dir_all(&nori_home).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to create Nori config directory '{}': {}",
+            nori_home.display(),
+            e
+        )
+    })?;
 
     // Set CODEX_HOME to redirect config loading to Nori location
     // SAFETY: Called early in main before spawning threads
