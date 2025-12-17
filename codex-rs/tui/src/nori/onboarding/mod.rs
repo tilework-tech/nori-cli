@@ -6,18 +6,24 @@
 //! - First-launch detection (`~/.nori/cli/config.toml`)
 //! - Nori-branded welcome screen with ASCII banner
 //! - Nori-branded directory trust prompts
+//! - Nori-branded onboarding screen orchestration
 //!
 //! The onboarding flow is:
 //! 1. First-launch welcome (if `~/.nori/cli/config.toml` doesn't exist)
 //! 2. Directory trust prompt (if directory not yet trusted)
 
 mod first_launch;
+mod onboarding_screen;
 mod trust_directory;
 mod welcome;
 
 pub(crate) use first_launch::find_nori_home;
 pub(crate) use first_launch::is_first_launch;
 pub(crate) use first_launch::mark_first_launch_complete;
+pub(crate) use onboarding_screen::NoriOnboardingResult;
+pub(crate) use onboarding_screen::NoriOnboardingScreen;
+pub(crate) use onboarding_screen::NoriOnboardingScreenArgs;
+pub(crate) use onboarding_screen::run_nori_onboarding_app;
 pub(crate) use trust_directory::NoriTrustDirectoryWidget;
 pub(crate) use welcome::NoriWelcomeWidget;
 
