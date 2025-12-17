@@ -113,6 +113,7 @@ tree-sitter-highlight = { workspace = true }
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
+which = { workspace = true }
 
 codex-windows-sandbox = { workspace = true }
 

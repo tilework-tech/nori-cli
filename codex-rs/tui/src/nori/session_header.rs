@@ -57,6 +57,11 @@ fn read_nori_profile() -> Option<String> {
     config.profile.and_then(|p| p.base_profile)
 }
 
+/// Check if the nori-ai command is available in PATH
+fn is_nori_ai_installed() -> bool {
+    which::which("nori-ai").is_ok()
+}
+
 /// Format a directory path for display, relativizing to home if possible.
 fn format_directory(directory: &Path, max_width: Option<usize>) -> String {
     let formatted = if let Some(rel) = relativize_to_home(directory) {
@@ -164,20 +169,24 @@ pub(crate) fn new_nori_session_info(
         let header = NoriSessionHeaderCell::new(model, config.cwd.clone());
 
         // Help lines below the header
-        let help_lines: Vec<Line<'static>> = vec![
+        let mut help_lines: Vec<Line<'static>> = vec![
             Line::from(""),
             Line::from(vec![
                 "  🍙 ".into(),
                 "Powered by Nori AI".bold(),
                 " 🍙".into(),
             ]),
-            Line::from(""),
-            Line::from(vec![
+        ];
+
+        // Only show install hint if nori-ai is not already installed
+        if !is_nori_ai_installed() {
+            help_lines.push(Line::from(""));
+            help_lines.push(Line::from(vec![
                 "  Run '".dim(),
                 "npx nori-ai install".cyan(),
                 "' to set up Nori AI enhancements".dim(),
-            ]),
-        ];
+            ]));
+        }
 
         CompositeHistoryCell::new(vec![
             Box::new(header),

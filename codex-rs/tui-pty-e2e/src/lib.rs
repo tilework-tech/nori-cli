@@ -277,6 +277,18 @@ name = "Mock ACP provider for tests"
             cmd.env(&key, &value);
         }
 
+        // Prepend extra directories to PATH if specified
+        if !config.extra_path.is_empty() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            let extra_paths: Vec<String> = config
+                .extra_path
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            let new_path = format!("{}:{}", extra_paths.join(":"), current_path);
+            cmd.env("PATH", new_path);
+        }
+
         // Disable color codes for easier parsing
         if config.no_color {
             cmd.env("NO_COLOR", "1");
@@ -603,6 +615,8 @@ pub struct SessionConfig {
     /// When true, allows falling back to HTTP providers if model is not in ACP registry.
     /// When false (default), ACP-only mode: unregistered models produce an error.
     pub allow_http_fallback: bool,
+    /// Extra directories to prepend to PATH when spawning the process.
+    pub extra_path: Vec<std::path::PathBuf>,
 }
 
 impl Default for SessionConfig {
@@ -624,6 +638,7 @@ impl SessionConfig {
             config_toml: None,
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
+            extra_path: Vec::new(),
         }
     }
 
@@ -693,6 +708,12 @@ impl SessionConfig {
         // This prevents the "Snapshots disabled" BackgroundEvent from racing
         // with the "Working" status indicator during streaming tests.
         self.git_init = false;
+        self
+    }
+
+    /// Add an extra directory to prepend to PATH when spawning the process.
+    pub fn with_extra_path(mut self, path: std::path::PathBuf) -> Self {
+        self.extra_path.push(path);
         self
     }
 }
@@ -829,22 +850,29 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // The header can appear in two forms:
     // 1. Boxed header with "╭──" border
     // 2. Plain text "Powered by Nori AI"
-    // Both end with a nori-ai install command
+    // The header ends with either:
+    // - nori-ai install command (when nori-ai is not installed)
+    // - "Powered by Nori AI" line (when nori-ai is already installed)
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
     let has_header = lines
         .iter()
-        .any(|l| l.contains("╭──") || l.contains("'npx nori-ai install'"));
+        .any(|l| l.contains("╭──") || l.contains("Powered by Nori AI"));
 
     if has_header {
-        // Find where the header ends (after the /review command line)
+        // Find where the header ends
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
-            // The nori-ai install line marks the end of the command list
+            // The nori-ai install line marks the end of the command list (if present)
             if line.contains("'npx nori-ai install'") {
                 skip_until = i + 1;
                 break;
+            }
+            // If no install line, use "Powered by Nori AI" as the end marker
+            if line.contains("Powered by Nori AI") {
+                skip_until = i + 1;
+                // Don't break yet - install line may follow
             }
         }
         // Skip empty lines after the header block

@@ -3,7 +3,6 @@ use std::time::Duration;
 use std::time::Instant;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
@@ -154,7 +153,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
 #[test]
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
-    // with the expected branding elements
+    // with the expected branding elements when nori-ai is NOT installed
     let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn codex");
 
     // Wait for the Nori branding to appear (the "Powered by Nori AI" line)
@@ -177,9 +176,10 @@ fn test_startup_shows_nori_banner() {
         "Expected 'Powered by Nori AI' text, but got: {}",
         contents
     );
+    // When nori-ai is NOT installed, show the npx install instructions
     assert!(
         contents.contains("npx nori-ai install"),
-        "Expected install instructions, but got: {}",
+        "Expected install instructions when nori-ai not installed, but got: {}",
         contents
     );
 
@@ -187,6 +187,51 @@ fn test_startup_shows_nori_banner() {
     assert_snapshot!(
         "startup_shows_nori_banner",
         normalize_for_input_snapshot(lines.collect::<Vec<&str>>()[1..11].join("\n"))
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_startup_hides_install_hint_when_nori_installed() {
+    // This test verifies that when nori-ai IS installed (available in PATH),
+    // the install instructions are NOT shown
+    use std::os::unix::fs::PermissionsExt;
+
+    // Create a temp directory for our mock nori-ai binary
+    let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
+
+    // Create a mock nori-ai executable (just needs to exist and be executable)
+    let mock_nori = mock_bin_dir.path().join("nori-ai");
+    std::fs::write(&mock_nori, "#!/bin/sh\nexit 0\n").expect("Failed to write mock nori-ai");
+    std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))
+        .expect("Failed to set permissions on mock nori-ai");
+
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        80,
+        SessionConfig::default().with_extra_path(mock_bin_dir.path().to_path_buf()),
+    )
+    .expect("Failed to spawn codex");
+
+    // Wait for the Nori branding to appear
+    session
+        .wait_for_text("Powered by Nori AI", TIMEOUT)
+        .expect("Nori branding did not appear");
+
+    let contents = session.screen_contents();
+
+    // Verify Nori branding is present
+    assert!(
+        contents.contains("Powered by Nori AI"),
+        "Expected 'Powered by Nori AI' text, but got: {}",
+        contents
+    );
+
+    // When nori-ai IS installed, the install instructions should NOT be shown
+    assert!(
+        !contents.contains("npx nori-ai install"),
+        "Install instructions should NOT be shown when nori-ai is installed, but got: {}",
+        contents
     );
 }
 
