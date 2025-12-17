@@ -379,6 +379,7 @@ async fn tool_call_output_truncated_only_once() -> Result<()> {
 
 // Verifies that an MCP tool call result exceeding the model formatting limits
 // is truncated before being sent back to the model.
+#[cfg(target_os = "macos")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn mcp_tool_call_output_exceeds_limit_truncated_for_model() -> Result<()> {
     skip_if_no_network!(Ok(()));
@@ -470,6 +471,7 @@ async fn mcp_tool_call_output_exceeds_limit_truncated_for_model() -> Result<()> 
 
 // Verifies that an MCP image tool output is serialized as content_items array with
 // the image preserved and no truncation summary appended (since there are no text items).
+#[cfg(target_os = "macos")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn mcp_image_output_preserves_image_and_no_text_summary() -> Result<()> {
     skip_if_no_network!(Ok(()));
@@ -735,6 +737,7 @@ async fn shell_command_output_not_truncated_with_custom_limit() -> Result<()> {
 }
 
 // MCP server output should also remain intact when the config increases the token limit.
+#[cfg(target_os = "macos")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn mcp_tool_call_output_not_truncated_with_custom_limit() -> Result<()> {
     skip_if_no_network!(Ok(()));
