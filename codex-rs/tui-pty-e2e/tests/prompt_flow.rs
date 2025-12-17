@@ -10,7 +10,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 #[test]
 #[cfg(target_os = "linux")]
 fn test_submit_prompt_default_response() {
-    let mut session = TuiSession::spawn(18, 80).expect("Failed to spawn codex");
+    let mut session = TuiSession::spawn(18, 80).expect("Failed to spawn");
 
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
 
@@ -45,7 +45,7 @@ fn test_submit_prompt_custom_response() {
     let config = SessionConfig::new()
         .with_mock_response("This is a custom test response from the mock agent.");
 
-    let mut session = TuiSession::spawn_with_config(18, 80, config).expect("Failed to spawn codex");
+    let mut session = TuiSession::spawn_with_config(18, 80, config).expect("Failed to spawn");
 
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
 

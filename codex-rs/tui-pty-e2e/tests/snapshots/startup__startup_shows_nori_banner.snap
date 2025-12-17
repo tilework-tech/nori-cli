@@ -2,13 +2,12 @@
 source: tui-pty-e2e/tests/startup.rs
 expression: "normalize_for_input_snapshot(lines.collect::<Vec<&str>>()[1..11].join(\"\\n\"))"
 ---
-│   _   _  ___  ____  ___    │
-│  | \ | \/ _ \|  _ \|_ _\   │
-│  |  \| | | | | |_) || |    │
-│  | |\  | |_| |  _ < | |    │
-│  \_| \_|\___/\_| \_\___|   │
+│ Nori v0.0.0                │
 │                            │
-│ version:   v0.0.0          │
 │ directory: [TMP_DIR] │
 │ agent:     mock-model      │
 │ profile:   [PROF]          │
+╰────────────────────────────╯
+
+
+  🍙 Powered by Nori AI 🍙

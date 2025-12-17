@@ -52,7 +52,7 @@ fn test_acp_create_new_file() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "New file created by ACP");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
     session
@@ -106,7 +106,7 @@ fn test_acp_edit_existing_file() {
         );
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -156,7 +156,7 @@ fn test_acp_create_file_with_parent_dirs() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Content in nested directory");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -206,7 +206,7 @@ fn test_acp_write_outside_workspace_denied() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "This should not be written");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -256,7 +256,7 @@ fn test_acp_write_system_path_denied() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Malicious content");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -305,7 +305,7 @@ fn test_acp_write_to_tmp_allowed() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Temporary file content");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -356,7 +356,7 @@ fn test_acp_multiple_file_writes() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "First file content");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -422,7 +422,7 @@ fn test_acp_file_write_snapshot() {
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Snapshot test content");
 
     let mut session =
-        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
         .wait_for_text("›", TIMEOUT)

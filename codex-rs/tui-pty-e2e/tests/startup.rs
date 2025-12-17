@@ -16,7 +16,7 @@ fn test_startup_error_for_unregistered_model() {
         80,
         SessionConfig::new().with_model("nonexistent".to_owned()),
     )
-    .expect("Failed to spawn codex");
+    .expect("Failed to spawn");
 
     // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
     // the TUI should show an error immediately at startup (not after prompt submission).
@@ -51,15 +51,15 @@ fn test_startup_shows_welcome() {
             .without_sandbox()
             .with_config_toml(""),
     )
-    .expect("Failed to spawn codex");
+    .expect("Failed to spawn");
 
     session
-        .wait_for_text("Welcome to Codex", TIMEOUT)
+        .wait_for_text("Welcome to Nori", TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
-    assert!(contents.contains("Welcome to Codex"));
+    assert!(contents.contains("Welcome to Nori, your AI coding assistant"));
     assert_snapshot!(
         "startup_shows_welcome",
         normalize_for_input_snapshot(contents)
@@ -77,7 +77,7 @@ fn test_startup_with_dimensions() {
             .without_approval_policy()
             .without_sandbox(),
     )
-    .expect("Failed to spawn codex");
+    .expect("Failed to spawn");
 
     session
         .wait_for_text("Powered by Nori AI", TIMEOUT)
@@ -100,12 +100,12 @@ fn test_runs_in_temp_directory_by_default() {
             .without_approval_policy()
             .without_sandbox(),
     )
-    .expect("Failed to spawn codex");
+    .expect("Failed to spawn");
 
     session
         .wait_for(
             |contents| {
-                contents.contains("Powered by Nori AI") || contents.contains("Welcome to Codex")
+                contents.contains("Powered by Nori AI") || contents.contains("Welcome to Nori")
             },
             TIMEOUT,
         )
@@ -132,7 +132,7 @@ fn test_runs_in_temp_directory_by_default() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_trust_screen_is_skipped_with_default_config() {
-    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn codex");
+    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
 
     // Wait for the prompt to appear (indicated by the chevron character)
     session
@@ -162,7 +162,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
     // with the expected branding elements
-    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn codex");
+    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
 
     // Wait for the Nori branding to appear (the "Powered by Nori AI" line)
     session
@@ -175,8 +175,8 @@ fn test_startup_shows_nori_banner() {
     // The ASCII art banner uses special characters like |_| and \_ to spell NORI
     // so we check for the unique pattern from the first line of the banner
     assert!(
-        contents.contains("|_) || |"),
-        "Expected NORI ASCII banner, but got: {}",
+        contents.contains("Nori v0"),
+        "Expected NORI header, but got: {}",
         contents
     );
     assert!(
@@ -201,7 +201,7 @@ fn test_startup_shows_nori_banner() {
 fn test_poll_does_not_block_when_no_data() {
     // RED phase: This test verifies that poll() returns quickly when no data is available,
     // proving the PTY reader is in non-blocking mode
-    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn codex");
+    let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
 
     // Wait for initial startup to complete
     session
@@ -221,7 +221,7 @@ fn test_poll_does_not_block_when_no_data() {
         prev_contents = contents;
     }
 
-    // Now codex is truly waiting for input, no more data will come
+    // Now nori is truly waiting for input, no more data will come
     // Poll should return immediately without blocking
     let start = Instant::now();
     session.poll().expect("Poll failed");
