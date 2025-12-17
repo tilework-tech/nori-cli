@@ -5,6 +5,8 @@
 //! the TUI loads configuration from `~/.nori/cli/config.toml` instead of
 //! `~/.codex/config.toml`.
 
+#![allow(dead_code)]
+
 use codex_acp::config::NORI_HOME_ENV;
 use codex_acp::config::NoriConfig;
 use codex_acp::config::NoriConfigOverrides;
