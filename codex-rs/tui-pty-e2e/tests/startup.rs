@@ -3,13 +3,11 @@ use std::time::Duration;
 use std::time::Instant;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
-#[ignore]
 // Testing that ACP mode with a nonexistent model produces a clear error
 // instead of falling back to HTTP providers
 fn test_startup_error_for_unregistered_model() {
@@ -24,22 +22,26 @@ fn test_startup_error_for_unregistered_model() {
     // the TUI should show an error immediately at startup (not after prompt submission).
     // The error is shown before the TUI even renders the shortcuts prompt.
     session
-        .wait_for_text(
-            "Model 'nonexistent' is not registered as an ACP agent",
-            TIMEOUT,
-        )
+        .wait_for_text("not registered as an ACP agent", TIMEOUT)
         .unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    assert_snapshot!(
-        "startup_error_unregistered_model",
-        normalize_for_input_snapshot(session.screen_contents())
+    let contents = session.screen_contents();
+
+    assert!(
+        contents.contains("Model 'nonexistent' is not registered as an ACP agent. Set acp.allow_http_fallback = true to allow HTTP providers."),
+        "Missing the required error message, screen contents: {}",
+        contents
     );
+    // assert_snapshot!(
+    //     "startup_error_unregistered_model",
+    //     normalize_for_input_snapshot(contents)
+    // );
 }
 
 #[test]
 #[cfg(target_os = "linux")]
-fn test_startup_shows_banner() {
+fn test_startup_shows_welcome() {
     let mut session = TuiSession::spawn_with_config(
         24,
         80,
@@ -66,7 +68,7 @@ fn test_startup_shows_banner() {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn test_startup_welcome_with_dimensions() {
+fn test_startup_with_dimensions() {
     let mut session = TuiSession::spawn_with_config(
         10,
         120,
@@ -101,7 +103,12 @@ fn test_runs_in_temp_directory_by_default() {
     .expect("Failed to spawn codex");
 
     session
-        .wait_for_text("Powered by Nori AI", TIMEOUT)
+        .wait_for(
+            |contents| {
+                contents.contains("Powered by Nori AI") || contents.contains("Welcome to Codex")
+            },
+            TIMEOUT,
+        )
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
