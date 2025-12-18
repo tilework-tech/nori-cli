@@ -400,10 +400,14 @@ impl ChatWidget {
     }
 
     // --- Small event handlers ---
+    #[tracing::instrument(name = "on_session_configured", skip_all, fields(model = %event.model))]
     fn on_session_configured(&mut self, event: codex_core::protocol::SessionConfiguredEvent) {
         // Mark that we've received SessionConfigured - this unlocks event processing
         // when expected_model is set (during agent switching)
         self.session_configured_received = true;
+
+        // Mark session configured milestone for startup profiling
+        crate::startup_profiling::mark_session_configured();
 
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
@@ -1290,6 +1294,7 @@ impl ChatWidget {
         }
     }
 
+    #[tracing::instrument(name = "ChatWidget::new", skip_all)]
     pub(crate) fn new(
         common: ChatWidgetInit,
         conversation_manager: Arc<ConversationManager>,

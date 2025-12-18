@@ -123,6 +123,8 @@ mod version;
 
 mod wrapping;
 
+pub mod startup_profiling;
+
 #[cfg(test)]
 pub mod test_backend;
 
@@ -138,14 +140,19 @@ use std::io::Write as _;
 
 // (tests access modules directly within the crate)
 
+#[tracing::instrument(name = "run_main", skip_all)]
 pub async fn run_main(
     mut cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
+    // Mark startup begin for profiling
+    startup_profiling::mark_startup_begin();
+
     // When nori-config feature is enabled, set up the Nori config environment
     // This redirects config loading to ~/.nori/cli instead of ~/.codex
     #[cfg(feature = "nori-config")]
     {
+        let _span = tracing::info_span!("nori_config_setup").entered();
         #[allow(clippy::print_stderr)]
         if let Err(e) = nori::config_adapter::setup_nori_config_environment() {
             eprintln!("Error setting up Nori config environment: {e}");
@@ -154,11 +161,14 @@ pub async fn run_main(
     }
 
     // Initialize ACP file tracing for subprocess debugging
-    let acp_log_path = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".nori-acp.log");
-    if let Err(e) = codex_acp::init_file_tracing(&acp_log_path) {
-        tracing::warn!("Failed to initialize ACP file tracing: {e}");
+    {
+        let _span = tracing::info_span!("acp_file_tracing_init").entered();
+        let acp_log_path = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(".nori-acp.log");
+        if let Err(e) = codex_acp::init_file_tracing(&acp_log_path) {
+            tracing::warn!("Failed to initialize ACP file tracing: {e}");
+        }
     }
 
     let (sandbox_mode, approval_policy) = if cli.full_auto {
@@ -184,6 +194,9 @@ pub async fn run_main(
             .raw_overrides
             .push("features.web_search_request=true".to_string());
     }
+
+    // Parse CLI overrides and load config
+    let _config_span = tracing::info_span!("config_loading").entered();
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
     // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
@@ -211,14 +224,16 @@ pub async fn run_main(
     };
 
     #[allow(clippy::print_stderr)]
-    let config_toml =
+    let config_toml = {
+        let _toml_span = tracing::info_span!("load_config_toml").entered();
         match load_config_as_toml_with_cli_overrides(&codex_home, cli_kv_overrides.clone()).await {
             Ok(config_toml) => config_toml,
             Err(err) => {
                 eprintln!("Error loading config.toml: {err}");
                 std::process::exit(1);
             }
-        };
+        }
+    };
 
     let model_provider_override = if cli.oss {
         let resolved = resolve_oss_provider(
@@ -280,7 +295,14 @@ pub async fn run_main(
         additional_writable_roots: additional_dirs,
     };
 
-    let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
+    let config = {
+        let _span = tracing::info_span!("load_config_full").entered();
+        load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await
+    };
+
+    // Mark config loaded milestone
+    startup_profiling::mark_config_loaded();
+    drop(_config_span);
 
     if let Some(warning) = add_dir_warning_message(&cli.add_dir, &config.sandbox_policy) {
         #[allow(clippy::print_stderr)]
@@ -291,12 +313,19 @@ pub async fn run_main(
     }
 
     #[allow(clippy::print_stderr)]
-    if let Err(err) = enforce_login_restrictions(&config).await {
-        eprintln!("{err}");
-        std::process::exit(1);
+    {
+        let _span = tracing::info_span!("enforce_login_restrictions").entered();
+        if let Err(err) = enforce_login_restrictions(&config).await {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
     }
 
     let active_profile = config.active_profile.clone();
+
+    // Setup logging infrastructure
+    let _logging_span = tracing::info_span!("logging_setup").entered();
+
     let log_dir = codex_core::config::log_dir(&config)?;
     std::fs::create_dir_all(&log_dir)?;
     // Open (or create) your log file, appending to it.
@@ -395,6 +424,10 @@ pub async fn run_main(
         let _ = tracing_subscriber::registry().with(file_layer).try_init();
     };
 
+    // Mark logging ready milestone
+    startup_profiling::mark_logging_ready();
+    drop(_logging_span);
+
     #[cfg(feature = "feedback")]
     return run_ratatui_app(
         cli,
@@ -413,6 +446,7 @@ pub async fn run_main(
         .map_err(|err| std::io::Error::other(err.to_string()));
 }
 
+#[tracing::instrument(name = "run_ratatui_app", skip_all)]
 async fn run_ratatui_app(
     cli: Cli,
     initial_config: Config,
@@ -432,13 +466,27 @@ async fn run_ratatui_app(
         tracing::error!("panic: {info}");
         prev_hook(info);
     }));
-    let mut terminal = tui::init()?;
+
+    // Initialize terminal
+    let mut terminal = {
+        let _span = tracing::info_span!("terminal_init").entered();
+        let t = tui::init()?;
+        startup_profiling::mark_terminal_init();
+        t
+    };
     terminal.clear()?;
 
-    let mut tui = Tui::new(terminal);
+    // Create Tui wrapper with event streams
+    let mut tui = {
+        let _span = tracing::info_span!("tui_create").entered();
+        let t = Tui::new(terminal);
+        startup_profiling::mark_tui_created();
+        t
+    };
 
     #[cfg(not(debug_assertions))]
     {
+        let _span = tracing::info_span!("update_check").entered();
         let skip_update_prompt = cli.prompt.as_ref().is_some_and(|prompt| !prompt.is_empty());
         if !skip_update_prompt {
             match run_update_prompt_if_needed(&mut tui, &initial_config).await? {
@@ -458,17 +506,21 @@ async fn run_ratatui_app(
     // Initialize high-fidelity session event logging if enabled.
     session_log::maybe_init(&initial_config);
 
-    let auth_manager = AuthManager::shared(
-        initial_config.codex_home.clone(),
-        false,
-        initial_config.cli_auth_credentials_store_mode,
-    );
+    let auth_manager = {
+        let _span = tracing::info_span!("auth_manager_init").entered();
+        AuthManager::shared(
+            initial_config.codex_home.clone(),
+            false,
+            initial_config.cli_auth_credentials_store_mode,
+        )
+    };
     let login_status = get_login_status(&initial_config);
     let should_show_trust_screen = should_show_trust_screen(&initial_config);
     let should_show_onboarding =
         should_show_onboarding(login_status, &initial_config, should_show_trust_screen);
 
     let config = if should_show_onboarding {
+        let _span = tracing::info_span!("onboarding").entered();
         // Use Nori-branded onboarding flow
         let onboarding_result = run_nori_onboarding_app(
             NoriOnboardingScreenArgs {
@@ -506,7 +558,9 @@ async fn run_ratatui_app(
     };
 
     // Determine resume behavior: explicit id, then resume last, then picker.
-    let resume_selection = if let Some(id_str) = cli.resume_session_id.as_deref() {
+    let resume_selection = {
+        let _span = tracing::info_span!("resume_selection").entered();
+        if let Some(id_str) = cli.resume_session_id.as_deref() {
         match find_conversation_path_by_id_str(&config.codex_home, id_str).await? {
             Some(path) => resume_picker::ResumeSelection::Resume(path),
             None => {
@@ -568,6 +622,7 @@ async fn run_ratatui_app(
         }
     } else {
         resume_picker::ResumeSelection::StartFresh
+    }
     };
 
     let Cli { prompt, images, .. } = cli;

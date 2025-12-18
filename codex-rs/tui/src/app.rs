@@ -234,6 +234,9 @@ pub(crate) struct App {
     /// Pending agent selection. When set, the agent will switch on the next
     /// prompt submission. This avoids disrupting active prompt turns.
     pending_agent: Option<PendingAgentSelection>,
+
+    /// Track if the first frame has been rendered (for profiling)
+    first_frame_rendered: bool,
 }
 
 impl App {
@@ -246,6 +249,7 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(name = "App::run", skip_all)]
     pub async fn run(
         tui: &mut tui::Tui,
         auth_manager: Arc<AuthManager>,
@@ -275,9 +279,11 @@ impl App {
         let app_event_tx = AppEventSender::new(app_event_tx);
 
         let auth_mode = auth_manager.auth().map(|auth| auth.mode);
-        let exit_info =
+        let exit_info = {
+            let _span = tracing::info_span!("model_migration_prompt").entered();
             handle_model_migration_prompt_if_needed(tui, &mut config, &app_event_tx, auth_mode)
-                .await;
+                .await
+        };
         if let Some(exit_info) = exit_info {
             return Ok(exit_info);
         }
@@ -289,50 +295,58 @@ impl App {
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
 
-        let mut chat_widget = match resume_selection {
-            ResumeSelection::StartFresh | ResumeSelection::Exit => {
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: app_event_tx.clone(),
-                    initial_prompt: initial_prompt.clone(),
-                    initial_images: initial_images.clone(),
-                    enhanced_keys_supported,
-                    auth_manager: auth_manager.clone(),
-                    #[cfg(feature = "feedback")]
-                    feedback: feedback.clone(),
-                    expected_model: None, // No filtering for fresh sessions
-                };
-                ChatWidget::new(init, conversation_manager.clone())
-            }
-            ResumeSelection::Resume(path) => {
-                let resumed = conversation_manager
-                    .resume_conversation_from_rollout(
-                        config.clone(),
-                        path.clone(),
-                        auth_manager.clone(),
-                    )
-                    .await
-                    .wrap_err_with(|| {
-                        format!("Failed to resume session from {}", path.display())
-                    })?;
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: app_event_tx.clone(),
-                    initial_prompt: initial_prompt.clone(),
-                    initial_images: initial_images.clone(),
-                    enhanced_keys_supported,
-                    auth_manager: auth_manager.clone(),
-                    #[cfg(feature = "feedback")]
-                    feedback: feedback.clone(),
-                    expected_model: None, // No filtering for resumed sessions
-                };
-                ChatWidget::new_from_existing(
-                    init,
-                    resumed.conversation,
-                    resumed.session_configured,
-                )
+        // Create ChatWidget - this spawns the agent and makes the chat interactive
+        let mut chat_widget = {
+            let _span = tracing::info_span!("chat_widget_create").entered();
+            match resume_selection {
+                ResumeSelection::StartFresh | ResumeSelection::Exit => {
+                    let init = crate::chatwidget::ChatWidgetInit {
+                        config: config.clone(),
+                        frame_requester: tui.frame_requester(),
+                        app_event_tx: app_event_tx.clone(),
+                        initial_prompt: initial_prompt.clone(),
+                        initial_images: initial_images.clone(),
+                        enhanced_keys_supported,
+                        auth_manager: auth_manager.clone(),
+                        #[cfg(feature = "feedback")]
+                        feedback: feedback.clone(),
+                        expected_model: None, // No filtering for fresh sessions
+                    };
+                    let widget = ChatWidget::new(init, conversation_manager.clone());
+                    crate::startup_profiling::mark_chat_widget_created();
+                    widget
+                }
+                ResumeSelection::Resume(path) => {
+                    let resumed = conversation_manager
+                        .resume_conversation_from_rollout(
+                            config.clone(),
+                            path.clone(),
+                            auth_manager.clone(),
+                        )
+                        .await
+                        .wrap_err_with(|| {
+                            format!("Failed to resume session from {}", path.display())
+                        })?;
+                    let init = crate::chatwidget::ChatWidgetInit {
+                        config: config.clone(),
+                        frame_requester: tui.frame_requester(),
+                        app_event_tx: app_event_tx.clone(),
+                        initial_prompt: initial_prompt.clone(),
+                        initial_images: initial_images.clone(),
+                        enhanced_keys_supported,
+                        auth_manager: auth_manager.clone(),
+                        #[cfg(feature = "feedback")]
+                        feedback: feedback.clone(),
+                        expected_model: None, // No filtering for resumed sessions
+                    };
+                    let widget = ChatWidget::new_from_existing(
+                        init,
+                        resumed.conversation,
+                        resumed.session_configured,
+                    );
+                    crate::startup_profiling::mark_chat_widget_created();
+                    widget
+                }
             }
         };
 
@@ -363,6 +377,7 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            first_frame_rendered: false,
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -459,6 +474,11 @@ impl App {
                             }
                         },
                     )?;
+                    // Mark first frame milestone for startup profiling
+                    if !self.first_frame_rendered {
+                        self.first_frame_rendered = true;
+                        crate::startup_profiling::mark_first_frame();
+                    }
                 }
             }
         }
@@ -1185,6 +1205,7 @@ mod tests {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            first_frame_rendered: false,
         }
     }
 
@@ -1224,6 +1245,7 @@ mod tests {
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
                 pending_agent: None,
+                first_frame_rendered: false,
             },
             rx,
             op_rx,

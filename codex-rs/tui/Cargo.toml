@@ -45,6 +45,10 @@ upstream-updates = []
 # OSS providers (Ollama, LM Studio) - forwarded to codex-common
 oss-providers = ["codex-common/oss-providers"]
 
+# Startup profiling instrumentation for performance analysis
+# Enables detailed tracing spans and chrome/flame graph output
+startup-profiling = ["dep:tracing-chrome", "dep:tracing-flame"]
+
 [lints]
 workspace = true
 
@@ -111,6 +115,8 @@ tokio-stream = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 tracing-appender = { workspace = true }
+tracing-chrome = { workspace = true, optional = true }
+tracing-flame = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tree-sitter-bash = { workspace = true }
 tree-sitter-highlight = { workspace = true }

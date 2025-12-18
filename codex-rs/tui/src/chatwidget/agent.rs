@@ -90,6 +90,7 @@ pub(crate) struct SpawnAgentResult {
 /// 1. If the model is registered in the ACP registry, use ACP mode
 /// 2. If the model is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
 /// 3. If the model is NOT registered and `acp_allow_http_fallback` is false (default), error
+#[tracing::instrument(name = "spawn_agent", skip_all, fields(model = %config.model))]
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
@@ -97,7 +98,7 @@ pub(crate) fn spawn_agent(
 ) -> SpawnAgentResult {
     let acp_agent_result = get_agent_config(&config.model);
 
-    match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
+    let result = match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
         // Model is registered in ACP registry -> use ACP
         (true, _) => spawn_acp_agent(config, app_event_tx),
 
@@ -126,7 +127,10 @@ pub(crate) fn spawn_agent(
                 acp_handle: None,
             }
         }
-    }
+    };
+
+    crate::startup_profiling::mark_agent_spawned();
+    result
 }
 
 /// Spawn an agent that emits an error and exits after a brief delay.
@@ -157,6 +161,7 @@ fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> Unbound
 ///
 /// This uses the `codex_acp` crate to spawn an agent subprocess and handle
 /// communication via the Agent Client Protocol.
+#[tracing::instrument(name = "spawn_acp_agent", skip_all)]
 fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
@@ -250,6 +255,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
 /// Spawn an HTTP agent (the original implementation).
 ///
 /// This uses `codex_core` to communicate with LLM providers via HTTP APIs.
+#[tracing::instrument(name = "spawn_http_agent", skip_all)]
 fn spawn_http_agent(
     config: Config,
     app_event_tx: AppEventSender,
