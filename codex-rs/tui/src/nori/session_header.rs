@@ -95,7 +95,7 @@ fn read_nori_config() -> NoriConfigInfo {
             return NoriConfigInfo {
                 profile: None,
                 install_dir: None,
-            }
+            };
         }
     };
 
@@ -107,7 +107,7 @@ fn read_nori_config() -> NoriConfigInfo {
             return NoriConfigInfo {
                 profile: None,
                 install_dir: Some(install_dir),
-            }
+            };
         }
     };
 
@@ -117,7 +117,7 @@ fn read_nori_config() -> NoriConfigInfo {
             return NoriConfigInfo {
                 profile: None,
                 install_dir: Some(install_dir),
-            }
+            };
         }
     };
 
@@ -377,8 +377,14 @@ mod tests {
         assert!(rendered.contains("test-agent"), "Should show agent name");
 
         // Should contain Profiles section with current profile
-        assert!(rendered.contains("Profiles"), "Should show Profiles section");
-        assert!(rendered.contains("current:"), "Should show current profile label");
+        assert!(
+            rendered.contains("Profiles"),
+            "Should show Profiles section"
+        );
+        assert!(
+            rendered.contains("current:"),
+            "Should show current profile label"
+        );
     }
 
     #[test]
@@ -424,10 +430,7 @@ mod tests {
             rendered.contains("senior-swe"),
             "Should show profile name when set"
         );
-        assert!(
-            rendered.contains("location:"),
-            "Should show location label"
-        );
+        assert!(rendered.contains("location:"), "Should show location label");
         assert!(
             rendered.contains("Profiles"),
             "Should show Profiles section header"
