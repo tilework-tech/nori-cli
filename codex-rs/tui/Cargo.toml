@@ -16,7 +16,10 @@ path = "src/lib.rs"
 default = ["unstable", "nori-config"]
 
 # Full feature set - enables all upstream/legacy functionality
-full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers"]
+full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers", "otel"]
+
+# OpenTelemetry tracing export (disabled by default)
+otel = ["dep:opentelemetry-appender-tracing"]
 
 # Enable vt100-based tests (emulator) when running with `--features vt100-tests`.
 vt100-tests = []
@@ -79,7 +82,7 @@ image = { workspace = true, features = ["jpeg", "png"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 mcp-types = { workspace = true }
-opentelemetry-appender-tracing = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true, optional = true }
 pathdiff = { workspace = true }
 pulldown-cmark = { workspace = true }
 rand = { workspace = true }

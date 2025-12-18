@@ -24,7 +24,9 @@
     ],
     "additionalDirectories": [
       ".claude/profiles",
-      ".claude/skills"
+      ".claude/skills",
+      "/home/clifford/Documents/source/nori/cli/.claude/profiles",
+      "/home/clifford/Documents/source/nori/cli/.claude/skills"
     ],
     "sandbox": {
       "filesystem": {
@@ -42,4 +44,3 @@
     }
   }
 }
-

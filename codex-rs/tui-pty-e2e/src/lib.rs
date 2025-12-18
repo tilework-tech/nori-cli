@@ -122,13 +122,16 @@ impl Drop for TuiSession {
             eprintln!("{}", indent_lines(&screen, indent).style(s.cyan));
 
             if let Some(tmpdir) = &self._temp_dir {
-                let log_path = tmpdir.path().join(".codex-acp.log");
-                let log_tail = if let Ok(content) = std::fs::read_to_string(log_path) {
-                    let lines: Vec<&str> = content.lines().collect();
-                    let start = lines.len().saturating_sub(150);
-                    lines[start..].join("\n")
+                let log_tail = if let Some(log_path) = find_acp_log_file(tmpdir.path()) {
+                    if let Ok(content) = std::fs::read_to_string(&log_path) {
+                        let lines: Vec<&str> = content.lines().collect();
+                        let start = lines.len().saturating_sub(150);
+                        lines[start..].join("\n")
+                    } else {
+                        format!("<failed to read log file at {}>", log_path.display())
+                    }
                 } else {
-                    "<failed to read log file>".to_string()
+                    "<no ACP log file found in NORI_HOME/log/>".to_string()
                 };
 
                 // Header for tracing
@@ -575,12 +578,36 @@ name = "Mock ACP provider for tests"
     /// Get the path to the ACP log file (if temp directory exists)
     ///
     /// This is useful for E2E tests that need to verify subprocess behavior
-    /// by parsing the ACP tracing logs.
+    /// by parsing the ACP tracing logs. Logs are stored in `$NORI_HOME/log/`
+    /// with rolling daily naming: `nori-acp.YYYY-MM-DD`.
     pub fn acp_log_path(&self) -> Option<std::path::PathBuf> {
         self._temp_dir
             .as_ref()
-            .map(|d| d.path().join(".codex-acp.log"))
+            .and_then(|d| find_acp_log_file(d.path()))
     }
+}
+
+/// Find the ACP log file in the given NORI_HOME directory.
+///
+/// Searches for files matching `nori-acp.*` in the `log/` subdirectory,
+/// returning the most recently modified one (handles rolling daily logs).
+fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> {
+    let log_dir = nori_home.join("log");
+    if !log_dir.exists() {
+        return None;
+    }
+
+    std::fs::read_dir(&log_dir)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with("nori-acp."))
+        })
+        .max_by_key(|entry| entry.metadata().ok().and_then(|m| m.modified().ok()))
+        .map(|entry| entry.path())
 }
 
 /// Sandbox policy for codex session

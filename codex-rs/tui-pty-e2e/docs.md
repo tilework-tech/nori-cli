@@ -256,7 +256,7 @@ See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
 Linux-only tests that verify ACP subprocess lifecycle management and event isolation:
 
 *Subprocess Management Tests:*
-- `acp_log_path()` method on `TuiSession` returns the path to the ACP tracing log file
+- `acp_log_path()` method on `TuiSession` finds and returns the path to the ACP tracing log file in `$NORI_HOME/log/` (searches for `nori-acp.*` files, returns most recently modified)
 - Tests extract PIDs from log lines matching `"ACP agent spawned (pid: Some(...))"`
 - Uses `/proc/{pid}` filesystem to verify process existence and zombie state
 - Key verified behaviors:
