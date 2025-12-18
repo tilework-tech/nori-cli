@@ -266,58 +266,248 @@ The ACP protocol is under active development. An experimental feature could prov
 
 ---
 
-### Solution 5: Hybrid Approach (Recommended)
+### Solution 6: Transcript File Parsing (New - Research-based)
 
-**Approach**: Combine multiple solutions for immediate value with a path to proper support.
+**Approach**: Read token usage directly from agent transcript files stored in home directories.
 
-**Phase 1 (Immediate)**: Client-side estimation
-- Implement basic token estimation using character count (~4 chars per token)
+Each ACP agent stores session transcripts locally with token usage information:
+
+#### Claude Code (`~/.claude/`)
+
+**Location**: `~/.claude/projects/<project_hash>/` (JSONL format)
+
+**Token Usage Structure** (per message):
+```json
+{
+  "role": "assistant",
+  "content": "...",
+  "usage": {
+    "input_tokens": 1234,
+    "output_tokens": 567,
+    "cache_read_tokens": 890,
+    "cache_creation_tokens": 123,
+    "total_tokens": 2814
+  }
+}
+```
+
+**Budget Tracking** (internal system tags):
+```
+<budget:token_budget>200000</budget:token_budget>
+<system-warning>Token usage: 37064/200000; 162936 remaining</system-warning>
+```
+
+**Extraction**: `jq '[.[] | select(.role=="assistant") | .usage.total_tokens] | add' transcript.jsonl`
+
+**External Tool**: The [`ccusage`](https://github.com/ryoppippi/ccusage) tool already parses these files and provides a `statusline` command:
+```json
+// ~/.claude/settings.json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bun x ccusage statusline"
+  }
+}
+```
+
+#### Codex (`~/.codex/`)
+
+**Location**: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+
+**Token Usage Structure** (in `TokenCountEvent`):
+```json
+{
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "type": "event_msg",
+  "payload": {
+    "TokenCount": {
+      "info": {
+        "total_token_usage": {
+          "input_tokens": 5000,
+          "output_tokens": 1200,
+          "cached_input_tokens": 3000,
+          "reasoning_output_tokens": 0,
+          "total_tokens": 6200
+        },
+        "last_token_usage": { ... },
+        "model_context_window": 200000
+      }
+    }
+  }
+}
+```
+
+**Note**: Codex rollouts already include full token tracking with `model_context_window`.
+
+#### Gemini CLI (`~/.gemini/`)
+
+**Location**: `~/.gemini/tmp/<project_hash>/checkpoints/checkpoint-*.json`
+
+**Shadow Git History**: `~/.gemini/history/<project_hash>/`
+
+**Token Display**: Shown in CLI output but not clearly persisted:
+```
+Model           Requests  Input     Output
+gemini-2.5-pro  12        6,082,929 17,014
+Cache savings: 2,401,483 (39.5%) of input tokens served from cache
+```
+
+**Note**: Gemini checkpointing must be explicitly enabled in `~/.gemini/settings.json`.
+
+#### Implementation
+
+```rust
+// In acp/src/transcript_reader.rs
+
+pub struct TranscriptReader {
+    agent_type: AgentType,
+    home_dir: PathBuf,
+}
+
+impl TranscriptReader {
+    pub fn read_current_session_usage(&self) -> Option<TokenUsageInfo> {
+        match self.agent_type {
+            AgentType::Claude => self.read_claude_transcript(),
+            AgentType::Codex => self.read_codex_rollout(),
+            AgentType::Gemini => self.read_gemini_checkpoint(),
+        }
+    }
+
+    fn read_claude_transcript(&self) -> Option<TokenUsageInfo> {
+        // Find most recent transcript in ~/.claude/projects/
+        // Parse JSONL and sum usage.total_tokens
+        // Look for budget tags if available
+    }
+
+    fn read_codex_rollout(&self) -> Option<TokenUsageInfo> {
+        // Find most recent rollout in ~/.codex/sessions/
+        // Find last TokenCountEvent
+        // Return TokenUsageInfo directly
+    }
+
+    fn read_gemini_checkpoint(&self) -> Option<TokenUsageInfo> {
+        // Find most recent checkpoint in ~/.gemini/tmp/
+        // Parse JSON checkpoint file
+        // May need to estimate if not explicitly stored
+    }
+}
+```
+
+**File Watching** (for live updates):
+```rust
+use notify::{Watcher, RecursiveMode};
+
+fn watch_transcript_updates(reader: &TranscriptReader, callback: impl Fn(TokenUsageInfo)) {
+    let mut watcher = notify::recommended_watcher(move |res| {
+        if let Ok(event) = res {
+            if let Some(usage) = reader.read_current_session_usage() {
+                callback(usage);
+            }
+        }
+    })?;
+
+    watcher.watch(&reader.transcript_path(), RecursiveMode::NonRecursive)?;
+}
+```
+
+**Pros**:
+- Uses **actual token counts** from the agent (not estimates)
+- Works without protocol changes
+- Data already exists - just needs to be read
+- Can leverage existing tools (`ccusage`) as reference
+- Claude and Codex have well-defined formats
+
+**Cons**:
+- File paths may change between agent versions
+- Requires file system access to user's home directory
+- Race conditions possible during active writes
+- Gemini format is less well-documented
+- Need to identify correct session/transcript for current conversation
+
+**Agent Transcript Summary**:
+
+| Agent | Location | Format | Token Info | Context Window |
+|-------|----------|--------|------------|----------------|
+| Claude Code | `~/.claude/projects/<hash>/` | JSONL | ✅ Per-message `usage` | ✅ Budget tags |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/` | JSONL | ✅ `TokenCountEvent` | ✅ In event |
+| Gemini | `~/.gemini/tmp/<hash>/checkpoints/` | JSON | ⚠️ Runtime only | ❌ Not persisted |
+
+---
+
+### Solution 5: Hybrid Approach (Updated Recommendation)
+
+**Approach**: Combine multiple solutions with a prioritized fallback chain.
+
+**Phase 1 (Immediate)**: Transcript file parsing (Solution 6)
+- Read actual token usage from agent home directory transcripts
+- Claude (`~/.claude/`) and Codex (`~/.codex/`) have reliable JSONL formats
+- Use file watching for live updates during sessions
+
+**Phase 2 (Fallback)**: Client-side estimation (Solution 3)
+- For agents without accessible transcripts (e.g., Gemini)
+- Basic token estimation using character count (~4 chars per token)
 - Show estimate with visual indicator (e.g., "~75% remaining")
-- Clear indication this is an estimate, not exact
 
-**Phase 2 (Short-term)**: Agent-specific slash commands
-- Add support for querying agents that expose context commands
-- Use actual data when available, fall back to estimation
-
-**Phase 3 (Medium-term)**: ACP protocol integration
+**Phase 3 (Long-term)**: ACP protocol integration (Solution 4)
 - When ACP adds token usage support, integrate properly
-- Replace estimation with actual values
-- Remove agent-specific workarounds
+- Replace transcript parsing with direct protocol data
+- Remove file system dependencies
 
 **Implementation**:
 
 ```rust
-// In acp/src/backend.rs
+// In acp/src/context_tracker.rs
+
+pub enum ContextSource {
+    /// Read from agent's transcript files (most accurate)
+    Transcript,
+    /// Client-side estimation (fallback)
+    Estimated,
+    /// From ACP protocol (future)
+    Protocol,
+}
 
 pub struct ContextUsageTracker {
-    /// Estimated tokens from client-side counting
+    agent_type: AgentType,
+    transcript_reader: Option<TranscriptReader>,
     estimated_tokens: i64,
-    /// Actual tokens from agent (if available)
-    actual_tokens: Option<i64>,
-    /// Model's context window size
     context_window: i64,
-    /// Whether we're using estimates
-    is_estimated: bool,
+    source: ContextSource,
 }
 
 impl ContextUsageTracker {
     pub fn get_context_remaining(&self) -> ContextRemaining {
+        // Priority: Transcript > Protocol > Estimation
+        let (tokens_used, source) = if let Some(reader) = &self.transcript_reader {
+            if let Some(usage) = reader.read_current_session_usage() {
+                (usage.total_token_usage.total_tokens, ContextSource::Transcript)
+            } else {
+                (self.estimated_tokens, ContextSource::Estimated)
+            }
+        } else {
+            (self.estimated_tokens, ContextSource::Estimated)
+        };
+
         ContextRemaining {
-            percent: self.calculate_percent(),
-            tokens_used: self.actual_tokens.unwrap_or(self.estimated_tokens),
+            percent: self.calculate_percent(tokens_used),
+            tokens_used,
             context_window: self.context_window,
-            is_estimated: self.actual_tokens.is_none(),
+            source,
         }
     }
 }
 ```
 
-Update status bar to show estimation indicator:
+Update status bar to show source indicator:
 ```rust
 // In tui/src/status/card.rs
 fn context_window_spans(&self) -> Option<Vec<Span<'static>>> {
     let context = self.token_usage.context_window.as_ref()?;
-    let prefix = if context.is_estimated { "~" } else { "" };
+    let prefix = match context.source {
+        ContextSource::Transcript => "",       // Accurate - no prefix
+        ContextSource::Estimated => "~",       // Estimate indicator
+        ContextSource::Protocol => "",         // Accurate from ACP
+    };
     Some(vec![
         Span::from(format!("{prefix}{percent}% left")),
         // ...
@@ -327,29 +517,40 @@ fn context_window_spans(&self) -> Option<Vec<Span<'static>>> {
 
 ## Recommendation
 
-**Start with Solution 5 (Hybrid Approach)** because:
+**Start with Solution 5 (Hybrid Approach)** with transcript parsing as primary source:
 
-1. **Immediate value**: Users get context awareness right away with estimates
-2. **Progressive enhancement**: Accuracy improves as better data sources become available
-3. **Future-proof**: Clean path to proper ACP integration
-4. **User transparency**: Clear indication when showing estimates vs actual values
+1. **Accurate data**: Transcript files contain actual token counts, not estimates
+2. **Immediate availability**: Claude and Codex already have well-documented formats
+3. **No protocol changes**: Works with current agent implementations
+4. **Graceful degradation**: Falls back to estimation when transcripts unavailable
+5. **Future-proof**: Clean path to ACP protocol integration
+
+**Implementation Priority**:
+1. Claude Code transcript parsing (best documented, `ccusage` as reference)
+2. Codex rollout parsing (already has `TokenCountEvent` structure)
+3. Client-side estimation fallback (for Gemini and unknown agents)
+4. ACP protocol integration (when available)
 
 ## File Changes Required
 
 | File | Changes |
 |------|---------|
-| `acp/src/backend.rs` | Add `ContextUsageTracker`, integrate with event translation |
-| `acp/src/registry.rs` | Add `context_window` and optionally `context_command` to `AcpAgentConfig` |
-| `protocol/src/protocol.rs` | Add `is_estimated` field to `TokenUsageInfo` or create new type |
-| `tui/src/status/card.rs` | Update display to show estimation indicator |
-| `tui/src/chatwidget.rs` | Pass estimated context info to status display |
+| `acp/src/transcript_reader.rs` | **NEW**: Agent-specific transcript parsers |
+| `acp/src/context_tracker.rs` | **NEW**: Unified context tracking with fallback chain |
+| `acp/src/backend.rs` | Integrate `ContextUsageTracker`, emit `TokenCountEvent` |
+| `acp/src/registry.rs` | Add `home_dir_pattern` and `context_window` to `AcpAgentConfig` |
+| `protocol/src/protocol.rs` | Add `ContextSource` enum to `TokenUsageInfo` |
+| `tui/src/status/card.rs` | Update display to show source indicator (`~` for estimates) |
+| `tui/src/chatwidget.rs` | Pass context info from transcript reader to status display |
+| `Cargo.toml` | Add `notify` crate for file watching |
 
 ## Open Questions
 
-1. Should we show any context info if we're highly uncertain about the estimate?
-2. How should we handle agents with unknown context window sizes?
-3. Should the estimation be configurable/disableable?
-4. What's the acceptable margin of error for estimates?
+1. How do we identify the correct transcript for the current ACP session?
+2. Should transcript reading be synchronous or async with file watching?
+3. How do we handle race conditions when agent is actively writing to transcript?
+4. Should we cache transcript data or read fresh on each status update?
+5. What's the polling interval for transcript updates vs file watching?
 
 ## References
 
@@ -358,3 +559,8 @@ fn context_window_spans(&self) -> Option<Vec<Span<'static>>> {
 - Status bar display: `codex-rs/tui/src/status/card.rs`
 - ACP backend: `codex-rs/acp/src/backend.rs`
 - ACP protocol: `agent-client-protocol` crate v0.9.0
+- Claude Code transcripts: `~/.claude/projects/` (JSONL with `usage` field)
+- Codex rollouts: `~/.codex/sessions/` (JSONL with `TokenCountEvent`)
+- Gemini checkpoints: `~/.gemini/tmp/` (JSON, checkpointing must be enabled)
+- External tool: [`ccusage`](https://github.com/ryoppippi/ccusage) - parses Claude/Codex transcripts
+- Claude Code feature request: [Issue #10593](https://github.com/anthropics/claude-code/issues/10593)
