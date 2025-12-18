@@ -7,6 +7,13 @@ description: Use when implementing any feature or bugfix, before writing impleme
 *CRITICAL* Add the following steps to your Todo list using TodoWrite:
 
 1. Write a failing test (RED phase)
+<system-reminder>All new test cases MUST include a "current-session" marker comment. Format:
+- JavaScript/TypeScript: `// @current-session`
+- Python: `# @current-session`
+- Rust: `// @current-session`
+- Go: `// @current-session`
+
+Place marker on the line immediately before the test function/block definition.</system-reminder>
 2. Verify the test fails due to the behavior of the application, and NOT due to the test.
 <system-reminder>If you have more than one test that you need to write, you should write all of them before moving to the GREEN phase.</system-reminder>
 3. Write the minimal amount of code necessary to make the test pass (GREEN phase)
