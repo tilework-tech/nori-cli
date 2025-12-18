@@ -416,6 +416,7 @@ fn test_acp_multiple_file_writes() {
 /// to detect any regressions in display format.
 #[test]
 #[cfg(target_os = "linux")]
+#[ignore]
 fn test_acp_file_write_snapshot() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())

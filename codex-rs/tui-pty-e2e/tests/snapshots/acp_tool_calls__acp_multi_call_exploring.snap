@@ -1,0 +1,28 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› Explore files
+
+
+■ Operation 'AddToHistory' is not supported in ACP mode
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Test message 1Test message 2
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Reading multiple files...
+
+• Explored
+  └ Read file1.rs, file2.rs, file3.rs
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Multi-call exploring done.
+
+
+› [DEFAULT_PROMPT]
+
+  100% context left · ? for shortcuts

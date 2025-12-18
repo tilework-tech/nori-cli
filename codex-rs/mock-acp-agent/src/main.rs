@@ -236,6 +236,215 @@ impl acp::Agent for MockAgent {
             }
         }
 
+        // Check for special test modes first before sending default messages
+        // Each special mode should return early to avoid executing default behavior
+
+        // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
+        if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {
+            eprintln!("Mock agent: sending mixed exploring and exec workflow");
+
+            // Batch 1: Initial exploring (2 Read calls)
+            let read_1 = acp::ToolCallId::new("read-001");
+            let read_2 = acp::ToolCallId::new("read-002");
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(read_1.clone(), "Reading file1.rs")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "src/file1.rs"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(read_2.clone(), "Reading file2.rs")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "src/file2.rs"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Complete first batch
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    read_1.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "file1.rs read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 200})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    read_2.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "file2.rs read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 150})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Execute command (non-exploring)
+            let exec_1 = acp::ToolCallId::new("exec-001");
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(exec_1.clone(), "Running tests")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"command": "cargo test"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    exec_1.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new("Tests passed")),
+                        ))])
+                        .raw_output(json!({"exit_code": 0})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Send intermediate agent text
+            self.send_text_chunk(
+                session_id.clone(),
+                "Based on my exploration, the most significant TUI Rust source file by size is:",
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Batch 2: More exploring (3 Read/Grep calls) - these will appear AFTER final message (the bug)
+            let read_3 = acp::ToolCallId::new("read-003");
+            let grep_1 = acp::ToolCallId::new("grep-001");
+            let read_4 = acp::ToolCallId::new("read-004");
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(read_3.clone(), "Reading SKILL.md")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": ".claude/skills/using-skills/SKILL.md"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(grep_1.clone(), "Searching for undefined")
+                    .kind(acp::ToolKind::Search)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"pattern": "undefined"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(read_4.clone(), "Reading config.toml")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "config.toml"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Complete second batch
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    read_3.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "SKILL.md read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 80})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    grep_1.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new("Found 5 matches")),
+                        ))])
+                        .raw_output(json!({"matches": 5})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    read_4.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "config.toml read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 25})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Final agent message - this triggers FinalMessageSeparator
+            self.send_text_chunk(
+                session_id.clone(),
+                "The chatwidget is the heart of the TUI experience.",
+            )
+            .await?;
+
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
             self.send_text_chunk(session_id.clone(), &response).await?;
@@ -496,6 +705,128 @@ impl acp::Agent for MockAgent {
             } else {
                 acp::StopReason::EndTurn
             }));
+        }
+
+        // Support multi-call exploring cells with out-of-order completion
+        // This tests the scenario where:
+        // 1. Multiple Read tool calls are sent (exploring operations)
+        // 2. Text streams DURING execution (triggers flush of incomplete ExecCell)
+        // 3. Completion events arrive out-of-order (call-2 before call-1)
+        if std::env::var("MOCK_AGENT_MULTI_CALL_EXPLORING").is_ok() {
+            eprintln!("Mock agent: sending multi-call exploring sequence");
+
+            // Send three Read tool calls
+            let call_1 = acp::ToolCallId::new("read-call-001");
+            let call_2 = acp::ToolCallId::new("read-call-002");
+            let call_3 = acp::ToolCallId::new("read-call-003");
+
+            // Send ToolCall 1 (Read file1.rs)
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(call_1.clone(), "Reading file1.rs")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "src/file1.rs"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Send ToolCall 2 (Read file2.rs)
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(call_2.clone(), "Reading file2.rs")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "src/file2.rs"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Send text DURING the tool calls - this triggers flush of incomplete ExecCell!
+            self.send_text_chunk(session_id.clone(), "Reading multiple files...")
+                .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Send ToolCall 3 (Read file3.rs)
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(call_3.clone(), "Reading file3.rs")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "src/file3.rs"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Complete calls OUT OF ORDER: call-2, then call-3, then call-1
+            // This tests that the cell can be retrieved by any pending call_id
+
+            // Complete call-2 first (not the first call!)
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    call_2.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "file2.rs read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 100})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Complete call-3
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    call_3.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "file3.rs read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 75})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Complete call-1 last
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    call_1.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "file1.rs read successfully",
+                            )),
+                        ))])
+                        .raw_output(json!({"lines": 150})),
+                ),
+            )
+            .await?;
+
+            // Final text (unless suppressed for testing)
+            if std::env::var("MOCK_AGENT_NO_FINAL_TEXT").is_err() {
+                self.send_text_chunk(session_id.clone(), "Multi-call exploring done.")
+                    .await?;
+            }
+
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
         Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))

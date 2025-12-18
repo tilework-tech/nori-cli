@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { getTargetTriple } from "./platform.js";
 
 // __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -12,48 +13,7 @@ const __dirname = path.dirname(__filename);
 
 const { platform, arch } = process;
 
-let targetTriple = null;
-switch (platform) {
-  case "linux":
-  case "android":
-    switch (arch) {
-      case "x64":
-        targetTriple = "x86_64-unknown-linux-musl";
-        break;
-      case "arm64":
-        targetTriple = "aarch64-unknown-linux-musl";
-        break;
-      default:
-        break;
-    }
-    break;
-  case "darwin":
-    switch (arch) {
-      case "x64":
-        targetTriple = "x86_64-apple-darwin";
-        break;
-      case "arm64":
-        targetTriple = "aarch64-apple-darwin";
-        break;
-      default:
-        break;
-    }
-    break;
-  case "win32":
-    switch (arch) {
-      case "x64":
-        targetTriple = "x86_64-pc-windows-msvc";
-        break;
-      case "arm64":
-        targetTriple = "aarch64-pc-windows-msvc";
-        break;
-      default:
-        break;
-    }
-    break;
-  default:
-    break;
-}
+const targetTriple = getTargetTriple(platform, arch);
 
 if (!targetTriple) {
   throw new Error(`Unsupported platform: ${platform} (${arch})`);

@@ -162,6 +162,8 @@ fn test_trust_screen_is_skipped_with_default_config() {
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
     // with the expected branding elements when nori-ai is NOT installed
+
+    use tui_pty_e2e::normalize_for_snapshot;
     let mut session = TuiSession::spawn_with_config(
         24,
         80,
@@ -199,7 +201,7 @@ fn test_startup_shows_nori_banner() {
     let lines = contents.lines();
     assert_snapshot!(
         "startup_shows_nori_banner",
-        normalize_for_input_snapshot(lines.collect::<Vec<&str>>()[1..8].join("\n"))
+        normalize_for_snapshot(lines.collect::<Vec<&str>>()[1..8].join("\n"))
     );
 }
 

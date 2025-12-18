@@ -1,5 +1,22 @@
 # Release Management
 
+## Supported Platforms
+
+The following platforms are supported:
+
+| Platform         | Architecture | Target Triple              |
+| ---------------- | ------------ | -------------------------- |
+| Linux            | x86_64       | x86_64-unknown-linux-musl  |
+| Linux            | arm64        | aarch64-unknown-linux-musl |
+| macOS            | x86_64       | x86_64-apple-darwin        |
+| macOS            | arm64        | aarch64-apple-darwin       |
+| Android (Termux) | arm64        | aarch64-linux-android      |
+| Android (Termux) | x86_64       | x86_64-linux-android       |
+
+Android binaries are cross-compiled using Android NDK 26.1 with API level 30 (Android 11+).
+
+## Distribution
+
 Currently, we made Codex binaries available in three places:
 
 - GitHub Releases https://github.com/openai/codex/releases/

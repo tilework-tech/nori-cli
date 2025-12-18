@@ -1,0 +1,27 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+• Explored
+  └ Read file1.rs, file2.rs
+
+• Ran 'Running tests(cargo test)'
+  └ Tests passed
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• Based on my exploration, the most significant TUI Rust source file by size is:
+
+• Explored
+  └ Read SKILL.md
+    Search undefined
+    Read config.toml
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+• The chatwidget is the heart of the TUI experience.
+
+
+› [DEFAULT_PROMPT]
+
+  100% context left · ? for shortcuts

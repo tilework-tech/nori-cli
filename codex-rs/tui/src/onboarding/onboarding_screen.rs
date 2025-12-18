@@ -93,9 +93,12 @@ impl OnboardingScreen {
             config,
         } = args;
         let cwd = config.cwd.clone();
+        #[allow(unused_variables)]
         let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
+        #[allow(unused_variables)]
         let forced_login_method = config.forced_login_method;
         let codex_home = config.codex_home;
+        #[allow(unused_variables)]
         let cli_auth_credentials_store_mode = config.cli_auth_credentials_store_mode;
         let mut steps: Vec<Step> = Vec::new();
         steps.push(Step::Welcome(WelcomeWidget::new(
@@ -399,6 +402,7 @@ pub(crate) async fn run_onboarding_app(
 
     let mut onboarding_screen = OnboardingScreen::new(tui, args);
     // One-time guard to fully clear the screen after ChatGPT login success message is shown
+    #[allow(unused_mut, unused_variables)]
     let mut did_full_clear_after_success = false;
 
     tui.draw(u16::MAX, |frame| {

@@ -13,7 +13,8 @@
   },
   "os": [
     "darwin",
-    "linux"
+    "linux",
+    "android"
   ],
   "cpu": [
     "x64",

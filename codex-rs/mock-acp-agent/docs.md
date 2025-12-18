@@ -58,10 +58,10 @@ Path: @/codex-rs/mock-acp-agent
 | `MOCK_AGENT_DELAY_MS` | Millisecond delay before completing stream to simulate realistic streaming (added for TUI testing) |
 | `MOCK_AGENT_REQUEST_PERMISSION` | Triggers a permission request to the client before responding, used for testing ACP approval bridging |
 | `MOCK_AGENT_SEND_TOOL_CALL` | Sends a tool call sequence (pending → in_progress → completed) for testing tool call display |
-| `MOCK_AGENT_WRITE_FILE` | Path to write via client's `fs/write_text_file` method - combines with `MOCK_AGENT_WRITE_CONTENT` to test file write implementation; on success, sends `
-File written successfully
-` and reads back file to verify |
+| `MOCK_AGENT_WRITE_FILE` | Path to write via client's `fs/write_text_file` method - combines with `MOCK_AGENT_WRITE_CONTENT` to test file write implementation; on success, sends `File written successfully` and reads back file to verify |
 | `MOCK_AGENT_WRITE_CONTENT` | Content to write when `MOCK_AGENT_WRITE_FILE` is set (defaults to "default content") |
+| `MOCK_AGENT_MULTI_CALL_EXPLORING` | Sends 3 Read tool calls with interleaved text streaming and out-of-order completion (call-2, call-3, call-1) to test multi-call exploring cell handling |
+| `MOCK_AGENT_NO_FINAL_TEXT` | Suppresses final text message after tool calls complete; combine with `MOCK_AGENT_MULTI_CALL_EXPLORING` to test immediate flush without subsequent text |
 
 **Stderr Output for Testing:**
 

@@ -231,7 +231,7 @@ mod tests {
             lines.push(line.trim_end().to_string());
         }
 
-        while lines.last().is_some_and(|l| l.is_empty()) {
+        while lines.last().is_some_and(String::is_empty) {
             lines.pop();
         }
 

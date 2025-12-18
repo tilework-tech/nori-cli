@@ -196,11 +196,46 @@ The `PendingExecCellTracker` (`chatwidget/pending_exec_cells.rs`) prevents dupli
 5. Result: duplicate entries for the same tool call
 
 The tracker intercepts this by:
-- `save_pending()`: Called during flush if the ExecCell has pending (incomplete) call_ids - saves the cell keyed by call_id instead of pushing to history
-- `retrieve()`: Called in `handle_exec_end_now()` - retrieves and removes the saved cell, restoring it to `active_cell` for completion
+- `save_pending()`: Called during flush if the ExecCell has pending (incomplete) call_ids - saves the cell with ALL pending call_ids mapped to it (multi-key storage)
+- `retrieve()`: Called in `handle_exec_end_now()` - retrieves and removes the saved cell by any of its call_ids, restoring it to `active_cell` for completion
 - `drain_failed()`: Called in `on_task_complete()` - marks any uncompleted pending cells as failed and returns them for insertion into history
 
-This follows the same encapsulation pattern as `InterruptManager`: self-contained state in its own module file with typed public methods instead of exposing raw data structures.
+**Multi-Key Storage for Multi-Call Exploring Cells:**
+
+Exploring cells (Read, ListFiles, Search operations) can group multiple tool calls into a single ExecCell. When such a cell is flushed during streaming and completion events arrive out-of-order (e.g., call-2 completes before call-1), the tracker must be able to retrieve the cell by ANY of its pending call_ids:
+
+```
+call_id_to_primary: { "call-1" -> "call-1", "call-2" -> "call-1", "call-3" -> "call-1" }
+cells:              { "call-1" -> ExecCell }
+```
+
+When `retrieve("call-2")` is called, it looks up the primary key via `call_id_to_primary`, removes all mappings for that cell, and returns the cell.
+
+**ExecCell Completion Handling (`handle_exec_end_now`):**
+
+After completing a call, the handler decides whether to keep the cell visible or flush it:
+
+1. **Cell still has pending calls** (`is_active()`): Keep in `active_cell` so it remains visible during streaming
+2. **Cell fully complete AND exploring**: Keep in `active_cell` to allow grouping with subsequent exploring commands
+3. **Cell fully complete AND NOT exploring**: Flush to history immediately
+
+This ensures exploring cells remain visible during streaming instead of disappearing into `pending_exec_cells`.
+
+**ExecCell Lifecycle Tracing:**
+
+The TUI provides detailed tracing for debugging ExecCell state transitions:
+
+```bash
+RUST_LOG=tui_event_flow=debug,cell_flushing=debug,pending_exec_cells=debug cargo run
+```
+
+| Target | What it logs |
+|--------|-------------|
+| `tui_event_flow` | Event reception (`on_exec_command_begin`, `on_exec_command_end`) with cell state |
+| `cell_flushing` | `flush_active_cell` decisions (save to pending vs flush to history) |
+| `pending_exec_cells` | `save_pending`, `retrieve`, `drain_failed` operations with call_id mappings |
+
+Combined with `acp_event_flow` from the ACP backend, these enable full end-to-end debugging of tool call display issues. See `@/codex-rs/tui/src/chatwidget/EXEC_CELL_LIFECYCLE.md` for comprehensive documentation.
 
 **ACP File Tracing:**
 

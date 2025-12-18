@@ -249,8 +249,49 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 - `translate_session_update_to_events()`: Converts ACP `SessionUpdate` to `codex_protocol::EventMsg`:
   - `AgentMessageChunk` → `AgentMessageDelta`
   - `AgentThoughtChunk` → `AgentReasoningDelta`
-  - `ToolCall` → `ExecCommandBegin`
+  - `ToolCall` → `ExecCommandBegin` (with filtering, see below)
   - `ToolCallUpdate(Completed)` → `ExecCommandEnd`
+
+### ACP Tool Call Event Filtering
+
+The ACP protocol emits **multiple ToolCall events** for the same `call_id` as details become available during LLM streaming:
+
+```
+Event 1 (early): ToolCall { call_id="toolu_123", title="Read File", raw_input={} }
+Event 2 (later): ToolCall { call_id="toolu_123", title="Read /home/.../file.rs", raw_input={path: "..."} }
+```
+
+Without filtering, duplicate events would cause ExecCells to disappear briefly and reappear at the end of agent turns. The fix uses two layers of filtering:
+
+**Layer 1 - Skip Generic Events (`translate_session_update_to_events`):**
+- Skip ToolCall events that lack useful display information
+- Check both `raw_input` (for path/command/pattern fields) and title (for embedded paths or commands)
+- `title_contains_useful_info()` detects paths in titles (`" /"`, backticks, long non-generic titles)
+- `extract_display_args()` extracts display-friendly arguments based on tool type
+
+**Layer 2 - Dispatch-Loop Deduplication:**
+- The update handler tracks `emitted_begin_call_ids: HashSet<String>`
+- Skips any `ExecCommandBegin` with a call_id that was already emitted
+- Safety net for edge cases that slip through Layer 1
+
+### Tool Classification System
+
+The `classify_tool_to_parsed_command()` function maps ACP `ToolKind` to TUI rendering modes:
+
+| ACP ToolKind | ParsedCommand | TUI Rendering |
+|--------------|---------------|---------------|
+| `Read` | `ParsedCommand::Read` | Exploring (compact, grouped) |
+| `Search` | `ParsedCommand::Search` | Exploring (compact, grouped) |
+| `Other` + title heuristics | `ListFiles`, `Search`, `Read` | Exploring (title-based fallback) |
+| `Execute`, `Edit`, `Delete`, `Move`, `Fetch`, `Think` | `ParsedCommand::Unknown` | Command (full display) |
+
+Title-based fallback uses `classify_tool_by_title()` when `ToolKind::Other` or `None`:
+- Titles containing "list", "glob", "ls", "find files" → `ListFiles`
+- Titles containing "search", "grep" → `Search`
+- Titles containing "read" or exactly "file" → `Read`
+- Everything else → `Unknown` (command mode)
+
+This enables the TUI to group and collapse read-only operations ("Explored 3 files") while showing mutating operations prominently
 
 **Event Translation (`translator.rs`):**
 
@@ -280,6 +321,22 @@ The approval translation maps between Codex's binary approve/deny model and ACP'
 - Last resort: first option for approve, last option for deny
 
 ### Things to Know
+
+**Event Flow Tracing:**
+
+The ACP backend provides detailed tracing for debugging tool event flow issues:
+
+```bash
+RUST_LOG=acp_event_flow=debug cargo run
+```
+
+The `acp_event_flow` target logs:
+- Streaming text and reasoning deltas with content previews
+- ToolCall events (skipped generic events, emitted events with parsed_cmd info)
+- ToolCallUpdate completion events with output extraction
+- Dispatch loop event counts and duplicate detection
+
+This pairs with TUI-side tracing targets (`tui_event_flow`, `cell_flushing`, `pending_exec_cells`) for full event lifecycle debugging.
 
 **Protocol Version Check:**
 
