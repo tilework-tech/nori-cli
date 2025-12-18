@@ -145,7 +145,7 @@ mod tests {
         std::fs::write(
             &config_path,
             r#"
-model = "claude-acp"
+model = "claude-code"
 
 [mcp_servers.filesystem]
 command = "npx"

@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// Default model for ACP-only mode
-pub const DEFAULT_MODEL: &str = "claude-acp";
+pub const DEFAULT_MODEL: &str = "claude-code";
 
 /// TOML-deserializable config structure (all fields optional)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NoriConfigToml {
-    /// The ACP agent model to use (e.g., "claude-acp", "gemini-acp")
+    /// The ACP agent model to use (e.g., "claude-code", "codex", "gemini")
     pub model: Option<String>,
 
     /// Sandbox mode for command execution
