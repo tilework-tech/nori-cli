@@ -457,6 +457,26 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         subcommand,
     } = MultitoolCli::parse();
 
+    // Set up CODEX_HOME to point to NORI_HOME so all codex-core config loading
+    // uses ~/.nori/cli/ instead of ~/.codex. This must happen early, before any
+    // subcommand dispatch or config loading. Only set if not already defined,
+    // to allow tests and users to override via environment variable.
+    if std::env::var("CODEX_HOME").is_err() {
+        if let Ok(nori_home) = find_nori_home() {
+            // Create the directory if it doesn't exist
+            if let Err(e) = std::fs::create_dir_all(&nori_home) {
+                eprintln!(
+                    "Warning: Failed to create Nori config directory '{}': {e}",
+                    nori_home.display()
+                );
+            }
+            // SAFETY: Called early in main before spawning threads
+            unsafe {
+                std::env::set_var("CODEX_HOME", &nori_home);
+            }
+        }
+    }
+
     // Initialize ACP rolling file tracing in $NORI_HOME/log/ (non-critical, log warning on failure)
     // Logs are stored as daily rolling files like: ~/.nori/cli/log/nori-acp.2024-01-15.log
     if let Ok(nori_home) = find_nori_home() {
