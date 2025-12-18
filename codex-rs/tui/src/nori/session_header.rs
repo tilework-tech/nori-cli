@@ -32,8 +32,6 @@ const NORI_HEADER_MAX_INNER_WIDTH: usize = 60;
 struct NoriConfig {
     #[serde(default)]
     agents: Option<NoriAgents>,
-    #[serde(default, rename = "installDir")]
-    install_dir: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -54,28 +52,61 @@ struct NoriProfile {
     base_profile: Option<String>,
 }
 
-/// Result of reading the nori config file
+/// Result of reading the nori config
 struct NoriConfigInfo {
     profile: Option<String>,
     install_dir: Option<PathBuf>,
 }
 
-/// Read the current Nori config from ~/.nori-config.json
-fn read_nori_config() -> NoriConfigInfo {
-    let Some(home) = dirs::home_dir() else {
-        return NoriConfigInfo {
-            profile: None,
-            install_dir: None,
-        };
-    };
-    let config_path = home.join(".nori-config.json");
+/// Run `nori-ai install-location` and parse the first (nearest) install directory.
+fn get_nearest_install_location() -> Option<PathBuf> {
+    let output = std::process::Command::new("nori-ai")
+        .arg("install-location")
+        .output()
+        .ok()?;
 
-    let content = match std::fs::read_to_string(config_path) {
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Parse output format:
+    // "Nori installation directories:\n\n  /path/one\n  /path/two\n"
+    // The first non-empty path after the header is the nearest
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.contains("installation directories") {
+            continue;
+        }
+        // Found a path
+        return Some(PathBuf::from(trimmed));
+    }
+
+    None
+}
+
+/// Read the Nori config from the nearest install location.
+/// Uses `nori-ai install-location` to find the correct config file.
+fn read_nori_config() -> NoriConfigInfo {
+    let install_dir = match get_nearest_install_location() {
+        Some(dir) => dir,
+        None => {
+            return NoriConfigInfo {
+                profile: None,
+                install_dir: None,
+            }
+        }
+    };
+
+    let config_path = install_dir.join(".nori-config.json");
+
+    let content = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,
         Err(_) => {
             return NoriConfigInfo {
                 profile: None,
-                install_dir: None,
+                install_dir: Some(install_dir),
             }
         }
     };
@@ -85,7 +116,7 @@ fn read_nori_config() -> NoriConfigInfo {
         Err(_) => {
             return NoriConfigInfo {
                 profile: None,
-                install_dir: None,
+                install_dir: Some(install_dir),
             }
         }
     };
@@ -97,10 +128,10 @@ fn read_nori_config() -> NoriConfigInfo {
         .and_then(|c| c.profile)
         .and_then(|p| p.base_profile);
 
-    // Extract install directory
-    let install_dir = config.install_dir.map(PathBuf::from);
-
-    NoriConfigInfo { profile, install_dir }
+    NoriConfigInfo {
+        profile,
+        install_dir: Some(install_dir),
+    }
 }
 
 /// Check if the nori-ai command is available in PATH
@@ -140,17 +171,46 @@ pub(crate) struct NoriSessionHeaderCell {
     directory: PathBuf,
     nori_profile: Option<String>,
     profile_location: Option<PathBuf>,
+    nori_ai_installed: bool,
 }
 
 impl NoriSessionHeaderCell {
     pub(crate) fn new(agent: String, directory: PathBuf) -> Self {
-        let nori_config = read_nori_config();
+        let nori_ai_installed = is_nori_ai_installed();
+        let nori_config = if nori_ai_installed {
+            read_nori_config()
+        } else {
+            NoriConfigInfo {
+                profile: None,
+                install_dir: None,
+            }
+        };
         Self {
             version: CODEX_CLI_VERSION,
             agent,
             directory,
             nori_profile: nori_config.profile,
             profile_location: nori_config.install_dir,
+            nori_ai_installed,
+        }
+    }
+
+    #[cfg(test)]
+    fn new_for_test(
+        version: &'static str,
+        agent: String,
+        directory: PathBuf,
+        nori_profile: Option<String>,
+        profile_location: Option<PathBuf>,
+        nori_ai_installed: bool,
+    ) -> Self {
+        Self {
+            version,
+            agent,
+            directory,
+            nori_profile,
+            profile_location,
+            nori_ai_installed,
         }
     }
 }
@@ -186,24 +246,33 @@ impl HistoryCell for NoriSessionHeaderCell {
             Span::from(self.agent.clone()),
         ]));
 
-        // Profile line
-        let profile_display = self
-            .nori_profile
-            .clone()
-            .unwrap_or_else(|| "(none)".to_string());
-        lines.push(Line::from(vec![
-            Span::from("profile:   ").dim(),
-            Span::from(profile_display),
-        ]));
+        // Profiles section - only shown if nori-ai is installed
+        if self.nori_ai_installed {
+            // Empty line before Profiles section
+            lines.push(Line::from(""));
 
-        // Profile location line (shows installation directory)
-        if let Some(ref location) = self.profile_location {
-            let location_max_width = inner_width.saturating_sub(18); // "profile location: " is 18 chars
-            let location_display = format_directory(location, Some(location_max_width));
+            // Profiles section header (green like Nori title)
+            lines.push(Line::from(Span::from("Profiles").green().bold()));
+
+            // Current profile line
+            let profile_display = self
+                .nori_profile
+                .clone()
+                .unwrap_or_else(|| "(none)".to_string());
             lines.push(Line::from(vec![
-                Span::from("profile location: ").dim(),
-                Span::from(location_display),
+                Span::from("current:  ").dim(),
+                Span::from(profile_display),
             ]));
+
+            // Profile location line
+            if let Some(ref location) = self.profile_location {
+                let location_max_width = inner_width.saturating_sub(10); // "location: " is 10 chars
+                let location_display = format_directory(location, Some(location_max_width));
+                lines.push(Line::from(vec![
+                    Span::from("location: ").dim(),
+                    Span::from(location_display),
+                ]));
+            }
         }
 
         with_border(lines)
@@ -276,7 +345,14 @@ mod tests {
 
     #[test]
     fn nori_header_renders_correctly() {
-        let cell = NoriSessionHeaderCell::new("test-agent".to_string(), PathBuf::from("/tmp/test"));
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "0.1.0",
+            "test-agent".to_string(),
+            PathBuf::from("/tmp/test"),
+            Some("senior-swe".to_string()),
+            Some(PathBuf::from("/home/user")),
+            true,
+        );
 
         let lines = cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
@@ -300,20 +376,22 @@ mod tests {
         assert!(rendered.contains("agent:"), "Should show agent label");
         assert!(rendered.contains("test-agent"), "Should show agent name");
 
-        // Should contain profile
-        assert!(rendered.contains("profile:"), "Should show profile label");
+        // Should contain Profiles section with current profile
+        assert!(rendered.contains("Profiles"), "Should show Profiles section");
+        assert!(rendered.contains("current:"), "Should show current profile label");
     }
 
     #[test]
     fn nori_profile_shows_none_when_not_set() {
-        // Create cell without a real config file
-        let cell = NoriSessionHeaderCell {
-            version: "test",
-            agent: "test-agent".to_string(),
-            directory: PathBuf::from("/tmp/test"),
-            nori_profile: None,
-            profile_location: None,
-        };
+        // Create cell with nori_ai_installed = true but no profile
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "test",
+            "test-agent".to_string(),
+            PathBuf::from("/tmp/test"),
+            None,
+            None,
+            true, // nori_ai_installed
+        );
 
         let lines = cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
@@ -322,17 +400,22 @@ mod tests {
             rendered.contains("(none)"),
             "Should show (none) when profile not set"
         );
+        assert!(
+            rendered.contains("Profiles"),
+            "Should show Profiles section when nori-ai installed"
+        );
     }
 
     #[test]
     fn nori_profile_shows_value_when_set() {
-        let cell = NoriSessionHeaderCell {
-            version: "test",
-            agent: "test-agent".to_string(),
-            directory: PathBuf::from("/tmp/test"),
-            nori_profile: Some("senior-swe".to_string()),
-            profile_location: Some(PathBuf::from("/home/user")),
-        };
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "test",
+            "test-agent".to_string(),
+            PathBuf::from("/tmp/test"),
+            Some("senior-swe".to_string()),
+            Some(PathBuf::from("/home/user")),
+            true, // nori_ai_installed
+        );
 
         let lines = cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
@@ -342,20 +425,66 @@ mod tests {
             "Should show profile name when set"
         );
         assert!(
-            rendered.contains("profile location:"),
-            "Should show profile location label"
+            rendered.contains("location:"),
+            "Should show location label"
+        );
+        assert!(
+            rendered.contains("Profiles"),
+            "Should show Profiles section header"
+        );
+    }
+
+    #[test]
+    fn nori_profiles_section_hidden_when_not_installed() {
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "test",
+            "test-agent".to_string(),
+            PathBuf::from("/tmp/test"),
+            Some("senior-swe".to_string()),
+            Some(PathBuf::from("/home/user")),
+            false, // nori_ai NOT installed
+        );
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        assert!(
+            !rendered.contains("Profiles"),
+            "Should NOT show Profiles section when nori-ai not installed"
+        );
+        assert!(
+            !rendered.contains("senior-swe"),
+            "Should NOT show profile when nori-ai not installed"
         );
     }
 
     #[test]
     fn nori_header_snapshot() {
-        let cell = NoriSessionHeaderCell {
-            version: "0.1.0",
-            agent: "claude-sonnet".to_string(),
-            directory: PathBuf::from("/home/user/project"),
-            nori_profile: Some("senior-swe".to_string()),
-            profile_location: Some(PathBuf::from("/home/user")),
-        };
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "0.1.0",
+            "claude-sonnet".to_string(),
+            PathBuf::from("/home/user/project"),
+            Some("senior-swe".to_string()),
+            Some(PathBuf::from("/home/user")),
+            true, // nori_ai_installed
+        );
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
+    fn nori_header_snapshot_no_profiles() {
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "0.1.0",
+            "claude-sonnet".to_string(),
+            PathBuf::from("/home/user/project"),
+            None,
+            None,
+            false, // nori_ai NOT installed
+        );
 
         let lines = cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
