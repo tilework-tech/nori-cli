@@ -35,6 +35,7 @@ use codex_protocol::config_types::SandboxMode;
 use codex_protocol::user_input::UserInput;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
 use event_processor_with_jsonl_output::EventProcessorWithJsonOutput;
+#[cfg(feature = "otel")]
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use serde_json::Value;
 use std::io::IsTerminal;
@@ -255,27 +256,36 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         std::process::exit(1);
     }
 
-    let otel = codex_core::otel_init::build_provider(&config, env!("CARGO_PKG_VERSION"));
+    // Initialize tracing subscriber with optional OTEL support
+    #[cfg(feature = "otel")]
+    {
+        let otel = codex_core::otel_init::build_provider(&config, env!("CARGO_PKG_VERSION"));
 
-    #[allow(clippy::print_stderr)]
-    let otel = match otel {
-        Ok(otel) => otel,
-        Err(e) => {
-            eprintln!("Could not create otel exporter: {e}");
-            std::process::exit(1);
+        #[allow(clippy::print_stderr)]
+        let otel = match otel {
+            Ok(otel) => otel,
+            Err(e) => {
+                eprintln!("Could not create otel exporter: {e}");
+                std::process::exit(1);
+            }
+        };
+
+        if let Some(provider) = otel.as_ref() {
+            let otel_layer = OpenTelemetryTracingBridge::new(&provider.logger).with_filter(
+                tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
+            );
+
+            let _ = tracing_subscriber::registry()
+                .with(fmt_layer)
+                .with(otel_layer)
+                .try_init();
+        } else {
+            let _ = tracing_subscriber::registry().with(fmt_layer).try_init();
         }
-    };
+    }
 
-    if let Some(provider) = otel.as_ref() {
-        let otel_layer = OpenTelemetryTracingBridge::new(&provider.logger).with_filter(
-            tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
-        );
-
-        let _ = tracing_subscriber::registry()
-            .with(fmt_layer)
-            .with(otel_layer)
-            .try_init();
-    } else {
+    #[cfg(not(feature = "otel"))]
+    {
         let _ = tracing_subscriber::registry().with(fmt_layer).try_init();
     }
 

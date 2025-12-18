@@ -23,6 +23,7 @@ use codex_core::find_conversation_path_by_id_str;
 use codex_core::get_platform_sandbox;
 use codex_core::protocol::AskForApproval;
 use codex_protocol::config_types::SandboxMode;
+#[cfg(feature = "otel")]
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
@@ -153,13 +154,8 @@ pub async fn run_main(
         }
     }
 
-    // Initialize ACP file tracing for subprocess debugging
-    let acp_log_path = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".nori-acp.log");
-    if let Err(e) = codex_acp::init_file_tracing(&acp_log_path) {
-        tracing::warn!("Failed to initialize ACP file tracing: {e}");
-    }
+    // Note: Rolling file tracing is initialized in codex-cli main.rs before run_main() is called.
+    // This ensures a single point of file-based tracing initialization.
 
     let (sandbox_mode, approval_policy) = if cli.full_auto {
         (
@@ -358,34 +354,49 @@ pub async fn run_main(
         ensure_oss_provider_ready(provider_id, &config).await?;
     }
 
-    let otel = codex_core::otel_init::build_provider(&config, env!("CARGO_PKG_VERSION"));
+    // Initialize tracing subscriber with optional OTEL support
+    #[cfg(feature = "otel")]
+    {
+        let otel = codex_core::otel_init::build_provider(&config, env!("CARGO_PKG_VERSION"));
 
-    #[allow(clippy::print_stderr)]
-    let otel = match otel {
-        Ok(otel) => otel,
-        Err(e) => {
-            eprintln!("Could not create otel exporter: {e}");
-            std::process::exit(1);
+        #[allow(clippy::print_stderr)]
+        let otel = match otel {
+            Ok(otel) => otel,
+            Err(e) => {
+                eprintln!("Could not create otel exporter: {e}");
+                std::process::exit(1);
+            }
+        };
+
+        if let Some(provider) = otel.as_ref() {
+            let otel_layer = OpenTelemetryTracingBridge::new(&provider.logger).with_filter(
+                tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
+            );
+
+            #[cfg(feature = "feedback")]
+            let _ = tracing_subscriber::registry()
+                .with(file_layer)
+                .with(feedback_layer)
+                .with(otel_layer)
+                .try_init();
+            #[cfg(not(feature = "feedback"))]
+            let _ = tracing_subscriber::registry()
+                .with(file_layer)
+                .with(otel_layer)
+                .try_init();
+        } else {
+            #[cfg(feature = "feedback")]
+            let _ = tracing_subscriber::registry()
+                .with(file_layer)
+                .with(feedback_layer)
+                .try_init();
+            #[cfg(not(feature = "feedback"))]
+            let _ = tracing_subscriber::registry().with(file_layer).try_init();
         }
-    };
+    }
 
-    if let Some(provider) = otel.as_ref() {
-        let otel_layer = OpenTelemetryTracingBridge::new(&provider.logger).with_filter(
-            tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
-        );
-
-        #[cfg(feature = "feedback")]
-        let _ = tracing_subscriber::registry()
-            .with(file_layer)
-            .with(feedback_layer)
-            .with(otel_layer)
-            .try_init();
-        #[cfg(not(feature = "feedback"))]
-        let _ = tracing_subscriber::registry()
-            .with(file_layer)
-            .with(otel_layer)
-            .try_init();
-    } else {
+    #[cfg(not(feature = "otel"))]
+    {
         #[cfg(feature = "feedback")]
         let _ = tracing_subscriber::registry()
             .with(file_layer)
@@ -393,7 +404,7 @@ pub async fn run_main(
             .try_init();
         #[cfg(not(feature = "feedback"))]
         let _ = tracing_subscriber::registry().with(file_layer).try_init();
-    };
+    }
 
     #[cfg(feature = "feedback")]
     return run_ratatui_app(

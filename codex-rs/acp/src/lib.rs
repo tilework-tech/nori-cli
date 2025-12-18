@@ -30,6 +30,7 @@ pub use registry::AcpProviderInfo;
 pub use registry::get_agent_config;
 pub use registry::list_available_agents;
 pub use tracing_setup::init_file_tracing;
+pub use tracing_setup::init_rolling_file_tracing;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
 

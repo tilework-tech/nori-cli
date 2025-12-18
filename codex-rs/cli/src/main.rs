@@ -2,7 +2,8 @@ use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
 use clap_complete::generate;
-use codex_acp::init_file_tracing;
+use codex_acp::find_nori_home;
+use codex_acp::init_rolling_file_tracing;
 use codex_arg0::arg0_dispatch_or_else;
 #[cfg(feature = "chatgpt")]
 use codex_chatgpt::apply_command::ApplyCommand;
@@ -456,12 +457,13 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         subcommand,
     } = MultitoolCli::parse();
 
-    // Initialize ACP file tracing (non-critical, log warning on failure)
-    let log_path = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".codex-acp.log");
-    if let Err(e) = init_file_tracing(&log_path) {
-        eprintln!("Warning: Failed to initialize ACP file tracing: {e}");
+    // Initialize ACP rolling file tracing in $NORI_HOME/log/ (non-critical, log warning on failure)
+    // Logs are stored as daily rolling files like: ~/.nori/cli/log/nori-acp.2024-01-15.log
+    if let Ok(nori_home) = find_nori_home() {
+        let log_dir = nori_home.join("log");
+        if let Err(e) = init_rolling_file_tracing(&log_dir, "nori-acp") {
+            eprintln!("Warning: Failed to initialize ACP file tracing: {e}");
+        }
     }
 
     // Fold --enable/--disable into config overrides so they flow to all subcommands.
