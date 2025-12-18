@@ -15,6 +15,12 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[features]
+default = []
+
+# OpenTelemetry tracing export (disabled by default)
+otel = ["dep:opentelemetry-appender-tracing"]
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
@@ -27,7 +33,7 @@ codex-common = { workspace = true, features = [
 codex-core = { workspace = true }
 codex-protocol = { workspace = true }
 mcp-types = { workspace = true }
-opentelemetry-appender-tracing = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true, optional = true }
 owo-colors = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
