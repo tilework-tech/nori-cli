@@ -30,17 +30,16 @@ fn test_rolling_file_tracing_comprehensive() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Verify log directory exists
-    assert!(log_dir.exists(), "Log directory should exist at {log_dir:?}");
+    assert!(
+        log_dir.exists(),
+        "Log directory should exist at {log_dir:?}"
+    );
 
     // Find the log file (rolling files have date suffix like nori-acp.2024-01-15)
     let log_files: Vec<_> = fs::read_dir(&log_dir)
         .expect("Failed to read log directory")
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .starts_with("nori-acp")
-        })
+        .filter(|e| e.file_name().to_string_lossy().starts_with("nori-acp"))
         .collect();
 
     assert!(
