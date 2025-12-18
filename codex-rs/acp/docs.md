@@ -128,15 +128,17 @@ Path semantics:
 
 ### File-Based Tracing
 
-The `init_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.rs` provides structured file logging:
-- Sets global tracing subscriber that writes to a user-specified file path
-- Filters at DEBUG level and above (TRACE is excluded)
+The `init_rolling_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.rs` provides structured file logging:
+- Sets global tracing subscriber that writes to rolling daily log files
+- Log files are named `nori-acp.YYYY-MM-DD` in the configured log directory
+- Filters at DEBUG level (debug builds) or WARN with INFO for codex_tui/acp (release builds)
+- RUST_LOG environment variable overrides default log level
 - Uses non-blocking file appender for async-safe writes
-- Creates parent directories automatically if they don't exist
+- Creates log directory automatically if it doesn't exist
 - Returns error on re-initialization since global subscriber can only be set once per process
 - Guard is intentionally leaked via `std::mem::forget()` to keep non-blocking writer alive for program lifetime
 - ANSI colors disabled for clean file output
-- Automatically initialized by the CLI (`@/codex-rs/cli/src/main.rs`) at startup, writing to `.codex-acp.log` in the current working directory
+- Automatically initialized by the CLI (`@/codex-rs/cli/src/main.rs`) at startup, writing to `$NORI_HOME/log/nori-acp.YYYY-MM-DD`
 
 ### Core Implementation
 

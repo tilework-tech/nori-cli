@@ -38,7 +38,7 @@ fn test_rolling_file_tracing_comprehensive() {
     // Find the log file (rolling files have date suffix like nori-acp.2024-01-15)
     let log_files: Vec<_> = fs::read_dir(&log_dir)
         .expect("Failed to read log directory")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.file_name().to_string_lossy().starts_with("nori-acp"))
         .collect();
 
