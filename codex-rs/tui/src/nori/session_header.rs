@@ -31,6 +31,20 @@ const NORI_HEADER_MAX_INNER_WIDTH: usize = 60;
 #[derive(Debug, Deserialize, Default)]
 struct NoriConfig {
     #[serde(default)]
+    agents: Option<NoriAgents>,
+    #[serde(default, rename = "installDir")]
+    install_dir: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct NoriAgents {
+    #[serde(default, rename = "claude-code")]
+    claude_code: Option<NoriAgentConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct NoriAgentConfig {
+    #[serde(default)]
     profile: Option<NoriProfile>,
 }
 
@@ -40,15 +54,53 @@ struct NoriProfile {
     base_profile: Option<String>,
 }
 
-/// Read the current Nori profile from ~/.nori-config.json
-fn read_nori_profile() -> Option<String> {
-    let home = dirs::home_dir()?;
+/// Result of reading the nori config file
+struct NoriConfigInfo {
+    profile: Option<String>,
+    install_dir: Option<PathBuf>,
+}
+
+/// Read the current Nori config from ~/.nori-config.json
+fn read_nori_config() -> NoriConfigInfo {
+    let Some(home) = dirs::home_dir() else {
+        return NoriConfigInfo {
+            profile: None,
+            install_dir: None,
+        };
+    };
     let config_path = home.join(".nori-config.json");
 
-    let content = std::fs::read_to_string(config_path).ok()?;
-    let config: NoriConfig = serde_json::from_str(&content).ok()?;
+    let content = match std::fs::read_to_string(config_path) {
+        Ok(c) => c,
+        Err(_) => {
+            return NoriConfigInfo {
+                profile: None,
+                install_dir: None,
+            }
+        }
+    };
 
-    config.profile.and_then(|p| p.base_profile)
+    let config: NoriConfig = match serde_json::from_str(&content) {
+        Ok(c) => c,
+        Err(_) => {
+            return NoriConfigInfo {
+                profile: None,
+                install_dir: None,
+            }
+        }
+    };
+
+    // Extract profile from agents.claude-code.profile.baseProfile
+    let profile = config
+        .agents
+        .and_then(|a| a.claude_code)
+        .and_then(|c| c.profile)
+        .and_then(|p| p.base_profile);
+
+    // Extract install directory
+    let install_dir = config.install_dir.map(PathBuf::from);
+
+    NoriConfigInfo { profile, install_dir }
 }
 
 /// Check if the nori-ai command is available in PATH
@@ -87,15 +139,18 @@ pub(crate) struct NoriSessionHeaderCell {
     agent: String,
     directory: PathBuf,
     nori_profile: Option<String>,
+    profile_location: Option<PathBuf>,
 }
 
 impl NoriSessionHeaderCell {
     pub(crate) fn new(agent: String, directory: PathBuf) -> Self {
+        let nori_config = read_nori_config();
         Self {
             version: CODEX_CLI_VERSION,
             agent,
             directory,
-            nori_profile: read_nori_profile(),
+            nori_profile: nori_config.profile,
+            profile_location: nori_config.install_dir,
         }
     }
 }
@@ -140,6 +195,16 @@ impl HistoryCell for NoriSessionHeaderCell {
             Span::from("profile:   ").dim(),
             Span::from(profile_display),
         ]));
+
+        // Profile location line (shows installation directory)
+        if let Some(ref location) = self.profile_location {
+            let location_max_width = inner_width.saturating_sub(18); // "profile location: " is 18 chars
+            let location_display = format_directory(location, Some(location_max_width));
+            lines.push(Line::from(vec![
+                Span::from("profile location: ").dim(),
+                Span::from(location_display),
+            ]));
+        }
 
         with_border(lines)
     }
@@ -247,6 +312,7 @@ mod tests {
             agent: "test-agent".to_string(),
             directory: PathBuf::from("/tmp/test"),
             nori_profile: None,
+            profile_location: None,
         };
 
         let lines = cell.display_lines(80);
@@ -265,6 +331,7 @@ mod tests {
             agent: "test-agent".to_string(),
             directory: PathBuf::from("/tmp/test"),
             nori_profile: Some("senior-swe".to_string()),
+            profile_location: Some(PathBuf::from("/home/user")),
         };
 
         let lines = cell.display_lines(80);
@@ -273,6 +340,10 @@ mod tests {
         assert!(
             rendered.contains("senior-swe"),
             "Should show profile name when set"
+        );
+        assert!(
+            rendered.contains("profile location:"),
+            "Should show profile location label"
         );
     }
 
@@ -283,6 +354,7 @@ mod tests {
             agent: "claude-sonnet".to_string(),
             directory: PathBuf::from("/home/user/project"),
             nori_profile: Some("senior-swe".to_string()),
+            profile_location: Some(PathBuf::from("/home/user")),
         };
 
         let lines = cell.display_lines(80);
