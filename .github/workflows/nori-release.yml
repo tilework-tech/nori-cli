@@ -29,16 +29,16 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to test build (e.g., 0.2.0) - dry run only'
+        description: "Version to test build (e.g., 0.2.0) - dry run only"
         required: true
         type: string
       dry_run:
-        description: 'Dry run mode (builds but does not publish)'
+        description: "Dry run mode (builds but does not publish)"
         required: false
         default: true
         type: boolean
       skip_tests:
-        description: 'Skip running tests (for faster build testing)'
+        description: "Skip running tests (for faster build testing)"
         required: false
         default: false
         type: boolean
@@ -200,6 +200,14 @@ jobs:
           - os: macos-14
             target: x86_64-apple-darwin
             artifact-name: darwin-x86_64
+          - os: ubuntu-24.04
+            target: aarch64-linux-android
+            artifact-name: android-arm64
+            use-ndk: true
+          - os: ubuntu-24.04
+            target: x86_64-linux-android
+            artifact-name: android-x86_64
+            use-ndk: true
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -224,6 +232,27 @@ jobs:
         with:
           toolchain: "1.90.0"
           targets: ${{ matrix.target }}
+
+      - name: Setup Android NDK
+        if: matrix.use-ndk == true
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;26.1.10909125"
+
+      - name: Configure Android linker
+        if: matrix.use-ndk == true
+        run: |
+          mkdir -p ~/.cargo
+          NDK_HOST_TAG="linux-x86_64"
+          NDK_TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST_TAG/bin"
+          cat >> ~/.cargo/config.toml << EOF
+          [target.aarch64-linux-android]
+          linker = "$NDK_TOOLCHAIN/aarch64-linux-android30-clang"
+
+          [target.x86_64-linux-android]
+          linker = "$NDK_TOOLCHAIN/x86_64-linux-android30-clang"
+          EOF
+          cat ~/.cargo/config.toml
 
       - name: Build release binaries
         working-directory: codex-rs
@@ -279,8 +308,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -331,8 +360,9 @@ jobs:
           mkdir -p "$STAGING_DIR/bin"
           mkdir -p "$STAGING_DIR/vendor"
 
-          # Copy the CLI launcher
+          # Copy the CLI launcher and platform module
           cp codex-cli/bin/nori.js "$STAGING_DIR/bin/"
+          cp codex-cli/bin/platform.js "$STAGING_DIR/bin/"
 
           # Copy vendor binaries
           cp -r vendor/* "$STAGING_DIR/vendor/"
@@ -416,8 +446,8 @@ jobs:
     runs-on: ubuntu-24.04
     environment: npm-publish
     permissions:
-      contents: read      # Required to checkout code
-      id-token: write     # Required for OIDC Trusted Publishing
+      contents: read # Required to checkout code
+      id-token: write # Required for OIDC Trusted Publishing
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -427,8 +457,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Download npm package
         uses: actions/download-artifact@v4
