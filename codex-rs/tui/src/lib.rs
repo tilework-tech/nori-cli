@@ -153,10 +153,10 @@ pub async fn run_main(
         }
     }
 
-    // Initialize ACP rolling file tracing in $NORI_HOME/logs/ for subprocess debugging
-    // Logs are stored as daily rolling files like: ~/.nori/cli/logs/nori-acp.2024-01-15.log
+    // Initialize ACP rolling file tracing in $NORI_HOME/log/ for subprocess debugging
+    // Logs are stored as daily rolling files like: ~/.nori/cli/log/nori-acp.2024-01-15.log
     if let Ok(nori_home) = codex_acp::find_nori_home() {
-        let log_dir = nori_home.join("logs");
+        let log_dir = nori_home.join("log");
         if let Err(e) = codex_acp::init_rolling_file_tracing(&log_dir, "nori-acp") {
             tracing::warn!("Failed to initialize ACP file tracing: {e}");
         }
