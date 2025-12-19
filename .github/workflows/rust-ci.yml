@@ -117,6 +117,7 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p codex-cli --profile ci-test --target ${{ matrix.target }}
+          cargo build -p codex-exec --profile ci-test --target ${{ matrix.target }}
 
       - name: cargo test nori
         env:

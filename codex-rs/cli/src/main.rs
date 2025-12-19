@@ -1152,8 +1152,7 @@ mod tests {
         let help = MultitoolCli::command().render_help().to_string();
         assert!(
             help.contains("nori [OPTIONS]"),
-            "Help should show 'nori' as binary name, got: {}",
-            help
+            "Help should show 'nori' as binary name, got: {help}"
         );
         assert!(
             !help.contains("codex [OPTIONS]"),
@@ -1167,8 +1166,7 @@ mod tests {
         let help = MultitoolCli::command().render_help().to_string();
         assert!(
             help.contains("~/.nori/cli/config.toml"),
-            "Help should reference ~/.nori/cli/config.toml, got: {}",
-            help
+            "Help should reference ~/.nori/cli/config.toml, got: {help}"
         );
         assert!(
             !help.contains("~/.codex/config.toml"),
@@ -1182,8 +1180,7 @@ mod tests {
         let help = MultitoolCli::command().render_long_help().to_string();
         assert!(
             help.contains("agent=\"claude-code\""),
-            "Help should show agent=\"claude-code\" example, got: {}",
-            help
+            "Help should show agent=\"claude-code\" example, got: {help}"
         );
         assert!(
             !help.contains("model=\"o3\""),
