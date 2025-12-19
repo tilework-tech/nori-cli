@@ -57,6 +57,7 @@ All tests run in isolated temporary directories created in `/tmp/`:
 - Each `spawn()` or `spawn_with_config()` call creates a new temp directory
 - Directory contains a `hello.py` file with `print('Hello, World!')`
 - A `config.toml` is automatically generated in the temp directory (used as CODEX_HOME)
+- Git repo initialized with `git init -b master` for deterministic branch name (when `git_init: true`)
 - Temp directory is automatically cleaned up when `TuiSession` is dropped
 - Tests no longer run in user's home directory for better isolation
 
@@ -109,7 +110,7 @@ Builder pattern for test environment setup:
 - `with_approval_policy(policy)` - Set approval policy (defaults to `OnFailure`)
 - `without_approval_policy()` - Remove approval policy to test trust screen
 - `with_config_toml(content)` - Provide custom config.toml content (overrides default generation). Pass `""` (empty string) to prevent config file creation entirely (enables first-launch welcome screen testing)
-- `with_excluded_binary(binary_name)` - Exclude directories containing a specific binary from PATH (useful for testing behavior when certain commands appear "not installed")
+- `with_excluded_binary(binary_name)` - Add additional binaries to exclude from PATH (note: `nori-ai` is excluded by default to match CI environment)
 - `cwd` field - Optional working directory (auto-created temp directory if None)
 - `config_toml` field - Optional custom config.toml content (None generates default, `Some("")` prevents file creation)
 
@@ -126,12 +127,14 @@ By default, all spawned sessions use `ApprovalPolicy::OnFailure` which:
 
 **Binary Exclusion for Test Isolation:**
 
-Tests that need to verify behavior when certain binaries are "not installed" use `with_excluded_binary()`:
+By default, `SessionConfig` excludes `nori-ai` from PATH to simulate CI runner environments where it is not installed. Tests that need `nori-ai` must explicitly add it via `with_extra_path()`.
+
+For additional exclusions, use `with_excluded_binary()`:
 ```rust
-SessionConfig::default().with_excluded_binary("nori-ai")
+SessionConfig::default().with_excluded_binary("some-other-binary")
 ```
 
-This filters PATH to remove directories containing the specified binary, ensuring the test sees the expected behavior regardless of what's installed on the developer's machine
+This filters PATH to remove directories containing the specified binary, ensuring tests behave consistently regardless of what's installed on the developer's machine
 
 ### Things to Know
 

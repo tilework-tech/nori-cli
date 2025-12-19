@@ -168,10 +168,11 @@ fn test_startup_shows_nori_banner() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
-    // Wait for the Nori branding to appear (the "Powered by Nori AI" line)
+    // Wait for the install instructions to appear (this is the key indicator that nori-ai is not installed)
+    // We wait for this specifically since it appears after "Powered by Nori AI" and ensures full render
     session
-        .wait_for_text("Powered by Nori AI", TIMEOUT)
-        .expect("Nori branding did not appear");
+        .wait_for_text("npx nori-ai install", TIMEOUT)
+        .expect("Install instructions did not appear - nori-ai might be in PATH");
 
     let contents = session.screen_contents();
 
@@ -186,12 +187,6 @@ fn test_startup_shows_nori_banner() {
     assert!(
         contents.contains("Powered by Nori AI"),
         "Expected 'Powered by Nori AI' text, but got: {}",
-        contents
-    );
-    // When nori-ai is NOT installed, show the npx install instructions
-    assert!(
-        contents.contains("npx nori-ai install"),
-        "Expected install instructions when nori-ai not installed, but got: {}",
         contents
     );
 
