@@ -33,11 +33,25 @@ fn get_nori_version() -> Option<String> {
     }
 
     let version_output = String::from_utf8(output.stdout).ok()?;
-    // Parse "nori-ai 19.1.1" to extract "19.1.1"
-    version_output
-        .split_whitespace()
-        .nth(1)
-        .map(|v| v.trim().to_string())
+    parse_nori_version(&version_output)
+}
+
+fn parse_nori_version(output: &str) -> Option<String> {
+    let trimmed = output.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+
+    match tokens.len() {
+        // Format: "19.1.1" (version only)
+        1 => Some(tokens[0].to_string()),
+        // Format: "nori-ai 19.1.1" (program name + version)
+        2 => Some(tokens[1].to_string()),
+        // Unexpected format
+        _ => None,
+    }
 }
 
 fn get_nori_profile() -> Option<String> {
@@ -272,5 +286,29 @@ mod tests {
         let (added, removed) = parse_git_shortstat(output);
         assert_eq!(added, None);
         assert_eq!(removed, None);
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_nori_version_with_program_name() {
+        // Old format: "nori-ai 19.1.1"
+        let version = parse_nori_version("nori-ai 19.1.1");
+        assert_eq!(version, Some("19.1.1".to_string()));
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_nori_version_version_only() {
+        // Current format: "19.1.1"
+        let version = parse_nori_version("19.1.1");
+        assert_eq!(version, Some("19.1.1".to_string()));
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_nori_version_with_newline() {
+        // Real output has trailing newline
+        let version = parse_nori_version("19.1.1\n");
+        assert_eq!(version, Some("19.1.1".to_string()));
     }
 }
