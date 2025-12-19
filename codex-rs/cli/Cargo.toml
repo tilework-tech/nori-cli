@@ -30,7 +30,12 @@ full = [
     "chatgpt",
     "responses-api-proxy",
     "oss-providers",
+    "codex-features",
 ]
+
+# Codex-only features (exec, resume, features subcommands) - propagate to TUI
+# Disabled by default for Nori builds; enabled by 'full' for upstream compatibility
+codex-features = ["codex-tui/codex-features"]
 
 # App server functionality
 app-server = ["dep:codex-app-server"]

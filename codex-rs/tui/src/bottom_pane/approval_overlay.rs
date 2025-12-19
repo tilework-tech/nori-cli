@@ -621,8 +621,8 @@ mod tests {
             })
             .collect();
         let expected = vec![
-            "✔ You approved codex to run".to_string(),
-            "  git add tui/src/render/".to_string(),
+            "✔ You approved Nori to".to_string(),
+            "  rungit add tui/src/render/".to_string(),
             "  mod.rs tui/src/render/".to_string(),
             "  renderable.rs this time".to_string(),
         ];

@@ -16,7 +16,11 @@ path = "src/lib.rs"
 default = ["unstable", "nori-config"]
 
 # Full feature set - enables all upstream/legacy functionality
-full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers", "otel"]
+full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers", "otel", "codex-features"]
+
+# Codex-only features (undo, compact, review slash commands)
+# Disabled by default for Nori builds; enabled by 'full' for upstream compatibility
+codex-features = []
 
 # OpenTelemetry tracing export (disabled by default)
 otel = ["dep:opentelemetry-appender-tracing"]

@@ -39,18 +39,18 @@ impl SlashCommand {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
-            SlashCommand::Init => "create an AGENTS.md file with instructions for Codex",
+            SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Review => "review my current changes and find issues",
-            SlashCommand::Undo => "ask Codex to undo a turn",
-            SlashCommand::Quit | SlashCommand::Exit => "exit Codex",
+            SlashCommand::Undo => "ask Nori to undo a turn",
+            SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Model => "choose what model and reasoning effort to use",
-            SlashCommand::Approvals => "choose what Codex can do without approval",
+            SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Mcp => "list configured MCP tools",
-            SlashCommand::Logout => "log out of Codex",
+            SlashCommand::Logout => "log out of Nori",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
         }
@@ -93,6 +93,8 @@ impl SlashCommand {
             SlashCommand::Logout => false,
             #[cfg(not(feature = "feedback"))]
             SlashCommand::Feedback => false,
+            #[cfg(not(feature = "codex-features"))]
+            SlashCommand::Undo | SlashCommand::Compact | SlashCommand::Review => false,
             _ => true,
         }
     }

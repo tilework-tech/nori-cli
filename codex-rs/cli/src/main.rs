@@ -27,6 +27,7 @@ use codex_cli::login::run_logout;
 #[cfg(feature = "cloud-tasks")]
 use codex_cloud_tasks::Cli as CloudTasksCli;
 use codex_common::CliConfigOverrides;
+#[cfg(feature = "codex-features")]
 use codex_exec::Cli as ExecCli;
 use codex_execpolicy::ExecPolicyCheckCommand;
 #[cfg(feature = "responses-api-proxy")]
@@ -46,11 +47,13 @@ mod wsl_paths;
 #[cfg(feature = "mcp-server")]
 use crate::mcp_cmd::McpCli;
 
+#[cfg(feature = "codex-features")]
 use codex_core::config::Config;
+#[cfg(feature = "codex-features")]
 use codex_core::config::ConfigOverrides;
 use codex_core::features::is_known_feature_key;
 
-/// Codex CLI
+/// Nori CLI
 ///
 /// If no subcommand is specified, options will be forwarded to the interactive CLI.
 #[derive(Debug, Parser)]
@@ -82,6 +85,7 @@ struct MultitoolCli {
 #[derive(Debug, clap::Subcommand)]
 enum Subcommand {
     /// Run Codex non-interactively.
+    #[cfg(feature = "codex-features")]
     #[clap(visible_alias = "e")]
     Exec(ExecCli),
 
@@ -108,7 +112,7 @@ enum Subcommand {
     /// Generate shell completion scripts.
     Completion(CompletionCommand),
 
-    /// Run commands within a Codex-provided sandbox.
+    /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
 
@@ -122,6 +126,7 @@ enum Subcommand {
     Apply(ApplyCommand),
 
     /// Resume a previous interactive session (picker by default; use --last to continue the most recent).
+    #[cfg(feature = "codex-features")]
     Resume(ResumeCommand),
 
     /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
@@ -139,6 +144,7 @@ enum Subcommand {
     StdioToUds(StdioToUdsCommand),
 
     /// Inspect feature flags.
+    #[cfg(feature = "codex-features")]
     Features(FeaturesCli),
 }
 
@@ -149,6 +155,7 @@ struct CompletionCommand {
     shell: Shell,
 }
 
+#[cfg(feature = "codex-features")]
 #[derive(Debug, Parser)]
 struct ResumeCommand {
     /// Conversation/session id (UUID). When provided, resumes this session.
@@ -411,18 +418,21 @@ impl FeatureToggles {
     }
 }
 
+#[cfg(feature = "codex-features")]
 #[derive(Debug, Parser)]
 struct FeaturesCli {
     #[command(subcommand)]
     sub: FeaturesSubcommand,
 }
 
+#[cfg(feature = "codex-features")]
 #[derive(Debug, Parser)]
 enum FeaturesSubcommand {
     /// List known features with their stage and effective state.
     List,
 }
 
+#[cfg(feature = "codex-features")]
 fn stage_str(stage: codex_core::features::Stage) -> &'static str {
     use codex_core::features::Stage;
     match stage {
@@ -499,6 +509,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let exit_info = codex_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
+        #[cfg(feature = "codex-features")]
         Some(Subcommand::Exec(mut exec_cli)) => {
             prepend_config_flags(
                 &mut exec_cli.config_overrides,
@@ -531,6 +542,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 codex_app_server_protocol::generate_json(&gen_cli.out_dir)?;
             }
         },
+        #[cfg(feature = "codex-features")]
         Some(Subcommand::Resume(ResumeCommand {
             session_id,
             last,
@@ -655,6 +667,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
         }
+        #[cfg(feature = "codex-features")]
         Some(Subcommand::Features(FeaturesCli { sub })) => match sub {
             FeaturesSubcommand::List => {
                 // Respect root-level `-c` overrides plus top-level flags like `--profile`.
@@ -702,6 +715,7 @@ fn prepend_config_flags(
 }
 
 /// Build the final `TuiCli` for a `codex resume` invocation.
+#[cfg(feature = "codex-features")]
 fn finalize_resume_interactive(
     mut interactive: TuiCli,
     root_config_overrides: CliConfigOverrides,
@@ -730,6 +744,7 @@ fn finalize_resume_interactive(
 /// Merge flags provided to `codex resume` so they take precedence over any
 /// root-level flags. Only overrides fields explicitly set on the resume-scoped
 /// CLI. Also appends `-c key=value` overrides with highest precedence.
+#[cfg(feature = "codex-features")]
 fn merge_resume_cli_flags(interactive: &mut TuiCli, resume_cli: TuiCli) {
     if let Some(model) = resume_cli.model {
         interactive.model = Some(model);
@@ -783,11 +798,13 @@ fn print_completion(cmd: CompletionCommand) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "codex-features")]
     use assert_matches::assert_matches;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
 
+    #[cfg(feature = "codex-features")]
     fn finalize_from_args(args: &[&str]) -> TuiCli {
         let cli = MultitoolCli::try_parse_from(args).expect("parse");
         let MultitoolCli {
@@ -866,6 +883,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_model_flag_applies_when_no_root_flags() {
         let interactive = finalize_from_args(["codex", "resume", "-m", "gpt-5.1-test"].as_ref());
 
@@ -876,6 +894,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_picker_logic_none_and_not_last() {
         let interactive = finalize_from_args(["codex", "resume"].as_ref());
         assert!(interactive.resume_picker);
@@ -885,6 +904,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_picker_logic_last() {
         let interactive = finalize_from_args(["codex", "resume", "--last"].as_ref());
         assert!(!interactive.resume_picker);
@@ -894,6 +914,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_picker_logic_with_session_id() {
         let interactive = finalize_from_args(["codex", "resume", "1234"].as_ref());
         assert!(!interactive.resume_picker);
@@ -903,6 +924,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_all_flag_sets_show_all() {
         let interactive = finalize_from_args(["codex", "resume", "--all"].as_ref());
         assert!(interactive.resume_picker);
@@ -910,6 +932,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_merges_option_flags_and_full_auto() {
         let interactive = finalize_from_args(
             [
@@ -967,6 +990,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "codex-features")]
     fn resume_merges_dangerously_bypass_flag() {
         let interactive = finalize_from_args(
             [
