@@ -313,6 +313,32 @@ Bridges between ACP types and codex-protocol types:
 
 Non-text content (images, audio, resources) and tool calls are currently dropped with empty vec.
 
+**Approval Request Formatting (`translator.rs`):**
+
+When ACP agents request permission for tool operations, the translator converts raw JSON tool call data into human-readable approval requests using git-style formatting:
+
+| Tool Kind | Format Example |
+|-----------|----------------|
+| Edit | `Edit main.rs (+6 -5)` |
+| Write (new file) | `Write config.toml (23 lines)` |
+| Execute | `Execute: cargo build --release` |
+| Delete | `Delete temp.txt` |
+| Move | `Move old.rs → new.rs` |
+| Generic | `ToolName(argument)` |
+
+The formatting pipeline:
+1. `extract_command_from_tool_call()` dispatches to format functions based on `ToolKind`
+2. `extract_reason_from_tool_call()` generates the descriptive reason shown in the approval prompt
+3. Helper functions extract and format data from the `raw_input` JSON:
+   - `extract_file_path()` - finds path from `file_path`, `path`, or `file` fields
+   - `shorten_path()` - extracts just the filename for compact display
+   - `calculate_diff_stats()` - computes +added/-removed using set difference on line splits
+   - `truncate_str()` - truncates long strings with "..."
+
+Write vs Edit detection uses field presence since ACP lacks a distinct Write variant:
+- `old_string` field present → Edit operation (string replacement)
+- `content` field present → Write operation (new file creation)
+
 **Approval Translation Details:**
 
 The approval translation maps between Codex's binary approve/deny model and ACP's option-based model:
