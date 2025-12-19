@@ -251,6 +251,87 @@ fn test_startup_hides_install_hint_when_nori_installed() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
+fn test_trust_directory_saves_to_config() {
+    // This test verifies that when a user completes the trust directory onboarding,
+    // their choice is saved to config.toml in NORI_HOME.
+    use tui_pty_e2e::Key;
+
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        80,
+        SessionConfig::default()
+            // No approval policy or sandbox - triggers onboarding
+            .without_approval_policy()
+            .without_sandbox()
+            // Empty config means no config.toml written, triggering first-launch
+            .with_config_toml(""),
+    )
+    .expect("Failed to spawn");
+
+    // Step 1: Wait for the welcome screen
+    session
+        .wait_for_text("Welcome to Nori", TIMEOUT)
+        .expect("Welcome screen did not appear");
+
+    // Step 2: Press Enter to advance past welcome screen
+    session.send_key(Key::Enter).expect("Failed to send Enter");
+
+    // Step 3: Wait for the trust directory screen
+    // The trust screen shows "You are running Nori in" for the directory path
+    session
+        .wait_for_text("You are running Nori in", TIMEOUT)
+        .expect("Trust directory screen did not appear");
+
+    // Step 4: Press 'y' or '1' to select "Trust" option
+    // (The default for non-git repos is DontTrust, so we explicitly select Trust)
+    session
+        .send_key(Key::Char('y'))
+        .expect("Failed to send 'y' key");
+
+    // Step 5: Wait for the main prompt to appear (onboarding complete)
+    // We wait for "context left" which only appears in the main prompt,
+    // not "›" which also appears as a selection marker in the trust screen
+    session
+        .wait_for_text("context left", TIMEOUT)
+        .expect("Main prompt did not appear after trust selection");
+
+    // Give a moment for config to be written
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    // Step 6: Verify config.toml was created with trust entry
+    let nori_home = session
+        .nori_home_path()
+        .expect("No NORI_HOME temp directory");
+    let config_path = nori_home.join("config.toml");
+
+    assert!(
+        config_path.exists(),
+        "config.toml should exist after trust selection, NORI_HOME: {}",
+        nori_home.display()
+    );
+
+    let config_content = std::fs::read_to_string(&config_path).expect("Failed to read config.toml");
+
+    // Verify the config contains a projects section with trust_level
+    assert!(
+        config_content.contains("[projects"),
+        "config.toml should contain [projects] section, got:\n{}",
+        config_content
+    );
+    assert!(
+        config_content.contains("trust_level"),
+        "config.toml should contain trust_level entry, got:\n{}",
+        config_content
+    );
+    assert!(
+        config_content.contains("trusted"),
+        "trust_level should be 'trusted' after selecting Trust, got:\n{}",
+        config_content
+    );
+}
+
+#[test]
 fn test_poll_does_not_block_when_no_data() {
     // RED phase: This test verifies that poll() returns quickly when no data is available,
     // proving the PTY reader is in non-blocking mode

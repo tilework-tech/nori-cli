@@ -116,22 +116,29 @@ The `lib.rs` re-export logic ensures `UpdateAction` type is always available via
 **Config Adapter (`config_adapter.rs`):**
 
 Provides integration between the Nori config system (from `@/codex-rs/acp/src/config/`) and the TUI:
-- `get_nori_home()`: Delegates to `codex_acp::config::find_nori_home()` - the canonical source for the Nori home path (`~/.nori/cli`)
-- `setup_nori_config_environment()`: Sets `CODEX_HOME` env var to redirect codex-core's config loading to the Nori location
+- `get_nori_home()`: Returns the canonicalized Nori home path (`~/.nori/cli`). Canonicalization handles systems with symlinks (e.g., macOS `/var` -> `/private/var`) to ensure consistency between where config is saved and loaded.
+- `setup_nori_config_environment()`: Sets `CODEX_HOME` env var (canonicalized) to redirect codex-core's config loading to the Nori location
 - `load_nori_config()`: Loads `NoriConfig` directly from `~/.nori/cli/config.toml`
 
-This ensures a single source of truth for path resolution: `codex_acp::config::find_nori_home()`.
+Path canonicalization is important because `find_codex_home()` returns a canonicalized path. If NORI_HOME is not canonicalized, trust settings saved under one path may not be found when config is loaded under the canonical path.
 
 **Onboarding Module (`onboarding/`):**
 
 Provides Nori-branded first-launch onboarding flow:
 - `first_launch.rs`: First-launch detection via `~/.nori/cli/config.toml` existence
   - `is_first_launch(nori_home)`: Returns true if `config.toml` doesn't exist
-  - `mark_first_launch_complete(nori_home)`: Creates minimal config file
+  - `mark_first_launch_complete(nori_home)`: Sets `cli.first_launch_complete = true` using `ConfigEditsBuilder`
   - Note: `nori_home` parameter expects the full path (`~/.nori/cli`), not `~/.nori`
 - `welcome.rs`: ASCII banner welcome screen with Nori branding
 - `trust_directory.rs`: Directory trust prompt (persists to codex-core's trust system)
 - `onboarding_screen.rs`: Orchestrates the multi-step onboarding flow
+
+**Config Persistence Pattern:**
+
+The onboarding flow writes config changes via `ConfigEditsBuilder` (from `@/codex-rs/core/src/config/edit.rs`) which merges edits with existing content. This is critical because:
+1. `trust_directory.rs` calls `set_project_trust_level()` to save trust settings
+2. `first_launch.rs` calls `mark_first_launch_complete()` to set `cli.first_launch_complete`
+3. Both must merge rather than overwrite to preserve each other's changes
 
 The onboarding screen uses `get_nori_home()` from `config_adapter` to get the canonical path, ensuring consistency with the ACP config module.
 

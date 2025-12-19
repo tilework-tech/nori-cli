@@ -114,11 +114,9 @@ fn test_acp_approval_request_displayed_in_tui() {
     // or show the approval popup from ExecApprovalRequestEvent
     let approval_appeared = session.wait_for(
         |screen| {
-            screen.contains("permission")
-                || screen.contains("approve")
-                || screen.contains("allow")
-                || screen.contains("deny")
-                || screen.contains("ACP agent requests")
+            screen.contains("Yes, proceed")
+                || screen.contains("Yes, and")
+                || screen.contains("No, and")
         },
         Duration::from_secs(10),
     );

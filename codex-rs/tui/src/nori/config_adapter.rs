@@ -13,11 +13,15 @@ use codex_acp::config::NoriConfigOverrides;
 use codex_acp::config::find_nori_home;
 use std::path::PathBuf;
 
-/// Get the Nori home directory path.
+/// Get the Nori home directory path (canonicalized).
 ///
 /// This is used to redirect config loading to `~/.nori/cli` instead of `~/.codex`.
+/// The path is canonicalized to match the behavior of `find_codex_home()` and ensure
+/// consistency between where trust is saved and where config is loaded.
 pub fn get_nori_home() -> anyhow::Result<PathBuf> {
-    find_nori_home()
+    let nori_home = find_nori_home()?;
+    // Canonicalize if the directory exists; otherwise return the original path
+    Ok(std::fs::canonicalize(&nori_home).unwrap_or(nori_home))
 }
 
 /// Set up the environment to use Nori config location.
@@ -42,15 +46,21 @@ pub fn setup_nori_config_environment() -> anyhow::Result<()> {
         )
     })?;
 
+    // Canonicalize the path after creating the directory to ensure consistency
+    // between where trust is saved (using nori_home) and where config is loaded
+    // (using canonicalized CODEX_HOME via find_codex_home()).
+    // This handles systems with symlinks (e.g., macOS /var -> /private/var).
+    let canonical_home = std::fs::canonicalize(&nori_home).unwrap_or(nori_home);
+
     // Set CODEX_HOME to redirect config loading to Nori location
     // SAFETY: Called early in main before spawning threads
     unsafe {
-        std::env::set_var("CODEX_HOME", &nori_home);
+        std::env::set_var("CODEX_HOME", &canonical_home);
     }
 
     tracing::debug!(
         "Nori config: using {} (via CODEX_HOME)",
-        nori_home.display()
+        canonical_home.display()
     );
 
     Ok(())

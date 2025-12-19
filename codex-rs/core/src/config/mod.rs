@@ -46,7 +46,6 @@ use codex_rmcp_client::OAuthCredentialsStoreMode;
 use dirs::home_dir;
 use dunce::canonicalize;
 use serde::Deserialize;
-use similar::DiffableStr;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -874,7 +873,7 @@ impl ConfigToml {
         // worktrees inherit trust from the main project.
         if let Some(repo_root) = resolve_root_git_project_for_trust(resolved_cwd)
             && let Some(project_config_for_root) =
-                projects.get(&repo_root.to_string_lossy().to_string_lossy().to_string())
+                projects.get(&repo_root.to_string_lossy().to_string())
         {
             return Some(project_config_for_root.clone());
         }

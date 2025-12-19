@@ -18,6 +18,7 @@ use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::Op;
+use codex_protocol::protocol::PatchApplyBeginEvent;
 use codex_protocol::protocol::ReviewDecision;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionConfiguredEvent;
@@ -31,9 +32,12 @@ use tracing::warn;
 
 use crate::connection::AcpConnection;
 use crate::connection::AcpModelState;
+use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
 use crate::registry::get_agent_config;
 use crate::translator;
+use crate::translator::is_patch_operation;
+use crate::translator::tool_call_to_file_change;
 
 /// Configuration for spawning an ACP backend.
 ///
@@ -293,8 +297,15 @@ impl AcpBackend {
                 // as details become available, but the TUI expects exactly one Begin per call_id.
                 let mut emitted_begin_call_ids: std::collections::HashSet<String> =
                     std::collections::HashSet::new();
+                // Track pending patch operations: store FileChange data from ToolCall events
+                // so we can emit PatchApplyBegin on ToolCallUpdate (after approval).
+                let mut pending_patch_changes: std::collections::HashMap<
+                    String,
+                    std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
+                > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
-                    let events = translate_session_update_to_events(&update);
+                    let events =
+                        translate_session_update_to_events(&update, &mut pending_patch_changes);
                     for event_msg in events {
                         // Deduplicate ExecCommandBegin events - only emit the first one per call_id
                         if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
@@ -357,7 +368,7 @@ impl AcpBackend {
     /// Handle an exec approval decision by finding and resolving the pending approval.
     async fn handle_exec_approval(&self, call_id: &str, decision: ReviewDecision) {
         let mut pending = self.pending_approvals.lock().await;
-        if let Some(pos) = pending.iter().position(|r| r.event.call_id == call_id) {
+        if let Some(pos) = pending.iter().position(|r| r.event.call_id() == call_id) {
             let request = pending.remove(pos);
             let _ = request.response_tx.send(decision);
         } else {
@@ -424,15 +435,21 @@ impl AcpBackend {
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
-            // Send ExecApprovalRequest event to TUI.
+            // Send the appropriate approval request event to TUI based on operation type.
             // Use the call_id as the event wrapper ID so that the TUI can
             // correctly route the user's decision back to this pending request.
-            let _ = event_tx
-                .send(Event {
-                    id: request.event.call_id.clone(),
-                    msg: EventMsg::ExecApprovalRequest(request.event.clone()),
-                })
-                .await;
+            let (id, msg) = match &request.event {
+                ApprovalEventType::Exec(exec_event) => (
+                    exec_event.call_id.clone(),
+                    EventMsg::ExecApprovalRequest(exec_event.clone()),
+                ),
+                ApprovalEventType::Patch(patch_event) => (
+                    patch_event.call_id.clone(),
+                    EventMsg::ApplyPatchApprovalRequest(patch_event.clone()),
+                ),
+            };
+
+            let _ = event_tx.send(Event { id, msg }).await;
 
             // Store the pending approval for later resolution
             pending_approvals.lock().await.push(request);
@@ -490,7 +507,16 @@ fn get_event_msg_type(msg: &EventMsg) -> &'static str {
 }
 
 /// Translate an ACP SessionUpdate to codex_protocol::EventMsg variants.
-fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventMsg> {
+///
+/// The `pending_patch_changes` map stores FileChange data from ToolCall events
+/// so that it can be retrieved when ToolCallUpdate arrives (after approval).
+fn translate_session_update_to_events(
+    update: &acp::SessionUpdate,
+    pending_patch_changes: &mut std::collections::HashMap<
+        String,
+        std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
+    >,
+) -> Vec<EventMsg> {
     match update {
         acp::SessionUpdate::AgentMessageChunk(chunk) => {
             if let acp::ContentBlock::Text(text) = &chunk.content {
@@ -555,6 +581,33 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
                 return vec![];
             }
 
+            // For patch operations (Edit/Write/Delete), don't emit anything on ToolCall.
+            // Store the FileChange data so we can emit PatchApplyBegin on ToolCallUpdate.
+            // The approval request will be shown first via ApplyPatchApprovalRequest.
+            if is_patch_operation(
+                Some(&tool_call.kind),
+                &tool_call.title,
+                tool_call.raw_input.as_ref(),
+            ) && let Some((path, change)) =
+                tool_call_to_file_change(Some(&tool_call.kind), tool_call.raw_input.as_ref())
+            {
+                let mut changes = std::collections::HashMap::new();
+                changes.insert(path, change);
+
+                // Store for retrieval on ToolCallUpdate
+                pending_patch_changes.insert(tool_call.tool_call_id.to_string(), changes);
+
+                debug!(
+                    target: "acp_event_flow",
+                    event_type = "ToolCall",
+                    call_id = %tool_call.tool_call_id,
+                    title = %tool_call.title,
+                    kind = ?tool_call.kind,
+                    "ACP: stored patch changes for later (will show after approval)"
+                );
+                return vec![];
+            }
+
             // Format command with tool name and input arguments for better display
             let command = format_tool_call_command(&tool_call.title, tool_call.raw_input.as_ref());
             // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
@@ -590,18 +643,40 @@ fn translate_session_update_to_events(update: &acp::SessionUpdate) -> Vec<EventM
         acp::SessionUpdate::ToolCallUpdate(update) => {
             // Tool call updates can be mapped based on status
             let status = update.fields.status;
+            let title = update.fields.title.clone().unwrap_or_default();
             debug!(
                 target: "acp_event_flow",
                 event_type = "ToolCallUpdate",
                 call_id = %update.tool_call_id,
                 status = ?status,
-                title = ?update.fields.title,
+                title = %title,
                 "ACP: tool call update received"
             );
             if status == Some(acp::ToolCallStatus::Completed) {
+                // Check if we have stored patch changes from the original ToolCall event.
+                // This data was stored when we first saw the ToolCall, before approval.
+                let call_id = update.tool_call_id.to_string();
+                if let Some(changes) = pending_patch_changes.remove(&call_id) {
+                    debug!(
+                        target: "acp_event_flow",
+                        event_type = "ToolCallUpdate",
+                        call_id = %call_id,
+                        title = %title,
+                        num_files = changes.len(),
+                        "ACP -> TUI: PatchApplyBegin (showing completed file operation)"
+                    );
+
+                    // Use PatchApplyBegin to create the history cell with the diff
+                    return vec![EventMsg::PatchApplyBegin(PatchApplyBeginEvent {
+                        call_id,
+                        turn_id: String::new(),
+                        auto_approved: true, // Already approved by this point
+                        changes,
+                    })];
+                }
+
                 // Extract output from tool call content and raw_output
                 let aggregated_output = extract_tool_output(&update.fields);
-                let title = update.fields.title.clone().unwrap_or_default();
                 let command = format_tool_call_command(&title, update.fields.raw_input.as_ref());
                 // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
                 let parsed_cmd = classify_tool_to_parsed_command(
@@ -1073,7 +1148,8 @@ mod tests {
             acp::ContentBlock::Text(acp::TextContent::new("Hello from agent")),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1092,7 +1168,8 @@ mod tests {
             acp::ContentBlock::Text(acp::TextContent::new("Thinking about the problem...")),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1113,7 +1190,8 @@ mod tests {
                 .raw_input(serde_json::json!({"command": "ls -la"})),
         );
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1136,7 +1214,8 @@ mod tests {
                 .title("read_file"),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1160,7 +1239,8 @@ mod tests {
                 ))]),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1182,7 +1262,8 @@ mod tests {
                 .raw_output(serde_json::json!({"lines": 42})),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         match &events[0] {
             EventMsg::ExecCommandEnd(end) => {
                 assert_eq!(end.aggregated_output, "Read 42 lines");
@@ -1228,7 +1309,8 @@ mod tests {
             acp::ContentBlock::Image(acp::ImageContent::new(String::new(), "image/png")),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert!(events.is_empty());
     }
 
@@ -1239,7 +1321,8 @@ mod tests {
             acp::ContentBlock::Text(acp::TextContent::new("User message")),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert!(events.is_empty());
     }
 
@@ -1479,7 +1562,8 @@ mod tests {
                 .raw_input(serde_json::json!({"path": "src/lib.rs"})),
         );
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1506,7 +1590,8 @@ mod tests {
                 .raw_input(serde_json::json!({"command": "cargo test"})),
         );
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -1535,7 +1620,8 @@ mod tests {
                 .raw_input(serde_json::json!({"path": "Cargo.toml"})),
         ));
 
-        let events = translate_session_update_to_events(&update);
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
