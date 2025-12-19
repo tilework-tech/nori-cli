@@ -11,6 +11,7 @@ pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
 pub use types::ApprovalPolicy;
+pub use types::DEFAULT_MODEL;
 pub use types::McpServerConfig;
 pub use types::McpServerTransportConfig;
 pub use types::NoriConfig;
@@ -62,7 +63,7 @@ mod tests {
     fn test_nori_config_default() {
         let config = NoriConfig::default();
 
-        assert_eq!(config.model, "claude-acp");
+        assert_eq!(config.model, "claude-code");
         assert!(config.animations);
         assert!(config.notifications);
         assert_eq!(
@@ -85,7 +86,7 @@ mod tests {
     #[test]
     fn test_nori_config_toml_deserialize_full() {
         let toml_str = r#"
-model = "gemini-acp"
+model = "gemini"
 sandbox_mode = "read-only"
 approval_policy = "always"
 
@@ -95,7 +96,7 @@ notifications = false
 "#;
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
 
-        assert_eq!(config.model, Some("gemini-acp".to_string()));
+        assert_eq!(config.model, Some("gemini".to_string()));
         assert_eq!(
             config.sandbox_mode,
             Some(codex_protocol::config_types::SandboxMode::ReadOnly)
@@ -113,7 +114,7 @@ notifications = false
         std::fs::write(
             &config_path,
             r#"
-model = "gemini-acp"
+model = "gemini"
 
 [tui]
 animations = false
@@ -123,7 +124,7 @@ animations = false
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
 
-        assert_eq!(config.model, "gemini-acp");
+        assert_eq!(config.model, "gemini");
         assert!(!config.animations);
         assert!(config.notifications); // default
     }
@@ -137,7 +138,7 @@ animations = false
         std::fs::write(
             &config_path,
             r#"
-model = "gemini-acp"
+model = "gemini"
 "#,
         )
         .unwrap();
@@ -146,14 +147,14 @@ model = "gemini-acp"
         unsafe { env::set_var(NORI_HOME_ENV, temp_dir.path()) };
 
         let overrides = NoriConfigOverrides {
-            model: Some("claude-acp".to_string()),
+            model: Some("claude-code".to_string()),
             ..Default::default()
         };
 
         let config = NoriConfig::load_with_overrides(overrides).unwrap();
 
         // Override should win
-        assert_eq!(config.model, "claude-acp");
+        assert_eq!(config.model, "claude-code");
 
         // SAFETY: Test runs serially
         unsafe { env::remove_var(NORI_HOME_ENV) };
@@ -170,7 +171,7 @@ model = "gemini-acp"
 
         let config = NoriConfig::load().unwrap();
 
-        assert_eq!(config.model, "claude-acp");
+        assert_eq!(config.model, "claude-code");
         assert!(config.animations);
         assert!(config.notifications);
 

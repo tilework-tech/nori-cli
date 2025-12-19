@@ -136,8 +136,8 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Should show the main prompt directly (skipping onboarding)
     assert!(
-        contents.contains("›") && contents.contains("context left"),
-        "Should show main prompt with context indicator, got: {}",
+        contents.contains("›") && contents.contains("? for shortcuts"),
+        "Should show main prompt with help indicator, got: {}",
         contents
     );
 }
@@ -147,19 +147,17 @@ fn test_trust_screen_is_skipped_with_default_config() {
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
     // with the expected branding elements when nori-ai is NOT installed
+    // (nori-ai is excluded from PATH by default in SessionConfig)
 
     use tui_pty_e2e::normalize_for_snapshot;
-    let mut session = TuiSession::spawn_with_config(
-        24,
-        80,
-        SessionConfig::default().with_excluded_binary("nori-ai"),
-    )
-    .expect("Failed to spawn");
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
-    // Wait for the Nori branding to appear (the "Powered by Nori AI" line)
+    // Wait for the install instructions to appear (this is the key indicator that nori-ai is not installed)
+    // We wait for this specifically since it appears after "Powered by Nori AI" and ensures full render
     session
-        .wait_for_text("Powered by Nori AI", TIMEOUT)
-        .expect("Nori branding did not appear");
+        .wait_for_text("npx nori-ai install", TIMEOUT)
+        .expect("Install instructions did not appear - nori-ai might be in PATH");
 
     let contents = session.screen_contents();
 
@@ -174,12 +172,6 @@ fn test_startup_shows_nori_banner() {
     assert!(
         contents.contains("Powered by Nori AI"),
         "Expected 'Powered by Nori AI' text, but got: {}",
-        contents
-    );
-    // When nori-ai is NOT installed, show the npx install instructions
-    assert!(
-        contents.contains("npx nori-ai install"),
-        "Expected install instructions when nori-ai not installed, but got: {}",
         contents
     );
 
@@ -274,10 +266,10 @@ fn test_trust_directory_saves_to_config() {
         .expect("Failed to send 'y' key");
 
     // Step 5: Wait for the main prompt to appear (onboarding complete)
-    // We wait for "context left" which only appears in the main prompt,
+    // We wait for "?" which only appears in the main prompt,
     // not "›" which also appears as a selection marker in the trust screen
     session
-        .wait_for_text("context left", TIMEOUT)
+        .wait_for_text("? for shortcuts", TIMEOUT)
         .expect("Main prompt did not appear after trust selection");
 
     // Give a moment for config to be written

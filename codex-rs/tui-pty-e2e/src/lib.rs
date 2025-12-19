@@ -182,9 +182,30 @@ impl TuiSession {
             std::fs::write(&hello_py, "print('Hello, World!')")?;
 
             // Initialize as git repo if requested (prevents "Snapshots disabled" race)
+            // Use -b master to ensure consistent branch name regardless of system git config
             if config.git_init {
                 std::process::Command::new("git")
-                    .args(["init"])
+                    .args(["init", "-b", "master"])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+
+                // Configure git user for the initial commit
+                std::process::Command::new("git")
+                    .args(["config", "user.email", "test@example.com"])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+                std::process::Command::new("git")
+                    .args(["config", "user.name", "Test User"])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+
+                // Add and commit the hello.py file to create a branch
+                std::process::Command::new("git")
+                    .args(["add", "."])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+                std::process::Command::new("git")
+                    .args(["commit", "-m", "Initial commit"])
                     .current_dir(temp_dir.path())
                     .output()?;
             }
@@ -319,6 +340,10 @@ name = "Mock ACP provider for tests"
         if config.no_color {
             cmd.env("NO_COLOR", "1");
         }
+
+        // Force synchronous system info collection in E2E tests
+        // This ensures footer displays git branch/nori version immediately
+        cmd.env("NORI_SYNC_SYSTEM_INFO", "1");
 
         let _child = pair.slave.spawn_command(cmd)?;
 
@@ -656,7 +681,9 @@ impl SessionConfig {
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
             extra_path: Vec::new(),
-            exclude_binaries: Vec::new(),
+            // Exclude nori-ai by default since it won't be in PATH on CI runners.
+            // Tests that need nori-ai should explicitly add it via with_extra_path().
+            exclude_binaries: vec!["nori-ai".to_string()],
         }
     }
 
@@ -804,6 +831,12 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         .map(|line| {
             let mut line = line.to_string();
 
+            // Normalize "─ Worked for Xs ───..." timing lines to solid bars
+            // This prevents flaky tests due to variable timing
+            if line.starts_with("─ Worked") && line.ends_with('─') {
+                return "─".repeat(line.chars().count());
+            }
+
             // Version: "Nori vX.Y.Z-prerelease" -> "Nori v0.0.0"
             // Only replace if it looks like a version (digit after "Nori v")
             let is_version = line
@@ -845,6 +878,56 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         .collect();
 
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // @current-session
+    #[test]
+    fn test_normalize_worked_for_line() {
+        // Test that "─ Worked for Xs ───..." lines are normalized to solid bars
+        let input =
+            "─ Worked for 0s ────────────────────────────────────────────────────────────────";
+        let expected =
+            "────────────────────────────────────────────────────────────────────────────────";
+        assert_eq!(normalize_for_snapshot(input.to_string()), expected);
+
+        // Test with different timing values
+        let input_1s =
+            "─ Worked for 1s ────────────────────────────────────────────────────────────────";
+        assert_eq!(normalize_for_snapshot(input_1s.to_string()), expected);
+
+        let input_10s =
+            "─ Worked for 10s ───────────────────────────────────────────────────────────────";
+        assert_eq!(normalize_for_snapshot(input_10s.to_string()), expected);
+
+        // Test with minute format (e.g., "1m 30s")
+        let input_1m30s =
+            "─ Worked for 1m 30s ────────────────────────────────────────────────────────────";
+        assert_eq!(normalize_for_snapshot(input_1m30s.to_string()), expected);
+
+        // Test that non-matching lines are unchanged
+        let regular_line = "This is a regular line of text";
+        assert_eq!(
+            normalize_for_snapshot(regular_line.to_string()),
+            regular_line
+        );
+
+        // Test partial match - doesn't start with ─
+        let partial =
+            "Worked for 0s ────────────────────────────────────────────────────────────────";
+        assert_eq!(normalize_for_snapshot(partial.to_string()), partial);
+
+        // Test within a multi-line content
+        let multi_line = "Some content\n─ Worked for 5s ────────────────────────────────────────────────────────────────\nMore content";
+        let expected_multi = "Some content\n────────────────────────────────────────────────────────────────────────────────\nMore content";
+        assert_eq!(
+            normalize_for_snapshot(multi_line.to_string()),
+            expected_multi
+        );
+    }
 }
 
 /// Normalize for input tests - strips header for consistent snapshot regardless of scroll state

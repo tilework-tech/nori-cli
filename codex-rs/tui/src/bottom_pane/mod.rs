@@ -103,14 +103,29 @@ impl BottomPane {
             disable_paste_burst,
             animations_enabled,
         } = params;
+        let mut composer = ChatComposer::new(
+            has_input_focus,
+            app_event_tx.clone(),
+            enhanced_keys_supported,
+            placeholder_text,
+            disable_paste_burst,
+        );
+
+        // In debug builds, allow synchronous system info collection for E2E tests
+        // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
+        // avoid blocking TUI startup.
+        #[cfg(debug_assertions)]
+        let system_info = if std::env::var("NORI_SYNC_SYSTEM_INFO").is_ok() {
+            crate::system_info::SystemInfo::collect_sync()
+        } else {
+            crate::system_info::SystemInfo::default()
+        };
+        #[cfg(not(debug_assertions))]
+        let system_info = crate::system_info::SystemInfo::default();
+        composer.set_system_info(system_info);
+
         Self {
-            composer: ChatComposer::new(
-                has_input_focus,
-                app_event_tx.clone(),
-                enhanced_keys_supported,
-                placeholder_text,
-                disable_paste_burst,
-            ),
+            composer,
             view_stack: Vec::new(),
             app_event_tx,
             frame_requester,
@@ -373,6 +388,12 @@ impl BottomPane {
     /// Update custom prompts available for the slash popup.
     pub(crate) fn set_custom_prompts(&mut self, prompts: Vec<CustomPrompt>) {
         self.composer.set_custom_prompts(prompts);
+        self.request_redraw();
+    }
+
+    /// Update system info displayed in the footer (for background refresh).
+    pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
+        self.composer.set_system_info(info);
         self.request_redraw();
     }
 

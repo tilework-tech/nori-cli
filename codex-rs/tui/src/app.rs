@@ -404,6 +404,17 @@ impl App {
         let tui_events = tui.event_stream();
         tokio::pin!(tui_events);
 
+        // Spawn background thread to collect system info without blocking startup.
+        // The footer initially shows default (empty) values, and this updates it
+        // once collection completes.
+        {
+            let tx = app.app_event_tx.clone();
+            thread::spawn(move || {
+                let info = crate::system_info::SystemInfo::collect_fresh();
+                tx.send(AppEvent::SystemInfoRefreshed(info));
+            });
+        }
+
         tui.frame_requester().schedule_frame();
 
         while select! {
@@ -583,6 +594,9 @@ impl App {
             }
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches);
+            }
+            AppEvent::SystemInfoRefreshed(info) => {
+                self.chat_widget.apply_system_info_refresh(info);
             }
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
@@ -940,6 +954,16 @@ impl App {
 
                 // Update the model in config
                 self.config.model = model_name.clone();
+
+                // Persist the agent selection to config.toml for next TUI startup
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                    .set_agent(Some(&model_name))
+                    .apply()
+                    .await
+                {
+                    tracing::error!(error = %err, "failed to persist agent selection");
+                    // Non-fatal: continue with the switch even if persistence fails
+                }
 
                 // Shutdown current conversation
                 self.shutdown_current_conversation().await;
@@ -1449,5 +1473,28 @@ mod tests {
             Some(AuthMode::ChatGPT),
             "unknown"
         ));
+    }
+
+    #[test]
+    fn test_agent_persistence_to_config() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let nori_home = temp_dir.path();
+
+        // Use ConfigEditsBuilder to persist an agent selection
+        ConfigEditsBuilder::new(nori_home)
+            .set_agent(Some("gemini"))
+            .apply_blocking()
+            .expect("persist agent");
+
+        // Read back the config file and verify it contains `agent = "gemini"`
+        let config_content =
+            std::fs::read_to_string(nori_home.join("config.toml")).expect("read config");
+        assert!(
+            config_content.contains("agent = \"gemini\""),
+            "Config should contain 'agent = \"gemini\"', got: {}",
+            config_content
+        );
     }
 }

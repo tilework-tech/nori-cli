@@ -65,6 +65,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `shimmer.rs`: Loading animation effects
 - `status_indicator_widget.rs`: Status display
 - `nori/`: Nori-specific branding and customization (see `@/codex-rs/tui/src/nori/docs.md`)
+- `system_info.rs`: Background system info collection for footer (git branch, Nori profile/version, git stats)
 
 **Input Handling:**
 
@@ -77,7 +78,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 
 - `/agent` opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.
 - Selecting an agent sends `AppEvent::SetPendingAgent`, so both the App and `ChatWidget` store a `pending_agent` (see `PendingAgentSelection` and `PendingAgentInfo`). The UI informs the user that the switch will happen on the next prompt submission.
-- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model (clearing the pending flag, updating `Config`, shutting down the old conversation, and creating a `ChatWidget` with `expected_model` to filter out leftover events).
+- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model. The App persists the agent selection to `~/.nori/cli/config.toml` via `ConfigEditsBuilder::set_agent()`, updates `Config`, shuts down the old conversation, and creates a `ChatWidget` with `expected_model` to filter out leftover events.
 - This workflow avoids disrupting active turns and powers the agent-switching verification in `tui-pty-e2e/tests/agent_switching.rs`.
 
 **ACP Model Switching (Unstable Feature):**
@@ -266,6 +267,31 @@ The `color.rs` and `terminal_palette.rs` modules handle terminal color detection
 - `AGENTS.md` documents testing conventions
 - Black-box integration tests in `@/codex-rs/tui-pty-e2e` test full TUI via PTY
 - Integration tests spawn real `nori` binary with `mock-acp-agent` backend
+
+**System Info Background Refresh:**
+
+The footer displays system information (git branch, Nori profile, Nori version, git stats) that is collected asynchronously to avoid blocking TUI startup:
+
+1. `BottomPane::new()` initializes the footer with default (empty) `SystemInfo`
+2. `App::run()` spawns a background thread that calls `SystemInfo::collect_fresh()`
+3. When collection completes, the thread sends `AppEvent::SystemInfoRefreshed(info)`
+4. `App` receives the event and calls `ChatWidget::apply_system_info_refresh()`
+5. The update propagates through `BottomPane::set_system_info()` to the composer
+
+```
+┌─────────────┐     spawn thread     ┌──────────────────┐
+│  App::run() │ ─────────────────────▶│  collect_fresh() │
+└─────────────┘                       └────────┬─────────┘
+                                               │
+     ┌─────────────────────────────────────────┘
+     │  AppEvent::SystemInfoRefreshed
+     ▼
+┌───────────────────┐     set_system_info()    ┌────────────┐
+│ ChatWidget        │ ─────────────────────────▶│ BottomPane │
+└───────────────────┘                          └────────────┘
+```
+
+For E2E testing, `NORI_SYNC_SYSTEM_INFO=1` env var enables synchronous collection in debug builds. This is set automatically by `@/codex-rs/tui-pty-e2e` to ensure footer data appears immediately in tests.
 
 **Configuration Flow:**
 

@@ -83,6 +83,7 @@ mod status;
 mod status_indicator_widget;
 mod streaming;
 mod style;
+mod system_info;
 mod terminal_palette;
 mod text_formatting;
 mod tui;
@@ -90,7 +91,8 @@ mod ui_consts;
 
 /// Default model for ACP-only mode when no model is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-const DEFAULT_ACP_MODEL: &str = "claude-4.5";
+/// This constant MUST match codex_acp::config::DEFAULT_MODEL to ensure consistency.
+const DEFAULT_ACP_MODEL: &str = "claude-code";
 
 // Upstream OpenAI/Codex update modules (only included with upstream-updates feature)
 // The update_action module is available in all builds for the UpdateAction type
@@ -149,6 +151,13 @@ pub async fn run_main(
     #[cfg(not(feature = "codex-features"))] cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
+    // Pre-warm the ACP agent installation cache in a background thread.
+    // This runs npm/bun detection early so the agent picker opens quickly.
+    // The detection can take 1-3 seconds per agent, so warming it early improves UX.
+    std::thread::spawn(|| {
+        codex_acp::prewarm_installation_cache();
+    });
+
     // When nori-config feature is enabled, set up the Nori config environment
     // This redirects config loading to ~/.nori/cli instead of ~/.codex
     #[cfg(feature = "nori-config")]
@@ -815,5 +824,18 @@ mod tests {
             "Trust prompt should not be shown for projects explicitly marked as untrusted"
         );
         Ok(())
+    }
+
+    #[test]
+    fn default_acp_model_matches_acp_module_default() {
+        // The TUI's DEFAULT_ACP_MODEL should match the ACP module's DEFAULT_MODEL
+        // to ensure consistency between the two modules.
+        assert_eq!(
+            DEFAULT_ACP_MODEL,
+            codex_acp::config::DEFAULT_MODEL,
+            "TUI default model '{}' does not match ACP module default '{}'",
+            DEFAULT_ACP_MODEL,
+            codex_acp::config::DEFAULT_MODEL
+        );
     }
 }

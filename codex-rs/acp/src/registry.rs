@@ -2,14 +2,338 @@
 //!
 //! Provides configuration for ACP agents (subprocess command and args)
 //! with embedded provider info to avoid circular dependencies with core.
+//!
+//! ## Agent Names
+//! - `claude-code` - Anthropic's Claude Code CLI agent
+//! - `codex` - OpenAI's Codex CLI agent
+//! - `gemini` - Google's Gemini CLI agent
+//!
+//! ## Provider Names
+//! - `anthropic` - Anthropic
+//! - `openai` - OpenAI
+//! - `google` - Google
 
 use anyhow::Result;
+use std::collections::HashMap;
+use std::fmt;
+use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
+
+/// Default idle timeout for ACP streaming (5 minutes)
+const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
+
+// =============================================================================
+// Core Enums
+// =============================================================================
+
+/// ACP agent identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AgentKind {
+    /// Anthropic's Claude Code CLI
+    ClaudeCode,
+    /// OpenAI's Codex CLI
+    Codex,
+    /// Google's Gemini CLI
+    Gemini,
+}
+
+impl AgentKind {
+    /// Get the slug (string identifier) for this agent
+    pub fn slug(&self) -> &'static str {
+        match self {
+            AgentKind::ClaudeCode => "claude-code",
+            AgentKind::Codex => "codex",
+            AgentKind::Gemini => "gemini",
+        }
+    }
+
+    /// Get the display name for this agent
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            AgentKind::ClaudeCode => "Claude Code",
+            AgentKind::Codex => "Codex",
+            AgentKind::Gemini => "Gemini",
+        }
+    }
+
+    /// Get the provider for this agent
+    pub fn provider(&self) -> Provider {
+        match self {
+            AgentKind::ClaudeCode => Provider::Anthropic,
+            AgentKind::Codex => Provider::OpenAI,
+            AgentKind::Gemini => Provider::Google,
+        }
+    }
+
+    /// Get the npm package name for the underlying agent (for installation detection)
+    pub fn npm_package(&self) -> &'static str {
+        match self {
+            AgentKind::ClaudeCode => "@anthropic-ai/claude-code",
+            AgentKind::Codex => "@openai/codex",
+            AgentKind::Gemini => "@google/gemini-cli",
+        }
+    }
+
+    /// Get the ACP adapter package name for launching this agent
+    pub fn acp_package(&self) -> &'static str {
+        match self {
+            // Claude and Codex use Zed's ACP adapters
+            AgentKind::ClaudeCode => "@zed-industries/claude-code-acp",
+            AgentKind::Codex => "@zed-industries/codex-acp",
+            // Gemini has native ACP support
+            AgentKind::Gemini => "@google/gemini-cli",
+        }
+    }
+
+    /// Get all agent variants
+    pub fn all() -> &'static [AgentKind] {
+        &[AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::Gemini]
+    }
+
+    /// Parse an agent from a string slug
+    pub fn from_slug(slug: &str) -> Option<AgentKind> {
+        let normalized = slug.to_lowercase();
+        match normalized.as_str() {
+            "claude-code" | "claude" | "claude-acp" | "claude-4.5" => Some(AgentKind::ClaudeCode),
+            "codex" | "codex-acp" => Some(AgentKind::Codex),
+            "gemini" | "gemini-acp" | "gemini-2.5-flash" => Some(AgentKind::Gemini),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AgentKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.slug())
+    }
+}
+
+/// Model provider identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Provider {
+    /// Anthropic
+    Anthropic,
+    /// OpenAI
+    OpenAI,
+    /// Google
+    Google,
+}
+
+impl Provider {
+    /// Get the slug (string identifier) for this provider
+    pub fn slug(&self) -> &'static str {
+        match self {
+            Provider::Anthropic => "anthropic",
+            Provider::OpenAI => "openai",
+            Provider::Google => "google",
+        }
+    }
+
+    /// Get the display name for this provider
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Provider::Anthropic => "Anthropic",
+            Provider::OpenAI => "OpenAI",
+            Provider::Google => "Google",
+        }
+    }
+}
+
+impl fmt::Display for Provider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.slug())
+    }
+}
+
+/// Package manager used to install/run the agent
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PackageManager {
+    /// npm (Node Package Manager)
+    Npm,
+    /// bun
+    Bun,
+}
+
+impl PackageManager {
+    /// Get the command name for this package manager
+    pub fn command(&self) -> &'static str {
+        match self {
+            PackageManager::Npm => "npx",
+            PackageManager::Bun => "bunx",
+        }
+    }
+
+    /// Get the display name for this package manager
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            PackageManager::Npm => "npm",
+            PackageManager::Bun => "bun",
+        }
+    }
+}
+
+impl fmt::Display for PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.display_name())
+    }
+}
+
+// =============================================================================
+// Known Models
+// =============================================================================
+
+/// A preset known model for an agent
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownModel {
+    /// Model identifier (used in API calls)
+    pub id: String,
+    /// Display name shown in the picker
+    pub display_name: String,
+    /// Description of the model's capabilities
+    pub description: String,
+    /// Whether this model can be selected (some agents don't support model switching yet)
+    pub enabled: bool,
+    /// Whether this is the default model for the agent
+    pub is_default: bool,
+}
+
+/// Optional reasoning effort level for Codex models
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReasoningEffort {
+    Low,
+    Medium,
+    High,
+    ExtraHigh,
+}
+
+impl ReasoningEffort {
+    pub fn slug(&self) -> &'static str {
+        match self {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            ReasoningEffort::ExtraHigh => "extra-high",
+        }
+    }
+}
+
+/// Get known models for Claude Code
+pub fn claude_code_known_models() -> Vec<KnownModel> {
+    vec![
+        KnownModel {
+            id: "default".to_string(),
+            display_name: "Default (recommended)".to_string(),
+            description: "Opus 4.5 · Most capable for complex work".to_string(),
+            enabled: true,
+            is_default: true,
+        },
+        KnownModel {
+            id: "sonnet".to_string(),
+            display_name: "Sonnet".to_string(),
+            description: "Sonnet 4.5 · Best for everyday tasks".to_string(),
+            enabled: true,
+            is_default: false,
+        },
+        KnownModel {
+            id: "sonnet-1m".to_string(),
+            display_name: "Sonnet (1M context)".to_string(),
+            description: "Sonnet 4.5 with 1M context · Uses rate limits faster".to_string(),
+            enabled: true,
+            is_default: false,
+        },
+        KnownModel {
+            id: "haiku".to_string(),
+            display_name: "Haiku".to_string(),
+            description: "Haiku 4.5 · Fastest for quick answers".to_string(),
+            enabled: true,
+            is_default: false,
+        },
+    ]
+}
+
+/// Get known models for Gemini
+pub fn gemini_known_models() -> Vec<KnownModel> {
+    vec![
+        KnownModel {
+            id: "auto".to_string(),
+            display_name: "Auto".to_string(),
+            description: "Let the system choose the best model for your task".to_string(),
+            enabled: false, // Model switching not yet supported
+            is_default: true,
+        },
+        KnownModel {
+            id: "pro".to_string(),
+            display_name: "Pro".to_string(),
+            description: "gemini-3-pro-preview, gemini-2.5-pro · For complex tasks requiring deep reasoning and creativity".to_string(),
+            enabled: false,
+            is_default: false,
+        },
+        KnownModel {
+            id: "flash".to_string(),
+            display_name: "Flash".to_string(),
+            description: "gemini-2.5-flash · For tasks needing a balance of speed and reasoning".to_string(),
+            enabled: false,
+            is_default: false,
+        },
+        KnownModel {
+            id: "flash-lite".to_string(),
+            display_name: "Flash-Lite".to_string(),
+            description: "gemini-2.5-flash-lite · For simple tasks that need to be done quickly".to_string(),
+            enabled: false,
+            is_default: false,
+        },
+    ]
+}
+
+/// Get known models for Codex
+pub fn codex_known_models() -> Vec<KnownModel> {
+    vec![
+        KnownModel {
+            id: "gpt-5.1-codex-max".to_string(),
+            display_name: "gpt-5.1-codex-max (current)".to_string(),
+            description: "Codex-optimized flagship for deep and fast reasoning".to_string(),
+            enabled: false, // Model switching not yet supported
+            is_default: true,
+        },
+        KnownModel {
+            id: "gpt-5.1-codex-mini".to_string(),
+            display_name: "gpt-5.1-codex-mini".to_string(),
+            description: "Optimized for Codex · Cheaper, faster, but less capable".to_string(),
+            enabled: false,
+            is_default: false,
+        },
+        KnownModel {
+            id: "gpt-5.2".to_string(),
+            display_name: "gpt-5.2".to_string(),
+            description:
+                "Latest frontier model with improvements across knowledge, reasoning and coding"
+                    .to_string(),
+            enabled: false,
+            is_default: false,
+        },
+    ]
+}
+
+/// Get known models for an agent
+pub fn get_known_models(agent: AgentKind) -> Vec<KnownModel> {
+    match agent {
+        AgentKind::ClaudeCode => claude_code_known_models(),
+        AgentKind::Codex => codex_known_models(),
+        AgentKind::Gemini => gemini_known_models(),
+    }
+}
+
+// =============================================================================
+// Agent Info (for UI)
+// =============================================================================
 
 /// Information about an available ACP agent for display in the picker
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentInfo {
-    /// Model name used to select this agent (e.g., "mock-model", "gemini-2.5-flash")
+    /// Agent identifier
+    pub agent: AgentKind,
+    /// Model name used to select this agent (e.g., "claude-code", "gemini")
     pub model_name: String,
     /// Display name shown in the picker
     pub display_name: String,
@@ -17,54 +341,150 @@ pub struct AcpAgentInfo {
     pub description: String,
     /// Provider slug for this agent
     pub provider_slug: String,
+    /// Whether the agent is currently installed
+    pub is_installed: bool,
+    /// Package manager used to manage this agent (if installed)
+    pub managed_by: Option<PackageManager>,
+    /// Known models for this agent (preset)
+    pub known_models: Vec<KnownModel>,
 }
 
-/// Get list of all available ACP agents for the agent picker
-pub fn list_available_agents() -> Vec<AcpAgentInfo> {
-    let mut agents = Vec::new();
+impl AcpAgentInfo {
+    /// Create agent info from an AgentKind enum
+    pub fn from_agent(agent: AgentKind) -> Self {
+        let (is_installed, managed_by) = detect_agent_installation(agent);
 
-    // Mock agents are only available in debug builds (for testing)
-    #[cfg(debug_assertions)]
+        Self {
+            agent,
+            model_name: agent.slug().to_string(),
+            display_name: agent.display_name().to_string(),
+            description: format!("{} via ACP", agent.provider().display_name()),
+            provider_slug: agent.slug().to_string(),
+            is_installed,
+            managed_by,
+            known_models: get_known_models(agent),
+        }
+    }
+}
+
+// =============================================================================
+// Installation Detection
+// =============================================================================
+
+/// Cache for agent installation detection (PATH-based, fast).
+/// Caching avoids repeated subprocess calls on every picker open.
+static INSTALLATION_CACHE: OnceLock<HashMap<AgentKind, (bool, Option<PackageManager>)>> =
+    OnceLock::new();
+
+/// Pre-warm the installation detection cache.
+///
+/// Detection is now fast (PATH lookup only), so prewarming is optional.
+/// Call this at app startup to avoid any startup latency from `which` commands.
+pub fn prewarm_installation_cache() {
+    let _ = INSTALLATION_CACHE.get_or_init(|| {
+        let mut map = HashMap::new();
+        for kind in AgentKind::all() {
+            map.insert(*kind, detect_agent_installation_uncached(*kind));
+        }
+        map
+    });
+}
+
+/// Detect if an agent is installed and which package manager manages it.
+///
+/// Uses PATH-based detection (fast `which` command) with caching.
+/// Agents not in PATH can still be launched via npx/bunx.
+fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
+    let cache = INSTALLATION_CACHE.get_or_init(|| {
+        let mut map = HashMap::new();
+        for kind in AgentKind::all() {
+            map.insert(*kind, detect_agent_installation_uncached(*kind));
+        }
+        map
+    });
+
+    cache.get(&agent).copied().unwrap_or((false, None))
+}
+
+/// Perform the actual installation detection (uncached).
+///
+/// Only checks PATH for fast detection. Agents not in PATH can still be
+/// launched via npx/bunx (which downloads and runs on-the-fly if needed).
+fn detect_agent_installation_uncached(agent: AgentKind) -> (bool, Option<PackageManager>) {
+    let binary_name = match agent {
+        AgentKind::ClaudeCode => "claude",
+        AgentKind::Codex => "codex",
+        AgentKind::Gemini => "gemini",
+    };
+
+    // Check if the binary exists in PATH (fast check)
+    if let Ok(output) = Command::new("which").arg(binary_name).output()
+        && output.status.success()
     {
-        agents.push(AcpAgentInfo {
-            model_name: "mock-model".to_string(),
-            display_name: "Mock ACP".to_string(),
-            description: "Mock agent for testing".to_string(),
-            provider_slug: "mock-acp".to_string(),
-        });
-        agents.push(AcpAgentInfo {
-            model_name: "mock-model-alt".to_string(),
-            display_name: "Mock ACP Alt".to_string(),
-            description: "Alternate mock agent for testing".to_string(),
-            provider_slug: "mock-acp-alt".to_string(),
-        });
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let managed_by = detect_package_manager_from_path(&path);
+        return (true, managed_by);
     }
 
-    // Production agents (always available)
-    agents.push(AcpAgentInfo {
-        model_name: "claude-acp".to_string(),
-        display_name: "Claude".to_string(),
-        description: "Anthropic Claude via ACP".to_string(),
-        provider_slug: "claude-acp".to_string(),
-    });
-    agents.push(AcpAgentInfo {
-        model_name: "codex-acp".to_string(),
-        display_name: "Codex".to_string(),
-        description: "OpenAI Codex via ACP".to_string(),
-        provider_slug: "codex-acp".to_string(),
-    });
-    agents.push(AcpAgentInfo {
-        model_name: "gemini-acp".to_string(),
-        display_name: "Gemini".to_string(),
-        description: "Google Gemini via ACP".to_string(),
-        provider_slug: "gemini-acp".to_string(),
-    });
+    // On Windows, try `where` instead
+    #[cfg(target_os = "windows")]
+    if let Ok(output) = Command::new("where").arg(binary_name).output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let managed_by = detect_package_manager_from_path(&path);
+            return (true, managed_by);
+        }
+    }
 
-    agents
+    // Binary not in PATH - agent is not locally installed.
+    // It can still be launched via npx/bunx which will download on-the-fly.
+    (false, None)
 }
 
-/// Default idle timeout for ACP streaming (5 minutes)
-const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
+/// Detect package manager from binary path
+fn detect_package_manager_from_path(path: &str) -> Option<PackageManager> {
+    let path_lower = path.to_lowercase();
+    if path_lower.contains(".bun") || path_lower.contains("bun/bin") {
+        Some(PackageManager::Bun)
+    } else if path_lower.contains("npm")
+        || path_lower.contains("node_modules")
+        || path_lower.contains(".npm")
+    {
+        Some(PackageManager::Npm)
+    } else {
+        // Default to npm if we can't determine
+        Some(PackageManager::Npm)
+    }
+}
+
+/// Detect the preferred package manager for launching ACP agents.
+///
+/// Priority:
+/// 1. NORI_MANAGED_BY_BUN env var → use bunx
+/// 2. NORI_MANAGED_BY_NPM env var → use npx
+/// 3. bun in PATH → use bunx
+/// 4. Default to npx
+pub fn detect_preferred_package_manager() -> PackageManager {
+    // Check explicit env var overrides first
+    if std::env::var("NORI_MANAGED_BY_BUN").is_ok() {
+        return PackageManager::Bun;
+    }
+    if std::env::var("NORI_MANAGED_BY_NPM").is_ok() {
+        return PackageManager::Npm;
+    }
+
+    // Check if bun is available in PATH
+    if Command::new("bun").arg("--version").output().is_ok() {
+        return PackageManager::Bun;
+    }
+
+    // Default to npm
+    PackageManager::Npm
+}
+
+// =============================================================================
+// Agent Config (for spawning)
+// =============================================================================
 
 /// Provider information embedded in ACP agent config.
 /// This mirrors relevant fields from `ModelProviderInfo` to avoid circular dependencies.
@@ -94,7 +514,9 @@ impl Default for AcpProviderInfo {
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
-    /// Provider identifier (e.g., "mock-acp", "gemini-acp")
+    /// Agent identifier
+    pub agent: AgentKind,
+    /// Provider identifier (e.g., "claude-code", "gemini")
     /// Used to determine when subprocess can be reused vs needs replacement
     pub provider_slug: String,
     /// Command to execute (binary path or command name)
@@ -105,10 +527,47 @@ pub struct AcpAgentConfig {
     pub provider_info: AcpProviderInfo,
 }
 
+/// Get list of all available ACP agents for the agent picker
+pub fn list_available_agents() -> Vec<AcpAgentInfo> {
+    let mut agents = Vec::new();
+
+    // Mock agents are only available in debug builds (for testing)
+    #[cfg(debug_assertions)]
+    {
+        agents.push(AcpAgentInfo {
+            agent: AgentKind::ClaudeCode, // Dummy, not really used
+            model_name: "mock-model".to_string(),
+            display_name: "Mock ACP".to_string(),
+            description: "Mock agent for testing".to_string(),
+            provider_slug: "mock-acp".to_string(),
+            is_installed: true,
+            managed_by: None,
+            known_models: vec![],
+        });
+        agents.push(AcpAgentInfo {
+            agent: AgentKind::ClaudeCode, // Dummy, not really used
+            model_name: "mock-model-alt".to_string(),
+            display_name: "Mock ACP Alt".to_string(),
+            description: "Alternate mock agent for testing".to_string(),
+            provider_slug: "mock-acp-alt".to_string(),
+            is_installed: true,
+            managed_by: None,
+            known_models: vec![],
+        });
+    }
+
+    // Production agents
+    for agent in AgentKind::all() {
+        agents.push(AcpAgentInfo::from_agent(*agent));
+    }
+
+    agents
+}
+
 /// Get ACP agent configuration for a given model name
 ///
 /// # Arguments
-/// * `model_name` - The model identifier (e.g., "mock-model", "gemini-flash-2.5")
+/// * `model_name` - The model identifier (e.g., "claude-code", "gemini")
 ///   Names are normalized to lowercase for case-insensitive matching.
 ///
 /// # Returns
@@ -126,40 +585,43 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
         return Ok(config);
     }
 
-    // Production agents
-    match normalized.as_str() {
-        "gemini-2.5-flash" | "gemini-acp" => Ok(AcpAgentConfig {
-            provider_slug: "gemini-acp".to_string(),
-            command: "npx".to_string(),
-            args: vec![
-                "@google/gemini-cli".to_string(),
-                "--experimental-acp".to_string(),
-            ],
+    // Try to parse as an AgentKind
+    if let Some(agent) = AgentKind::from_slug(&normalized) {
+        let package_manager = detect_preferred_package_manager();
+
+        let (command, args) = match agent {
+            // Claude and Codex use Zed's ACP adapters
+            AgentKind::ClaudeCode => (
+                package_manager.command().to_string(),
+                vec!["@zed-industries/claude-code-acp".to_string()],
+            ),
+            AgentKind::Codex => (
+                package_manager.command().to_string(),
+                vec!["@zed-industries/codex-acp".to_string()],
+            ),
+            // Gemini has native ACP support via --experimental-acp flag
+            AgentKind::Gemini => (
+                package_manager.command().to_string(),
+                vec![
+                    "@google/gemini-cli".to_string(),
+                    "--experimental-acp".to_string(),
+                ],
+            ),
+        };
+
+        return Ok(AcpAgentConfig {
+            agent,
+            provider_slug: agent.slug().to_string(),
+            command,
+            args,
             provider_info: AcpProviderInfo {
-                name: "Gemini ACP".to_string(),
+                name: format!("{} ACP", agent.display_name()),
                 ..Default::default()
             },
-        }),
-        "claude-4.5" | "claude-acp" => Ok(AcpAgentConfig {
-            provider_slug: "claude-acp".to_string(),
-            command: "npx".to_string(),
-            args: vec!["@zed-industries/claude-code-acp".to_string()],
-            provider_info: AcpProviderInfo {
-                name: "Claude ACP".to_string(),
-                ..Default::default()
-            },
-        }),
-        "codex-acp" => Ok(AcpAgentConfig {
-            provider_slug: "codex-acp".to_string(),
-            command: "npx".to_string(),
-            args: vec!["@zed-industries/codex-acp".to_string()],
-            provider_info: AcpProviderInfo {
-                name: "Codex ACP".to_string(),
-                ..Default::default()
-            },
-        }),
-        _ => anyhow::bail!("Unknown ACP model: {model_name}"),
+        });
     }
+
+    anyhow::bail!("Unknown ACP model: {model_name}")
 }
 
 /// Get mock agent configuration (only available in debug builds)
@@ -204,6 +666,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                agent: AgentKind::ClaudeCode, // Dummy
                 provider_slug: "mock-acp".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -244,6 +707,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                agent: AgentKind::ClaudeCode, // Dummy
                 provider_slug: "mock-acp-alt".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -257,9 +721,121 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
     }
 }
 
+// =============================================================================
+// Tests
+// =============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_agent_slugs() {
+        assert_eq!(AgentKind::ClaudeCode.slug(), "claude-code");
+        assert_eq!(AgentKind::Codex.slug(), "codex");
+        assert_eq!(AgentKind::Gemini.slug(), "gemini");
+    }
+
+    #[test]
+    fn test_provider_slugs() {
+        assert_eq!(Provider::Anthropic.slug(), "anthropic");
+        assert_eq!(Provider::OpenAI.slug(), "openai");
+        assert_eq!(Provider::Google.slug(), "google");
+    }
+
+    #[test]
+    fn test_agent_from_slug() {
+        // Direct slugs
+        assert_eq!(
+            AgentKind::from_slug("claude-code"),
+            Some(AgentKind::ClaudeCode)
+        );
+        assert_eq!(AgentKind::from_slug("codex"), Some(AgentKind::Codex));
+        assert_eq!(AgentKind::from_slug("gemini"), Some(AgentKind::Gemini));
+
+        // Legacy aliases
+        assert_eq!(
+            AgentKind::from_slug("claude-acp"),
+            Some(AgentKind::ClaudeCode)
+        );
+        assert_eq!(
+            AgentKind::from_slug("claude-4.5"),
+            Some(AgentKind::ClaudeCode)
+        );
+        assert_eq!(AgentKind::from_slug("codex-acp"), Some(AgentKind::Codex));
+        assert_eq!(AgentKind::from_slug("gemini-acp"), Some(AgentKind::Gemini));
+        assert_eq!(
+            AgentKind::from_slug("gemini-2.5-flash"),
+            Some(AgentKind::Gemini)
+        );
+
+        // Case insensitive
+        assert_eq!(
+            AgentKind::from_slug("Claude-Code"),
+            Some(AgentKind::ClaudeCode)
+        );
+        assert_eq!(AgentKind::from_slug("CODEX"), Some(AgentKind::Codex));
+
+        // Unknown
+        assert_eq!(AgentKind::from_slug("unknown"), None);
+    }
+
+    #[test]
+    fn test_agent_provider_relationship() {
+        assert_eq!(AgentKind::ClaudeCode.provider(), Provider::Anthropic);
+        assert_eq!(AgentKind::Codex.provider(), Provider::OpenAI);
+        assert_eq!(AgentKind::Gemini.provider(), Provider::Google);
+    }
+
+    #[test]
+    fn test_package_manager_commands() {
+        assert_eq!(PackageManager::Npm.command(), "npx");
+        assert_eq!(PackageManager::Bun.command(), "bunx");
+    }
+
+    #[test]
+    fn test_claude_code_known_models() {
+        let models = claude_code_known_models();
+        assert_eq!(models.len(), 4);
+
+        let default = models.iter().find(|m| m.is_default).unwrap();
+        assert_eq!(default.id, "default");
+        assert!(default.enabled);
+
+        let sonnet = models.iter().find(|m| m.id == "sonnet").unwrap();
+        assert!(sonnet.enabled);
+
+        let haiku = models.iter().find(|m| m.id == "haiku").unwrap();
+        assert!(haiku.enabled);
+    }
+
+    #[test]
+    fn test_gemini_known_models() {
+        let models = gemini_known_models();
+        assert_eq!(models.len(), 4);
+
+        // All models should be disabled (model switching not supported yet)
+        for model in &models {
+            assert!(!model.enabled, "Model {} should be disabled", model.id);
+        }
+
+        let auto = models.iter().find(|m| m.id == "auto").unwrap();
+        assert!(auto.is_default);
+    }
+
+    #[test]
+    fn test_codex_known_models() {
+        let models = codex_known_models();
+        assert_eq!(models.len(), 3);
+
+        // All models should be disabled (model switching not supported yet)
+        for model in &models {
+            assert!(!model.enabled, "Model {} should be disabled", model.id);
+        }
+
+        let default = models.iter().find(|m| m.is_default).unwrap();
+        assert_eq!(default.id, "gpt-5.1-codex-max");
+    }
 
     #[test]
     #[cfg(debug_assertions)]
@@ -295,37 +871,74 @@ mod tests {
     }
 
     #[test]
-    fn test_get_gemini_model_config() {
-        let config = get_agent_config("gemini-2.5-flash")
-            .expect("Should return config for gemini-2.5-flash");
+    fn test_get_claude_code_config() {
+        let config = get_agent_config("claude-code").expect("Should return config for claude-code");
 
-        assert_eq!(config.provider_slug, "gemini-acp");
-        assert_eq!(config.command, "npx");
-        assert_eq!(
-            config.args,
-            vec!["@google/gemini-cli", "--experimental-acp"]
+        assert_eq!(config.provider_slug, "claude-code");
+        assert_eq!(config.agent, AgentKind::ClaudeCode);
+        // Command should be npx or bunx
+        assert!(
+            config.command == "npx" || config.command == "bunx",
+            "Command should be npx or bunx, got: {}",
+            config.command
         );
+        // Uses Zed's ACP adapter
+        assert!(
+            config
+                .args
+                .contains(&"@zed-industries/claude-code-acp".to_string())
+        );
+        assert_eq!(config.provider_info.name, "Claude Code ACP");
+    }
+
+    #[test]
+    fn test_get_codex_config() {
+        let config = get_agent_config("codex").expect("Should return config for codex");
+
+        assert_eq!(config.provider_slug, "codex");
+        assert_eq!(config.agent, AgentKind::Codex);
+        assert!(
+            config.command == "npx" || config.command == "bunx",
+            "Command should be npx or bunx, got: {}",
+            config.command
+        );
+        // Uses Zed's ACP adapter
+        assert!(
+            config
+                .args
+                .contains(&"@zed-industries/codex-acp".to_string())
+        );
+        assert_eq!(config.provider_info.name, "Codex ACP");
+    }
+
+    #[test]
+    fn test_get_gemini_config() {
+        let config = get_agent_config("gemini").expect("Should return config for gemini");
+
+        assert_eq!(config.provider_slug, "gemini");
+        assert_eq!(config.agent, AgentKind::Gemini);
+        assert!(
+            config.command == "npx" || config.command == "bunx",
+            "Command should be npx or bunx, got: {}",
+            config.command
+        );
+        assert!(config.args.contains(&"@google/gemini-cli".to_string()));
+        assert!(config.args.contains(&"--experimental-acp".to_string()));
         assert_eq!(config.provider_info.name, "Gemini ACP");
     }
 
     #[test]
-    fn test_get_claude_model_config() {
-        let config = get_agent_config("claude-acp").expect("Should return config for claude-acp");
+    fn test_legacy_model_names() {
+        // Claude legacy names
+        assert!(get_agent_config("claude-acp").is_ok());
+        assert!(get_agent_config("claude-4.5").is_ok());
 
-        assert_eq!(config.provider_slug, "claude-acp");
-        assert_eq!(config.command, "npx");
-        assert_eq!(config.args, vec!["@zed-industries/claude-code-acp"]);
-        assert_eq!(config.provider_info.name, "Claude ACP");
-    }
+        // Codex legacy names
+        assert!(get_agent_config("codex-acp").is_ok());
 
-    #[test]
-    fn test_get_codex_model_config() {
-        let config = get_agent_config("codex-acp").expect("Should return config for codex-acp");
-
-        assert_eq!(config.provider_slug, "codex-acp");
-        assert_eq!(config.command, "npx");
-        assert_eq!(config.args, vec!["@zed-industries/codex-acp"]);
-        assert_eq!(config.provider_info.name, "Codex ACP");
+        // Gemini legacy names
+        assert!(get_agent_config("gemini-acp").is_ok());
+        assert!(get_agent_config("gemini-2.5-flash").is_ok());
     }
 
     #[test]
@@ -341,20 +954,20 @@ mod tests {
     fn test_get_agent_config_normalizes_model_names() {
         // Should work with lowercase model names
         assert!(
-            get_agent_config("gemini-2.5-flash").is_ok(),
-            "Lowercase 'gemini-2.5-flash' should work"
+            get_agent_config("claude-code").is_ok(),
+            "Lowercase 'claude-code' should work"
         );
 
         // Should work with mixed case (normalized to lowercase)
-        let gemini_result = get_agent_config("Gemini-2.5-Flash");
+        let claude_result = get_agent_config("Claude-Code");
         assert!(
-            gemini_result.is_ok(),
-            "Mixed case 'Gemini-2.5-Flash' should work"
+            claude_result.is_ok(),
+            "Mixed case 'Claude-Code' should work"
         );
         assert_eq!(
-            gemini_result.unwrap().provider_slug,
-            "gemini-acp",
-            "Should resolve to gemini-acp provider"
+            claude_result.unwrap().provider_slug,
+            "claude-code",
+            "Should resolve to claude-code provider"
         );
 
         // Should still reject unknown models
@@ -371,13 +984,13 @@ mod tests {
     #[cfg(debug_assertions)]
     fn test_list_available_agents_debug_build() {
         let agents = list_available_agents();
-        // Debug build should have 5 agents: mock, mock-alt, claude, codex, gemini
+        // Debug build should have 5 agents: mock, mock-alt, claude-code, codex, gemini
         assert_eq!(agents.len(), 5, "Debug build should have 5 agents");
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
         assert!(names.contains(&"Mock ACP Alt"), "Should have Mock ACP Alt");
-        assert!(names.contains(&"Claude"), "Should have Claude");
+        assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
         assert!(names.contains(&"Gemini"), "Should have Gemini");
     }
@@ -388,8 +1001,45 @@ mod tests {
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
 
         // Production agents should always be present
-        assert!(names.contains(&"Claude"), "Should have Claude");
+        assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
         assert!(names.contains(&"Gemini"), "Should have Gemini");
+    }
+
+    #[test]
+    fn test_agent_info_has_known_models() {
+        let agents = list_available_agents();
+
+        // Find Claude Code agent
+        let claude = agents
+            .iter()
+            .find(|a| a.model_name == "claude-code")
+            .expect("Should have Claude Code agent");
+        assert!(!claude.known_models.is_empty());
+        assert_eq!(claude.known_models.len(), 4);
+
+        // Find Gemini agent
+        let gemini = agents
+            .iter()
+            .find(|a| a.model_name == "gemini")
+            .expect("Should have Gemini agent");
+        assert!(!gemini.known_models.is_empty());
+        assert_eq!(gemini.known_models.len(), 4);
+
+        // Find Codex agent
+        let codex = agents
+            .iter()
+            .find(|a| a.model_name == "codex")
+            .expect("Should have Codex agent");
+        assert!(!codex.known_models.is_empty());
+        assert_eq!(codex.known_models.len(), 3);
+    }
+
+    #[test]
+    fn test_reasoning_effort_slugs() {
+        assert_eq!(ReasoningEffort::Low.slug(), "low");
+        assert_eq!(ReasoningEffort::Medium.slug(), "medium");
+        assert_eq!(ReasoningEffort::High.slug(), "high");
+        assert_eq!(ReasoningEffort::ExtraHigh.slug(), "extra-high");
     }
 }

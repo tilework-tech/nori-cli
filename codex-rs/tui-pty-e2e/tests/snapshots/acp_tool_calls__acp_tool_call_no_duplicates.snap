@@ -10,11 +10,11 @@ expression: normalize_for_input_snapshot(contents)
 
 ■ Operation 'AddToHistory' is not supported in ACP mode
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Test message 1Test message 2
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Processing command...Interleaved test done.
 
@@ -24,4 +24,4 @@ expression: normalize_for_input_snapshot(contents)
 
 › [DEFAULT_PROMPT]
 
-  100% context left · ? for shortcuts
+  ⎇ master · ? for shortcuts

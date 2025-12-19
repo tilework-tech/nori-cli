@@ -8,5 +8,3 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 › Line 1
   Line 2
   Line 3
-
-  100% context left

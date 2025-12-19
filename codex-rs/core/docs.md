@@ -64,7 +64,7 @@ The `config/` module handles:
 **Config Persistence via `edit.rs`:**
 
 All config mutations should go through `ConfigEditsBuilder` which provides atomic read-modify-write operations using temp file + rename. Key capabilities:
-- `set_model()`, `set_project_trust_level()`, `replace_mcp_servers()` - Domain-specific setters
+- `set_model()`, `set_agent()`, `set_project_trust_level()`, `replace_mcp_servers()` - Domain-specific setters
 - `set_path(&["cli", "first_launch_complete"], toml_value(true))` - Generic path setter for arbitrary TOML paths
 - Re-exports `toml_edit::Item` and `toml_value` so callers can build TOML values without adding `toml_edit` as a direct dependency
 

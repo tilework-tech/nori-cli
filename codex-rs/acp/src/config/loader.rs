@@ -88,11 +88,19 @@ impl NoriConfig {
         // Resolve MCP servers
         let mcp_servers = resolve_mcp_servers(toml.mcp_servers)?;
 
+        // Agent is the user's persisted preference, defaults to DEFAULT_MODEL
+        let agent = toml.agent.unwrap_or_else(|| DEFAULT_MODEL.to_string());
+
+        // Model is the runtime value: CLI override > config model > persisted agent > DEFAULT_MODEL
+        // Using agent as fallback ensures the persisted preference is honored at startup
+        let model = overrides
+            .model
+            .or(toml.model)
+            .unwrap_or_else(|| agent.clone());
+
         Ok(Self {
-            model: overrides
-                .model
-                .or(toml.model)
-                .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+            agent,
+            model,
             sandbox_mode: overrides
                 .sandbox_mode
                 .or(toml.sandbox_mode)
@@ -145,7 +153,7 @@ mod tests {
         std::fs::write(
             &config_path,
             r#"
-model = "claude-acp"
+model = "claude-code"
 
 [mcp_servers.filesystem]
 command = "npx"
@@ -199,5 +207,63 @@ enabled = true
 
         let config = NoriConfig::from_toml(toml, nori_home, overrides).unwrap();
         assert_eq!(config.cwd, custom_cwd);
+    }
+
+    #[test]
+    fn test_load_persisted_agent_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        // Write a config file with an agent field
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "gemini"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        // The agent field should be loaded and used to determine the model
+        assert_eq!(
+            config.agent, "gemini",
+            "Agent should be loaded from config.toml"
+        );
+    }
+
+    #[test]
+    fn test_agent_defaults_to_claude_code() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        // Write an empty config file (no agent specified)
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        // The agent should default to "claude-code"
+        assert_eq!(
+            config.agent, "claude-code",
+            "Agent should default to 'claude-code' when not specified"
+        );
+    }
+
+    #[test]
+    fn test_model_uses_persisted_agent_as_fallback() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        // Write a config with only agent set (no model specified)
+        std::fs::write(&config_path, "agent = \"gemini\"").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        // Model should fall back to the persisted agent value
+        assert_eq!(
+            config.model, "gemini",
+            "Model should use persisted agent as fallback when not overridden"
+        );
+        assert_eq!(config.agent, "gemini");
     }
 }

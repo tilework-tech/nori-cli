@@ -1,5 +1,6 @@
 ---
 source: tui-pty-e2e/tests/streaming.rs
+assertion_line: 33
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
@@ -10,11 +11,11 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 ■ Operation 'AddToHistory' is not supported in ACP mode
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Working (0s • esc to interrupt)
 
 
 › [DEFAULT_PROMPT]
 
-  100% context left · ? for shortcuts
+  ⎇ master · ? for shortcuts
