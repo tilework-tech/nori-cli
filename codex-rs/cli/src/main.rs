@@ -1079,6 +1079,17 @@ mod tests {
         );
     }
 
+    /// When codex-features is disabled, --ask-for-approval flag should not be recognized
+    #[test]
+    #[cfg(not(feature = "codex-features"))]
+    fn approval_flag_rejected_without_codex_features() {
+        let result = MultitoolCli::try_parse_from(["nori", "--ask-for-approval", "on-failure"]);
+        assert!(
+            result.is_err(),
+            "--ask-for-approval should be rejected when codex-features is disabled"
+        );
+    }
+
     /// When codex-features is disabled, --full-auto flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]

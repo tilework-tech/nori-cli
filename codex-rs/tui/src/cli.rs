@@ -1,5 +1,6 @@
 use clap::Parser;
 use clap::ValueHint;
+#[cfg(feature = "codex-features")]
 use codex_common::ApprovalModeCliArg;
 use codex_common::CliConfigOverrides;
 use std::path::PathBuf;
@@ -59,6 +60,7 @@ pub struct Cli {
     pub sandbox_mode: Option<codex_common::SandboxModeCliArg>,
 
     /// Configure when the model requires human approval before executing a command.
+    #[cfg(feature = "codex-features")]
     #[arg(long = "ask-for-approval", short = 'a')]
     pub approval_policy: Option<ApprovalModeCliArg>,
 
@@ -98,4 +100,10 @@ pub struct Cli {
     /// Use this flag to bypass the initial Nori welcome message on first launch.
     #[arg(long = "skip-welcome", default_value_t = false)]
     pub skip_welcome: bool,
+
+    /// Skip the trust directory prompt for untrusted directories.
+    /// When set, automatically trusts the current directory without prompting.
+    /// Intended for testing and automation scenarios.
+    #[arg(long = "skip-trust-directory", default_value_t = false)]
+    pub skip_trust_directory: bool,
 }

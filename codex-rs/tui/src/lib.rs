@@ -514,6 +514,7 @@ async fn run_ratatui_app(
             NoriOnboardingScreenArgs {
                 show_trust_screen: should_show_trust_screen,
                 skip_welcome: cli.skip_welcome,
+                skip_trust_directory: cli.skip_trust_directory,
                 login_status,
                 auth_manager: auth_manager.clone(),
                 config: initial_config.clone(),

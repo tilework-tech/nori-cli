@@ -46,9 +46,8 @@ fn test_startup_shows_welcome() {
         24,
         80,
         SessionConfig::default()
-            // Don't include the values that would bypass welcome
-            .without_approval_policy()
-            .without_sandbox()
+            // Don't skip trust directory - allows welcome screen to show
+            .with_skip_trust_directory(false)
             .with_config_toml(""),
     )
     .expect("Failed to spawn");
@@ -69,15 +68,8 @@ fn test_startup_shows_welcome() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_startup_with_dimensions() {
-    let mut session = TuiSession::spawn_with_config(
-        10,
-        120,
-        SessionConfig::default()
-            // Don't include the values that would bypass welcome
-            .without_approval_policy()
-            .without_sandbox(),
-    )
-    .expect("Failed to spawn");
+    let mut session =
+        TuiSession::spawn_with_config(10, 120, SessionConfig::default()).expect("Failed to spawn");
 
     session
         .wait_for_text("Powered by Nori AI", TIMEOUT)
@@ -92,15 +84,8 @@ fn test_startup_with_dimensions() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_runs_in_temp_directory_by_default() {
-    let mut session = TuiSession::spawn_with_config(
-        24,
-        80,
-        SessionConfig::default()
-            // Don't include the values that would bypass welcome
-            .without_approval_policy()
-            .without_sandbox(),
-    )
-    .expect("Failed to spawn");
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
     session
         .wait_for(
@@ -261,9 +246,8 @@ fn test_trust_directory_saves_to_config() {
         24,
         80,
         SessionConfig::default()
-            // No approval policy or sandbox - triggers onboarding
-            .without_approval_policy()
-            .without_sandbox()
+            // Don't skip trust directory - allows trust prompt to appear
+            .with_skip_trust_directory(false)
             // Empty config means no config.toml written, triggering first-launch
             .with_config_toml(""),
     )

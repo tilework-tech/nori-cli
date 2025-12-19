@@ -54,6 +54,8 @@ pub(crate) struct NoriOnboardingScreenArgs {
     pub show_trust_screen: bool,
     /// Whether to skip the first-launch welcome (--skip-welcome flag).
     pub skip_welcome: bool,
+    /// Whether to skip the trust directory prompt (--skip-trust-directory flag).
+    pub skip_trust_directory: bool,
     /// Current login status (unused in Nori but kept for API compatibility).
     #[allow(dead_code)]
     pub login_status: LoginStatus,
@@ -87,6 +89,7 @@ impl NoriOnboardingScreen {
         let NoriOnboardingScreenArgs {
             show_trust_screen,
             skip_welcome,
+            skip_trust_directory,
             login_status: _,
             auth_manager: _,
             config,
@@ -103,8 +106,8 @@ impl NoriOnboardingScreen {
             steps.push(NoriStep::Welcome(NoriWelcomeWidget::new()));
         }
 
-        // Add directory trust screen if needed
-        if show_trust_screen {
+        // Add directory trust screen if needed (unless --skip-trust-directory is set)
+        if show_trust_screen && !skip_trust_directory {
             let is_git_repo = get_git_repo_root(&cwd).is_some();
             let highlighted = if is_git_repo {
                 TrustDirectorySelection::Trust
