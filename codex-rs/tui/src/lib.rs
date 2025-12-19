@@ -7,7 +7,9 @@ use additional_dirs::add_dir_warning_message;
 use app::App;
 pub use app::AppExitInfo;
 use codex_app_server_protocol::AuthMode;
+#[cfg(feature = "codex-features")]
 use codex_common::oss::ensure_oss_provider_ready;
+#[cfg(feature = "codex-features")]
 use codex_common::oss::get_default_model_for_oss_provider;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
@@ -17,7 +19,9 @@ use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
+#[cfg(feature = "codex-features")]
 use codex_core::config::load_config_as_toml_with_cli_overrides;
+#[cfg(feature = "codex-features")]
 use codex_core::config::resolve_oss_provider;
 use codex_core::find_conversation_path_by_id_str;
 use codex_core::get_platform_sandbox;
@@ -140,7 +144,8 @@ use std::io::Write as _;
 // (tests access modules directly within the crate)
 
 pub async fn run_main(
-    mut cli: Cli,
+    #[cfg(feature = "codex-features")] mut cli: Cli,
+    #[cfg(not(feature = "codex-features"))] cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
     // When nori-config feature is enabled, set up the Nori config environment
@@ -157,6 +162,7 @@ pub async fn run_main(
     // Note: Rolling file tracing is initialized in codex-cli main.rs before run_main() is called.
     // This ensures a single point of file-based tracing initialization.
 
+    #[cfg(feature = "codex-features")]
     let (sandbox_mode, approval_policy) = if cli.full_auto {
         (
             Some(SandboxMode::WorkspaceWrite),
@@ -174,7 +180,12 @@ pub async fn run_main(
         )
     };
 
+    #[cfg(not(feature = "codex-features"))]
+    let (sandbox_mode, approval_policy): (Option<SandboxMode>, Option<AskForApproval>) =
+        (None, None);
+
     // Map the legacy --search flag to the new feature toggle.
+    #[cfg(feature = "codex-features")]
     if cli.web_search {
         cli.config_overrides
             .raw_overrides
@@ -206,6 +217,7 @@ pub async fn run_main(
         }
     };
 
+    #[cfg(feature = "codex-features")]
     #[allow(clippy::print_stderr)]
     let config_toml =
         match load_config_as_toml_with_cli_overrides(&codex_home, cli_kv_overrides.clone()).await {
@@ -216,6 +228,7 @@ pub async fn run_main(
             }
         };
 
+    #[cfg(feature = "codex-features")]
     let model_provider_override = if cli.oss {
         let resolved = resolve_oss_provider(
             cli.oss_provider.as_deref(),
@@ -239,8 +252,12 @@ pub async fn run_main(
         None
     };
 
+    #[cfg(not(feature = "codex-features"))]
+    let model_provider_override: Option<String> = None;
+
     // When using `--oss`, let the bootstrapper pick the model based on selected provider.
     // Otherwise, default to Claude for ACP-only mode (overrides upstream gpt-5.1-codex default).
+    #[cfg(feature = "codex-features")]
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
     } else if cli.oss {
@@ -252,6 +269,12 @@ pub async fn run_main(
     } else {
         Some(DEFAULT_ACP_MODEL.to_string()) // Use Claude as default for ACP mode
     };
+
+    #[cfg(not(feature = "codex-features"))]
+    let model = cli
+        .model
+        .clone()
+        .or_else(|| Some(DEFAULT_ACP_MODEL.to_string()));
 
     // canonicalize the cwd
     let cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
@@ -270,7 +293,10 @@ pub async fn run_main(
         developer_instructions: None,
         compact_prompt: None,
         include_apply_patch_tool: None,
+        #[cfg(feature = "codex-features")]
         show_raw_agent_reasoning: cli.oss.then_some(true),
+        #[cfg(not(feature = "codex-features"))]
+        show_raw_agent_reasoning: None,
         tools_web_search_request: None,
         experimental_sandbox_command_assessment: None,
         additional_writable_roots: additional_dirs,
@@ -339,6 +365,7 @@ pub async fn run_main(
         .with_target(false)
         .with_filter(targets);
 
+    #[cfg(feature = "codex-features")]
     if cli.oss && model_provider_override.is_some() {
         // We're in the oss section, so provider_id should be Some
         // Let's handle None case gracefully though just in case

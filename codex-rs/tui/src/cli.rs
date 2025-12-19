@@ -1,5 +1,6 @@
 use clap::Parser;
 use clap::ValueHint;
+#[cfg(feature = "codex-features")]
 use codex_common::ApprovalModeCliArg;
 use codex_common::CliConfigOverrides;
 use std::path::PathBuf;
@@ -38,11 +39,13 @@ pub struct Cli {
 
     /// Convenience flag to select the local open source model provider. Equivalent to -c
     /// model_provider=oss; verifies a local LM Studio or Ollama server is running.
+    #[cfg(feature = "codex-features")]
     #[arg(long = "oss", default_value_t = false)]
     pub oss: bool,
 
     /// Specify which local provider to use (lmstudio or ollama).
     /// If not specified with --oss, will use config default or show selection.
+    #[cfg(feature = "codex-features")]
     #[arg(long = "local-provider")]
     pub oss_provider: Option<String>,
 
@@ -52,19 +55,23 @@ pub struct Cli {
 
     /// Select the sandbox policy to use when executing model-generated shell
     /// commands.
+    #[cfg(feature = "codex-features")]
     #[arg(long = "sandbox", short = 's')]
     pub sandbox_mode: Option<codex_common::SandboxModeCliArg>,
 
     /// Configure when the model requires human approval before executing a command.
+    #[cfg(feature = "codex-features")]
     #[arg(long = "ask-for-approval", short = 'a')]
     pub approval_policy: Option<ApprovalModeCliArg>,
 
     /// Convenience alias for low-friction sandboxed automatic execution (-a on-request, --sandbox workspace-write).
+    #[cfg(feature = "codex-features")]
     #[arg(long = "full-auto", default_value_t = false)]
     pub full_auto: bool,
 
     /// Skip all confirmation prompts and execute commands without sandboxing.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed.
+    #[cfg(feature = "codex-features")]
     #[arg(
         long = "dangerously-bypass-approvals-and-sandbox",
         alias = "yolo",
@@ -78,6 +85,7 @@ pub struct Cli {
     pub cwd: Option<PathBuf>,
 
     /// Enable web search (off by default). When enabled, the native Responses `web_search` tool is available to the model (no per‑call approval).
+    #[cfg(feature = "codex-features")]
     #[arg(long = "search", default_value_t = false)]
     pub web_search: bool,
 

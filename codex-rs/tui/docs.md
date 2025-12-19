@@ -8,7 +8,7 @@ The `codex-tui` crate provides the interactive terminal user interface for Codex
 
 ### How it fits into the larger codebase
 
-TUI is one of the primary entry points, invoked when running `codex` without a subcommand:
+TUI is one of the primary entry points, invoked when running `nori` without a subcommand:
 
 - **Depends on** `codex-core` for conversation management, configuration, and authentication
 - **Depends on** `codex-acp` for ACP agent backend (alternative to HTTP-based LLM providers)
@@ -265,14 +265,14 @@ The `color.rs` and `terminal_palette.rs` modules handle terminal color detection
 - Uses `insta` for snapshot tests of rendered output
 - `AGENTS.md` documents testing conventions
 - Black-box integration tests in `@/codex-rs/tui-pty-e2e` test full TUI via PTY
-- Integration tests spawn real `codex` binary with `mock-acp-agent` backend
+- Integration tests spawn real `nori` binary with `mock-acp-agent` backend
 
 **Configuration Flow:**
 
 TUI respects config overrides from:
-1. CLI flags (`--model`, `--sandbox`, etc.)
+1. CLI flags (`--model` always available; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
 2. `-c key=value` overrides
 3. Config profiles (`-p profile-name`)
-4. `~/.codex/config.toml`
+4. `~/.nori/cli/config.toml`
 
 Created and maintained by Nori.

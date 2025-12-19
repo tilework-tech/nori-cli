@@ -295,9 +295,9 @@ jobs:
 
           # Copy the main binary
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cp codex-rs/target/$TARGET/release/codex.exe artifacts/vendor/$TARGET/nori/nori.exe
+            cp codex-rs/target/$TARGET/release/nori.exe artifacts/vendor/$TARGET/nori/nori.exe
           else
-            cp codex-rs/target/$TARGET/release/codex artifacts/vendor/$TARGET/nori/nori
+            cp codex-rs/target/$TARGET/release/nori artifacts/vendor/$TARGET/nori/nori
             chmod +x artifacts/vendor/$TARGET/nori/nori
           fi
 
@@ -404,42 +404,6 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tree "$STAGING_DIR" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-
-          # cat > "$STAGING_DIR/package.json" << EOF
-          # {
-          #   "name": "$PACKAGE_NAME",
-          #   "version": "$VERSION",
-          #   "description": "Nori AI CLI - A fork of OpenAI Codex with ACP support",
-          #   "license": "Apache-2.0",
-          #   "bin": {
-          #     "nori": "bin/codex.js",
-          #     "nori-ai": "bin/codex.js"
-          #   },
-          #   "type": "module",
-          #   "engines": {
-          #     "node": ">=16"
-          #   },
-          #   "files": [
-          #     "bin",
-          #     "vendor"
-          #   ],
-          #   "repository": {
-          #     "type": "git",
-          #     "url": "git+https://github.com/tilework-tech/nori-cli.git"
-          #   },
-          #   "keywords": [
-          #     "nori",
-          #     "ai",
-          #     "cli",
-          #     "codex",
-          #     "acp"
-          #   ],
-          #   "homepage": "https://github.com/tilework-tech/nori-cli#readme",
-          #   "bugs": {
-          #     "url": "https://github.com/tilework-tech/nori-cli/issues"
-          #   }
-          # }
-          # EOF
 
           # Pack the package
           cd "$STAGING_DIR"
