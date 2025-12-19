@@ -494,4 +494,44 @@ mod tests {
 
         insta::assert_snapshot!(rendered);
     }
+
+    /// Test that verifies exact box alignment and tilde replacement.
+    /// Uses real home directory paths to test relativization.
+    #[test]
+    fn nori_header_alignment_with_real_paths() {
+        // Use the actual home directory so relativize_to_home works
+        let home = dirs::home_dir().expect("home directory should exist");
+        let directory = home.join("Documents/source/nori/cli/codex-rs");
+        let location = home.join("Documents/source/nori/cli");
+
+        let cell = NoriSessionHeaderCell::new_for_test(
+            "0.0.0",
+            "claude-4.5".to_string(),
+            directory,
+            None, // no profile set
+            Some(location),
+            true, // nori_ai_installed
+        );
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Expected output with proper alignment:
+        // - All lines should have the same width (right border aligned)
+        // - location should show ~/... not /home/user/...
+        // - Labels should be consistently spaced
+        let expected = "\
+╭─────────────────────────────────────────────────╮
+│ Nori v0.0.0                                     │
+│                                                 │
+│ directory: ~/Documents/source/nori/cli/codex-rs │
+│ agent:     claude-4.5                           │
+│                                                 │
+│ Profiles                                        │
+│ current:   (none)                               │
+│ location:  ~/Documents/source/nori/cli          │
+╰─────────────────────────────────────────────────╯";
+
+        assert_eq!(rendered, expected, "Header should have proper alignment and tilde paths");
+    }
 }
