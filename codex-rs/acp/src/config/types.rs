@@ -13,6 +13,10 @@ pub const DEFAULT_MODEL: &str = "claude-code";
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NoriConfigToml {
+    /// The ACP agent to use (e.g., "claude-code", "codex", "gemini")
+    /// This is persisted separately from model to track user's agent preference
+    pub agent: Option<String>,
+
     /// The ACP agent model to use (e.g., "claude-code", "codex", "gemini")
     pub model: Option<String>,
 
@@ -98,6 +102,10 @@ pub struct NoriConfigOverrides {
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]
 pub struct NoriConfig {
+    /// The ACP agent to use (e.g., "claude-code", "codex", "gemini")
+    /// Persisted to track user's agent preference across sessions
+    pub agent: String,
+
     /// The ACP agent model to use
     pub model: String,
 
@@ -126,6 +134,7 @@ pub struct NoriConfig {
 impl Default for NoriConfig {
     fn default() -> Self {
         Self {
+            agent: DEFAULT_MODEL.to_string(),
             model: DEFAULT_MODEL.to_string(),
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,

@@ -11,6 +11,7 @@ pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
 pub use types::ApprovalPolicy;
+pub use types::DEFAULT_MODEL;
 pub use types::McpServerConfig;
 pub use types::McpServerTransportConfig;
 pub use types::NoriConfig;

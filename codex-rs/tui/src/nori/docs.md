@@ -55,7 +55,7 @@ The banner uses green+bold for alphabetic characters and dark gray for structura
 - `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry (model name, display name, description, provider slug) with a `SelectionAction` that sends `AppEvent::SetPendingAgent`.
 - `acp_model_picker_params()` renders a fallback when the `unstable` feature is disabled, showing a disabled picker that directs users to use `/agent`.
 - `acp_model_picker_params_with_models()` [unstable] creates a model picker with actual models fetched from the ACP agent. Displays each model as a `SelectionItem` with a `SelectionAction` that sends `AppEvent::SetAcpModel`.
-- `PendingAgentSelection` holds the selected model/display name pair so the App and `ChatWidget` can store it until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`, at which point the conversation is rebuilt with the new model and the picker view is dismissed.
+- `PendingAgentSelection` holds the selected model/display name pair so the App and `ChatWidget` can store it until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`, at which point the agent is persisted to config and the conversation is rebuilt with the new model.
 
 **Feedback Redirect (`feedback.rs`):**
 

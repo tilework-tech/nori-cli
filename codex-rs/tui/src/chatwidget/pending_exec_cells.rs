@@ -356,7 +356,6 @@ mod tests {
     #[test]
     fn retrieve_invalidates_all_call_ids_for_same_cell() {
         use codex_protocol::parse_command::ParsedCommand;
-        use std::path::PathBuf;
 
         let mut tracker = PendingExecCellTracker::new();
 

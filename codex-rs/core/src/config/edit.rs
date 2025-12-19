@@ -21,6 +21,9 @@ pub use toml_edit::value as toml_value;
 /// Discrete config mutations supported by the persistence engine.
 #[derive(Clone, Debug)]
 pub enum ConfigEdit {
+    /// Update the agent selection (e.g., "claude-code", "codex", "gemini").
+    /// This is persisted separately from model to track user's agent preference.
+    SetAgent { agent: Option<String> },
     /// Update the active (or default) model selection and optional reasoning effort.
     SetModel {
         model: Option<String>,
@@ -233,6 +236,14 @@ impl ConfigDocument {
 
     fn apply(&mut self, edit: &ConfigEdit) -> anyhow::Result<bool> {
         match edit {
+            ConfigEdit::SetAgent { agent } => Ok(self.write_value(
+                Scope::Global,
+                &["agent"],
+                match agent {
+                    Some(a) => value(a.clone()),
+                    None => return Ok(self.clear(Scope::Global, &["agent"])),
+                },
+            )),
             ConfigEdit::SetModel { model, effort } => Ok({
                 let mut mutated = false;
                 mutated |= self.write_profile_value(
@@ -495,6 +506,13 @@ impl ConfigEditsBuilder {
         self.edits.push(ConfigEdit::SetModel {
             model: model.map(ToOwned::to_owned),
             effort,
+        });
+        self
+    }
+
+    pub fn set_agent(mut self, agent: Option<&str>) -> Self {
+        self.edits.push(ConfigEdit::SetAgent {
+            agent: agent.map(ToOwned::to_owned),
         });
         self
     }

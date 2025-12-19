@@ -85,7 +85,8 @@ mod ui_consts;
 
 /// Default model for ACP-only mode when no model is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-const DEFAULT_ACP_MODEL: &str = "claude-4.5";
+/// This constant MUST match codex_acp::config::DEFAULT_MODEL to ensure consistency.
+const DEFAULT_ACP_MODEL: &str = "claude-code";
 
 // Upstream OpenAI/Codex update modules (only included with upstream-updates feature)
 // The update_action module is available in all builds for the UpdateAction type
@@ -785,5 +786,18 @@ mod tests {
             "Trust prompt should not be shown for projects explicitly marked as untrusted"
         );
         Ok(())
+    }
+
+    #[test]
+    fn default_acp_model_matches_acp_module_default() {
+        // The TUI's DEFAULT_ACP_MODEL should match the ACP module's DEFAULT_MODEL
+        // to ensure consistency between the two modules.
+        assert_eq!(
+            DEFAULT_ACP_MODEL,
+            codex_acp::config::DEFAULT_MODEL,
+            "TUI default model '{}' does not match ACP module default '{}'",
+            DEFAULT_ACP_MODEL,
+            codex_acp::config::DEFAULT_MODEL
+        );
     }
 }

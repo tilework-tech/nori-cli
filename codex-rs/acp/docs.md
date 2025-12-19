@@ -110,6 +110,26 @@ Key exports from `@/codex-rs/acp/src/config/loader.rs`:
 - `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 
+Key exports from `@/codex-rs/acp/src/config/types.rs`:
+- `DEFAULT_MODEL`: The default agent model (`"claude-code"`), used when no agent is specified in config
+- `NoriConfigToml`: TOML-deserializable config structure with optional fields
+- `NoriConfig`: Resolved configuration with defaults applied
+
+**Agent Persistence:**
+
+The `NoriConfig` and `NoriConfigToml` types include an `agent` field that tracks the user's preferred agent separately from the `model` field:
+
+| Field | Purpose | Persistence |
+|-------|---------|-------------|
+| `agent` | User's agent preference (e.g., "claude-code", "gemini") | Persisted to config.toml via `set_agent()` |
+| `model` | Active model for current session | Can be overridden by CLI flags |
+
+The distinction exists because:
+- `agent` represents the user's persistent preference across TUI sessions
+- `model` may be temporarily overridden by CLI flags without changing the stored preference
+- When loading config, `agent` defaults to `DEFAULT_MODEL` ("claude-code") if not specified
+
+
 Consumers of these paths:
 - `@/codex-rs/tui/src/nori/config_adapter.rs`: `get_nori_home()` delegates to `find_nori_home()`
 - `@/codex-rs/tui/src/nori/onboarding/`: Uses `get_nori_home()` for first-launch detection and config file creation

@@ -77,7 +77,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 
 - `/agent` opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.
 - Selecting an agent sends `AppEvent::SetPendingAgent`, so both the App and `ChatWidget` store a `pending_agent` (see `PendingAgentSelection` and `PendingAgentInfo`). The UI informs the user that the switch will happen on the next prompt submission.
-- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model (clearing the pending flag, updating `Config`, shutting down the old conversation, and creating a `ChatWidget` with `expected_model` to filter out leftover events).
+- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model. The App persists the agent selection to `~/.nori/cli/config.toml` via `ConfigEditsBuilder::set_agent()`, updates `Config`, shuts down the old conversation, and creates a `ChatWidget` with `expected_model` to filter out leftover events.
 - This workflow avoids disrupting active turns and powers the agent-switching verification in `tui-pty-e2e/tests/agent_switching.rs`.
 
 **ACP Model Switching (Unstable Feature):**

@@ -941,6 +941,16 @@ impl App {
                 // Update the model in config
                 self.config.model = model_name.clone();
 
+                // Persist the agent selection to config.toml for next TUI startup
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                    .set_agent(Some(&model_name))
+                    .apply()
+                    .await
+                {
+                    tracing::error!(error = %err, "failed to persist agent selection");
+                    // Non-fatal: continue with the switch even if persistence fails
+                }
+
                 // Shutdown current conversation
                 self.shutdown_current_conversation().await;
 
@@ -1449,5 +1459,28 @@ mod tests {
             Some(AuthMode::ChatGPT),
             "unknown"
         ));
+    }
+
+    #[test]
+    fn test_agent_persistence_to_config() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let nori_home = temp_dir.path();
+
+        // Use ConfigEditsBuilder to persist an agent selection
+        ConfigEditsBuilder::new(nori_home)
+            .set_agent(Some("gemini"))
+            .apply_blocking()
+            .expect("persist agent");
+
+        // Read back the config file and verify it contains `agent = "gemini"`
+        let config_content =
+            std::fs::read_to_string(nori_home.join("config.toml")).expect("read config");
+        assert!(
+            config_content.contains("agent = \"gemini\""),
+            "Config should contain 'agent = \"gemini\"', got: {}",
+            config_content
+        );
     }
 }
