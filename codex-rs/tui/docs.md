@@ -125,6 +125,7 @@ The TUI crate uses Cargo feature flags to enable modular builds with two primary
 | `backend-client` | `codex-backend-client` | Cloud tasks backend client |
 | `upstream-updates` | - | OpenAI/Codex update checking mechanism |
 | `oss-providers` | `codex-common/oss-providers` | Ollama/LM Studio local model support |
+| `codex-features` | - | Gates `/undo`, `/compact`, `/review` slash commands |
 
 Feature gating patterns:
 - Import gating: `#[cfg(feature = "backend-client")] use codex_backend_client::Client`

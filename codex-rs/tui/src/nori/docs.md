@@ -45,6 +45,7 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 - `new_nori_session_info()`: Entry point called by `history_cell::new_session_info()`. Creates the composite cell with header + help text
 - `read_nori_profile()`: Parses `~/.nori-config.json` to extract `profile.baseProfile`
 - `format_directory()`: Relativizes paths to home directory with truncation for narrow terminals
+- `new_nori_status_output()`: Creates the composite cell for `/status` command output. Displays the command echo followed by the `NoriSessionHeaderCell` showing Nori branding, version, directory, agent, and profile info. Called by `chatwidget.rs::add_status_output()`
 
 **ASCII Banner Styling:**
 

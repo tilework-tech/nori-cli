@@ -145,6 +145,19 @@ impl HistoryCell for NoriSessionHeaderCell {
     }
 }
 
+/// Create the Nori status output cell for the /status command.
+///
+/// This displays a simplified version of the session header showing:
+/// - The /status command echo
+/// - Nori branding with version
+/// - Directory, agent, and profile info
+pub(crate) fn new_nori_status_output(model: &str, directory: PathBuf) -> CompositeHistoryCell {
+    let command = PlainHistoryCell::new(vec!["/status".magenta().into()]);
+    let header = NoriSessionHeaderCell::new(model.to_string(), directory);
+
+    CompositeHistoryCell::new(vec![Box::new(command), Box::new(header)])
+}
+
 /// Create the Nori session info cell to be displayed at session start.
 pub(crate) fn new_nori_session_info(
     config: &Config,
@@ -289,5 +302,49 @@ mod tests {
         let rendered = render_lines(&lines).join("\n");
 
         insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
+    fn nori_status_output_shows_status_command_and_nori_branding() {
+        let status_cell = new_nori_status_output("claude-sonnet", PathBuf::from("/tmp/project"));
+
+        let lines = status_cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should show /status command echo
+        assert!(
+            rendered.contains("/status"),
+            "Status output should show /status command"
+        );
+
+        // Should contain Nori branding
+        assert!(
+            rendered.contains("Nori"),
+            "Status output should contain Nori branding"
+        );
+
+        // Should NOT contain OpenAI Codex branding
+        assert!(
+            !rendered.contains("OpenAI"),
+            "Status output should NOT contain OpenAI branding"
+        );
+        assert!(
+            !rendered.contains("Codex"),
+            "Status output should NOT contain Codex branding"
+        );
+
+        // Should show directory and agent info
+        assert!(
+            rendered.contains("directory:"),
+            "Status output should show directory"
+        );
+        assert!(
+            rendered.contains("agent:"),
+            "Status output should show agent"
+        );
+        assert!(
+            rendered.contains("claude-sonnet"),
+            "Status output should show agent name"
+        );
     }
 }

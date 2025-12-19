@@ -68,7 +68,7 @@ These translate to `-c features.<name>=true/false` config overrides.
 
 **Cargo Feature Flags (Compile-time):**
 
-The CLI uses Cargo features to enable optional functionality. By default (`default = []`), only core functionality is included (TUI, exec, ACP). Optional features can be enabled individually or via the `full` meta-feature:
+The CLI uses Cargo features to enable optional functionality. By default (`default = []`), only core functionality is included (TUI, ACP). Optional features can be enabled individually or via the `full` meta-feature:
 
 | Feature | Dependencies | Enables |
 |---------|--------------|---------|
@@ -83,6 +83,7 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 | `chatgpt` | `codex-chatgpt` | `apply` subcommand |
 | `responses-api-proxy` | `codex-responses-api-proxy` | `responses-api-proxy` subcommand |
 | `oss-providers` | `codex-tui/oss-providers`, `codex-common/oss-providers` | Ollama/LM Studio local model support |
+| `codex-features` | `codex-tui/codex-features` | `exec`, `resume`, `features` subcommands + TUI `/undo`, `/compact`, `/review` |
 
 **Feature Propagation to TUI:**
 
@@ -92,12 +93,13 @@ Several CLI features propagate to the TUI crate for coordinated behavior:
 - `backend-client` -> `codex-tui/backend-client`: Enables cloud tasks backend
 - `upstream-updates` -> `codex-tui/upstream-updates`: Uses OpenAI update system instead of Nori's
 - `oss-providers` -> `codex-tui/oss-providers` -> `codex-common/oss-providers`: Enables Ollama/LM Studio local model support
+- `codex-features` -> `codex-tui/codex-features`: Enables `/undo`, `/compact`, `/review` commands in TUI
 
 Without these features, the TUI uses Nori-specific alternatives (e.g., GitHub Discussions for feedback, GitHub releases for updates). For OSS providers, the `codex-common` crate provides stub implementations that return `None` or errors when the feature is disabled.
 
 Build examples:
 ```bash
-cargo build -p codex-cli                    # Minimal (TUI + exec + ACP only, Nori updates)
+cargo build -p codex-cli                    # Minimal (TUI + ACP only, no exec/resume/features subcommands)
 cargo build -p codex-cli --features full    # All functionality (OpenAI-compatible)
 cargo build -p codex-cli --features login,mcp-server  # Selective
 ```
