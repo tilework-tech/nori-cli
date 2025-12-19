@@ -1,8 +1,10 @@
 use std::env;
 use std::fs;
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::time::Duration;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SystemInfo {
@@ -37,11 +39,10 @@ impl SystemInfo {
         };
 
         // Check if cache is valid
-        if let Some(cached) = cache_guard.as_ref() {
-            if cached.cached_at.elapsed() < CACHE_TTL {
+        if let Some(cached) = cache_guard.as_ref()
+            && cached.cached_at.elapsed() < CACHE_TTL {
                 return cached.info.clone();
             }
-        }
 
         // Cache miss or expired - but use default if this is the first call
         // to avoid blocking TUI startup
