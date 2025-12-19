@@ -250,6 +250,123 @@ fn test_startup_hides_install_hint_when_nori_installed() {
     );
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn test_session_header_alignment_with_profiles() {
+    // This test verifies that when nori-ai is installed and returns an install location:
+    // 1. The location path shows ~/... not /home/user/...
+    // 2. All lines in the header box have the same width (right border aligned)
+    // 3. Labels are consistently spaced
+    use std::os::unix::fs::PermissionsExt;
+    use tui_pty_e2e::normalize_for_snapshot;
+
+    // Get the actual home directory so we can construct a path that will be relativized
+    let home = std::path::PathBuf::from(std::env::var("HOME").expect("HOME env var should exist"));
+    let install_path = home.join("test-nori-install");
+
+    // Create a temp directory for our mock nori-ai binary
+    let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
+
+    // Create a mock nori-ai executable that responds to install-location
+    let mock_nori = mock_bin_dir.path().join("nori-ai");
+    let script = format!(
+        r#"#!/bin/sh
+if [ "$1" = "install-location" ]; then
+    echo "Nori installation directories:"
+    echo ""
+    echo "  {}"
+    exit 0
+fi
+exit 0
+"#,
+        install_path.display()
+    );
+    std::fs::write(&mock_nori, script).expect("Failed to write mock nori-ai");
+    std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))
+        .expect("Failed to set permissions on mock nori-ai");
+
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        80,
+        SessionConfig::default().with_extra_path(mock_bin_dir.path().to_path_buf()),
+    )
+    .expect("Failed to spawn");
+
+    // Wait for the Profiles section to appear
+    session
+        .wait_for_text("Profiles", TIMEOUT)
+        .expect("Profiles section did not appear");
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // Verify the Profiles section is shown
+    assert!(
+        contents.contains("Profiles"),
+        "Expected Profiles section, but got: {}",
+        contents
+    );
+    assert!(
+        contents.contains("current:"),
+        "Expected current: label, but got: {}",
+        contents
+    );
+    assert!(
+        contents.contains("location:"),
+        "Expected location: label, but got: {}",
+        contents
+    );
+
+    // Verify location shows ~/... not /home/...
+    // The location line should contain "~/test-nori-install" not the full path
+    assert!(
+        contents.contains("~/test-nori-install"),
+        "Location should show ~/test-nori-install with tilde, but got: {}",
+        contents
+    );
+    assert!(
+        !contents.contains(&format!("{}", install_path.display())),
+        "Location should NOT show full path {}, but got: {}",
+        install_path.display(),
+        contents
+    );
+
+    // Verify box alignment by checking that all header lines have the same length
+    // Find lines that start with the box border character
+    let header_lines: Vec<&str> = contents
+        .lines()
+        .filter(|line| line.starts_with('│') || line.starts_with('╭') || line.starts_with('╰'))
+        .collect();
+
+    if header_lines.len() >= 2 {
+        let first_len = header_lines[0].chars().count();
+        for (i, line) in header_lines.iter().enumerate() {
+            let line_len = line.chars().count();
+            assert_eq!(
+                line_len, first_len,
+                "Line {} has different length ({}) than first line ({}). Lines:\n{}",
+                i,
+                line_len,
+                first_len,
+                header_lines.join("\n")
+            );
+        }
+    }
+
+    // Capture the header portion for snapshot
+    let header_lines_for_snapshot: Vec<&str> = contents
+        .lines()
+        .skip_while(|line| !line.starts_with('╭'))
+        .take_while(|line| !line.starts_with('╰') || line.starts_with('╰'))
+        .take(11) // Take up to the bottom border
+        .collect();
+
+    assert_snapshot!(
+        "session_header_with_profiles_aligned",
+        normalize_for_snapshot(header_lines_for_snapshot.join("\n"))
+    );
+}
+
 #[test]
 fn test_poll_does_not_block_when_no_data() {
     // RED phase: This test verifies that poll() returns quickly when no data is available,
