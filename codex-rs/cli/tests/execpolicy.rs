@@ -19,7 +19,7 @@ prefix_rule(
 "#,
     )?;
 
-    let output = Command::cargo_bin("codex")?
+    let output = Command::cargo_bin("nori")?
         .env("CODEX_HOME", codex_home.path())
         .args([
             "execpolicy",
