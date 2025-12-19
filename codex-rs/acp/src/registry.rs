@@ -65,12 +65,23 @@ impl AgentKind {
         }
     }
 
-    /// Get the npm package name for this agent
+    /// Get the npm package name for the underlying agent (for installation detection)
     pub fn npm_package(&self) -> &'static str {
         match self {
             AgentKind::ClaudeCode => "@anthropic-ai/claude-code",
             AgentKind::Codex => "@openai/codex",
-            AgentKind::Gemini => "@anthropic-ai/claude-code", // Gemini uses npx @google/gemini-cli
+            AgentKind::Gemini => "@google/gemini-cli",
+        }
+    }
+
+    /// Get the ACP adapter package name for launching this agent
+    pub fn acp_package(&self) -> &'static str {
+        match self {
+            // Claude and Codex use Zed's ACP adapters
+            AgentKind::ClaudeCode => "@zed-industries/claude-code-acp",
+            AgentKind::Codex => "@zed-industries/codex-acp",
+            // Gemini has native ACP support
+            AgentKind::Gemini => "@google/gemini-cli",
         }
     }
 
@@ -598,14 +609,16 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
         let package_manager = detect_preferred_package_manager();
 
         let (command, args) = match agent {
+            // Claude and Codex use Zed's ACP adapters
             AgentKind::ClaudeCode => (
                 package_manager.command().to_string(),
-                vec!["@anthropic-ai/claude-code".to_string(), "--acp".to_string()],
+                vec!["@zed-industries/claude-code-acp".to_string()],
             ),
             AgentKind::Codex => (
                 package_manager.command().to_string(),
-                vec!["@openai/codex".to_string(), "--acp".to_string()],
+                vec!["@zed-industries/codex-acp".to_string()],
             ),
+            // Gemini has native ACP support via --experimental-acp flag
             AgentKind::Gemini => (
                 package_manager.command().to_string(),
                 vec![
@@ -874,8 +887,8 @@ mod tests {
             "Command should be npx or bunx, got: {}",
             config.command
         );
-        assert!(config.args.contains(&"@anthropic-ai/claude-code".to_string()));
-        assert!(config.args.contains(&"--acp".to_string()));
+        // Uses Zed's ACP adapter
+        assert!(config.args.contains(&"@zed-industries/claude-code-acp".to_string()));
         assert_eq!(config.provider_info.name, "Claude Code ACP");
     }
 
@@ -890,8 +903,8 @@ mod tests {
             "Command should be npx or bunx, got: {}",
             config.command
         );
-        assert!(config.args.contains(&"@openai/codex".to_string()));
-        assert!(config.args.contains(&"--acp".to_string()));
+        // Uses Zed's ACP adapter
+        assert!(config.args.contains(&"@zed-industries/codex-acp".to_string()));
         assert_eq!(config.provider_info.name, "Codex ACP");
     }
 
