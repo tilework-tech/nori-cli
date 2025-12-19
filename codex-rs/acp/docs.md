@@ -217,11 +217,43 @@ The ACP module bridges permission requests to Codex's approval UI. Approval requ
 └─────────────────────────┘  (via oneshot)        └─────────────────────────┘
 ```
 
-- `ApprovalRequest` bundles the translated `ExecApprovalRequestEvent`, original ACP options, and response channel
+- `ApprovalRequest` bundles the `ApprovalEventType`, original ACP options, and response channel
+- `ApprovalEventType` enum selects the appropriate approval UI:
+  - `Exec(ExecApprovalRequestEvent)` - for shell commands and generic operations
+  - `Patch(ApplyPatchApprovalRequestEvent)` - for file Edit/Write/Delete with diff rendering
 - `AcpConnection::take_approval_receiver()` exposes the receiver for TUI consumption
 - Falls back to auto-approve if approval channel is closed (no UI listening)
 - Falls back to deny if response channel is dropped (UI didn't respond)
 - **Critical timing**: The agent subprocess blocks waiting for approval. Deferring approval display would deadlock (agent waits for approval, but TaskComplete never arrives until agent finishes)
+
+**Patch Event Translation:**
+
+For Edit/Write/Delete operations, the ACP backend emits native patch events for better TUI rendering:
+
+| Operation | Approval Event | Result Event |
+|-----------|----------------|--------------|
+| Edit (old_string + new_string) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Update` |
+| Write (content only) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Add` |
+| Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
+| Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
+
+The patch event flow requires state tracking since ToolCallUpdate may not have the same fields as ToolCall:
+
+```
+┌───────────────────┐      ┌───────────────────────────────┐      ┌───────────────────┐
+│  ToolCall         │      │  RequestPermission            │      │  ToolCallUpdate   │
+│  (Edit detected)  │      │                               │      │  (Completed)      │
+│                   │      │                               │      │                   │
+│  Store FileChange │─────►│  ApplyPatchApprovalRequest    │─────►│  Retrieve stored  │
+│  in pending map   │      │  (approval overlay shown)     │      │  FileChange, emit │
+│  (no event)       │      │                               │      │  PatchApplyBegin  │
+└───────────────────┘      └───────────────────────────────┘      └───────────────────┘
+```
+
+Key translator functions:
+- `is_patch_operation()` - detects Edit/Write/Delete based on ToolKind or raw_input fields
+- `tool_call_to_file_change()` - converts raw_input to `FileChange` using `diffy` for unified diffs
+- `permission_request_to_patch_approval_event()` - creates `ApplyPatchApprovalRequestEvent` for patch ops
 
 **TUI Backend Adapter (`backend.rs`):**
 
