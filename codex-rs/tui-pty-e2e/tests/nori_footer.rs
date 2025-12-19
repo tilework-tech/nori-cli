@@ -1,7 +1,9 @@
+use insta::assert_snapshot;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 // @current-session
 #[test]
@@ -171,4 +173,6 @@ fn test_footer_full_startup_with_all_info() {
         "Footer should contain Nori version. Contents: {}",
         contents
     );
+
+    assert_snapshot!("full_footer", normalize_for_input_snapshot(contents));
 }
