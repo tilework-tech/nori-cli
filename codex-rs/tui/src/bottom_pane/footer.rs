@@ -87,7 +87,10 @@ fn footer_lines(props: &FooterProps) -> Vec<Line<'static>> {
         })],
         FooterMode::ShortcutSummary => {
             let mut line = build_footer_line(props);
-            line.push_span(" · ".dim());
+            // Only add separator if there's already content
+            if !line.spans.is_empty() {
+                line.push_span(" · ".dim());
+            }
             line.extend(vec![
                 key_hint::plain(KeyCode::Char('?')).into(),
                 " for shortcuts".dim(),
@@ -234,38 +237,39 @@ fn context_window_line(percent: Option<i64>) -> Line<'static> {
 fn build_footer_line(props: &FooterProps) -> Line<'static> {
     let mut spans = Vec::new();
 
-    // Add git branch if available: "⎇ branch-name"
+    // Add git branch if available: "⎇ branch-name" (yellow)
     if let Some(branch) = &props.git_branch {
-        spans.push(Span::from("⎇ "));
-        spans.push(Span::from(branch.clone()).dim());
+        spans.push(Span::from("⎇ ").yellow());
+        spans.push(Span::from(branch.clone()).yellow());
         spans.push(Span::from(" · ").dim());
     }
 
-    // Add nori profile if available: "Profile: name"
+    // Add nori profile if available: "Profile: name" (cyan)
     if let Some(profile) = &props.nori_profile {
-        spans.push(Span::from("Profile: ").dim());
-        spans.push(Span::from(profile.clone()).dim());
+        spans.push(Span::from("Profile: ").cyan());
+        spans.push(Span::from(profile.clone()).cyan());
         spans.push(Span::from(" · ").dim());
     }
 
-    // Add nori version if available: "Nori v19.1.1"
+    // Add nori version if available: "Nori v19.1.1" (green)
     if let Some(version) = &props.nori_version {
-        spans.push(Span::from("Nori v").dim());
-        spans.push(Span::from(version.clone()).dim());
+        spans.push(Span::from("Nori v").green());
+        spans.push(Span::from(version.clone()).green());
         spans.push(Span::from(" · ").dim());
     }
 
-    // Add git stats if available: "+10 -3"
+    // Add git stats if available: "+10 -3" (green for added, red for removed)
     if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed) {
         if added > 0 || removed > 0 {
-            spans.push(Span::from(format!("+{} -{}", added, removed)).dim());
-            spans.push(Span::from(" · ").dim());
+            spans.push(Span::from(format!("+{}", added)).green());
+            spans.push(Span::from(" ").dim());
+            spans.push(Span::from(format!("-{}", removed)).red());
+            // Don't add separator after stats - the caller will add "? for shortcuts"
         }
+    } else if !spans.is_empty() {
+        // Remove trailing separator if no stats were added but we have other content
+        spans.pop();
     }
-
-    // Add context percentage: "72% context left"
-    let percent = props.context_window_percent.unwrap_or(100).clamp(0, 100);
-    spans.push(Span::from(format!("{}% context left", percent)).dim());
 
     Line::from(spans)
 }
