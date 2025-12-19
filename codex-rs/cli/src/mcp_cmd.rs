@@ -79,7 +79,7 @@ pub struct GetArgs {
 }
 
 #[derive(Debug, clap::Parser)]
-#[command(override_usage = "codex mcp add [OPTIONS] <NAME> (--url <URL> | -- <COMMAND>...)")]
+#[command(override_usage = "nori mcp add [OPTIONS] <NAME> (--url <URL> | -- <COMMAND>...)")]
 pub struct AddArgs {
     /// Name for the MCP server configuration.
     pub name: String,
@@ -286,7 +286,7 @@ async fn run_add(config_overrides: &CliConfigOverrides, add_args: AddArgs) -> Re
                 if !config.features.enabled(Feature::RmcpClient) {
                     println!(
                         "MCP server supports login. Add `experimental_use_rmcp_client = true` \
-                         to your config.toml and run `codex mcp login {name}` to login."
+                         to your config.toml and run `nori mcp login {name}` to login."
                     );
                 } else {
                     println!("Detected OAuth support. Starting OAuth flow…");
@@ -304,7 +304,7 @@ async fn run_add(config_overrides: &CliConfigOverrides, add_args: AddArgs) -> Re
             }
             Ok(false) => {}
             Err(_) => println!(
-                "MCP server may or may not require login. Run `codex mcp login {name}` to login."
+                "MCP server may or may not require login. Run `nori mcp login {name}` to login."
             ),
         }
     }
@@ -492,7 +492,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
     }
 
     if entries.is_empty() {
-        println!("No MCP servers configured yet. Try `codex mcp add my-tool -- my-command`.");
+        println!("No MCP servers configured yet. Try `nori mcp add my-tool -- my-command`.");
         return Ok(());
     }
 
@@ -823,7 +823,7 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
     if let Some(timeout) = server.tool_timeout_sec {
         println!("  tool_timeout_sec: {}", timeout.as_secs_f64());
     }
-    println!("  remove: codex mcp remove {}", get_args.name);
+    println!("  remove: nori mcp remove {}", get_args.name);
 
     Ok(())
 }
