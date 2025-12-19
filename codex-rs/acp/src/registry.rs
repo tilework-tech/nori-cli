@@ -305,7 +305,9 @@ pub fn codex_known_models() -> Vec<KnownModel> {
         KnownModel {
             id: "gpt-5.2".to_string(),
             display_name: "gpt-5.2".to_string(),
-            description: "Latest frontier model with improvements across knowledge, reasoning and coding".to_string(),
+            description:
+                "Latest frontier model with improvements across knowledge, reasoning and coding"
+                    .to_string(),
             enabled: false,
             is_default: false,
         },
@@ -378,12 +380,12 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
     };
 
     // Check if the binary exists in PATH
-    if let Ok(output) = Command::new("which").arg(binary_name).output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let managed_by = detect_package_manager_from_path(&path);
-            return (true, managed_by);
-        }
+    if let Ok(output) = Command::new("which").arg(binary_name).output()
+        && output.status.success()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let managed_by = detect_package_manager_from_path(&path);
+        return (true, managed_by);
     }
 
     // On Windows, try `where` instead
@@ -765,19 +767,34 @@ mod tests {
     #[test]
     fn test_agent_from_slug() {
         // Direct slugs
-        assert_eq!(AgentKind::from_slug("claude-code"), Some(AgentKind::ClaudeCode));
+        assert_eq!(
+            AgentKind::from_slug("claude-code"),
+            Some(AgentKind::ClaudeCode)
+        );
         assert_eq!(AgentKind::from_slug("codex"), Some(AgentKind::Codex));
         assert_eq!(AgentKind::from_slug("gemini"), Some(AgentKind::Gemini));
 
         // Legacy aliases
-        assert_eq!(AgentKind::from_slug("claude-acp"), Some(AgentKind::ClaudeCode));
-        assert_eq!(AgentKind::from_slug("claude-4.5"), Some(AgentKind::ClaudeCode));
+        assert_eq!(
+            AgentKind::from_slug("claude-acp"),
+            Some(AgentKind::ClaudeCode)
+        );
+        assert_eq!(
+            AgentKind::from_slug("claude-4.5"),
+            Some(AgentKind::ClaudeCode)
+        );
         assert_eq!(AgentKind::from_slug("codex-acp"), Some(AgentKind::Codex));
         assert_eq!(AgentKind::from_slug("gemini-acp"), Some(AgentKind::Gemini));
-        assert_eq!(AgentKind::from_slug("gemini-2.5-flash"), Some(AgentKind::Gemini));
+        assert_eq!(
+            AgentKind::from_slug("gemini-2.5-flash"),
+            Some(AgentKind::Gemini)
+        );
 
         // Case insensitive
-        assert_eq!(AgentKind::from_slug("Claude-Code"), Some(AgentKind::ClaudeCode));
+        assert_eq!(
+            AgentKind::from_slug("Claude-Code"),
+            Some(AgentKind::ClaudeCode)
+        );
         assert_eq!(AgentKind::from_slug("CODEX"), Some(AgentKind::Codex));
 
         // Unknown
@@ -876,8 +893,7 @@ mod tests {
 
     #[test]
     fn test_get_claude_code_config() {
-        let config =
-            get_agent_config("claude-code").expect("Should return config for claude-code");
+        let config = get_agent_config("claude-code").expect("Should return config for claude-code");
 
         assert_eq!(config.provider_slug, "claude-code");
         assert_eq!(config.agent, AgentKind::ClaudeCode);
@@ -888,7 +904,11 @@ mod tests {
             config.command
         );
         // Uses Zed's ACP adapter
-        assert!(config.args.contains(&"@zed-industries/claude-code-acp".to_string()));
+        assert!(
+            config
+                .args
+                .contains(&"@zed-industries/claude-code-acp".to_string())
+        );
         assert_eq!(config.provider_info.name, "Claude Code ACP");
     }
 
@@ -904,7 +924,11 @@ mod tests {
             config.command
         );
         // Uses Zed's ACP adapter
-        assert!(config.args.contains(&"@zed-industries/codex-acp".to_string()));
+        assert!(
+            config
+                .args
+                .contains(&"@zed-industries/codex-acp".to_string())
+        );
         assert_eq!(config.provider_info.name, "Codex ACP");
     }
 
