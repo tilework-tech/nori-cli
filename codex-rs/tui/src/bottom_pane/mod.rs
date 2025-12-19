@@ -111,8 +111,9 @@ impl BottomPane {
             disable_paste_burst,
         );
 
-        // Collect and set system info for footer
-        let system_info = crate::system_info::SystemInfo::collect();
+        // Start with default system info to avoid blocking TUI startup
+        // System info collection is deferred to avoid blocking parallel test execution
+        let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
         Self {
