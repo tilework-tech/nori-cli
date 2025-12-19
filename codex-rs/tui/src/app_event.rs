@@ -9,6 +9,7 @@ use codex_file_search::FileMatch;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
+use crate::system_info::SystemInfo;
 
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
@@ -53,6 +54,9 @@ pub(crate) enum AppEvent {
         query: String,
         matches: Vec<FileMatch>,
     },
+
+    /// Result of background system info collection for the footer.
+    SystemInfoRefreshed(SystemInfo),
 
     /// Result of refreshing rate limits
     #[allow(dead_code)]

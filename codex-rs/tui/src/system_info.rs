@@ -1,10 +1,6 @@
 use std::env;
 use std::fs;
 use std::process::Command;
-use std::sync::Mutex;
-use std::sync::OnceLock;
-use std::time::Duration;
-use std::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SystemInfo {
@@ -15,58 +11,7 @@ pub(crate) struct SystemInfo {
     pub(crate) git_lines_removed: Option<i32>,
 }
 
-struct CachedSystemInfo {
-    info: SystemInfo,
-    cached_at: Instant,
-}
-
-static SYSTEM_INFO_CACHE: OnceLock<Mutex<Option<CachedSystemInfo>>> = OnceLock::new();
-const CACHE_TTL: Duration = Duration::from_secs(5);
-
 impl SystemInfo {
-    /// Collect system info with 5-second TTL cache
-    /// Returns default on first call to avoid blocking, then caches for 5 seconds
-    pub fn collect() -> Self {
-        let cache = SYSTEM_INFO_CACHE.get_or_init(|| Mutex::new(None));
-
-        // Try to acquire lock without blocking
-        let mut cache_guard = match cache.try_lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                // Lock contention - return default to avoid blocking
-                return Self::default();
-            }
-        };
-
-        // Check if cache is valid
-        if let Some(cached) = cache_guard.as_ref()
-            && cached.cached_at.elapsed() < CACHE_TTL {
-                return cached.info.clone();
-            }
-
-        // Cache miss or expired - but use default if this is the first call
-        // to avoid blocking TUI startup
-        if cache_guard.is_none() {
-            // First call - return default immediately
-            *cache_guard = Some(CachedSystemInfo {
-                info: Self::default(),
-                cached_at: Instant::now(),
-            });
-            return Self::default();
-        }
-
-        // Subsequent calls - collect fresh data
-        let info = Self::collect_fresh();
-
-        // Update cache
-        *cache_guard = Some(CachedSystemInfo {
-            info: info.clone(),
-            cached_at: Instant::now(),
-        });
-
-        info
-    }
-
     /// Collect system info synchronously (blocking).
     /// Only available in debug builds for E2E testing via NORI_SYNC_SYSTEM_INFO=1.
     #[cfg(debug_assertions)]
@@ -74,7 +19,9 @@ impl SystemInfo {
         Self::collect_fresh()
     }
 
-    fn collect_fresh() -> Self {
+    /// Collect fresh system info. This is blocking and should be called from
+    /// a background thread to avoid blocking TUI startup.
+    pub(crate) fn collect_fresh() -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats();
         Self {
             git_branch: get_git_branch(),

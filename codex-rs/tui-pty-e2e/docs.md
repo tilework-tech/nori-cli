@@ -212,6 +212,7 @@ This normalization allows snapshot assertions to focus on UI structure and stati
 - Sets `TERM=xterm-256color` for terminal feature detection
 - NO_COLOR=1 by default for deterministic output parsing
 - Terminal size configurable (default 24x80, some tests use 40x120)
+- NORI_SYNC_SYSTEM_INFO=1 for synchronous footer system info collection (ensures git branch/version appear immediately)
 
 **Polling Pattern:**
 

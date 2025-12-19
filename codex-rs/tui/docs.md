@@ -65,6 +65,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `shimmer.rs`: Loading animation effects
 - `status_indicator_widget.rs`: Status display
 - `nori/`: Nori-specific branding and customization (see `@/codex-rs/tui/src/nori/docs.md`)
+- `system_info.rs`: Background system info collection for footer (git branch, Nori profile/version, git stats)
 
 **Input Handling:**
 
@@ -265,6 +266,31 @@ The `color.rs` and `terminal_palette.rs` modules handle terminal color detection
 - `AGENTS.md` documents testing conventions
 - Black-box integration tests in `@/codex-rs/tui-pty-e2e` test full TUI via PTY
 - Integration tests spawn real `codex` binary with `mock-acp-agent` backend
+
+**System Info Background Refresh:**
+
+The footer displays system information (git branch, Nori profile, Nori version, git stats) that is collected asynchronously to avoid blocking TUI startup:
+
+1. `BottomPane::new()` initializes the footer with default (empty) `SystemInfo`
+2. `App::run()` spawns a background thread that calls `SystemInfo::collect_fresh()`
+3. When collection completes, the thread sends `AppEvent::SystemInfoRefreshed(info)`
+4. `App` receives the event and calls `ChatWidget::apply_system_info_refresh()`
+5. The update propagates through `BottomPane::set_system_info()` to the composer
+
+```
+┌─────────────┐     spawn thread     ┌──────────────────┐
+│  App::run() │ ─────────────────────▶│  collect_fresh() │
+└─────────────┘                       └────────┬─────────┘
+                                               │
+     ┌─────────────────────────────────────────┘
+     │  AppEvent::SystemInfoRefreshed
+     ▼
+┌───────────────────┐     set_system_info()    ┌────────────┐
+│ ChatWidget        │ ─────────────────────────▶│ BottomPane │
+└───────────────────┘                          └────────────┘
+```
+
+For E2E testing, `NORI_SYNC_SYSTEM_INFO=1` env var enables synchronous collection in debug builds. This is set automatically by `@/codex-rs/tui-pty-e2e` to ensure footer data appears immediately in tests.
 
 **Configuration Flow:**
 

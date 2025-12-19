@@ -3140,6 +3140,11 @@ impl ChatWidget {
         self.bottom_pane.on_file_search_result(query, matches);
     }
 
+    /// Update system info in the footer (for background refresh).
+    pub(crate) fn apply_system_info_refresh(&mut self, info: crate::system_info::SystemInfo) {
+        self.bottom_pane.set_system_info(info);
+    }
+
     /// Handle Ctrl-C key press.
     fn on_ctrl_c(&mut self) {
         if self.bottom_pane.on_ctrl_c() == CancellationEvent::Handled {

@@ -404,6 +404,17 @@ impl App {
         let tui_events = tui.event_stream();
         tokio::pin!(tui_events);
 
+        // Spawn background thread to collect system info without blocking startup.
+        // The footer initially shows default (empty) values, and this updates it
+        // once collection completes.
+        {
+            let tx = app.app_event_tx.clone();
+            thread::spawn(move || {
+                let info = crate::system_info::SystemInfo::collect_fresh();
+                tx.send(AppEvent::SystemInfoRefreshed(info));
+            });
+        }
+
         tui.frame_requester().schedule_frame();
 
         while select! {
@@ -583,6 +594,9 @@ impl App {
             }
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches);
+            }
+            AppEvent::SystemInfoRefreshed(info) => {
+                self.chat_widget.apply_system_info_refresh(info);
             }
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));

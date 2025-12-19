@@ -391,6 +391,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update system info displayed in the footer (for background refresh).
+    pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
+        self.composer.set_system_info(info);
+        self.request_redraw();
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.composer.is_empty()
     }
