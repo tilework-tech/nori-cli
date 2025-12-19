@@ -187,6 +187,26 @@ impl TuiSession {
                     .args(["init"])
                     .current_dir(temp_dir.path())
                     .output()?;
+
+                // Configure git user for the initial commit
+                std::process::Command::new("git")
+                    .args(["config", "user.email", "test@example.com"])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+                std::process::Command::new("git")
+                    .args(["config", "user.name", "Test User"])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+
+                // Add and commit the hello.py file to create a branch
+                std::process::Command::new("git")
+                    .args(["add", "."])
+                    .current_dir(temp_dir.path())
+                    .output()?;
+                std::process::Command::new("git")
+                    .args(["commit", "-m", "Initial commit"])
+                    .current_dir(temp_dir.path())
+                    .output()?;
             }
 
             config.cwd = Some(temp_dir.path().to_path_buf());

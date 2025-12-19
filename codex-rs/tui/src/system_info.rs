@@ -1,0 +1,276 @@
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SystemInfo {
+    pub(crate) git_branch: Option<String>,
+    pub(crate) nori_profile: Option<String>,
+    pub(crate) nori_version: Option<String>,
+    pub(crate) git_lines_added: Option<i32>,
+    pub(crate) git_lines_removed: Option<i32>,
+}
+
+impl SystemInfo {
+    pub fn collect() -> Self {
+        let (git_lines_added, git_lines_removed) = get_git_stats();
+        Self {
+            git_branch: get_git_branch(),
+            nori_profile: get_nori_profile(),
+            nori_version: get_nori_version(),
+            git_lines_added,
+            git_lines_removed,
+        }
+    }
+}
+
+fn get_nori_version() -> Option<String> {
+    let output = Command::new("nori-ai").arg("--version").output().ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let version_output = String::from_utf8(output.stdout).ok()?;
+    // Parse "nori-ai 19.1.1" to extract "19.1.1"
+    version_output
+        .split_whitespace()
+        .nth(1)
+        .map(|v| v.trim().to_string())
+}
+
+fn get_nori_profile() -> Option<String> {
+    // Search for .nori-config.json in current directory and parent directories
+    let mut current_dir = env::current_dir().ok()?;
+
+    loop {
+        let config_path = current_dir.join(".nori-config.json");
+        if config_path.exists() {
+            // Try to read and parse the config file
+            if let Ok(contents) = fs::read_to_string(&config_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
+                    // Extract agents.claude-code.profile.baseProfile
+                    if let Some(profile) = json
+                        .get("agents")
+                        .and_then(|a| a.get("claude-code"))
+                        .and_then(|c| c.get("profile"))
+                        .and_then(|p| p.get("baseProfile"))
+                        .and_then(|b| b.as_str())
+                    {
+                        return Some(profile.to_string());
+                    }
+                }
+            }
+        }
+
+        // Move to parent directory
+        if !current_dir.pop() {
+            break;
+        }
+    }
+
+    None
+}
+
+fn get_git_stats() -> (Option<i32>, Option<i32>) {
+    let output = match Command::new("git")
+        .args(["diff", "HEAD", "--shortstat"])
+        .output()
+    {
+        Ok(output) => output,
+        Err(_) => return (None, None),
+    };
+
+    if !output.status.success() {
+        return (None, None);
+    }
+
+    let stats = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(_) => return (None, None),
+    };
+
+    parse_git_shortstat(&stats)
+}
+
+fn parse_git_shortstat(output: &str) -> (Option<i32>, Option<i32>) {
+    if output.trim().is_empty() {
+        return (None, None);
+    }
+
+    let mut added = None;
+    let mut removed = None;
+
+    // Parse insertions: "10 insertions(+)" or "10 insertion(+)"
+    if let Some(insertions_idx) = output.find("insertion") {
+        // Extract the substring before "insertion"
+        let before = &output[..insertions_idx];
+        // Split by commas and spaces to get individual tokens
+        let tokens: Vec<&str> = before
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|s| !s.is_empty())
+            .collect();
+        // The number should be the last token before "insertion"
+        if let Some(last_token) = tokens.last() {
+            if let Ok(num) = last_token.parse::<i32>() {
+                added = Some(num);
+            }
+        }
+    }
+
+    // Parse deletions: "3 deletions(-)" or "3 deletion(-)"
+    if let Some(deletions_idx) = output.find("deletion") {
+        let before = &output[..deletions_idx];
+        let tokens: Vec<&str> = before
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if let Some(last_token) = tokens.last() {
+            if let Ok(num) = last_token.parse::<i32>() {
+                removed = Some(num);
+            }
+        }
+    }
+
+    // If we found insertions but not deletions, deletions is 0
+    if added.is_some() && removed.is_none() {
+        removed = Some(0);
+    }
+
+    // If we found deletions but not insertions, insertions is 0
+    if removed.is_some() && added.is_none() {
+        added = Some(0);
+    }
+
+    (added, removed)
+}
+
+fn get_git_branch() -> Option<String> {
+    let output = match Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+    {
+        Ok(output) => output,
+        Err(_e) => {
+            return None;
+        }
+    };
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let branch = String::from_utf8(output.stdout).ok()?;
+    let branch = branch.trim();
+
+    if branch.is_empty() {
+        return None;
+    }
+
+    // Truncate long branch names to 30 characters
+    let truncated = if branch.len() > 30 {
+        format!("{}...", &branch[..27])
+    } else {
+        branch.to_string()
+    };
+
+    Some(truncated)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // @current-session
+    #[test]
+    fn test_system_info_can_be_constructed() {
+        let info = SystemInfo {
+            git_branch: Some("main".to_string()),
+            nori_profile: Some("clifford".to_string()),
+            nori_version: Some("19.1.1".to_string()),
+            git_lines_added: Some(10),
+            git_lines_removed: Some(3),
+        };
+        assert_eq!(info.git_branch, Some("main".to_string()));
+    }
+
+    // @current-session
+    #[test]
+    fn test_get_git_branch_in_git_repo() {
+        // This test runs in the actual git repo, so it should detect a branch
+        let branch = get_git_branch();
+        // Should detect a branch when run in a git repository
+        assert!(
+            branch.is_some(),
+            "Should detect git branch when run in a git repository"
+        );
+        let branch_name = branch.unwrap();
+        assert!(!branch_name.is_empty(), "Branch name should not be empty");
+        assert!(
+            !branch_name.contains('\n'),
+            "Branch name should not contain newlines"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn test_get_git_branch_truncates_long_names() {
+        // Test that very long branch names are truncated
+        // We'll implement truncation in get_git_branch
+        // For now this tests that we handle the output correctly
+        let branch = get_git_branch();
+        if let Some(name) = branch {
+            assert!(
+                name.len() <= 30,
+                "Branch names should be truncated to 30 characters"
+            );
+        }
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_git_shortstat_with_changes() {
+        let output = " 2 files changed, 10 insertions(+), 3 deletions(-)";
+        let (added, removed) = parse_git_shortstat(output);
+        assert_eq!(added, Some(10));
+        assert_eq!(removed, Some(3));
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_git_shortstat_only_additions() {
+        let output = " 1 file changed, 5 insertions(+)";
+        let (added, removed) = parse_git_shortstat(output);
+        assert_eq!(added, Some(5));
+        assert_eq!(removed, Some(0));
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_git_shortstat_only_deletions() {
+        let output = " 1 file changed, 7 deletions(-)";
+        let (added, removed) = parse_git_shortstat(output);
+        assert_eq!(added, Some(0));
+        assert_eq!(removed, Some(7));
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_git_shortstat_empty() {
+        let output = "";
+        let (added, removed) = parse_git_shortstat(output);
+        assert_eq!(added, None);
+        assert_eq!(removed, None);
+    }
+
+    // @current-session
+    #[test]
+    fn test_parse_git_shortstat_no_changes() {
+        // When there are no changes, git diff --shortstat returns empty
+        let output = "";
+        let (added, removed) = parse_git_shortstat(output);
+        assert_eq!(added, None);
+        assert_eq!(removed, None);
+    }
+}

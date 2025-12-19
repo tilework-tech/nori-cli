@@ -11,13 +11,18 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct FooterProps {
     pub(crate) mode: FooterMode,
     pub(crate) esc_backtrack_hint: bool,
     pub(crate) use_shift_enter_hint: bool,
     pub(crate) is_task_running: bool,
     pub(crate) context_window_percent: Option<i64>,
+    pub(crate) git_branch: Option<String>,
+    pub(crate) nori_profile: Option<String>,
+    pub(crate) nori_version: Option<String>,
+    pub(crate) git_lines_added: Option<i32>,
+    pub(crate) git_lines_removed: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,11 +63,11 @@ pub(crate) fn reset_mode_after_activity(current: FooterMode) -> FooterMode {
     }
 }
 
-pub(crate) fn footer_height(props: FooterProps) -> u16 {
+pub(crate) fn footer_height(props: &FooterProps) -> u16 {
     footer_lines(props).len() as u16
 }
 
-pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps) {
+pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: &FooterProps) {
     Paragraph::new(prefix_lines(
         footer_lines(props),
         " ".repeat(FOOTER_INDENT_COLS).into(),
@@ -71,7 +76,7 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps) {
     .render(area, buf);
 }
 
-fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
+fn footer_lines(props: &FooterProps) -> Vec<Line<'static>> {
     // Show the context indicator on the left, appended after the primary hint
     // (e.g., "? for shortcuts"). Keep it visible even when typing (i.e., when
     // the shortcut hint is hidden). Hide it only for the multi-line
@@ -81,7 +86,7 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             is_task_running: props.is_task_running,
         })],
         FooterMode::ShortcutSummary => {
-            let mut line = context_window_line(props.context_window_percent);
+            let mut line = build_footer_line(props);
             line.push_span(" · ".dim());
             line.extend(vec![
                 key_hint::plain(KeyCode::Char('?')).into(),
@@ -94,7 +99,7 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             esc_backtrack_hint: props.esc_backtrack_hint,
         }),
         FooterMode::EscHint => vec![esc_hint_line(props.esc_backtrack_hint)],
-        FooterMode::ContextOnly => vec![context_window_line(props.context_window_percent)],
+        FooterMode::ContextOnly => vec![build_footer_line(props)],
     }
 }
 
@@ -224,6 +229,45 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
 fn context_window_line(percent: Option<i64>) -> Line<'static> {
     let percent = percent.unwrap_or(100).clamp(0, 100);
     Line::from(vec![Span::from(format!("{percent}% context left")).dim()])
+}
+
+fn build_footer_line(props: &FooterProps) -> Line<'static> {
+    let mut spans = Vec::new();
+
+    // Add git branch if available: "⎇ branch-name"
+    if let Some(branch) = &props.git_branch {
+        spans.push(Span::from("⎇ "));
+        spans.push(Span::from(branch.clone()).dim());
+        spans.push(Span::from(" · ").dim());
+    }
+
+    // Add nori profile if available: "Profile: name"
+    if let Some(profile) = &props.nori_profile {
+        spans.push(Span::from("Profile: ").dim());
+        spans.push(Span::from(profile.clone()).dim());
+        spans.push(Span::from(" · ").dim());
+    }
+
+    // Add nori version if available: "Nori v19.1.1"
+    if let Some(version) = &props.nori_version {
+        spans.push(Span::from("Nori v").dim());
+        spans.push(Span::from(version.clone()).dim());
+        spans.push(Span::from(" · ").dim());
+    }
+
+    // Add git stats if available: "+10 -3"
+    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed) {
+        if added > 0 || removed > 0 {
+            spans.push(Span::from(format!("+{} -{}", added, removed)).dim());
+            spans.push(Span::from(" · ").dim());
+        }
+    }
+
+    // Add context percentage: "72% context left"
+    let percent = props.context_window_percent.unwrap_or(100).clamp(0, 100);
+    spans.push(Span::from(format!("{}% context left", percent)).dim());
+
+    Line::from(spans)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -379,12 +423,12 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     fn snapshot_footer(name: &str, props: FooterProps) {
-        let height = footer_height(props).max(1);
+        let height = footer_height(&props).max(1);
         let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
         terminal
             .draw(|f| {
                 let area = Rect::new(0, 0, f.area().width, height);
-                render_footer(area, f.buffer_mut(), props);
+                render_footer(area, f.buffer_mut(), &props);
             })
             .unwrap();
         assert_snapshot!(name, terminal.backend());
@@ -400,6 +444,11 @@ mod tests {
                 use_shift_enter_hint: false,
                 is_task_running: false,
                 context_window_percent: None,
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
 
@@ -411,6 +460,11 @@ mod tests {
                 use_shift_enter_hint: true,
                 is_task_running: false,
                 context_window_percent: None,
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
 
@@ -422,6 +476,11 @@ mod tests {
                 use_shift_enter_hint: false,
                 is_task_running: false,
                 context_window_percent: None,
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
 
@@ -433,6 +492,11 @@ mod tests {
                 use_shift_enter_hint: false,
                 is_task_running: true,
                 context_window_percent: None,
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
 
@@ -444,6 +508,11 @@ mod tests {
                 use_shift_enter_hint: false,
                 is_task_running: false,
                 context_window_percent: None,
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
 
@@ -455,6 +524,11 @@ mod tests {
                 use_shift_enter_hint: false,
                 is_task_running: false,
                 context_window_percent: None,
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
 
@@ -466,6 +540,89 @@ mod tests {
                 use_shift_enter_hint: false,
                 is_task_running: true,
                 context_window_percent: Some(72),
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
+            },
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn footer_props_can_be_constructed_with_nori_fields() {
+        let _props = FooterProps {
+            mode: FooterMode::ShortcutSummary,
+            esc_backtrack_hint: false,
+            use_shift_enter_hint: false,
+            is_task_running: false,
+            context_window_percent: Some(100),
+            git_branch: Some("main".to_string()),
+            nori_profile: Some("clifford".to_string()),
+            nori_version: Some("19.1.1".to_string()),
+            git_lines_added: Some(10),
+            git_lines_removed: Some(3),
+        };
+        // Test passes if this compiles and constructs without error
+    }
+
+    // @current-session
+    #[test]
+    fn footer_with_nori_info() {
+        snapshot_footer(
+            "footer_with_full_nori_info",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                context_window_percent: Some(72),
+                git_branch: Some("feature/test".to_string()),
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+            },
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn footer_with_only_git_info() {
+        snapshot_footer(
+            "footer_with_only_git",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                context_window_percent: Some(100),
+                git_branch: Some("main".to_string()),
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: Some(5),
+                git_lines_removed: Some(2),
+            },
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn footer_with_no_nori_info() {
+        snapshot_footer(
+            "footer_with_no_nori",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                context_window_percent: Some(85),
+                git_branch: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
             },
         );
     }

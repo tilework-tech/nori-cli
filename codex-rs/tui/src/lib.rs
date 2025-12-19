@@ -78,6 +78,7 @@ mod status;
 mod status_indicator_widget;
 mod streaming;
 mod style;
+mod system_info;
 mod terminal_palette;
 mod text_formatting;
 mod tui;
