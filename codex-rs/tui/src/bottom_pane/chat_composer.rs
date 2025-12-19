@@ -1401,7 +1401,7 @@ impl ChatComposer {
             esc_backtrack_hint: self.esc_backtrack_hint,
             use_shift_enter_hint: self.use_shift_enter_hint,
             is_task_running: self.is_task_running,
-            context_window_percent: self.context_window_percent,
+            _context_window_percent: self.context_window_percent,
             git_branch,
             nori_profile,
             nori_version,

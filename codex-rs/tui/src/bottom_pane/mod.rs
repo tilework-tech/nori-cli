@@ -80,9 +80,6 @@ pub(crate) struct BottomPane {
     /// Queued user messages to show above the composer while a turn is running.
     queued_user_messages: QueuedUserMessages,
     context_window_percent: Option<i64>,
-
-    /// System info for footer (git branch, nori profile, etc.)
-    system_info: Option<crate::system_info::SystemInfo>,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -116,7 +113,7 @@ impl BottomPane {
 
         // Collect and set system info for footer
         let system_info = crate::system_info::SystemInfo::collect();
-        composer.set_system_info(system_info.clone());
+        composer.set_system_info(system_info);
 
         Self {
             composer,
@@ -131,7 +128,6 @@ impl BottomPane {
             esc_backtrack_hint: false,
             animations_enabled,
             context_window_percent: None,
-            system_info: Some(system_info),
         }
     }
 
@@ -365,12 +361,6 @@ impl BottomPane {
 
         self.context_window_percent = percent;
         self.composer.set_context_window_percent(percent);
-        self.request_redraw();
-    }
-
-    pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
-        self.system_info = Some(info.clone());
-        self.composer.set_system_info(info);
         self.request_redraw();
     }
 

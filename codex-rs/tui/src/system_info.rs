@@ -1,6 +1,5 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Clone, Debug, Default)]
@@ -62,18 +61,18 @@ fn get_nori_profile() -> Option<String> {
         let config_path = current_dir.join(".nori-config.json");
         if config_path.exists() {
             // Try to read and parse the config file
-            if let Ok(contents) = fs::read_to_string(&config_path) {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
-                    // Extract agents.claude-code.profile.baseProfile
-                    if let Some(profile) = json
-                        .get("agents")
-                        .and_then(|a| a.get("claude-code"))
-                        .and_then(|c| c.get("profile"))
-                        .and_then(|p| p.get("baseProfile"))
-                        .and_then(|b| b.as_str())
-                    {
-                        return Some(profile.to_string());
-                    }
+            if let Ok(contents) = fs::read_to_string(&config_path)
+                && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+            {
+                // Extract agents.claude-code.profile.baseProfile
+                if let Some(profile) = json
+                    .get("agents")
+                    .and_then(|a| a.get("claude-code"))
+                    .and_then(|c| c.get("profile"))
+                    .and_then(|p| p.get("baseProfile"))
+                    .and_then(|b| b.as_str())
+                {
+                    return Some(profile.to_string());
                 }
             }
         }
@@ -126,10 +125,10 @@ fn parse_git_shortstat(output: &str) -> (Option<i32>, Option<i32>) {
             .filter(|s| !s.is_empty())
             .collect();
         // The number should be the last token before "insertion"
-        if let Some(last_token) = tokens.last() {
-            if let Ok(num) = last_token.parse::<i32>() {
-                added = Some(num);
-            }
+        if let Some(last_token) = tokens.last()
+            && let Ok(num) = last_token.parse::<i32>()
+        {
+            added = Some(num);
         }
     }
 
@@ -140,10 +139,10 @@ fn parse_git_shortstat(output: &str) -> (Option<i32>, Option<i32>) {
             .split(|c: char| c == ',' || c.is_whitespace())
             .filter(|s| !s.is_empty())
             .collect();
-        if let Some(last_token) = tokens.last() {
-            if let Ok(num) = last_token.parse::<i32>() {
-                removed = Some(num);
-            }
+        if let Some(last_token) = tokens.last()
+            && let Ok(num) = last_token.parse::<i32>()
+        {
+            removed = Some(num);
         }
     }
 

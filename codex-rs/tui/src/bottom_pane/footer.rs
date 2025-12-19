@@ -17,7 +17,7 @@ pub(crate) struct FooterProps {
     pub(crate) esc_backtrack_hint: bool,
     pub(crate) use_shift_enter_hint: bool,
     pub(crate) is_task_running: bool,
-    pub(crate) context_window_percent: Option<i64>,
+    pub(crate) _context_window_percent: Option<i64>,
     pub(crate) git_branch: Option<String>,
     pub(crate) nori_profile: Option<String>,
     pub(crate) nori_version: Option<String>,
@@ -229,17 +229,14 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn context_window_line(percent: Option<i64>) -> Line<'static> {
-    let percent = percent.unwrap_or(100).clamp(0, 100);
-    Line::from(vec![Span::from(format!("{percent}% context left")).dim()])
-}
-
 fn build_footer_line(props: &FooterProps) -> Line<'static> {
     let mut spans = Vec::new();
 
     // Add git branch if available: "⎇ branch-name" (yellow)
     if let Some(branch) = &props.git_branch {
+        #[allow(clippy::disallowed_methods)]
         spans.push(Span::from("⎇ ").yellow());
+        #[allow(clippy::disallowed_methods)]
         spans.push(Span::from(branch.clone()).yellow());
         spans.push(Span::from(" · ").dim());
     }
@@ -261,9 +258,9 @@ fn build_footer_line(props: &FooterProps) -> Line<'static> {
     // Add git stats if available: "+10 -3" (green for added, red for removed)
     if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed) {
         if added > 0 || removed > 0 {
-            spans.push(Span::from(format!("+{}", added)).green());
+            spans.push(Span::from(format!("+{added}")).green());
             spans.push(Span::from(" ").dim());
-            spans.push(Span::from(format!("-{}", removed)).red());
+            spans.push(Span::from(format!("-{removed}")).red());
             // Don't add separator after stats - the caller will add "? for shortcuts"
         }
     } else if !spans.is_empty() {
