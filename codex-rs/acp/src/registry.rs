@@ -16,7 +16,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -372,16 +371,15 @@ impl AcpAgentInfo {
 // Installation Detection
 // =============================================================================
 
-/// Cache for agent installation status.
-/// This avoids repeated slow subprocess calls (npm list, bun checks) on every picker open.
+/// Cache for agent installation detection (PATH-based, fast).
+/// Caching avoids repeated subprocess calls on every picker open.
 static INSTALLATION_CACHE: OnceLock<HashMap<AgentKind, (bool, Option<PackageManager>)>> =
     OnceLock::new();
 
 /// Pre-warm the installation detection cache.
 ///
-/// Call this at app startup (in a background thread) to avoid delays when
-/// the agent picker opens for the first time. The npm/bun detection can be slow
-/// (1-3 seconds per agent), so warming the cache early improves UX.
+/// Detection is now fast (PATH lookup only), so prewarming is optional.
+/// Call this at app startup to avoid any startup latency from `which` commands.
 pub fn prewarm_installation_cache() {
     let _ = INSTALLATION_CACHE.get_or_init(|| {
         let mut map = HashMap::new();
@@ -394,9 +392,8 @@ pub fn prewarm_installation_cache() {
 
 /// Detect if an agent is installed and which package manager manages it.
 ///
-/// This function uses a cache to avoid repeated slow subprocess calls.
-/// The first call performs the detection; subsequent calls return cached results.
-/// For best performance, call `prewarm_installation_cache()` at startup.
+/// Uses PATH-based detection (fast `which` command) with caching.
+/// Agents not in PATH can still be launched via npx/bunx.
 fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
     let cache = INSTALLATION_CACHE.get_or_init(|| {
         let mut map = HashMap::new();
@@ -410,6 +407,9 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
 }
 
 /// Perform the actual installation detection (uncached).
+///
+/// Only checks PATH for fast detection. Agents not in PATH can still be
+/// launched via npx/bunx (which downloads and runs on-the-fly if needed).
 fn detect_agent_installation_uncached(agent: AgentKind) -> (bool, Option<PackageManager>) {
     let binary_name = match agent {
         AgentKind::ClaudeCode => "claude",
@@ -436,16 +436,8 @@ fn detect_agent_installation_uncached(agent: AgentKind) -> (bool, Option<Package
         }
     }
 
-    // Binary not in PATH - check npm/bun global packages as fallback
-    // These checks are slower but only run once due to caching
-    if is_npm_package_installed(agent) {
-        return (true, Some(PackageManager::Npm));
-    }
-
-    if is_bun_package_installed(agent) {
-        return (true, Some(PackageManager::Bun));
-    }
-
+    // Binary not in PATH - agent is not locally installed.
+    // It can still be launched via npx/bunx which will download on-the-fly.
     (false, None)
 }
 
@@ -465,74 +457,23 @@ fn detect_package_manager_from_path(path: &str) -> Option<PackageManager> {
     }
 }
 
-/// Check if a package is installed via npm globally
-fn is_npm_package_installed(agent: AgentKind) -> bool {
-    let package_name = match agent {
-        AgentKind::ClaudeCode => "@anthropic-ai/claude-code",
-        AgentKind::Codex => "@openai/codex",
-        AgentKind::Gemini => "@google/gemini-cli",
-    };
-
-    Command::new("npm")
-        .args(["list", "-g", package_name])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
-/// Check if a package is installed via bun globally
-fn is_bun_package_installed(agent: AgentKind) -> bool {
-    let package_name = match agent {
-        AgentKind::ClaudeCode => "@anthropic-ai/claude-code",
-        AgentKind::Codex => "@openai/codex",
-        AgentKind::Gemini => "@google/gemini-cli",
-    };
-
-    // bun pm ls -g doesn't exist, so we check the global bin directory
-    if let Some(bun_bin) = get_bun_global_bin_dir() {
-        let binary_name = match agent {
-            AgentKind::ClaudeCode => "claude",
-            AgentKind::Codex => "codex",
-            AgentKind::Gemini => "gemini",
-        };
-        let binary_path = bun_bin.join(binary_name);
-        if binary_path.exists() {
-            return true;
-        }
-    }
-
-    // Fallback: try running `bunx --bun <package> --version` to see if it's cached
-    Command::new("bunx")
-        .args(["--bun", package_name, "--version"])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
-/// Get bun's global bin directory
-fn get_bun_global_bin_dir() -> Option<PathBuf> {
-    // Try $BUN_INSTALL/bin first
-    if let Ok(bun_install) = std::env::var("BUN_INSTALL") {
-        let bin_dir = PathBuf::from(bun_install).join("bin");
-        if bin_dir.exists() {
-            return Some(bin_dir);
-        }
-    }
-
-    // Fall back to ~/.bun/bin
-    if let Some(home) = dirs::home_dir() {
-        let bin_dir = home.join(".bun").join("bin");
-        if bin_dir.exists() {
-            return Some(bin_dir);
-        }
-    }
-
-    None
-}
-
-/// Detect the preferred package manager on the system
+/// Detect the preferred package manager for launching ACP agents.
+///
+/// Priority:
+/// 1. NORI_MANAGED_BY_BUN env var → use bunx
+/// 2. NORI_MANAGED_BY_NPM env var → use npx
+/// 3. bun in PATH → use bunx
+/// 4. Default to npx
 pub fn detect_preferred_package_manager() -> PackageManager {
-    // Check if bun is available
+    // Check explicit env var overrides first
+    if std::env::var("NORI_MANAGED_BY_BUN").is_ok() {
+        return PackageManager::Bun;
+    }
+    if std::env::var("NORI_MANAGED_BY_NPM").is_ok() {
+        return PackageManager::Npm;
+    }
+
+    // Check if bun is available in PATH
     if Command::new("bun").arg("--version").output().is_ok() {
         return PackageManager::Bun;
     }
