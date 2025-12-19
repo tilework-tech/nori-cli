@@ -89,9 +89,7 @@ impl NoriConfig {
         let mcp_servers = resolve_mcp_servers(toml.mcp_servers)?;
 
         // Agent is the user's persisted preference, defaults to DEFAULT_MODEL
-        let agent = toml
-            .agent
-            .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+        let agent = toml.agent.unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
         // Model is the runtime value: CLI override > config model > persisted agent > DEFAULT_MODEL
         // Using agent as fallback ensures the persisted preference is honored at startup
