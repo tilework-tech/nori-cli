@@ -151,7 +151,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Should show the main prompt directly (skipping onboarding)
     assert!(
-        contents.contains("›") && contents.contains("context left"),
+        contents.contains("›") && contents.contains("? for shortcuts"),
         "Should show main prompt with context indicator, got: {}",
         contents
     );

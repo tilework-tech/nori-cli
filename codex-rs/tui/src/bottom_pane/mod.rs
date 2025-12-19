@@ -111,8 +111,16 @@ impl BottomPane {
             disable_paste_burst,
         );
 
-        // Start with default system info to avoid blocking TUI startup
-        // System info collection is deferred to avoid blocking parallel test execution
+        // In debug builds, allow synchronous system info collection for E2E tests
+        // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
+        // avoid blocking TUI startup.
+        #[cfg(debug_assertions)]
+        let system_info = if std::env::var("NORI_SYNC_SYSTEM_INFO").is_ok() {
+            crate::system_info::SystemInfo::collect_sync()
+        } else {
+            crate::system_info::SystemInfo::default()
+        };
+        #[cfg(not(debug_assertions))]
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 

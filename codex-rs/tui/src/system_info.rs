@@ -67,6 +67,13 @@ impl SystemInfo {
         info
     }
 
+    /// Collect system info synchronously (blocking).
+    /// Only available in debug builds for E2E testing via NORI_SYNC_SYSTEM_INFO=1.
+    #[cfg(debug_assertions)]
+    pub fn collect_sync() -> Self {
+        Self::collect_fresh()
+    }
+
     fn collect_fresh() -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats();
         Self {
@@ -364,5 +371,16 @@ mod tests {
         // Real output has trailing newline
         let version = parse_nori_version("19.1.1\n");
         assert_eq!(version, Some("19.1.1".to_string()));
+    }
+
+    // @current-session
+    #[test]
+    fn test_collect_sync_returns_populated_data() {
+        // This test runs in a git repo, so collect_sync should find the branch
+        let info = SystemInfo::collect_sync();
+        assert!(
+            info.git_branch.is_some(),
+            "collect_sync should populate git_branch when run in a git repository"
+        );
     }
 }

@@ -346,6 +346,10 @@ name = "Mock ACP provider for tests"
             cmd.env("NO_COLOR", "1");
         }
 
+        // Force synchronous system info collection in E2E tests
+        // This ensures footer displays git branch/nori version immediately
+        cmd.env("NORI_SYNC_SYSTEM_INFO", "1");
+
         let _child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
