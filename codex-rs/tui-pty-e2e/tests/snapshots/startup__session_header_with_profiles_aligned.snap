@@ -2,13 +2,13 @@
 source: tui-pty-e2e/tests/startup.rs
 expression: "normalize_for_snapshot(header_lines_for_snapshot.join(\"\\n\"))"
 ---
-╭───────────────────────────────────╮
-│ Nori v0.0.0                       │
-│                                   │
-│ directory: [TMP_DIR] │
-│ agent:     mock-model             │
-│                                   │
-│ Profiles                          │
-│ current:   (none)                 │
-│ location:  ~/test-nori-install    │
-╰───────────────────────────────────╯
+╭────────────────────────────────╮
+│ Nori v0.0.0                    │
+│                                │
+│ directory: [TMP_DIR]     │
+│ agent:     mock-model          │
+│                                │
+│ Profiles                       │
+│ current:   (none)              │
+│ location:  ~/test-nori-install │
+╰────────────────────────────────╯

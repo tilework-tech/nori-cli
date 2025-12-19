@@ -343,7 +343,8 @@ exit 0
         for (i, line) in header_lines.iter().enumerate() {
             let line_len = line.chars().count();
             assert_eq!(
-                line_len, first_len,
+                line_len,
+                first_len,
                 "Line {} has different length ({}) than first line ({}). Lines:\n{}",
                 i,
                 line_len,

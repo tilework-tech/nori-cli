@@ -532,6 +532,9 @@ mod tests {
 │ location:  ~/Documents/source/nori/cli          │
 ╰─────────────────────────────────────────────────╯";
 
-        assert_eq!(rendered, expected, "Header should have proper alignment and tilde paths");
+        assert_eq!(
+            rendered, expected,
+            "Header should have proper alignment and tilde paths"
+        );
     }
 }
