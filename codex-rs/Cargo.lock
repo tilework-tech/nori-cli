@@ -873,6 +873,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "codex-protocol",
+ "diffy",
  "dirs",
  "futures",
  "pretty_assertions",

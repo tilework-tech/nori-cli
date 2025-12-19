@@ -19,6 +19,7 @@ use std::thread;
 use agent_client_protocol as acp;
 use anyhow::Context;
 use anyhow::Result;
+use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::approvals::ExecApprovalRequestEvent;
 use codex_protocol::protocol::ReviewDecision;
 use futures::AsyncBufReadExt;
@@ -35,6 +36,29 @@ use tracing::warn;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
+/// The type of approval event to send to the UI.
+///
+/// This enum allows us to use the more appropriate approval UI for different
+/// operation types - exec approval for shell commands, patch approval for
+/// file edits/writes/deletes.
+#[derive(Debug)]
+pub enum ApprovalEventType {
+    /// Exec approval for shell commands and other operations
+    Exec(ExecApprovalRequestEvent),
+    /// Patch approval for file edit/write/delete operations
+    Patch(ApplyPatchApprovalRequestEvent),
+}
+
+impl ApprovalEventType {
+    /// Get the call_id from the event
+    pub fn call_id(&self) -> &str {
+        match self {
+            ApprovalEventType::Exec(e) => &e.call_id,
+            ApprovalEventType::Patch(e) => &e.call_id,
+        }
+    }
+}
+
 /// An approval request sent from the ACP layer to the UI layer.
 ///
 /// When an ACP agent requests permission to perform an operation,
@@ -42,8 +66,8 @@ use crate::translator;
 /// to the user and return their decision via the response channel.
 #[derive(Debug)]
 pub struct ApprovalRequest {
-    /// The translated Codex approval event
-    pub event: ExecApprovalRequestEvent,
+    /// The translated Codex approval event (either exec or patch)
+    pub event: ApprovalEventType,
     /// The original ACP permission options for translating the response
     pub options: Vec<acp::PermissionOption>,
     /// Channel to send the user's decision back
@@ -638,8 +662,17 @@ impl acp::Client for ClientDelegate {
         &self,
         arguments: acp::RequestPermissionRequest,
     ) -> acp::Result<acp::RequestPermissionResponse> {
-        // Translate ACP permission request to Codex approval event
-        let event = translator::permission_request_to_approval_event(&arguments, &self.cwd);
+        // Translate ACP permission request to Codex approval event.
+        // Use patch approval for Edit/Write/Delete operations for better TUI rendering.
+        let event = if let Some(patch_event) =
+            translator::permission_request_to_patch_approval_event(&arguments)
+        {
+            ApprovalEventType::Patch(patch_event)
+        } else {
+            let exec_event =
+                translator::permission_request_to_approval_event(&arguments, &self.cwd);
+            ApprovalEventType::Exec(exec_event)
+        };
 
         // Create a response channel for the UI to send the decision
         let (response_tx, response_rx) = oneshot::channel();

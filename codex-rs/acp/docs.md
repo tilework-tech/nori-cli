@@ -217,11 +217,43 @@ The ACP module bridges permission requests to Codex's approval UI. Approval requ
 └─────────────────────────┘  (via oneshot)        └─────────────────────────┘
 ```
 
-- `ApprovalRequest` bundles the translated `ExecApprovalRequestEvent`, original ACP options, and response channel
+- `ApprovalRequest` bundles the `ApprovalEventType`, original ACP options, and response channel
+- `ApprovalEventType` enum selects the appropriate approval UI:
+  - `Exec(ExecApprovalRequestEvent)` - for shell commands and generic operations
+  - `Patch(ApplyPatchApprovalRequestEvent)` - for file Edit/Write/Delete with diff rendering
 - `AcpConnection::take_approval_receiver()` exposes the receiver for TUI consumption
 - Falls back to auto-approve if approval channel is closed (no UI listening)
 - Falls back to deny if response channel is dropped (UI didn't respond)
 - **Critical timing**: The agent subprocess blocks waiting for approval. Deferring approval display would deadlock (agent waits for approval, but TaskComplete never arrives until agent finishes)
+
+**Patch Event Translation:**
+
+For Edit/Write/Delete operations, the ACP backend emits native patch events for better TUI rendering:
+
+| Operation | Approval Event | Result Event |
+|-----------|----------------|--------------|
+| Edit (old_string + new_string) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Update` |
+| Write (content only) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Add` |
+| Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
+| Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
+
+The patch event flow requires state tracking since ToolCallUpdate may not have the same fields as ToolCall:
+
+```
+┌───────────────────┐      ┌───────────────────────────────┐      ┌───────────────────┐
+│  ToolCall         │      │  RequestPermission            │      │  ToolCallUpdate   │
+│  (Edit detected)  │      │                               │      │  (Completed)      │
+│                   │      │                               │      │                   │
+│  Store FileChange │─────►│  ApplyPatchApprovalRequest    │─────►│  Retrieve stored  │
+│  in pending map   │      │  (approval overlay shown)     │      │  FileChange, emit │
+│  (no event)       │      │                               │      │  PatchApplyBegin  │
+└───────────────────┘      └───────────────────────────────┘      └───────────────────┘
+```
+
+Key translator functions:
+- `is_patch_operation()` - detects Edit/Write/Delete based on ToolKind or raw_input fields
+- `tool_call_to_file_change()` - converts raw_input to `FileChange` using `diffy` for unified diffs
+- `permission_request_to_patch_approval_event()` - creates `ApplyPatchApprovalRequestEvent` for patch ops
 
 **TUI Backend Adapter (`backend.rs`):**
 
@@ -312,6 +344,32 @@ Bridges between ACP types and codex-protocol types:
 - `Completed(StopReason)` - Session completion signal
 
 Non-text content (images, audio, resources) and tool calls are currently dropped with empty vec.
+
+**Approval Request Formatting (`translator.rs`):**
+
+When ACP agents request permission for tool operations, the translator converts raw JSON tool call data into human-readable approval requests using git-style formatting:
+
+| Tool Kind | Format Example |
+|-----------|----------------|
+| Edit | `Edit main.rs (+6 -5)` |
+| Write (new file) | `Write config.toml (23 lines)` |
+| Execute | `Execute: cargo build --release` |
+| Delete | `Delete temp.txt` |
+| Move | `Move old.rs → new.rs` |
+| Generic | `ToolName(argument)` |
+
+The formatting pipeline:
+1. `extract_command_from_tool_call()` dispatches to format functions based on `ToolKind`
+2. `extract_reason_from_tool_call()` generates the descriptive reason shown in the approval prompt
+3. Helper functions extract and format data from the `raw_input` JSON:
+   - `extract_file_path()` - finds path from `file_path`, `path`, or `file` fields
+   - `shorten_path()` - extracts just the filename for compact display
+   - `calculate_diff_stats()` - computes +added/-removed using set difference on line splits
+   - `truncate_str()` - truncates long strings with "..."
+
+Write vs Edit detection uses field presence since ACP lacks a distinct Write variant:
+- `old_string` field present → Edit operation (string replacement)
+- `content` field present → Write operation (new file creation)
 
 **Approval Translation Details:**
 

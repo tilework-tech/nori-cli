@@ -27,13 +27,13 @@ That's it. Nori launches an interactive TUI where you can chat, run commands, an
 
 ## Providers
 
-Switch between AI providers with the `/agent` command:
+Each provider you plan to use needs to be authenticated separately before use. Switch between AI providers with the `/agent` command:
 
-| Provider | Command |
-|----------|---------|
-| Claude | `npx @zed-industries/claude-code-acp` (default) |
-| Gemini | `npx @google/gemini-cli --experimental-acp` |
-| OpenAI | `npx @zed-industries/codex-acp` |
+| Provider | Command | Authentication |
+|----------|---------|----------------|
+| Claude | `npm i -g @zed-industries/claude-code-acp` (default) | `npx @anthropic-ai/claude-code setup-token` |
+| Gemini | `npm i -g @google/gemini-cli --experimental-acp` | `npx @google/gemini-cli` and then `/auth` |
+| OpenAI | `npm i -g @zed-industries/codex-acp` | `npx @openai/codex login` |
 
 ## Features
 
