@@ -227,11 +227,9 @@ impl TuiSession {
             cmd.arg("--ask-for-approval");
             cmd.arg(approval.as_str());
         }
-        // Also set sandbox to workspace-write to allow file operations in tests
-        if let Some(sandbox) = &config.sandbox {
-            cmd.arg("--sandbox");
-            cmd.arg(sandbox.as_str());
-        }
+        // Note: sandbox is configured via config.toml, not CLI flags
+        // The config.toml written above doesn't set sandbox_policy, so tests
+        // will use the default sandbox policy from the trusted project config.
 
         // Set TERM to enable terminal features
         cmd.env("TERM", "xterm-256color");
@@ -628,6 +626,7 @@ pub enum Sandbox {
 }
 
 impl Sandbox {
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             Sandbox::ReadOnly => "read-only",
@@ -800,7 +799,7 @@ fn codex_binary_path() -> String {
         .parent() // deps
         .and_then(|p| p.parent()) // debug or release
         .expect("Failed to get target directory")
-        .join("codex")
+        .join("nori")
         .to_string_lossy()
         .into_owned()
 }
