@@ -22,7 +22,7 @@ fn test_footer_displays_git_branch() {
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
-    // The footer should contain git branch info (likely "main" or "master")
+    // The footer should contain git branch info (master, since we use git init -b master)
     // Check for the branch symbol and "? for shortcuts" which should always be present
     assert!(
         contents.contains("⎇") && contents.contains("? for shortcuts"),
@@ -30,10 +30,10 @@ fn test_footer_displays_git_branch() {
         contents
     );
 
-    // Check that the branch name appears (either main or master typically)
+    // Check that the branch name appears (always master since we use git init -b master)
     assert!(
-        contents.contains("main") || contents.contains("master"),
-        "Footer should contain git branch name. Contents: {}",
+        contents.contains("master"),
+        "Footer should contain git branch name 'master'. Contents: {}",
         contents
     );
 }
@@ -131,15 +131,15 @@ fn test_footer_full_startup_with_all_info() {
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
-    // Verify git branch is displayed
+    // Verify git branch is displayed (always master since we use git init -b master)
     assert!(
         contents.contains("⎇"),
         "Footer should contain git branch symbol. Contents: {}",
         contents
     );
     assert!(
-        contents.contains("main") || contents.contains("master"),
-        "Footer should contain branch name. Contents: {}",
+        contents.contains("master"),
+        "Footer should contain branch name 'master'. Contents: {}",
         contents
     );
 
@@ -164,7 +164,7 @@ fn test_footer_full_startup_with_all_info() {
 
     // Verify the footer contains all the expected segments separated by ·
     assert!(
-        contents.contains("⎇ main"),
+        contents.contains("⎇ master"),
         "Footer should contain git branch. Contents: {}",
         contents
     );

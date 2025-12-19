@@ -182,9 +182,10 @@ impl TuiSession {
             std::fs::write(&hello_py, "print('Hello, World!')")?;
 
             // Initialize as git repo if requested (prevents "Snapshots disabled" race)
+            // Use -b master to ensure consistent branch name regardless of system git config
             if config.git_init {
                 std::process::Command::new("git")
-                    .args(["init"])
+                    .args(["init", "-b", "master"])
                     .current_dir(temp_dir.path())
                     .output()?;
 
@@ -722,7 +723,9 @@ impl SessionConfig {
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
             extra_path: Vec::new(),
-            exclude_binaries: Vec::new(),
+            // Exclude nori-ai by default since it won't be in PATH on CI runners.
+            // Tests that need nori-ai should explicitly add it via with_extra_path().
+            exclude_binaries: vec!["nori-ai".to_string()],
         }
     }
 
