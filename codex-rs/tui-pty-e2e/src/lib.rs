@@ -585,6 +585,14 @@ name = "Mock ACP provider for tests"
             .as_ref()
             .and_then(|d| find_acp_log_file(d.path()))
     }
+
+    /// Get the NORI_HOME path (temp directory used for config storage)
+    ///
+    /// This is useful for E2E tests that need to verify config.toml contents
+    /// after user interactions (e.g., trust directory selection).
+    pub fn nori_home_path(&self) -> Option<std::path::PathBuf> {
+        self._temp_dir.as_ref().map(|d| d.path().to_path_buf())
+    }
 }
 
 /// Find the ACP log file in the given NORI_HOME directory.

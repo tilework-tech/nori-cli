@@ -14,6 +14,10 @@ use toml_edit::Item as TomlItem;
 use toml_edit::Table as TomlTable;
 use toml_edit::value;
 
+// Re-export for users of ConfigEditsBuilder::set_path
+pub use toml_edit::Item;
+pub use toml_edit::value as toml_value;
+
 /// Discrete config mutations supported by the persistence engine.
 #[derive(Clone, Debug)]
 pub enum ConfigEdit {
@@ -551,6 +555,20 @@ impl ConfigEditsBuilder {
         self.edits.push(ConfigEdit::SetPath {
             segments: vec!["features".to_string(), key.to_string()],
             value: value(enabled),
+        });
+        self
+    }
+
+    /// Set a value at an arbitrary path in the config.
+    ///
+    /// # Example
+    /// ```ignore
+    /// builder.set_path(&["cli", "first_launch_complete"], value(true))
+    /// ```
+    pub fn set_path(mut self, segments: &[&str], val: TomlItem) -> Self {
+        self.edits.push(ConfigEdit::SetPath {
+            segments: segments.iter().map(|s| (*s).to_string()).collect(),
+            value: val,
         });
         self
     }

@@ -29,6 +29,8 @@ The main API provides:
 - `wait_for_text(needle, timeout)` - Poll screen until text appears
 - `wait_for(predicate, timeout)` - Poll screen until condition matches
 - `screen_contents()` - Get current terminal screen as string
+- `nori_home_path()` - Get NORI_HOME temp directory path for config verification
+- `acp_log_path()` - Get path to ACP log file for subprocess behavior verification
 
 **Debugging Aids:**
 
@@ -152,7 +154,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 
 | File | Coverage |
 |------|----------|
-| `@/codex-rs/tui-pty-e2e/tests/startup.rs` | TUI initialization, prompt display, trust screen skipping, snapshot testing for 4 startup scenarios, non-blocking PTY verification |
+| `@/codex-rs/tui-pty-e2e/tests/startup.rs` | TUI initialization, prompt display, trust screen skipping, snapshot testing for startup scenarios, non-blocking PTY verification, trust directory config persistence verification |
 | `@/codex-rs/tui-pty-e2e/tests/prompt_flow.rs` | Prompt submission and agent responses |
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
