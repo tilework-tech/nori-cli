@@ -152,7 +152,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
     // Should show the main prompt directly (skipping onboarding)
     assert!(
         contents.contains("›") && contents.contains("? for shortcuts"),
-        "Should show main prompt with context indicator, got: {}",
+        "Should show main prompt with help indicator, got: {}",
         contents
     );
 }
@@ -282,10 +282,10 @@ fn test_trust_directory_saves_to_config() {
         .expect("Failed to send 'y' key");
 
     // Step 5: Wait for the main prompt to appear (onboarding complete)
-    // We wait for "context left" which only appears in the main prompt,
+    // We wait for "?" which only appears in the main prompt,
     // not "›" which also appears as a selection marker in the trust screen
     session
-        .wait_for_text("context left", TIMEOUT)
+        .wait_for_text("? for shortcuts", TIMEOUT)
         .expect("Main prompt did not appear after trust selection");
 
     // Give a moment for config to be written
