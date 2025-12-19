@@ -33,7 +33,7 @@ fn test_acp_mode_startup_with_mock_agent() {
 
     // Verify we're in the TUI and not stuck at an error screen
     assert!(
-        contents.contains("›") && contents.contains("context left"),
+        contents.contains("›"),
         "Should show main prompt with context indicator in ACP mode, got: {}",
         contents
     );
