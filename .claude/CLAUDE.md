@@ -113,18 +113,18 @@ Found 23 skills:
 /home/clifford/Documents/source/nori/cli/.claude/skills/recall/SKILL.md
   Name: Recall
   Description: Search the Nori knowledge base for relevant context, solutions, and documentation.
-/home/clifford/Documents/source/nori/cli/.claude/skills/read-noridoc/SKILL.md
-  Name: Read Noridoc
-  Description: Read documentation from the server-side noridocs system by file path.
 /home/clifford/Documents/source/nori/cli/.claude/skills/prompt-analysis/SKILL.md
   Name: Prompt Analysis
   Description: Analyze prompts for quality and best practices before sending them to Claude.
-/home/clifford/Documents/source/nori/cli/.claude/skills/memorize/SKILL.md
-  Name: Memorize
-  Description: Use this to save important implementation decisions, patterns, or context to the Nori knowledge base for future sessions.
+/home/clifford/Documents/source/nori/cli/.claude/skills/read-noridoc/SKILL.md
+  Name: Read Noridoc
+  Description: Read documentation from the server-side noridocs system by file path.
 /home/clifford/Documents/source/nori/cli/.claude/skills/list-noridocs/SKILL.md
   Name: List Noridocs
   Description: List all server-side noridocs, optionally filtered by repository and/or path prefix.
+/home/clifford/Documents/source/nori/cli/.claude/skills/memorize/SKILL.md
+  Name: Memorize
+  Description: Use this to save important implementation decisions, patterns, or context to the Nori knowledge base for future sessions.
 /home/clifford/Documents/source/nori/cli/.claude/skills/handle-large-tasks/SKILL.md
   Name: Handle-Large-Tasks
   Description: Use this skill to split large plans into smaller chunks. This skill manages your context window for large tasks. Use it when a task will take a long time and cause context issues.

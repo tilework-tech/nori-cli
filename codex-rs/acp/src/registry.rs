@@ -14,9 +14,11 @@
 //! - `google` - Google
 
 use anyhow::Result;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Default idle timeout for ACP streaming (5 minutes)
@@ -370,16 +372,52 @@ impl AcpAgentInfo {
 // Installation Detection
 // =============================================================================
 
-/// Detect if an agent is installed and which package manager manages it
+/// Cache for agent installation status.
+/// This avoids repeated slow subprocess calls (npm list, bun checks) on every picker open.
+static INSTALLATION_CACHE: OnceLock<HashMap<AgentKind, (bool, Option<PackageManager>)>> =
+    OnceLock::new();
+
+/// Pre-warm the installation detection cache.
+///
+/// Call this at app startup (in a background thread) to avoid delays when
+/// the agent picker opens for the first time. The npm/bun detection can be slow
+/// (1-3 seconds per agent), so warming the cache early improves UX.
+pub fn prewarm_installation_cache() {
+    let _ = INSTALLATION_CACHE.get_or_init(|| {
+        let mut map = HashMap::new();
+        for kind in AgentKind::all() {
+            map.insert(*kind, detect_agent_installation_uncached(*kind));
+        }
+        map
+    });
+}
+
+/// Detect if an agent is installed and which package manager manages it.
+///
+/// This function uses a cache to avoid repeated slow subprocess calls.
+/// The first call performs the detection; subsequent calls return cached results.
+/// For best performance, call `prewarm_installation_cache()` at startup.
 fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
-    // First, try to detect via `which` or `where` command
+    let cache = INSTALLATION_CACHE.get_or_init(|| {
+        let mut map = HashMap::new();
+        for kind in AgentKind::all() {
+            map.insert(*kind, detect_agent_installation_uncached(*kind));
+        }
+        map
+    });
+
+    cache.get(&agent).copied().unwrap_or((false, None))
+}
+
+/// Perform the actual installation detection (uncached).
+fn detect_agent_installation_uncached(agent: AgentKind) -> (bool, Option<PackageManager>) {
     let binary_name = match agent {
         AgentKind::ClaudeCode => "claude",
         AgentKind::Codex => "codex",
         AgentKind::Gemini => "gemini",
     };
 
-    // Check if the binary exists in PATH
+    // Check if the binary exists in PATH (fast check)
     if let Ok(output) = Command::new("which").arg(binary_name).output()
         && output.status.success()
     {
@@ -398,12 +436,12 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
         }
     }
 
-    // Check npm global packages
+    // Binary not in PATH - check npm/bun global packages as fallback
+    // These checks are slower but only run once due to caching
     if is_npm_package_installed(agent) {
         return (true, Some(PackageManager::Npm));
     }
 
-    // Check bun global packages
     if is_bun_package_installed(agent) {
         return (true, Some(PackageManager::Bun));
     }
