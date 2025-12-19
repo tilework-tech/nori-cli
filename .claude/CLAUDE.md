@@ -113,12 +113,12 @@ Found 23 skills:
 /home/clifford/Documents/source/nori/cli/.claude/skills/recall/SKILL.md
   Name: Recall
   Description: Search the Nori knowledge base for relevant context, solutions, and documentation.
-/home/clifford/Documents/source/nori/cli/.claude/skills/prompt-analysis/SKILL.md
-  Name: Prompt Analysis
-  Description: Analyze prompts for quality and best practices before sending them to Claude.
 /home/clifford/Documents/source/nori/cli/.claude/skills/read-noridoc/SKILL.md
   Name: Read Noridoc
   Description: Read documentation from the server-side noridocs system by file path.
+/home/clifford/Documents/source/nori/cli/.claude/skills/prompt-analysis/SKILL.md
+  Name: Prompt Analysis
+  Description: Analyze prompts for quality and best practices before sending them to Claude.
 /home/clifford/Documents/source/nori/cli/.claude/skills/memorize/SKILL.md
   Name: Memorize
   Description: Use this to save important implementation decisions, patterns, or context to the Nori knowledge base for future sessions.
@@ -128,12 +128,12 @@ Found 23 skills:
 /home/clifford/Documents/source/nori/cli/.claude/skills/handle-large-tasks/SKILL.md
   Name: Handle-Large-Tasks
   Description: Use this skill to split large plans into smaller chunks. This skill manages your context window for large tasks. Use it when a task will take a long time and cause context issues.
-/home/clifford/Documents/source/nori/cli/.claude/skills/creating-skills/SKILL.md
-  Name: Creating-Skills
-  Description: Use when you need to create a new custom skill for a profile - guides through gathering requirements, creating directory structure, writing SKILL.md, and optionally adding bundled scripts
 /home/clifford/Documents/source/nori/cli/.claude/skills/finishing-a-development-branch/SKILL.md
   Name: Finishing a Development Branch
   Description: Use this when you have completed some feature implementation and have written passing tests, and you are ready to create a PR.
+/home/clifford/Documents/source/nori/cli/.claude/skills/creating-skills/SKILL.md
+  Name: Creating-Skills
+  Description: Use when you need to create a new custom skill for a profile - guides through gathering requirements, creating directory structure, writing SKILL.md, and optionally adding bundled scripts
 /home/clifford/Documents/source/nori/cli/.claude/skills/building-ui-ux/SKILL.md
   Name: Building UI/UX
   Description: Use when implementing user interfaces or user experiences - guides through exploration of design variations, frontend setup, iteration, and proper integration

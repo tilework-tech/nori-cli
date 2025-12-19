@@ -196,6 +196,10 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
 2. Random default prompts on lines starting with `› ` → `[DEFAULT_PROMPT]` placeholder
    - Detects specific default prompt patterns: "Find and fix a bug", "Explain this codebase", "Write tests for", etc.
    - Preserves user-entered prompts and UI text like "? for shortcuts"
+3. "Worked for Xs" timing separator lines → solid horizontal bar
+   - Lines starting with `─ Worked` and ending with `─` are replaced with solid `─` characters
+   - Example: `─ Worked for 0s ───...` becomes `─────────────────...`
+   - Prevents flaky tests when timing varies between 0s, 1s, 10s, or minute formats like 1m 30s
 
 **`normalize_for_input_snapshot()`** - Extends base normalization by stripping the startup header block:
 - Detects the header block (lines containing `╭──` through the `/review` and `/model` command list)

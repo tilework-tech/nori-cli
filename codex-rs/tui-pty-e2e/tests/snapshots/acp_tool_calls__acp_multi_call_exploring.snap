@@ -7,18 +7,18 @@ expression: normalize_for_input_snapshot(contents)
 
 ■ Operation 'AddToHistory' is not supported in ACP mode
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Test message 1Test message 2
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Reading multiple files...
 
 • Explored
   └ Read file1.rs, file2.rs, file3.rs
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Multi-call exploring done.
 

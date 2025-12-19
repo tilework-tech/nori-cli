@@ -8,7 +8,7 @@ expression: normalize_for_input_snapshot(contents)
 • Ran 'Running tests(cargo test)'
   └ Tests passed
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • Based on my exploration, the most significant TUI Rust source file by size is:
 
@@ -17,7 +17,7 @@ expression: normalize_for_input_snapshot(contents)
     Search undefined
     Read config.toml
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
 
 • The chatwidget is the heart of the TUI experience.
 
