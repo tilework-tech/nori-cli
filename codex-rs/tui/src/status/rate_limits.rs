@@ -1,6 +1,5 @@
 use crate::chatwidget::get_limits_duration;
 
-use super::helpers::format_reset_timestamp;
 use chrono::DateTime;
 use chrono::Duration as ChronoDuration;
 use chrono::Local;
@@ -12,6 +11,15 @@ use codex_core::protocol::RateLimitWindow;
 const STATUS_LIMIT_BAR_SEGMENTS: usize = 20;
 const STATUS_LIMIT_BAR_FILLED: &str = "█";
 const STATUS_LIMIT_BAR_EMPTY: &str = "░";
+
+fn format_reset_timestamp(dt: DateTime<Local>, captured_at: DateTime<Local>) -> String {
+    let time = dt.format("%H:%M").to_string();
+    if dt.date_naive() == captured_at.date_naive() {
+        time
+    } else {
+        format!("{time} on {}", dt.format("%-d %b"))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct StatusRateLimitRow {

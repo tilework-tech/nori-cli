@@ -69,6 +69,7 @@ mod markdown_stream;
 mod model_migration;
 mod nori;
 pub mod onboarding;
+#[cfg(feature = "codex-features")]
 mod oss_selection;
 mod pager_overlay;
 pub mod public_widgets;
