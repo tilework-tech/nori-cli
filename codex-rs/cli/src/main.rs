@@ -1046,7 +1046,6 @@ mod tests {
         assert_eq!(err.to_string(), "Unknown feature flag: does_not_exist");
     }
 
-    // @current-session
     /// When codex-features is disabled, --oss flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1058,7 +1057,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --local-provider flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1070,7 +1068,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --sandbox flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1082,7 +1079,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, -a/--ask-for-approval flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1094,7 +1090,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --full-auto flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1106,7 +1101,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --dangerously-bypass-approvals-and-sandbox flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1119,7 +1113,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --search flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1131,7 +1124,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --enable flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1143,7 +1135,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When codex-features is disabled, --disable flag should not be recognized
     #[test]
     #[cfg(not(feature = "codex-features"))]
@@ -1155,7 +1146,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// Binary name should be "nori" in help output
     #[test]
     fn binary_name_is_nori() {
@@ -1171,7 +1161,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// Config path example should reference ~/.nori/cli/ not ~/.codex/
     #[test]
     fn config_help_references_nori_path() {
@@ -1187,7 +1176,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// Config example should show agent="claude-code" not model="o3"
     #[test]
     fn config_example_shows_agent_claude_code() {
