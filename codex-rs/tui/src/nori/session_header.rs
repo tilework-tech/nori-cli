@@ -260,16 +260,16 @@ impl HistoryCell for NoriSessionHeaderCell {
                 .clone()
                 .unwrap_or_else(|| "(none)".to_string());
             lines.push(Line::from(vec![
-                Span::from("current:  ").dim(),
+                Span::from("current:   ").dim(),
                 Span::from(profile_display),
             ]));
 
             // Profile location line
             if let Some(ref location) = self.profile_location {
-                let location_max_width = inner_width.saturating_sub(10); // "location: " is 10 chars
+                let location_max_width = inner_width.saturating_sub(11); // "location:  " is 11 chars
                 let location_display = format_directory(location, Some(location_max_width));
                 lines.push(Line::from(vec![
-                    Span::from("location: ").dim(),
+                    Span::from("location:  ").dim(),
                     Span::from(location_display),
                 ]));
             }
