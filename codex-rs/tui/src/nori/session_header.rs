@@ -19,7 +19,6 @@ use codex_core::config::Config;
 use codex_core::protocol::SessionConfiguredEvent;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
-use serde::Deserialize;
 use std::path::Path;
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
@@ -27,33 +26,137 @@ use unicode_width::UnicodeWidthStr;
 /// Maximum inner width for the Nori session header card.
 const NORI_HEADER_MAX_INNER_WIDTH: usize = 60;
 
-/// Nori config file structure (partial - only what we need)
-#[derive(Debug, Deserialize, Default)]
-struct NoriConfig {
-    #[serde(default)]
-    profile: Option<NoriProfile>,
-}
+/// Read the current Nori profile by searching for .nori-config.json in ancestors.
+///
+/// Walks from the given directory upward through parent directories, returning
+/// the profile from the nearest ancestor containing a .nori-config.json file.
+fn read_nori_profile(cwd: &Path) -> Option<String> {
+    let mut current_dir = cwd.to_path_buf();
 
-#[derive(Debug, Deserialize)]
-struct NoriProfile {
-    #[serde(rename = "baseProfile")]
-    base_profile: Option<String>,
-}
+    loop {
+        let config_path = current_dir.join(".nori-config.json");
+        if config_path.exists()
+            && let Ok(contents) = std::fs::read_to_string(&config_path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+        {
+            // Try new format: agents.claude-code.profile.baseProfile
+            if let Some(profile) = json
+                .get("agents")
+                .and_then(|a| a.get("claude-code"))
+                .and_then(|c| c.get("profile"))
+                .and_then(|p| p.get("baseProfile"))
+                .and_then(|b| b.as_str())
+            {
+                return Some(profile.to_string());
+            }
+            // Try old format: profile.baseProfile
+            if let Some(profile) = json
+                .get("profile")
+                .and_then(|p| p.get("baseProfile"))
+                .and_then(|b| b.as_str())
+            {
+                return Some(profile.to_string());
+            }
+        }
 
-/// Read the current Nori profile from ~/.nori-config.json
-fn read_nori_profile() -> Option<String> {
-    let home = dirs::home_dir()?;
-    let config_path = home.join(".nori-config.json");
+        // Move to parent directory
+        if !current_dir.pop() {
+            break;
+        }
+    }
 
-    let content = std::fs::read_to_string(config_path).ok()?;
-    let config: NoriConfig = serde_json::from_str(&content).ok()?;
-
-    config.profile.and_then(|p| p.base_profile)
+    None
 }
 
 /// Check if the nori-ai command is available in PATH
 fn is_nori_ai_installed() -> bool {
     which::which("nori-ai").is_ok()
+}
+
+/// Discover instruction files (CLAUDE.md, AGENTS.md, .claude/*.md) in ancestors.
+///
+/// Walks from the git root (or cwd if no git root) to cwd, collecting all
+/// instruction files found along the path. Returns paths ordered from root to cwd.
+fn discover_instruction_files(cwd: &Path) -> Vec<PathBuf> {
+    // Build chain from cwd upwards and detect git root
+    let mut chain: Vec<PathBuf> = Vec::new();
+    let mut current = cwd.to_path_buf();
+    let mut git_root: Option<PathBuf> = None;
+
+    loop {
+        chain.push(current.clone());
+
+        // Check for .git marker
+        let git_marker = current.join(".git");
+        if git_marker.exists() {
+            git_root = Some(current.clone());
+            break;
+        }
+
+        if !current.pop() {
+            break;
+        }
+    }
+
+    // Determine search directories (from git root to cwd, or just cwd if no git root)
+    let search_dirs: Vec<PathBuf> = if let Some(root) = git_root {
+        // Reverse the chain and filter to only include from git root onward
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        let mut saw_root = false;
+        for p in chain.iter().rev() {
+            if !saw_root {
+                if p == &root {
+                    saw_root = true;
+                } else {
+                    continue;
+                }
+            }
+            dirs.push(p.clone());
+        }
+        dirs
+    } else {
+        // No git root, just search cwd
+        vec![cwd.to_path_buf()]
+    };
+
+    let mut found: Vec<PathBuf> = Vec::new();
+
+    for dir in search_dirs {
+        // Check for CLAUDE.md
+        let claude_md = dir.join("CLAUDE.md");
+        if claude_md.is_file() {
+            found.push(claude_md);
+        }
+
+        // Check for AGENTS.md
+        let agents_md = dir.join("AGENTS.md");
+        if agents_md.is_file() {
+            found.push(agents_md);
+        }
+
+        // Check for .claude/*.md files
+        let claude_dir = dir.join(".claude");
+        if claude_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&claude_dir)
+        {
+            let mut md_files: Vec<PathBuf> = entries
+                .flatten()
+                .filter_map(|entry| {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().is_some_and(|ext| ext == "md") {
+                        Some(path)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            // Sort for deterministic ordering
+            md_files.sort();
+            found.extend(md_files);
+        }
+    }
+
+    found
 }
 
 /// Format a directory path for display, relativizing to home if possible.
@@ -87,15 +190,19 @@ pub(crate) struct NoriSessionHeaderCell {
     agent: String,
     directory: PathBuf,
     nori_profile: Option<String>,
+    instruction_files: Vec<PathBuf>,
 }
 
 impl NoriSessionHeaderCell {
     pub(crate) fn new(agent: String, directory: PathBuf) -> Self {
+        let nori_profile = read_nori_profile(&directory);
+        let instruction_files = discover_instruction_files(&directory);
         Self {
             version: CODEX_CLI_VERSION,
             agent,
             directory,
-            nori_profile: read_nori_profile(),
+            nori_profile,
+            instruction_files,
         }
     }
 }
@@ -140,6 +247,15 @@ impl HistoryCell for NoriSessionHeaderCell {
             Span::from("profile:   ").dim(),
             Span::from(profile_display),
         ]));
+
+        // Instruction files lines (agents.md: path)
+        for path in &self.instruction_files {
+            let path_str = format_directory(path, Some(dir_max_width));
+            lines.push(Line::from(vec![
+                Span::from("agents.md: ").dim(),
+                Span::from(path_str),
+            ]));
+        }
 
         with_border(lines)
     }
@@ -209,6 +325,8 @@ pub(crate) fn new_nori_session_info(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
 
     fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
         lines
@@ -220,6 +338,138 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    // @current-session
+    #[test]
+    fn read_nori_profile_finds_ancestor_config() {
+        // Create a temp directory structure:
+        // /tmp/xxx/
+        //   .nori-config.json  (with profile)
+        //   subdir/
+        //     nested/  <- cwd
+        let tmp = TempDir::new().expect("tempdir");
+        let root = tmp.path();
+
+        // Create nested directory structure
+        let nested = root.join("subdir/nested");
+        fs::create_dir_all(&nested).expect("create nested dirs");
+
+        // Create .nori-config.json at root with profile
+        let config_content = r#"{
+            "profile": {
+                "baseProfile": "test-profile"
+            }
+        }"#;
+        fs::write(root.join(".nori-config.json"), config_content).expect("write config");
+
+        // Call read_nori_profile with nested directory as cwd
+        let profile = read_nori_profile(&nested);
+
+        assert_eq!(
+            profile,
+            Some("test-profile".to_string()),
+            "Should find profile in ancestor .nori-config.json"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn read_nori_profile_returns_none_when_no_config() {
+        let tmp = TempDir::new().expect("tempdir");
+        let profile = read_nori_profile(tmp.path());
+        assert_eq!(
+            profile, None,
+            "Should return None when no config file exists"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn discover_instruction_files_finds_all_ancestors() {
+        // Create a temp directory structure with instruction files:
+        // /tmp/xxx/
+        //   .git  (to mark git root)
+        //   AGENTS.md
+        //   .claude/
+        //     settings.md
+        //   subdir/
+        //     CLAUDE.md
+        //     nested/  <- cwd
+        //       AGENTS.md
+        let tmp = TempDir::new().expect("tempdir");
+        let root = tmp.path();
+
+        // Create .git to mark root
+        fs::write(root.join(".git"), "gitdir: /path/to/git").expect("write .git");
+
+        // Create instruction files at various levels
+        fs::write(root.join("AGENTS.md"), "root agents").expect("write root AGENTS.md");
+        fs::create_dir_all(root.join(".claude")).expect("create .claude dir");
+        fs::write(root.join(".claude/settings.md"), "claude settings")
+            .expect("write .claude/settings.md");
+
+        let subdir = root.join("subdir");
+        fs::create_dir_all(&subdir).expect("create subdir");
+        fs::write(subdir.join("CLAUDE.md"), "subdir claude").expect("write subdir CLAUDE.md");
+
+        let nested = subdir.join("nested");
+        fs::create_dir_all(&nested).expect("create nested");
+        fs::write(nested.join("AGENTS.md"), "nested agents").expect("write nested AGENTS.md");
+
+        // Call discover_instruction_files with nested as cwd
+        let files = discover_instruction_files(&nested);
+
+        // Should find files in order from root to cwd:
+        // 1. root/AGENTS.md
+        // 2. root/.claude/settings.md
+        // 3. subdir/CLAUDE.md
+        // 4. nested/AGENTS.md
+        assert_eq!(files.len(), 4, "Should find 4 instruction files");
+
+        // Verify paths contain expected files
+        let file_names: Vec<String> = files
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert!(file_names.contains(&"AGENTS.md".to_string()));
+        assert!(file_names.contains(&"CLAUDE.md".to_string()));
+        assert!(file_names.contains(&"settings.md".to_string()));
+    }
+
+    // @current-session
+    #[test]
+    fn discover_instruction_files_returns_empty_when_none_exist() {
+        let tmp = TempDir::new().expect("tempdir");
+        let files = discover_instruction_files(tmp.path());
+        assert!(
+            files.is_empty(),
+            "Should return empty vec when no instruction files exist"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn nori_header_renders_instruction_files() {
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "test-agent".to_string(),
+            directory: PathBuf::from("/tmp/test"),
+            nori_profile: Some("test-profile".to_string()),
+            instruction_files: vec![
+                PathBuf::from("/home/user/project/AGENTS.md"),
+                PathBuf::from("/home/user/project/.claude/rules.md"),
+            ],
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should show instruction files
+        assert!(
+            rendered.contains("agents.md:"),
+            "Should show agents.md label for instruction files"
+        );
     }
 
     #[test]
@@ -260,6 +510,7 @@ mod tests {
             agent: "test-agent".to_string(),
             directory: PathBuf::from("/tmp/test"),
             nori_profile: None,
+            instruction_files: Vec::new(),
         };
 
         let lines = cell.display_lines(80);
@@ -278,6 +529,7 @@ mod tests {
             agent: "test-agent".to_string(),
             directory: PathBuf::from("/tmp/test"),
             nori_profile: Some("senior-swe".to_string()),
+            instruction_files: Vec::new(),
         };
 
         let lines = cell.display_lines(80);
@@ -296,6 +548,10 @@ mod tests {
             agent: "claude-sonnet".to_string(),
             directory: PathBuf::from("/home/user/project"),
             nori_profile: Some("senior-swe".to_string()),
+            instruction_files: vec![
+                PathBuf::from("/home/user/project/AGENTS.md"),
+                PathBuf::from("/home/user/project/.claude/settings.md"),
+            ],
         };
 
         let lines = cell.display_lines(80);

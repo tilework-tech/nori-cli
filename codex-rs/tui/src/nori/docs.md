@@ -22,18 +22,15 @@ The `nori` module contains Nori-specific TUI customizations that replace or exte
 The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 
 ```
-╭──────────────────────────────────────╮
-│   _   _  ___  ____  ___              │
-│  | \ | \/ _ \|  _ \|_ _\             │
-│  |  \| | | | | |_) || |              │
-│  | |\  | |_| |  _ < | |              │
-│  \_| \_|\___/\_| \_\___|             │
-│                                      │
-│ version:   v0.x.x                    │
-│ directory: ~/path/to/project         │
-│ agent:     claude-sonnet             │
-│ profile:   senior-swe                │
-╰──────────────────────────────────────╯
+╭───────────────────────────────────────────────────╮
+│ Nori v0.x.x                                       │
+│                                                   │
+│ directory: ~/path/to/project                      │
+│ agent:     claude-sonnet                          │
+│ profile:   senior-swe                             │
+│ agents.md: ~/path/to/project/AGENTS.md            │
+│ agents.md: ~/path/to/project/.claude/settings.md  │
+╰───────────────────────────────────────────────────╯
 
   Powered by Nori AI
 
@@ -43,9 +40,10 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 **Key functions:**
 
 - `new_nori_session_info()`: Entry point called by `history_cell::new_session_info()`. Creates the composite cell with header + help text
-- `read_nori_profile()`: Parses `~/.nori-config.json` to extract `profile.baseProfile`
+- `read_nori_profile(cwd)`: Walks from the given directory upward through parent directories, returning the profile from the nearest ancestor containing a `.nori-config.json` file. Supports both new format (`agents.claude-code.profile.baseProfile`) and old format (`profile.baseProfile`)
+- `discover_instruction_files(cwd)`: Discovers instruction files (CLAUDE.md, AGENTS.md, `.claude/*.md`) in ancestors. Walks from the git root (or cwd if no git root) to cwd, collecting all instruction files found along the path. Returns paths ordered from root to cwd
 - `format_directory()`: Relativizes paths to home directory with truncation for narrow terminals
-- `new_nori_status_output()`: Creates the composite cell for `/status` command output. Displays the command echo followed by the `NoriSessionHeaderCell` showing Nori branding, version, directory, agent, and profile info. Called by `chatwidget.rs::add_status_output()`
+- `new_nori_status_output()`: Creates the composite cell for `/status` command output. Displays the command echo followed by the `NoriSessionHeaderCell` showing Nori branding, version, directory, agent, profile, and instruction files info. Called by `chatwidget.rs::add_status_output()`
 
 **ASCII Banner Styling:**
 
@@ -89,9 +87,17 @@ Compiled only when `upstream-updates` feature is disabled. Provides Nori-specifi
 
 **Profile Display:**
 
-- When `~/.nori-config.json` contains a `profile.baseProfile`, that value is displayed
-- When the file is missing or has no profile, displays "(none)"
+- Profile is resolved by walking from cwd upward through parent directories, using the nearest ancestor containing `.nori-config.json`
+- Supports both new format (`agents.claude-code.profile.baseProfile`) and old format (`profile.baseProfile`)
+- When no config file is found in any ancestor, displays "(none)"
 - Config parsing is permissive - missing fields or invalid JSON result in `None` profile
+
+**Instruction Files Display:**
+
+- Instruction files (CLAUDE.md, AGENTS.md, `.claude/*.md`) are discovered by walking from the git root to cwd
+- If no git root is found, only the cwd is searched
+- All discovered files are displayed in the session header as `agents.md: <path>`
+- Paths are ordered from root to cwd (matching the order they are loaded)
 
 **Integration Point:**
 
