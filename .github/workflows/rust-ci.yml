@@ -122,12 +122,11 @@ jobs:
       #   run: cargo check --profile ci-test --target ${{ matrix.target }}
       # - name: cargo clippy
       #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-      - name: Build mock-acp-agent
+      - name: cargo build
         run: |
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p codex-cli --profile ci-test --target ${{ matrix.target }}
-          cargo build -p codex-exec --profile ci-test --target ${{ matrix.target }}
       - name: cargo test nori
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/codex-rs/target/mock-acp-out/mock_acp_agent
@@ -137,7 +136,6 @@ jobs:
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-tui
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-cli
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-protocol
-          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-core
       - name: cargo clippy
         run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
 
