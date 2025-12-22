@@ -928,11 +928,109 @@ mod tests {
             expected_multi
         );
     }
+
+    // @current-session
+    #[test]
+    fn test_normalize_acp_error_messages() {
+        // Test ACP error at start with empty line after
+        let input =
+            "■ Operation 'ListCustomPrompts' is not supported in ACP mode\n\n› [DEFAULT_PROMPT]\n";
+        let expected = "› [DEFAULT_PROMPT]\n";
+        assert_eq!(normalize_for_input_snapshot(input.to_string()), expected);
+
+        // Test ACP error at start without empty line after
+        let input_no_empty =
+            "■ Operation 'ListCustomPrompts' is not supported in ACP mode\n› [DEFAULT_PROMPT]\n";
+        let expected_no_empty = "› [DEFAULT_PROMPT]\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_no_empty.to_string()),
+            expected_no_empty
+        );
+
+        // Test ACP error in middle of content
+        let input_middle = "Some content\n■ Operation 'AddToHistory' is not supported in ACP mode\n\nMore content\n";
+        let expected_middle = "Some content\nMore content\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_middle.to_string()),
+            expected_middle
+        );
+
+        // Test multiple ACP errors
+        let input_multiple = "■ Operation 'ListCustomPrompts' is not supported in ACP mode\n\n■ Operation 'AddToHistory' is not supported in ACP mode\n\nContent\n";
+        let expected_multiple = "Content\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_multiple.to_string()),
+            expected_multiple
+        );
+
+        // Test content without ACP errors (no-op)
+        let input_no_errors = "› [DEFAULT_PROMPT]\n\n  ⎇ master · Nori v0.0.0\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_no_errors.to_string()),
+            input_no_errors
+        );
+
+        // Test ACP error at end with no trailing newline
+        let input_at_end = "Content\n■ Operation 'Foo' is not supported in ACP mode";
+        let expected_at_end = "Content";
+        assert_eq!(
+            normalize_for_input_snapshot(input_at_end.to_string()),
+            expected_at_end
+        );
+
+        // Test multiple consecutive empty lines after error (only strip one)
+        let input_multiple_empty = "■ Operation 'Bar' is not supported in ACP mode\n\n\nContent\n";
+        let expected_multiple_empty = "\nContent\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_multiple_empty.to_string()),
+            expected_multiple_empty
+        );
+
+        // Test different operation names
+        let input_diff_op =
+            "■ Operation 'SomeOtherOperation' is not supported in ACP mode\n\nContent\n";
+        let expected_diff_op = "Content\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_diff_op.to_string()),
+            expected_diff_op
+        );
+
+        // Test that similar but non-matching text is preserved
+        let input_similar = "■ This is some other message\n\nContent\n";
+        assert_eq!(
+            normalize_for_input_snapshot(input_similar.to_string()),
+            input_similar
+        );
+    }
 }
 
 /// Normalize for input tests - strips header for consistent snapshot regardless of scroll state
 pub fn normalize_for_input_snapshot(contents: String) -> String {
+    // Capture if original input has trailing newline before normalize_for_snapshot strips it
+    let has_trailing_newline = contents.ends_with('\n');
     let normalized = normalize_for_snapshot(contents);
+
+    // Strip ACP error messages (prevents flaky snapshots due to timing of debug-mode errors)
+    // Pattern: "■ Operation 'X' is not supported in ACP mode" followed by optional empty line
+    let lines: Vec<&str> = normalized.lines().collect();
+    let mut filtered_lines = Vec::new();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+        if line.contains("■ Operation '") && line.contains("' is not supported in ACP mode") {
+            // Skip the error line
+            i += 1;
+            // If next line is empty, skip it too
+            if i < lines.len() && lines[i].trim().is_empty() {
+                i += 1;
+            }
+        } else {
+            filtered_lines.push(line);
+            i += 1;
+        }
+    }
+    let normalized = filtered_lines.join("\n");
 
     // Strip startup header block if present (prevents flaky snapshots due to scroll timing)
     // The header can appear in two forms:
@@ -948,7 +1046,7 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
         l.contains("╭──") || l.contains("Powered by Nori AI") || l.contains("'npx nori-ai install'")
     });
 
-    if has_header {
+    let mut result = if has_header {
         // Find where the header ends
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
@@ -978,5 +1076,12 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
         }
     } else {
         normalized
+    };
+
+    // Restore trailing newline if original input had one
+    if has_trailing_newline && !result.is_empty() {
+        result.push('\n');
     }
+
+    result
 }

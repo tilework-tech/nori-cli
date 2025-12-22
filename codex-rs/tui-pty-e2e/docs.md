@@ -51,7 +51,7 @@ The crate exports helper functions for consistent test patterns:
 - `TIMEOUT: Duration` - Standard 5-second timeout constant for use across all tests
 - `TIMEOUT_INPUT: Duration` - 300ms timeout for input stabilization before snapshots
 - `normalize_for_snapshot(contents: String) -> String` - Normalizes dynamic content for snapshot testing (see below)
-- `normalize_for_input_snapshot(contents: String) -> String` - Extends normalization by stripping the startup header block (see below)
+- `normalize_for_input_snapshot(contents: String) -> String` - Extends normalization by stripping ACP error messages, startup header block, and preserving trailing newlines (see below)
 
 **Automatic Test Isolation:**
 
@@ -192,7 +192,7 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
 | Function | Use Case |
 |----------|----------|
 | `normalize_for_snapshot()` | General snapshots that should include the startup header |
-| `normalize_for_input_snapshot()` | Input-focused tests where header visibility varies with scroll timing |
+| `normalize_for_input_snapshot()` | Input-focused tests where header visibility varies with scroll timing and ACP error messages appear with variable timing |
 
 **`normalize_for_snapshot()`** - Base normalization rules:
 1. Temp directory paths (`/tmp/.tmpXXXXXX`) → `[TMP_DIR]` placeholder
@@ -204,12 +204,29 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
    - Example: `─ Worked for 0s ───...` becomes `─────────────────...`
    - Prevents flaky tests when timing varies between 0s, 1s, 10s, or minute formats like 1m 30s
 
-**`normalize_for_input_snapshot()`** - Extends base normalization by stripping the startup header block:
-- Detects the header block (lines containing `╭──` through the `/review` and `/model` command list)
-- Removes the entire header section to prevent flaky snapshots
-- Used by input handling tests in `@/codex-rs/tui-pty-e2e/tests/input_handling.rs`
+**`normalize_for_input_snapshot()`** - Extends base normalization with three additional phases:
 
-**Why Two Functions:** Terminal render timing can cause the startup header block to scroll partially in or out of the viewport before a snapshot is taken. For tests focused on input handling, the header presence is irrelevant - only the input area matters. By stripping the header, `normalize_for_input_snapshot()` produces deterministic snapshots regardless of scroll state.
+1. **ACP Error Message Filtering** (Phase 1):
+   - Strips lines matching pattern: `"■ Operation 'X' is not supported in ACP mode"`
+   - Also removes the subsequent empty line if present
+   - Example: `"■ Operation 'ListCustomPrompts' is not supported in ACP mode\n\n"` → removed entirely
+   - Prevents snapshot flakiness caused by timing-dependent debug-mode error messages
+   - These error messages only appear in debug builds when certain operations aren't supported in ACP mode
+   - Test coverage: `test_normalize_acp_error_messages()` in `@/codex-rs/tui-pty-e2e/src/lib.rs`
+
+2. **Startup Header Stripping** (Phase 2):
+   - Detects the header block (lines containing `╭──`, `Powered by Nori AI`, or `'npx nori-ai install'`)
+   - Removes the entire header section including trailing empty lines
+   - Used by input handling tests in `@/codex-rs/tui-pty-e2e/tests/input_handling.rs`
+   - Prevents flaky snapshots when header scrolls partially in/out of viewport
+
+3. **Trailing Newline Preservation** (Phase 3):
+   - Captures whether the original input had a trailing newline before any normalization
+   - Restores the trailing newline at the very end after all normalization passes
+   - Ensures original input's newline status is preserved regardless of intermediate string operations
+   - Example: Input `"foo\n"` → after all normalizations → output still ends with `"\n"`
+
+**Why Two Functions:** Terminal render timing can cause the startup header block to scroll partially in or out of the viewport before a snapshot is taken. Additionally, ACP error messages (like `"■ Operation 'ListCustomPrompts' is not supported in ACP mode"`) are only emitted in debug builds and have variable timing - they may or may not appear before the snapshot is captured. For tests focused on input handling, neither the header presence nor these debug error messages are relevant - only the input area matters. By stripping both, `normalize_for_input_snapshot()` produces deterministic snapshots regardless of scroll state or debug message timing.
 
 This normalization allows snapshot assertions to focus on UI structure and static content rather than ephemeral runtime values.
 

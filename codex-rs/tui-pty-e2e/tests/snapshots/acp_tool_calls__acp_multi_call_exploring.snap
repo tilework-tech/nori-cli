@@ -5,8 +5,6 @@ expression: normalize_for_input_snapshot(contents)
 › Explore files
 
 
-■ Operation 'AddToHistory' is not supported in ACP mode
-
 ────────────────────────────────────────────────────────────────────────────────
 
 • Test message 1Test message 2
