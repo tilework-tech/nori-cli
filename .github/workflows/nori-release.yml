@@ -191,11 +191,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: blacksmith-4vcpu-ubuntu-2404
             target: x86_64-unknown-linux-musl
             artifact-name: linux-x86_64
-          - os: ubuntu-24.04-arm
-            target: blacksmith-4vcpu-ubuntu-2404-arm
+          - os: blacksmith-4vcpu-ubuntu-2404-arm
+            target: aarch64-unknown-linux-musl
             artifact-name: linux-arm64
           - os: macos-14
             target: aarch64-apple-darwin
