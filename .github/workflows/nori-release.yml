@@ -168,7 +168,9 @@ jobs:
 
       - name: cargo build
         working-directory: codex-rs
-        run: cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p codex-cli && cargo build --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
+        run: |
+          cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p codex-cli
+          cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
 
       - name: cargo test
         working-directory: codex-rs
