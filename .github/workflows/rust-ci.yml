@@ -32,6 +32,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # sudo apt-get update
+          # sudo apt-get install -y coreutils musl-tools
+          docker system prune -af || true
+
+      - name: Setup faster linker
+        uses: rui314/setup-mold@v1
+
       - uses: dtolnay/rust-toolchain@1.90
         with:
           targets: ${{ matrix.target }}
@@ -103,22 +116,18 @@ jobs:
             sccache-${{ matrix.runner }}-${{ matrix.target }}-
 
       # CI checks
-      - name: cargo check
-        run: cargo check --target ${{ matrix.target }}
-
       - name: cargo fmt
         run: cargo +nightly fmt -- --check
-
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-
+      # - name: cargo check
+      #   run: cargo check --profile ci-test --target ${{ matrix.target }}
+      # - name: cargo clippy
+      #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
       - name: Build mock-acp-agent
         run: |
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p codex-cli --profile ci-test --target ${{ matrix.target }}
           cargo build -p codex-exec --profile ci-test --target ${{ matrix.target }}
-
       - name: cargo test nori
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/codex-rs/target/mock-acp-out/mock_acp_agent
@@ -129,7 +138,8 @@ jobs:
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-cli
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-protocol
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-core
-
+      - name: cargo clippy
+        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
 
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache

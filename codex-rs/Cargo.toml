@@ -286,6 +286,7 @@ codegen-units = 1
 debug = 1         # Reduce debug symbol size
 inherits = "test"
 opt-level = 0
+incremental = false
 
 [patch.crates-io]
 # Uncomment to debug local changes.
