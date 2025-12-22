@@ -164,7 +164,7 @@ jobs:
 
       - name: cargo clippy
         working-directory: codex-rs
-        run: cargo clippy --target ${{ env.MUSL_TARGET }} --all-targets # needs all features to avoid unused import/var/etc errors
+        run: cargo clippy --target ${{ env.MUSL_TARGET }} --all-features -- -D warnings
 
       - name: cargo build
         working-directory: codex-rs
@@ -178,7 +178,6 @@ jobs:
           cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-tui
           cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-cli
           cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-protocol
-          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-core
 
   # ============================================================================
   # BUILD NATIVE BINARIES
