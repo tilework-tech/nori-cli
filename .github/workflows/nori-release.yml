@@ -55,7 +55,7 @@ jobs:
   # ============================================================================
   validate:
     name: Validate Release
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version: ${{ steps.validate.outputs.version }}
       tag_name: ${{ steps.validate.outputs.tag_name }}
@@ -129,7 +129,7 @@ jobs:
     name: Run Tests
     needs: validate
     if: ${{ needs.validate.outputs.skip_tests != 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       MUSL_TARGET: x86_64-unknown-linux-musl
     steps:
@@ -195,7 +195,7 @@ jobs:
             target: x86_64-unknown-linux-musl
             artifact-name: linux-x86_64
           - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
+            target: blacksmith-4vcpu-ubuntu-2404-arm
             artifact-name: linux-arm64
           - os: macos-14
             target: aarch64-apple-darwin
@@ -324,7 +324,7 @@ jobs:
     name: Stage npm Package
     needs: [validate, build-native]
     if: ${{ !failure() && !cancelled() }}
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -433,7 +433,7 @@ jobs:
     needs: [validate, stage-npm]
     # Only publish for actual tag pushes, not workflow_dispatch (which is dry run only)
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: npm-publish
     permissions:
       contents: read # Required to checkout code
@@ -513,7 +513,7 @@ jobs:
     needs: [validate, build-native, publish-npm]
     # Only create release for actual tag pushes
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
@@ -630,7 +630,7 @@ jobs:
     name: Dry Run Summary
     needs: [validate, stage-npm]
     if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Download npm package
         uses: actions/download-artifact@v4
