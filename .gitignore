@@ -1,24 +1,24 @@
 # cli tools
 # CLAUDE.md
+# .claude/agents/
+# .claude/skills/
+
+.nori-config.json
+.nori-installed-version
+
 settings.local.json
-.claude/settings.local.json
-.claude/agents/
 .claude/commands/
+.claude/profiles/
+.claude/skills/*noridoc*
+.claude/skills/memorize
+.claude/skills/prompt-analysis
+.claude/skills/recall
 .claude/**/*.js
 .claude/**/*.js.map
 .claude/**/*.ts
 .claude/**/*.ts.map
 AGENTS.override.md
 AGENTS.md
-
-# nori local details
-.claude/profiles/
-.claude/skills/*noridoc*
-.claude/skills/memorize
-.claude/skills/prompt-analysis
-.claude/skills/recall
-.nori-config.json
-.nori-installed-version
 
 # deps
 # Node.js dependencies
