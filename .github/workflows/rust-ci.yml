@@ -32,6 +32,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # sudo apt-get update
+          # sudo apt-get install -y coreutils musl-tools
+          docker system prune -af || true
+
+      - name: Setup faster linker
+        uses: rui314/setup-mold@v1
+
       - uses: dtolnay/rust-toolchain@1.90
         with:
           targets: ${{ matrix.target }}
@@ -104,7 +117,7 @@ jobs:
 
       # CI checks
       - name: cargo check
-        run: cargo check --target ${{ matrix.target }}
+        run: cargo check --profile ci-test --target ${{ matrix.target }}
 
       - name: cargo fmt
         run: cargo +nightly fmt -- --check

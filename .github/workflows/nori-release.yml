@@ -155,27 +155,30 @@ jobs:
           targets: ${{ env.MUSL_TARGET }}
           components: clippy
 
-      # - name: cargo check
-      #   working-directory: codex-rs
-      #   run: cargo check --target ${{ env.MUSL_TARGET }} --all-targets
+      - name: Setup faster linker
+        uses: rui314/setup-mold@v1
 
-      # - name: cargo clippy
-      #   working-directory: codex-rs
-      #   run: cargo clippy --target ${{ env.MUSL_TARGET }} --all-targets # needs all features to avoid unused import/var/etc errors
+      - name: cargo check
+        working-directory: codex-rs
+        run: cargo check --profile ci-test --target ${{ env.MUSL_TARGET }} --all-targets
 
-      # - name: cargo build
-      #   working-directory: codex-rs
-      #   run: cargo build --target ${{ env.MUSL_TARGET }} -p codex-cli && cargo build --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
+      - name: cargo clippy
+        working-directory: codex-rs
+        run: cargo clippy --target ${{ env.MUSL_TARGET }} --all-targets # needs all features to avoid unused import/var/etc errors
 
-      # - name: cargo test
-      #   working-directory: codex-rs
-      #   run: |
-      #     cargo test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
-      #     cargo test --target ${{ env.MUSL_TARGET }} --package codex-acp
-      #     cargo test --target ${{ env.MUSL_TARGET }} --package codex-tui
-      #     cargo test --target ${{ env.MUSL_TARGET }} --package codex-cli
-      #     cargo test --target ${{ env.MUSL_TARGET }} --package codex-protocol
-      #     cargo test --target ${{ env.MUSL_TARGET }} --package codex-core
+      - name: cargo build
+        working-directory: codex-rs
+        run: cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p codex-cli && cargo build --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
+
+      - name: cargo test
+        working-directory: codex-rs
+        run: |
+          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
+          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-acp
+          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-tui
+          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-cli
+          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-protocol
+          cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-core
 
   # ============================================================================
   # BUILD NATIVE BINARIES
