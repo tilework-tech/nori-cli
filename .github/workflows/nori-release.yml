@@ -517,7 +517,7 @@ jobs:
     needs: [validate, build-native, publish-npm]
     # Only create release for actual tag pushes
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
