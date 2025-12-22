@@ -1,15 +1,9 @@
 ---
 source: tui-pty-e2e/tests/streaming.rs
-assertion_line: 33
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
-■ Operation 'ListCustomPrompts' is not supported in ACP mode
-
-
 › testing!!!
 
-
-■ Operation 'AddToHistory' is not supported in ACP mode
 
 ────────────────────────────────────────────────────────────────────────────────
 

@@ -2,13 +2,8 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
-■ Operation 'ListCustomPrompts' is not supported in ACP mode
-
-
 › Echo hello
 
-
-■ Operation 'AddToHistory' is not supported in ACP mode
 
 ────────────────────────────────────────────────────────────────────────────────
 

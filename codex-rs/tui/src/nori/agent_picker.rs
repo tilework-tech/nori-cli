@@ -67,7 +67,9 @@ pub fn agent_picker_params(
 
     SelectionViewParams {
         title: Some("Select Agent".to_string()),
-        subtitle: Some("Agent will switch on next prompt submission".to_string()),
+        subtitle: Some(
+            "Creates new conversation with selected agent (history not preserved)".to_string(),
+        ),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         ..Default::default()

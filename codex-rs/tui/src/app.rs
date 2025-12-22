@@ -932,7 +932,7 @@ impl App {
                 );
                 self.chat_widget.add_info_message(
                     format!(
-                        "Agent '{display_name}' selected. Will switch on next prompt submission."
+                        "Agent '{display_name}' selected. On next prompt, will start a new conversation with this agent (current history will not be transferred)."
                     ),
                     None,
                 );
@@ -984,8 +984,10 @@ impl App {
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
 
-                self.chat_widget
-                    .add_info_message(format!("Switched to agent: {display_name}"), None);
+                self.chat_widget.add_info_message(
+                    format!("Started new conversation with agent: {display_name}"),
+                    None,
+                );
             }
             #[cfg(feature = "unstable")]
             AppEvent::OpenAcpModelPicker {
