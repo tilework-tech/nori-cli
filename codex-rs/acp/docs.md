@@ -222,6 +222,31 @@ The `write_text_file` method implements file creation and modification for ACP a
 
 The path validation canonicalizes paths to prevent symlink-based directory traversal attacks.
 
+**Session Transcript Parsing (`session_parser.rs`):**
+
+The `session_parser` module provides parsers to extract token usage and metadata from agent session transcript files. Each agent (Claude, Codex, Gemini) runs as an opaque subprocess and stores session data in different formats:
+
+- **Codex**: `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-<ISODATE>T<HH-MM-SS>-<SESSION_GUID>.jsonl`
+- **Gemini**: `~/.gemini/tmp/<HASHED_PATHS>/chats/session-<ISODATE>T<HH-MM>-<SESSIONID>.json`
+- **Claude**: `~/.claude/projects/<PROJECT_PATH>/<SESSIONID>.jsonl`
+
+Key types:
+- `TokenUsageReport`: Unified report wrapping `TokenUsage` (from codex-protocol) with agent type, session ID, and transcript path
+- `AgentKind`: Enum identifying the agent (Claude, Codex, Gemini)
+- `ParseError`: Error cases (EmptyFile, MissingSessionId, TokenOverflow, IoError, JsonError)
+
+Parser functions:
+- `parse_codex_session()`: Parses Codex JSONL with cumulative `token_count` events. Session ID derived from filename since not embedded in content. Extracts `model_context_window` when available.
+- `parse_gemini_session()`: Parses Gemini JSON with messages array. Aggregates tokens from each message. Maps `tokens.thoughts` to `reasoning_output_tokens`, `tokens.cached` to `cached_input_tokens`.
+- `parse_claude_session()`: Parses Claude JSONL with per-message usage objects (nested in `.message.usage`). Maps `cache_read_input_tokens` to `cached_input_tokens`. No separate reasoning tokens.
+
+Implementation details:
+- **Line-by-line JSONL parsing**: Resilient error handling logs warnings and continues on malformed lines
+- **Checked arithmetic**: Uses `.checked_add()` for token aggregation to prevent overflow
+- **Agent-specific token mapping**: Each parser maps agent-specific token fields to the unified `TokenUsage` struct
+- **Codex as external agent**: Treats Codex sessions as external data (like Gemini/Claude), not relying on internal Codex state
+
+Session discovery logic (finding files in ~/.codex, ~/.gemini, ~/.claude) is deferred for future TUI integration.
 
 **Approval Bridging:**
 
