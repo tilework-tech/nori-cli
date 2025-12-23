@@ -10,6 +10,7 @@ pub mod backend;
 pub mod config;
 pub mod connection;
 pub mod registry;
+pub mod session_parser;
 pub mod tracing_setup;
 pub mod translator;
 
