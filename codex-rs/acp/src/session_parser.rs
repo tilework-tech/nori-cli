@@ -12,7 +12,8 @@
 //! and will be implemented when integrating with the TUI/status command.
 
 use codex_protocol::protocol::TokenUsage;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -88,22 +89,23 @@ pub async fn parse_codex_session(path: &std::path::Path) -> Result<TokenUsageRep
         // Look for event_msg with type token_count
         if v.get("type").and_then(|t| t.as_str()) == Some("event_msg")
             && let Some(payload) = v.get("payload")
-                && payload.get("type").and_then(|t| t.as_str()) == Some("token_count")
-                    && let Some(info) = payload.get("info") {
-                        // Extract total_token_usage
-                        if let Some(total_usage) = info.get("total_token_usage") {
-                            let usage: TokenUsage = serde_json::from_value(total_usage.clone())?;
-                            last_token_usage = Some(usage);
-                        }
+            && payload.get("type").and_then(|t| t.as_str()) == Some("token_count")
+            && let Some(info) = payload.get("info")
+        {
+            // Extract total_token_usage
+            if let Some(total_usage) = info.get("total_token_usage") {
+                let usage: TokenUsage = serde_json::from_value(total_usage.clone())?;
+                last_token_usage = Some(usage);
+            }
 
-                        // Extract model_context_window
-                        if let Some(mcw) = info.get("model_context_window") {
-                            model_context_window = mcw.as_i64();
-                        }
-                    }
+            // Extract model_context_window
+            if let Some(mcw) = info.get("model_context_window") {
+                model_context_window = mcw.as_i64();
+            }
+        }
     }
 
-    let token_usage = last_token_usage.ok_or(ParseError::MissingSessionId)?;
+    let token_usage = last_token_usage.ok_or(ParseError::EmptyFile)?;
 
     // Derive session ID from filename (e.g., "session-codex.jsonl" -> "codex")
     let session_id = path
@@ -151,16 +153,36 @@ pub async fn parse_gemini_session(path: &std::path::Path) -> Result<TokenUsageRe
         for message in messages {
             if let Some(tokens) = message.get("tokens") {
                 total_input = total_input
-                    .checked_add(tokens.get("input").and_then(serde_json::Value::as_i64).unwrap_or(0))
+                    .checked_add(
+                        tokens
+                            .get("input")
+                            .and_then(serde_json::Value::as_i64)
+                            .unwrap_or(0),
+                    )
                     .ok_or(ParseError::TokenOverflow)?;
                 total_output = total_output
-                    .checked_add(tokens.get("output").and_then(serde_json::Value::as_i64).unwrap_or(0))
+                    .checked_add(
+                        tokens
+                            .get("output")
+                            .and_then(serde_json::Value::as_i64)
+                            .unwrap_or(0),
+                    )
                     .ok_or(ParseError::TokenOverflow)?;
                 total_cached = total_cached
-                    .checked_add(tokens.get("cached").and_then(serde_json::Value::as_i64).unwrap_or(0))
+                    .checked_add(
+                        tokens
+                            .get("cached")
+                            .and_then(serde_json::Value::as_i64)
+                            .unwrap_or(0),
+                    )
                     .ok_or(ParseError::TokenOverflow)?;
                 total_thoughts = total_thoughts
-                    .checked_add(tokens.get("thoughts").and_then(serde_json::Value::as_i64).unwrap_or(0))
+                    .checked_add(
+                        tokens
+                            .get("thoughts")
+                            .and_then(serde_json::Value::as_i64)
+                            .unwrap_or(0),
+                    )
                     .ok_or(ParseError::TokenOverflow)?;
             }
         }
@@ -219,23 +241,40 @@ pub async fn parse_claude_session(path: &std::path::Path) -> Result<TokenUsageRe
 
         // Extract session ID from first message that has it
         if session_id.is_none()
-            && let Some(sid) = v.get("sessionId").and_then(|s| s.as_str()) {
-                session_id = Some(sid.to_string());
-            }
+            && let Some(sid) = v.get("sessionId").and_then(|s| s.as_str())
+        {
+            session_id = Some(sid.to_string());
+        }
 
         // Look for messages with usage field
         if let Some(message) = v.get("message")
-            && let Some(usage) = message.get("usage") {
-                total_input = total_input
-                    .checked_add(usage.get("input_tokens").and_then(serde_json::Value::as_i64).unwrap_or(0))
-                    .ok_or(ParseError::TokenOverflow)?;
-                total_output = total_output
-                    .checked_add(usage.get("output_tokens").and_then(serde_json::Value::as_i64).unwrap_or(0))
-                    .ok_or(ParseError::TokenOverflow)?;
-                total_cache_read = total_cache_read
-                    .checked_add(usage.get("cache_read_input_tokens").and_then(serde_json::Value::as_i64).unwrap_or(0))
-                    .ok_or(ParseError::TokenOverflow)?;
-            }
+            && let Some(usage) = message.get("usage")
+        {
+            total_input = total_input
+                .checked_add(
+                    usage
+                        .get("input_tokens")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(0),
+                )
+                .ok_or(ParseError::TokenOverflow)?;
+            total_output = total_output
+                .checked_add(
+                    usage
+                        .get("output_tokens")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(0),
+                )
+                .ok_or(ParseError::TokenOverflow)?;
+            total_cache_read = total_cache_read
+                .checked_add(
+                    usage
+                        .get("cache_read_input_tokens")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(0),
+                )
+                .ok_or(ParseError::TokenOverflow)?;
+        }
     }
 
     let session_id = session_id.ok_or(ParseError::MissingSessionId)?;

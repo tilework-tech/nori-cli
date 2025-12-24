@@ -880,6 +880,88 @@ pub fn normalize_for_snapshot(contents: String) -> String {
     lines.join("\n")
 }
 
+/// Normalize for input tests - strips header for consistent snapshot regardless of scroll state
+pub fn normalize_for_input_snapshot(contents: String) -> String {
+    // Capture if original input has trailing newline before normalize_for_snapshot strips it
+    let has_trailing_newline = contents.ends_with('\n');
+    let normalized = normalize_for_snapshot(contents);
+
+    // Strip ACP error messages (prevents flaky snapshots due to timing of debug-mode errors)
+    // Pattern: "■ Operation 'X' is not supported in ACP mode" followed by optional empty line
+    let lines: Vec<&str> = normalized.lines().collect();
+    let mut filtered_lines = Vec::new();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+        if line.contains("■ Operation '") && line.contains("' is not supported in ACP mode") {
+            // Skip the error line
+            i += 1;
+            // If next line is empty, skip it too
+            if i < lines.len() && lines[i].trim().is_empty() {
+                i += 1;
+            }
+        } else {
+            filtered_lines.push(line);
+            i += 1;
+        }
+    }
+    let normalized = filtered_lines.join("\n");
+
+    // Strip startup header block if present (prevents flaky snapshots due to scroll timing)
+    // The header can appear in two forms:
+    // 1. Boxed header with "╭──" border
+    // 2. Plain text "Powered by Nori AI"
+    // The header ends with either:
+    // - nori-ai install command (when nori-ai is not installed)
+    // - "Powered by Nori AI" line (when nori-ai is already installed)
+    let lines: Vec<&str> = normalized.lines().collect();
+
+    // Detect if header is present (either boxed or plain text form)
+    let has_header = lines.iter().any(|l| {
+        l.contains("╭──") || l.contains("Powered by Nori AI") || l.contains("'npx nori-ai install'")
+    });
+
+    let mut result = if has_header {
+        // Find where the header ends
+        let mut skip_until = 0;
+        for (i, line) in lines.iter().enumerate() {
+            // The nori-ai install line marks the end of the command list (if present)
+            if line.contains("'npx nori-ai install'") {
+                skip_until = i + 1;
+                break;
+            }
+            // If no install line, use "Powered by Nori AI" as the end marker
+            if line.contains("Powered by Nori AI") {
+                skip_until = i + 1;
+                // Don't break yet - install line may follow
+            }
+        }
+        // Skip empty lines after the header block
+        while skip_until < lines.len() && lines[skip_until].trim().is_empty() {
+            skip_until += 1;
+        }
+        if skip_until > 0 {
+            lines
+                .into_iter()
+                .skip(skip_until)
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            normalized
+        }
+    } else {
+        normalized
+    };
+
+    // Restore trailing newline if original input had one
+    if has_trailing_newline && !result.is_empty() {
+        result.push('\n');
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1002,86 +1084,4 @@ mod tests {
             input_similar
         );
     }
-}
-
-/// Normalize for input tests - strips header for consistent snapshot regardless of scroll state
-pub fn normalize_for_input_snapshot(contents: String) -> String {
-    // Capture if original input has trailing newline before normalize_for_snapshot strips it
-    let has_trailing_newline = contents.ends_with('\n');
-    let normalized = normalize_for_snapshot(contents);
-
-    // Strip ACP error messages (prevents flaky snapshots due to timing of debug-mode errors)
-    // Pattern: "■ Operation 'X' is not supported in ACP mode" followed by optional empty line
-    let lines: Vec<&str> = normalized.lines().collect();
-    let mut filtered_lines = Vec::new();
-    let mut i = 0;
-
-    while i < lines.len() {
-        let line = lines[i];
-        if line.contains("■ Operation '") && line.contains("' is not supported in ACP mode") {
-            // Skip the error line
-            i += 1;
-            // If next line is empty, skip it too
-            if i < lines.len() && lines[i].trim().is_empty() {
-                i += 1;
-            }
-        } else {
-            filtered_lines.push(line);
-            i += 1;
-        }
-    }
-    let normalized = filtered_lines.join("\n");
-
-    // Strip startup header block if present (prevents flaky snapshots due to scroll timing)
-    // The header can appear in two forms:
-    // 1. Boxed header with "╭──" border
-    // 2. Plain text "Powered by Nori AI"
-    // The header ends with either:
-    // - nori-ai install command (when nori-ai is not installed)
-    // - "Powered by Nori AI" line (when nori-ai is already installed)
-    let lines: Vec<&str> = normalized.lines().collect();
-
-    // Detect if header is present (either boxed or plain text form)
-    let has_header = lines.iter().any(|l| {
-        l.contains("╭──") || l.contains("Powered by Nori AI") || l.contains("'npx nori-ai install'")
-    });
-
-    let mut result = if has_header {
-        // Find where the header ends
-        let mut skip_until = 0;
-        for (i, line) in lines.iter().enumerate() {
-            // The nori-ai install line marks the end of the command list (if present)
-            if line.contains("'npx nori-ai install'") {
-                skip_until = i + 1;
-                break;
-            }
-            // If no install line, use "Powered by Nori AI" as the end marker
-            if line.contains("Powered by Nori AI") {
-                skip_until = i + 1;
-                // Don't break yet - install line may follow
-            }
-        }
-        // Skip empty lines after the header block
-        while skip_until < lines.len() && lines[skip_until].trim().is_empty() {
-            skip_until += 1;
-        }
-        if skip_until > 0 {
-            lines
-                .into_iter()
-                .skip(skip_until)
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            normalized
-        }
-    } else {
-        normalized
-    };
-
-    // Restore trailing newline if original input had one
-    if has_trailing_newline && !result.is_empty() {
-        result.push('\n');
-    }
-
-    result
 }

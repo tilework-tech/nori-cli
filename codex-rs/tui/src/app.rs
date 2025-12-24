@@ -1495,8 +1495,7 @@ mod tests {
             std::fs::read_to_string(nori_home.join("config.toml")).expect("read config");
         assert!(
             config_content.contains("agent = \"gemini\""),
-            "Config should contain 'agent = \"gemini\"', got: {}",
-            config_content
+            "Config should contain 'agent = \"gemini\"', got: {config_content}"
         );
     }
 }

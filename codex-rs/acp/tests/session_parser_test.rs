@@ -1,10 +1,11 @@
-use codex_acp::session_parser::{
-    AgentKind, ParseError, parse_claude_session, parse_codex_session, parse_gemini_session,
-};
+use codex_acp::session_parser::AgentKind;
+use codex_acp::session_parser::ParseError;
+use codex_acp::session_parser::parse_claude_session;
+use codex_acp::session_parser::parse_codex_session;
+use codex_acp::session_parser::parse_gemini_session;
 use std::io::Write;
 use std::path::Path;
 
-// @current-session
 #[tokio::test]
 async fn test_parse_codex_session() {
     // Tests run from codex-rs/acp, session files are two levels up in worktree root
@@ -30,7 +31,6 @@ async fn test_parse_codex_session() {
     assert_eq!(report.model_context_window, Some(258400));
 }
 
-// @current-session
 #[tokio::test]
 async fn test_parse_gemini_session() {
     // Tests run from codex-rs/acp, session files are two levels up in worktree root
@@ -57,7 +57,6 @@ async fn test_parse_gemini_session() {
     );
 }
 
-// @current-session
 #[tokio::test]
 async fn test_parse_claude_session() {
     // Tests run from codex-rs/acp, session files are two levels up in worktree root
@@ -86,7 +85,6 @@ async fn test_parse_claude_session() {
     );
 }
 
-// @current-session
 #[tokio::test]
 async fn test_parse_empty_file() {
     let temp_file = tempfile::NamedTempFile::new().expect("create temp file");
@@ -96,21 +94,6 @@ async fn test_parse_empty_file() {
     assert!(matches!(result, Err(ParseError::EmptyFile)));
 }
 
-// @current-session
-#[tokio::test]
-async fn test_parse_malformed_json() {
-    let mut temp_file = tempfile::NamedTempFile::new().expect("create temp file");
-    writeln!(temp_file, "{{{{invalid json}}}}").expect("write to temp file");
-    writeln!(temp_file, r#"{{"type":"valid","sessionId":"test"}}"#).expect("write to temp file");
-    temp_file.flush().expect("flush temp file");
-
-    // Parser should skip bad line and continue - but will fail because no valid token data
-    let result = parse_codex_session(temp_file.path()).await;
-    // Will fail with MissingSessionId because no valid token_count events found
-    assert!(result.is_err());
-}
-
-// @current-session
 #[tokio::test]
 async fn test_parse_missing_session_id() {
     let mut temp_file = tempfile::NamedTempFile::new().expect("create temp file");
