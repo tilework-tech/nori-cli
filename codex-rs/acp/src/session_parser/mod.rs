@@ -23,17 +23,17 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+mod claude;
 mod codex;
 mod gemini;
-mod claude;
 
+pub use claude::parse_claude_session;
 pub use codex::parse_codex_session;
 pub use gemini::parse_gemini_session;
-pub use claude::parse_claude_session;
 
 use codex_protocol::protocol::TokenUsage;
-use std::path::PathBuf;
 use std::io;
+use std::path::PathBuf;
 
 /// Token usage report extracted from a session transcript
 #[derive(Debug, Clone)]
