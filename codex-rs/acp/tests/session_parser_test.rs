@@ -9,7 +9,7 @@ use std::path::Path;
 #[tokio::test]
 async fn test_parse_codex_session() {
     // Tests run from codex-rs/acp, session files are two levels up in worktree root
-    let path = Path::new("../../session-codex.jsonl");
+    let path = Path::new("./tests/fixtures/session-codex.jsonl");
     let report = parse_codex_session(path)
         .await
         .expect("should parse codex session");
@@ -34,7 +34,7 @@ async fn test_parse_codex_session() {
 #[tokio::test]
 async fn test_parse_gemini_session() {
     // Tests run from codex-rs/acp, session files are two levels up in worktree root
-    let path = Path::new("../../session-gemini.json");
+    let path = Path::new("./tests/fixtures/session-gemini.json");
     let report = parse_gemini_session(path)
         .await
         .expect("should parse gemini session");
@@ -60,7 +60,7 @@ async fn test_parse_gemini_session() {
 #[tokio::test]
 async fn test_parse_claude_session() {
     // Tests run from codex-rs/acp, session files are two levels up in worktree root
-    let path = Path::new("../../session-claude.jsonl");
+    let path = Path::new("./tests/fixtures/session-claude.jsonl");
     let report = parse_claude_session(path)
         .await
         .expect("should parse claude session");
