@@ -5,6 +5,7 @@ use codex_acp::AcpBackendConfig;
 #[cfg(feature = "unstable")]
 use codex_acp::AcpModelState;
 use codex_acp::get_agent_config;
+use codex_acp::session_parser::AgentKind;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
@@ -20,6 +21,15 @@ use tokio::sync::oneshot;
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 
+/// Session information for an ACP agent session.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpSessionInfo {
+    /// The type of agent (Claude, Codex, Gemini).
+    pub agent_kind: AgentKind,
+    /// The session ID as a string.
+    pub session_id: String,
+}
+
 /// Command for controlling the ACP agent.
 #[cfg(feature = "unstable")]
 pub(crate) enum AcpModelCommand {
@@ -31,6 +41,10 @@ pub(crate) enum AcpModelCommand {
     SetModel {
         model_id: String,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    /// Get session information (agent kind and session ID)
+    GetSessionInfo {
+        response_tx: oneshot::Sender<AcpSessionInfo>,
     },
 }
 
@@ -71,6 +85,19 @@ impl AcpAgentHandle {
         response_rx
             .await
             .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+    }
+
+    /// Get session information (agent kind and session ID) from the ACP agent.
+    pub async fn get_session_info(&self) -> Option<AcpSessionInfo> {
+        let (response_tx, response_rx) = oneshot::channel();
+        if self
+            .model_cmd_tx
+            .send(AcpModelCommand::GetSessionInfo { response_tx })
+            .is_err()
+        {
+            return None;
+        }
+        response_rx.await.ok()
     }
 }
 
@@ -223,6 +250,13 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
                             let model_id = codex_acp::ModelId::from(model_id);
                             let result = backend_for_model.set_model(&model_id).await;
                             let _ = response_tx.send(result);
+                        }
+                        AcpModelCommand::GetSessionInfo { response_tx } => {
+                            let session_info = AcpSessionInfo {
+                                agent_kind: backend_for_model.agent_kind().into(),
+                                session_id: backend_for_model.session_id().0.to_string(),
+                            };
+                            let _ = response_tx.send(session_info);
                         }
                     }
                 }

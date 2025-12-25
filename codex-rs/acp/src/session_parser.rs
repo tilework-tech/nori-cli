@@ -25,6 +25,16 @@ pub enum AgentKind {
     Gemini,
 }
 
+impl From<crate::registry::AgentKind> for AgentKind {
+    fn from(kind: crate::registry::AgentKind) -> Self {
+        match kind {
+            crate::registry::AgentKind::ClaudeCode => AgentKind::Claude,
+            crate::registry::AgentKind::Codex => AgentKind::Codex,
+            crate::registry::AgentKind::Gemini => AgentKind::Gemini,
+        }
+    }
+}
+
 /// Token usage report extracted from a session transcript.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenUsageReport {

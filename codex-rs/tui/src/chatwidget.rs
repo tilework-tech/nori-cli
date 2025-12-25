@@ -2148,10 +2148,61 @@ impl ChatWidget {
     }
 
     pub(crate) fn add_status_output(&mut self) {
+        // Add basic status immediately
         self.add_to_history(crate::nori::session_header::new_nori_status_output(
             &self.config.model,
             self.config.cwd.clone(),
         ));
+
+        // Spawn async task to fetch and display token usage for ACP sessions
+        #[cfg(feature = "unstable")]
+        if let Some(acp_handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            let cwd = self.config.cwd.clone();
+
+            tokio::spawn(async move {
+                // Get session info from ACP handle
+                let Some(session_info) = acp_handle.get_session_info().await else {
+                    tracing::debug!("could not get session info for token usage");
+                    return;
+                };
+
+                // Discover transcript path
+                let transcript_path = match codex_acp::discover_transcript_path(
+                    session_info.agent_kind,
+                    &session_info.session_id,
+                    &cwd,
+                )
+                .await
+                {
+                    Ok(path) => path,
+                    Err(e) => {
+                        tracing::debug!("could not discover transcript: {e}");
+                        return;
+                    }
+                };
+
+                // Parse token usage from transcript
+                let report = match codex_acp::session_parser::parse_session_transcript(
+                    session_info.agent_kind,
+                    &transcript_path,
+                )
+                .await
+                {
+                    Ok(report) => report,
+                    Err(e) => {
+                        tracing::debug!("could not parse token usage: {e}");
+                        return;
+                    }
+                };
+
+                // Send the token usage cell to be added to history
+                let cell = crate::nori::session_header::TokenUsageCell::new(report);
+                app_event_tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                    cell,
+                )));
+            });
+        }
     }
     fn stop_rate_limit_poller(&mut self) {
         if let Some(handle) = self.rate_limit_poller.take() {

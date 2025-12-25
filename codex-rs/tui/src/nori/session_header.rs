@@ -15,6 +15,7 @@ use crate::history_cell::SessionInfoCell;
 use crate::history_cell::card_inner_width;
 use crate::history_cell::with_border;
 use crate::version::CODEX_CLI_VERSION;
+use codex_acp::session_parser::TokenUsageReport;
 use codex_core::config::Config;
 use codex_core::protocol::SessionConfiguredEvent;
 use ratatui::prelude::*;
@@ -254,6 +255,111 @@ impl HistoryCell for NoriSessionHeaderCell {
             lines.push(Line::from(vec![
                 Span::from("agents.md: ").dim(),
                 Span::from(path_str),
+            ]));
+        }
+
+        with_border(lines)
+    }
+}
+
+/// Token usage display cell for /status command.
+///
+/// Shows aggregated token usage from the current session transcript.
+#[derive(Debug)]
+pub(crate) struct TokenUsageCell {
+    report: TokenUsageReport,
+}
+
+impl TokenUsageCell {
+    pub(crate) fn new(report: TokenUsageReport) -> Self {
+        Self { report }
+    }
+
+    /// Format a token count with thousands separators.
+    fn format_tokens(count: i64) -> String {
+        if count == 0 {
+            return "0".to_string();
+        }
+
+        let s = count.abs().to_string();
+        let mut result = String::with_capacity(s.len() + s.len() / 3);
+
+        for (i, c) in s.chars().rev().enumerate() {
+            if i > 0 && i % 3 == 0 {
+                result.push(',');
+            }
+            result.push(c);
+        }
+
+        if count < 0 {
+            result.push('-');
+        }
+
+        result.chars().rev().collect()
+    }
+}
+
+impl HistoryCell for TokenUsageCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let Some(_inner_width) = card_inner_width(width, NORI_HEADER_MAX_INNER_WIDTH) else {
+            return Vec::new();
+        };
+
+        let mut lines: Vec<Line<'static>> = Vec::new();
+
+        // Title
+        lines.push(Line::from(vec![
+            Span::from("Token Usage").cyan().bold(),
+        ]));
+
+        lines.push(Line::from(""));
+
+        // Input tokens
+        let input_str = Self::format_tokens(self.report.token_usage.input_tokens);
+        lines.push(Line::from(vec![
+            Span::from("input:     ").dim(),
+            Span::from(input_str),
+        ]));
+
+        // Cached input tokens (if any)
+        if self.report.token_usage.cached_input_tokens > 0 {
+            let cached_str = Self::format_tokens(self.report.token_usage.cached_input_tokens);
+            lines.push(Line::from(vec![
+                Span::from("  cached:  ").dim(),
+                Span::from(cached_str),
+            ]));
+        }
+
+        // Output tokens
+        let output_str = Self::format_tokens(self.report.token_usage.output_tokens);
+        lines.push(Line::from(vec![
+            Span::from("output:    ").dim(),
+            Span::from(output_str),
+        ]));
+
+        // Reasoning tokens (if any)
+        if self.report.token_usage.reasoning_output_tokens > 0 {
+            let reasoning_str = Self::format_tokens(self.report.token_usage.reasoning_output_tokens);
+            lines.push(Line::from(vec![
+                Span::from("  reasoning: ").dim(),
+                Span::from(reasoning_str),
+            ]));
+        }
+
+        // Total tokens
+        let total_str = Self::format_tokens(self.report.token_usage.total_tokens);
+        lines.push(Line::from(vec![
+            Span::from("total:     ").dim(),
+            Span::from(total_str).bold(),
+        ]));
+
+        // Context window usage (if available)
+        if let Some(context_window) = self.report.model_context_window {
+            let usage_pct = (self.report.token_usage.total_tokens as f64 / context_window as f64) * 100.0;
+            lines.push(Line::from(vec![
+                Span::from("context:   ").dim(),
+                Span::from(format!("{:.1}%", usage_pct)),
+                Span::from(format!(" of {}", Self::format_tokens(context_window))).dim(),
             ]));
         }
 
