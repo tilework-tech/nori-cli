@@ -104,3 +104,39 @@ async fn test_parse_missing_session_id() {
     let result = parse_gemini_session(temp_file.path()).await;
     assert!(matches!(result, Err(ParseError::MissingSessionId)));
 }
+
+#[tokio::test]
+async fn test_parse_gemini_malformed_json() {
+    let path = Path::new("./tests/fixtures/malformed.json");
+    let result = parse_gemini_session(path).await;
+    assert!(matches!(result, Err(ParseError::JsonError(_))));
+}
+
+#[tokio::test]
+async fn test_parse_nonexistent_file() {
+    let path = Path::new("/nonexistent/path/file.jsonl");
+    let result = parse_codex_session(path).await;
+    assert!(matches!(result, Err(ParseError::IoError(_))));
+}
+
+#[tokio::test]
+async fn test_parse_codex_no_token_data() {
+    let path = Path::new("./tests/fixtures/codex-no-tokens.jsonl");
+    let result = parse_codex_session(path).await;
+    assert!(matches!(result, Err(ParseError::EmptyFile)));
+}
+
+#[tokio::test]
+async fn test_parse_codex_all_malformed_lines() {
+    let path = Path::new("./tests/fixtures/all-malformed.jsonl");
+    let result = parse_codex_session(path).await;
+    assert!(matches!(result, Err(ParseError::EmptyFile)));
+}
+
+#[tokio::test]
+async fn test_parse_claude_all_malformed_lines() {
+    let path = Path::new("./tests/fixtures/all-malformed.jsonl");
+    let result = parse_claude_session(path).await;
+    // Should return EmptyFile when no valid lines found
+    assert!(matches!(result, Err(ParseError::EmptyFile)));
+}
