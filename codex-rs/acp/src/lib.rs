@@ -10,6 +10,7 @@ pub mod backend;
 pub mod config;
 pub mod connection;
 pub mod registry;
+pub mod session_discovery;
 pub mod session_parser;
 pub mod tracing_setup;
 pub mod translator;
@@ -45,6 +46,12 @@ pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
+
+// Session discovery exports
+pub use session_discovery::DiscoveryError;
+pub use session_discovery::cwd_to_claude_project_path;
+pub use session_discovery::discover_transcript_path;
+pub use session_discovery::discover_transcript_path_with_home;
 
 // Re-export commonly used types from agent-client-protocol
 pub use agent_client_protocol::Agent;
