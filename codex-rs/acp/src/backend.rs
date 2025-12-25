@@ -34,6 +34,7 @@ use crate::connection::AcpConnection;
 use crate::connection::AcpModelState;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
+use crate::registry::AgentKind;
 use crate::registry::get_agent_config;
 use crate::translator;
 use crate::translator::is_patch_operation;
@@ -63,6 +64,7 @@ pub struct AcpBackendConfig {
 pub struct AcpBackend {
     connection: Arc<AcpConnection>,
     session_id: acp::SessionId,
+    agent_kind: AgentKind,
     event_tx: mpsc::Sender<Event>,
     #[allow(dead_code)]
     cwd: PathBuf,
@@ -109,6 +111,7 @@ impl AcpBackend {
         let backend = Self {
             connection,
             session_id,
+            agent_kind: agent_config.agent,
             event_tx: event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
@@ -402,6 +405,11 @@ impl AcpBackend {
     /// Get the current session ID.
     pub fn session_id(&self) -> &acp::SessionId {
         &self.session_id
+    }
+
+    /// Get the agent kind (Claude, Codex, or Gemini).
+    pub fn agent_kind(&self) -> AgentKind {
+        self.agent_kind
     }
 
     /// Get a reference to the underlying ACP connection.
