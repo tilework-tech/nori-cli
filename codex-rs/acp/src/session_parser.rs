@@ -300,3 +300,45 @@ pub async fn parse_claude_session(path: &std::path::Path) -> Result<TokenUsageRe
         model_context_window: None, // Claude format doesn't include this
     })
 }
+
+/// Parse a session transcript file based on the specified agent format.
+///
+/// This is a convenience wrapper that dispatches to the appropriate format-specific
+/// parser based on the `format` parameter.
+///
+/// # Arguments
+///
+/// * `format` - The agent type that created the session transcript
+/// * `path` - Path to the session transcript file
+///
+/// # Returns
+///
+/// Returns a [`TokenUsageReport`] containing aggregated token usage and metadata,
+/// or a [`ParseError`] if the file cannot be read or parsed.
+///
+/// # Examples
+///
+/// ```no_run
+/// use codex_acp::session_parser::{parse_session_transcript, AgentKind};
+/// use std::path::Path;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let report = parse_session_transcript(
+///     AgentKind::Claude,
+///     Path::new("~/.claude/projects/my-project/session-123.jsonl")
+/// ).await?;
+///
+/// println!("Total tokens: {}", report.token_usage.total_tokens);
+/// # Ok(())
+/// # }
+/// ```
+pub async fn parse_session_transcript(
+    format: AgentKind,
+    path: &std::path::Path,
+) -> Result<TokenUsageReport, ParseError> {
+    match format {
+        AgentKind::Claude => parse_claude_session(path).await,
+        AgentKind::Codex => parse_codex_session(path).await,
+        AgentKind::Gemini => parse_gemini_session(path).await,
+    }
+}
