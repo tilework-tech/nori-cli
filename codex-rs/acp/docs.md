@@ -360,7 +360,12 @@ The `session_parser` module provides parsers to extract token usage and metadata
 Key types:
 - `TokenUsageReport`: Unified report wrapping `TokenUsage` (from codex-protocol) with agent type, session ID, and transcript path
 - `AgentKind`: Enum identifying the agent (Claude, Codex, Gemini)
-- `ParseError`: Error cases (EmptyFile, MissingSessionId, TokenOverflow, IoError, JsonError)
+- `ParseError`: Error variants with semantic distinctions:
+  - `IoError`: File cannot be read (e.g., missing file, permission denied). Automatically converted via `#[from]` attribute.
+  - `JsonError`: Root-level JSON parse failure (entire file is malformed). Automatically converted via `#[from]` attribute.
+  - `EmptyFile`: Either file is empty, OR all JSONL lines failed to parse, OR valid structure exists but no token data found
+  - `MissingSessionId`: Valid JSON structure but session ID field not present
+  - `TokenOverflow`: Arithmetic overflow during token aggregation
 
 Parser functions:
 - `parse_codex_session()`: Parses Codex JSONL with cumulative `token_count` events. Session ID derived from filename since not embedded in content. Extracts `model_context_window` when available.
@@ -368,12 +373,44 @@ Parser functions:
 - `parse_claude_session()`: Parses Claude JSONL with per-message usage objects (nested in `.message.usage`). Maps `cache_read_input_tokens` to `cached_input_tokens`. No separate reasoning tokens.
 
 Implementation details:
-- **Line-by-line JSONL parsing**: Resilient error handling logs warnings and continues on malformed lines
+- **Line-by-line JSONL parsing**: Resilient error handling logs warnings and continues on malformed lines. Individual line parse failures do NOT cause the entire parse to fail.
+- **Valid line tracking**: Both `parse_codex_session()` and `parse_claude_session()` track `valid_lines` counter (incremented after successful JSON parse). If `valid_lines == 0` after processing all lines, returns `ParseError::EmptyFile` to distinguish "all lines malformed" from "missing token data".
+- **Error semantics**: The implementation distinguishes between three failure modes:
+  1. **Structural failure** (IoError, JsonError): File is inaccessible or fundamentally malformed
+  2. **All-malformed JSONL** (EmptyFile): Every line in JSONL failed to parse (valid_lines == 0)
+  3. **Missing data** (EmptyFile, MissingSessionId): Valid JSON but required fields absent
+- **Zero tokens vs. no token information**: Zero token count is semantically valid (e.g., session just started). The error case is when token information is completely inaccessible or missing from the transcript structure.
 - **Checked arithmetic**: Uses `.checked_add()` for token aggregation to prevent overflow
 - **Agent-specific token mapping**: Each parser maps agent-specific token fields to the unified `TokenUsage` struct
 - **Codex as external agent**: Treats Codex sessions as external data (like Gemini/Claude), not relying on internal Codex state
 
+Error handling pattern:
+```rust
+// In parse_codex_session and parse_claude_session:
+let mut valid_lines = 0;
+for line in text.lines() {
+    let v: serde_json::Value = match serde_json::from_str(line) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("failed to parse line: {e}");
+            continue; // Skip this line, continue processing
+        }
+    };
+    valid_lines += 1; // Only count successfully parsed lines
+    // ... process valid JSON ...
+}
+if valid_lines == 0 {
+    return Err(ParseError::EmptyFile); // All lines failed to parse
+}
+```
+
+This ensures:
+- **Lenient per-line**: One bad line in a JSONL file doesn't invalidate the entire session
+- **Strict overall**: If EVERY line is malformed, that's a fundamental problem that should error
+- **Semantic accuracy**: `EmptyFile` when all-malformed prevents misleading `MissingSessionId` errors
+
 Session discovery logic (finding files in ~/.codex, ~/.gemini, ~/.claude) is deferred for future TUI integration.
+
 
 **Approval Bridging:**
 
