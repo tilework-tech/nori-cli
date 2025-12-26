@@ -1,10 +1,10 @@
 //! Tests for session transcript discovery functionality.
 
+use codex_acp::DiscoveryError;
 use codex_acp::cwd_to_claude_project_path;
 use codex_acp::discover_transcript_path;
 use codex_acp::discover_transcript_path_with_home;
 use codex_acp::session_parser::AgentKind;
-use codex_acp::DiscoveryError;
 use std::path::Path;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -70,17 +70,13 @@ async fn create_gemini_session_structure(
 
     let transcript_filename = format!("session-2024-12-25T10-30-{session_id}.json");
     let transcript_path = chats_dir.join(&transcript_filename);
-    fs::write(
-        &transcript_path,
-        r#"{"sessionId": "test", "messages": []}"#,
-    )
-    .await
-    .expect("write transcript");
+    fs::write(&transcript_path, r#"{"sessionId": "test", "messages": []}"#)
+        .await
+        .expect("write transcript");
 
     transcript_path
 }
 
-// @current-session
 #[test]
 fn test_cwd_to_claude_project_path_converts_slashes_to_dashes() {
     let cwd = Path::new("/home/user/nori-cli");
@@ -93,7 +89,6 @@ fn test_cwd_to_claude_project_path_converts_slashes_to_dashes() {
     );
 }
 
-// @current-session
 #[test]
 fn test_cwd_to_claude_project_path_handles_root() {
     let cwd = Path::new("/");
@@ -103,7 +98,6 @@ fn test_cwd_to_claude_project_path_handles_root() {
     assert_eq!(project_path, "-", "root path should convert to single dash");
 }
 
-// @current-session
 #[test]
 fn test_cwd_to_claude_project_path_handles_nested_path() {
     let cwd = Path::new("/a/b/c/d/e");
@@ -115,7 +109,6 @@ fn test_cwd_to_claude_project_path_handles_nested_path() {
     );
 }
 
-// @current-session
 #[tokio::test]
 async fn test_claude_transcript_discovery_finds_existing_transcript() {
     let temp_dir = TempDir::new().expect("create temp dir");
@@ -149,7 +142,6 @@ async fn test_claude_transcript_discovery_finds_existing_transcript() {
     }
 }
 
-// @current-session
 #[tokio::test]
 async fn test_claude_transcript_discovery_returns_error_for_missing_transcript() {
     let temp_dir = TempDir::new().expect("create temp dir");
@@ -171,7 +163,6 @@ async fn test_claude_transcript_discovery_returns_error_for_missing_transcript()
     );
 }
 
-// @current-session
 #[tokio::test]
 async fn test_codex_transcript_discovery_finds_by_session_guid() {
     let temp_dir = TempDir::new().expect("create temp dir");
@@ -208,7 +199,6 @@ async fn test_codex_transcript_discovery_finds_by_session_guid() {
     }
 }
 
-// @current-session
 #[tokio::test]
 async fn test_codex_transcript_discovery_returns_error_for_missing_session() {
     let temp_dir = TempDir::new().expect("create temp dir");
@@ -229,7 +219,6 @@ async fn test_codex_transcript_discovery_returns_error_for_missing_session() {
     );
 }
 
-// @current-session
 #[tokio::test]
 async fn test_gemini_transcript_discovery_finds_by_session_id() {
     let temp_dir = TempDir::new().expect("create temp dir");
@@ -266,7 +255,6 @@ async fn test_gemini_transcript_discovery_finds_by_session_id() {
     }
 }
 
-// @current-session
 #[tokio::test]
 async fn test_gemini_transcript_discovery_returns_error_for_missing_session() {
     let temp_dir = TempDir::new().expect("create temp dir");
@@ -287,7 +275,6 @@ async fn test_gemini_transcript_discovery_returns_error_for_missing_session() {
     );
 }
 
-// @current-session
 #[tokio::test]
 async fn test_discover_transcript_path_uses_real_home() {
     // This test verifies the main function works (uses real home directory)

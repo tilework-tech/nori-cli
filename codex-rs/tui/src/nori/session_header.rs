@@ -308,9 +308,7 @@ impl HistoryCell for TokenUsageCell {
         let mut lines: Vec<Line<'static>> = Vec::new();
 
         // Title
-        lines.push(Line::from(vec![
-            Span::from("Token Usage").cyan().bold(),
-        ]));
+        lines.push(Line::from(vec![Span::from("Token Usage").cyan().bold()]));
 
         lines.push(Line::from(""));
 
@@ -339,7 +337,8 @@ impl HistoryCell for TokenUsageCell {
 
         // Reasoning tokens (if any)
         if self.report.token_usage.reasoning_output_tokens > 0 {
-            let reasoning_str = Self::format_tokens(self.report.token_usage.reasoning_output_tokens);
+            let reasoning_str =
+                Self::format_tokens(self.report.token_usage.reasoning_output_tokens);
             lines.push(Line::from(vec![
                 Span::from("  reasoning: ").dim(),
                 Span::from(reasoning_str),
@@ -355,10 +354,11 @@ impl HistoryCell for TokenUsageCell {
 
         // Context window usage (if available)
         if let Some(context_window) = self.report.model_context_window {
-            let usage_pct = (self.report.token_usage.total_tokens as f64 / context_window as f64) * 100.0;
+            let usage_pct =
+                (self.report.token_usage.total_tokens as f64 / context_window as f64) * 100.0;
             lines.push(Line::from(vec![
                 Span::from("context:   ").dim(),
-                Span::from(format!("{:.1}%", usage_pct)),
+                Span::from(format!("{usage_pct:.1}%")),
                 Span::from(format!(" of {}", Self::format_tokens(context_window))).dim(),
             ]));
         }

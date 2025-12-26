@@ -105,10 +105,13 @@ async fn discover_claude_transcript(
 ///
 /// Codex stores transcripts in `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-*-<SESSION_GUID>.jsonl`.
 /// We search recursively for a file ending with `-<session_id>.jsonl`.
-async fn discover_codex_transcript(session_id: &str, home: &Path) -> Result<PathBuf, DiscoveryError> {
+async fn discover_codex_transcript(
+    session_id: &str,
+    home: &Path,
+) -> Result<PathBuf, DiscoveryError> {
     let sessions_dir = home.join(".codex").join("sessions");
 
-    if !fs::metadata(&sessions_dir).await.is_ok() {
+    if fs::metadata(&sessions_dir).await.is_err() {
         return Err(DiscoveryError::TranscriptNotFound);
     }
 
@@ -121,10 +124,13 @@ async fn discover_codex_transcript(session_id: &str, home: &Path) -> Result<Path
 ///
 /// Gemini stores transcripts in `~/.gemini/tmp/<HASHED_PATH>/chats/session-*-<SESSIONID>.json`.
 /// We search recursively for a file ending with `-<session_id>.json`.
-async fn discover_gemini_transcript(session_id: &str, home: &Path) -> Result<PathBuf, DiscoveryError> {
+async fn discover_gemini_transcript(
+    session_id: &str,
+    home: &Path,
+) -> Result<PathBuf, DiscoveryError> {
     let tmp_dir = home.join(".gemini").join("tmp");
 
-    if !fs::metadata(&tmp_dir).await.is_ok() {
+    if fs::metadata(&tmp_dir).await.is_err() {
         return Err(DiscoveryError::TranscriptNotFound);
     }
 
@@ -145,14 +151,17 @@ async fn find_file_with_suffix(dir: &Path, suffix: &str) -> Result<PathBuf, Disc
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
+            let file_type = match entry.file_type().await {
+                Ok(ft) => ft,
+                Err(_) => continue,
+            };
 
-            if path.is_dir() {
+            if file_type.is_dir() {
                 stack.push(path);
-            } else if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                if filename.ends_with(suffix) {
+            } else if let Some(filename) = path.file_name().and_then(|s| s.to_str())
+                && filename.ends_with(suffix) {
                     return Ok(path);
                 }
-            }
         }
     }
 
