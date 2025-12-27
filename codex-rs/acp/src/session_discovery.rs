@@ -159,9 +159,10 @@ async fn find_file_with_suffix(dir: &Path, suffix: &str) -> Result<PathBuf, Disc
             if file_type.is_dir() {
                 stack.push(path);
             } else if let Some(filename) = path.file_name().and_then(|s| s.to_str())
-                && filename.ends_with(suffix) {
-                    return Ok(path);
-                }
+                && filename.ends_with(suffix)
+            {
+                return Ok(path);
+            }
         }
     }
 
