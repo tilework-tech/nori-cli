@@ -250,7 +250,7 @@ fn build_footer_line(props: &FooterProps) -> Line<'static> {
 
     // Add nori version if available: "Nori v19.1.1" (green)
     if let Some(version) = &props.nori_version {
-        spans.push(Span::from("Nori v").green());
+        spans.push(Span::from("Profiles v").green());
         spans.push(Span::from(version.clone()).green());
         spans.push(Span::from(" · ").dim());
     }

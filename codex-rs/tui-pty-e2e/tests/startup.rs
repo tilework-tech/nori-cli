@@ -165,7 +165,7 @@ fn test_startup_shows_nori_banner() {
     // The ASCII art banner uses special characters like |_| and \_ to spell NORI
     // so we check for the unique pattern from the first line of the banner
     assert!(
-        contents.contains("Nori v0"),
+        contents.contains("Nori CLI v0"),
         "Expected NORI header, but got: {}",
         contents
     );

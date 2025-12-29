@@ -4,7 +4,7 @@ assertion_line: 740
 expression: rendered
 ---
 ╭──────────────────────────────────────────╮
-│ Nori v0.1.0                              │
+│ Nori CLI v0.1.0                          │
 │                                          │
 │ directory: /home/user/project            │
 │ agent:     claude-sonnet                 │
