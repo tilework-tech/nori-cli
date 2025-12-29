@@ -169,6 +169,13 @@ pub async fn run_main(
         }
     }
 
+    // Track install/session in background (non-blocking, fire-and-forget)
+    // This updates ~/.nori/cli/.nori-install.json with launch metadata
+    #[cfg(feature = "nori-config")]
+    if let Ok(nori_home) = codex_acp::config::find_nori_home() {
+        codex_install_tracker::track_launch(&nori_home);
+    }
+
     // Note: Rolling file tracing is initialized in codex-cli main.rs before run_main() is called.
     // This ensures a single point of file-based tracing initialization.
 
