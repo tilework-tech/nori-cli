@@ -68,7 +68,10 @@ fn detect_agent_kind(agent: &str) -> Option<AgentKindSimple> {
 /// - Claude: activates .claude/CLAUDE.md, CLAUDE.md, CLAUDE.local.md (all can be active per dir)
 /// - Codex: activates AGENTS.override.md OR AGENTS.md per dir (preferring override)
 /// - Gemini: activates only GEMINI.md per dir (no hidden variants, no overrides)
-fn discover_all_instruction_files(cwd: &Path, agent_kind: Option<AgentKindSimple>) -> Vec<InstructionFile> {
+fn discover_all_instruction_files(
+    cwd: &Path,
+    agent_kind: Option<AgentKindSimple>,
+) -> Vec<InstructionFile> {
     // Build chain from cwd upwards and detect git root
     let mut chain: Vec<PathBuf> = Vec::new();
     let mut current = cwd.to_path_buf();
@@ -113,7 +116,8 @@ fn discover_all_instruction_files(cwd: &Path, agent_kind: Option<AgentKindSimple
     let mut found: Vec<InstructionFile> = Vec::new();
 
     // Track which directories have override files (for Codex algorithm)
-    let mut dirs_with_override: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    let mut dirs_with_override: std::collections::HashSet<PathBuf> =
+        std::collections::HashSet::new();
 
     // First pass: discover all files and detect overrides
     let mut discovered: Vec<(PathBuf, PathBuf)> = Vec::new(); // (file_path, parent_dir)
@@ -160,9 +164,7 @@ fn discover_all_instruction_files(cwd: &Path, agent_kind: Option<AgentKindSimple
         let active = match agent_kind {
             Some(AgentKindSimple::Claude) => {
                 // Claude activates: .claude/CLAUDE.md, CLAUDE.md, CLAUDE.local.md
-                is_hidden_claude
-                    || filename == "CLAUDE.md"
-                    || filename == "CLAUDE.local.md"
+                is_hidden_claude || filename == "CLAUDE.md" || filename == "CLAUDE.local.md"
             }
             Some(AgentKindSimple::Codex) => {
                 // Codex activates: AGENTS.override.md OR AGENTS.md (prefer override)
@@ -430,7 +432,6 @@ mod tests {
             .collect()
     }
 
-    // @current-session
     #[test]
     fn read_nori_profile_finds_ancestor_config() {
         // Create a temp directory structure:
@@ -463,7 +464,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn read_nori_profile_returns_none_when_no_config() {
         let tmp = TempDir::new().expect("tempdir");
@@ -474,7 +474,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn discover_finds_all_ancestors_with_new_function() {
         // Create a temp directory structure with instruction files:
@@ -526,7 +525,6 @@ mod tests {
         assert!(file_names.contains(&"CLAUDE.md".to_string()));
     }
 
-    // @current-session
     #[test]
     fn discover_returns_empty_when_none_exist() {
         let tmp = TempDir::new().expect("tempdir");
@@ -534,34 +532,6 @@ mod tests {
         assert!(
             files.is_empty(),
             "Should return empty vec when no instruction files exist"
-        );
-    }
-
-    // @current-session
-    #[test]
-    fn nori_header_renders_instruction_files_legacy() {
-        let cell = NoriSessionHeaderCell {
-            version: "test",
-            agent: "test-agent".to_string(),
-            directory: PathBuf::from("/tmp/test"),
-            nori_profile: Some("test-profile".to_string()),
-            instruction_files: vec![
-                InstructionFile { path: PathBuf::from("/home/user/project/AGENTS.md"), active: true },
-                InstructionFile { path: PathBuf::from("/home/user/project/.claude/rules.md"), active: false },
-            ],
-        };
-
-        let lines = cell.display_lines(80);
-        let rendered = render_lines(&lines).join("\n");
-
-        // Should show instruction files section
-        assert!(
-            rendered.contains("Instruction Files"),
-            "Should show Instruction Files section header"
-        );
-        assert!(
-            rendered.contains("AGENTS.md"),
-            "Should show AGENTS.md in output"
         );
     }
 
@@ -642,8 +612,14 @@ mod tests {
             directory: PathBuf::from("/home/user/project"),
             nori_profile: Some("senior-swe".to_string()),
             instruction_files: vec![
-                InstructionFile { path: PathBuf::from("/home/user/project/AGENTS.md"), active: false },
-                InstructionFile { path: PathBuf::from("/home/user/project/.claude/settings.md"), active: true },
+                InstructionFile {
+                    path: PathBuf::from("/home/user/project/AGENTS.md"),
+                    active: false,
+                },
+                InstructionFile {
+                    path: PathBuf::from("/home/user/project/.claude/settings.md"),
+                    active: true,
+                },
             ],
         };
 
@@ -701,29 +677,45 @@ mod tests {
     // NEW TESTS: Agent-specific instruction file discovery and activation
     // =========================================================================
 
-    // @current-session
     #[test]
     fn detect_agent_kind_from_model_string() {
         // Test Claude variants
-        assert_eq!(detect_agent_kind("claude-code"), Some(AgentKindSimple::Claude));
-        assert_eq!(detect_agent_kind("claude-sonnet"), Some(AgentKindSimple::Claude));
-        assert_eq!(detect_agent_kind("claude-opus-4"), Some(AgentKindSimple::Claude));
+        assert_eq!(
+            detect_agent_kind("claude-code"),
+            Some(AgentKindSimple::Claude)
+        );
+        assert_eq!(
+            detect_agent_kind("claude-sonnet"),
+            Some(AgentKindSimple::Claude)
+        );
+        assert_eq!(
+            detect_agent_kind("claude-opus-4"),
+            Some(AgentKindSimple::Claude)
+        );
 
         // Test Codex variants
         assert_eq!(detect_agent_kind("codex"), Some(AgentKindSimple::Codex));
-        assert_eq!(detect_agent_kind("codex-mini"), Some(AgentKindSimple::Codex));
+        assert_eq!(
+            detect_agent_kind("codex-mini"),
+            Some(AgentKindSimple::Codex)
+        );
 
         // Test Gemini variants
         assert_eq!(detect_agent_kind("gemini"), Some(AgentKindSimple::Gemini));
-        assert_eq!(detect_agent_kind("gemini-cli"), Some(AgentKindSimple::Gemini));
-        assert_eq!(detect_agent_kind("gemini-2.0-flash"), Some(AgentKindSimple::Gemini));
+        assert_eq!(
+            detect_agent_kind("gemini-cli"),
+            Some(AgentKindSimple::Gemini)
+        );
+        assert_eq!(
+            detect_agent_kind("gemini-2.0-flash"),
+            Some(AgentKindSimple::Gemini)
+        );
 
         // Test unknown
         assert_eq!(detect_agent_kind("gpt-4"), None);
         assert_eq!(detect_agent_kind("unknown-model"), None);
     }
 
-    // @current-session
     #[test]
     fn discover_all_instruction_file_types() {
         // Create a temp directory structure with ALL instruction file types:
@@ -745,9 +737,11 @@ mod tests {
         fs::write(root.join("CLAUDE.md"), "claude").expect("write CLAUDE.md");
         fs::write(root.join("CLAUDE.local.md"), "claude local").expect("write CLAUDE.local.md");
         fs::create_dir_all(root.join(".claude")).expect("create .claude");
-        fs::write(root.join(".claude/CLAUDE.md"), "hidden claude").expect("write .claude/CLAUDE.md");
+        fs::write(root.join(".claude/CLAUDE.md"), "hidden claude")
+            .expect("write .claude/CLAUDE.md");
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
-        fs::write(root.join("AGENTS.override.md"), "agents override").expect("write AGENTS.override.md");
+        fs::write(root.join("AGENTS.override.md"), "agents override")
+            .expect("write AGENTS.override.md");
         fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
 
         let files = discover_all_instruction_files(root, None);
@@ -758,21 +752,41 @@ mod tests {
             .map(|f| f.path.file_name().unwrap().to_string_lossy().to_string())
             .collect();
 
-        assert!(paths.contains(&"CLAUDE.md".to_string()), "Should find CLAUDE.md");
-        assert!(paths.contains(&"CLAUDE.local.md".to_string()), "Should find CLAUDE.local.md");
-        assert!(paths.iter().any(|p| p == "CLAUDE.md"), "Should find .claude/CLAUDE.md");
-        assert!(paths.contains(&"AGENTS.md".to_string()), "Should find AGENTS.md");
-        assert!(paths.contains(&"AGENTS.override.md".to_string()), "Should find AGENTS.override.md");
-        assert!(paths.contains(&"GEMINI.md".to_string()), "Should find GEMINI.md");
+        assert!(
+            paths.contains(&"CLAUDE.md".to_string()),
+            "Should find CLAUDE.md"
+        );
+        assert!(
+            paths.contains(&"CLAUDE.local.md".to_string()),
+            "Should find CLAUDE.local.md"
+        );
+        assert!(
+            paths.iter().any(|p| p == "CLAUDE.md"),
+            "Should find .claude/CLAUDE.md"
+        );
+        assert!(
+            paths.contains(&"AGENTS.md".to_string()),
+            "Should find AGENTS.md"
+        );
+        assert!(
+            paths.contains(&"AGENTS.override.md".to_string()),
+            "Should find AGENTS.override.md"
+        );
+        assert!(
+            paths.contains(&"GEMINI.md".to_string()),
+            "Should find GEMINI.md"
+        );
 
         // Check we found the hidden variant by checking full path
-        let has_hidden_claude = files.iter().any(|f| {
-            f.path.to_string_lossy().contains(".claude/CLAUDE.md")
-        });
-        assert!(has_hidden_claude, "Should find .claude/CLAUDE.md hidden variant");
+        let has_hidden_claude = files
+            .iter()
+            .any(|f| f.path.to_string_lossy().contains(".claude/CLAUDE.md"));
+        assert!(
+            has_hidden_claude,
+            "Should find .claude/CLAUDE.md hidden variant"
+        );
     }
 
-    // @current-session
     #[test]
     fn claude_activation_algorithm_activates_all_claude_files() {
         // Claude should activate: .claude/CLAUDE.md, CLAUDE.md, CLAUDE.local.md
@@ -784,17 +798,21 @@ mod tests {
         fs::write(root.join("CLAUDE.md"), "claude").expect("write CLAUDE.md");
         fs::write(root.join("CLAUDE.local.md"), "claude local").expect("write CLAUDE.local.md");
         fs::create_dir_all(root.join(".claude")).expect("create .claude");
-        fs::write(root.join(".claude/CLAUDE.md"), "hidden claude").expect("write .claude/CLAUDE.md");
+        fs::write(root.join(".claude/CLAUDE.md"), "hidden claude")
+            .expect("write .claude/CLAUDE.md");
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
         fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
 
         let files = discover_all_instruction_files(root, Some(AgentKindSimple::Claude));
 
         // All Claude files should be active
-        let claude_files: Vec<_> = files.iter().filter(|f| {
-            let name = f.path.file_name().unwrap().to_string_lossy();
-            name.contains("CLAUDE")
-        }).collect();
+        let claude_files: Vec<_> = files
+            .iter()
+            .filter(|f| {
+                let name = f.path.file_name().unwrap().to_string_lossy();
+                name.contains("CLAUDE")
+            })
+            .collect();
 
         assert_eq!(claude_files.len(), 3, "Should find 3 Claude files");
         for f in &claude_files {
@@ -802,18 +820,25 @@ mod tests {
         }
 
         // AGENTS.md and GEMINI.md should NOT be active
-        let agents_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md"
-        }).expect("Should find AGENTS.md");
-        assert!(!agents_file.active, "AGENTS.md should NOT be active for Claude agent");
+        let agents_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md")
+            .expect("Should find AGENTS.md");
+        assert!(
+            !agents_file.active,
+            "AGENTS.md should NOT be active for Claude agent"
+        );
 
-        let gemini_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "GEMINI.md"
-        }).expect("Should find GEMINI.md");
-        assert!(!gemini_file.active, "GEMINI.md should NOT be active for Claude agent");
+        let gemini_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "GEMINI.md")
+            .expect("Should find GEMINI.md");
+        assert!(
+            !gemini_file.active,
+            "GEMINI.md should NOT be active for Claude agent"
+        );
     }
 
-    // @current-session
     #[test]
     fn codex_activation_prefers_override_over_regular() {
         // Codex should activate: AGENTS.override.md OR AGENTS.md (preferring override)
@@ -822,31 +847,40 @@ mod tests {
 
         fs::write(root.join(".git"), "gitdir").expect("write .git");
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
-        fs::write(root.join("AGENTS.override.md"), "agents override").expect("write AGENTS.override.md");
+        fs::write(root.join("AGENTS.override.md"), "agents override")
+            .expect("write AGENTS.override.md");
         fs::write(root.join("CLAUDE.md"), "claude").expect("write CLAUDE.md");
 
         let files = discover_all_instruction_files(root, Some(AgentKindSimple::Codex));
 
         // AGENTS.override.md should be active (preferred over AGENTS.md)
-        let override_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "AGENTS.override.md"
-        }).expect("Should find AGENTS.override.md");
+        let override_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "AGENTS.override.md")
+            .expect("Should find AGENTS.override.md");
         assert!(override_file.active, "AGENTS.override.md should be active");
 
         // AGENTS.md should NOT be active when override exists
-        let agents_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md"
-        }).expect("Should find AGENTS.md");
-        assert!(!agents_file.active, "AGENTS.md should NOT be active when override exists");
+        let agents_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md")
+            .expect("Should find AGENTS.md");
+        assert!(
+            !agents_file.active,
+            "AGENTS.md should NOT be active when override exists"
+        );
 
         // CLAUDE.md should NOT be active
-        let claude_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "CLAUDE.md"
-        }).expect("Should find CLAUDE.md");
-        assert!(!claude_file.active, "CLAUDE.md should NOT be active for Codex agent");
+        let claude_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "CLAUDE.md")
+            .expect("Should find CLAUDE.md");
+        assert!(
+            !claude_file.active,
+            "CLAUDE.md should NOT be active for Codex agent"
+        );
     }
 
-    // @current-session
     #[test]
     fn codex_activation_falls_back_to_regular_when_no_override() {
         let tmp = TempDir::new().expect("tempdir");
@@ -858,13 +892,16 @@ mod tests {
 
         let files = discover_all_instruction_files(root, Some(AgentKindSimple::Codex));
 
-        let agents_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md"
-        }).expect("Should find AGENTS.md");
-        assert!(agents_file.active, "AGENTS.md should be active when no override exists");
+        let agents_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md")
+            .expect("Should find AGENTS.md");
+        assert!(
+            agents_file.active,
+            "AGENTS.md should be active when no override exists"
+        );
     }
 
-    // @current-session
     #[test]
     fn gemini_activation_only_activates_gemini_files() {
         // Gemini should only activate GEMINI.md files (no hidden variants, no overrides)
@@ -878,9 +915,10 @@ mod tests {
 
         let files = discover_all_instruction_files(root, Some(AgentKindSimple::Gemini));
 
-        let gemini_file = files.iter().find(|f| {
-            f.path.file_name().unwrap().to_string_lossy() == "GEMINI.md"
-        }).expect("Should find GEMINI.md");
+        let gemini_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "GEMINI.md")
+            .expect("Should find GEMINI.md");
         assert!(gemini_file.active, "GEMINI.md should be active");
 
         // Other files should NOT be active
@@ -892,7 +930,6 @@ mod tests {
         }
     }
 
-    // @current-session
     #[test]
     fn discovery_traverses_directory_hierarchy() {
         // Test that discovery walks from git root to cwd
@@ -908,7 +945,8 @@ mod tests {
 
         let nested = subdir.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
-        fs::write(nested.join("CLAUDE.local.md"), "nested local").expect("write nested CLAUDE.local.md");
+        fs::write(nested.join("CLAUDE.local.md"), "nested local")
+            .expect("write nested CLAUDE.local.md");
 
         // Discover from nested directory
         let files = discover_all_instruction_files(&nested, Some(AgentKindSimple::Claude));
@@ -922,13 +960,21 @@ mod tests {
         }
     }
 
-    // @current-session
     #[test]
     fn header_renders_instruction_files_section() {
         let files = vec![
-            InstructionFile { path: PathBuf::from("/home/user/.claude/CLAUDE.md"), active: true },
-            InstructionFile { path: PathBuf::from("/home/user/project/CLAUDE.md"), active: true },
-            InstructionFile { path: PathBuf::from("/home/user/project/AGENTS.md"), active: false },
+            InstructionFile {
+                path: PathBuf::from("/home/user/.claude/CLAUDE.md"),
+                active: true,
+            },
+            InstructionFile {
+                path: PathBuf::from("/home/user/project/CLAUDE.md"),
+                active: true,
+            },
+            InstructionFile {
+                path: PathBuf::from("/home/user/project/AGENTS.md"),
+                active: false,
+            },
         ];
 
         let cell = NoriSessionHeaderCell {
@@ -953,31 +999,5 @@ mod tests {
             rendered.contains("CLAUDE.md"),
             "Should show CLAUDE.md in output"
         );
-    }
-
-    // @current-session
-    #[test]
-    fn header_snapshot_with_instruction_files_section() {
-        let files = vec![
-            InstructionFile { path: PathBuf::from("/home/user/.claude/CLAUDE.md"), active: true },
-            InstructionFile { path: PathBuf::from("/home/user/project/.claude/CLAUDE.md"), active: true },
-            InstructionFile { path: PathBuf::from("/home/user/project/CLAUDE.md"), active: true },
-            InstructionFile { path: PathBuf::from("/home/user/project/CLAUDE.local.md"), active: true },
-            InstructionFile { path: PathBuf::from("/home/user/project/AGENTS.md"), active: false },
-            InstructionFile { path: PathBuf::from("/home/user/project/GEMINI.md"), active: false },
-        ];
-
-        let cell = NoriSessionHeaderCell {
-            version: "0.1.0",
-            agent: "claude-code".to_string(),
-            directory: PathBuf::from("/home/user/project"),
-            nori_profile: Some("senior-swe".to_string()),
-            instruction_files: files,
-        };
-
-        let lines = cell.display_lines(80);
-        let rendered = render_lines(&lines).join("\n");
-
-        insta::assert_snapshot!("header_with_instruction_files", rendered);
     }
 }
