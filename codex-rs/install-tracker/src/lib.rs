@@ -25,6 +25,7 @@ mod state;
 pub use analytics::TrackEventRequest;
 pub use analytics::create_install_event;
 pub use analytics::create_session_event;
+pub use analytics::send_event;
 pub use analytics::InstallEventType;
 pub use detection::detect_install_source;
 pub use detection::generate_user_id;
@@ -61,7 +62,7 @@ pub enum LaunchEvent {
 /// 1. Read or create the install state file
 /// 2. Determine if this is a first install, upgrade, or normal session
 /// 3. Update the state file
-/// 4. (Future: send analytics events)
+/// 4. Send analytics events (release builds only)
 ///
 /// The function returns immediately and never blocks startup.
 /// All errors are silently logged at debug level.
@@ -123,6 +124,23 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
 
     // Write updated state
     write_install_state(nori_home, &new_state).await?;
+
+    // Send analytics event (no-op in debug builds)
+    let analytics_event = match &event {
+        LaunchEvent::FirstInstall => {
+            create_install_event(&new_state, InstallEventType::FirstInstall)
+        }
+        LaunchEvent::Upgrade { previous_version } => create_install_event(
+            &new_state,
+            InstallEventType::Upgrade {
+                previous_version: previous_version.clone(),
+            },
+        ),
+        LaunchEvent::Session { days_since_install } => {
+            create_session_event(&new_state, *days_since_install)
+        }
+    };
+    send_event(&analytics_event).await;
 
     debug!("Install tracking complete: {event:?}");
 

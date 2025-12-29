@@ -1,10 +1,14 @@
 //! Analytics event sending
 //!
 //! Provides fire-and-forget analytics event sending for install tracking.
+//!
+//! Analytics events are only sent in release builds to avoid noise from
+//! development and E2E testing.
 
 use crate::state::InstallSource;
 use crate::state::InstallState;
 use serde::Serialize;
+use tracing::debug;
 
 /// Event name for install/upgrade events
 pub const EVENT_PLUGIN_INSTALL_COMPLETED: &str = "plugin_install_completed";
@@ -30,12 +34,12 @@ pub struct TrackEventRequest {
 }
 
 /// Type of install event
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallEventType {
     /// First time installation
     FirstInstall,
     /// Version upgrade
-    Upgrade { previous_version: &'static str },
+    Upgrade { previous_version: String },
 }
 
 /// Create an install/upgrade event
@@ -43,9 +47,9 @@ pub fn create_install_event(
     state: &InstallState,
     event_type: InstallEventType,
 ) -> TrackEventRequest {
-    let (is_first_install, previous_version) = match event_type {
+    let (is_first_install, previous_version) = match &event_type {
         InstallEventType::FirstInstall => (true, None),
-        InstallEventType::Upgrade { previous_version } => (false, Some(previous_version)),
+        InstallEventType::Upgrade { previous_version } => (false, Some(previous_version.clone())),
     };
 
     let mut params = serde_json::json!({
@@ -56,7 +60,7 @@ pub fn create_install_event(
     });
 
     if let Some(prev) = previous_version {
-        params["previous_version"] = serde_json::Value::String(prev.to_string());
+        params["previous_version"] = serde_json::Value::String(prev);
     }
 
     TrackEventRequest {
@@ -90,6 +94,62 @@ fn install_source_to_string(source: InstallSource) -> &'static str {
         InstallSource::Bun => "bun",
         InstallSource::Unknown => "unknown",
     }
+}
+
+/// Send an analytics event to the backend (release builds only)
+///
+/// This function is a no-op in debug builds to avoid noise from
+/// development and E2E testing.
+///
+/// In release builds, it sends the event via HTTP POST to the analytics
+/// endpoint. Failures are silently ignored (fire-and-forget).
+#[cfg(not(debug_assertions))]
+pub async fn send_event(event: &TrackEventRequest) {
+    /// Default analytics endpoint URL
+    const DEFAULT_ANALYTICS_URL: &str = "https://demo.tilework.tech/api/analytics/track";
+
+    /// Environment variable to override the analytics URL
+    const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
+
+    let url =
+        std::env::var(ANALYTICS_URL_ENV).unwrap_or_else(|_| DEFAULT_ANALYTICS_URL.to_string());
+    debug!("Sending analytics event to {}: {:?}", url, event.event_name);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build();
+
+    let client = match client {
+        Ok(c) => c,
+        Err(e) => {
+            debug!("Failed to create HTTP client for analytics: {e}");
+            return;
+        }
+    };
+
+    match client.post(&url).json(event).send().await {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                debug!("Analytics event sent successfully: {}", event.event_name);
+            } else {
+                debug!("Analytics request failed with status {status}");
+            }
+        }
+        Err(e) => {
+            debug!("Failed to send analytics event: {e}");
+        }
+    }
+}
+
+/// No-op analytics sending for debug builds
+#[cfg(debug_assertions)]
+pub async fn send_event(event: &TrackEventRequest) {
+    debug!(
+        "Analytics event skipped (debug build): {}",
+        event.event_name
+    );
+    let _ = event; // Suppress unused warning
 }
 
 #[cfg(test)]
@@ -134,7 +194,7 @@ mod tests {
         let event = create_install_event(
             &state,
             InstallEventType::Upgrade {
-                previous_version: "1.0.0",
+                previous_version: "1.0.0".to_string(),
             },
         );
 

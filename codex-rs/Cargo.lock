@@ -1414,6 +1414,7 @@ dependencies = [
  "codex-acp",
  "hex",
  "libc",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
