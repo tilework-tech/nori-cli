@@ -1,5 +1,5 @@
 [package]
-name = "codex-install-tracker"
+name = "nori-installed"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ publish = false
 
 [lib]
 doctest = false
-name = "codex_install_tracker"
+name = "nori_installed"
 path = "src/lib.rs"
 
 [lints]

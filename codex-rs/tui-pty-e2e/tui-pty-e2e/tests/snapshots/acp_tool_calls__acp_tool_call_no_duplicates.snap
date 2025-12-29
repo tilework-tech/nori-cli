@@ -1,0 +1,22 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› Test interleaved
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Test message 1Test message 2
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Processing command...Interleaved test done.
+
+• Ran 'Executing interleaved command(test)'
+  └ Command completed
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · ? for shortcuts

@@ -11,7 +11,7 @@
 //! Call `track_launch()` early in the CLI startup:
 //!
 //! ```ignore
-//! use codex_install_tracker::track_launch;
+//! use nori_installed::track_launch;
 //! use std::path::Path;
 //!
 //! // Non-blocking, fire-and-forget

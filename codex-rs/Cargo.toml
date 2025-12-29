@@ -44,7 +44,7 @@ members = [
     "codex-client",
     "codex-api",
     "acp",
-    "install-tracker",
+    "installed",
     "mock-acp-agent",
     "tui-pty-e2e",
 ]
@@ -103,7 +103,7 @@ core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
 mcp_test_support = { path = "mcp-server/tests/common" }
 codex-acp = { path = "acp" }
-codex-install-tracker = { path = "install-tracker" }
+nori-installed = { path = "installed" }
 
 # External
 allocative = "0.3.3"

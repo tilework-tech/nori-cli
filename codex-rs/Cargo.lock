@@ -1406,25 +1406,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codex-install-tracker"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "chrono",
- "codex-acp",
- "hex",
- "libc",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tracing",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "codex-keyring-store"
 version = "0.0.0"
 dependencies = [
@@ -1658,7 +1639,6 @@ dependencies = [
  "codex-core",
  "codex-feedback",
  "codex-file-search",
- "codex-install-tracker",
  "codex-login",
  "codex-protocol",
  "codex-windows-sandbox",
@@ -1674,6 +1654,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "mcp-types",
+ "nori-installed",
  "opentelemetry-appender-tracing",
  "pathdiff",
  "pretty_assertions",
@@ -4088,6 +4069,25 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "nori-installed"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-acp",
+ "hex",
+ "libc",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
