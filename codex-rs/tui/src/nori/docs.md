@@ -67,9 +67,9 @@ Compiled only when `feedback` feature is disabled (`#[cfg(not(feature = "feedbac
 Compiled only when `upstream-updates` feature is disabled. Provides Nori-specific update checking:
 
 `update_action.rs`:
-- `UpdateAction` enum with `NpmGlobalLatest` and `Manual` variants
+- `UpdateAction` enum with `NpmGlobalLatest`, `BunGlobalLatest`, and `Manual` variants
 - `command_args()` returns the shell command to execute the update
-- `get_update_action()` (release builds only) checks `NORI_MANAGED_BY_NPM` env var to determine update method
+- `get_update_action()` (release builds only) checks `NORI_MANAGED_BY_BUN` then `NORI_MANAGED_BY_NPM` env vars to determine update method
 
 `updates.rs` (release builds only):
 - Queries `https://api.github.com/repos/tilework-tech/nori-cli/releases/latest` for version info
