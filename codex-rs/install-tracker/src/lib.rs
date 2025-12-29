@@ -22,11 +22,11 @@ mod analytics;
 mod detection;
 mod state;
 
+pub use analytics::InstallEventType;
 pub use analytics::TrackEventRequest;
 pub use analytics::create_install_event;
 pub use analytics::create_session_event;
 pub use analytics::send_event;
-pub use analytics::InstallEventType;
 pub use detection::detect_install_source;
 pub use detection::generate_user_id;
 pub use state::InstallSource;
@@ -47,13 +47,9 @@ pub enum LaunchEvent {
     /// First time installation
     FirstInstall,
     /// Version was upgraded
-    Upgrade {
-        previous_version: String,
-    },
+    Upgrade { previous_version: String },
     /// Normal session start
-    Session {
-        days_since_install: i64,
-    },
+    Session { days_since_install: i64 },
 }
 
 /// Track a CLI launch. Call this early in main().
@@ -117,7 +113,12 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
                 let days = state.days_since_install(now);
                 debug!("Normal session, days since install: {days}");
                 state.record_session(now);
-                (LaunchEvent::Session { days_since_install: days }, state)
+                (
+                    LaunchEvent::Session {
+                        days_since_install: days,
+                    },
+                    state,
+                )
             }
         }
     };

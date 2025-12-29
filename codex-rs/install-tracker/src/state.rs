@@ -82,7 +82,12 @@ impl InstallState {
     }
 
     /// Update state for a version upgrade
-    pub fn record_upgrade(&mut self, new_version: String, source: InstallSource, now: DateTime<Utc>) {
+    pub fn record_upgrade(
+        &mut self,
+        new_version: String,
+        source: InstallSource,
+        now: DateTime<Utc>,
+    ) {
         self.installed_version = new_version;
         self.install_source = source;
         self.last_updated_at = now;
@@ -259,7 +264,10 @@ mod tests {
     fn test_install_state_path() {
         let home = PathBuf::from("/home/user/.nori/cli");
         let path = install_state_path(&home);
-        assert_eq!(path, PathBuf::from("/home/user/.nori/cli/.nori-install.json"));
+        assert_eq!(
+            path,
+            PathBuf::from("/home/user/.nori/cli/.nori-install.json")
+        );
     }
 
     #[tokio::test]

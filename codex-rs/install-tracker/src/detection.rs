@@ -185,7 +185,10 @@ mod tests {
         let user_id = generate_user_id();
 
         // Should start with "sha256:"
-        assert!(user_id.starts_with("sha256:"), "user_id should start with 'sha256:'");
+        assert!(
+            user_id.starts_with("sha256:"),
+            "user_id should start with 'sha256:'"
+        );
 
         // Should have a 64-character hex hash after the prefix
         let hash_part = user_id.strip_prefix("sha256:").expect("prefix not found");
