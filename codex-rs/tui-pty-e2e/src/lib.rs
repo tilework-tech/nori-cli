@@ -966,7 +966,6 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
 mod tests {
     use super::*;
 
-    // @current-session
     #[test]
     fn test_normalize_worked_for_line() {
         // Test that "─ Worked for Xs ───..." lines are normalized to solid bars
@@ -1011,7 +1010,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn test_normalize_acp_error_messages() {
         // Test ACP error at start with empty line after

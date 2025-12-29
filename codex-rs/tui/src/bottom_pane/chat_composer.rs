@@ -1407,6 +1407,11 @@ impl ChatComposer {
             nori_version,
             git_lines_added,
             git_lines_removed,
+            is_worktree: self
+                .system_info
+                .as_ref()
+                .map(|s| s.is_worktree)
+                .unwrap_or(false),
         }
     }
 

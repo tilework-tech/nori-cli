@@ -58,6 +58,10 @@ pub(crate) enum AppEvent {
     /// Result of background system info collection for the footer.
     SystemInfoRefreshed(SystemInfo),
 
+    /// Request to refresh system info for a specific directory.
+    /// This is triggered when the effective CWD changes during agent operations.
+    RefreshSystemInfoForDirectory(PathBuf),
+
     /// Result of refreshing rate limits
     #[allow(dead_code)]
     RateLimitSnapshotFetched(RateLimitSnapshot),

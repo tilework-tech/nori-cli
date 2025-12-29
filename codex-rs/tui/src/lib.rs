@@ -51,6 +51,7 @@ mod clipboard_paste;
 mod color;
 pub mod custom_terminal;
 mod diff_render;
+mod effective_cwd_tracker;
 mod exec_cell;
 mod exec_command;
 // Feedback compatibility layer - provides stubs when feedback feature is disabled

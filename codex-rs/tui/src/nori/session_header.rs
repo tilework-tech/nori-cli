@@ -340,7 +340,6 @@ mod tests {
             .collect()
     }
 
-    // @current-session
     #[test]
     fn read_nori_profile_finds_ancestor_config() {
         // Create a temp directory structure:
@@ -373,7 +372,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn read_nori_profile_returns_none_when_no_config() {
         let tmp = TempDir::new().expect("tempdir");
@@ -384,7 +382,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn discover_instruction_files_finds_all_ancestors() {
         // Create a temp directory structure with instruction files:
@@ -437,7 +434,6 @@ mod tests {
         assert!(file_names.contains(&"settings.md".to_string()));
     }
 
-    // @current-session
     #[test]
     fn discover_instruction_files_returns_empty_when_none_exist() {
         let tmp = TempDir::new().expect("tempdir");
@@ -448,7 +444,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn nori_header_renders_instruction_files() {
         let cell = NoriSessionHeaderCell {

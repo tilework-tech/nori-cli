@@ -1,6 +1,7 @@
 use super::*;
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
+use crate::effective_cwd_tracker::EffectiveCwdTracker;
 use crate::test_backend::VT100Backend;
 use crate::tui::FrameRequester;
 use assert_matches::assert_matches;
@@ -381,6 +382,7 @@ fn make_chatwidget_manual() -> (
         feedback: crate::feedback_compat::CodexFeedback::new(),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
+        effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd.clone()),
         pending_agent: None,
         expected_model: None,
         session_configured_received: false,

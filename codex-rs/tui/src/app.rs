@@ -598,6 +598,15 @@ impl App {
             AppEvent::SystemInfoRefreshed(info) => {
                 self.chat_widget.apply_system_info_refresh(info);
             }
+            AppEvent::RefreshSystemInfoForDirectory(dir) => {
+                // Spawn a background thread to collect system info for the specified directory.
+                // This is triggered when the effective CWD changes during agent operations.
+                let tx = self.app_event_tx.clone();
+                thread::spawn(move || {
+                    let info = crate::system_info::SystemInfo::collect_for_directory(&dir);
+                    tx.send(AppEvent::SystemInfoRefreshed(info));
+                });
+            }
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
             }

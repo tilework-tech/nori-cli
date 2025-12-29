@@ -5,7 +5,6 @@ use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
-// @current-session
 #[test]
 #[cfg(target_os = "linux")]
 fn test_footer_displays_git_branch() {
@@ -38,31 +37,6 @@ fn test_footer_displays_git_branch() {
     );
 }
 
-// @current-session
-#[test]
-#[cfg(target_os = "linux")]
-fn test_footer_shows_initial_state() {
-    // This test just verifies the footer renders properly with git info
-    // Since we don't have easy access to modify files in E2E tests,
-    // we'll just check the initial state
-    let mut session =
-        TuiSession::spawn_with_config(24, 120, SessionConfig::new()).expect("Failed to spawn");
-
-    // Wait for the TUI to start
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    let contents = session.screen_contents();
-
-    // The footer should show the git branch and shortcuts
-    assert!(
-        contents.contains("? for shortcuts"),
-        "Footer should show shortcuts hint. Contents: {}",
-        contents
-    );
-}
-
-// @current-session
 #[test]
 #[cfg(target_os = "linux")]
 fn test_footer_without_git_repo() {
@@ -94,7 +68,6 @@ fn test_footer_without_git_repo() {
     );
 }
 
-// @current-session
 #[test]
 #[cfg(target_os = "linux")]
 fn test_footer_full_startup_with_all_info() {

@@ -23,6 +23,9 @@ pub(crate) struct FooterProps {
     pub(crate) nori_version: Option<String>,
     pub(crate) git_lines_added: Option<i32>,
     pub(crate) git_lines_removed: Option<i32>,
+    /// Whether the current directory is a git worktree (not the main repo).
+    /// When true, the git branch indicator is shown in orange instead of yellow.
+    pub(crate) is_worktree: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -232,12 +235,22 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
 fn build_footer_line(props: &FooterProps) -> Line<'static> {
     let mut spans = Vec::new();
 
-    // Add git branch if available: "⎇ branch-name" (yellow)
+    // Add git branch if available: "⎇ branch-name"
+    // Yellow for main repo, light red (orange-ish) for worktree
     if let Some(branch) = &props.git_branch {
-        #[allow(clippy::disallowed_methods)]
-        spans.push(Span::from("⎇ ").yellow());
-        #[allow(clippy::disallowed_methods)]
-        spans.push(Span::from(branch.clone()).yellow());
+        if props.is_worktree {
+            // Light red for worktree (distinguishable from yellow, works with ANSI)
+            #[allow(clippy::disallowed_methods)]
+            spans.push(Span::from("⎇ ").light_red());
+            #[allow(clippy::disallowed_methods)]
+            spans.push(Span::from(branch.clone()).light_red());
+        } else {
+            // Yellow for main repo
+            #[allow(clippy::disallowed_methods)]
+            spans.push(Span::from("⎇ ").yellow());
+            #[allow(clippy::disallowed_methods)]
+            spans.push(Span::from(branch.clone()).yellow());
+        }
         spans.push(Span::from(" · ").dim());
     }
 
@@ -450,6 +463,7 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
 
@@ -466,6 +480,7 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
 
@@ -482,6 +497,7 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
 
@@ -498,6 +514,7 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
 
@@ -514,6 +531,7 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
 
@@ -530,6 +548,7 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
 
@@ -546,29 +565,11 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
             },
         );
     }
 
-    // @current-session
-    #[test]
-    fn footer_props_can_be_constructed_with_nori_fields() {
-        let _props = FooterProps {
-            mode: FooterMode::ShortcutSummary,
-            esc_backtrack_hint: false,
-            use_shift_enter_hint: false,
-            is_task_running: false,
-            _context_window_percent: Some(100),
-            git_branch: Some("main".to_string()),
-            nori_profile: Some("clifford".to_string()),
-            nori_version: Some("19.1.1".to_string()),
-            git_lines_added: Some(10),
-            git_lines_removed: Some(3),
-        };
-        // Test passes if this compiles and constructs without error
-    }
-
-    // @current-session
     #[test]
     fn footer_with_nori_info() {
         snapshot_footer(
@@ -584,11 +585,11 @@ mod tests {
                 nori_version: Some("19.1.1".to_string()),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
+                is_worktree: false,
             },
         );
     }
 
-    // @current-session
     #[test]
     fn footer_with_only_git_info() {
         snapshot_footer(
@@ -604,11 +605,11 @@ mod tests {
                 nori_version: None,
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
+                is_worktree: false,
             },
         );
     }
 
-    // @current-session
     #[test]
     fn footer_with_no_nori_info() {
         snapshot_footer(
@@ -624,6 +625,28 @@ mod tests {
                 nori_version: None,
                 git_lines_added: None,
                 git_lines_removed: None,
+                is_worktree: false,
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_worktree_shows_orange_branch() {
+        // When is_worktree is true, the git branch should be displayed in orange
+        snapshot_footer(
+            "footer_with_worktree_orange",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                _context_window_percent: Some(72),
+                git_branch: Some("feature/worktree-branch".to_string()),
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                git_lines_added: Some(5),
+                git_lines_removed: Some(2),
+                is_worktree: true,
             },
         );
     }

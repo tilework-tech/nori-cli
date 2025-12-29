@@ -90,6 +90,7 @@ use crate::bottom_pane::custom_prompt_view::CustomPromptView;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::clipboard_paste::paste_image_to_temp_png;
 use crate::diff_render::display_path_for;
+use crate::effective_cwd_tracker::EffectiveCwdTracker;
 use crate::exec_cell::CommandOutput;
 use crate::exec_cell::ExecCell;
 use crate::exec_cell::new_active_exec_command;
@@ -334,6 +335,8 @@ pub(crate) struct ChatWidget {
     current_rollout_path: Option<PathBuf>,
     // Tracks incomplete ExecCells that were flushed before completion.
     pending_exec_cells: PendingExecCellTracker,
+    // Tracks the effective CWD based on tool call locations for footer updates.
+    effective_cwd_tracker: EffectiveCwdTracker,
     // Pending agent selection for next prompt submission
     pending_agent: Option<PendingAgentInfo>,
     // Expected model name for agent switch synchronization.
@@ -1183,6 +1186,13 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
+        // Observe the command's working directory to potentially update footer git info.
+        // If the effective CWD changes (after debounce), trigger a system info refresh.
+        if self.effective_cwd_tracker.observe_directory(ev.cwd.clone()) {
+            self.app_event_tx
+                .send(AppEvent::RefreshSystemInfoForDirectory(ev.cwd.clone()));
+        }
+
         // Ensure the status indicator is visible while the command runs.
         self.running_commands.insert(
             ev.call_id.clone(),
@@ -1360,6 +1370,7 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
+            effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
             expected_model,
             session_configured_received: false,
@@ -1446,6 +1457,7 @@ impl ChatWidget {
             feedback,
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
+            effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
             expected_model,
             // For existing conversations, we've already received SessionConfigured
