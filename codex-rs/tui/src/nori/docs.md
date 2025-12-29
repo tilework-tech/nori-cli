@@ -126,8 +126,19 @@ Provides integration between the Nori config system (from `@/codex-rs/acp/src/co
 - `get_nori_home()`: Returns the canonicalized Nori home path (`~/.nori/cli`). Canonicalization handles systems with symlinks (e.g., macOS `/var` -> `/private/var`) to ensure consistency between where config is saved and loaded.
 - `setup_nori_config_environment()`: Sets `CODEX_HOME` env var (canonicalized) to redirect codex-core's config loading to the Nori location
 - `load_nori_config()`: Loads `NoriConfig` directly from `~/.nori/cli/config.toml`
+- `get_persisted_agent_model()`: Returns the user's persisted agent preference from `NoriConfig`. Called by `@/codex-rs/tui/src/lib.rs` during startup to provide the default model when no `--model` CLI flag is provided. Returns `None` if config loading fails, allowing the caller to fall back to `DEFAULT_ACP_MODEL`.
 
 Path canonicalization is important because `find_codex_home()` returns a canonicalized path. If NORI_HOME is not canonicalized, trust settings saved under one path may not be found when config is loaded under the canonical path.
+
+**Model Resolution Priority:**
+
+When the TUI starts without a `--model` CLI argument, the model is resolved via `get_persisted_agent_model()` which delegates to `NoriConfig::load()`. The `NoriConfig.model` field resolution follows this priority:
+
+1. `model` field in config.toml (if explicitly set)
+2. `agent` field in config.toml (persisted user preference from `/agent` command)
+3. `DEFAULT_MODEL` constant ("claude-code")
+
+This enables users to set a default agent via `agent = "gemini"` in `~/.nori/cli/config.toml` and have it respected at startup.
 
 **Onboarding Module (`onboarding/`):**
 

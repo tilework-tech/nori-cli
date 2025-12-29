@@ -925,7 +925,7 @@ mod tests {
         for f in &files {
             let name = f.path.file_name().unwrap().to_string_lossy();
             if name != "GEMINI.md" {
-                assert!(!f.active, "{} should NOT be active for Gemini agent", name);
+                assert!(!f.active, "{name} should NOT be active for Gemini agent");
             }
         }
     }
