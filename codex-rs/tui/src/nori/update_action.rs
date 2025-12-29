@@ -5,6 +5,8 @@
 pub enum UpdateAction {
     /// Update via `npm install -g nori-ai-cli@latest`
     NpmGlobalLatest,
+    /// Update via `bun install -g nori-ai-cli@latest`
+    BunGlobalLatest,
     /// Manual update (show instructions)
     Manual,
 }
@@ -14,6 +16,7 @@ impl UpdateAction {
     pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
         match self {
             UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "nori-ai-cli@latest"]),
+            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "nori-ai-cli@latest"]),
             UpdateAction::Manual => (
                 "echo",
                 &["Please visit https://github.com/tilework-tech/nori-cli/releases"],
@@ -36,9 +39,9 @@ impl UpdateAction {
 /// that directs users to GitHub releases.
 #[cfg(not(debug_assertions))]
 pub(crate) fn get_update_action() -> Option<UpdateAction> {
-    let managed_by_npm = std::env::var_os("NORI_MANAGED_BY_NPM").is_some();
-
-    if managed_by_npm {
+    if std::env::var_os("NORI_MANAGED_BY_BUN").is_some() {
+        Some(UpdateAction::BunGlobalLatest)
+    } else if std::env::var_os("NORI_MANAGED_BY_NPM").is_some() {
         Some(UpdateAction::NpmGlobalLatest)
     } else {
         // For other installations, show manual update option
@@ -64,5 +67,13 @@ mod tests {
         let (cmd, args) = action.command_args();
         assert_eq!(cmd, "echo");
         assert!(args[0].contains("tilework-tech/nori-cli"));
+    }
+
+    #[test]
+    fn bun_update_command_is_correct() {
+        let action = UpdateAction::BunGlobalLatest;
+        let (cmd, args) = action.command_args();
+        assert_eq!(cmd, "bun");
+        assert_eq!(args, &["install", "-g", "nori-ai-cli@latest"]);
     }
 }

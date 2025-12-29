@@ -70,13 +70,13 @@ You have access to the Nori skills system. Read the full instructions at: /home/
 
 ## Available Skills
 
-Found 23 skills:
+Found 17 skills:
 /home/clifford/Documents/source/nori/cli/.claude/skills/writing-plans/SKILL.md
   Name: Writing-Plans
   Description: Use when design is complete and you need detailed implementation tasks for engineers with zero codebase context - creates comprehensive implementation plans with exact file paths, complete code examples, and verification steps assuming engineer has minimal domain knowledge
 /home/clifford/Documents/source/nori/cli/.claude/skills/webapp-testing/SKILL.md
   Name: webapp-testing
-  Description: Use this skill to build features that requires modifying a webapp frontend.
+  Description: Use this skill to build features or debug anything that uses a webapp frontend.
 /home/clifford/Documents/source/nori/cli/.claude/skills/using-skills/SKILL.md
   Name: Getting Started with Abilities
   Description: Describes how to use abilities. Read before any conversation.
@@ -104,27 +104,6 @@ Found 23 skills:
 /home/clifford/Documents/source/nori/cli/.claude/skills/receiving-code-review/SKILL.md
   Name: Code-Review-Reception
   Description: Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation
-/home/clifford/Documents/source/nori/cli/.claude/skills/write-noridoc/SKILL.md
-  Name: Write Noridoc
-  Description: Write or update documentation in the server-side noridocs system.
-/home/clifford/Documents/source/nori/cli/.claude/skills/sync-noridocs/SKILL.md
-  Name: Sync Noridocs
-  Description: Sync all local docs.md files to server-side noridocs system.
-/home/clifford/Documents/source/nori/cli/.claude/skills/recall/SKILL.md
-  Name: Recall
-  Description: Search the Nori knowledge base for relevant context, solutions, and documentation.
-/home/clifford/Documents/source/nori/cli/.claude/skills/read-noridoc/SKILL.md
-  Name: Read Noridoc
-  Description: Read documentation from the server-side noridocs system by file path.
-/home/clifford/Documents/source/nori/cli/.claude/skills/prompt-analysis/SKILL.md
-  Name: Prompt Analysis
-  Description: Analyze prompts for quality and best practices before sending them to Claude.
-/home/clifford/Documents/source/nori/cli/.claude/skills/memorize/SKILL.md
-  Name: Memorize
-  Description: Use this to save important implementation decisions, patterns, or context to the Nori knowledge base for future sessions.
-/home/clifford/Documents/source/nori/cli/.claude/skills/list-noridocs/SKILL.md
-  Name: List Noridocs
-  Description: List all server-side noridocs, optionally filtered by repository and/or path prefix.
 /home/clifford/Documents/source/nori/cli/.claude/skills/handle-large-tasks/SKILL.md
   Name: Handle-Large-Tasks
   Description: Use this skill to split large plans into smaller chunks. This skill manages your context window for large tasks. Use it when a task will take a long time and cause context issues.
@@ -134,6 +113,9 @@ Found 23 skills:
 /home/clifford/Documents/source/nori/cli/.claude/skills/creating-skills/SKILL.md
   Name: Creating-Skills
   Description: Use when you need to create a new custom skill for a profile - guides through gathering requirements, creating directory structure, writing SKILL.md, and optionally adding bundled scripts
+/home/clifford/Documents/source/nori/cli/.claude/skills/creating-debug-tests-and-iterating/SKILL.md
+  Name: creating-debug-tests-and-iterating
+  Description: Use this skill when faced with a difficult debugging task where you need to replicate some bug or behavior in order to see what is going wrong.
 /home/clifford/Documents/source/nori/cli/.claude/skills/building-ui-ux/SKILL.md
   Name: Building UI/UX
   Description: Use when implementing user interfaces or user experiences - guides through exploration of design variations, frontend setup, iteration, and proper integration

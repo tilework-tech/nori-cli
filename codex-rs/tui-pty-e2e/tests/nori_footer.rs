@@ -145,7 +145,7 @@ fn test_footer_full_startup_with_all_info() {
 
     // Verify nori version is displayed (from our mock nori-ai)
     assert!(
-        contents.contains("Nori v19.1.1") || contents.contains("Nori v0"), // v0 if mock didn't work
+        contents.contains("Profiles v19.1.1") || contents.contains("Profiles v0"), // v0 if mock didn't work
         "Footer should contain Nori version. Contents: {}",
         contents
     );
@@ -169,7 +169,7 @@ fn test_footer_full_startup_with_all_info() {
         contents
     );
     assert!(
-        contents.contains("Nori v"),
+        contents.contains("Nori CLI v"),
         "Footer should contain Nori version. Contents: {}",
         contents
     );

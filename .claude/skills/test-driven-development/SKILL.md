@@ -18,6 +18,7 @@ Place marker on the line immediately before the test function/block definition.<
 <system-reminder>If you have more than one test that you need to write, you should write all of them before moving to the GREEN phase.</system-reminder>
 3. Write the minimal amount of code necessary to make the test pass (GREEN phase)
 4. Verify the test now passes due to the behavior of the application.
+    - If you go through three loops without making progress, switch to running `/home/clifford/Documents/source/nori/cli/skills/creating-debug-tests-and-iterating`
 5. Refactor the code to clean it up.
 6. Verify tests still pass.
 </required>

@@ -1,6 +1,6 @@
 ---
 name: webapp-testing
-description: Use this skill to build features that requires modifying a webapp frontend.
+description: Use this skill to build features or debug anything that uses a webapp frontend.
 ---
 
 <required>

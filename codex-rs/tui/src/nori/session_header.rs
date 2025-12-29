@@ -217,7 +217,7 @@ impl HistoryCell for NoriSessionHeaderCell {
 
         // Simple "Nori" title (ASCII art is reserved for the first-launch welcome screen)
         lines.push(Line::from(vec![
-            Span::from("Nori").green().bold(),
+            Span::from("Nori CLI").green().bold(),
             Span::from(format!(" v{}", self.version)).dim(),
         ]));
 
