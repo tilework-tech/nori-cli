@@ -1,9 +1,10 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
-expression: "normalize_for_snapshot(lines.collect::<Vec<&str>>()[1..8].join(\"\\n\"))"
+expression: "normalize_for_snapshot(header_lines.join(\"\\n\"))"
 ---
-│ Nori CLI v0.0.0            │
-│                            │
+│ Nori CLI v0.0.0                   │
+│                                   │
 │ directory: [TMP_DIR] │
-│ agent:     mock-model      │
-│ profile:   [PROF]          │
+│ agent:     mock-model             │
+│ profile:   [PROF]                 │
+╰───────────────────────────────────╯

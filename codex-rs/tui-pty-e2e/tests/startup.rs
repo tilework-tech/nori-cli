@@ -175,10 +175,17 @@ fn test_startup_shows_nori_banner() {
         contents
     );
 
-    let lines = contents.lines();
+    // Extract the entire boxed header (from line after top border through bottom border)
+    let lines: Vec<&str> = contents.lines().collect();
+    let bottom_border_idx = lines
+        .iter()
+        .position(|l| l.contains("╰──"))
+        .expect("Should find bottom border");
+    // Slice from line 1 (after top border) through bottom border (inclusive)
+    let header_lines = &lines[1..=bottom_border_idx];
     assert_snapshot!(
         "startup_shows_nori_banner",
-        normalize_for_snapshot(lines.collect::<Vec<&str>>()[1..8].join("\n"))
+        normalize_for_snapshot(header_lines.join("\n"))
     );
 }
 
