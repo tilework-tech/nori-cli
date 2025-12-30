@@ -870,10 +870,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
             // Also skip the blank line that precedes instruction files (already added)
             // Remove the last line if it's a blank box line
             if let Some(last) = filtered_lines.last()
-                && last.contains('│') && last.trim_matches(|c| c == '│' || c == ' ').is_empty()
-                {
-                    filtered_lines.pop();
-                }
+                && last.contains('│')
+                && last.trim_matches(|c| c == '│' || c == ' ').is_empty()
+            {
+                filtered_lines.pop();
+            }
             continue;
         }
 
