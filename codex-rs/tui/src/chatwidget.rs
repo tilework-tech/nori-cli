@@ -828,6 +828,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_begin(&mut self, event: PatchApplyBeginEvent) {
+        // Observe directories from file paths to potentially update footer git info.
+        self.observe_directories_from_changes(&event.changes);
+
         self.add_to_history(history_cell::new_patch_event(
             event.changes,
             &self.config.cwd,
@@ -1125,10 +1128,38 @@ impl ChatWidget {
         &mut self,
         event: codex_core::protocol::PatchApplyEndEvent,
     ) {
+        // Observe directories from file paths to potentially update footer git info.
+        self.observe_directories_from_changes(&event.changes);
+
         // If the patch was successful, just let the "Edited" block stand.
         // Otherwise, add a failure block.
         if !event.success {
             self.add_to_history(history_cell::new_patch_apply_failure(event.stderr));
+        }
+    }
+
+    /// Observes the parent directories of changed files to update the effective CWD tracker.
+    /// If the effective CWD changes (after debounce), triggers a system info refresh.
+    fn observe_directories_from_changes(
+        &mut self,
+        changes: &std::collections::HashMap<PathBuf, codex_core::protocol::FileChange>,
+    ) {
+        for file_path in changes.keys() {
+            // Resolve relative paths against config.cwd before extracting parent
+            let absolute_path = if file_path.is_absolute() {
+                file_path.clone()
+            } else {
+                self.config.cwd.join(file_path)
+            };
+
+            if self.effective_cwd_tracker.observe_file_path(&absolute_path)
+                && let Some(parent) = absolute_path.parent()
+            {
+                self.app_event_tx
+                    .send(AppEvent::RefreshSystemInfoForDirectory(
+                        parent.to_path_buf(),
+                    ));
+            }
         }
     }
 

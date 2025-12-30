@@ -286,19 +286,26 @@ The footer displays system information (git branch, Nori profile, Nori version, 
 The ACP protocol sets CWD at session creation and it is immutable. However, when the agent works in different directories (e.g., git worktrees created via `/skill using-git-worktrees`), the footer dynamically updates:
 
 1. `ChatWidget` maintains an `EffectiveCwdTracker` initialized with the session CWD
-2. When `handle_exec_begin_now()` processes an exec event, it calls `effective_cwd_tracker.observe_directory(ev.cwd)`
-3. The tracker uses 500ms debounce to avoid flickering during rapid command execution
-4. When effective CWD changes (debounce threshold met), ChatWidget sends `AppEvent::RefreshSystemInfoForDirectory(dir)`
-5. App spawns a background thread calling `SystemInfo::collect_for_directory(&dir)`
-6. The thread sends `AppEvent::SystemInfoRefreshed(info)` when complete
-7. Footer re-renders with the new directory's git branch and stats
+2. Directory changes are detected from two event sources:
+   - **Shell commands**: `handle_exec_begin_now()` calls `observe_directory(ev.cwd)`
+   - **File writes**: `on_patch_apply_begin()` and `handle_patch_apply_end_now()` call `observe_directories_from_changes()`, which extracts parent directories from file paths and calls `observe_file_path()` for each
+3. For file paths, relative paths are resolved against `config.cwd` before extracting the parent directory
+4. The tracker uses 500ms debounce to avoid flickering during rapid operations in different directories
+5. When effective CWD changes (debounce threshold met), ChatWidget sends `AppEvent::RefreshSystemInfoForDirectory(dir)`
+6. App spawns a background thread calling `SystemInfo::collect_for_directory(&dir)`
+7. The thread sends `AppEvent::SystemInfoRefreshed(info)` when complete
+8. Footer re-renders with the new directory's git branch and stats
 
 ```
-┌────────────────────┐  observe_directory()  ┌──────────────────────┐
-│ handle_exec_begin  │ ─────────────────────▶│ EffectiveCwdTracker  │
-└────────────────────┘                       └──────────┬───────────┘
-                                                        │ (if changed after 500ms)
-     ┌──────────────────────────────────────────────────┘
+┌────────────────────┐  observe_directory()       ┌──────────────────────┐
+│ handle_exec_begin  │ ──────────────────────────▶│                      │
+└────────────────────┘                            │                      │
+                                                  │ EffectiveCwdTracker  │
+┌────────────────────┐  observe_file_path()       │                      │
+│ on_patch_apply_*   │ ──────────────────────────▶│                      │
+└────────────────────┘                            └──────────┬───────────┘
+                                                             │ (if changed after 500ms)
+     ┌───────────────────────────────────────────────────────┘
      │  AppEvent::RefreshSystemInfoForDirectory
      ▼
 ┌─────────────┐     spawn thread     ┌─────────────────────────┐
@@ -312,7 +319,6 @@ The ACP protocol sets CWD at session creation and it is immutable. However, when
 │ ChatWidget        │ ─────────────────────────▶│ BottomPane │
 └───────────────────┘                          └────────────┘
 ```
-
 *Git Worktree Detection:*
 
 `SystemInfo` includes an `is_worktree: bool` field that indicates whether the current directory is a git worktree (not the main repository). Detection works by comparing `git rev-parse --git-common-dir` with `--git-dir` - in a worktree, these paths differ.

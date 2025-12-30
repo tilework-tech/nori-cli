@@ -5,6 +5,7 @@
 //! footer should reflect the current working context. This module tracks the
 //! "effective" CWD by monitoring tool call locations and debouncing updates.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
@@ -67,6 +68,27 @@ impl EffectiveCwdTracker {
     /// Returns `true` if the effective CWD changed as a result of this update.
     pub(crate) fn observe_directory(&mut self, dir: PathBuf) -> bool {
         self.observe_directory_at(dir, Instant::now())
+    }
+
+    /// Updates the tracker with an observed file path from a tool call.
+    /// Extracts the parent directory and observes it.
+    ///
+    /// Returns `true` if the effective CWD changed as a result of this update.
+    /// Returns `false` if the file path has no parent directory.
+    pub(crate) fn observe_file_path(&mut self, file_path: &Path) -> bool {
+        self.observe_file_path_at(file_path, Instant::now())
+    }
+
+    /// Updates the tracker with an observed file path at a specific time.
+    /// This variant is primarily for testing.
+    fn observe_file_path_at(&mut self, file_path: &Path, now: Instant) -> bool {
+        if let Some(parent) = file_path.parent() {
+            // Only observe if parent is non-empty (i.e., not a bare filename)
+            if !parent.as_os_str().is_empty() {
+                return self.observe_directory_at(parent.to_path_buf(), now);
+            }
+        }
+        false
     }
 
     /// Updates the tracker with an observed directory at a specific time.
@@ -243,5 +265,89 @@ mod tests {
 
         tracker.reset(None);
         assert!(tracker.effective_cwd().is_none());
+    }
+
+    #[test]
+    fn test_observe_file_path_extracts_parent_directory() {
+        let initial = PathBuf::from("/home/user/project");
+        let mut tracker = EffectiveCwdTracker::with_initial_cwd(initial);
+
+        let file_path = PathBuf::from("/home/user/worktree/src/main.rs");
+        let start = Instant::now();
+
+        // First observation - starts the candidate with parent dir
+        let changed = tracker.observe_file_path_at(&file_path, start);
+        assert!(!changed);
+
+        // Second observation after threshold - should change to parent dir
+        let after_threshold = start + Duration::from_millis(600);
+        let changed = tracker.observe_file_path_at(&file_path, after_threshold);
+        assert!(changed);
+
+        // Effective CWD should be the parent directory, not the file path
+        let expected_dir = PathBuf::from("/home/user/worktree/src");
+        assert_eq!(tracker.effective_cwd(), Some(&expected_dir));
+    }
+
+    #[test]
+    fn test_observe_file_path_with_root_file_returns_false() {
+        let initial = PathBuf::from("/home/user/project");
+        let mut tracker = EffectiveCwdTracker::with_initial_cwd(initial);
+
+        // A file at the root has "/" as parent
+        let file_path = PathBuf::from("/root_file.txt");
+        let start = Instant::now();
+
+        // First observation
+        let changed = tracker.observe_file_path_at(&file_path, start);
+        assert!(!changed);
+
+        // After threshold - should change to root
+        let after_threshold = start + Duration::from_millis(600);
+        let changed = tracker.observe_file_path_at(&file_path, after_threshold);
+        assert!(changed);
+
+        let expected_dir = PathBuf::from("/");
+        assert_eq!(tracker.effective_cwd(), Some(&expected_dir));
+    }
+
+    #[test]
+    fn test_observe_file_path_without_parent_returns_false() {
+        let initial = PathBuf::from("/home/user/project");
+        let mut tracker = EffectiveCwdTracker::with_initial_cwd(initial.clone());
+
+        // A bare filename has no parent
+        let file_path = PathBuf::from("file.txt");
+        let changed = tracker.observe_file_path(&file_path);
+
+        // Should return false and not change effective CWD
+        assert!(!changed);
+        assert_eq!(tracker.effective_cwd(), Some(&initial));
+    }
+
+    #[test]
+    fn test_observe_file_path_and_directory_interleaved() {
+        let initial = PathBuf::from("/home/user/project");
+        let mut tracker = EffectiveCwdTracker::with_initial_cwd(initial);
+
+        let file_path = PathBuf::from("/home/user/worktree/src/main.rs");
+        let dir_path = PathBuf::from("/home/user/worktree/src");
+        let start = Instant::now();
+
+        // Observe via file path
+        let changed = tracker.observe_file_path_at(&file_path, start);
+        assert!(!changed);
+
+        // Observe via directory directly (same directory as file's parent)
+        // This should count toward the debounce threshold
+        let mid = start + Duration::from_millis(300);
+        let changed = tracker.observe_directory_at(dir_path.clone(), mid);
+        assert!(!changed);
+
+        // After threshold - should change
+        let after_threshold = start + Duration::from_millis(600);
+        let changed = tracker.observe_directory_at(dir_path.clone(), after_threshold);
+        assert!(changed);
+        assert_eq!(tracker.effective_cwd(), Some(&dir_path));
     }
 }

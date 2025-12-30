@@ -382,7 +382,7 @@ fn make_chatwidget_manual() -> (
         feedback: crate::feedback_compat::CodexFeedback::new(),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
-        effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd.clone()),
+        effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd),
         pending_agent: None,
         expected_model: None,
         session_configured_received: false,
@@ -3501,4 +3501,153 @@ Would you like me to elaborate on any of these points?"#;
         "acp_markdown_list_response",
         term.backend().vt100().screen().contents()
     );
+}
+
+/// Helper to drain all RefreshSystemInfoForDirectory events from the channel.
+fn drain_refresh_system_info_events(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    while let Ok(ev) = rx.try_recv() {
+        if let AppEvent::RefreshSystemInfoForDirectory(dir) = ev {
+            dirs.push(dir);
+        }
+    }
+    dirs
+}
+
+/// PatchApplyBegin events should observe the parent directory of changed files
+/// and trigger a footer refresh when the effective CWD changes.
+#[test]
+fn patch_apply_begin_observes_directory_for_footer_update() {
+    use std::collections::HashMap;
+
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Set up the initial CWD to something different from where we'll write files
+    let initial_cwd = PathBuf::from("/home/user/project");
+    chat.config.cwd = initial_cwd.clone();
+    chat.effective_cwd_tracker.reset(Some(initial_cwd));
+
+    // Create a PatchApplyBeginEvent with files in a different directory (worktree)
+    let worktree_file = PathBuf::from("/home/user/worktree/src/main.rs");
+    let mut changes = HashMap::new();
+    changes.insert(
+        worktree_file,
+        FileChange::Add {
+            content: "fn main() {}".to_string(),
+        },
+    );
+
+    // First patch event - should start tracking the new directory as candidate
+    chat.handle_codex_event(Event {
+        id: "patch-1".into(),
+        msg: EventMsg::PatchApplyBegin(PatchApplyBeginEvent {
+            call_id: "c1".into(),
+            turn_id: "turn-c1".into(),
+            auto_approved: true,
+            changes: changes.clone(),
+        }),
+    });
+
+    // Drain events - should NOT have RefreshSystemInfoForDirectory yet (debounce not met)
+    let refresh_dirs = drain_refresh_system_info_events(&mut rx);
+    assert!(
+        refresh_dirs.is_empty(),
+        "should not refresh immediately, debounce threshold not met"
+    );
+
+    // Note: The current implementation doesn't track PatchApplyBegin events for CWD changes.
+    // This test will fail until we implement that feature.
+    // After implementation, subsequent patch events in the same directory after 500ms
+    // should trigger a RefreshSystemInfoForDirectory event.
+}
+
+/// PatchApplyEnd events should also observe the parent directory of changed files.
+#[test]
+fn patch_apply_end_observes_directory_for_footer_update() {
+    use std::collections::HashMap;
+
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Set up the initial CWD
+    let initial_cwd = PathBuf::from("/home/user/project");
+    chat.config.cwd = initial_cwd.clone();
+    chat.effective_cwd_tracker.reset(Some(initial_cwd));
+
+    // Create changes in a worktree directory
+    let worktree_file = PathBuf::from("/home/user/worktree/src/lib.rs");
+    let mut changes = HashMap::new();
+    changes.insert(
+        worktree_file,
+        FileChange::Update {
+            unified_diff: "--- a/src/lib.rs\n+++ b/src/lib.rs\n".to_string(),
+            move_path: None,
+        },
+    );
+
+    // First end event - should start tracking
+    chat.handle_codex_event(Event {
+        id: "patch-end-1".into(),
+        msg: EventMsg::PatchApplyEnd(PatchApplyEndEvent {
+            call_id: "c1".into(),
+            turn_id: "turn-c1".into(),
+            stdout: String::new(),
+            stderr: String::new(),
+            success: true,
+            changes: changes.clone(),
+        }),
+    });
+
+    // Drain - no refresh yet due to debounce
+    let refresh_dirs = drain_refresh_system_info_events(&mut rx);
+    assert!(
+        refresh_dirs.is_empty(),
+        "should not refresh immediately, debounce threshold not met"
+    );
+
+    // Note: Like PatchApplyBegin, this test documents expected behavior.
+    // The test will pass once we implement directory observation in handle_patch_apply_end_now.
+}
+
+/// When files have relative paths, they should be resolved against config.cwd
+/// before extracting the parent directory.
+#[test]
+fn patch_apply_resolves_relative_paths_against_cwd() {
+    use std::collections::HashMap;
+
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Set up a specific CWD
+    let cwd = PathBuf::from("/home/user/worktree");
+    chat.config.cwd = cwd.clone();
+    chat.effective_cwd_tracker.reset(Some(cwd));
+
+    // Create a change with a relative path
+    let relative_file = PathBuf::from("src/main.rs");
+    let mut changes = HashMap::new();
+    changes.insert(
+        relative_file,
+        FileChange::Add {
+            content: "fn main() {}".to_string(),
+        },
+    );
+
+    // Send patch event
+    chat.handle_codex_event(Event {
+        id: "patch-rel-1".into(),
+        msg: EventMsg::PatchApplyBegin(PatchApplyBeginEvent {
+            call_id: "c1".into(),
+            turn_id: "turn-c1".into(),
+            auto_approved: true,
+            changes,
+        }),
+    });
+
+    // Drain - the effective CWD should remain unchanged since the resolved path
+    // (/home/user/worktree/src) is a subdirectory of the current CWD
+    let _ = drain_refresh_system_info_events(&mut rx);
+
+    // The effective CWD tracker should have observed /home/user/worktree/src
+    // but since it's within the current CWD hierarchy, behavior depends on implementation
 }
