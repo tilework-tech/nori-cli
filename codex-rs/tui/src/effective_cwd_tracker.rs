@@ -10,6 +10,37 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+/// Find the git repository root for a given path by walking up the directory tree.
+///
+/// Returns the directory containing `.git` (either as a directory or a file,
+/// since git worktrees use a `.git` file pointing to the main repository).
+///
+/// Returns `None` if no git root is found or if the starting path doesn't exist.
+pub(crate) fn find_git_root(start: &Path) -> Option<PathBuf> {
+    // Start from the directory containing the path (or the path itself if it's a directory)
+    let mut current = if start.is_dir() {
+        start.to_path_buf()
+    } else {
+        start.parent()?.to_path_buf()
+    };
+
+    loop {
+        let git_marker = current.join(".git");
+        // .git can be a directory (regular repo) or a file (worktree)
+        if git_marker.is_dir() || git_marker.is_file() {
+            return Some(current);
+        }
+
+        // Move to parent directory
+        match current.parent() {
+            Some(parent) if parent != current => {
+                current = parent.to_path_buf();
+            }
+            _ => return None, // Reached filesystem root
+        }
+    }
+}
+
 /// Debounce threshold for CWD updates - only update if the same directory
 /// is observed consistently for this duration.
 const DEBOUNCE_THRESHOLD: Duration = Duration::from_millis(500);
@@ -139,6 +170,60 @@ impl EffectiveCwdTracker {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn test_find_git_root_from_subdirectory() {
+        // This test runs in the actual git repo
+        let current_dir = std::env::current_dir().expect("should have current dir");
+        let git_root = find_git_root(&current_dir);
+
+        // Should find a git root
+        assert!(git_root.is_some(), "should find git root from current dir");
+
+        let root = git_root.unwrap();
+        // The root should contain a .git directory or file
+        let git_marker = root.join(".git");
+        assert!(
+            git_marker.is_dir() || git_marker.is_file(),
+            ".git should exist at root"
+        );
+    }
+
+    #[test]
+    fn test_find_git_root_from_file_path() {
+        // Test with a file path (not just a directory)
+        let current_dir = std::env::current_dir().expect("should have current dir");
+        let file_path = current_dir.join("some_file.rs");
+
+        let git_root = find_git_root(&file_path);
+        assert!(git_root.is_some(), "should find git root from file path");
+    }
+
+    #[test]
+    fn test_find_git_root_non_git_directory() {
+        // /tmp is typically not a git repository
+        let temp_dir = std::env::temp_dir();
+        let git_root = find_git_root(&temp_dir);
+
+        // Should return None for non-git directories
+        assert!(
+            git_root.is_none(),
+            "should not find git root in temp directory"
+        );
+    }
+
+    #[test]
+    fn test_find_git_root_nonexistent_path() {
+        // A path that doesn't exist
+        let nonexistent = PathBuf::from("/nonexistent/path/that/does/not/exist");
+        let git_root = find_git_root(&nonexistent);
+
+        // Should return None for nonexistent paths
+        assert!(
+            git_root.is_none(),
+            "should not find git root for nonexistent path"
+        );
+    }
 
     #[test]
     fn test_new_tracker_has_no_effective_cwd() {

@@ -1140,6 +1140,10 @@ impl ChatWidget {
 
     /// Observes the parent directories of changed files to update the effective CWD tracker.
     /// If the effective CWD changes (after debounce), triggers a system info refresh.
+    ///
+    /// Uses the git repository root for the refresh directory rather than the file's parent
+    /// to ensure git commands work correctly. Also skips directories that don't exist yet
+    /// (which can happen when creating new files in new directories).
     fn observe_directories_from_changes(
         &mut self,
         changes: &std::collections::HashMap<PathBuf, codex_core::protocol::FileChange>,
@@ -1152,13 +1156,23 @@ impl ChatWidget {
                 self.config.cwd.join(file_path)
             };
 
-            if self.effective_cwd_tracker.observe_file_path(&absolute_path)
-                && let Some(parent) = absolute_path.parent()
-            {
-                self.app_event_tx
-                    .send(AppEvent::RefreshSystemInfoForDirectory(
-                        parent.to_path_buf(),
-                    ));
+            if self.effective_cwd_tracker.observe_file_path(&absolute_path) {
+                // Find the git root for this path, falling back to parent directory
+                // This ensures git commands work correctly even when the immediate
+                // parent directory doesn't exist yet (new file in new directory)
+                let refresh_dir = crate::effective_cwd_tracker::find_git_root(&absolute_path)
+                    .or_else(|| {
+                        // Fall back to parent directory only if it exists
+                        absolute_path
+                            .parent()
+                            .filter(|p| p.exists())
+                            .map(std::path::Path::to_path_buf)
+                    });
+
+                if let Some(dir) = refresh_dir {
+                    self.app_event_tx
+                        .send(AppEvent::RefreshSystemInfoForDirectory(dir));
+                }
             }
         }
     }
