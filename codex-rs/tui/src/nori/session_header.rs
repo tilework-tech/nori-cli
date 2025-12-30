@@ -72,6 +72,16 @@ fn discover_all_instruction_files(
     cwd: &Path,
     agent_kind: Option<AgentKindSimple>,
 ) -> Vec<InstructionFile> {
+    discover_all_instruction_files_with_home(cwd, agent_kind, dirs::home_dir().as_deref())
+}
+
+/// Internal function that discovers instruction files with an optional custom home directory.
+/// This allows testing with a fake home directory.
+fn discover_all_instruction_files_with_home(
+    cwd: &Path,
+    agent_kind: Option<AgentKindSimple>,
+    home_dir: Option<&Path>,
+) -> Vec<InstructionFile> {
     // Build chain from cwd upwards and detect git root
     let mut chain: Vec<PathBuf> = Vec::new();
     let mut current = cwd.to_path_buf();
@@ -152,8 +162,38 @@ fn discover_all_instruction_files(
         }
     }
 
+    // Discover home directory config files
+    // These are user-level configs that apply globally:
+    // - ~/.claude/CLAUDE.md for Claude
+    // - ~/.codex/AGENTS.md for Codex
+    // - ~/.gemini/GEMINI.md for Gemini
+    let mut home_configs: Vec<(PathBuf, PathBuf)> = Vec::new();
+    if let Some(home) = home_dir {
+        // Check for Claude home config: ~/.claude/CLAUDE.md
+        let claude_home = home.join(".claude").join("CLAUDE.md");
+        if claude_home.is_file() {
+            home_configs.push((claude_home, home.join(".claude")));
+        }
+
+        // Check for Codex home config: ~/.codex/AGENTS.md
+        let codex_home = home.join(".codex").join("AGENTS.md");
+        if codex_home.is_file() {
+            home_configs.push((codex_home, home.join(".codex")));
+        }
+
+        // Check for Gemini home config: ~/.gemini/GEMINI.md
+        let gemini_home = home.join(".gemini").join("GEMINI.md");
+        if gemini_home.is_file() {
+            home_configs.push((gemini_home, home.join(".gemini")));
+        }
+    }
+
+    // Prepend home configs to discovered list so they appear first
+    let mut all_discovered = home_configs;
+    all_discovered.extend(discovered);
+
     // Second pass: apply activation algorithm
-    for (file_path, parent_dir) in discovered {
+    for (file_path, parent_dir) in all_discovered {
         let filename = file_path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
@@ -506,8 +546,8 @@ mod tests {
         fs::create_dir_all(&nested).expect("create nested");
         fs::write(nested.join("AGENTS.md"), "nested agents").expect("write nested AGENTS.md");
 
-        // Call discover_all_instruction_files with nested as cwd
-        let files = discover_all_instruction_files(&nested, None);
+        // Call discover_all_instruction_files_with_home with None home to avoid real home configs
+        let files = discover_all_instruction_files_with_home(&nested, None, None);
 
         // Should find files in order from root to cwd:
         // 1. root/AGENTS.md
@@ -528,7 +568,8 @@ mod tests {
     #[test]
     fn discover_returns_empty_when_none_exist() {
         let tmp = TempDir::new().expect("tempdir");
-        let files = discover_all_instruction_files(tmp.path(), None);
+        // Use None home to avoid picking up real home directory configs
+        let files = discover_all_instruction_files_with_home(tmp.path(), None, None);
         assert!(
             files.is_empty(),
             "Should return empty vec when no instruction files exist"
@@ -744,7 +785,7 @@ mod tests {
             .expect("write AGENTS.override.md");
         fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
 
-        let files = discover_all_instruction_files(root, None);
+        let files = discover_all_instruction_files_with_home(root, None, None);
 
         // Should find all 7 files
         let paths: Vec<String> = files
@@ -803,7 +844,9 @@ mod tests {
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
         fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
 
-        let files = discover_all_instruction_files(root, Some(AgentKindSimple::Claude));
+        // Use None home to avoid picking up real home directory configs
+        let files =
+            discover_all_instruction_files_with_home(root, Some(AgentKindSimple::Claude), None);
 
         // All Claude files should be active
         let claude_files: Vec<_> = files
@@ -851,7 +894,8 @@ mod tests {
             .expect("write AGENTS.override.md");
         fs::write(root.join("CLAUDE.md"), "claude").expect("write CLAUDE.md");
 
-        let files = discover_all_instruction_files(root, Some(AgentKindSimple::Codex));
+        let files =
+            discover_all_instruction_files_with_home(root, Some(AgentKindSimple::Codex), None);
 
         // AGENTS.override.md should be active (preferred over AGENTS.md)
         let override_file = files
@@ -890,7 +934,8 @@ mod tests {
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
         // No AGENTS.override.md
 
-        let files = discover_all_instruction_files(root, Some(AgentKindSimple::Codex));
+        let files =
+            discover_all_instruction_files_with_home(root, Some(AgentKindSimple::Codex), None);
 
         let agents_file = files
             .iter()
@@ -913,7 +958,8 @@ mod tests {
         fs::write(root.join("CLAUDE.md"), "claude").expect("write CLAUDE.md");
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
 
-        let files = discover_all_instruction_files(root, Some(AgentKindSimple::Gemini));
+        let files =
+            discover_all_instruction_files_with_home(root, Some(AgentKindSimple::Gemini), None);
 
         let gemini_file = files
             .iter()
@@ -948,8 +994,9 @@ mod tests {
         fs::write(nested.join("CLAUDE.local.md"), "nested local")
             .expect("write nested CLAUDE.local.md");
 
-        // Discover from nested directory
-        let files = discover_all_instruction_files(&nested, Some(AgentKindSimple::Claude));
+        // Discover from nested directory (use None home to avoid real home configs)
+        let files =
+            discover_all_instruction_files_with_home(&nested, Some(AgentKindSimple::Claude), None);
 
         // Should find files from all levels
         assert_eq!(files.len(), 3, "Should find 3 files across hierarchy");
@@ -998,6 +1045,230 @@ mod tests {
         assert!(
             rendered.contains("CLAUDE.md"),
             "Should show CLAUDE.md in output"
+        );
+    }
+
+    // =========================================================================
+    // HOME CONFIG DISCOVERY TESTS
+    // =========================================================================
+
+    #[test]
+    fn discover_finds_claude_home_config() {
+        // Test that discovery finds ~/.claude/CLAUDE.md for Claude agents
+        // Structure:
+        //   fake_home/
+        //     .claude/
+        //       CLAUDE.md  <- user-level config
+        //   project/
+        //     .git
+        //     CLAUDE.md  <- project-level config
+        let tmp = TempDir::new().expect("tempdir");
+        let fake_home = tmp.path().join("fake_home");
+        let project = tmp.path().join("project");
+
+        // Create fake home with .claude/CLAUDE.md
+        fs::create_dir_all(fake_home.join(".claude")).expect("create .claude");
+        fs::write(fake_home.join(".claude/CLAUDE.md"), "user claude config")
+            .expect("write user CLAUDE.md");
+
+        // Create project with .git and CLAUDE.md
+        fs::create_dir_all(&project).expect("create project");
+        fs::write(project.join(".git"), "gitdir").expect("write .git");
+        fs::write(project.join("CLAUDE.md"), "project claude config")
+            .expect("write project CLAUDE.md");
+
+        // Discover files with custom home
+        let files = discover_all_instruction_files_with_home(
+            &project,
+            Some(AgentKindSimple::Claude),
+            Some(&fake_home),
+        );
+
+        // Should find both user-level and project-level config
+        assert!(
+            files.len() >= 2,
+            "Should find at least 2 files (user and project): found {}",
+            files.len()
+        );
+
+        // Should find the home config
+        let has_home_config = files
+            .iter()
+            .any(|f| f.path.to_string_lossy().contains(".claude/CLAUDE.md"));
+        assert!(has_home_config, "Should find ~/.claude/CLAUDE.md");
+
+        // Home config should be active for Claude
+        let home_file = files
+            .iter()
+            .find(|f| {
+                f.path.to_string_lossy().contains("fake_home")
+                    && f.path.to_string_lossy().contains(".claude/CLAUDE.md")
+            })
+            .expect("Should find home CLAUDE.md");
+        assert!(
+            home_file.active,
+            "Home CLAUDE.md should be active for Claude"
+        );
+    }
+
+    #[test]
+    fn discover_finds_codex_home_config() {
+        // Test that discovery finds ~/.codex/AGENTS.md for Codex agents
+        let tmp = TempDir::new().expect("tempdir");
+        let fake_home = tmp.path().join("fake_home");
+        let project = tmp.path().join("project");
+
+        // Create fake home with .codex/AGENTS.md
+        fs::create_dir_all(fake_home.join(".codex")).expect("create .codex");
+        fs::write(fake_home.join(".codex/AGENTS.md"), "user codex config")
+            .expect("write user AGENTS.md");
+
+        // Create project with .git
+        fs::create_dir_all(&project).expect("create project");
+        fs::write(project.join(".git"), "gitdir").expect("write .git");
+
+        // Discover files with custom home
+        let files = discover_all_instruction_files_with_home(
+            &project,
+            Some(AgentKindSimple::Codex),
+            Some(&fake_home),
+        );
+
+        // Should find the home config
+        let has_home_config = files
+            .iter()
+            .any(|f| f.path.to_string_lossy().contains(".codex/AGENTS.md"));
+        assert!(has_home_config, "Should find ~/.codex/AGENTS.md");
+
+        // Home config should be active for Codex
+        let home_file = files
+            .iter()
+            .find(|f| f.path.to_string_lossy().contains(".codex/AGENTS.md"))
+            .expect("Should find home AGENTS.md");
+        assert!(
+            home_file.active,
+            "Home AGENTS.md should be active for Codex"
+        );
+    }
+
+    #[test]
+    fn discover_finds_gemini_home_config() {
+        // Test that discovery finds ~/.gemini/GEMINI.md for Gemini agents
+        let tmp = TempDir::new().expect("tempdir");
+        let fake_home = tmp.path().join("fake_home");
+        let project = tmp.path().join("project");
+
+        // Create fake home with .gemini/GEMINI.md
+        fs::create_dir_all(fake_home.join(".gemini")).expect("create .gemini");
+        fs::write(fake_home.join(".gemini/GEMINI.md"), "user gemini config")
+            .expect("write user GEMINI.md");
+
+        // Create project with .git
+        fs::create_dir_all(&project).expect("create project");
+        fs::write(project.join(".git"), "gitdir").expect("write .git");
+
+        // Discover files with custom home
+        let files = discover_all_instruction_files_with_home(
+            &project,
+            Some(AgentKindSimple::Gemini),
+            Some(&fake_home),
+        );
+
+        // Should find the home config
+        let has_home_config = files
+            .iter()
+            .any(|f| f.path.to_string_lossy().contains(".gemini/GEMINI.md"));
+        assert!(has_home_config, "Should find ~/.gemini/GEMINI.md");
+
+        // Home config should be active for Gemini
+        let home_file = files
+            .iter()
+            .find(|f| f.path.to_string_lossy().contains(".gemini/GEMINI.md"))
+            .expect("Should find home GEMINI.md");
+        assert!(
+            home_file.active,
+            "Home GEMINI.md should be active for Gemini"
+        );
+    }
+
+    #[test]
+    fn discover_home_config_is_inactive_for_other_agents() {
+        // Test that Claude home config is inactive when running as Codex agent
+        let tmp = TempDir::new().expect("tempdir");
+        let fake_home = tmp.path().join("fake_home");
+        let project = tmp.path().join("project");
+
+        // Create fake home with all agent configs
+        fs::create_dir_all(fake_home.join(".claude")).expect("create .claude");
+        fs::write(fake_home.join(".claude/CLAUDE.md"), "user claude config")
+            .expect("write user CLAUDE.md");
+        fs::create_dir_all(fake_home.join(".codex")).expect("create .codex");
+        fs::write(fake_home.join(".codex/AGENTS.md"), "user codex config")
+            .expect("write user AGENTS.md");
+
+        // Create project with .git
+        fs::create_dir_all(&project).expect("create project");
+        fs::write(project.join(".git"), "gitdir").expect("write .git");
+
+        // Discover files as Codex agent
+        let files = discover_all_instruction_files_with_home(
+            &project,
+            Some(AgentKindSimple::Codex),
+            Some(&fake_home),
+        );
+
+        // Claude home config should exist but be inactive
+        let claude_file = files
+            .iter()
+            .find(|f| f.path.to_string_lossy().contains(".claude/CLAUDE.md"));
+        if let Some(f) = claude_file {
+            assert!(
+                !f.active,
+                "Claude home config should be inactive for Codex agent"
+            );
+        }
+
+        // Codex home config should be active
+        let codex_file = files
+            .iter()
+            .find(|f| f.path.to_string_lossy().contains(".codex/AGENTS.md"))
+            .expect("Should find Codex home config");
+        assert!(codex_file.active, "Codex home config should be active");
+    }
+
+    #[test]
+    fn discover_home_config_order_is_first() {
+        // Test that home config appears first in the list (before project configs)
+        let tmp = TempDir::new().expect("tempdir");
+        let fake_home = tmp.path().join("fake_home");
+        let project = tmp.path().join("project");
+
+        // Create fake home with .claude/CLAUDE.md
+        fs::create_dir_all(fake_home.join(".claude")).expect("create .claude");
+        fs::write(fake_home.join(".claude/CLAUDE.md"), "user claude config")
+            .expect("write user CLAUDE.md");
+
+        // Create project with .git and CLAUDE.md
+        fs::create_dir_all(&project).expect("create project");
+        fs::write(project.join(".git"), "gitdir").expect("write .git");
+        fs::write(project.join("CLAUDE.md"), "project claude config")
+            .expect("write project CLAUDE.md");
+
+        // Discover files with custom home
+        let files = discover_all_instruction_files_with_home(
+            &project,
+            Some(AgentKindSimple::Claude),
+            Some(&fake_home),
+        );
+
+        assert!(files.len() >= 2, "Should find at least 2 files");
+
+        // First file should be the home config
+        let first_file = &files[0];
+        assert!(
+            first_file.path.to_string_lossy().contains("fake_home"),
+            "First file should be the home config, got: {:?}",
+            first_file.path
         );
     }
 }
