@@ -170,6 +170,13 @@ pub async fn run_main(
         }
     }
 
+    // Track install/session in background (non-blocking, fire-and-forget)
+    // This updates ~/.nori/cli/.nori-install.json with launch metadata
+    #[cfg(feature = "nori-config")]
+    if let Ok(nori_home) = codex_acp::config::find_nori_home() {
+        nori_installed::track_launch(&nori_home);
+    }
+
     // Note: Rolling file tracing is initialized in codex-cli main.rs before run_main() is called.
     // This ensures a single point of file-based tracing initialization.
 
@@ -268,7 +275,7 @@ pub async fn run_main(
     let model_provider_override: Option<String> = None;
 
     // When using `--oss`, let the bootstrapper pick the model based on selected provider.
-    // Otherwise, default to Claude for ACP-only mode (overrides upstream gpt-5.1-codex default).
+    // Otherwise, use the persisted agent preference from NoriConfig (defaults to claude-code).
     #[cfg(feature = "codex-features")]
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
@@ -279,14 +286,28 @@ pub async fn run_main(
             .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
             .map(std::borrow::ToOwned::to_owned)
     } else {
-        Some(DEFAULT_ACP_MODEL.to_string()) // Use Claude as default for ACP mode
+        // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
+        #[cfg(feature = "nori-config")]
+        let default_model = nori::config_adapter::get_persisted_agent_model()
+            .unwrap_or_else(|| DEFAULT_ACP_MODEL.to_string());
+        #[cfg(not(feature = "nori-config"))]
+        let default_model = DEFAULT_ACP_MODEL.to_string();
+        Some(default_model)
     };
 
     #[cfg(not(feature = "codex-features"))]
-    let model = cli
-        .model
-        .clone()
-        .or_else(|| Some(DEFAULT_ACP_MODEL.to_string()));
+    let model = cli.model.clone().or_else(|| {
+        // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
+        #[cfg(feature = "nori-config")]
+        {
+            nori::config_adapter::get_persisted_agent_model()
+                .or_else(|| Some(DEFAULT_ACP_MODEL.to_string()))
+        }
+        #[cfg(not(feature = "nori-config"))]
+        {
+            Some(DEFAULT_ACP_MODEL.to_string())
+        }
+    });
 
     // canonicalize the cwd
     let cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));

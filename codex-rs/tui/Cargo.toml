@@ -73,6 +73,7 @@ codex-common = { workspace = true, features = [
 ] }
 codex-core = { workspace = true }
 codex-feedback = { workspace = true, optional = true }
+nori-installed = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true, optional = true }
 codex-protocol = { workspace = true }

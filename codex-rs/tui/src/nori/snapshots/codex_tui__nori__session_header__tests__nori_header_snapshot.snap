@@ -1,13 +1,16 @@
 ---
 source: tui/src/nori/session_header.rs
+assertion_line: 740
 expression: rendered
 ---
-╭───────────────────────────────────────────────────╮
-│ Nori CLI v0.1.0                                   │
-│                                                   │
-│ directory: /home/user/project                     │
-│ agent:     claude-sonnet                          │
-│ profile:   senior-swe                             │
-│ agents.md: /home/user/project/AGENTS.md           │
-│ agents.md: /home/user/project/.claude/settings.md │
-╰───────────────────────────────────────────────────╯
+╭──────────────────────────────────────────╮
+│ Nori CLI v0.1.0                          │
+│                                          │
+│ directory: /home/user/project            │
+│ agent:     claude-sonnet                 │
+│ profile:   senior-swe                    │
+│                                          │
+│ Instruction Files                        │
+│   /home/user/project/AGENTS.md           │
+│   /home/user/project/.claude/settings.md │
+╰──────────────────────────────────────────╯

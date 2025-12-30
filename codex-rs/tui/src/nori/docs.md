@@ -9,7 +9,7 @@ The `nori` module contains Nori-specific TUI customizations that replace or exte
 ### How it fits into the larger codebase
 
 - **Called by** `history_cell.rs` via `new_session_info()` which delegates to `new_nori_session_info()`
-- **Replaces** the original `SessionHeaderHistoryCell` (preserved as dead code for potential future feature flag selection)
+- **Replaces** the original Codex session header (preserved as dead code for potential future feature flag selection)
 - **Uses** `HistoryCell` trait from `@/codex-rs/tui/src/history_cell.rs` for consistent rendering
 - **Reads** `~/.nori-config.json` for Nori profile information
 - **Conditionally compiled** based on feature flags - modules like `feedback.rs`, `updates.rs` are only included when their corresponding upstream features are disabled
@@ -23,13 +23,16 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 
 ```
 ╭───────────────────────────────────────────────────╮
-│ Nori v0.x.x                                       │
+│ Nori CLI v0.x.x                                   │
 │                                                   │
 │ directory: ~/path/to/project                      │
 │ agent:     claude-sonnet                          │
 │ profile:   senior-swe                             │
-│ agents.md: ~/path/to/project/AGENTS.md            │
-│ agents.md: ~/path/to/project/.claude/settings.md  │
+│                                                   │
+│ Instruction Files                                 │
+│   ~/.claude/CLAUDE.md              (active)       │
+│   ~/project/.claude/CLAUDE.md      (active)       │
+│   ~/project/AGENTS.md              (dimmed)       │
 ╰───────────────────────────────────────────────────╯
 
   Powered by Nori AI
@@ -37,51 +40,46 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
   Run 'npx nori-ai install' to set up Nori AI enhancements
 ```
 
+**Agent-Specific Instruction File Discovery:**
+
+The `discover_all_instruction_files()` function discovers ALL instruction files in the directory hierarchy and user home, marking them as active/inactive based on the current agent's activation algorithm:
+
+| Agent   | Active Files                                              |
+|---------|----------------------------------------------------------|
+| Claude  | `.claude/CLAUDE.md`, `CLAUDE.md`, `CLAUDE.local.md` (all three per directory) |
+| Codex   | `AGENTS.override.md` OR `AGENTS.md` per directory (override takes precedence) |
+| Gemini  | `GEMINI.md` only (no hidden variants, no overrides)       |
+
+**Discovery Order:**
+1. Home directory configs first (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`)
+2. Project configs from git root to cwd (or just cwd if no git root)
+
 **Key functions:**
 
 - `new_nori_session_info()`: Entry point called by `history_cell::new_session_info()`. Creates the composite cell with header + help text
-- `read_nori_profile(cwd)`: Walks from the given directory upward through parent directories, returning the profile from the nearest ancestor containing a `.nori-config.json` file. Supports both new format (`agents.claude-code.profile.baseProfile`) and old format (`profile.baseProfile`)
-- `discover_instruction_files(cwd)`: Discovers instruction files (CLAUDE.md, AGENTS.md, `.claude/*.md`) in ancestors. Walks from the git root (or cwd if no git root) to cwd, collecting all instruction files found along the path. Returns paths ordered from root to cwd
+- `detect_agent_kind(agent)`: Parses agent string to determine `AgentKindSimple` (Claude, Codex, Gemini, or None)
+- `discover_all_instruction_files(cwd, agent_kind)`: Discovers all instruction files and applies agent-specific activation algorithm
+- `discover_all_instruction_files_with_home(cwd, agent_kind, home_dir)`: Internal variant accepting optional custom home directory for testing
+- `read_nori_profile(cwd)`: Walks from the given directory upward, returning the profile from the nearest ancestor containing a `.nori-config.json` file
 - `format_directory()`: Relativizes paths to home directory with truncation for narrow terminals
-- `new_nori_status_output()`: Creates the composite cell for `/status` command output. Displays the command echo followed by the `NoriSessionHeaderCell` showing Nori branding, version, directory, agent, profile, and instruction files info. Called by `chatwidget.rs::add_status_output()`
-
-**ASCII Banner Styling:**
-
-The banner uses green+bold for alphabetic characters and dark gray for structural characters (pipes, slashes) to create a two-tone visual effect.
+- `new_nori_status_output()`: Creates the composite cell for `/status` command output
 
 **Agent Picker (`agent_picker.rs`):**
 
-- `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry (model name, display name, description, provider slug) with a `SelectionAction` that sends `AppEvent::SetPendingAgent`.
-- `acp_model_picker_params()` renders a fallback when the `unstable` feature is disabled, showing a disabled picker that directs users to use `/agent`.
-- `acp_model_picker_params_with_models()` [unstable] creates a model picker with actual models fetched from the ACP agent. Displays each model as a `SelectionItem` with a `SelectionAction` that sends `AppEvent::SetAcpModel`.
-- `PendingAgentSelection` holds the selected model/display name pair so the App and `ChatWidget` can store it until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`, at which point the agent is persisted to config and the conversation is rebuilt with the new model.
+- `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry with a `SelectionAction` that sends `AppEvent::SetPendingAgent`
+- `acp_model_picker_params()` renders a fallback when the `unstable` feature is disabled
+- `PendingAgentSelection` holds the selected model/display name pair until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`
 
 **Feedback Redirect (`feedback.rs`):**
 
-Compiled only when `feedback` feature is disabled (`#[cfg(not(feature = "feedback"))]`). Redirects `/feedback` command to GitHub Discussions instead of OpenAI's feedback system:
-- `NORI_FEEDBACK_URL`: Points to `https://github.com/tilework-tech/nori-cli/discussions`
-- `feedback_message()`: Returns user-facing message with the discussions URL
+Compiled only when `feedback` feature is disabled. Redirects `/feedback` command to GitHub Discussions instead of OpenAI's feedback system.
 
 **Update System (`update_action.rs`, `updates.rs`, `update_prompt.rs`):**
 
 Compiled only when `upstream-updates` feature is disabled. Provides Nori-specific update checking:
-
-`update_action.rs`:
 - `UpdateAction` enum with `NpmGlobalLatest`, `BunGlobalLatest`, and `Manual` variants
-- `command_args()` returns the shell command to execute the update
-- `get_update_action()` (release builds only) checks `NORI_MANAGED_BY_BUN` then `NORI_MANAGED_BY_NPM` env vars to determine update method
-
-`updates.rs` (release builds only):
-- Queries `https://api.github.com/repos/tilework-tech/nori-cli/releases/latest` for version info
-- Caches version data in `~/.codex/nori-version.json` with 20-hour refresh interval
-- `get_upgrade_version()`: Background-refreshes cache and returns newer version if available
-- `get_upgrade_version_for_popup()`: Returns version only if not previously dismissed
-- `dismiss_version()`: Persists user's dismissal to avoid repeated prompts
-- Tag format: expects `nori-v<semver>` (e.g., `nori-v1.2.3`)
-
-`update_prompt.rs` (release builds only):
-- `run_update_prompt_if_needed()`: Displays update prompt UI when new version available
-- Returns `UpdatePromptOutcome::Continue` or `UpdatePromptOutcome::RunUpdate(action)`
+- `get_update_action()` checks `NORI_MANAGED_BY_BUN` then `NORI_MANAGED_BY_NPM` env vars
+- Queries GitHub releases API with caching in `~/.codex/nori-version.json` (20-hour refresh)
 
 ### Things to Know
 
@@ -90,26 +88,33 @@ Compiled only when `upstream-updates` feature is disabled. Provides Nori-specifi
 - Profile is resolved by walking from cwd upward through parent directories, using the nearest ancestor containing `.nori-config.json`
 - Supports both new format (`agents.claude-code.profile.baseProfile`) and old format (`profile.baseProfile`)
 - When no config file is found in any ancestor, displays "(none)"
-- Config parsing is permissive - missing fields or invalid JSON result in `None` profile
 
 **Instruction Files Display:**
 
-- Instruction files (CLAUDE.md, AGENTS.md, `.claude/*.md`) are discovered by walking from the git root to cwd
-- If no git root is found, only the cwd is searched
-- All discovered files are displayed in the session header as `agents.md: <path>`
-- Paths are ordered from root to cwd (matching the order they are loaded)
+- Active files are shown in normal text; inactive files are dimmed
+- Home directory configs appear first in the list, followed by project configs
+- The `InstructionFile` struct tracks both path and activation status
+- Tests use `discover_all_instruction_files_with_home()` with `None` home directory to avoid picking up real home configs
 
-**Integration Point:**
+**Config Adapter (`config_adapter.rs`):**
 
-The original Codex session header (`SessionHeaderHistoryCell`) is preserved with `#[allow(dead_code)]` annotations. The `new_session_info()` function in `history_cell.rs` unconditionally calls the Nori version. Future work could add a feature flag or config option to toggle between them.
+Provides integration between the Nori config system (from `@/codex-rs/acp/src/config/`) and the TUI:
+- `get_nori_home()`: Returns the canonicalized Nori home path (`~/.nori/cli`)
+- `setup_nori_config_environment()`: Sets `CODEX_HOME` env var to redirect codex-core's config loading to the Nori location
+- `get_persisted_agent_model()`: Returns the user's persisted agent preference from `NoriConfig`
+
+**Model Resolution Priority:**
+
+When the TUI starts without a `--model` CLI argument:
+1. `model` field in config.toml (if explicitly set)
+2. `agent` field in config.toml (persisted user preference from `/agent` command)
+3. `DEFAULT_MODEL` constant ("claude-code")
 
 **Width Handling:**
 
-The session header uses a max inner width of 60 characters. Directory paths are center-truncated when they exceed available space (e.g., `~/a/b/…/y/z`).
+The session header uses a max inner width of 60 characters. Directory paths are center-truncated when they exceed available space.
 
 **Conditional Compilation:**
-
-Module availability in `mod.rs` follows this pattern:
 
 ```
 session_header.rs, agent_picker.rs  -> Always included
@@ -118,35 +123,12 @@ update_action.rs                    -> #[cfg(not(feature = "upstream-updates"))]
 update_prompt.rs, updates.rs        -> #[cfg(all(not(feature = "upstream-updates"), not(debug_assertions)))]
 ```
 
-The `lib.rs` re-export logic ensures `UpdateAction` type is always available via `codex_tui::update_action::UpdateAction` regardless of which update system is compiled.
-
-**Config Adapter (`config_adapter.rs`):**
-
-Provides integration between the Nori config system (from `@/codex-rs/acp/src/config/`) and the TUI:
-- `get_nori_home()`: Returns the canonicalized Nori home path (`~/.nori/cli`). Canonicalization handles systems with symlinks (e.g., macOS `/var` -> `/private/var`) to ensure consistency between where config is saved and loaded.
-- `setup_nori_config_environment()`: Sets `CODEX_HOME` env var (canonicalized) to redirect codex-core's config loading to the Nori location
-- `load_nori_config()`: Loads `NoriConfig` directly from `~/.nori/cli/config.toml`
-
-Path canonicalization is important because `find_codex_home()` returns a canonicalized path. If NORI_HOME is not canonicalized, trust settings saved under one path may not be found when config is loaded under the canonical path.
-
 **Onboarding Module (`onboarding/`):**
 
 Provides Nori-branded first-launch onboarding flow:
 - `first_launch.rs`: First-launch detection via `~/.nori/cli/config.toml` existence
-  - `is_first_launch(nori_home)`: Returns true if `config.toml` doesn't exist
-  - `mark_first_launch_complete(nori_home)`: Sets `cli.first_launch_complete = true` using `ConfigEditsBuilder`
-  - Note: `nori_home` parameter expects the full path (`~/.nori/cli`), not `~/.nori`
 - `welcome.rs`: ASCII banner welcome screen with Nori branding
-- `trust_directory.rs`: Directory trust prompt (persists to codex-core's trust system)
+- `trust_directory.rs`: Directory trust prompt
 - `onboarding_screen.rs`: Orchestrates the multi-step onboarding flow
-
-**Config Persistence Pattern:**
-
-The onboarding flow writes config changes via `ConfigEditsBuilder` (from `@/codex-rs/core/src/config/edit.rs`) which merges edits with existing content. This is critical because:
-1. `trust_directory.rs` calls `set_project_trust_level()` to save trust settings
-2. `first_launch.rs` calls `mark_first_launch_complete()` to set `cli.first_launch_complete`
-3. Both must merge rather than overwrite to preserve each other's changes
-
-The onboarding screen uses `get_nori_home()` from `config_adapter` to get the canonical path, ensuring consistency with the ACP config module.
 
 Created and maintained by Nori.

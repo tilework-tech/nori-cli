@@ -28,6 +28,7 @@ The workspace is organized into crate categories:
 | Patch System | `apply-patch` | Structured file modification |
 | MCP | `mcp-types`, `rmcp-client` | Model Context Protocol support |
 | ACP | `acp`, `mock-acp-agent` | Agent Context Protocol support |
+| Analytics | `installed` | Install tracking and usage analytics |
 | Testing | `tui-pty-e2e` | PTY-based black-box TUI testing |
 | Utilities | `utils/*`, `async-utils`, `ansi-escape`, `feedback` | Helper libraries |
 
