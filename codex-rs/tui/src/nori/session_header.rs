@@ -584,18 +584,24 @@ mod tests {
             directory: PathBuf::from("/tmp/test"),
             nori_profile: Some("test-profile".to_string()),
             instruction_files: vec![
-                PathBuf::from("/home/user/project/AGENTS.md"),
-                PathBuf::from("/home/user/project/.claude/rules.md"),
+                InstructionFile {
+                    path: PathBuf::from("/home/user/project/AGENTS.md"),
+                    active: true,
+                },
+                InstructionFile {
+                    path: PathBuf::from("/home/user/project/.claude/rules.md"),
+                    active: false,
+                },
             ],
         };
 
         let lines = cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
 
-        // Should show instruction files
+        // Should show instruction files section
         assert!(
-            rendered.contains("agents.md:"),
-            "Should show agents.md label for instruction files"
+            rendered.contains("Instruction Files"),
+            "Should show 'Instruction Files' section header"
         );
     }
 

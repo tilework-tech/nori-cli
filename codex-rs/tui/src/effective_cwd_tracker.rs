@@ -125,6 +125,20 @@ impl EffectiveCwdTracker {
     /// Updates the tracker with an observed directory at a specific time.
     /// This variant is primarily for testing.
     fn observe_directory_at(&mut self, dir: PathBuf, now: Instant) -> bool {
+        // Reject empty directory paths - these are invalid and would cause
+        // git commands to fail, clearing the footer info
+        if dir.as_os_str().is_empty() {
+            return false;
+        }
+
+        tracing::debug!(
+            target: "system_info",
+            observed_dir = ?dir,
+            effective_cwd = ?self.effective_cwd,
+            candidate_cwd = ?self.candidate_cwd,
+            "observe_directory: processing observed directory"
+        );
+
         // If this matches the current effective CWD, nothing to do
         if self.effective_cwd.as_ref() == Some(&dir) {
             // Clear any pending candidate since we're back to the effective CWD
@@ -434,5 +448,47 @@ mod tests {
         let changed = tracker.observe_directory_at(dir_path.clone(), after_threshold);
         assert!(changed);
         assert_eq!(tracker.effective_cwd(), Some(&dir_path));
+    }
+
+    #[test]
+    fn test_observe_empty_directory_returns_false() {
+        // Empty directory paths should be rejected to prevent git commands from failing.
+        // This can happen when ACP mode sends ExecCommandBegin events with PathBuf::new().
+        let initial = PathBuf::from("/home/user/project");
+        let mut tracker = EffectiveCwdTracker::with_initial_cwd(initial.clone());
+
+        // Empty PathBuf should be rejected
+        let empty_dir = PathBuf::new();
+        let changed = tracker.observe_directory(empty_dir);
+
+        // Should return false and not change effective CWD
+        assert!(!changed);
+        assert_eq!(tracker.effective_cwd(), Some(&initial));
+
+        // Also verify it doesn't become a candidate (test by observing again after threshold)
+        let start = Instant::now();
+        let empty_dir = PathBuf::new();
+        tracker.observe_directory_at(empty_dir.clone(), start);
+
+        let after_threshold = start + Duration::from_millis(600);
+        let changed = tracker.observe_directory_at(empty_dir, after_threshold);
+        assert!(!changed);
+        assert_eq!(tracker.effective_cwd(), Some(&initial));
+    }
+
+    #[test]
+    fn test_observe_empty_directory_does_not_clear_effective_cwd() {
+        // Verify that observing an empty directory doesn't clear an existing effective CWD
+        let initial = PathBuf::from("/home/user/project");
+        let mut tracker = EffectiveCwdTracker::with_initial_cwd(initial.clone());
+
+        // Observe empty directory multiple times
+        for _ in 0..10 {
+            let changed = tracker.observe_directory(PathBuf::new());
+            assert!(!changed);
+        }
+
+        // Effective CWD should still be the initial value
+        assert_eq!(tracker.effective_cwd(), Some(&initial));
     }
 }
