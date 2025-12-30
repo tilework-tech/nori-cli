@@ -46,6 +46,7 @@ pub enum InstallEventType {
 pub fn create_install_event(
     state: &InstallState,
     event_type: InstallEventType,
+    days_since_install: i64,
 ) -> TrackEventRequest {
     let (is_first_install, previous_version) = match &event_type {
         InstallEventType::FirstInstall => (true, None),
@@ -53,14 +54,15 @@ pub fn create_install_event(
     };
 
     let mut params = serde_json::json!({
-        "install_type": "free",
-        "install_source": install_source_to_string(state.install_source),
-        "installed_version": state.installed_version,
-        "is_first_install": is_first_install,
+        "tilework_user_id": state.user_id,
+        "tilework_cli_installed_version": state.installed_version,
+        "tilework_cli_install_source": install_source_to_string(state.install_source),
+        "tilework_cli_is_first_install": is_first_install,
+        "tilework_cli_days_since_install": days_since_install,
     });
 
     if let Some(prev) = previous_version {
-        params["previous_version"] = serde_json::Value::String(prev);
+        params["tilework_cli_previous_version"] = serde_json::Value::String(prev);
     }
 
     TrackEventRequest {
@@ -74,10 +76,10 @@ pub fn create_install_event(
 /// Create a session started event
 pub fn create_session_event(state: &InstallState, days_since_install: i64) -> TrackEventRequest {
     let params = serde_json::json!({
-        "install_type": "free",
-        "installed_version": state.installed_version,
-        "install_source": install_source_to_string(state.install_source),
-        "days_since_install": days_since_install,
+        "tilework_user_id": state.user_id,
+        "tilework_cli_installed_version": state.installed_version,
+        "tilework_cli_install_source": install_source_to_string(state.install_source),
+        "tilework_cli_days_since_install": days_since_install,
     });
 
     TrackEventRequest {
@@ -168,23 +170,33 @@ mod tests {
         )
     }
 
+    // @current-session
     #[test]
     fn test_create_first_install_event() {
         let state = create_test_state();
-        let event = create_install_event(&state, InstallEventType::FirstInstall);
+        let event = create_install_event(&state, InstallEventType::FirstInstall, 0);
 
         assert_eq!(event.client_id, "nori-cli");
         assert_eq!(event.user_id, "sha256:testhash");
         assert_eq!(event.event_name, EVENT_PLUGIN_INSTALL_COMPLETED);
 
         let params = &event.event_params;
-        assert_eq!(params["install_type"], "free");
-        assert_eq!(params["install_source"], "bun");
-        assert_eq!(params["installed_version"], "1.0.0");
-        assert_eq!(params["is_first_install"], true);
-        assert!(params.get("previous_version").is_none());
+        // Verify new tilework_cli_ prefixed fields
+        assert_eq!(params["tilework_user_id"], "sha256:testhash");
+        assert_eq!(params["tilework_cli_install_source"], "bun");
+        assert_eq!(params["tilework_cli_installed_version"], "1.0.0");
+        assert_eq!(params["tilework_cli_is_first_install"], true);
+        assert_eq!(params["tilework_cli_days_since_install"], 0);
+        assert!(params.get("tilework_cli_previous_version").is_none());
+
+        // Verify removed fields are NOT present
+        assert!(params.get("install_type").is_none());
+        assert!(params.get("install_source").is_none());
+        assert!(params.get("installed_version").is_none());
+        assert!(params.get("is_first_install").is_none());
     }
 
+    // @current-session
     #[test]
     fn test_create_upgrade_event() {
         let mut state = create_test_state();
@@ -196,17 +208,29 @@ mod tests {
             InstallEventType::Upgrade {
                 previous_version: "1.0.0".to_string(),
             },
+            5, // 5 days since original install
         );
 
         assert_eq!(event.event_name, EVENT_PLUGIN_INSTALL_COMPLETED);
 
         let params = &event.event_params;
-        assert_eq!(params["install_source"], "npm");
-        assert_eq!(params["installed_version"], "2.0.0");
-        assert_eq!(params["is_first_install"], false);
-        assert_eq!(params["previous_version"], "1.0.0");
+        // Verify new tilework_cli_ prefixed fields
+        assert_eq!(params["tilework_user_id"], "sha256:testhash");
+        assert_eq!(params["tilework_cli_install_source"], "npm");
+        assert_eq!(params["tilework_cli_installed_version"], "2.0.0");
+        assert_eq!(params["tilework_cli_is_first_install"], false);
+        assert_eq!(params["tilework_cli_previous_version"], "1.0.0");
+        assert_eq!(params["tilework_cli_days_since_install"], 5);
+
+        // Verify removed fields are NOT present
+        assert!(params.get("install_type").is_none());
+        assert!(params.get("install_source").is_none());
+        assert!(params.get("installed_version").is_none());
+        assert!(params.get("is_first_install").is_none());
+        assert!(params.get("previous_version").is_none());
     }
 
+    // @current-session
     #[test]
     fn test_create_session_event() {
         let state = create_test_state();
@@ -217,10 +241,20 @@ mod tests {
         assert_eq!(event.event_name, EVENT_SESSION_STARTED);
 
         let params = &event.event_params;
-        assert_eq!(params["install_type"], "free");
-        assert_eq!(params["installed_version"], "1.0.0");
-        assert_eq!(params["install_source"], "bun");
-        assert_eq!(params["days_since_install"], 5);
+        // Verify new tilework_cli_ prefixed fields
+        assert_eq!(params["tilework_user_id"], "sha256:testhash");
+        assert_eq!(params["tilework_cli_installed_version"], "1.0.0");
+        assert_eq!(params["tilework_cli_install_source"], "bun");
+        assert_eq!(params["tilework_cli_days_since_install"], 5);
+
+        // Verify removed fields are NOT present
+        assert!(params.get("install_type").is_none());
+        assert!(params.get("installed_version").is_none());
+        assert!(params.get("install_source").is_none());
+        assert!(params.get("days_since_install").is_none());
+
+        // Verify is_first_install is NOT in session events
+        assert!(params.get("tilework_cli_is_first_install").is_none());
     }
 
     #[test]
@@ -237,6 +271,7 @@ mod tests {
         assert!(json.contains("\"eventParams\""));
     }
 
+    // @current-session
     #[test]
     fn test_install_source_unknown() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
@@ -248,6 +283,6 @@ mod tests {
         );
 
         let event = create_session_event(&state, 0);
-        assert_eq!(event.event_params["install_source"], "unknown");
+        assert_eq!(event.event_params["tilework_cli_install_source"], "unknown");
     }
 }

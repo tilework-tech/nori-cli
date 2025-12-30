@@ -127,15 +127,17 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
     write_install_state(nori_home, &new_state).await?;
 
     // Send analytics event (no-op in debug builds)
+    let days = new_state.days_since_install(now);
     let analytics_event = match &event {
         LaunchEvent::FirstInstall => {
-            create_install_event(&new_state, InstallEventType::FirstInstall)
+            create_install_event(&new_state, InstallEventType::FirstInstall, days)
         }
         LaunchEvent::Upgrade { previous_version } => create_install_event(
             &new_state,
             InstallEventType::Upgrade {
                 previous_version: previous_version.clone(),
             },
+            days,
         ),
         LaunchEvent::Session { days_since_install } => {
             create_session_event(&new_state, *days_since_install)
