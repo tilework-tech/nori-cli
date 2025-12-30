@@ -72,6 +72,16 @@ fn discover_all_instruction_files(
     cwd: &Path,
     agent_kind: Option<AgentKindSimple>,
 ) -> Vec<InstructionFile> {
+    // In debug builds, allow E2E tests to mock instruction files for consistent snapshots.
+    // This returns a constant list to ensure banner width is consistent across machines.
+    #[cfg(debug_assertions)]
+    if std::env::var("NORI_MOCK_INSTRUCTION_FILES").is_ok() {
+        return vec![InstructionFile {
+            path: std::path::PathBuf::from("~/.claude/CLAUDE.md"),
+            active: true,
+        }];
+    }
+
     discover_all_instruction_files_with_home(cwd, agent_kind, dirs::home_dir().as_deref())
 }
 

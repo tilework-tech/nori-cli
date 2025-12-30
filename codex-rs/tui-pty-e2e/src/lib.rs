@@ -345,6 +345,10 @@ name = "Mock ACP provider for tests"
         // This ensures footer displays git branch/nori version immediately
         cmd.env("NORI_SYNC_SYSTEM_INFO", "1");
 
+        // Mock instruction files for consistent banner width across machines
+        // This returns a constant list (~/.claude/CLAUDE.md) instead of discovering real files
+        cmd.env("NORI_MOCK_INSTRUCTION_FILES", "1");
+
         let _child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
@@ -857,53 +861,6 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         .collect();
     normalized = lines.join("\n");
 
-    // Strip "Instruction Files" section from banner
-    // This section contains machine-specific paths that break cross-machine snapshots
-    let lines: Vec<&str> = normalized.lines().collect();
-    let mut filtered_lines: Vec<&str> = Vec::new();
-    let mut inside_instruction_files = false;
-
-    for line in &lines {
-        // Detect "Instruction Files" header line
-        if line.contains("Instruction Files") && line.contains('│') {
-            inside_instruction_files = true;
-            // Also skip the blank line that precedes instruction files (already added)
-            // Remove the last line if it's a blank box line
-            if let Some(last) = filtered_lines.last()
-                && last.contains('│')
-                && last.trim_matches(|c| c == '│' || c == ' ').is_empty()
-            {
-                filtered_lines.pop();
-            }
-            continue;
-        }
-
-        // When inside instruction files section, skip file path lines
-        if inside_instruction_files {
-            // File paths start with │ and contain ~/ or are indented paths
-            if line.contains('│') && (line.contains("~/") || line.contains("/.")) {
-                continue;
-            }
-            // Check if we've reached the end (bottom border or non-path line)
-            if line.contains("╰──") {
-                inside_instruction_files = false;
-                // Keep the bottom border
-                filtered_lines.push(line);
-                continue;
-            }
-            // Skip blank lines within instruction files section
-            if line.contains('│') && line.trim_matches(|c| c == '│' || c == ' ').is_empty() {
-                continue;
-            }
-            // Any other line ends the instruction files section
-            inside_instruction_files = false;
-        }
-
-        filtered_lines.push(line);
-    }
-
-    normalized = filtered_lines.join("\n");
-
     // Replace dynamic prompt text on lines starting with ›
     let lines: Vec<String> = normalized
         .lines()
@@ -1134,66 +1091,8 @@ mod tests {
 
     // @current-session
     #[test]
-    fn test_normalize_strips_instruction_files() {
-        // Test that "Instruction Files" section is stripped from the banner
-        // This section contains machine-specific paths that break cross-machine snapshots
-        let input = r#"╭──────────────────────────────────────────────────────────────╮
-│ Nori CLI v0.0.0                                              │
-│ profile:   clifford                                          │
-│                                                              │
-│ Instruction Files                                            │
-│   ~/.claude/CLAUDE.md                                        │
-│   ~/.gemini/GEMINI.md                                        │
-│   ~/Documents/…/working-message-disappears-early/AGENTS.md   │
-│   ~/Documents/source/nori/cli/.worktrees/…/.claude/CLAUDE.md │
-╰──────────────────────────────────────────────────────────────╯"#;
-
-        let normalized = normalize_for_snapshot(input.to_string());
-
-        // Should contain profile line (normalized to [PROF])
-        assert!(
-            normalized.contains("profile:"),
-            "Should preserve profile line, got:\n{}",
-            normalized
-        );
-
-        // Should NOT contain instruction files section
-        assert!(
-            !normalized.contains("Instruction Files"),
-            "Should strip 'Instruction Files' header, got:\n{}",
-            normalized
-        );
-
-        // Should NOT contain the file paths
-        assert!(
-            !normalized.contains("~/.claude/CLAUDE.md"),
-            "Should strip instruction file paths, got:\n{}",
-            normalized
-        );
-        assert!(
-            !normalized.contains("AGENTS.md"),
-            "Should strip instruction file paths, got:\n{}",
-            normalized
-        );
-
-        // Box borders should be preserved
-        assert!(
-            normalized.contains("╭──"),
-            "Should preserve top border, got:\n{}",
-            normalized
-        );
-        assert!(
-            normalized.contains("╰──"),
-            "Should preserve bottom border, got:\n{}",
-            normalized
-        );
-    }
-
-    // @current-session
-    #[test]
-    fn test_normalize_preserves_banner_without_instruction_files() {
-        // Test that banners WITHOUT instruction files are preserved correctly
-        // Uses 4 lines: top border, version line, profile line, bottom border
+    fn test_normalize_version_and_profile() {
+        // Test that version and profile are normalized correctly
         let input = r#"╭──────────────────────────────────────────────────────────────╮
 │ Nori CLI v0.1.2                                              │
 │ profile:   testuser                                          │
@@ -1226,46 +1125,5 @@ mod tests {
             "Should preserve bottom border, got:\n{}",
             normalized
         );
-
-        // Should have exactly 4 lines (no instruction files to strip)
-        let line_count = normalized.lines().count();
-        assert_eq!(
-            line_count, 4,
-            "Should have 4 lines (no instruction files to strip), got {} lines:\n{}",
-            line_count, normalized
-        );
-    }
-
-    // @current-session
-    #[test]
-    fn test_normalize_strips_instruction_files_with_blank_line() {
-        // Test that the blank line between profile and instruction files is also stripped
-        let input = r#"│ profile:   clifford                                          │
-│                                                              │
-│ Instruction Files                                            │
-│   ~/.claude/CLAUDE.md                                        │
-╰──────────────────────────────────────────────────────────────╯"#;
-
-        let normalized = normalize_for_snapshot(input.to_string());
-
-        // After stripping instruction files, we should not have consecutive blank box lines
-        // The result should go directly from profile to bottom border
-        let lines: Vec<&str> = normalized.lines().collect();
-
-        // Find profile line
-        let profile_idx = lines
-            .iter()
-            .position(|l| l.contains("profile:"))
-            .expect("Should have profile line");
-
-        // The line after profile should be the bottom border (not a blank line)
-        if profile_idx + 1 < lines.len() {
-            let next_line = lines[profile_idx + 1];
-            assert!(
-                next_line.contains("╰──"),
-                "Line after profile should be bottom border, not blank line. Got:\n{}",
-                normalized
-            );
-        }
     }
 }
