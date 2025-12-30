@@ -881,7 +881,13 @@ fn streaming_final_answer_keeps_task_running_state() {
     chat.on_commit_tick();
 
     assert!(chat.bottom_pane.is_task_running());
-    assert!(chat.bottom_pane.status_widget().is_none());
+    // The status indicator ("Working (Xs)") should remain visible during streaming
+    // until the conversational turn fully completes (TaskComplete event).
+    // Previously this was incorrectly hidden during on_commit_tick.
+    assert!(
+        chat.bottom_pane.status_widget().is_some(),
+        "status indicator should remain visible during streaming until task completes"
+    );
 
     chat.bottom_pane
         .set_composer_text("queued submission".to_string());

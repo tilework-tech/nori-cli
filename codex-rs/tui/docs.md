@@ -177,6 +177,20 @@ The app uses a tokio-based event loop that multiplexes:
 
 State updates flow through `app_event_sender.rs` channels.
 
+**Status Indicator Lifecycle:**
+
+The "Working (Xs)" status indicator in the bottom pane is controlled exclusively by conversational turn boundaries:
+
+- **Shown**: When `TaskStarted` event arrives, `on_task_started()` calls `set_task_running(true)`
+- **Hidden**: When `TaskComplete` event arrives, `on_task_complete()` calls `set_task_running(false)`
+
+**Invariant**: Streaming operations (e.g., `on_commit_tick()`) must NOT call `hide_status_indicator()`. The status indicator should remain visible throughout the entire conversational turn, including during:
+- Streaming text deltas being committed to history
+- Subagent completions (when parent turn is still active)
+- Tool call executions
+
+This ensures users see continuous "Working" feedback until the agent's conversational turn fully completes.
+
 **Interrupt Queueing and Approval Handling:**
 
 Most event types (exec begin/end, MCP calls, elicitation) are queued during active streaming and flushed when streaming completes via `InterruptManager`. However, **approval requests are handled immediately** (not deferred):
