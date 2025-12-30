@@ -829,6 +829,15 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         }
     }
 
+    // Replace nix-shell temp directories: /tmp/nix-shell.XXXX/.tmpXXXXXX -> [TMP_DIR]
+    // This handles the case where nix creates nested tmp directories
+    while let Some(start) = normalized.find("/tmp/nix-shell.") {
+        let end = normalized[start..]
+            .find(|c: char| c.is_whitespace() || c == '│')
+            .map_or(normalized.len(), |pos| start + pos);
+        normalized.replace_range(start..end, "[TMP_DIR]");
+    }
+
     // Per-line replacements
     let lines: Vec<String> = normalized
         .lines()
@@ -857,6 +866,32 @@ pub fn normalize_for_snapshot(contents: String) -> String {
             }
 
             line
+        })
+        .collect();
+    normalized = lines.join("\n");
+
+    // Normalize box line widths to a fixed width (prevents flaky snapshots from varying content)
+    // This handles lines like "│ content │" and "╰───────╯" that vary based on directory path length
+    const FIXED_BOX_WIDTH: usize = 37; // Fixed inner width for consistency
+    let lines: Vec<String> = normalized
+        .lines()
+        .map(|line| {
+            // Normalize box content lines: "│ content    │" -> fixed width
+            if line.starts_with('│') && line.ends_with('│') {
+                let inner = &line[3..line.len() - 3]; // Strip "│ " and " │" (3 bytes each for UTF-8)
+                let trimmed = inner.trim_end();
+                if trimmed.len() < FIXED_BOX_WIDTH {
+                    return format!("│ {:<width$} │", trimmed, width = FIXED_BOX_WIDTH);
+                }
+            }
+            // Normalize bottom border: "╰───────╯" -> fixed width
+            if line.starts_with('╰')
+                && line.ends_with('╯')
+                && line.chars().all(|c| c == '╰' || c == '─' || c == '╯')
+            {
+                return format!("╰{}╯", "─".repeat(FIXED_BOX_WIDTH + 2));
+            }
+            line.to_string()
         })
         .collect();
     normalized = lines.join("\n");
