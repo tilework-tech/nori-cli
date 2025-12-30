@@ -194,15 +194,23 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
 | `normalize_for_snapshot()` | General snapshots that should include the startup header |
 | `normalize_for_input_snapshot()` | Input-focused tests where header visibility varies with scroll timing and ACP error messages appear with variable timing |
 
-**`normalize_for_snapshot()`** - Base normalization rules:
+**`normalize_for_snapshot()`** - Base normalization rules (in order of application):
+
 1. Temp directory paths (`/tmp/.tmpXXXXXX`) → `[TMP_DIR]` placeholder
-2. Random default prompts on lines starting with `› ` → `[DEFAULT_PROMPT]` placeholder
+2. "Worked for Xs" timing separator lines → solid horizontal bar
+   - Lines starting with `─ Worked` and ending with `─` are replaced with solid `─` characters
+   - Prevents flaky tests when timing varies
+3. Version normalization: `"Nori CLI vX.Y.Z..."` → `"Nori CLI v0.0.0"`
+   - Only replaces if a digit follows `"Nori CLI v"`
+4. Profile normalization: `"profile: value"` → `"profile: [PROF]"`
+5. Instruction Files section stripping (multi-line):
+   - Detects `"Instruction Files"` header line within the banner box
+   - Removes the header, all subsequent file path lines (containing `~/` or `/.`), and the preceding blank line
+   - Exits when reaching bottom border (`╰──`) or non-file-path content
+   - Prevents cross-machine snapshot failures from user-specific paths like `~/.claude/CLAUDE.md`
+6. Random default prompts on lines starting with `› ` → `[DEFAULT_PROMPT]` placeholder
    - Detects specific default prompt patterns: "Find and fix a bug", "Explain this codebase", "Write tests for", etc.
    - Preserves user-entered prompts and UI text like "? for shortcuts"
-3. "Worked for Xs" timing separator lines → solid horizontal bar
-   - Lines starting with `─ Worked` and ending with `─` are replaced with solid `─` characters
-   - Example: `─ Worked for 0s ───...` becomes `─────────────────...`
-   - Prevents flaky tests when timing varies between 0s, 1s, 10s, or minute formats like 1m 30s
 
 **`normalize_for_input_snapshot()`** - Extends base normalization with three additional phases:
 

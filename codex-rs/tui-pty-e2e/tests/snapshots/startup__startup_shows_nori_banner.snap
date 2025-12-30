@@ -7,4 +7,10 @@ expression: "normalize_for_snapshot(lines.collect::<Vec<&str>>()[1..8].join(\"\\
 │ directory: [TMP_DIR] │
 │ agent:     mock-model      │
 │ profile:   [PROF]          │
+<<<<<<< Updated upstream
 ╰────────────────────────────╯
+||||||| Stash base
+│                            │
+│ Instruction Files          │
+=======
+>>>>>>> Stashed changes
