@@ -26,6 +26,9 @@ pub struct NoriConfigToml {
     /// Approval policy for commands
     pub approval_policy: Option<ApprovalPolicy>,
 
+    /// Enable ACP traffic tracing via sacp-tee proxy
+    pub acp_trace_enabled: Option<bool>,
+
     /// TUI settings
     #[serde(default)]
     pub tui: TuiConfigToml,
@@ -97,6 +100,9 @@ pub struct NoriConfigOverrides {
 
     /// Override current working directory
     pub cwd: Option<PathBuf>,
+
+    /// Override ACP trace enabled setting
+    pub acp_trace_enabled: Option<bool>,
 }
 
 /// Resolved configuration with defaults applied
@@ -115,6 +121,9 @@ pub struct NoriConfig {
     /// Approval policy for commands
     pub approval_policy: ApprovalPolicy,
 
+    /// Enable ACP traffic tracing via sacp-tee proxy
+    pub acp_trace_enabled: bool,
+
     /// Enable TUI animations
     pub animations: bool,
 
@@ -131,6 +140,17 @@ pub struct NoriConfig {
     pub mcp_servers: HashMap<String, McpServerConfig>,
 }
 
+impl NoriConfig {
+    /// Get the path for the ACP trace log file for a given session.
+    ///
+    /// Returns a path like `~/.nori/cli/log/acp-trace-<session_id>.log`
+    pub fn acp_trace_log_path(&self, session_id: &str) -> PathBuf {
+        self.nori_home
+            .join("log")
+            .join(format!("acp-trace-{}.log", session_id))
+    }
+}
+
 impl Default for NoriConfig {
     fn default() -> Self {
         Self {
@@ -138,6 +158,7 @@ impl Default for NoriConfig {
             model: DEFAULT_MODEL.to_string(),
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,
+            acp_trace_enabled: false,
             animations: true,
             notifications: true,
             nori_home: PathBuf::from(".nori/cli"),

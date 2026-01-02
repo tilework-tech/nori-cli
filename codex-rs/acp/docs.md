@@ -160,6 +160,386 @@ The `init_rolling_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.
 - ANSI colors disabled for clean file output
 - Automatically initialized by the CLI (`@/codex-rs/cli/src/main.rs`) at startup, writing to `$NORI_HOME/log/nori-acp.YYYY-MM-DD`
 
+### ACP Traffic Tracing
+
+When enabled via `--acp-trace` CLI flag or `acp_trace_enabled = true` in config, the ACP module captures all JSON-RPC 2.0 traffic between the client and agent subprocess using the `sacp-tee` proxy from the symposium-acp library.
+
+**Configuration Flow:**
+
+```
+┌─────────────────────────┐     acp_trace_enabled      ┌─────────────────────────┐
+│   Config / CLI Flag     │────────────────────────────►│   TUI spawn_acp_agent() │
+│                         │                             │                         │
+│   --acp-trace flag      │                             │   Builds AcpTraceConfig │
+│   acp.trace_enabled     │                             │   with session log path │
+└─────────────────────────┘                             └───────────┬─────────────┘
+                                                                    │
+                                                                    ▼
+┌─────────────────────────┐     trace_config: Option    ┌─────────────────────────┐
+│   AcpBackendConfig      │◄────────────────────────────│   AcpBackend::spawn()   │
+│   - trace_config field  │                             │                         │
+└───────────┬─────────────┘                             └─────────────────────────┘
+            │
+            ▼
+┌─────────────────────────┐    build_agent_command()    ┌─────────────────────────┐
+│   AcpConnection::spawn()│────────────────────────────►│   Wrapped Command       │
+│                         │                             │                         │
+│   Passes trace_config   │                             │   sacp-tee --log-file   │
+│   to internal spawn     │                             │   <path> -- <cmd>       │
+└─────────────────────────┘                             └─────────────────────────┘
+```
+
+**Key Types:**
+
+- `AcpTraceConfig`: Holds the log file path for a session (exported from `connection.rs`)
+- `AcpBackendConfig.trace_config`: Optional field passed from TUI to backend
+- `build_agent_command()`: Wraps the agent command with `sacp-tee` when tracing is enabled
+
+**Log File Naming:**
+
+Session-specific log files are created at `{codex_home}/log/acp-trace-{timestamp}-{pid}.log`:
+- `timestamp`: Unix timestamp in milliseconds at session creation
+- `pid`: Process ID of the Nori process
+- Log directory is created automatically if it doesn't exist
+
+**Command Wrapping:**
+
+When `trace_config` is `Some`, `build_agent_command()` transforms:
+```
+Original: gemini-cli --experimental-acp
+Wrapped:  sacp-tee --log-file /path/to/log.log -- gemini-cli --experimental-acp
+```
+
+The `sacp-tee` proxy intercepts all stdio traffic and logs JSON-RPC messages while passing them through unchanged. Assumes `sacp-tee` is installed and available in PATH when enabled.
+
+### Core Implementation
+
+**Thread-Safe Connection Wrapper (`connection.rs`):**
+
+The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in codex-core's multi-threaded tokio runtime. The solution is a thread-safe wrapper pattern:
+
+```
+┌─────────────────────────┐   mpsc channels     ┌─────────────────────────┐
+│   Main Tokio Runtime    │◄───────────────────►│  ACP Worker Thread      │
+│                         │  AcpCommand enum    │  (single-threaded RT)   │
+│   AcpConnection         │                     │                         │
+│   - spawn()             │  ────────────────►  │  AcpConnectionInner     │
+│   - create_session()    │  CreateSession      │  - ClientDelegate       │
+│   - prompt()            │  Prompt             │  - run_command_loop()   │
+│   - cancel()            │  Cancel             │  - model_state Arc      │
+│   - set_model() [unst]  │  SetModel [unstable]│                         │
+│                         │  ◄────────────────  │                         │
+│                         │  oneshot responses  │                         │
+└─────────────────────────┘                     └─────────────────────────┘
+```
+
+Model state is stored in `Arc<RwLock<AcpModelState>>` shared between the main thread and worker thread for thread-safe access.
+
+- `AcpConnection::spawn()` creates dedicated thread with `LocalSet` for `!Send` futures
+- Commands sent via `mpsc::Sender<AcpCommand>` to worker thread
+- Responses returned via `oneshot` channels embedded in commands
+- Worker thread spawns subprocess, handles JSON-RPC handshake, runs command loop
+
+**Subprocess Lifecycle Management:**
+
+The `run_command_loop()` function manages agent subprocess cleanup:
+- Runs until the command channel is closed (when `AcpConnection` is dropped)
+- On exit, calls `child.kill()` to terminate the subprocess
+- This prevents orphaned/zombie processes when sessions are switched (e.g., via `/new` command)
+- Logs subprocess PID at spawn via `debug!("ACP agent spawned (pid: {:?})")` for E2E test verification
+
+**ClientDelegate (`connection.rs`):**
+
+- Implements `acp::Client` trait to handle agent requests
+- Routes session updates to registered `mpsc::Sender<SessionUpdate>` channels
+- Bridges permission requests to Codex approval system via `ApprovalRequest` channel
+- Implements file read (synchronous `std::fs::read_to_string`)
+- Terminal operations return `method_not_found` (not yet supported)
+- Implements file write (`write_text_file`) with relative path resolution and security boundaries
+
+**File Write Implementation:**
+
+The `write_text_file` method implements file creation and modification for ACP agents with security boundaries:
+
+1. **Relative Path Resolution**: Paths like `file.txt` are resolved against the workspace directory (`cwd`) before validation, so agents can use simple relative paths for workspace files
+
+2. **Security Boundaries**: Application-level path restrictions (temporary until OS-level sandboxing is deployed):
+   - Workspace writes: Any path within or under the workspace directory
+   - Temporary writes: Any path under `/tmp` directory  
+   - System paths: All other paths are rejected with an error
+
+3. **Auto-create Directories**: Parent directories are created automatically using `std::fs::create_dir_all` when needed
+
+4. **Atomicity**: Not currently atomic - partial writes can occur if interrupted
+
+The path validation canonicalizes paths to prevent symlink-based directory traversal attacks.
+
+**Session Transcript Parsing (`session_parser.rs`):**
+
+The `session_parser` module provides parsers to extract token usage and metadata from agent session transcript files. Each agent (Claude, Codex, Gemini) runs as an opaque subprocess and stores session data in different formats:
+
+- **Codex**: `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-<ISODATE>T<HH-MM-SS>-<SESSION_GUID>.jsonl`
+- **Gemini**: `~/.gemini/tmp/<HASHED_PATHS>/chats/session-<ISODATE>T<HH-MM>-<SESSIONID>.json`
+- **Claude**: `~/.claude/projects/<PROJECT_PATH>/<SESSIONID>.jsonl`
+
+Key types:
+- `TokenUsageReport`: Unified report wrapping `TokenUsage` (from codex-protocol) with agent type, session ID, and transcript path
+- `AgentKind`: Enum identifying the agent (Claude, Codex, Gemini)
+- `ParseError`: Error cases (EmptyFile, MissingSessionId, TokenOverflow, IoError, JsonError)
+
+Parser functions:
+- `parse_codex_session()`: Parses Codex JSONL with cumulative `token_count` events. Session ID derived from filename since not embedded in content. Extracts `model_context_window` when available.
+- `parse_gemini_session()`: Parses Gemini JSON with messages array. Aggregates tokens from each message. Maps `tokens.thoughts` to `reasoning_output_tokens`, `tokens.cached` to `cached_input_tokens`.
+- `parse_claude_session()`: Parses Claude JSONL with per-message usage objects (nested in `.message.usage`). Maps `cache_read_input_tokens` to `cached_input_tokens`. No separate reasoning tokens.
+
+Implementation details:
+- **Line-by-line JSONL parsing**: Resilient error handling logs warnings and continues on malformed lines
+- **Checked arithmetic**: Uses `.checked_add()` for token aggregation to prevent overflow
+- **Agent-specific token mapping**: Each parser maps agent-specific token fields to the unified `TokenUsage` struct
+- **Codex as external agent**: Treats Codex sessions as external data (like Gemini/Claude), not relying on internal Codex state
+
+Session discovery logic (finding files in ~/.codex, ~/.gemini, ~/.claude) is deferred for future TUI integration.
+
+**Approval Bridging:**
+
+The ACP module bridges permission requests to Codex's approval UI. Approval requests are handled **immediately** (not deferred) to avoid deadlocks:
+
+```
+┌─────────────────────────┐   ApprovalRequest     ┌─────────────────────────┐
+│   ACP Worker Thread     │──────────────────────►│   Main Thread (TUI)     │
+│                         │                       │                         │
+│   ClientDelegate        │                       │   - Display approval UI │
+│   - request_permission()│◄──────────────────────│   - Get user decision   │
+│                         │  ReviewDecision       │   - Send via oneshot    │
+└─────────────────────────┘  (via oneshot)        └─────────────────────────┘
+```
+
+- `ApprovalRequest` bundles the `ApprovalEventType`, original ACP options, and response channel
+- `ApprovalEventType` enum selects the appropriate approval UI:
+  - `Exec(ExecApprovalRequestEvent)` - for shell commands and generic operations
+  - `Patch(ApplyPatchApprovalRequestEvent)` - for file Edit/Write/Delete with diff rendering
+- `AcpConnection::take_approval_receiver()` exposes the receiver for TUI consumption
+- Falls back to auto-approve if approval channel is closed (no UI listening)
+- Falls back to deny if response channel is dropped (UI didn't respond)
+- **Critical timing**: The agent subprocess blocks waiting for approval. Deferring approval display would deadlock (agent waits for approval, but TaskComplete never arrives until agent finishes)
+
+**Patch Event Translation:**
+
+For Edit/Write/Delete operations, the ACP backend emits native patch events for better TUI rendering:
+
+| Operation | Approval Event | Result Event |
+|-----------|----------------|--------------|
+| Edit (old_string + new_string) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Update` |
+| Write (content only) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Add` |
+| Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
+| Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
+
+The patch event flow requires state tracking since ToolCallUpdate may not have the same fields as ToolCall:
+
+```
+┌───────────────────┐      ┌───────────────────────────────┐      ┌───────────────────┐
+│  ToolCall         │      │  RequestPermission            │      │  ToolCallUpdate   │
+│  (Edit detected)  │      │                               │      │  (Completed)      │
+│                   │      │                               │      │                   │
+│  Store FileChange │─────►│  ApplyPatchApprovalRequest    │─────►│  Retrieve stored  │
+│  in pending map   │      │  (approval overlay shown)     │      │  FileChange, emit │
+│  (no event)       │      │                               │      │  PatchApplyBegin  │
+└───────────────────┘      └───────────────────────────────┘      └───────────────────┘
+```
+
+Key translator functions:
+- `is_patch_operation()` - detects Edit/Write/Delete based on ToolKind or raw_input fields
+- `tool_call_to_file_change()` - converts raw_input to `FileChange` using `diffy` for unified diffs
+- `permission_request_to_patch_approval_event()` - creates `ApplyPatchApprovalRequestEvent` for patch ops
+
+**TUI Backend Adapter (`backend.rs`):**
+
+The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
+
+```
+┌─────────────────────────┐                      ┌─────────────────────────┐
+│   TUI Event Loop        │  Event channel       │   AcpBackend            │
+│                         │◄─────────────────────│                         │
+│   - spawn_acp_agent()   │  codex_protocol::    │   - spawn()             │
+│   - forwards events     │  Event               │   - submit(Op)          │
+│                         │                      │   - approval handling   │
+│                         │  ─────────────────►  │                         │
+│                         │  Op channel          │                         │
+└─────────────────────────┘                      └─────────────────────────┘
+```
+
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy)
+- `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task
+- `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
+  - `Op::UserInput` → ACP `prompt()`
+  - `Op::Interrupt` → ACP `cancel()`
+  - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
+  - Unsupported ops → Error event sent to TUI
+- `AcpBackend::model_state()`: Returns current model state (available models and current selection)
+- `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching
+- `translate_session_update_to_events()`: Converts ACP `SessionUpdate` to `codex_protocol::EventMsg`:
+  - `AgentMessageChunk` → `AgentMessageDelta`
+  - `AgentThoughtChunk` → `AgentReasoningDelta`
+  - `ToolCall` → `ExecCommandBegin` (with filtering, see below)
+  - `ToolCallUpdate(Completed)` → `ExecCommandEnd`
+
+### ACP Tool Call Event Filtering
+
+The ACP protocol emits **multiple ToolCall events** for the same `call_id` as details become available during LLM streaming:
+
+```
+Event 1 (early): ToolCall { call_id="toolu_123", title="Read File", raw_input={} }
+Event 2 (later): ToolCall { call_id="toolu_123", title="Read /home/.../file.rs", raw_input={path: "..."} }
+```
+
+Without filtering, duplicate events would cause ExecCells to disappear briefly and reappear at the end of agent turns. The fix uses two layers of filtering:
+
+**Layer 1 - Skip Generic Events (`translate_session_update_to_events`):**
+- Skip ToolCall events that lack useful display information
+- Check both `raw_input` (for path/command/pattern fields) and title (for embedded paths or commands)
+- `title_contains_useful_info()` detects paths in titles (`" /"`, backticks, long non-generic titles)
+- `extract_display_args()` extracts display-friendly arguments based on tool type
+
+**Layer 2 - Dispatch-Loop Deduplication:**
+- The update handler tracks `emitted_begin_call_ids: HashSet<String>`
+- Skips any `ExecCommandBegin` with a call_id that was already emitted
+- Safety net for edge cases that slip through Layer 1
+
+### Tool Classification System
+
+The `classify_tool_to_parsed_command()` function maps ACP `ToolKind` to TUI rendering modes:
+
+| ACP ToolKind | ParsedCommand | TUI Rendering |
+|--------------|---------------|---------------|
+| `Read` | `ParsedCommand::Read` | Exploring (compact, grouped) |
+| `Search` | `ParsedCommand::Search` | Exploring (compact, grouped) |
+| `Other` + title heuristics | `ListFiles`, `Search`, `Read` | Exploring (title-based fallback) |
+| `Execute`, `Edit`, `Delete`, `Move`, `Fetch`, `Think` | `ParsedCommand::Unknown` | Command (full display) |
+
+Title-based fallback uses `classify_tool_by_title()` when `ToolKind::Other` or `None`:
+- Titles containing "list", "glob", "ls", "find files" → `ListFiles`
+- Titles containing "search", "grep" → `Search`
+- Titles containing "read" or exactly "file" → `Read`
+- Everything else → `Unknown` (command mode)
+
+This enables the TUI to group and collapse read-only operations ("Explored 3 files") while showing mutating operations prominently
+
+**Event Translation (`translator.rs`):**
+
+Bridges between ACP types and codex-protocol types:
+
+| Function | Purpose |
+|----------|---------|
+| `response_items_to_content_blocks()` | Converts codex `ResponseItem` to ACP `ContentBlock` for prompts |
+| `text_to_content_block()` | Simple text-to-ContentBlock conversion |
+| `translate_session_update()` | Translates ACP `SessionUpdate` to `TranslatedEvent` enum |
+| `permission_request_to_approval_event()` | Converts ACP `RequestPermissionRequest` to Codex `ExecApprovalRequestEvent` |
+| `review_decision_to_permission_outcome()` | Converts Codex `ReviewDecision` back to ACP `RequestPermissionOutcome` |
+
+`TranslatedEvent` variants:
+- `TextDelta(String)` - Text content from `AgentMessageChunk` or `AgentThoughtChunk`
+- `Completed(StopReason)` - Session completion signal
+
+Non-text content (images, audio, resources) and tool calls are currently dropped with empty vec.
+
+**Approval Request Formatting (`translator.rs`):**
+
+When ACP agents request permission for tool operations, the translator converts raw JSON tool call data into human-readable approval requests using git-style formatting:
+
+| Tool Kind | Format Example |
+|-----------|----------------|
+| Edit | `Edit main.rs (+6 -5)` |
+| Write (new file) | `Write config.toml (23 lines)` |
+| Execute | `Execute: cargo build --release` |
+| Delete | `Delete temp.txt` |
+| Move | `Move old.rs → new.rs` |
+| Generic | `ToolName(argument)` |
+
+The formatting pipeline:
+1. `extract_command_from_tool_call()` dispatches to format functions based on `ToolKind`
+2. `extract_reason_from_tool_call()` generates the descriptive reason shown in the approval prompt
+3. Helper functions extract and format data from the `raw_input` JSON:
+   - `extract_file_path()` - finds path from `file_path`, `path`, or `file` fields
+   - `shorten_path()` - extracts just the filename for compact display
+   - `calculate_diff_stats()` - computes +added/-removed using set difference on line splits
+   - `truncate_str()` - truncates long strings with "..."
+
+Write vs Edit detection uses field presence since ACP lacks a distinct Write variant:
+- `old_string` field present → Edit operation (string replacement)
+- `content` field present → Write operation (new file creation)
+
+**Approval Translation Details:**
+
+The approval translation maps between Codex's binary approve/deny model and ACP's option-based model:
+
+- `Approved`/`ApprovedForSession` → Finds option with `AllowOnce` or `AllowAlways` kind
+- `Denied`/`Abort` → Finds option with `RejectOnce` or `RejectAlways` kind
+- Falls back to text matching ("allow", "approve", "yes" vs "deny", "reject", "no") if kind-based matching fails
+- Last resort: first option for approve, last option for deny
+
+### Things to Know
+
+**Event Flow Tracing:**
+
+The ACP backend provides detailed tracing for debugging tool event flow issues:
+
+```bash
+RUST_LOG=acp_event_flow=debug cargo run
+```
+
+The `acp_event_flow` target logs:
+- Streaming text and reasoning deltas with content previews
+- ToolCall events (skipped generic events, emitted events with parsed_cmd info)
+- ToolCallUpdate completion events with output extraction
+- Dispatch loop event counts and duplicate detection
+
+This pairs with TUI-side tracing targets (`tui_event_flow`, `cell_flushing`, `pending_exec_cells`) for full event lifecycle debugging.
+
+**Protocol Version Check:**
+
+- Minimum supported version is `acp::V1`
+- Checked during initialization handshake
+- Connection fails if agent reports older version
+
+**Stderr Handling:**
+
+- Agent stderr is captured via `spawn_local` task in `spawn_connection_internal()`
+- Lines are logged via `tracing::warn!` with "ACP agent stderr:" prefix
+- Task runs until EOF or error
+
+**Session Update Routing:**
+
+- `ClientDelegate` maintains `HashMap<SessionId, Sender<SessionUpdate>>`
+- Updates for unregistered sessions are silently dropped
+- Uses `try_send()` (non-blocking) - full/closed channels cause update loss
+
+**Agent Initialization:**
+
+Client advertises these capabilities to agents:
+- `fs.read_text_file: true`
+- `fs.write_text_file: true`
+- `terminal: false`
+
+### Future Work
+
+The following features are marked with TODO comments in the codebase:
+
+**Resume/Fork Integration (connection.rs:343-350):**
+- Accept optional session_id parameter to resume existing sessions
+- Load persisted history from Codex rollout format
+- Send history to agent via session initialization
+
+**Codex-format History Persistence (connection.rs:385-394):**
+- Collect all SessionUpdates during prompts
+- Convert to Codex ResponseItem format using translator functions
+- Write to rollout storage for session resume and history browsing
+
+**History Export for Handoff (connection.rs:220-234):**
+- Export session history in Codex format
+- Enable switching from ACP mode to HTTP mode mid-session
+- Support replaying history through different backends
+
+Created and maintained by Nori.
 ### Core Implementation
 
 **Thread-Safe Connection Wrapper (`connection.rs`):**

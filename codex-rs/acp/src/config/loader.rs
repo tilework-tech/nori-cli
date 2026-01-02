@@ -57,6 +57,14 @@ impl NoriConfig {
 
     /// Load configuration from a specific path (for testing)
     pub fn load_from_path(config_path: &PathBuf) -> Result<Self> {
+        Self::load_from_path_with_overrides(config_path, NoriConfigOverrides::default())
+    }
+
+    /// Load configuration from a specific path with CLI overrides (for testing)
+    pub fn load_from_path_with_overrides(
+        config_path: &PathBuf,
+        overrides: NoriConfigOverrides,
+    ) -> Result<Self> {
         let nori_home = config_path
             .parent()
             .map(PathBuf::from)
@@ -71,7 +79,7 @@ impl NoriConfig {
             NoriConfigToml::default()
         };
 
-        Self::from_toml(toml_config, nori_home, NoriConfigOverrides::default())
+        Self::from_toml(toml_config, nori_home, overrides)
     }
 
     /// Build resolved config from TOML + overrides
@@ -109,6 +117,10 @@ impl NoriConfig {
                 .approval_policy
                 .or(toml.approval_policy)
                 .unwrap_or(ApprovalPolicy::OnRequest),
+            acp_trace_enabled: overrides
+                .acp_trace_enabled
+                .or(toml.acp_trace_enabled)
+                .unwrap_or(false),
             animations: toml.tui.animations.unwrap_or(true),
             notifications: toml.tui.notifications.unwrap_or(true),
             nori_home,

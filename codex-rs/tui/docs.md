@@ -46,6 +46,8 @@ The TUI supports two backend modes, selected automatically at startup based on m
 
 Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
 
+When `config.acp_trace_enabled` is true (via `--acp-trace` CLI flag or `acp.trace_enabled` in config.toml), `spawn_acp_agent()` constructs an `AcpTraceConfig` with a session-specific log path (`{codex_home}/log/acp-trace-{timestamp}-{pid}.log`) and passes it to `AcpBackendConfig`. See `@/codex-rs/acp/docs.md` for details on traffic tracing.
+
 **ACP Backend Arc Reference Handling:**
 
 In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference after spawning the op forwarding task. This prevents a self-reference deadlock:
@@ -346,7 +348,7 @@ For E2E testing, `NORI_SYNC_SYSTEM_INFO=1` env var enables synchronous collectio
 **Configuration Flow:**
 
 TUI respects config overrides from:
-1. CLI flags (`--model` always available; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
+1. CLI flags (`--model`, `--acp-trace` always available; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
 2. `-c key=value` overrides
 3. Config profiles (`-p profile-name`)
 4. `~/.nori/cli/config.toml`

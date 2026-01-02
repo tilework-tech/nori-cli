@@ -36,6 +36,50 @@ use tracing::warn;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
+/// Configuration for ACP traffic tracing via sacp-tee proxy.
+///
+/// When enabled, the agent subprocess command is wrapped with `sacp-tee`
+/// to capture all JSON-RPC 2.0 traffic for debugging purposes.
+#[derive(Debug, Clone)]
+pub struct AcpTraceConfig {
+    /// Path to the log file where traffic will be recorded
+    pub log_file_path: PathBuf,
+}
+
+/// Build the command and arguments for spawning an ACP agent.
+///
+/// When `trace_config` is `Some`, the command is wrapped with `sacp-tee`
+/// to enable traffic logging. Otherwise, the original command is returned unchanged.
+///
+/// # Arguments
+/// * `config` - The ACP agent configuration
+/// * `trace_config` - Optional tracing configuration
+///
+/// # Returns
+/// A tuple of (command, args) to use when spawning the process
+pub fn build_agent_command(
+    config: &AcpAgentConfig,
+    trace_config: Option<AcpTraceConfig>,
+) -> (String, Vec<String>) {
+    match trace_config {
+        Some(trace) => {
+            // Wrap with sacp-tee: sacp-tee --log-file <path> -- <original-command> <original-args>
+            let mut args = vec![
+                "--log-file".to_string(),
+                trace.log_file_path.to_string_lossy().to_string(),
+                "--".to_string(),
+                config.command.clone(),
+            ];
+            args.extend(config.args.clone());
+            ("sacp-tee".to_string(), args)
+        }
+        None => {
+            // Pass through unchanged
+            (config.command.clone(), config.args.clone())
+        }
+    }
+}
+
 /// The type of approval event to send to the UI.
 ///
 /// This enum allows us to use the more appropriate approval UI for different
@@ -155,10 +199,15 @@ impl AcpConnection {
     /// # Arguments
     /// * `config` - Agent configuration (command, args, provider info)
     /// * `cwd` - Working directory for the agent subprocess
+    /// * `trace_config` - Optional tracing configuration for sacp-tee proxy
     ///
     /// # Returns
     /// A connected `AcpConnection` ready for creating sessions.
-    pub async fn spawn(config: &AcpAgentConfig, cwd: &Path) -> Result<Self> {
+    pub async fn spawn(
+        config: &AcpAgentConfig,
+        cwd: &Path,
+        trace_config: Option<AcpTraceConfig>,
+    ) -> Result<Self> {
         let config = config.clone();
         let cwd = cwd.to_path_buf();
 
@@ -188,7 +237,9 @@ impl AcpConnection {
                 let local = tokio::task::LocalSet::new();
                 local
                     .run_until(async move {
-                        match spawn_connection_internal(&config, &cwd, approval_tx).await {
+                        match spawn_connection_internal(&config, &cwd, approval_tx, trace_config)
+                            .await
+                        {
                             Ok((inner, capabilities)) => {
                                 let _ = init_tx.send(Ok(capabilities));
                                 run_command_loop(inner, command_rx, model_state_for_worker).await;
@@ -370,22 +421,26 @@ async fn spawn_connection_internal(
     config: &AcpAgentConfig,
     cwd: &Path,
     approval_tx: mpsc::Sender<ApprovalRequest>,
+    trace_config: Option<AcpTraceConfig>,
 ) -> Result<(AcpConnectionInner, acp::AgentCapabilities)> {
+    // Build the command, potentially wrapping with sacp-tee for tracing
+    let (command, args) = build_agent_command(config, trace_config);
+
     debug!(
         "Spawning ACP agent: {} {:?} in {}",
-        config.command,
-        config.args,
+        command,
+        args,
         cwd.display()
     );
 
-    let mut child = Command::new(&config.command)
-        .args(&config.args)
+    let mut child = Command::new(&command)
+        .args(&args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
+        .with_context(|| format!("Failed to spawn ACP agent: {}", command))?;
 
     let stdout = child.stdout.take().context("Failed to take stdout")?;
     let stdin = child.stdin.take().context("Failed to take stdin")?;
@@ -897,8 +952,8 @@ mod tests {
 
         let temp_dir = tempdir().expect("Failed to create temp dir");
 
-        // Spawn connection
-        let conn = AcpConnection::spawn(&config, temp_dir.path())
+        // Spawn connection (without tracing)
+        let conn = AcpConnection::spawn(&config, temp_dir.path(), None)
             .await
             .expect("Failed to spawn ACP connection");
 

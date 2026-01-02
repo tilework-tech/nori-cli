@@ -247,6 +247,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         tools_web_search_request: None,
         experimental_sandbox_command_assessment: None,
         additional_writable_roots: add_dir,
+        acp_trace_enabled: None,
     };
 
     let config = Config::load_with_cli_overrides(cli_kv_overrides, overrides).await?;

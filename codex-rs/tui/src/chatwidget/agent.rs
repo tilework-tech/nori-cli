@@ -4,6 +4,7 @@ use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
 #[cfg(feature = "unstable")]
 use codex_acp::AcpModelState;
+use codex_acp::AcpTraceConfig;
 use codex_acp::get_agent_config;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
@@ -171,12 +172,37 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
         // Create event channel for backend → TUI
         let (event_tx, mut event_rx) = mpsc::channel(32);
 
+        // Build trace config if tracing is enabled
+        let trace_config = if config.acp_trace_enabled {
+            // Generate a session ID for the trace file using timestamp and process ID
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let session_id = format!("{}-{}", timestamp, std::process::id());
+            let log_path = config
+                .codex_home
+                .join("log")
+                .join(format!("acp-trace-{session_id}.log"));
+            // Ensure the log directory exists
+            if let Err(e) = std::fs::create_dir_all(config.codex_home.join("log")) {
+                tracing::warn!("Failed to create log directory for ACP trace: {e}");
+            }
+            tracing::info!("ACP tracing enabled, logging to: {}", log_path.display());
+            Some(AcpTraceConfig {
+                log_file_path: log_path,
+            })
+        } else {
+            None
+        };
+
         // Create ACP backend config from codex config
         let acp_config = AcpBackendConfig {
             model: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
+            trace_config,
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {

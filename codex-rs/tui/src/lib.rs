@@ -333,6 +333,7 @@ pub async fn run_main(
         tools_web_search_request: None,
         experimental_sandbox_command_assessment: None,
         additional_writable_roots: additional_dirs,
+        acp_trace_enabled: if cli.acp_trace { Some(true) } else { None },
     };
 
     let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;

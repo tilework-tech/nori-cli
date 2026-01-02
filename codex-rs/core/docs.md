@@ -70,6 +70,17 @@ All config mutations should go through `ConfigEditsBuilder` which provides atomi
 
 This pattern ensures config changes merge with existing content rather than overwriting the entire file.
 
+**ACP Configuration:**
+
+The `Config` struct includes fields for ACP (Agent Context Protocol) integration, which are passed through to `@/codex-rs/acp` when spawning ACP agents:
+
+| Field | TOML Path | Description |
+|-------|-----------|-------------|
+| `acp_allow_http_fallback` | `acp.allow_http_fallback` | Allow fallback to HTTP providers for unregistered models |
+| `acp_trace_enabled` | `acp.trace_enabled` | Enable traffic tracing via `sacp-tee` proxy |
+
+These fields follow the standard override priority: CLI flag > TOML config > default (false). The `ConfigOverrides` struct includes `acp_trace_enabled` for CLI override support.
+
 ### Things to Know
 
 **Test Suite Configuration:**

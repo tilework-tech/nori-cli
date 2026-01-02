@@ -106,4 +106,11 @@ pub struct Cli {
     /// Intended for testing and automation scenarios.
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
+
+    /// Enable ACP traffic tracing using sacp-tee proxy.
+    /// When enabled, all JSON-RPC 2.0 traffic between the client and agent
+    /// is logged to a session-specific file in the log directory.
+    /// Requires sacp-tee to be installed and available in PATH.
+    #[arg(long = "acp-trace")]
+    pub acp_trace: bool,
 }

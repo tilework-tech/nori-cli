@@ -32,6 +32,7 @@ use tracing::warn;
 
 use crate::connection::AcpConnection;
 use crate::connection::AcpModelState;
+use crate::connection::AcpTraceConfig;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
 use crate::registry::get_agent_config;
@@ -53,6 +54,8 @@ pub struct AcpBackendConfig {
     pub approval_policy: AskForApproval,
     /// Sandbox policy for command execution
     pub sandbox_policy: SandboxPolicy,
+    /// Optional trace configuration for ACP traffic debugging
+    pub trace_config: Option<AcpTraceConfig>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -93,7 +96,8 @@ impl AcpBackend {
         debug!("Spawning ACP backend for model: {}", config.model);
 
         // Spawn the ACP connection
-        let mut connection = AcpConnection::spawn(&agent_config, &cwd).await?;
+        let mut connection =
+            AcpConnection::spawn(&agent_config, &cwd, config.trace_config.clone()).await?;
 
         // Create a session
         let session_id = connection.create_session(&cwd).await?;

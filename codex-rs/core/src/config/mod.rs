@@ -283,6 +283,10 @@ pub struct Config {
     /// registered in the ACP registry. When `false` (the default), Codex runs
     /// in ACP-only mode and produces an error for unregistered models.
     pub acp_allow_http_fallback: bool,
+
+    /// When `true`, enables ACP traffic tracing using `sacp-tee` proxy.
+    /// Traffic is logged to `codex_home/log/acp-trace-{session_id}.log`.
+    pub acp_trace_enabled: bool,
 }
 
 impl Config {
@@ -737,6 +741,11 @@ pub struct AcpConfigToml {
     /// in ACP-only mode and produces an error for unregistered models.
     #[serde(default)]
     pub allow_http_fallback: bool,
+
+    /// When `true`, enables ACP traffic tracing using `sacp-tee` proxy.
+    /// Traffic is logged to `codex_home/log/acp-trace-{session_id}.log`.
+    #[serde(default)]
+    pub trace_enabled: bool,
 }
 
 impl From<ConfigToml> for UserSavedConfig {
@@ -923,6 +932,8 @@ pub struct ConfigOverrides {
     pub experimental_sandbox_command_assessment: Option<bool>,
     /// Additional directories that should be treated as writable roots for this session.
     pub additional_writable_roots: Vec<PathBuf>,
+    /// Enable ACP traffic tracing using `sacp-tee` proxy.
+    pub acp_trace_enabled: Option<bool>,
 }
 
 /// Resolves the OSS provider from CLI override, profile config, or global config.
@@ -981,6 +992,7 @@ impl Config {
             tools_web_search_request: override_tools_web_search_request,
             experimental_sandbox_command_assessment: sandbox_command_assessment_override,
             additional_writable_roots,
+            acp_trace_enabled: acp_trace_enabled_override,
         } = overrides;
 
         let active_profile_name = config_profile_key
@@ -1289,7 +1301,14 @@ impl Config {
                     exporter,
                 }
             },
-            acp_allow_http_fallback: cfg.acp.map(|a| a.allow_http_fallback).unwrap_or(false),
+            acp_allow_http_fallback: cfg
+                .acp
+                .as_ref()
+                .map(|a| a.allow_http_fallback)
+                .unwrap_or(false),
+            acp_trace_enabled: acp_trace_enabled_override
+                .or(cfg.acp.as_ref().map(|a| a.trace_enabled))
+                .unwrap_or(false),
         };
         Ok(config)
     }
@@ -3030,6 +3049,7 @@ model_verbosity = "high"
                 animations: true,
                 otel: OtelConfig::default(),
                 acp_allow_http_fallback: false,
+                acp_trace_enabled: false,
             },
             o3_profile_config
         );
@@ -3104,6 +3124,7 @@ model_verbosity = "high"
             animations: true,
             otel: OtelConfig::default(),
             acp_allow_http_fallback: false,
+            acp_trace_enabled: false,
         };
 
         assert_eq!(expected_gpt3_profile_config, gpt3_profile_config);
@@ -3193,6 +3214,7 @@ model_verbosity = "high"
             animations: true,
             otel: OtelConfig::default(),
             acp_allow_http_fallback: false,
+            acp_trace_enabled: false,
         };
 
         assert_eq!(expected_zdr_profile_config, zdr_profile_config);
@@ -3268,6 +3290,7 @@ model_verbosity = "high"
             animations: true,
             otel: OtelConfig::default(),
             acp_allow_http_fallback: false,
+            acp_trace_enabled: false,
         };
 
         assert_eq!(expected_gpt5_profile_config, gpt5_profile_config);

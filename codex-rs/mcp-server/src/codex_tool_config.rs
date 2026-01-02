@@ -171,6 +171,7 @@ impl CodexToolCallParam {
             tools_web_search_request: None,
             experimental_sandbox_command_assessment: None,
             additional_writable_roots: Vec::new(),
+            acp_trace_enabled: None,
         };
 
         let cli_overrides = cli_overrides
