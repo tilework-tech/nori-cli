@@ -90,6 +90,8 @@ Sandboxing is enforced through `safety.rs` and `sandboxing/`:
 
 The `SandboxMode` enum controls the policy: `ReadOnly`, `WorkspaceWrite`, `DangerFullAccess`.
 
+The macOS seatbelt module (`@/codex-rs/core/src/seatbelt.rs`) exports `MACOS_PATH_TO_SEATBELT_EXECUTABLE` and `create_seatbelt_command_args()` as public for reuse by `@/codex-rs/acp` when sandboxing ACP agent subprocesses.
+
 **Authentication:**
 
 The `auth/` module manages:

@@ -160,6 +160,51 @@ The `init_rolling_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.
 - ANSI colors disabled for clean file output
 - Automatically initialized by the CLI (`@/codex-rs/cli/src/main.rs`) at startup, writing to `$NORI_HOME/log/nori-acp.YYYY-MM-DD`
 
+### Subprocess Sandboxing
+
+The `sandbox` module (`@/codex-rs/acp/src/sandbox.rs`) provides OS-level sandboxing for ACP agent subprocesses. This restricts what the agent process can access at the operating system level.
+
+**Platform Support:**
+
+| Platform | Sandbox Type | Implementation |
+|----------|--------------|----------------|
+| macOS | Seatbelt | `/usr/bin/sandbox-exec` with SBPL profile |
+| Linux | Landlock + seccomp | `codex-linux-sandbox` binary |
+| Windows | Deferred | Returns command unchanged (TODO) |
+
+**Key Types:**
+
+- `SandboxType`: Enum identifying which sandbox to use (`None`, `MacosSeatbelt`, `LinuxSeccomp`, `WindowsRestrictedToken`)
+- `SandboxedCommand`: Result struct containing transformed program, args, optional arg0 override, and sandbox type
+- `SandboxError`: Error cases (currently only `MissingLinuxSandboxBinary`)
+
+**Sandbox Policy Mapping:**
+
+The sandbox respects `SandboxPolicy` from `codex-protocol`:
+- `DangerFullAccess`: No sandbox applied, command passed through unchanged
+- `ReadOnly`: Full read access, no writes or network
+- `WorkspaceWrite`: Can write to workspace directory only
+
+**Command Transformation:**
+
+```
+┌─────────────────┐                          ┌─────────────────────────────────┐
+│  Original Cmd   │  transform_command_      │  Sandboxed Command              │
+│  program: npx   │  for_sandbox()           │  program: /usr/bin/sandbox-exec │
+│  args: [claude] │─────────────────────────►│  args: [-p, <profile>, --, ...] │
+│                 │                          │  arg0: None (macOS)             │
+└─────────────────┘                          └─────────────────────────────────┘
+```
+
+On macOS, the module delegates to `codex_core::seatbelt::create_seatbelt_command_args()` for SBPL profile generation.
+
+On Linux, args are structured as: `--sandbox-policy-cwd <cwd> --sandbox-policy <json> -- <original_command>`
+
+**Integration with Connection:**
+
+`AcpConnection::spawn()` accepts `sandbox_policy` and `codex_linux_sandbox_exe` parameters. The `spawn_connection_internal()` function calls `transform_command_for_sandbox()` before spawning the subprocess.
+
+
 ### Core Implementation
 
 **Thread-Safe Connection Wrapper (`connection.rs`):**
@@ -183,7 +228,7 @@ The ACP library uses `LocalBoxFuture` which is `!Send`, preventing direct use in
 
 Model state is stored in `Arc<RwLock<AcpModelState>>` shared between the main thread and worker thread for thread-safe access.
 
-- `AcpConnection::spawn()` creates dedicated thread with `LocalSet` for `!Send` futures
+- `AcpConnection::spawn(config, cwd, sandbox_policy, codex_linux_sandbox_exe)` creates dedicated thread with `LocalSet` for `!Send` futures, applying OS-level sandboxing to the subprocess
 - Commands sent via `mpsc::Sender<AcpCommand>` to worker thread
 - Responses returned via `oneshot` channels embedded in commands
 - Worker thread spawns subprocess, handles JSON-RPC handshake, runs command loop
@@ -211,7 +256,7 @@ The `write_text_file` method implements file creation and modification for ACP a
 
 1. **Relative Path Resolution**: Paths like `file.txt` are resolved against the workspace directory (`cwd`) before validation, so agents can use simple relative paths for workspace files
 
-2. **Security Boundaries**: Application-level path restrictions (temporary until OS-level sandboxing is deployed):
+2. **Security Boundaries (Defense-in-Depth)**: Application-level path restrictions complement OS-level sandboxing:
    - Workspace writes: Any path within or under the workspace directory
    - Temporary writes: Any path under `/tmp` directory  
    - System paths: All other paths are rejected with an error
@@ -221,6 +266,9 @@ The `write_text_file` method implements file creation and modification for ACP a
 4. **Atomicity**: Not currently atomic - partial writes can occur if interrupted
 
 The path validation canonicalizes paths to prevent symlink-based directory traversal attacks.
+
+
+The defense-in-depth approach layers protections: OS sandbox restricts the agent subprocess directly, while application-level checks control what the host writes on behalf of the agent via ACP protocol. This remains valuable because Windows lacks OS-level sandboxing currently.
 
 **Session Transcript Parsing (`session_parser.rs`):**
 

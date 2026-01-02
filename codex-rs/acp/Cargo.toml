@@ -29,6 +29,9 @@ toml = { workspace = true }
 dirs = { workspace = true }
 diffy = { workspace = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+codex-core = { path = "../core", default-features = false }
+
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 serial_test = { workspace = true }

@@ -92,8 +92,10 @@ impl AcpBackend {
 
         debug!("Spawning ACP backend for model: {}", config.model);
 
-        // Spawn the ACP connection
-        let mut connection = AcpConnection::spawn(&agent_config, &cwd).await?;
+        // Spawn the ACP connection with sandbox configuration
+        // TODO: Pass codex_linux_sandbox_exe path from configuration
+        let mut connection =
+            AcpConnection::spawn(&agent_config, &cwd, &config.sandbox_policy, None).await?;
 
         // Create a session
         let session_id = connection.create_session(&cwd).await?;

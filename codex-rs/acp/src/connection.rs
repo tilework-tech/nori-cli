@@ -22,6 +22,7 @@ use anyhow::Result;
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::approvals::ExecApprovalRequestEvent;
 use codex_protocol::protocol::ReviewDecision;
+use codex_protocol::protocol::SandboxPolicy;
 use futures::AsyncBufReadExt;
 use futures::io::BufReader;
 use tokio::process::Child;
@@ -34,6 +35,7 @@ use tracing::debug;
 use tracing::warn;
 
 use crate::registry::AcpAgentConfig;
+use crate::sandbox::transform_command_for_sandbox;
 use crate::translator;
 
 /// The type of approval event to send to the UI.
@@ -155,12 +157,21 @@ impl AcpConnection {
     /// # Arguments
     /// * `config` - Agent configuration (command, args, provider info)
     /// * `cwd` - Working directory for the agent subprocess
+    /// * `sandbox_policy` - Sandbox policy to apply to the subprocess
+    /// * `codex_linux_sandbox_exe` - Path to the `codex-linux-sandbox` binary (required on Linux)
     ///
     /// # Returns
     /// A connected `AcpConnection` ready for creating sessions.
-    pub async fn spawn(config: &AcpAgentConfig, cwd: &Path) -> Result<Self> {
+    pub async fn spawn(
+        config: &AcpAgentConfig,
+        cwd: &Path,
+        sandbox_policy: &SandboxPolicy,
+        codex_linux_sandbox_exe: Option<&Path>,
+    ) -> Result<Self> {
         let config = config.clone();
         let cwd = cwd.to_path_buf();
+        let sandbox_policy = sandbox_policy.clone();
+        let codex_linux_sandbox_exe = codex_linux_sandbox_exe.map(|p| p.to_path_buf());
 
         // Use a oneshot channel to receive the initialization result
         let (init_tx, init_rx) = oneshot::channel();
@@ -188,7 +199,15 @@ impl AcpConnection {
                 let local = tokio::task::LocalSet::new();
                 local
                     .run_until(async move {
-                        match spawn_connection_internal(&config, &cwd, approval_tx).await {
+                        match spawn_connection_internal(
+                            &config,
+                            &cwd,
+                            &sandbox_policy,
+                            codex_linux_sandbox_exe.as_deref(),
+                            approval_tx,
+                        )
+                        .await
+                        {
                             Ok((inner, capabilities)) => {
                                 let _ = init_tx.send(Ok(capabilities));
                                 run_command_loop(inner, command_rx, model_state_for_worker).await;
@@ -369,6 +388,8 @@ struct AcpConnectionInner {
 async fn spawn_connection_internal(
     config: &AcpAgentConfig,
     cwd: &Path,
+    sandbox_policy: &SandboxPolicy,
+    codex_linux_sandbox_exe: Option<&Path>,
     approval_tx: mpsc::Sender<ApprovalRequest>,
 ) -> Result<(AcpConnectionInner, acp::AgentCapabilities)> {
     debug!(
@@ -378,12 +399,40 @@ async fn spawn_connection_internal(
         cwd.display()
     );
 
-    let mut child = Command::new(&config.command)
-        .args(&config.args)
+    // Transform the command for sandbox execution based on the policy
+    let sandboxed = transform_command_for_sandbox(
+        &config.command,
+        &config.args,
+        sandbox_policy,
+        cwd,
+        codex_linux_sandbox_exe,
+    )
+    .with_context(|| format!("Failed to set up sandbox for ACP agent: {}", config.command))?;
+
+    debug!(
+        "Sandbox transformed command: {} {:?} (type: {:?})",
+        sandboxed.program, sandboxed.args, sandboxed.sandbox_type
+    );
+
+    let mut cmd = Command::new(&sandboxed.program);
+    cmd.args(&sandboxed.args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    // Set arg0 if specified (used by Linux sandbox for arg0 dispatch).
+    // The import may appear unused when sandbox gracefully degrades to unsandboxed execution.
+    #[cfg(unix)]
+    {
+        #[allow(unused_imports)]
+        use std::os::unix::process::CommandExt;
+        if let Some(ref arg0) = sandboxed.arg0 {
+            cmd.arg0(arg0);
+        }
+    }
+
+    let mut child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
 
@@ -746,16 +795,20 @@ impl acp::Client for ClientDelegate {
             path.to_path_buf()
         };
 
-        // TEMPORARY PATH RESTRICTION:
-        // This application-level path check provides basic safety until the ACP agent
-        // subprocess is launched with OS-level sandboxing (Seatbelt on macOS, Landlock
-        // on Linux, restricted tokens on Windows) as implemented in codex-core's
-        // sandboxing module. Once subprocess sandboxing is in place, these checks
-        // should be removed as the OS will enforce write restrictions more robustly.
+        // PATH RESTRICTION (Defense-in-Depth):
+        // This application-level path check provides an additional layer of safety.
+        // While ACP agent subprocesses are now launched with OS-level sandboxing
+        // (Seatbelt on macOS, Landlock+seccomp on Linux), this restriction remains
+        // valuable because:
         //
-        // For now, restrict writes to:
-        // 1. Within the working directory (typical workspace operations)
-        // 2. Within /tmp (temporary files, common for agent workflows)
+        // 1. The OS sandbox restricts what the agent subprocess can directly access
+        // 2. This restriction controls what the HOST writes on behalf of the agent
+        //    (when the agent calls write_text_file via ACP protocol)
+        // 3. Windows currently lacks OS-level sandboxing (deferred implementation)
+        //
+        // Restrict writes to:
+        // - Within the working directory (typical workspace operations)
+        // - Within /tmp (temporary files, common for agent workflows)
         let allowed = if let Ok(canonical) = resolved_path.canonicalize() {
             let in_cwd = self
                 .cwd
@@ -792,7 +845,7 @@ impl acp::Client for ClientDelegate {
                 resolved_path.display()
             )));
         }
-        // END TEMPORARY PATH RESTRICTION
+        // END PATH RESTRICTION
 
         // Create parent directories if they don't exist
         if let Some(parent) = resolved_path.parent()
@@ -897,8 +950,11 @@ mod tests {
 
         let temp_dir = tempdir().expect("Failed to create temp dir");
 
+        // Use DangerFullAccess for testing - sandbox transformation is tested in sandbox.rs
+        let sandbox_policy = SandboxPolicy::DangerFullAccess;
+
         // Spawn connection
-        let conn = AcpConnection::spawn(&config, temp_dir.path())
+        let conn = AcpConnection::spawn(&config, temp_dir.path(), &sandbox_policy, None)
             .await
             .expect("Failed to spawn ACP connection");
 

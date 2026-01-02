@@ -10,6 +10,7 @@ pub mod backend;
 pub mod config;
 pub mod connection;
 pub mod registry;
+pub mod sandbox;
 pub mod session_parser;
 pub mod tracing_setup;
 pub mod translator;
@@ -45,6 +46,13 @@ pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
+
+// Sandbox types
+pub use sandbox::SandboxError;
+pub use sandbox::SandboxType;
+pub use sandbox::SandboxedCommand;
+pub use sandbox::get_platform_sandbox;
+pub use sandbox::transform_command_for_sandbox;
 
 // Re-export commonly used types from agent-client-protocol
 pub use agent_client_protocol::Agent;
