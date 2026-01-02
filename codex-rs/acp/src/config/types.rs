@@ -147,7 +147,7 @@ impl NoriConfig {
     pub fn acp_trace_log_path(&self, session_id: &str) -> PathBuf {
         self.nori_home
             .join("log")
-            .join(format!("acp-trace-{}.log", session_id))
+            .join(format!("acp-trace-{session_id}.log"))
     }
 }
 

@@ -440,7 +440,7 @@ async fn spawn_connection_internal(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .with_context(|| format!("Failed to spawn ACP agent: {}", command))?;
+        .with_context(|| format!("Failed to spawn ACP agent: {command}"))?;
 
     let stdout = child.stdout.take().context("Failed to take stdout")?;
     let stdin = child.stdin.take().context("Failed to take stdin")?;
