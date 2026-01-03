@@ -171,7 +171,7 @@ impl AcpConnection {
         let config = config.clone();
         let cwd = cwd.to_path_buf();
         let sandbox_policy = sandbox_policy.clone();
-        let codex_linux_sandbox_exe = codex_linux_sandbox_exe.map(|p| p.to_path_buf());
+        let codex_linux_sandbox_exe = codex_linux_sandbox_exe.map(std::path::Path::to_path_buf);
 
         // Use a oneshot channel to receive the initialization result
         let (init_tx, init_rx) = oneshot::channel();
