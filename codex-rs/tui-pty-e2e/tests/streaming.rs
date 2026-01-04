@@ -146,10 +146,10 @@ fn test_status_displays_token_usage_from_session_transcript() {
     let nori_home = session
         .nori_home_path()
         .expect("nori_home should exist in test");
-    
+
     // Mock Agent uses session ID "0" for the first session
     let session_id = "0";
-    
+
     // Create Claude projects directory structure
     // Claude stores transcripts at ~/.claude/projects/<project_path>/<session_id>.jsonl
     // where project_path is cwd with / replaced by -
@@ -197,7 +197,7 @@ fn test_status_displays_token_usage_from_session_transcript() {
 
     // Verify token usage details appear in output
     let screen = session.screen_contents();
-    
+
     assert!(
         screen.contains("input:"),
         "Should show input tokens label, got:\n{}",
