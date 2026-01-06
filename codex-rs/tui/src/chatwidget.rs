@@ -1381,6 +1381,9 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
             }),
             active_cell: None,
             config: config.clone(),
@@ -1468,6 +1471,9 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
             }),
             active_cell: None,
             config: config.clone(),
@@ -1523,6 +1529,9 @@ impl ChatWidget {
 
     /// Set a pending agent to switch to on the next prompt submission.
     pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
+        // Update the bottom pane's model display name for approval dialogs
+        self.bottom_pane
+            .set_model_display_name(display_name.clone());
         self.pending_agent = Some(PendingAgentInfo {
             model_name,
             display_name,
@@ -3160,6 +3169,18 @@ impl ChatWidget {
     pub(crate) fn set_model(&mut self, model: &str) {
         self.session_header.set_model(model);
         self.config.model = model.to_string();
+        // Update the bottom pane's model display name for approval dialogs
+        let display_name = crate::nori::agent_picker::get_agent_info(model)
+            .map(|info| info.display_name)
+            .unwrap_or_else(|| model.to_string());
+        self.bottom_pane.set_model_display_name(display_name);
+    }
+
+    /// Update the model display name shown in approval dialogs.
+    /// Used when ACP model switch completes successfully.
+    #[cfg(feature = "unstable")]
+    pub(crate) fn update_model_display_name(&mut self, display_name: String) {
+        self.bottom_pane.set_model_display_name(display_name);
     }
 
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {

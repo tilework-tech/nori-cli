@@ -69,6 +69,7 @@ The `discover_all_instruction_files()` function discovers ALL instruction files 
 - `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry with a `SelectionAction` that sends `AppEvent::SetPendingAgent`
 - `acp_model_picker_params()` renders a fallback when the `unstable` feature is disabled
 - `PendingAgentSelection` holds the selected model/display name pair until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`
+- `get_agent_info(model_name)` looks up agent metadata (display name, description) from the available agents list by model name (case-insensitive). Used by `chatwidget.rs` to resolve human-readable display names for approval dialogs.
 
 **Feedback Redirect (`feedback.rs`):**
 

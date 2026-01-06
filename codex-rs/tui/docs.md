@@ -202,6 +202,18 @@ Most event types (exec begin/end, MCP calls, elicitation) are queued during acti
 - The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
 - `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
 
+**Approval Overlay Model Display Name:**
+
+The approval overlay displays the current agent's display name (e.g., "Claude", "Gemini") instead of a hardcoded name in options like "No, and tell Claude what to do differently". The display name flows through:
+
+1. `ChatWidget` initialization resolves the display name via `nori::agent_picker::get_agent_info(model)`, falling back to the raw model name if not found
+2. `BottomPaneParams.model_display_name` carries the name to `BottomPane`
+3. `BottomPane.set_model_display_name()` allows dynamic updates when agent switches
+4. `ApprovalOverlay::new()` receives the display name and passes it to `exec_options()` / `patch_options()`
+5. If the display name is empty, "the agent" is used as fallback
+
+Updates occur via `set_pending_agent()` (when user selects new agent) and `set_model()` (when model changes), ensuring the approval dialog always reflects the active agent.
+
 **Pending ExecCell Tracking:**
 
 The `PendingExecCellTracker` (`chatwidget/pending_exec_cells.rs`) prevents duplicate ACP tool call messages in the chat history. The problem it solves:

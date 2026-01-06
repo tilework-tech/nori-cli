@@ -67,10 +67,15 @@ pub(crate) struct ApprovalOverlay {
     options: Vec<ApprovalOption>,
     current_complete: bool,
     done: bool,
+    model_display_name: String,
 }
 
 impl ApprovalOverlay {
-    pub fn new(request: ApprovalRequest, app_event_tx: AppEventSender) -> Self {
+    pub fn new(
+        request: ApprovalRequest,
+        app_event_tx: AppEventSender,
+        model_display_name: String,
+    ) -> Self {
         let mut view = Self {
             current_request: None,
             current_variant: None,
@@ -80,6 +85,7 @@ impl ApprovalOverlay {
             options: Vec::new(),
             current_complete: false,
             done: false,
+            model_display_name,
         };
         view.set_current(request);
         view
@@ -94,7 +100,7 @@ impl ApprovalOverlay {
         let ApprovalRequestState { variant, header } = ApprovalRequestState::from(request);
         self.current_variant = Some(variant.clone());
         self.current_complete = false;
-        let (options, params) = Self::build_options(variant, header);
+        let (options, params) = Self::build_options(variant, header, &self.model_display_name);
         self.options = options;
         self.list = ListSelectionView::new(params, self.app_event_tx.clone());
     }
@@ -102,14 +108,15 @@ impl ApprovalOverlay {
     fn build_options(
         variant: ApprovalVariant,
         header: Box<dyn Renderable>,
+        model_display_name: &str,
     ) -> (Vec<ApprovalOption>, SelectionViewParams) {
         let (options, title) = match &variant {
             ApprovalVariant::Exec { .. } => (
-                exec_options(),
+                exec_options(model_display_name),
                 "Would you like to run the following command?".to_string(),
             ),
             ApprovalVariant::ApplyPatch { .. } => (
-                patch_options(),
+                patch_options(model_display_name),
                 "Would you like to make the following edits?".to_string(),
             ),
             ApprovalVariant::McpElicitation { server_name, .. } => (
@@ -463,7 +470,12 @@ impl ApprovalOption {
     }
 }
 
-fn exec_options() -> Vec<ApprovalOption> {
+fn exec_options(model_display_name: &str) -> Vec<ApprovalOption> {
+    let display_name = if model_display_name.is_empty() {
+        "the agent"
+    } else {
+        model_display_name
+    };
     vec![
         ApprovalOption {
             label: "Yes, proceed".to_string(),
@@ -478,7 +490,7 @@ fn exec_options() -> Vec<ApprovalOption> {
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('a'))],
         },
         ApprovalOption {
-            label: "No, and tell Codex what to do differently".to_string(),
+            label: format!("No, and tell {display_name} what to do differently"),
             decision: ApprovalDecision::Review(ReviewDecision::Abort),
             display_shortcut: Some(key_hint::plain(KeyCode::Esc)),
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('n'))],
@@ -486,7 +498,12 @@ fn exec_options() -> Vec<ApprovalOption> {
     ]
 }
 
-fn patch_options() -> Vec<ApprovalOption> {
+fn patch_options(model_display_name: &str) -> Vec<ApprovalOption> {
+    let display_name = if model_display_name.is_empty() {
+        "the agent"
+    } else {
+        model_display_name
+    };
     vec![
         ApprovalOption {
             label: "Yes, proceed".to_string(),
@@ -495,7 +512,7 @@ fn patch_options() -> Vec<ApprovalOption> {
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('y'))],
         },
         ApprovalOption {
-            label: "No, and tell Codex what to do differently".to_string(),
+            label: format!("No, and tell {display_name} what to do differently"),
             decision: ApprovalDecision::Review(ReviewDecision::Abort),
             display_shortcut: Some(key_hint::plain(KeyCode::Esc)),
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('n'))],
@@ -546,7 +563,7 @@ mod tests {
     fn ctrl_c_aborts_and_clears_queue() {
         let (tx, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx);
-        let mut view = ApprovalOverlay::new(make_exec_request(), tx);
+        let mut view = ApprovalOverlay::new(make_exec_request(), tx, String::new());
         view.enqueue_request(make_exec_request());
         assert_eq!(CancellationEvent::Handled, view.on_ctrl_c());
         assert!(view.queue.is_empty());
@@ -557,7 +574,7 @@ mod tests {
     fn shortcut_triggers_selection() {
         let (tx, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx);
-        let mut view = ApprovalOverlay::new(make_exec_request(), tx);
+        let mut view = ApprovalOverlay::new(make_exec_request(), tx, String::new());
         assert!(!view.is_complete());
         view.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
         // We expect at least one CodexOp message in the queue.
@@ -583,7 +600,7 @@ mod tests {
             risk: None,
         };
 
-        let view = ApprovalOverlay::new(exec_request, tx);
+        let view = ApprovalOverlay::new(exec_request, tx, String::new());
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
         view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
 
@@ -633,7 +650,7 @@ mod tests {
     fn enter_sets_last_selected_index_without_dismissing() {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let mut view = ApprovalOverlay::new(make_exec_request(), tx);
+        let mut view = ApprovalOverlay::new(make_exec_request(), tx, String::new());
         view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -650,5 +667,100 @@ mod tests {
             }
         }
         assert_eq!(decision, Some(ReviewDecision::ApprovedForSession));
+    }
+
+    #[test]
+    fn exec_approval_shows_model_name_in_deny_option() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let exec_request = ApprovalRequest::Exec {
+            id: "test".into(),
+            command: vec!["echo".into(), "test".into()],
+            reason: None,
+            risk: None,
+        };
+
+        let view = ApprovalOverlay::new(exec_request, tx, "Claude".to_string());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        assert!(
+            rendered.iter().any(|line| line.contains("tell Claude")),
+            "expected deny option to include model name 'Claude', got {rendered:?}"
+        );
+        assert!(
+            !rendered.iter().any(|line| line.contains("tell Codex")),
+            "should not contain hardcoded 'Codex', got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn patch_approval_shows_model_name_in_deny_option() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let patch_request = ApprovalRequest::ApplyPatch {
+            id: "test".into(),
+            reason: None,
+            cwd: PathBuf::from("/tmp"),
+            changes: HashMap::new(),
+        };
+
+        let view = ApprovalOverlay::new(patch_request, tx, "Gemini".to_string());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        assert!(
+            rendered.iter().any(|line| line.contains("tell Gemini")),
+            "expected deny option to include model name 'Gemini', got {rendered:?}"
+        );
+        assert!(
+            !rendered.iter().any(|line| line.contains("tell Codex")),
+            "should not contain hardcoded 'Codex', got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn approval_overlay_uses_fallback_for_empty_model_name() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let exec_request = ApprovalRequest::Exec {
+            id: "test".into(),
+            command: vec!["echo".into(), "test".into()],
+            reason: None,
+            risk: None,
+        };
+
+        let view = ApprovalOverlay::new(exec_request, tx, "".to_string());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        assert!(
+            rendered.iter().any(|line| line.contains("tell the agent")),
+            "expected deny option to use fallback 'the agent' for empty model name, got {rendered:?}"
+        );
     }
 }

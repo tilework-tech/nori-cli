@@ -1021,6 +1021,9 @@ impl App {
                 error,
             } => {
                 if success {
+                    // Update the approval dialog display name to reflect the new model
+                    self.chat_widget
+                        .update_model_display_name(display_name.clone());
                     self.chat_widget
                         .add_info_message(format!("Model switched to: {display_name}"), None);
                 } else {

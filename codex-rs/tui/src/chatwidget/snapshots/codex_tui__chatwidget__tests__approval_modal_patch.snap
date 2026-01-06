@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests.rs
+assertion_line: 2003
 expression: terminal.backend().vt100().screen().contents()
 ---
   Would you like to make the following edits?
@@ -12,6 +13,6 @@ expression: terminal.backend().vt100().screen().contents()
     2 +world
 
 › 1. Yes, proceed (y)
-  2. No, and tell Codex what to do differently (esc)
+  2. No, and tell the agent what to do differently (esc)
 
   Press enter to confirm or esc to cancel
