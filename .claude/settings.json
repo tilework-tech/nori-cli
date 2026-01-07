@@ -22,12 +22,6 @@
       "Bash(cargo t:*)",
       "Bash(cargo search:*)"
     ],
-    "additionalDirectories": [
-      ".claude/profiles",
-      ".claude/skills",
-      "/home/clifford/Documents/source/nori/cli/.claude/profiles",
-      "/home/clifford/Documents/source/nori/cli/.claude/skills"
-    ],
     "sandbox": {
       "filesystem": {
         "read": {
