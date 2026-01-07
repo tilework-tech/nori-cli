@@ -162,7 +162,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
-| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle, event isolation, and config persistence - verifies subprocess spawning, cleanup on session switch, different agents use different processes, event filtering prevents cross-agent contamination, and config persistence deferred until successful spawn (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace and `/tmp/claude/` allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_tool_calls.rs` | ACP tool call rendering and multi-call exploring cells - verifies tool calls appear correctly in TUI, tests grouping of Read/Search operations, validates cells don't disappear during streaming with out-of-order completion events; uses `MOCK_AGENT_MULTI_CALL_EXPLORING` and `MOCK_AGENT_NO_FINAL_TEXT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
@@ -305,6 +305,12 @@ Linux-only tests that verify ACP subprocess lifecycle management and event isola
 - `extract_agent_messages_from_log()` helper parses `Mock agent:` log entries from ACP log file
 - `test_agent_switch_message_flow_mock_to_mock_alt` verifies that after switching agents, the NEW agent receives and responds to prompts (catches race conditions where OLD agent events could leak)
 - `test_agent_switch_logs_correct_sequence` verifies the expected log sequence during agent switch: agent receives prompt, logs receipt, sends response
+
+*Config Persistence Tests:*
+- `test_agent_switch_config_persisted_after_successful_spawn` verifies that config IS persisted when agent spawns successfully - uses Codex agent which sends `SessionConfigured`, confirming persistence happens after successful spawn
+- `test_agent_switch_to_mock_alt_persists_config` verifies normal agent switch flow persists config correctly - switches from `mock-model` to `mock-model-alt` and confirms config.toml is updated
+- `nori_home_path()` method on `TuiSession` returns the temp directory used as NORI_HOME, allowing tests to read `config.toml` and verify persistence
+- These tests are regression tests for the crash loop bug where config was persisted BEFORE spawn attempt, causing restart loops when switching to invalid agents
 
 **Binary Discovery:**
 

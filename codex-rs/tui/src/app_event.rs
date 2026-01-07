@@ -212,6 +212,14 @@ pub(crate) enum AppEvent {
         image_paths: Vec<PathBuf>,
     },
 
+    /// Persist the agent selection to config.toml after successful spawn.
+    /// This is sent after SessionConfigured is received during an agent switch,
+    /// ensuring the config is only updated if the agent actually started successfully.
+    PersistAgentSelection {
+        /// The model name to persist (e.g., "claude", "codex", "gemini-2.5-flash")
+        model_name: String,
+    },
+
     /// Open the ACP model picker popup with available models from the agent.
     #[cfg(feature = "unstable")]
     OpenAcpModelPicker {

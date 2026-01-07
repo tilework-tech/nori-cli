@@ -387,6 +387,7 @@ fn make_chatwidget_manual() -> (
         pending_agent: None,
         expected_model: None,
         session_configured_received: false,
+        pending_agent_switch: None,
         #[cfg(feature = "unstable")]
         acp_handle: None,
     };

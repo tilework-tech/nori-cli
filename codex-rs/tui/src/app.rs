@@ -961,24 +961,20 @@ impl App {
                 // Clear the pending agent since we're applying it now
                 self.pending_agent = None;
 
-                // Update the model in config
+                // Update the model in config (in-memory only, NOT persisted yet)
                 self.config.model = model_name.clone();
 
-                // Persist the agent selection to config.toml for next TUI startup
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_agent(Some(&model_name))
-                    .apply()
-                    .await
-                {
-                    tracing::error!(error = %err, "failed to persist agent selection");
-                    // Non-fatal: continue with the switch even if persistence fails
-                }
+                // NOTE: We intentionally do NOT persist the agent selection here.
+                // Config persistence is deferred until after successful spawn,
+                // triggered by SessionConfigured event. This prevents crash loops
+                // when switching to an agent that fails to spawn.
 
                 // Shutdown current conversation
                 self.shutdown_current_conversation().await;
 
                 // Create the new chat widget with the new config and the message as initial prompt
                 // Set expected_model to filter events from the OLD agent until SessionConfigured
+                // Set pending_agent_switch so ChatWidget knows to persist config on success
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: self.config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -993,10 +989,28 @@ impl App {
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
 
+                // Mark that an agent switch is in progress so we persist on SessionConfigured
+                self.chat_widget
+                    .set_pending_agent_switch(model_name.clone());
+
                 self.chat_widget.add_info_message(
                     format!("Started new conversation with agent: {display_name}"),
                     None,
                 );
+            }
+            AppEvent::PersistAgentSelection { model_name } => {
+                // Persist the agent selection to config.toml after successful spawn
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                    .set_agent(Some(&model_name))
+                    .apply()
+                    .await
+                {
+                    tracing::error!(error = %err, "failed to persist agent selection");
+                    self.chat_widget
+                        .add_error_message(format!("Failed to save agent selection: {err}"));
+                } else {
+                    tracing::info!("Agent selection '{}' persisted to config", model_name);
+                }
             }
             #[cfg(feature = "unstable")]
             AppEvent::OpenAcpModelPicker {

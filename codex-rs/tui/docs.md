@@ -79,8 +79,16 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 
 - `/agent` opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.
 - Selecting an agent sends `AppEvent::SetPendingAgent`, so both the App and `ChatWidget` store a `pending_agent` (see `PendingAgentSelection` and `PendingAgentInfo`). The UI informs the user that the switch will happen on the next prompt submission.
-- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model. The App persists the agent selection to `~/.nori/cli/config.toml` via `ConfigEditsBuilder::set_agent()`, updates `Config`, shuts down the old conversation, and creates a `ChatWidget` with `expected_model` to filter out leftover events.
-- This workflow avoids disrupting active turns and powers the agent-switching verification in `tui-pty-e2e/tests/agent_switching.rs`.
+- When the next prompt is submitted, `ChatWidget` intercepts the queued `UserMessage`, forwards it as `AppEvent::SubmitWithAgentSwitch`, and lets the App restart the conversation with the new model.
+- **Config persistence is deferred until after successful spawn** to prevent crash loops. The sequence is:
+  1. `App` updates in-memory `config.model` but does NOT persist to disk
+  2. `App` shuts down old conversation and creates new `ChatWidget` with `expected_model` set
+  3. `ChatWidget.set_pending_agent_switch(model_name)` marks a switch in progress
+  4. New agent subprocess spawns; if spawn fails, CLI exits but config unchanged (safe restart)
+  5. On successful spawn, `SessionConfigured` event arrives at `ChatWidget.on_session_configured()`
+  6. `ChatWidget` detects pending switch and sends `AppEvent::PersistAgentSelection { model_name }`
+  7. `App` persists agent to `~/.nori/cli/config.toml` via `ConfigEditsBuilder::set_agent()`
+- This workflow avoids disrupting active turns and prevents crash loops when switching to agents that fail to spawn.
 
 **ACP Model Switching (Unstable Feature):**
 

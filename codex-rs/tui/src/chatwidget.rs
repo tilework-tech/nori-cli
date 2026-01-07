@@ -345,6 +345,10 @@ pub(crate) struct ChatWidget {
     // Whether SessionConfigured has been received for this widget.
     // Used with expected_model to filter events from previous agents.
     session_configured_received: bool,
+    // Model name to persist to config after successful spawn.
+    // Set during agent switch, cleared after SessionConfigured triggers persistence.
+    // This defers config persistence until spawn succeeds, preventing crash loops.
+    pending_agent_switch: Option<String>,
     // ACP agent handle for model switching (only present in ACP mode)
     #[cfg(feature = "unstable")]
     acp_handle: Option<AcpAgentHandle>,
@@ -407,6 +411,14 @@ impl ChatWidget {
         // Mark that we've received SessionConfigured - this unlocks event processing
         // when expected_model is set (during agent switching)
         self.session_configured_received = true;
+
+        // If we're completing an agent switch, NOW persist the config.
+        // This ensures config is only updated after successful spawn,
+        // preventing crash loops when switching to unavailable agents.
+        if let Some(model_name) = self.pending_agent_switch.take() {
+            self.app_event_tx
+                .send(AppEvent::PersistAgentSelection { model_name });
+        }
 
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
@@ -1426,6 +1438,7 @@ impl ChatWidget {
             pending_agent: None,
             expected_model,
             session_configured_received: false,
+            pending_agent_switch: None,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
         };
@@ -1517,6 +1530,7 @@ impl ChatWidget {
             expected_model,
             // For existing conversations, we've already received SessionConfigured
             session_configured_received: true,
+            pending_agent_switch: None,
             // No ACP handle for existing conversations (they are HTTP mode only)
             #[cfg(feature = "unstable")]
             acp_handle: None,
@@ -1536,6 +1550,13 @@ impl ChatWidget {
             model_name,
             display_name,
         });
+    }
+
+    /// Mark that an agent switch is in progress and config should be persisted
+    /// when SessionConfigured is received. This defers persistence until spawn
+    /// succeeds, preventing crash loops when switching to unavailable agents.
+    pub(crate) fn set_pending_agent_switch(&mut self, model_name: String) {
+        self.pending_agent_switch = Some(model_name);
     }
 
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
