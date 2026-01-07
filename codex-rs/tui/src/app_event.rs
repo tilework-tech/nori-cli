@@ -212,6 +212,15 @@ pub(crate) enum AppEvent {
         image_paths: Vec<PathBuf>,
     },
 
+    /// Agent failed to spawn (ACP or HTTP backend). Show error and prompt user
+    /// to select a different agent.
+    AgentSpawnFailed {
+        /// The model name of the agent that failed to spawn
+        model_name: String,
+        /// The error message describing the failure
+        error: String,
+    },
+
     /// Open the ACP model picker popup with available models from the agent.
     #[cfg(feature = "unstable")]
     OpenAcpModelPicker {

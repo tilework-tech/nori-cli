@@ -42,9 +42,30 @@ The TUI supports two backend modes, selected automatically at startup based on m
 - `spawn_agent()`: Entry point that detects ACP vs HTTP mode via `codex_acp::get_agent_config()`
 - `spawn_acp_agent()`: Uses `AcpBackend` for ACP-registered models (e.g., "mock-model", "mock-model-alt", "claude-acp", "gemini-acp")
 - `spawn_http_agent()`: Uses `codex-core` for HTTP-based LLM providers (OpenAI, Anthropic, etc.)
-- `spawn_error_agent()`: Displays error and exits for unregistered models when HTTP fallback is disabled
+- `spawn_error_agent()`: Handles unregistered models when HTTP fallback is disabled
 
 Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
+
+**Agent Spawn Failure Recovery:**
+
+All agent spawn paths use graceful failure recovery via the `AgentSpawnFailed` event instead of exiting the application:
+
+```
+┌─────────────────────┐     spawn fails      ┌──────────────────────────┐
+│  spawn_acp_agent()  │ ────────────────────▶│ AppEvent::AgentSpawnFailed│
+│  spawn_http_agent() │                      │  { model_name, error }   │
+│  spawn_error_agent()│                      └───────────┬──────────────┘
+└─────────────────────┘                                  │
+                                                         ▼
+                        ┌────────────────────────────────────────────────┐
+                        │  App::handle_event()                           │
+                        │  1. Log warning with model and error           │
+                        │  2. add_error_message() - show inline error    │
+                        │  3. open_agent_popup() - let user pick another │
+                        └────────────────────────────────────────────────┘
+```
+
+This prevents crash loops: if a user selects an agent that fails to spawn (e.g., ACP session creation fails), the agent is still persisted to `config.toml` as user intent. On restart, the same failing agent would load, causing repeated failures. By showing an error and opening the agent picker, users can select a working agent without exiting.
 
 **ACP Backend Arc Reference Handling:**
 
