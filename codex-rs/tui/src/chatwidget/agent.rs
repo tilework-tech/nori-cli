@@ -9,8 +9,6 @@ use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
 use codex_core::config::Config;
-use codex_core::protocol::Event;
-use codex_core::protocol::EventMsg;
 use codex_core::protocol::Op;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
@@ -113,13 +111,13 @@ pub(crate) fn spawn_agent(
 
         // Model NOT registered and HTTP fallback NOT allowed -> error
         (false, false) => {
+            let model_name = config.model;
             let error_msg = format!(
-                "Model '{}' is not registered as an ACP agent. \
+                "Model '{model_name}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp",
-                config.model
+                 Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp"
             );
-            let op_tx = spawn_error_agent(error_msg, app_event_tx);
+            let op_tx = spawn_error_agent(model_name, error_msg, app_event_tx);
             SpawnAgentResult {
                 op_tx,
                 #[cfg(feature = "unstable")]
@@ -129,25 +127,23 @@ pub(crate) fn spawn_agent(
     }
 }
 
-/// Spawn an agent that emits an error and exits after a brief delay.
+/// Spawn an agent that emits an error and opens the agent picker.
 ///
-/// The delay allows the TUI to render the error message before exiting,
-/// so users can see what went wrong.
-fn spawn_error_agent(error_msg: String, app_event_tx: AppEventSender) -> UnboundedSender<Op> {
+/// This is used when the requested model is not a valid ACP agent.
+fn spawn_error_agent(
+    model_name: String,
+    error_msg: String,
+    app_event_tx: AppEventSender,
+) -> UnboundedSender<Op> {
     let (codex_op_tx, _codex_op_rx) = unbounded_channel::<Op>();
 
     tokio::spawn(async move {
         tracing::error!("{}", error_msg);
-        app_event_tx.send(AppEvent::CodexEvent(Event {
-            id: String::new(),
-            msg: EventMsg::Error(codex_protocol::protocol::ErrorEvent {
-                message: error_msg,
-                codex_error_info: None,
-            }),
-        }));
-        // Brief delay to allow the TUI to render the error before exiting
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        app_event_tx.send(AppEvent::ExitRequest);
+        // Send AgentSpawnFailed so the user can select a different agent
+        app_event_tx.send(AppEvent::AgentSpawnFailed {
+            model_name,
+            error: error_msg,
+        });
     });
 
     codex_op_tx
@@ -183,14 +179,11 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             Ok(b) => Arc::new(b),
             Err(e) => {
                 tracing::error!("failed to spawn ACP backend: {e}");
-                app_event_tx.send(AppEvent::CodexEvent(Event {
-                    id: String::new(),
-                    msg: EventMsg::Error(codex_protocol::protocol::ErrorEvent {
-                        message: format!("Failed to spawn ACP agent: {e}"),
-                        codex_error_info: None,
-                    }),
-                }));
-                app_event_tx.send(AppEvent::ExitRequest);
+                // Send AgentSpawnFailed so the user can select a different agent
+                app_event_tx.send(AppEvent::AgentSpawnFailed {
+                    model_name: config.model.clone(),
+                    error: format!("Failed to spawn ACP agent: {e}"),
+                });
                 return;
             }
         };
@@ -257,6 +250,8 @@ fn spawn_http_agent(
 ) -> UnboundedSender<Op> {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
+    // Clone model name before config is moved
+    let model_name = config.model.clone();
     let app_event_tx_clone = app_event_tx;
     tokio::spawn(async move {
         let NewConversation {
@@ -269,11 +264,11 @@ fn spawn_http_agent(
             Err(err) => {
                 let message = err.to_string();
                 eprintln!("{message}");
-                app_event_tx_clone.send(AppEvent::CodexEvent(Event {
-                    id: "".to_string(),
-                    msg: EventMsg::Error(err.to_error_event(None)),
-                }));
-                app_event_tx_clone.send(AppEvent::ExitRequest);
+                // Send AgentSpawnFailed so the user can select a different agent
+                app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
+                    model_name,
+                    error: format!("Failed to initialize HTTP agent: {err}"),
+                });
                 tracing::error!("failed to initialize codex: {err}");
                 return;
             }

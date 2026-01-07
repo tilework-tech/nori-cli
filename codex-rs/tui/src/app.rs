@@ -998,6 +998,20 @@ impl App {
                     None,
                 );
             }
+            AppEvent::AgentSpawnFailed { model_name, error } => {
+                tracing::warn!(
+                    model = %model_name,
+                    error = %error,
+                    "Agent failed to spawn, opening agent picker"
+                );
+
+                // Show error message to the user
+                self.chat_widget
+                    .add_error_message(format!("Failed to start agent '{model_name}': {error}"));
+
+                // Open agent picker so user can select a different agent
+                self.chat_widget.open_agent_popup();
+            }
             #[cfg(feature = "unstable")]
             AppEvent::OpenAcpModelPicker {
                 models,
@@ -1172,6 +1186,7 @@ mod tests {
     use super::*;
     use crate::app_backtrack::BacktrackState;
     use crate::app_backtrack::user_count;
+    use crate::chatwidget::tests::make_chatwidget_manual;
     use crate::chatwidget::tests::make_chatwidget_manual_with_sender;
     use crate::file_search::FileSearchManager;
     use crate::history_cell::AgentMessageCell;
@@ -1509,5 +1524,37 @@ mod tests {
             config_content.contains("agent = \"gemini\""),
             "Config should contain 'agent = \"gemini\"', got: {config_content}"
         );
+    }
+
+    /// Test that AgentSpawnFailed event can be constructed and matches expected structure
+    #[test]
+    fn agent_spawn_failed_event_exists() {
+        // This test verifies the AgentSpawnFailed event variant exists
+        // and has the expected fields
+        let event = AppEvent::AgentSpawnFailed {
+            model_name: "codex".to_string(),
+            error: "Failed to spawn ACP agent: npx not found".to_string(),
+        };
+
+        // Verify it matches the expected pattern
+        match event {
+            AppEvent::AgentSpawnFailed { model_name, error } => {
+                assert_eq!(model_name, "codex");
+                assert!(error.contains("Failed to spawn"));
+            }
+            _ => panic!("Expected AgentSpawnFailed event"),
+        }
+    }
+
+    /// Test that App has a method to handle spawn failures by opening the agent picker
+    #[test]
+    fn chat_widget_can_open_agent_popup() {
+        let (mut chat, _rx, _ops) = make_chatwidget_manual();
+
+        // Before opening, we should be able to call open_agent_popup without panic
+        chat.open_agent_popup();
+
+        // The popup should now be showing (we can't easily check internal state,
+        // but the call should succeed without panicking)
     }
 }
