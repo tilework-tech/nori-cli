@@ -67,6 +67,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `nori/`: Nori-specific branding and customization (see `@/codex-rs/tui/src/nori/docs.md`)
 - `system_info.rs`: Background system info collection for footer (git branch, Nori profile/version, git stats, worktree detection)
 - `effective_cwd_tracker.rs`: Tracks effective CWD from tool call locations with debounce logic
+- `session_stats.rs`: Session activity tracking and exit summary display
 
 **Input Handling:**
 
@@ -112,6 +113,38 @@ The `onboarding/` module handles first-run experience:
 
 - `resume_picker.rs`: UI for selecting sessions to resume
 - `session_log.rs`: High-fidelity session event logging
+
+**Session Statistics (`session_stats.rs`):**
+
+Tracks user activity during a session and displays a summary when the TUI exits. The `SessionStats` struct records:
+- User and assistant message counts
+- Tool calls by category (Bash, Read, Edit, etc.)
+- Skills invoked via the Skill tool
+- Subagents invoked via the Task tool
+
+Data flow:
+```
+┌─────────────────────┐  record_*()         ┌──────────────────┐
+│ ChatWidget handlers │ ──────────────────▶ │  SessionStats    │
+│ - on_agent_message  │                     │  (in ChatWidget) │
+│ - handle_exec_begin │                     └────────┬─────────┘
+│ - handle_mcp_begin  │                              │
+│ - on_patch_apply    │                              │
+│ - send_user_message │                              │
+└─────────────────────┘                              │
+                                                     │ session_stats()
+     ┌───────────────────────────────────────────────┘
+     ▼
+┌──────────────────────┐    AppExitInfo    ┌────────────────────┐
+│ App::run() returns   │ ─────────────────▶│ main.rs prints     │
+│ with session_stats   │                   │ to_display_string()│
+└──────────────────────┘                   └────────────────────┘
+```
+
+The module also provides:
+- `SessionStatisticsCell`: Implements `HistoryCell` trait for TUI rendering with bordered display
+- `extract_skill_from_raw_input()`: Parses Skill tool arguments to extract skill name from `{"skill": "name"}`
+- `extract_subagent_from_raw_input()`: Parses Task tool arguments to extract subagent type from `{"subagent_type": "type"}`
 
 ### Things to Know
 

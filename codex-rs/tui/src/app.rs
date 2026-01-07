@@ -67,6 +67,7 @@ pub struct AppExitInfo {
     pub token_usage: TokenUsage,
     pub conversation_id: Option<ConversationId>,
     pub update_action: Option<UpdateAction>,
+    pub session_stats: crate::session_stats::SessionStats,
 }
 
 fn session_summary(
@@ -185,6 +186,7 @@ async fn handle_model_migration_prompt_if_needed(
                     token_usage: TokenUsage::default(),
                     conversation_id: None,
                     update_action: None,
+                    session_stats: crate::session_stats::SessionStats::default(),
                 });
             }
         }
@@ -430,6 +432,7 @@ impl App {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
             update_action: app.pending_update_action,
+            session_stats: app.chat_widget.session_stats().clone(),
         })
     }
 

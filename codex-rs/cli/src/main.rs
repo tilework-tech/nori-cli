@@ -856,6 +856,7 @@ mod tests {
                 .map(ConversationId::from_string)
                 .map(Result::unwrap),
             update_action: None,
+            session_stats: codex_tui::session_stats::SessionStats::default(),
         }
     }
 
@@ -865,6 +866,7 @@ mod tests {
             token_usage: TokenUsage::default(),
             conversation_id: None,
             update_action: None,
+            session_stats: codex_tui::session_stats::SessionStats::default(),
         };
         let lines = format_exit_messages(exit_info, false);
         assert!(lines.is_empty());

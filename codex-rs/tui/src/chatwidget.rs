@@ -107,6 +107,9 @@ use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableExt;
 use crate::render::renderable::RenderableItem;
+use crate::session_stats::SessionStats;
+use crate::session_stats::extract_skill_from_raw_input;
+use crate::session_stats::extract_subagent_from_raw_input;
 use crate::slash_command::SlashCommand;
 use crate::status::RateLimitSnapshotDisplay;
 use crate::text_formatting::truncate_text;
@@ -348,6 +351,8 @@ pub(crate) struct ChatWidget {
     // ACP agent handle for model switching (only present in ACP mode)
     #[cfg(feature = "unstable")]
     acp_handle: Option<AcpAgentHandle>,
+    // Session statistics tracking
+    session_stats: SessionStats,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -469,6 +474,9 @@ impl ChatWidget {
     }
 
     fn on_agent_message(&mut self, message: String) {
+        // Track assistant message for session statistics
+        self.session_stats.record_assistant_message();
+
         // If we have a stream_controller, then the final agent message is redundant and will be a
         // duplicate of what has already been streamed.
         if self.stream_controller.is_none() {
@@ -828,6 +836,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_begin(&mut self, event: PatchApplyBeginEvent) {
+        // Track Edit tool call for session statistics
+        self.session_stats.record_tool_call("Edit");
+
         // Observe directories from file paths to potentially update footer git info.
         self.observe_directories_from_changes(&event.changes);
 
@@ -838,6 +849,9 @@ impl ChatWidget {
     }
 
     fn on_view_image_tool_call(&mut self, event: ViewImageToolCallEvent) {
+        // Track ViewImage tool call for session statistics
+        self.session_stats.record_tool_call("ViewImage");
+
         self.flush_answer_stream_with_separator();
         self.add_to_history(history_cell::new_view_image_tool_call(
             event.path,
@@ -874,6 +888,9 @@ impl ChatWidget {
     }
 
     fn on_web_search_end(&mut self, ev: WebSearchEndEvent) {
+        // Track WebSearch tool call for session statistics
+        self.session_stats.record_tool_call("WebSearch");
+
         self.flush_answer_stream_with_separator();
         self.add_to_history(history_cell::new_web_search_call(format!(
             "Searched: {}",
@@ -1235,6 +1252,9 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
+        // Track Bash tool call for session statistics
+        self.session_stats.record_tool_call("Bash");
+
         // Observe the command's working directory to potentially update footer git info.
         // If the effective CWD changes (after debounce), trigger a system info refresh.
         if self.effective_cwd_tracker.observe_directory(ev.cwd.clone()) {
@@ -1305,6 +1325,24 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_mcp_begin_now(&mut self, ev: McpToolCallBeginEvent) {
+        // Track tool call for session statistics
+        self.session_stats.record_tool_call(&ev.invocation.tool);
+
+        // Check if this is a Skill tool call and extract skill name
+        if ev.invocation.tool == "Skill"
+            && let Some(skill_name) = extract_skill_from_raw_input(ev.invocation.arguments.as_ref())
+        {
+            self.session_stats.record_skill(&skill_name);
+        }
+
+        // Check if this is a Task tool call and extract subagent type
+        if ev.invocation.tool == "Task"
+            && let Some(subagent_type) =
+                extract_subagent_from_raw_input(ev.invocation.arguments.as_ref())
+        {
+            self.session_stats.record_subagent(&subagent_type);
+        }
+
         self.flush_answer_stream_with_separator();
         self.flush_active_cell();
         self.active_cell = Some(Box::new(history_cell::new_active_mcp_tool_call(
@@ -1428,6 +1466,7 @@ impl ChatWidget {
             session_configured_received: false,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
+            session_stats: SessionStats::new(),
         };
 
         widget.prefetch_rate_limits();
@@ -1520,6 +1559,7 @@ impl ChatWidget {
             // No ACP handle for existing conversations (they are HTTP mode only)
             #[cfg(feature = "unstable")]
             acp_handle: None,
+            session_stats: SessionStats::new(),
         };
 
         widget.prefetch_rate_limits();
@@ -1861,6 +1901,9 @@ impl ChatWidget {
         if text.is_empty() && image_paths.is_empty() {
             return;
         }
+
+        // Track user message for session statistics
+        self.session_stats.record_user_message();
 
         // Check if there's a pending agent switch - if so, send the message through
         // the App to trigger the switch first
@@ -3464,6 +3507,11 @@ impl ChatWidget {
     /// runtime overrides applied via TUI, e.g., model or approval policy).
     pub(crate) fn config_ref(&self) -> &Config {
         &self.config
+    }
+
+    /// Get a reference to the session statistics tracker.
+    pub(crate) fn session_stats(&self) -> &SessionStats {
+        &self.session_stats
     }
 
     pub(crate) fn clear_token_usage(&mut self) {
