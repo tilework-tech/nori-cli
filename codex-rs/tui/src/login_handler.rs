@@ -7,9 +7,10 @@
 //! - OAuth browser login flow
 //! - API key entry flow
 
-use codex_acp::{AgentKind, list_available_agents};
-use codex_core::auth::AuthCredentialsStoreMode;
+use codex_acp::AgentKind;
+use codex_acp::list_available_agents;
 use codex_core::AuthManager;
+use codex_core::auth::AuthCredentialsStoreMode;
 use codex_login::ShutdownHandle;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,28 +28,20 @@ pub enum LoginFlowState {
         install_command: String,
     },
     /// Installing the agent
-    Installing {
-        agent_name: String,
-    },
+    Installing { agent_name: String },
     /// Choosing between OAuth and API key
     ChoosingAuthMethod,
     /// OAuth flow in progress - waiting for browser
-    AwaitingBrowserAuth {
-        auth_url: String,
-    },
+    AwaitingBrowserAuth { auth_url: String },
     /// API key entry mode
     EnteringApiKey {
         current_value: String,
         prepopulated_from_env: bool,
     },
     /// Login successful
-    Success {
-        method: AuthMethod,
-    },
+    Success { method: AuthMethod },
     /// Login failed or cancelled
-    Failed {
-        message: String,
-    },
+    Failed { message: String },
     /// Login cancelled by user
     Cancelled,
 }
@@ -69,13 +62,9 @@ pub enum AgentLoginSupport {
         is_installed: bool,
     },
     /// Agent doesn't support in-app login yet
-    NotSupported {
-        agent_name: String,
-    },
+    NotSupported { agent_name: String },
     /// Unknown agent
-    Unknown {
-        model_name: String,
-    },
+    Unknown { model_name: String },
 }
 
 /// Handler for the /login command flow
@@ -149,7 +138,10 @@ impl LoginHandler {
     /// Start the login flow for a given model
     pub fn start_login(&mut self, model_name: &str) -> Result<(), String> {
         match Self::check_agent_support(model_name) {
-            AgentLoginSupport::Supported { agent, is_installed } => {
+            AgentLoginSupport::Supported {
+                agent,
+                is_installed,
+            } => {
                 self.agent = Some(agent);
                 if is_installed {
                     // Agent is installed, proceed to auth method selection
@@ -165,16 +157,12 @@ impl LoginHandler {
                     Ok(())
                 }
             }
-            AgentLoginSupport::NotSupported { agent_name } => {
-                Err(format!(
-                    "In-app login for '{agent_name}' is not yet supported. Please authenticate externally."
-                ))
-            }
-            AgentLoginSupport::Unknown { model_name } => {
-                Err(format!(
-                    "Unknown agent '{model_name}'. Cannot determine login method."
-                ))
-            }
+            AgentLoginSupport::NotSupported { agent_name } => Err(format!(
+                "In-app login for '{agent_name}' is not yet supported. Please authenticate externally."
+            )),
+            AgentLoginSupport::Unknown { model_name } => Err(format!(
+                "Unknown agent '{model_name}'. Cannot determine login method."
+            )),
         }
     }
 
@@ -234,7 +222,11 @@ impl LoginHandler {
 
     /// Update API key value
     pub fn update_api_key(&mut self, value: String) {
-        if let LoginFlowState::EnteringApiKey { current_value, prepopulated_from_env } = &mut self.state {
+        if let LoginFlowState::EnteringApiKey {
+            current_value,
+            prepopulated_from_env,
+        } = &mut self.state
+        {
             *current_value = value;
             *prepopulated_from_env = false;
         }
@@ -249,19 +241,15 @@ impl LoginHandler {
             }
 
             // Save the API key
-            match codex_core::auth::login_with_api_key(
-                &self.codex_home,
-                api_key,
-                self.store_mode,
-            ) {
+            match codex_core::auth::login_with_api_key(&self.codex_home, api_key, self.store_mode) {
                 Ok(()) => {
                     self.auth_manager.reload();
-                    self.state = LoginFlowState::Success { method: AuthMethod::ApiKey };
+                    self.state = LoginFlowState::Success {
+                        method: AuthMethod::ApiKey,
+                    };
                     Ok(())
                 }
-                Err(e) => {
-                    Err(format!("Failed to save API key: {e}"))
-                }
+                Err(e) => Err(format!("Failed to save API key: {e}")),
             }
         } else {
             Err("Not in API key entry state".to_string())
@@ -273,7 +261,9 @@ impl LoginHandler {
     pub fn oauth_complete(&mut self) {
         if matches!(self.state, LoginFlowState::AwaitingBrowserAuth { .. }) {
             // auth_manager.reload() is called by the spawned task before this
-            self.state = LoginFlowState::Success { method: AuthMethod::OAuth };
+            self.state = LoginFlowState::Success {
+                method: AuthMethod::OAuth,
+            };
         }
     }
 
@@ -428,7 +418,10 @@ mod tests {
 
         handler.choose_oauth();
 
-        assert!(matches!(handler.state(), LoginFlowState::AwaitingBrowserAuth { .. }));
+        assert!(matches!(
+            handler.state(),
+            LoginFlowState::AwaitingBrowserAuth { .. }
+        ));
     }
 
     #[test]
@@ -438,7 +431,10 @@ mod tests {
 
         handler.choose_api_key();
 
-        assert!(matches!(handler.state(), LoginFlowState::EnteringApiKey { .. }));
+        assert!(matches!(
+            handler.state(),
+            LoginFlowState::EnteringApiKey { .. }
+        ));
     }
 
     #[test]
@@ -466,7 +462,12 @@ mod tests {
         let result = handler.submit_api_key();
 
         assert!(result.is_ok());
-        assert!(matches!(handler.state(), LoginFlowState::Success { method: AuthMethod::ApiKey }));
+        assert!(matches!(
+            handler.state(),
+            LoginFlowState::Success {
+                method: AuthMethod::ApiKey
+            }
+        ));
     }
 
     #[test]
@@ -490,7 +491,12 @@ mod tests {
 
         handler.oauth_complete();
 
-        assert!(matches!(handler.state(), LoginFlowState::Success { method: AuthMethod::OAuth }));
+        assert!(matches!(
+            handler.state(),
+            LoginFlowState::Success {
+                method: AuthMethod::OAuth
+            }
+        ));
     }
 
     #[test]
@@ -500,10 +506,14 @@ mod tests {
         handler.state = LoginFlowState::Idle;
         assert!(!handler.is_active());
 
-        handler.state = LoginFlowState::Success { method: AuthMethod::OAuth };
+        handler.state = LoginFlowState::Success {
+            method: AuthMethod::OAuth,
+        };
         assert!(!handler.is_active());
 
-        handler.state = LoginFlowState::Failed { message: "test".to_string() };
+        handler.state = LoginFlowState::Failed {
+            message: "test".to_string(),
+        };
         assert!(!handler.is_active());
 
         handler.state = LoginFlowState::Cancelled;
@@ -517,12 +527,14 @@ mod tests {
         handler.state = LoginFlowState::ChoosingAuthMethod;
         assert!(handler.is_active());
 
-        handler.state = LoginFlowState::AwaitingBrowserAuth { auth_url: "".to_string() };
+        handler.state = LoginFlowState::AwaitingBrowserAuth {
+            auth_url: "".to_string(),
+        };
         assert!(handler.is_active());
 
         handler.state = LoginFlowState::EnteringApiKey {
             current_value: "".to_string(),
-            prepopulated_from_env: false
+            prepopulated_from_env: false,
         };
         assert!(handler.is_active());
     }
@@ -555,6 +567,9 @@ mod tests {
 
         handler.installation_complete();
 
-        assert!(matches!(handler.state(), LoginFlowState::ChoosingAuthMethod));
+        assert!(matches!(
+            handler.state(),
+            LoginFlowState::ChoosingAuthMethod
+        ));
     }
 }
