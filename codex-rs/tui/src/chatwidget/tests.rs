@@ -3690,7 +3690,9 @@ fn exec_read_skill_md_records_skill() {
 
     // Verify the skill was recorded
     assert!(
-        chat.session_stats().skills_used.contains(&"brainstorming".to_string()),
+        chat.session_stats()
+            .skills_used
+            .contains(&"brainstorming".to_string()),
         "Expected 'brainstorming' skill to be recorded, but skills_used was: {:?}",
         chat.session_stats().skills_used
     );
