@@ -1260,10 +1260,10 @@ impl ChatWidget {
 
         // Check if any parsed commands are Read operations to SKILL.md files
         for parsed_cmd in &ev.parsed_cmd {
-            if let codex_protocol::parse_command::ParsedCommand::Read { path, .. } = parsed_cmd {
-                if let Some(skill_name) = extract_skill_from_read_path(path.to_str()) {
-                    self.session_stats.record_skill(&skill_name);
-                }
+            if let codex_protocol::parse_command::ParsedCommand::Read { path, .. } = parsed_cmd
+                && let Some(skill_name) = extract_skill_from_read_path(path.to_str())
+            {
+                self.session_stats.record_skill(&skill_name);
             }
         }
 
@@ -1384,13 +1384,13 @@ impl ChatWidget {
 
         // If this is a Task tool call, scan the result text for skill paths
         // This captures skills used by subagents whose tool calls are not directly visible
-        if invocation.tool == "Task" {
-            if let Ok(tool_result) = &result {
-                for content_block in &tool_result.content {
-                    if let mcp_types::ContentBlock::TextContent(text_content) = content_block {
-                        for skill_name in extract_skills_from_text(&text_content.text) {
-                            self.session_stats.record_skill(&skill_name);
-                        }
+        if invocation.tool == "Task"
+            && let Ok(tool_result) = &result
+        {
+            for content_block in &tool_result.content {
+                if let mcp_types::ContentBlock::TextContent(text_content) = content_block {
+                    for skill_name in extract_skills_from_text(&text_content.text) {
+                        self.session_stats.record_skill(&skill_name);
                     }
                 }
             }
