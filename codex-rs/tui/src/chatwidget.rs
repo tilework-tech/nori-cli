@@ -110,6 +110,7 @@ use crate::render::renderable::RenderableItem;
 use crate::session_stats::SessionStats;
 use crate::session_stats::extract_skill_from_raw_input;
 use crate::session_stats::extract_skill_from_read_file_path;
+use crate::session_stats::extract_skills_from_text;
 use crate::session_stats::extract_subagent_from_raw_input;
 use crate::slash_command::SlashCommand;
 use crate::status::RateLimitSnapshotDisplay;
@@ -1370,6 +1371,20 @@ impl ChatWidget {
             duration,
             result,
         } = ev;
+
+        // If this is a Task tool call, scan the result text for skill paths
+        // This captures skills used by subagents whose tool calls are not directly visible
+        if invocation.tool == "Task" {
+            if let Ok(tool_result) = &result {
+                for content_block in &tool_result.content {
+                    if let mcp_types::ContentBlock::TextContent(text_content) = content_block {
+                        for skill_name in extract_skills_from_text(&text_content.text) {
+                            self.session_stats.record_skill(&skill_name);
+                        }
+                    }
+                }
+            }
+        }
 
         let extra_cell = match self
             .active_cell

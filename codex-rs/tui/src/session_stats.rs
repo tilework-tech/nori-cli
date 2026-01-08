@@ -257,6 +257,31 @@ pub fn extract_skill_from_read_file_path(raw_input: Option<&serde_json::Value>) 
     extract_skill_from_read_path(Some(file_path))
 }
 
+/// Extract all skill names from text content (e.g., Task tool output).
+///
+/// Scans text for patterns like `{skill-name}/SKILL.md` and returns
+/// all unique skill names found. This is used to detect skills used
+/// by subagents whose tool calls are not directly visible.
+pub fn extract_skills_from_text(text: &str) -> Vec<String> {
+    use regex_lite::Regex;
+
+    let mut skills = Vec::new();
+
+    // Match patterns like "skill-name/SKILL.md" anywhere in text
+    if let Ok(re) = Regex::new(r"([a-zA-Z0-9_-]+)/SKILL\.md") {
+        for cap in re.captures_iter(text) {
+            if let Some(skill_name) = cap.get(1) {
+                let name = skill_name.as_str().to_string();
+                if !skills.contains(&name) {
+                    skills.push(name);
+                }
+            }
+        }
+    }
+
+    skills
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -485,6 +510,65 @@ mod tests {
         let raw_input = json!({"other_field": "value"});
         let result = extract_skill_from_read_file_path(Some(&raw_input));
         assert_eq!(result, None);
+    }
+
+    // =========================================================================
+    // Tests for extracting skills from text content (Task tool output)
+    // =========================================================================
+
+    #[test]
+    fn extract_skills_from_text_finds_single_skill() {
+        let text = "Reading /home/user/.claude/skills/brainstorming/SKILL.md";
+        let result = extract_skills_from_text(text);
+        assert_eq!(result, vec!["brainstorming".to_string()]);
+    }
+
+    #[test]
+    fn extract_skills_from_text_finds_multiple_skills() {
+        let text = r#"
+            Read file: /home/user/.claude/skills/using-skills/SKILL.md
+            Then read: ~/.claude/skills/test-driven-development/SKILL.md
+            And finally: /path/to/brainstorming/SKILL.md
+        "#;
+        let result = extract_skills_from_text(text);
+        assert_eq!(result.len(), 3);
+        assert!(result.contains(&"using-skills".to_string()));
+        assert!(result.contains(&"test-driven-development".to_string()));
+        assert!(result.contains(&"brainstorming".to_string()));
+    }
+
+    #[test]
+    fn extract_skills_from_text_deduplicates() {
+        let text = r#"
+            Read: /home/user/.claude/skills/tdd/SKILL.md
+            Read again: ~/.claude/skills/tdd/SKILL.md
+        "#;
+        let result = extract_skills_from_text(text);
+        assert_eq!(result, vec!["tdd".to_string()]);
+    }
+
+    #[test]
+    fn extract_skills_from_text_returns_empty_for_no_skills() {
+        let text = "Just some regular text with no skill paths";
+        let result = extract_skills_from_text(text);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn extract_skills_from_text_ignores_non_skill_md_files() {
+        let text = r#"
+            Read: /home/user/.claude/skills/brainstorming/README.md
+            Read: /home/user/code/project/src/main.rs
+        "#;
+        let result = extract_skills_from_text(text);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn extract_skills_from_text_handles_underscores_and_dashes() {
+        let text = "Read: /path/to/my_skill-name/SKILL.md";
+        let result = extract_skills_from_text(text);
+        assert_eq!(result, vec!["my_skill-name".to_string()]);
     }
 
     // =========================================================================
