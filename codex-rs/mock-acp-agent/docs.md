@@ -51,6 +51,7 @@ Path: @/codex-rs/mock-acp-agent
 | Variable | Effect |
 |----------|--------|
 | `MOCK_AGENT_HANG` | Sleeps 60s during initialize (timeout testing) |
+| `MOCK_AGENT_REQUIRE_AUTH` | Returns `acp::Error::auth_required()` from `new_session` to simulate authentication errors |
 | `MOCK_AGENT_REQUEST_FILE` | Reads file path via client during prompt |
 | `MOCK_AGENT_STREAM_UNTIL_CANCEL` | Continuously streams until cancel notification |
 | `MOCK_AGENT_STDERR_COUNT` | Emits N lines of `MOCK_AGENT_STDERR_LINE:{i}` to stderr during prompt |
@@ -62,6 +63,10 @@ Path: @/codex-rs/mock-acp-agent
 | `MOCK_AGENT_WRITE_CONTENT` | Content to write when `MOCK_AGENT_WRITE_FILE` is set (defaults to "default content") |
 | `MOCK_AGENT_MULTI_CALL_EXPLORING` | Sends 3 Read tool calls with interleaved text streaming and out-of-order completion (call-2, call-3, call-1) to test multi-call exploring cell handling |
 | `MOCK_AGENT_NO_FINAL_TEXT` | Suppresses final text message after tool calls complete; combine with `MOCK_AGENT_MULTI_CALL_EXPLORING` to test immediate flush without subsequent text |
+
+**Auth Error Simulation:**
+
+When `MOCK_AGENT_REQUIRE_AUTH=1` is set, the mock agent returns an authentication error during session creation. This enables testing of the auth error handling flow in `@/codex-rs/acp/src/backend.rs` which detects auth errors and provides helpful user-facing messages with authentication instructions.
 
 **Stderr Output for Testing:**
 

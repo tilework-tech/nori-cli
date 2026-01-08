@@ -95,8 +95,26 @@ impl AcpBackend {
         // Spawn the ACP connection
         let mut connection = AcpConnection::spawn(&agent_config, &cwd).await?;
 
-        // Create a session
-        let session_id = connection.create_session(&cwd).await?;
+        // Create a session, with enhanced error message for auth failures
+        let session_id = match connection.create_session(&cwd).await {
+            Ok(id) => id,
+            Err(e) => {
+                // Check if this is an authentication error and provide a helpful hint.
+                // We use string matching because the acp::Error from agent-client-protocol
+                // doesn't expose a typed error code directly. The error format is:
+                // "Error { code: -32000: Authentication required, message: "...", data: ... }"
+                // where -32000 is the ACP auth_required() error code.
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("auth") || err_str.contains("-32000") {
+                    return Err(anyhow::anyhow!(
+                        "Authentication required for {}. {}",
+                        agent_config.agent.display_name(),
+                        agent_config.auth_hint
+                    ));
+                }
+                return Err(e);
+            }
+        };
 
         debug!("ACP session created: {:?}", session_id);
 

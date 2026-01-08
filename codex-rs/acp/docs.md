@@ -25,11 +25,42 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
   - `provider_info`: Embedded `AcpProviderInfo` with provider configuration (name, retry settings, timeouts)
+  - `auth_hint`: Human-readable authentication instructions for this agent
 - Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-2.5-Flash" → "gemini-2.5-flash")
 - Uses exact matching only (no prefix matching) - each model must be explicitly registered
 - The `provider_slug` field enables subprocess reuse determination when switching models (same slug can reuse, different slug spawns new process)
 - `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
 - Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
+
+### Authentication Error Handling
+
+When ACP agents require authentication, the system provides helpful error messages with instructions:
+
+| Agent | Environment Variable | CLI Authentication Command |
+|-------|---------------------|---------------------------|
+| Claude Code | `ANTHROPIC_API_KEY` | `npx @anthropic-ai/claude-code setup-token` |
+| Codex | `OPENAI_API_KEY` | `npx @openai/codex login` |
+| Gemini | `GEMINI_API_KEY` | `npx @google/gemini-cli` then type `/auth` |
+
+**Auth Hint Flow:**
+
+```
+┌─────────────────────────┐                      ┌─────────────────────────┐
+│   AcpBackend::spawn()   │                      │   AcpConnection         │
+│                         │  create_session()    │                         │
+│   1. Get agent config   │─────────────────────>│   2. Forward to agent   │
+│   (includes auth_hint)  │                      │                         │
+│                         │<─────────────────────│   3. Error: -32000      │
+│   4. Detect auth error  │  "auth required"     │   (Authentication req)  │
+│   5. Format message     │                      │                         │
+│   with auth_hint        │                      │                         │
+└─────────────────────────┘                      └─────────────────────────┘
+```
+
+- `AgentKind::auth_hint()` provides per-agent authentication instructions
+- `AcpAgentConfig.auth_hint` carries this information through the config layer
+- `AcpBackend::spawn()` detects auth errors (checking for "auth" or "-32000" in error message)
+- On auth failure, constructs user-friendly error: `"Authentication required for {provider}. {auth_hint}"`
 
 ### Agent Picker Metadata
 

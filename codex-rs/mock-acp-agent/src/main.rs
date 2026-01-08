@@ -183,6 +183,12 @@ impl acp::Agent for MockAgent {
         &self,
         _arguments: acp::NewSessionRequest,
     ) -> Result<acp::NewSessionResponse, acp::Error> {
+        // Simulate authentication error if MOCK_AGENT_REQUIRE_AUTH is set
+        if std::env::var("MOCK_AGENT_REQUIRE_AUTH").is_ok() {
+            eprintln!("Mock agent: authentication required (simulated)");
+            return Err(acp::Error::auth_required());
+        }
+
         let session_id = self.next_session_id.get();
         self.next_session_id.set(session_id + 1);
         eprintln!("Mock agent: new_session id={}", session_id);

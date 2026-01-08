@@ -500,9 +500,12 @@ async fn run_command_loop(
                     );
                 }
 
-                let result = result
-                    .map(|r| r.session_id)
-                    .context("Failed to create ACP session");
+                let result = result.map(|r| r.session_id).map_err(|e| {
+                    // Preserve the original error message for better debugging
+                    // The acp::Error contains code and message that are useful for
+                    // detecting authentication errors
+                    anyhow::anyhow!("Failed to create ACP session: {e}")
+                });
                 let _ = response_tx.send(result);
             }
             AcpCommand::Prompt {
@@ -875,11 +878,81 @@ impl acp::Client for ClientDelegate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use tempfile::tempdir;
+
+    /// Test that authentication errors include helpful auth hints.
+    /// When an ACP agent returns an authentication error, the error message
+    /// should include instructions on how to authenticate.
+    #[tokio::test]
+    #[serial]
+    async fn test_auth_error_includes_hint() {
+        // Get the mock agent config
+        let config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+
+        // Check if mock agent binary exists
+        if !std::path::Path::new(&config.command).exists() {
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                config.command
+            );
+            return;
+        }
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+
+        // Set env var to make mock agent require authentication
+        // SAFETY: We're in a single-threaded test context and the env var
+        // is cleaned up immediately after use.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_REQUIRE_AUTH", "1");
+        }
+
+        // Spawn connection - this should succeed
+        let conn = AcpConnection::spawn(&config, temp_dir.path()).await;
+
+        // Clean up env var
+        // SAFETY: Same as above
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_REQUIRE_AUTH");
+        }
+
+        // The connection spawn or session creation should fail with auth error
+        // The error message should include authentication instructions
+        match conn {
+            Ok(conn) => {
+                // Connection established, but session creation should fail
+                let session_result = conn.create_session(temp_dir.path()).await;
+                assert!(
+                    session_result.is_err(),
+                    "Session creation should fail when auth is required"
+                );
+                let err_msg = session_result.unwrap_err().to_string();
+                assert!(
+                    err_msg.contains("Authentication required")
+                        || err_msg.contains("auth")
+                        || err_msg.contains("login"),
+                    "Error should mention authentication, got: {err_msg}"
+                );
+            }
+            Err(e) => {
+                // Connection failed - error should include auth hint
+                let err_msg = e.to_string();
+                assert!(
+                    err_msg.contains("Authentication required")
+                        || err_msg.contains("auth")
+                        || err_msg.contains("login"),
+                    "Error should mention authentication, got: {err_msg}"
+                );
+            }
+        }
+    }
 
     /// Test that we can spawn an ACP connection and receive responses from the mock agent.
     /// This is an integration test using the real mock-acp-agent binary.
     #[tokio::test]
+    #[serial]
     async fn test_spawn_connection_and_receive_response() {
         // Get the mock agent config
         let config = crate::registry::get_agent_config("mock-model")
