@@ -1756,8 +1756,7 @@ impl ChatWidget {
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| self.config.model.clone());
                 let message = format!(
-                    "In-app login for '{}' is not implemented. To authenticate, please ensure that {} is downloaded and authenticated as you normally would (e.g. through API keys or running a login command).",
-                    agent_name, agent_name
+                    "In-app login for '{agent_name}' is not implemented. To authenticate, please ensure that {agent_name} is downloaded and authenticated as you normally would (e.g. through API keys or running a login command)."
                 );
                 self.add_info_message(message, None);
             }
