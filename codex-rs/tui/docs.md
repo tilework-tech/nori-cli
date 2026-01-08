@@ -164,11 +164,12 @@ Data flow:
 
 *Skill Detection:*
 
-Skills are detected via two paths in `handle_mcp_begin_now()`:
-1. **Skill tool invocations** (slash commands like `/commit`): `extract_skill_from_raw_input()` parses `{"skill": "name"}` from tool arguments
-2. **Read tool calls to SKILL.md files**: `extract_skill_from_read_file_path()` uses regex to match paths ending in `{skill-name}/SKILL.md`
+Skills are detected via multiple paths:
+1. **Skill tool invocations** (slash commands like `/commit`): In `handle_mcp_begin_now()`, `extract_skill_from_raw_input()` parses `{"skill": "name"}` from MCP tool arguments
+2. **Read exec commands to SKILL.md files**: In `handle_exec_begin_now()`, `extract_skill_from_read_path()` checks `ParsedCommand::Read` paths for SKILL.md patterns
+3. **Task tool results**: In `handle_mcp_end_now()`, `extract_skills_from_text()` scans Task tool output for SKILL.md paths (captures skills used by subagents)
 
-Both paths call `record_skill()`, which deduplicates by checking if the skill name already exists in `skills_used`.
+All paths call `record_skill()`, which deduplicates by checking if the skill name already exists in `skills_used`.
 
 The module also provides:
 - `SessionStatisticsCell`: Implements `HistoryCell` trait for TUI rendering with bordered display
