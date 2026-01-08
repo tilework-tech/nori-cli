@@ -91,6 +91,21 @@ impl AgentKind {
         &[AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::Gemini]
     }
 
+    /// Get authentication hint for this agent.
+    ///
+    /// Returns actionable instructions on how to authenticate with this agent's provider.
+    pub fn auth_hint(&self) -> &'static str {
+        match self {
+            AgentKind::ClaudeCode => "Run `claude login` to authenticate with Anthropic.",
+            AgentKind::Codex => {
+                "Run `codex login` or set OPENAI_API_KEY to authenticate with OpenAI."
+            }
+            AgentKind::Gemini => {
+                "Run `gemini login` or set GOOGLE_API_KEY to authenticate with Google."
+            }
+        }
+    }
+
     /// Parse an agent from a string slug
     pub fn from_slug(slug: &str) -> Option<AgentKind> {
         let normalized = slug.to_lowercase();
@@ -525,6 +540,8 @@ pub struct AcpAgentConfig {
     pub args: Vec<String>,
     /// Provider information for this ACP agent
     pub provider_info: AcpProviderInfo,
+    /// Authentication hint for this agent (displayed on auth failures)
+    pub auth_hint: String,
 }
 
 /// Get list of all available ACP agents for the agent picker
@@ -618,6 +635,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 name: format!("{} ACP", agent.display_name()),
                 ..Default::default()
             },
+            auth_hint: agent.auth_hint().to_string(),
         });
     }
 
@@ -674,6 +692,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                     name: "Mock ACP".to_string(),
                     ..Default::default()
                 },
+                auth_hint: "Mock agent - no authentication required.".to_string(),
             })
         }
         "mock-model-alt" => {
@@ -715,6 +734,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                     name: "Mock ACP Alt".to_string(),
                     ..Default::default()
                 },
+                auth_hint: "Mock agent - no authentication required.".to_string(),
             })
         }
         _ => None,
@@ -1041,5 +1061,58 @@ mod tests {
         assert_eq!(ReasoningEffort::Medium.slug(), "medium");
         assert_eq!(ReasoningEffort::High.slug(), "high");
         assert_eq!(ReasoningEffort::ExtraHigh.slug(), "extra-high");
+    }
+
+    #[test]
+    fn test_auth_hint_returns_actionable_instructions() {
+        // Claude Code should mention `claude login`
+        let claude_hint = AgentKind::ClaudeCode.auth_hint();
+        assert!(
+            claude_hint.contains("claude login"),
+            "Claude hint should mention 'claude login', got: {claude_hint}"
+        );
+
+        // Codex should mention `codex login` or OPENAI_API_KEY
+        let codex_hint = AgentKind::Codex.auth_hint();
+        assert!(
+            codex_hint.contains("codex login") || codex_hint.contains("OPENAI_API_KEY"),
+            "Codex hint should mention login or API key, got: {codex_hint}"
+        );
+
+        // Gemini should mention `gemini login` or GOOGLE_API_KEY
+        let gemini_hint = AgentKind::Gemini.auth_hint();
+        assert!(
+            gemini_hint.contains("gemini login") || gemini_hint.contains("GOOGLE_API_KEY"),
+            "Gemini hint should mention login or API key, got: {gemini_hint}"
+        );
+    }
+
+    #[test]
+    fn test_agent_config_includes_auth_hint() {
+        // Get config for claude-code and verify it has an auth hint
+        let config = get_agent_config("claude-code").expect("Should return config");
+        assert!(
+            !config.auth_hint.is_empty(),
+            "Config should have a non-empty auth_hint"
+        );
+        assert!(
+            config.auth_hint.contains("claude login"),
+            "Claude config auth_hint should mention 'claude login', got: {}",
+            config.auth_hint
+        );
+
+        // Get config for codex
+        let config = get_agent_config("codex").expect("Should return config");
+        assert!(
+            !config.auth_hint.is_empty(),
+            "Codex config should have a non-empty auth_hint"
+        );
+
+        // Get config for gemini
+        let config = get_agent_config("gemini").expect("Should return config");
+        assert!(
+            !config.auth_hint.is_empty(),
+            "Gemini config should have a non-empty auth_hint"
+        );
     }
 }

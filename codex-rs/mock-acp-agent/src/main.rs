@@ -167,6 +167,12 @@ impl acp::Agent for MockAgent {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         }
 
+        // Simulate authentication failure if requested
+        if std::env::var("MOCK_AGENT_REQUIRE_AUTH").is_ok() {
+            eprintln!("Mock agent: simulating authentication failure");
+            return Err(acp::Error::new(-32000, "Authentication required"));
+        }
+
         eprintln!("Mock agent: initialize");
         Ok(acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
             .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))

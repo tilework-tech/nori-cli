@@ -875,11 +875,13 @@ impl acp::Client for ClientDelegate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use tempfile::tempdir;
 
     /// Test that we can spawn an ACP connection and receive responses from the mock agent.
     /// This is an integration test using the real mock-acp-agent binary.
     #[tokio::test]
+    #[serial]
     async fn test_spawn_connection_and_receive_response() {
         // Get the mock agent config
         let config = crate::registry::get_agent_config("mock-model")

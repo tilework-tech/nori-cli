@@ -51,6 +51,7 @@ Path: @/codex-rs/mock-acp-agent
 | Variable | Effect |
 |----------|--------|
 | `MOCK_AGENT_HANG` | Sleeps 60s during initialize (timeout testing) |
+| `MOCK_AGENT_REQUIRE_AUTH` | Returns error code -32000 "Authentication required" during initialize (auth failure testing) |
 | `MOCK_AGENT_REQUEST_FILE` | Reads file path via client during prompt |
 | `MOCK_AGENT_STREAM_UNTIL_CANCEL` | Continuously streams until cancel notification |
 | `MOCK_AGENT_STDERR_COUNT` | Emits N lines of `MOCK_AGENT_STDERR_LINE:{i}` to stderr during prompt |

@@ -25,11 +25,24 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
   - `provider_info`: Embedded `AcpProviderInfo` with provider configuration (name, retry settings, timeouts)
+  - `auth_hint`: Agent-specific authentication instructions for error messages
 - Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-2.5-Flash" → "gemini-2.5-flash")
 - Uses exact matching only (no prefix matching) - each model must be explicitly registered
 - The `provider_slug` field enables subprocess reuse determination when switching models (same slug can reuse, different slug spawns new process)
 - `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
 - Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
+
+**Agent Authentication Hints:**
+
+Each `AgentKind` provides actionable authentication instructions via `auth_hint()`:
+
+| Agent | Auth Hint |
+|-------|-----------|
+| Claude Code | "Run `claude login` to authenticate with Anthropic." |
+| Codex | "Run `codex login` or set OPENAI_API_KEY to authenticate with OpenAI." |
+| Gemini | "Run `gemini login` or set GOOGLE_API_KEY to authenticate with Google." |
+
+These hints are embedded in `AcpAgentConfig.auth_hint` and displayed in enhanced error messages when authentication fails.
 
 ### Agent Picker Metadata
 
@@ -317,7 +330,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 ```
 
 - `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy)
-- `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task
+- `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`
   - `Op::Interrupt` → ACP `cancel()`
@@ -426,6 +439,24 @@ The approval translation maps between Codex's binary approve/deny model and ACP'
 - Last resort: first option for approve, last option for deny
 
 ### Things to Know
+
+**ACP Error Categorization:**
+
+The `AcpBackend::spawn()` method provides actionable error messages when agent initialization fails. Error categorization uses pattern matching on the full error chain (via `format!("{e:?}")` debug format) to catch nested error messages:
+
+| Category | Detection Patterns | User Message |
+|----------|-------------------|--------------|
+| `Authentication` | "auth", "-32000" (JSON-RPC code), "api key", "unauthorized", "not logged in" | "Authentication required for {provider}. {auth_hint}" |
+| `QuotaExceeded` | "quota", "rate limit", "too many requests", "429" | "Rate limit or quota exceeded. Please wait and try again." |
+| `ExecutableNotFound` | "not found", "no such file", "command not found" | "Could not find the {agent} CLI. Please install with: npm install -g {package}" |
+| `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}. Original error: {err}" |
+| `Unknown` | (fallback) | Original error message passed through |
+
+Key implementation details:
+- Uses `format!("{e:?}")` (debug format) to inspect the full anyhow error chain, not just top-level message
+- Uses `format!("{e}")` (display format) for user-facing error text
+- Agent-specific auth hints come from `AgentKind::auth_hint()` via `AcpAgentConfig.auth_hint`
+- Installation instructions use `AgentKind::npm_package()` and `AgentKind::display_name()`
 
 **Event Flow Tracing:**
 
