@@ -1655,4 +1655,55 @@ mod tests {
             _ => panic!("Expected ExecCommandEnd event"),
         }
     }
+
+    /// Integration test: verify that authentication errors from ACP agents
+    /// produce helpful error messages with auth hints.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_spawn_with_auth_error_includes_hint() {
+        // Set the env var to make the mock agent return an auth error
+        // SAFETY: This test runs serially and restores the env var after completion
+        unsafe {
+            std::env::set_var("MOCK_AGENT_REQUIRE_AUTH", "1");
+        }
+
+        let (event_tx, _event_rx) = mpsc::channel(32);
+        let config = AcpBackendConfig {
+            model: "mock-model".to_string(),
+            cwd: std::env::current_dir().unwrap(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::DangerFullAccess,
+        };
+
+        let result = AcpBackend::spawn(&config, event_tx).await;
+
+        // Clean up env var
+        // SAFETY: This test runs serially
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_REQUIRE_AUTH");
+        }
+
+        // Verify the error contains both the provider name and auth hint
+        let err_msg = match result {
+            Ok(_) => panic!("Expected auth error but got success"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            err_msg.contains("Authentication required"),
+            "Error should mention 'Authentication required': {}",
+            err_msg
+        );
+        // The mock model uses AgentKind::ClaudeCode as a dummy, so the display name is "Claude Code"
+        assert!(
+            err_msg.contains("Claude Code"),
+            "Error should include provider name: {}",
+            err_msg
+        );
+        // The mock agent's auth_hint says no auth required (since it's a mock)
+        assert!(
+            err_msg.contains("Mock agent for testing"),
+            "Error should include auth hint: {}",
+            err_msg
+        );
+    }
 }
