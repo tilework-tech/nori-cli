@@ -97,6 +97,11 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `slash_command.rs`: `/command` parsing and execution
 - `file_search.rs`: Fuzzy file finder
 
+**Slash Command Stubs:**
+
+Some slash commands are placeholders for future functionality:
+- `/login`: Displays an info message indicating in-app login is not yet implemented. Directs users to authenticate externally via API keys or the agent's native login command (e.g., `claude login`). The message includes the current agent's display name.
+
 **ACP Agent Switching:**
 
 - `/agent` opens the Nori-specific agent picker popup in `tui/src/chatwidget.rs`, which drives `nori::agent_picker::agent_picker_params()` and renders the metadata returned by `codex_acp::list_available_agents()` as `SelectionItem`s.

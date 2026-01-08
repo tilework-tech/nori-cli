@@ -24,6 +24,7 @@ pub enum SlashCommand {
     Mention,
     Status,
     Mcp,
+    Login,
     Logout,
     Quit,
     Exit,
@@ -50,6 +51,7 @@ impl SlashCommand {
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Mcp => "list configured MCP tools",
+            SlashCommand::Login => "log in to the current agent (coming soon)",
             SlashCommand::Logout => "log out of Nori",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
@@ -73,6 +75,7 @@ impl SlashCommand {
             | SlashCommand::Model
             | SlashCommand::Approvals
             | SlashCommand::Review
+            | SlashCommand::Login
             | SlashCommand::Logout => false,
             SlashCommand::Diff
             | SlashCommand::Mention
@@ -157,6 +160,27 @@ mod tests {
         assert!(
             has_feedback,
             "/feedback should be visible when feedback feature is enabled"
+        );
+    }
+
+    #[test]
+    fn login_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_login = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Login);
+        assert!(has_login, "/login should be visible in commands list");
+    }
+
+    #[test]
+    fn login_has_description() {
+        let desc = SlashCommand::Login.description();
+        assert!(!desc.is_empty(), "/login should have a description");
+    }
+
+    #[test]
+    fn login_not_available_during_task() {
+        assert!(
+            !SlashCommand::Login.available_during_task(),
+            "/login should not be available while task is running"
         );
     }
 }

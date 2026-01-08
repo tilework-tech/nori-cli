@@ -1751,6 +1751,15 @@ impl ChatWidget {
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_exit();
             }
+            SlashCommand::Login => {
+                let agent_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| self.config.model.clone());
+                let message = format!(
+                    "In-app login for '{agent_name}' is not implemented. To authenticate, please ensure that {agent_name} is downloaded and authenticated as you normally would (e.g. through API keys or running a login command)."
+                );
+                self.add_info_message(message, None);
+            }
             SlashCommand::Logout => {
                 if let Err(e) = codex_core::auth::logout(
                     &self.config.codex_home,
