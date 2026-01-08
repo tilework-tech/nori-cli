@@ -110,6 +110,7 @@ use crate::render::renderable::RenderableItem;
 use crate::session_stats::SessionStats;
 use crate::session_stats::extract_skill_from_raw_input;
 use crate::session_stats::extract_skill_from_read_file_path;
+use crate::session_stats::extract_skill_from_read_path;
 use crate::session_stats::extract_skills_from_text;
 use crate::session_stats::extract_subagent_from_raw_input;
 use crate::slash_command::SlashCommand;
@@ -1256,6 +1257,15 @@ impl ChatWidget {
     pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
         // Track Bash tool call for session statistics
         self.session_stats.record_tool_call("Bash");
+
+        // Check if any parsed commands are Read operations to SKILL.md files
+        for parsed_cmd in &ev.parsed_cmd {
+            if let codex_protocol::parse_command::ParsedCommand::Read { path, .. } = parsed_cmd {
+                if let Some(skill_name) = extract_skill_from_read_path(path.to_str()) {
+                    self.session_stats.record_skill(&skill_name);
+                }
+            }
+        }
 
         // Observe the command's working directory to potentially update footer git info.
         // If the effective CWD changes (after debounce), trigger a system info refresh.
