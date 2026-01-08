@@ -253,6 +253,12 @@ pub(crate) enum AppEvent {
         /// Error message on failure
         error: Option<String>,
     },
+
+    /// Result of OAuth login flow completion.
+    LoginComplete {
+        /// Whether the login was successful
+        success: bool,
+    },
 }
 
 #[allow(dead_code)]

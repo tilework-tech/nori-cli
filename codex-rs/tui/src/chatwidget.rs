@@ -78,6 +78,7 @@ use tracing::debug;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
+use crate::login_handler::{LoginHandler, AgentLoginSupport};
 use crate::bottom_pane::ApprovalRequest;
 use crate::bottom_pane::BottomPane;
 use crate::bottom_pane::BottomPaneParams;
@@ -355,6 +356,8 @@ pub(crate) struct ChatWidget {
     acp_handle: Option<AcpAgentHandle>,
     // Session statistics tracking
     session_stats: SessionStats,
+    // Login handler for /login command
+    login_handler: Option<LoginHandler>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -1492,6 +1495,7 @@ impl ChatWidget {
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
+            login_handler: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1585,6 +1589,7 @@ impl ChatWidget {
             #[cfg(feature = "unstable")]
             acp_handle: None,
             session_stats: SessionStats::new(),
+            login_handler: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1752,13 +1757,7 @@ impl ChatWidget {
                 self.request_exit();
             }
             SlashCommand::Login => {
-                let agent_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| self.config.model.clone());
-                let message = format!(
-                    "In-app login for '{agent_name}' is not implemented. To authenticate, please ensure that {agent_name} is downloaded and authenticated as you normally would (e.g. through API keys or running a login command)."
-                );
-                self.add_info_message(message, None);
+                self.handle_login_command();
             }
             SlashCommand::Logout => {
                 if let Err(e) = codex_core::auth::logout(
@@ -3272,6 +3271,140 @@ impl ChatWidget {
 
     pub(crate) fn add_error_message(&mut self, message: String) {
         self.add_to_history(history_cell::new_error_event(message));
+        self.request_redraw();
+    }
+
+    /// Handle the /login slash command
+    fn handle_login_command(&mut self) {
+        let model_name = &self.config.model;
+
+        match LoginHandler::check_agent_support(model_name) {
+            AgentLoginSupport::Supported { agent, is_installed } => {
+                if !is_installed {
+                    // Agent not installed - show installation instructions
+                    let display_name = agent.display_name();
+                    let npm_package = agent.npm_package();
+                    self.add_info_message(
+                        format!(
+                            "{display_name} is not installed. To install, run:\n\n  npm install -g {npm_package}\n\nThen run /login again to authenticate."
+                        ),
+                        Some("Install the agent first, then authenticate".to_string()),
+                    );
+                    return;
+                }
+
+                // Create and initialize the login handler
+                let mut handler = LoginHandler::new(
+                    self.config.codex_home.clone(),
+                    self.config.cli_auth_credentials_store_mode,
+                    self.auth_manager.clone(),
+                );
+
+                // Start the login flow
+                if let Err(e) = handler.start_login(model_name) {
+                    self.add_error_message(e);
+                    return;
+                }
+
+                // Show auth method selection message and start OAuth flow
+                self.add_info_message(
+                    "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                    Some("Press Esc to cancel".to_string()),
+                );
+
+                // Start OAuth flow
+                handler.choose_oauth();
+
+                // Store the handler and start the actual login server
+                self.start_oauth_login_flow(handler);
+            }
+            AgentLoginSupport::NotSupported { agent_name } => {
+                self.add_info_message(
+                    format!(
+                        "In-app login for '{agent_name}' is not yet supported. Please authenticate externally using the agent's native login command or API keys."
+                    ),
+                    None,
+                );
+            }
+            AgentLoginSupport::Unknown { model_name } => {
+                self.add_info_message(
+                    format!(
+                        "Unknown agent '{model_name}'. Cannot determine login method."
+                    ),
+                    None,
+                );
+            }
+        }
+    }
+
+    /// Start the OAuth login flow
+    fn start_oauth_login_flow(&mut self, mut handler: LoginHandler) {
+        use codex_core::auth::CLIENT_ID;
+        use codex_login::{ServerOptions, run_login_server};
+
+        let opts = ServerOptions::new(
+            self.config.codex_home.clone(),
+            CLIENT_ID.to_string(),
+            None, // No forced workspace ID
+            self.config.cli_auth_credentials_store_mode,
+        );
+
+        match run_login_server(opts) {
+            Ok(child) => {
+                let auth_url = child.auth_url.clone();
+                handler.set_auth_url(auth_url.clone());
+                handler.set_shutdown_handle(child.cancel_handle());
+
+                // Store the handler
+                self.login_handler = Some(handler);
+
+                // Update the info message with the URL
+                self.add_info_message(
+                    format!(
+                        "Opening browser for authentication...\n\nIf the browser doesn't open automatically, visit:\n{auth_url}\n\nWaiting for authentication to complete..."
+                    ),
+                    Some("Press Esc to cancel".to_string()),
+                );
+
+                // Spawn a task to wait for completion
+                let app_event_tx = self.app_event_tx.clone();
+                let auth_manager = self.auth_manager.clone();
+                tokio::spawn(async move {
+                    match child.block_until_done().await {
+                        Ok(()) => {
+                            auth_manager.reload();
+                            app_event_tx.send(AppEvent::LoginComplete { success: true });
+                        }
+                        Err(e) => {
+                            tracing::error!("OAuth login failed: {e}");
+                            app_event_tx.send(AppEvent::LoginComplete { success: false });
+                        }
+                    }
+                });
+            }
+            Err(e) => {
+                self.add_error_message(format!("Failed to start login server: {e}"));
+            }
+        }
+    }
+
+    /// Handle login completion event
+    pub(crate) fn handle_login_complete(&mut self, success: bool) {
+        if let Some(mut handler) = self.login_handler.take() {
+            if success {
+                handler.oauth_complete();
+                self.add_info_message(
+                    "Successfully authenticated with OpenAI!\n\nYou can now use Codex.".to_string(),
+                    None,
+                );
+            } else {
+                handler.cancel();
+                self.add_info_message(
+                    "Login cancelled or failed.".to_string(),
+                    None,
+                );
+            }
+        }
         self.request_redraw();
     }
 

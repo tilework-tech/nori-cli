@@ -1049,6 +1049,9 @@ impl App {
                         .add_info_message(format!("Failed to switch model: {error_msg}"), None);
                 }
             }
+            AppEvent::LoginComplete { success } => {
+                self.chat_widget.handle_login_complete(success);
+            }
         }
         Ok(true)
     }

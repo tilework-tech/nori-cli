@@ -97,10 +97,81 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `slash_command.rs`: `/command` parsing and execution
 - `file_search.rs`: Fuzzy file finder
 
-**Slash Command Stubs:**
+**/login Slash Command (`login_handler.rs`):**
 
-Some slash commands are placeholders for future functionality:
-- `/login`: Displays an info message indicating in-app login is not yet implemented. Directs users to authenticate externally via API keys or the agent's native login command (e.g., `claude login`). The message includes the current agent's display name.
+The `/login` slash command provides in-app authentication for supported ACP agents:
+
+```
+┌─────────────────────┐
+│  /login invoked     │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────────────────────────┐
+│ LoginHandler::check_agent_support()     │
+│ - Queries codex_acp::list_available_agents() │
+│ - Returns Supported/NotSupported/Unknown │
+└──────────────────┬──────────────────────┘
+                   │
+     ┌─────────────┼─────────────┐
+     ▼             ▼             ▼
+ Supported    NotSupported    Unknown
+ (Codex)      (Claude/Gemini)  (other)
+     │             │             │
+     │             └──────┬──────┘
+     │                    ▼
+     │         Show "not yet supported"
+     │         message and return
+     ▼
+┌───────────────────────┐
+│ Agent Installed?      │
+│ (via AcpAgentInfo)    │
+└───────────┬───────────┘
+            │
+    ┌───────┴───────┐
+    ▼               ▼
+Not Installed   Installed
+    │               │
+    ▼               ▼
+Show npm         Start OAuth
+install          via codex_login
+instructions     crate
+```
+
+**Agent Support Matrix:**
+
+| Agent | In-App Login | Behavior |
+|-------|-------------|----------|
+| Codex | Supported | OAuth browser flow via `codex_login::run_login_server()` |
+| Claude Code | Not supported | Shows "authenticate externally" message |
+| Gemini | Not supported | Shows "authenticate externally" message |
+| Unknown | Error | Shows "unknown agent" error |
+
+**OAuth Flow Integration:**
+
+When OAuth is initiated for Codex:
+1. `ChatWidget::start_oauth_login_flow()` spawns `codex_login::run_login_server()`
+2. Browser opens to the auth URL automatically
+3. A tokio task waits on `child.block_until_done()`
+4. On completion, sends `AppEvent::LoginComplete { success }` to the event loop
+5. `App::handle_event()` routes to `ChatWidget::handle_login_complete()`
+6. `LoginHandler.oauth_complete()` updates state and calls `auth_manager.reload()`
+
+**LoginHandler State Machine:**
+
+```
+Idle ──▶ ChoosingAuthMethod ──▶ AwaitingBrowserAuth ──▶ Success
+                  │                      │
+                  │                      ├──▶ Failed
+                  │                      │
+                  ▼                      ▼
+           EnteringApiKey            Cancelled
+                  │
+                  ├──▶ Success
+                  └──▶ Failed
+```
+
+The handler is stored as `Option<LoginHandler>` in `ChatWidget` and only instantiated when `/login` is invoked. Credentials are stored in `~/.nori/cli/auth.json` via existing `codex-core` infrastructure
 
 **ACP Agent Switching:**
 
@@ -186,15 +257,17 @@ The module also provides:
 
 The TUI crate uses Cargo feature flags to enable modular builds with two primary modes:
 
-| Feature | Optional Dep | Description |
-|---------|-------------|-------------|
-| `full` | - | Meta-feature enabling all optional features |
-| `login` | `codex-login` | ChatGPT/API login functionality |
-| `feedback` | `codex-feedback` | Sentry feedback integration |
-| `backend-client` | `codex-backend-client` | Cloud tasks backend client |
-| `upstream-updates` | - | OpenAI/Codex update checking mechanism |
-| `oss-providers` | `codex-common/oss-providers` | Ollama/LM Studio local model support |
-| `codex-features` | - | Gates `/undo`, `/compact`, `/review` slash commands |
+| Feature | Optional Dep | Default | Description |
+|---------|-------------|---------|-------------|
+| `full` | - | No | Meta-feature enabling all optional features |
+| `login` | `codex-login` | **Yes** | ChatGPT/API login functionality (enables `/login` command) |
+| `feedback` | `codex-feedback` | No | Sentry feedback integration |
+| `backend-client` | `codex-backend-client` | No | Cloud tasks backend client |
+| `upstream-updates` | - | No | OpenAI/Codex update checking mechanism |
+| `oss-providers` | `codex-common/oss-providers` | No | Ollama/LM Studio local model support |
+| `codex-features` | - | No | Gates `/undo`, `/compact`, `/review` slash commands |
+| `unstable` | `codex-acp/unstable` | **Yes** | Unstable ACP features like model switching |
+| `nori-config` | - | **Yes** | Nori's simplified ACP-only config |
 
 Feature gating patterns:
 - Import gating: `#[cfg(feature = "backend-client")] use codex_backend_client::Client`

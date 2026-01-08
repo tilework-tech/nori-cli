@@ -13,7 +13,7 @@ name = "codex_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["unstable", "nori-config"]
+default = ["unstable", "nori-config", "login"]
 
 # Full feature set - enables all upstream/legacy functionality
 full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers", "otel", "codex-features"]
