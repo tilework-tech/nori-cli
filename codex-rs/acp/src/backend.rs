@@ -81,7 +81,8 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
     } else if error_lower.contains("command not found")
         || (error_lower.contains("no such file") && error_lower.contains("directory"))
         || error_lower.contains("os error 2") // ENOENT on Unix
-        || error_lower.contains("cannot find the path") // Windows
+        || error_lower.contains("cannot find the path")
+    // Windows
     {
         AcpErrorCategory::ExecutableNotFound
     } else if error_lower.contains("initialization")
@@ -111,13 +112,19 @@ pub fn enhanced_error_message(
             format!("Authentication required for {provider_name}. {auth_hint}")
         }
         AcpErrorCategory::QuotaExceeded => {
-            format!("Rate limit or quota exceeded for {provider_name}. Please wait and try again, or check your usage limits.")
+            format!(
+                "Rate limit or quota exceeded for {provider_name}. Please wait and try again, or check your usage limits."
+            )
         }
         AcpErrorCategory::ExecutableNotFound => {
-            format!("Could not find the {display_name} CLI. Please install it with: npm install -g {npm_package}")
+            format!(
+                "Could not find the {display_name} CLI. Please install it with: npm install -g {npm_package}"
+            )
         }
         AcpErrorCategory::Initialization => {
-            format!("Failed to initialize {provider_name}. The agent may be incompatible or experiencing issues. Original error: {original_error}")
+            format!(
+                "Failed to initialize {provider_name}. The agent may be incompatible or experiencing issues. Original error: {original_error}"
+            )
         }
         AcpErrorCategory::Unknown => original_error.to_string(),
     }
