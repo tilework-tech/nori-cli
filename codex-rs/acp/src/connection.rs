@@ -504,13 +504,16 @@ async fn spawn_connection_internal(
 
         if let Some(method_id) = auth_method_id {
             debug!("Authenticating with method: {}", method_id);
-            connection
+            let auth_result = connection
                 .authenticate(acp::AuthenticateRequest::new(acp::AuthMethodId::from(
                     method_id.to_string(),
                 )))
-                .await
-                .context("ACP authentication failed")?;
-            debug!("Authentication successful");
+                .await;
+            match &auth_result {
+                Ok(_) => debug!("Authentication successful"),
+                Err(e) => warn!("Authentication failed with error: {:?}", e),
+            }
+            auth_result.context("ACP authentication failed")?;
         } else {
             warn!(
                 "Agent requires authentication but no suitable auth method found. Available: {:?}",
