@@ -365,6 +365,41 @@ struct AcpConnectionInner {
     stderr_task: tokio::task::JoinHandle<()>,
 }
 
+/// Select the appropriate authentication method based on available environment variables.
+///
+/// This checks for API key environment variables and returns the corresponding auth method ID
+/// if a matching method is available in the agent's advertised auth methods.
+///
+/// Priority order:
+/// 1. OPENAI_API_KEY -> "openai-api-key"
+/// 2. CODEX_API_KEY -> "codex-api-key"
+/// 3. GEMINI_API_KEY -> "gemini-api-key"
+/// 4. GOOGLE_API_KEY -> "google-api-key"
+/// 5. ANTHROPIC_API_KEY -> "anthropic-api-key"
+fn select_auth_method(auth_methods: &[acp::AuthMethod]) -> Option<&str> {
+    // Map of environment variable to auth method ID
+    let env_to_method = [
+        ("OPENAI_API_KEY", "openai-api-key"),
+        ("CODEX_API_KEY", "codex-api-key"),
+        ("GEMINI_API_KEY", "gemini-api-key"),
+        ("GOOGLE_API_KEY", "google-api-key"),
+        ("ANTHROPIC_API_KEY", "anthropic-api-key"),
+    ];
+
+    // Find the first matching auth method where we have the corresponding env var
+    for (env_var, method_id) in &env_to_method {
+        if std::env::var(env_var).is_ok()
+            && auth_methods
+                .iter()
+                .any(|m| m.id.0.as_ref() == *method_id)
+        {
+            return Some(method_id);
+        }
+    }
+
+    None
+}
+
 /// Spawns the connection on the current LocalSet.
 async fn spawn_connection_internal(
     config: &AcpAgentConfig,
@@ -378,12 +413,23 @@ async fn spawn_connection_internal(
         cwd.display()
     );
 
-    let mut child = Command::new(&config.command)
-        .args(&config.args)
+    let mut cmd = Command::new(&config.command);
+    cmd.args(&config.args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    // Explicitly pass through API key environment variables for ACP agents
+    // Some package runners (bunx/npx) may not properly inherit all env vars
+    for var in ["OPENAI_API_KEY", "CODEX_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"] {
+        if let Ok(val) = std::env::var(var) {
+            debug!("Passing {} to ACP agent subprocess", var);
+            cmd.env(var, val);
+        }
+    }
+
+    let mut child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
 
@@ -451,6 +497,28 @@ async fn spawn_connection_internal(
         response.agent_info
     );
 
+    // If the agent advertises auth methods, we need to authenticate before creating sessions
+    if !response.auth_methods.is_empty() {
+        // Determine which auth method to use based on available environment variables
+        let auth_method_id = select_auth_method(&response.auth_methods);
+
+        if let Some(method_id) = auth_method_id {
+            debug!("Authenticating with method: {}", method_id);
+            connection
+                .authenticate(acp::AuthenticateRequest::new(acp::AuthMethodId::from(
+                    method_id.to_string(),
+                )))
+                .await
+                .context("ACP authentication failed")?;
+            debug!("Authentication successful");
+        } else {
+            warn!(
+                "Agent requires authentication but no suitable auth method found. Available: {:?}",
+                response.auth_methods.iter().map(|m| &m.id).collect::<Vec<_>>()
+            );
+        }
+    }
+
     let inner = AcpConnectionInner {
         connection,
         client_delegate,
@@ -481,10 +549,18 @@ async fn run_command_loop(
                 // 3. Sending history to the agent via the session initialization
                 // See: codex-core/src/rollout.rs for the persistence format
 
+                let request = acp::NewSessionRequest::new(cwd);
+                debug!(
+                    "Creating ACP session with request: {:?}",
+                    serde_json::to_string(&request).unwrap_or_else(|_| "serialization failed".to_string())
+                );
                 let result = inner
                     .connection
-                    .new_session(acp::NewSessionRequest::new(cwd))
+                    .new_session(request)
                     .await;
+                if let Err(ref e) = result {
+                    warn!("ACP session creation failed: {:?}", e);
+                }
 
                 // Capture model state from the response if available
                 #[cfg(feature = "unstable")]

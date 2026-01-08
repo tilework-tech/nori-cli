@@ -48,6 +48,10 @@ pub use translator::translate_session_update;
 
 // Re-export commonly used types from agent-client-protocol
 pub use agent_client_protocol::Agent;
+pub use agent_client_protocol::AuthMethod;
+pub use agent_client_protocol::AuthMethodId;
+pub use agent_client_protocol::AuthenticateRequest;
+pub use agent_client_protocol::AuthenticateResponse;
 pub use agent_client_protocol::Client;
 pub use agent_client_protocol::ClientSideConnection;
 pub use agent_client_protocol::InitializeRequest;
