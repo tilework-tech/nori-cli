@@ -140,7 +140,7 @@ The `onboarding/` module handles first-run experience:
 Tracks user activity during a session and displays a summary when the TUI exits. The `SessionStats` struct records:
 - User and assistant message counts
 - Tool calls by category (Bash, Read, Edit, etc.)
-- Skills invoked via the Skill tool
+- Skills invoked (deduplicated)
 - Subagents invoked via the Task tool
 
 Data flow:
@@ -162,9 +162,16 @@ Data flow:
 └──────────────────────┘                   └────────────────────┘
 ```
 
+*Skill Detection:*
+
+Skills are detected via two paths in `handle_mcp_begin_now()`:
+1. **Skill tool invocations** (slash commands like `/commit`): `extract_skill_from_raw_input()` parses `{"skill": "name"}` from tool arguments
+2. **Read tool calls to SKILL.md files**: `extract_skill_from_read_file_path()` uses regex to match paths ending in `{skill-name}/SKILL.md`
+
+Both paths call `record_skill()`, which deduplicates by checking if the skill name already exists in `skills_used`.
+
 The module also provides:
 - `SessionStatisticsCell`: Implements `HistoryCell` trait for TUI rendering with bordered display
-- `extract_skill_from_raw_input()`: Parses Skill tool arguments to extract skill name from `{"skill": "name"}`
 - `extract_subagent_from_raw_input()`: Parses Task tool arguments to extract subagent type from `{"subagent_type": "type"}`
 
 ### Things to Know

@@ -109,6 +109,7 @@ use crate::render::renderable::RenderableExt;
 use crate::render::renderable::RenderableItem;
 use crate::session_stats::SessionStats;
 use crate::session_stats::extract_skill_from_raw_input;
+use crate::session_stats::extract_skill_from_read_file_path;
 use crate::session_stats::extract_subagent_from_raw_input;
 use crate::slash_command::SlashCommand;
 use crate::status::RateLimitSnapshotDisplay;
@@ -1331,6 +1332,14 @@ impl ChatWidget {
         // Check if this is a Skill tool call and extract skill name
         if ev.invocation.tool == "Skill"
             && let Some(skill_name) = extract_skill_from_raw_input(ev.invocation.arguments.as_ref())
+        {
+            self.session_stats.record_skill(&skill_name);
+        }
+
+        // Check if this is a Read tool call to a SKILL.md file
+        if ev.invocation.tool == "Read"
+            && let Some(skill_name) =
+                extract_skill_from_read_file_path(ev.invocation.arguments.as_ref())
         {
             self.session_stats.record_skill(&skill_name);
         }

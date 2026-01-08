@@ -228,6 +228,35 @@ pub fn extract_subagent_from_raw_input(raw_input: Option<&serde_json::Value>) ->
         .map(str::to_string)
 }
 
+/// Extract skill name from a Read tool call's file path.
+///
+/// Matches any path ending in `{skill-name}/SKILL.md`.
+/// Returns the skill name (directory name) if the path matches, None otherwise.
+pub fn extract_skill_from_read_path(file_path: Option<&str>) -> Option<String> {
+    use regex_lite::Regex;
+
+    let path = file_path?;
+
+    // Match any path ending in {skill-name}/SKILL.md
+    let re = Regex::new(r"([^/]+)/SKILL\.md$").ok()?;
+
+    re.captures(path)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+/// Extract skill name from a Read tool call's raw_input JSON.
+///
+/// The Read tool is invoked with `{"file_path": "/path/to/file"}`.
+/// If the file_path matches a SKILL.md pattern, returns the skill name.
+pub fn extract_skill_from_read_file_path(raw_input: Option<&serde_json::Value>) -> Option<String> {
+    let file_path = raw_input
+        .and_then(|v| v.get("file_path"))
+        .and_then(|v| v.as_str())?;
+
+    extract_skill_from_read_path(Some(file_path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +418,72 @@ mod tests {
     fn extract_subagent_from_missing_field_returns_none() {
         let raw_input = json!({"description": "test", "prompt": "test"});
         let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, None);
+    }
+
+    // =========================================================================
+    // Tests for skill extraction from Read tool file paths
+    // =========================================================================
+
+    #[test]
+    fn extract_skill_from_read_path_with_absolute_path() {
+        let result =
+            extract_skill_from_read_path(Some("/home/user/.claude/skills/brainstorming/SKILL.md"));
+        assert_eq!(result, Some("brainstorming".to_string()));
+    }
+
+    #[test]
+    fn extract_skill_from_read_path_with_tilde_path() {
+        let result =
+            extract_skill_from_read_path(Some("~/.claude/skills/test-driven-development/SKILL.md"));
+        assert_eq!(result, Some("test-driven-development".to_string()));
+    }
+
+    #[test]
+    fn extract_skill_from_read_path_with_any_skill_md() {
+        // Should match any path ending in {name}/SKILL.md
+        let result = extract_skill_from_read_path(Some("/some/random/path/my-skill/SKILL.md"));
+        assert_eq!(result, Some("my-skill".to_string()));
+    }
+
+    #[test]
+    fn extract_skill_from_read_path_with_non_skill_path() {
+        let result = extract_skill_from_read_path(Some("/home/user/code/project/src/main.rs"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_skill_from_read_path_with_none() {
+        let result = extract_skill_from_read_path(None);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_skill_from_read_path_with_partial_skill_path() {
+        // Not a SKILL.md file
+        let result =
+            extract_skill_from_read_path(Some("/home/user/.claude/skills/brainstorming/README.md"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_skill_from_read_file_path_extracts_from_json() {
+        let raw_input = json!({"file_path": "/home/user/.claude/skills/using-skills/SKILL.md"});
+        let result = extract_skill_from_read_file_path(Some(&raw_input));
+        assert_eq!(result, Some("using-skills".to_string()));
+    }
+
+    #[test]
+    fn extract_skill_from_read_file_path_returns_none_for_non_skill() {
+        let raw_input = json!({"file_path": "/home/user/code/main.rs"});
+        let result = extract_skill_from_read_file_path(Some(&raw_input));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_skill_from_read_file_path_returns_none_when_no_file_path() {
+        let raw_input = json!({"other_field": "value"});
+        let result = extract_skill_from_read_file_path(Some(&raw_input));
         assert_eq!(result, None);
     }
 
