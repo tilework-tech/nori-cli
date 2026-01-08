@@ -245,6 +245,12 @@ impl acp::Agent for MockAgent {
         // Check for special test modes first before sending default messages
         // Each special mode should return early to avoid executing default behavior
 
+        // Support simulating prompt failures for testing error propagation
+        if std::env::var("MOCK_AGENT_PROMPT_FAIL").is_ok() {
+            eprintln!("Mock agent: simulating prompt failure");
+            return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
+        }
+
         // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
         if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {
             eprintln!("Mock agent: sending mixed exploring and exec workflow");

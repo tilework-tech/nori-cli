@@ -13,7 +13,6 @@ use anyhow::Result;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
-#[cfg(debug_assertions)]
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
@@ -481,7 +480,59 @@ impl AcpBackend {
             // Wait for all updates to be processed
             let _ = update_handler.await;
 
-            // Send TaskComplete event
+            // If prompt failed, send an error event to the TUI BEFORE TaskComplete
+            // This ensures the user sees why their request failed instead of a silent failure
+            if let Err(ref e) = result {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+
+                // Generate user-friendly message based on error category
+                let user_message = match category {
+                    AcpErrorCategory::Authentication => {
+                        format!(
+                            "Authentication error: {display_error}. Please check your credentials or re-authenticate."
+                        )
+                    }
+                    AcpErrorCategory::QuotaExceeded => {
+                        "Rate limit or quota exceeded. Please wait and try again, or check your usage limits.".to_string()
+                    }
+                    AcpErrorCategory::ExecutableNotFound => {
+                        format!("Agent executable not found: {display_error}")
+                    }
+                    AcpErrorCategory::Initialization => {
+                        format!("Agent initialization failed: {display_error}")
+                    }
+                    AcpErrorCategory::Unknown => {
+                        format!("ACP prompt failed: {display_error}")
+                    }
+                };
+
+                warn!("ACP prompt failed: {}", e);
+                debug!(
+                    target: "acp_event_flow",
+                    user_message = %user_message,
+                    "ACP prompt failure: sending ErrorEvent to TUI"
+                );
+
+                // Send error event to TUI so user sees the error
+                let _ = event_tx
+                    .send(Event {
+                        id: id_clone.clone(),
+                        msg: EventMsg::Error(ErrorEvent {
+                            message: user_message.clone(),
+                            codex_error_info: None,
+                        }),
+                    })
+                    .await;
+
+                debug!(
+                    target: "acp_event_flow",
+                    "ACP prompt failure: ErrorEvent sent to TUI"
+                );
+            }
+
+            // Send TaskComplete event (always, to end the turn)
             let _ = event_tx
                 .send(Event {
                     id: id_clone,
@@ -490,10 +541,6 @@ impl AcpBackend {
                     }),
                 })
                 .await;
-
-            if let Err(e) = result {
-                warn!("ACP prompt failed: {}", e);
-            }
         });
 
         Ok(())

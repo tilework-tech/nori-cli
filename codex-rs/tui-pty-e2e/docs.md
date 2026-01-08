@@ -165,6 +165,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace and `/tmp/claude/` allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_tool_calls.rs` | ACP tool call rendering and multi-call exploring cells - verifies tool calls appear correctly in TUI, tests grouping of Read/Search operations, validates cells don't disappear during streaming with out-of-order completion events; uses `MOCK_AGENT_MULTI_CALL_EXPLORING` and `MOCK_AGENT_NO_FINAL_TEXT` env vars (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/acp_prompt_errors.rs` | ACP prompt failure error propagation - verifies that when `prompt()` fails, the error is displayed to the user (not silently swallowed) and the TUI remains responsive; uses `MOCK_AGENT_PROMPT_FAIL` env var (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -283,6 +284,7 @@ Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_REQUEST_PERMISSION` - Trigger permission request to test approval bridging
 - `MOCK_AGENT_MULTI_CALL_EXPLORING` - Send 3 Read tool calls with interleaved text and out-of-order completion
 - `MOCK_AGENT_NO_FINAL_TEXT` - Suppress final agent text (combine with MULTI_CALL_EXPLORING to test immediate flush)
+- `MOCK_AGENT_PROMPT_FAIL` - Return error from prompt() to test error propagation to TUI
 
 See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
 

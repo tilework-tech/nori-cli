@@ -458,6 +458,33 @@ Key implementation details:
 - Agent-specific auth hints come from `AgentKind::auth_hint()` via `AcpAgentConfig.auth_hint`
 - Installation instructions use `AgentKind::npm_package()` and `AgentKind::display_name()`
 
+**ACP Prompt Failure Error Propagation:**
+
+When `connection.prompt()` fails at runtime (after successful spawn), the error is propagated to the TUI via `ErrorEvent`:
+
+```
+┌────────────────────┐   prompt() fails    ┌────────────────────┐
+│  AcpBackend        │─────────────────────│  ACP Connection    │
+│  (on_submit task)  │                     │                    │
+└────────────────────┘                     └────────────────────┘
+         │
+         │ categorize_acp_error()
+         ▼
+┌────────────────────┐   ErrorEvent        ┌────────────────────┐
+│  Generate user     │────────────────────►│  TUI               │
+│  message           │                     │  (displays error)  │
+└────────────────────┘   TaskComplete      └────────────────────┘
+```
+
+The error handling flow in `AcpBackend::on_submit()`:
+1. Prompt fails with error (e.g., auth failure, rate limit)
+2. Error categorized using `categorize_acp_error()` (same as spawn-time errors)
+3. User-friendly message generated based on category
+4. `ErrorEvent` sent to TUI **before** `TaskComplete`
+5. `TaskComplete` always sent to end the turn
+
+This ensures prompt failures are visible to users rather than appearing as silent failures where the "Working" indicator disappears with no response.
+
 **Event Flow Tracing:**
 
 The ACP backend provides detailed tracing for debugging tool event flow issues:
