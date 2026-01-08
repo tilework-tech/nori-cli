@@ -3659,3 +3659,77 @@ fn patch_apply_resolves_relative_paths_against_cwd() {
     // The effective CWD tracker should have observed /home/user/worktree/src
     // but since it's within the current CWD hierarchy, behavior depends on implementation
 }
+
+// Test that skill detection works for Read exec commands to SKILL.md files
+#[test]
+fn exec_read_skill_md_records_skill() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Create a Read parsed command for a SKILL.md file
+    let skill_path = PathBuf::from("/home/user/.claude/skills/brainstorming/SKILL.md");
+    let parsed_cmd = vec![ParsedCommand::Read {
+        cmd: "cat".to_string(),
+        name: "SKILL.md".to_string(),
+        path: skill_path.clone(),
+    }];
+
+    // Send ExecCommandBegin event with the Read command
+    chat.handle_codex_event(Event {
+        id: "skill-read-1".into(),
+        msg: EventMsg::ExecCommandBegin(ExecCommandBeginEvent {
+            call_id: "skill-read-1".into(),
+            process_id: None,
+            turn_id: "turn-1".into(),
+            command: vec!["cat".to_string(), skill_path.to_string_lossy().to_string()],
+            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            parsed_cmd,
+            source: ExecCommandSource::Agent,
+            interaction_input: None,
+        }),
+    });
+
+    // Verify the skill was recorded
+    assert!(
+        chat.session_stats()
+            .skills_used
+            .contains(&"brainstorming".to_string()),
+        "Expected 'brainstorming' skill to be recorded, but skills_used was: {:?}",
+        chat.session_stats().skills_used
+    );
+}
+
+// Test that non-SKILL.md Read commands don't record skills
+#[test]
+fn exec_read_non_skill_file_does_not_record_skill() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Create a Read parsed command for a regular file
+    let file_path = PathBuf::from("/home/user/code/project/src/main.rs");
+    let parsed_cmd = vec![ParsedCommand::Read {
+        cmd: "cat".to_string(),
+        name: "main.rs".to_string(),
+        path: file_path.clone(),
+    }];
+
+    // Send ExecCommandBegin event
+    chat.handle_codex_event(Event {
+        id: "regular-read-1".into(),
+        msg: EventMsg::ExecCommandBegin(ExecCommandBeginEvent {
+            call_id: "regular-read-1".into(),
+            process_id: None,
+            turn_id: "turn-1".into(),
+            command: vec!["cat".to_string(), file_path.to_string_lossy().to_string()],
+            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            parsed_cmd,
+            source: ExecCommandSource::Agent,
+            interaction_input: None,
+        }),
+    });
+
+    // Verify no skill was recorded
+    assert!(
+        chat.session_stats().skills_used.is_empty(),
+        "Expected no skills to be recorded, but skills_used was: {:?}",
+        chat.session_stats().skills_used
+    );
+}
