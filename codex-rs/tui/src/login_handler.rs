@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 /// State of the login flow
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum LoginFlowState {
     /// No login flow active
     Idle,
@@ -48,6 +49,7 @@ pub enum LoginFlowState {
 
 /// Authentication method used
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum AuthMethod {
     OAuth,
     ApiKey,
@@ -68,6 +70,7 @@ pub enum AgentLoginSupport {
 }
 
 /// Handler for the /login command flow
+#[allow(dead_code)]
 pub struct LoginHandler {
     /// Current state of the login flow
     state: LoginFlowState,
@@ -83,6 +86,7 @@ pub struct LoginHandler {
     shutdown_handle: Option<ShutdownHandle>,
 }
 
+#[allow(dead_code)]
 impl LoginHandler {
     /// Create a new login handler
     pub fn new(
