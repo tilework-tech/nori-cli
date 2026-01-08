@@ -3297,29 +3297,17 @@ impl ChatWidget {
                     return;
                 }
 
-                // Create and initialize the login handler
-                let mut handler = LoginHandler::new(
-                    self.config.codex_home.clone(),
-                    self.config.cli_auth_credentials_store_mode,
-                    self.auth_manager.clone(),
-                );
+                // Create and start the login handler
+                let mut handler = LoginHandler::new();
+                handler.start_oauth();
 
-                // Start the login flow
-                if let Err(e) = handler.start_login(model_name) {
-                    self.add_error_message(e);
-                    return;
-                }
-
-                // Show auth method selection message and start OAuth flow
+                // Show auth method selection message
                 self.add_info_message(
                     "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
                     Some("Press Esc to cancel".to_string()),
                 );
 
-                // Start OAuth flow
-                handler.choose_oauth();
-
-                // Store the handler and start the actual login server
+                // Start the actual login server
                 self.start_oauth_login_flow(handler);
             }
             AgentLoginSupport::NotSupported { agent_name } => {
@@ -3355,7 +3343,6 @@ impl ChatWidget {
         match run_login_server(opts) {
             Ok(child) => {
                 let auth_url = child.auth_url.clone();
-                handler.set_auth_url(auth_url.clone());
                 handler.set_shutdown_handle(child.cancel_handle());
 
                 // Store the handler

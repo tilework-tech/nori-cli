@@ -155,23 +155,18 @@ When OAuth is initiated for Codex:
 3. A tokio task waits on `child.block_until_done()`
 4. On completion, sends `AppEvent::LoginComplete { success }` to the event loop
 5. `App::handle_event()` routes to `ChatWidget::handle_login_complete()`
-6. `LoginHandler.oauth_complete()` updates state and calls `auth_manager.reload()`
+6. On success: `LoginHandler.oauth_complete()` updates state, `auth_manager.reload()` is called
+7. On failure: `LoginHandler.cancel()` shuts down the OAuth server and shows error message
 
 **LoginHandler State Machine:**
 
 ```
-Idle ──▶ ChoosingAuthMethod ──▶ AwaitingBrowserAuth ──▶ Success
-                  │                      │
-                  │                      ├──▶ Failed
-                  │                      │
-                  ▼                      ▼
-           EnteringApiKey            Cancelled
-                  │
-                  ├──▶ Success
-                  └──▶ Failed
+Idle ──▶ AwaitingBrowserAuth ──▶ Success
+                   │
+                   └──▶ Cancelled
 ```
 
-The handler is stored as `Option<LoginHandler>` in `ChatWidget` and only instantiated when `/login` is invoked. Credentials are stored in `~/.nori/cli/auth.json` via existing `codex-core` infrastructure
+The handler is stored as `Option<LoginHandler>` in `ChatWidget` and only instantiated when `/login` is invoked. It primarily manages the shutdown handle for cancelling the OAuth server. Credentials are stored in `~/.nori/cli/auth.json` via existing `codex-core` infrastructure
 
 **ACP Agent Switching:**
 
