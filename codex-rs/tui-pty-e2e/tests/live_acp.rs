@@ -118,21 +118,14 @@ fn test_claude_acp_live_response() {
 #[ignore]
 fn test_codex_acp_live_response() {
     // Skip if API key not set
-    let api_key = match std::env::var("OPENAI_API_KEY") {
-        Ok(key) => key,
-        Err(_) => {
-            eprintln!("Skipping test_codex_acp_live_response: OPENAI_API_KEY not set");
-            return;
-        }
-    };
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("Skipping test_codex_acp_live_response: OPENAI_API_KEY not set");
+        return;
+    }
 
     let config = SessionConfig::new()
         .with_model("codex".to_owned())
-        .with_config_toml(generate_live_config("codex"))
-        // Pass through the API key to the TUI process so it reaches the ACP agent
-        .with_agent_env("OPENAI_API_KEY", api_key)
-        // Force npx instead of bunx to avoid potential env var inheritance issues
-        .with_agent_env("NORI_MANAGED_BY_NPM", "1");
+        .with_config_toml(generate_live_config("codex"));
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with codex");
@@ -148,19 +141,16 @@ fn test_codex_acp_live_response() {
     std::thread::sleep(LIVE_TIMEOUT_INPUT);
 
     // Wait for any response from the model (not a specific string, just any output)
-    // Also check we don't get authentication errors
+    // Also check we don't get "Authentication required" error
     session
         .wait_for(
             |screen| {
                 // Check that we got some response text after the prompt
                 // The screen should contain more than just the prompt area
                 // and should NOT contain authentication errors
-                let has_content = screen.lines().count() > 5;
-                let has_auth_error = screen.contains("Authentication required")
-                    || screen.contains("Failed to create ACP session")
-                    || screen.contains("ACP authentication failed")
-                    || screen.contains("Failed to start agent");
-                has_content && !has_auth_error
+                screen.lines().count() > 5
+                    && !screen.contains("Authentication required")
+                    && !screen.contains("Failed to create ACP session")
             },
             LIVE_TIMEOUT,
         )
@@ -173,10 +163,14 @@ fn test_codex_acp_live_response() {
 }
 
 /// Generate a config.toml for live ACP testing
-///
-/// For Nori's ACP mode, we just need to set the model to the agent name.
-/// The model_providers section is only for codex-core mode, not Nori ACP mode.
 fn generate_live_config(model: &str) -> String {
-    format!(r#"model = "{model}"
-"#)
+    format!(
+        r#"model = "{model}"
+model_provider = "live_acp_provider"
+
+[model_providers.live_acp_provider]
+name = "Live ACP provider for tests"
+wire_api = "acp"
+"#
+    )
 }

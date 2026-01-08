@@ -389,9 +389,7 @@ fn select_auth_method(auth_methods: &[acp::AuthMethod]) -> Option<&str> {
     // Find the first matching auth method where we have the corresponding env var
     for (env_var, method_id) in &env_to_method {
         if std::env::var(env_var).is_ok()
-            && auth_methods
-                .iter()
-                .any(|m| m.id.0.as_ref() == *method_id)
+            && auth_methods.iter().any(|m| m.id.0.as_ref() == *method_id)
         {
             return Some(method_id);
         }
@@ -422,9 +420,14 @@ async fn spawn_connection_internal(
 
     // Explicitly pass through API key environment variables for ACP agents
     // Some package runners (bunx/npx) may not properly inherit all env vars
-    for var in ["OPENAI_API_KEY", "CODEX_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"] {
+    for var in [
+        "OPENAI_API_KEY",
+        "CODEX_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ] {
         if let Ok(val) = std::env::var(var) {
-            debug!("Passing {} to ACP agent subprocess", var);
             cmd.env(var, val);
         }
     }
@@ -504,20 +507,21 @@ async fn spawn_connection_internal(
 
         if let Some(method_id) = auth_method_id {
             debug!("Authenticating with method: {}", method_id);
-            let auth_result = connection
+            connection
                 .authenticate(acp::AuthenticateRequest::new(acp::AuthMethodId::from(
                     method_id.to_string(),
                 )))
-                .await;
-            match &auth_result {
-                Ok(_) => debug!("Authentication successful"),
-                Err(e) => warn!("Authentication failed with error: {:?}", e),
-            }
-            auth_result.context("ACP authentication failed")?;
+                .await
+                .context("ACP authentication failed")?;
+            debug!("Authentication successful");
         } else {
             warn!(
                 "Agent requires authentication but no suitable auth method found. Available: {:?}",
-                response.auth_methods.iter().map(|m| &m.id).collect::<Vec<_>>()
+                response
+                    .auth_methods
+                    .iter()
+                    .map(|m| &m.id)
+                    .collect::<Vec<_>>()
             );
         }
     }
@@ -552,18 +556,10 @@ async fn run_command_loop(
                 // 3. Sending history to the agent via the session initialization
                 // See: codex-core/src/rollout.rs for the persistence format
 
-                let request = acp::NewSessionRequest::new(cwd);
-                debug!(
-                    "Creating ACP session with request: {:?}",
-                    serde_json::to_string(&request).unwrap_or_else(|_| "serialization failed".to_string())
-                );
                 let result = inner
                     .connection
-                    .new_session(request)
+                    .new_session(acp::NewSessionRequest::new(cwd))
                     .await;
-                if let Err(ref e) = result {
-                    warn!("ACP session creation failed: {:?}", e);
-                }
 
                 // Capture model state from the response if available
                 #[cfg(feature = "unstable")]
