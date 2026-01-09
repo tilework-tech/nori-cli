@@ -115,6 +115,24 @@ The `rollout/` module handles session persistence:
 - `list.rs`: Lists and queries saved sessions
 - Sessions stored in `~/.codex/sessions/` with JSON-lines format
 
+**User Notifications (`user_notification.rs`):**
+
+The `UserNotifier` and `UserNotification` types enable external notification handlers to receive events from Codex:
+
+- `UserNotifier::new(notify: Option<Vec<String>>)` - Creates a notifier with an optional external command
+- `UserNotifier::notify(&notification)` - Serializes the notification to JSON and invokes the configured command
+- `UserNotification::AgentTurnComplete` - Sent when an agent turn finishes
+- `UserNotification::ApprovalRequested` - Sent when user approval is needed (exec, edit, or elicitation)
+
+The `ApprovalRequested` variant includes:
+- `request_type`: "exec", "edit", or "elicitation"
+- `message`: Human-readable description
+- `command`: For exec requests, the command being requested
+- `file_paths`: For edit requests, the files being modified
+- `idle_duration_secs`: Present when idle threshold was exceeded before the request
+
+Both types are publicly exported from `lib.rs` for TUI consumption.
+
 **MCP Integration:**
 
 The `mcp/` and `mcp_connection_manager.rs` modules manage MCP server connections defined in config.

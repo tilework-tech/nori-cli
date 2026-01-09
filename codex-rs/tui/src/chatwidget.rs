@@ -10,6 +10,8 @@ use std::time::Duration;
 use codex_app_server_protocol::AuthMode;
 #[cfg(feature = "backend-client")]
 use codex_backend_client::Client as BackendClient;
+use codex_core::UserNotification;
+use codex_core::UserNotifier;
 use codex_core::config::Config;
 use codex_core::config::types::Notifications;
 use codex_core::git_info::current_branch_name;
@@ -100,6 +102,7 @@ use crate::history_cell::AgentMessageCell;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::McpToolCallCell;
 use crate::history_cell::PlainHistoryCell;
+use crate::idle_detector::IdleDetector;
 use crate::login_handler::AgentLoginSupport;
 use crate::login_handler::LoginHandler;
 #[allow(unused_imports)]
@@ -361,6 +364,10 @@ pub(crate) struct ChatWidget {
     session_stats: SessionStats,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    // OS-level notification handler for approval events
+    user_notifier: UserNotifier,
+    // Idle detection for approval notifications
+    idle_detector: IdleDetector,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -482,6 +489,8 @@ impl ChatWidget {
     }
 
     fn on_agent_message(&mut self, message: String) {
+        // Reset idle timer when agent produces output
+        self.record_activity();
         // Track assistant message for session statistics
         self.session_stats.record_assistant_message();
 
@@ -1210,7 +1219,16 @@ impl ChatWidget {
         self.flush_answer_stream_with_separator();
         let command = shlex::try_join(ev.command.iter().map(String::as_str))
             .unwrap_or_else(|_| ev.command.join(" "));
-        self.notify(Notification::ExecApprovalRequested { command });
+        self.notify(Notification::ExecApprovalRequested {
+            command: command.clone(),
+        });
+        // Send OS-level notification via notify hook
+        self.send_approval_notification(
+            "exec",
+            format!("Approval requested: {}", truncate_text(&command, 50)),
+            Some(command),
+            None,
+        );
 
         let request = ApprovalRequest::Exec {
             id,
@@ -1229,18 +1247,40 @@ impl ChatWidget {
     ) {
         self.flush_answer_stream_with_separator();
 
+        let file_paths: Vec<PathBuf> = ev.changes.keys().cloned().collect();
         let request = ApprovalRequest::ApplyPatch {
             id,
             reason: ev.reason,
-            changes: ev.changes.clone(),
+            changes: ev.changes,
             cwd: self.config.cwd.clone(),
         };
         self.bottom_pane.push_approval_request(request);
         self.request_redraw();
         self.notify(Notification::EditApprovalRequested {
             cwd: self.config.cwd.clone(),
-            changes: ev.changes.keys().cloned().collect(),
+            changes: file_paths.clone(),
         });
+        // Send OS-level notification via notify hook
+        let file_count = file_paths.len();
+        let message = if file_count == 1 {
+            format!(
+                "Nori wants to edit {}",
+                display_path_for(&file_paths[0], &self.config.cwd)
+            )
+        } else {
+            format!("Nori wants to edit {file_count} files")
+        };
+        self.send_approval_notification(
+            "edit",
+            message,
+            None,
+            Some(
+                file_paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .collect(),
+            ),
+        );
     }
 
     pub(crate) fn handle_elicitation_request_now(&mut self, ev: ElicitationRequestEvent) {
@@ -1249,6 +1289,13 @@ impl ChatWidget {
         self.notify(Notification::ElicitationRequested {
             server_name: ev.server_name.clone(),
         });
+        // Send OS-level notification via notify hook
+        self.send_approval_notification(
+            "elicitation",
+            format!("Approval requested by {}", ev.server_name),
+            None,
+            None,
+        );
 
         let request = ApprovalRequest::McpElicitation {
             server_name: ev.server_name,
@@ -1260,6 +1307,8 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
+        // Reset idle timer when agent starts work
+        self.record_activity();
         // Track Bash tool call for session statistics
         self.session_stats.record_tool_call("Bash");
 
@@ -1499,6 +1548,8 @@ impl ChatWidget {
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
+            user_notifier: UserNotifier::new(config.notify.clone()),
+            idle_detector: IdleDetector::new(Duration::from_secs(5)),
         };
 
         widget.prefetch_rate_limits();
@@ -1593,6 +1644,8 @@ impl ChatWidget {
             acp_handle: None,
             session_stats: SessionStats::new(),
             login_handler: None,
+            user_notifier: UserNotifier::new(config.notify.clone()),
+            idle_detector: IdleDetector::new(Duration::from_secs(5)),
         };
 
         widget.prefetch_rate_limits();
@@ -1938,6 +1991,9 @@ impl ChatWidget {
             return;
         }
 
+        // Reset idle timer when user sends a message
+        self.record_activity();
+
         // Special-case: "/login <agent>" triggers login for a specific agent
         // This intercepts before the message is sent to the agent
         if let Some(agent_name) = text.strip_prefix("/login ").map(str::trim)
@@ -2254,6 +2310,34 @@ impl ChatWidget {
         }
         self.pending_notification = Some(notification);
         self.request_redraw();
+    }
+
+    /// Send an OS-level notification for an approval request.
+    /// This triggers the external notify hook if configured.
+    fn send_approval_notification(
+        &mut self,
+        request_type: &str,
+        message: String,
+        command: Option<String>,
+        file_paths: Option<Vec<String>>,
+    ) {
+        // Check idle duration and include it if threshold was exceeded
+        let idle_duration = self.idle_detector.check_idle();
+        let idle_duration_secs = idle_duration.map(|d| d.as_secs());
+
+        let notification = UserNotification::ApprovalRequested {
+            request_type: request_type.to_string(),
+            message,
+            command,
+            file_paths,
+            idle_duration_secs,
+        };
+        self.user_notifier.notify(&notification);
+    }
+
+    /// Record user/agent activity to reset the idle timer.
+    fn record_activity(&mut self) {
+        self.idle_detector.record_activity();
     }
 
     pub(crate) fn maybe_post_pending_notification(&mut self, tui: &mut crate::tui::Tui) {

@@ -3,12 +3,12 @@ use tracing::error;
 use tracing::warn;
 
 #[derive(Debug, Default)]
-pub(crate) struct UserNotifier {
+pub struct UserNotifier {
     notify_command: Option<Vec<String>>,
 }
 
 impl UserNotifier {
-    pub(crate) fn notify(&self, notification: &UserNotification) {
+    pub fn notify(&self, notification: &UserNotification) {
         if let Some(notify_command) = &self.notify_command
             && !notify_command.is_empty()
         {
@@ -34,7 +34,7 @@ impl UserNotifier {
         }
     }
 
-    pub(crate) fn new(notify: Option<Vec<String>>) -> Self {
+    pub fn new(notify: Option<Vec<String>>) -> Self {
         Self {
             notify_command: notify,
         }
@@ -46,7 +46,7 @@ impl UserNotifier {
 /// program.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
-pub(crate) enum UserNotification {
+pub enum UserNotification {
     #[serde(rename_all = "kebab-case")]
     AgentTurnComplete {
         thread_id: String,
@@ -58,6 +58,31 @@ pub(crate) enum UserNotification {
 
         /// The last message sent by the assistant in the turn.
         last_assistant_message: Option<String>,
+    },
+
+    /// Notification sent when an approval request arrives, optionally after
+    /// an idle period. This allows external notification handlers to alert
+    /// the user when the agent needs their attention.
+    #[serde(rename_all = "kebab-case")]
+    ApprovalRequested {
+        /// The type of approval request: "exec", "edit", or "elicitation"
+        request_type: String,
+
+        /// Human-readable message describing the approval request
+        message: String,
+
+        /// For exec requests, the command being requested
+        #[serde(skip_serializing_if = "Option::is_none")]
+        command: Option<String>,
+
+        /// For edit requests, the list of file paths being modified
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_paths: Option<Vec<String>>,
+
+        /// How long the system was idle before this request, in seconds.
+        /// Present when the idle threshold was exceeded.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        idle_duration_secs: Option<u64>,
     },
 }
 
@@ -82,6 +107,43 @@ mod tests {
             serialized,
             r#"{"type":"agent-turn-complete","thread-id":"b5f6c1c2-1111-2222-3333-444455556666","turn-id":"12345","cwd":"/Users/example/project","input-messages":["Rename `foo` to `bar` and update the callsites."],"last-assistant-message":"Rename complete and verified `cargo build` succeeds."}"#
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_approval_requested_exec_notification() -> Result<()> {
+        let notification = UserNotification::ApprovalRequested {
+            request_type: "exec".to_string(),
+            message: "Approval needed for command execution".to_string(),
+            command: Some("rm -rf /tmp/test".to_string()),
+            file_paths: None,
+            idle_duration_secs: Some(5),
+        };
+        let serialized = serde_json::to_string(&notification)?;
+        assert!(serialized.contains(r#""type":"approval-requested""#));
+        assert!(serialized.contains(r#""request-type":"exec""#));
+        assert!(serialized.contains(r#""command":"rm -rf /tmp/test""#));
+        assert!(serialized.contains(r#""idle-duration-secs":5"#));
+        Ok(())
+    }
+
+    #[test]
+    fn test_approval_requested_edit_notification() -> Result<()> {
+        let notification = UserNotification::ApprovalRequested {
+            request_type: "edit".to_string(),
+            message: "Approval needed for file edits".to_string(),
+            command: None,
+            file_paths: Some(vec![
+                "/path/to/file1.rs".to_string(),
+                "/path/to/file2.rs".to_string(),
+            ]),
+            idle_duration_secs: None,
+        };
+        let serialized = serde_json::to_string(&notification)?;
+        assert!(serialized.contains(r#""type":"approval-requested""#));
+        assert!(serialized.contains(r#""request-type":"edit""#));
+        assert!(serialized.contains(r#""file-paths""#));
+        assert!(serialized.contains(r#"/path/to/file1.rs"#));
         Ok(())
     }
 }

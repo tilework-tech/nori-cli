@@ -362,6 +362,37 @@ Most event types (exec begin/end, MCP calls, elicitation) are queued during acti
 - The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
 - `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
 
+**OS-Level Approval Notifications:**
+
+The TUI supports OS-level notifications when approval is needed, implemented via `UserNotifier` from `codex-core` and `IdleDetector`:
+
+```
+┌─────────────────────┐   check_idle()     ┌─────────────────┐
+│   IdleDetector      │◄───────────────────│                 │
+│  (5-second threshold)                    │   ChatWidget    │
+└─────────────────────┘                    │                 │
+                                           │  - user_notifier│
+┌─────────────────────┐   notify()         │  - idle_detector│
+│   UserNotifier      │◄───────────────────│                 │
+│  (spawns notify     │                    └─────────────────┘
+│   hook command)     │                            ▲
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                  record_activity()
+┌─────────────────────┐                    (on user messages,
+│ ~/.nori/cli/        │                     agent starts work)
+│ notify-hook.sh      │
+└─────────────────────┘
+```
+
+- `IdleDetector` (`idle_detector.rs`): Tracks idle state using a 5-second threshold. `check_idle()` returns the idle duration once per idle period (prevents duplicate notifications). `record_activity()` resets the timer.
+- `ChatWidget` fields: `user_notifier: UserNotifier` and `idle_detector: IdleDetector`
+- `send_approval_notification()`: Creates `UserNotification::ApprovalRequested` with idle duration if threshold exceeded
+- Activity is recorded when user submits messages (`submit_user_message`) and when agent starts (`on_task_started`)
+- Approval handlers call `send_approval_notification()`: `handle_exec_approval_now()`, `handle_apply_patch_approval_now()`, `handle_elicitation_request_now()`
+
+The notify hook is deployed to `~/.nori/cli/notify-hook.sh` during first-launch onboarding and configured in `config.toml` via `notify = ["/path/to/notify-hook.sh"]`. See `@/codex-rs/tui/src/nori/docs.md` for deployment details.
+
 **Approval Overlay Model Display Name:**
 
 The approval overlay displays the current agent's display name (e.g., "Claude", "Gemini") instead of a hardcoded name in options like "No, and tell Claude what to do differently". The display name flows through:

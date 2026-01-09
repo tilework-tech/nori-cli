@@ -92,6 +92,9 @@ mod state;
 mod tasks;
 mod user_notification;
 mod user_shell_command;
+
+pub use user_notification::UserNotification;
+pub use user_notification::UserNotifier;
 pub mod util;
 
 pub use apply_patch::CODEX_APPLY_PATCH_ARG1;

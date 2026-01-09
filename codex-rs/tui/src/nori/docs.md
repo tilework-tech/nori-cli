@@ -132,4 +132,27 @@ Provides Nori-branded first-launch onboarding flow:
 - `trust_directory.rs`: Directory trust prompt
 - `onboarding_screen.rs`: Orchestrates the multi-step onboarding flow
 
+**Notify Hook Deployment (`first_launch.rs`):**
+
+On first launch, the onboarding flow deploys a bundled notification script and configures it:
+
+1. `deploy_notify_hook(nori_home)`: Writes the bundled `notify-hook.sh` to `~/.nori/cli/notify-hook.sh`
+   - Script content is embedded at compile time via `include_str!("../notify-hook.sh")`
+   - Sets executable permissions on Unix systems (`chmod +x`)
+2. `mark_first_launch_complete(nori_home)`: Deploys the hook AND configures it in `config.toml`
+   - Sets `cli.first_launch_complete = true`
+   - Sets `notify = ["/path/to/notify-hook.sh"]` using `ConfigEditsBuilder::set_path()`
+
+**Bundled Notification Script (`notify-hook.sh`):**
+
+Cross-platform OS notification script that receives JSON as a CLI argument:
+
+| Platform | Tool | Fallback |
+|----------|------|----------|
+| Linux | `notify-send` | None (logs warning) |
+| macOS | `terminal-notifier` | `osascript` |
+| Windows | PowerShell `NotifyIcon` | None |
+
+JSON parsing attempts `python3` first, then `jq`, with a fallback message. For `approval-requested` notifications, displays the message with optional idle duration. Supports `NORI_NOTIFY_DEBUG` env var for logging to `/tmp/nori-notify.log`.
+
 Created and maintained by Nori.

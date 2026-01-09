@@ -15,6 +15,7 @@ use toml_edit::Table as TomlTable;
 use toml_edit::value;
 
 // Re-export for users of ConfigEditsBuilder::set_path
+pub use toml_edit::Array;
 pub use toml_edit::Item;
 pub use toml_edit::value as toml_value;
 

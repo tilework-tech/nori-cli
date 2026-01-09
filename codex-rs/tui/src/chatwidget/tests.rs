@@ -391,6 +391,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
+        user_notifier: UserNotifier::new(cfg.notify.clone()),
+        idle_detector: IdleDetector::new(Duration::from_secs(5)),
     };
     (widget, rx, op_rx)
 }
