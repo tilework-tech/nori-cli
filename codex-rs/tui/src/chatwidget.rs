@@ -362,6 +362,8 @@ pub(crate) struct ChatWidget {
     session_stats: SessionStats,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    // Agent being logged into (for login completion message)
+    pending_login_agent: Option<codex_acp::AgentKind>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -1500,6 +1502,7 @@ impl ChatWidget {
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
+            pending_login_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1594,6 +1597,7 @@ impl ChatWidget {
             acp_handle: None,
             session_stats: SessionStats::new(),
             login_handler: None,
+            pending_login_agent: None,
         };
 
         widget.prefetch_rate_limits();
@@ -3289,6 +3293,8 @@ impl ChatWidget {
 
     /// Handle the /login slash command
     fn handle_login_command(&mut self) {
+        use codex_acp::AgentKind;
+
         // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
         // otherwise use the current config model
         let model_name = self
@@ -3323,14 +3329,32 @@ impl ChatWidget {
                 let mut handler = LoginHandler::new();
                 handler.start_oauth();
 
-                // Show auth method selection message
+                // Store which agent we're logging into
+                self.pending_login_agent = Some(agent);
+
+                // Show agent-specific auth message
+                let (provider, env_var) = match agent {
+                    AgentKind::ClaudeCode => ("Anthropic", "ANTHROPIC_API_KEY"),
+                    AgentKind::Codex => ("OpenAI", "OPENAI_API_KEY"),
+                    AgentKind::Gemini => ("Google", "GOOGLE_API_KEY"),
+                };
+
                 self.add_info_message(
-                    "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                    format!(
+                        "Starting authentication...\n\nA browser window will open for you to sign in with your {provider} account.\n\nAlternatively, you can set the {env_var} environment variable."
+                    ),
                     Some("Press Esc to cancel".to_string()),
                 );
 
-                // Start the actual login server
-                self.start_oauth_login_flow(handler);
+                // Start the appropriate login server based on agent
+                match agent {
+                    AgentKind::ClaudeCode => self.start_anthropic_oauth_login_flow(handler),
+                    AgentKind::Codex => self.start_oauth_login_flow(handler),
+                    AgentKind::Gemini => {
+                        // Gemini should not reach here as it returns NotSupported
+                        self.add_error_message("Gemini in-app login is not yet supported.".to_string());
+                    }
+                }
             }
             AgentLoginSupport::NotSupported { agent_name } => {
                 // Provide agent-specific instructions
@@ -3339,11 +3363,6 @@ impl ChatWidget {
                         "In-app login for Gemini is not yet supported.\n\n\
                          To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
                          Alternatively, set the GOOGLE_API_KEY environment variable."
-                    }
-                    "Claude Code" => {
-                        "In-app login for Claude Code is not yet supported.\n\n\
-                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
-                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
                     }
                     _ => {
                         "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
@@ -3362,6 +3381,8 @@ impl ChatWidget {
 
     /// Handle the /login <agent> command with explicit agent name
     fn handle_login_command_with_agent(&mut self, agent_name: &str) {
+        use codex_acp::AgentKind;
+
         match LoginHandler::check_agent_support(agent_name) {
             AgentLoginSupport::Supported {
                 agent,
@@ -3385,12 +3406,32 @@ impl ChatWidget {
                 let mut handler = LoginHandler::new();
                 handler.start_oauth();
 
+                // Store which agent we're logging into
+                self.pending_login_agent = Some(agent);
+
+                // Show agent-specific auth message
+                let (provider, env_var) = match agent {
+                    AgentKind::ClaudeCode => ("Anthropic", "ANTHROPIC_API_KEY"),
+                    AgentKind::Codex => ("OpenAI", "OPENAI_API_KEY"),
+                    AgentKind::Gemini => ("Google", "GOOGLE_API_KEY"),
+                };
+
                 self.add_info_message(
-                    "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                    format!(
+                        "Starting authentication...\n\nA browser window will open for you to sign in with your {provider} account.\n\nAlternatively, you can set the {env_var} environment variable."
+                    ),
                     Some("Press Esc to cancel".to_string()),
                 );
 
-                self.start_oauth_login_flow(handler);
+                // Start the appropriate login server based on agent
+                match agent {
+                    AgentKind::ClaudeCode => self.start_anthropic_oauth_login_flow(handler),
+                    AgentKind::Codex => self.start_oauth_login_flow(handler),
+                    AgentKind::Gemini => {
+                        // Gemini should not reach here as it returns NotSupported
+                        self.add_error_message("Gemini in-app login is not yet supported.".to_string());
+                    }
+                }
             }
             AgentLoginSupport::NotSupported { agent_name } => {
                 let instructions = match agent_name.as_str() {
@@ -3398,11 +3439,6 @@ impl ChatWidget {
                         "In-app login for Gemini is not yet supported.\n\n\
                          To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
                          Alternatively, set the GOOGLE_API_KEY environment variable."
-                    }
-                    "Claude Code" => {
-                        "In-app login for Claude Code is not yet supported.\n\n\
-                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
-                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
                     }
                     _ => {
                         "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
@@ -3419,7 +3455,7 @@ impl ChatWidget {
         }
     }
 
-    /// Start the OAuth login flow
+    /// Start the OAuth login flow for OpenAI (Codex)
     fn start_oauth_login_flow(&mut self, mut handler: LoginHandler) {
         use codex_core::auth::CLIENT_ID;
         use codex_login::ServerOptions;
@@ -3470,13 +3506,75 @@ impl ChatWidget {
         }
     }
 
+    /// Start the Anthropic OAuth login flow for Claude Code
+    fn start_anthropic_oauth_login_flow(&mut self, handler: LoginHandler) {
+        use codex_login::AnthropicServerOptions;
+        use codex_login::run_anthropic_login_server;
+
+        // Use home directory for Claude credentials (standard location: ~/.claude/)
+        let home_dir = dirs::home_dir().unwrap_or_else(|| self.config.codex_home.clone());
+        let opts = AnthropicServerOptions::new(home_dir);
+
+        match run_anthropic_login_server(opts) {
+            Ok(child) => {
+                let auth_url = child.auth_url.clone();
+                // Convert the Anthropic shutdown handle to a codex_login ShutdownHandle
+                // by storing it in the handler (we'll handle cancellation via the handler)
+                let cancel_handle = child.cancel_handle();
+
+                // Store the handler
+                self.login_handler = Some(handler);
+
+                // Update the info message with the URL
+                self.add_info_message(
+                    format!(
+                        "Opening browser for authentication...\n\nIf the browser doesn't open automatically, visit:\n{auth_url}\n\nWaiting for authentication to complete..."
+                    ),
+                    Some("Press Esc to cancel".to_string()),
+                );
+
+                // Spawn a task to wait for completion
+                let app_event_tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    match child.block_until_done().await {
+                        Ok(()) => {
+                            app_event_tx.send(AppEvent::LoginComplete { success: true });
+                        }
+                        Err(e) => {
+                            tracing::error!("Anthropic OAuth login failed: {e}");
+                            app_event_tx.send(AppEvent::LoginComplete { success: false });
+                        }
+                    }
+                    // Ensure cancel handle is kept alive
+                    drop(cancel_handle);
+                });
+            }
+            Err(e) => {
+                self.add_error_message(format!("Failed to start login server: {e}"));
+            }
+        }
+    }
+
     /// Handle login completion event
     pub(crate) fn handle_login_complete(&mut self, success: bool) {
+        use codex_acp::AgentKind;
+
+        let agent = self.pending_login_agent.take();
+
         if let Some(mut handler) = self.login_handler.take() {
             if success {
                 handler.oauth_complete();
+
+                // Show agent-specific success message
+                let (provider, agent_name) = match agent {
+                    Some(AgentKind::ClaudeCode) => ("Anthropic", "Claude Code"),
+                    Some(AgentKind::Codex) => ("OpenAI", "Codex"),
+                    Some(AgentKind::Gemini) => ("Google", "Gemini"),
+                    None => ("the provider", "the agent"),
+                };
+
                 self.add_info_message(
-                    "Successfully authenticated with OpenAI!\n\nYou can now use Codex.".to_string(),
+                    format!("Successfully authenticated with {provider}!\n\nYou can now use {agent_name}."),
                     None,
                 );
             } else {

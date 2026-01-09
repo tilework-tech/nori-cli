@@ -1,7 +1,14 @@
+mod anthropic_server;
 mod device_code_auth;
 mod pkce;
 mod server;
 
+pub use anthropic_server::AnthropicLoginServer;
+pub use anthropic_server::AnthropicServerOptions;
+pub use anthropic_server::AnthropicShutdownHandle;
+pub use anthropic_server::ANTHROPIC_CLIENT_ID;
+pub use anthropic_server::ANTHROPIC_ISSUER;
+pub use anthropic_server::run_anthropic_login_server;
 pub use device_code_auth::run_device_code_login;
 pub use server::LoginServer;
 pub use server::ServerOptions;

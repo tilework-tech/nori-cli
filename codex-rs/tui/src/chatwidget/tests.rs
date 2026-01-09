@@ -391,6 +391,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
+        pending_login_agent: None,
     };
     (widget, rx, op_rx)
 }

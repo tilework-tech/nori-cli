@@ -85,13 +85,15 @@ impl LoginHandler {
                         is_installed: info.is_installed,
                         login_method: LoginMethod::OAuthBrowser,
                     },
+                    // Claude Code supports in-app login via OAuth browser flow
+                    AgentKind::ClaudeCode => AgentLoginSupport::Supported {
+                        agent: AgentKind::ClaudeCode,
+                        is_installed: info.is_installed,
+                        login_method: LoginMethod::OAuthBrowser,
+                    },
                     // Gemini requires interactive CLI for auth - show instructions
                     AgentKind::Gemini => AgentLoginSupport::NotSupported {
                         agent_name: "Gemini".to_string(),
-                    },
-                    // Other agents don't support in-app login yet
-                    other => AgentLoginSupport::NotSupported {
-                        agent_name: other.display_name().to_string(),
                     },
                 }
             }
@@ -154,15 +156,19 @@ mod tests {
     }
 
     #[test]
-    fn check_agent_support_returns_not_supported_for_claude() {
-        // Claude Code login support will be added later
+    fn check_agent_support_returns_supported_for_claude_with_oauth() {
         let support = LoginHandler::check_agent_support("claude-code");
 
         match support {
-            AgentLoginSupport::NotSupported { agent_name } => {
-                assert_eq!(agent_name, "Claude Code");
+            AgentLoginSupport::Supported {
+                agent,
+                login_method,
+                ..
+            } => {
+                assert_eq!(agent, AgentKind::ClaudeCode);
+                assert_eq!(login_method, LoginMethod::OAuthBrowser);
             }
-            _ => panic!("Expected NotSupported variant for claude-code"),
+            _ => panic!("Expected Supported variant for claude-code"),
         }
     }
 
