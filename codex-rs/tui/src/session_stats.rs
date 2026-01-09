@@ -8,6 +8,7 @@ use crate::history_cell::with_border;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::collections::HashMap;
+use unicode_width::UnicodeWidthStr;
 
 /// Tracks statistics for a conversation session.
 #[derive(Debug, Default, Clone)]
@@ -70,61 +71,112 @@ impl SessionStats {
 
     /// Format session statistics as plain text for console output.
     pub fn to_display_string(&self) -> String {
+        const WIDTH: usize = 55;
+        let border_line = "─".repeat(WIDTH);
         let mut lines = Vec::new();
 
-        lines.push("┌───────────────────────────────────────────────────────┐".to_string());
-        lines.push("│                Nori Session Statistics                │".to_string());
-        lines.push("├───────────────────────────────────────────────────────┤".to_string());
+        // Top border and title
+        lines.push(format!("╭{}╮", border_line));
+        lines.push(format!(
+            "│{:^width$}│",
+            "📊 Nori Session Statistics",
+            width = WIDTH
+        ));
+        lines.push(format!("├{}┤", border_line));
 
-        // Messages line
-        let messages = format!(
-            "│ Messages          User: {}    Assistant: {}",
+        // Messages section
+        let total_messages = self.user_messages + self.assistant_messages;
+        lines.push(format!(
+            "│ 💬 Messages  ({} total){:>pad$}│",
+            total_messages,
+            "",
+            pad = WIDTH - 21 - total_messages.to_string().len()
+        ));
+        let msg_line = format!(
+            "│    User: {}  │  Assistant: {}",
             self.user_messages, self.assistant_messages
         );
-        lines.push(format!("{messages:<55}│"));
+        lines.push(format!("{:<width$}│", msg_line, width = WIDTH + 1));
 
-        // Tool calls line
-        let tool_calls_text = if self.tool_calls.is_empty() {
-            "(none)".to_string()
+        // Separator
+        lines.push(format!("│{}│", "─".repeat(WIDTH)));
+
+        // Tool calls section
+        let total_tool_calls: u32 = self.tool_calls.values().sum();
+        lines.push(format!(
+            "│ 🔧 Tool Calls  ({} total){:>pad$}│",
+            total_tool_calls,
+            "",
+            pad = WIDTH - 23 - total_tool_calls.to_string().len()
+        ));
+
+        if self.tool_calls.is_empty() {
+            lines.push(format!("│    (none){:>pad$}│", "", pad = WIDTH - 10));
         } else {
+            // Sort by count (descending), then by name
             let mut sorted: Vec<_> = self.tool_calls.iter().collect();
-            sorted.sort_by(|a, b| a.0.cmp(b.0));
-            sorted
-                .iter()
-                .map(|(name, count)| format!("{name}: {count}"))
-                .collect::<Vec<_>>()
-                .join("  ")
-        };
-        let tool_calls = format!("│ Tool Calls        {tool_calls_text}");
-        lines.push(format!("{tool_calls:<55}│"));
+            sorted.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
 
-        lines.push("├───────────────────────────────────────────────────────┤".to_string());
+            // Format tool calls in two columns if possible
+            let max_name_len = sorted.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
+
+            for chunk in sorted.chunks(2) {
+                let mut line = "│   ".to_string();
+                for (idx, (name, count)) in chunk.iter().enumerate() {
+                    if idx > 0 {
+                        line.push_str(" │ ");
+                    }
+                    line.push_str(&format!(
+                        "{:>width$}: {}",
+                        name,
+                        count,
+                        width = max_name_len
+                    ));
+                }
+                lines.push(format!("{:<width$}│", line, width = WIDTH + 1));
+            }
+        }
+
+        // Separator
+        lines.push(format!("│{}│", "─".repeat(WIDTH)));
 
         // Skills section
-        lines.push("│ Skills Used                                           │".to_string());
+        lines.push(format!(
+            "│ ✨ Skills Used  ({}){:>pad$}│",
+            self.skills_used.len(),
+            "",
+            pad = WIDTH - 19 - self.skills_used.len().to_string().len()
+        ));
         if self.skills_used.is_empty() {
-            lines.push("│   (none)                                              │".to_string());
+            lines.push(format!("│    (none){:>pad$}│", "", pad = WIDTH - 10));
         } else {
             for skill in &self.skills_used {
-                let skill_line = format!("│   {skill}");
-                lines.push(format!("{skill_line:<55}│"));
+                let skill_line = format!("│    • {}", skill);
+                lines.push(format!("{:<width$}│", skill_line, width = WIDTH + 1));
             }
         }
 
-        lines.push("├───────────────────────────────────────────────────────┤".to_string());
+        // Separator
+        lines.push(format!("│{}│", "─".repeat(WIDTH)));
 
         // Subagents section
-        lines.push("│ Subagents Used                                        │".to_string());
+        lines.push(format!(
+            "│ 🤖 Subagents Used  ({}){:>pad$}│",
+            self.subagents_used.len(),
+            "",
+            pad = WIDTH - 22 - self.subagents_used.len().to_string().len()
+        ));
         if self.subagents_used.is_empty() {
-            lines.push("│   (none)                                              │".to_string());
+            lines.push(format!("│    (none){:>pad$}│", "", pad = WIDTH - 10));
         } else {
             for subagent in &self.subagents_used {
-                let subagent_line = format!("│   {subagent}");
-                lines.push(format!("{subagent_line:<55}│"));
+                let subagent_line = format!("│    • {}", subagent);
+                lines.push(format!("{:<width$}│", subagent_line, width = WIDTH + 1));
             }
         }
 
-        lines.push("└───────────────────────────────────────────────────────┘".to_string());
+        // Bottom border
+        lines.push(format!("╰{}╯", border_line));
 
         lines.join("\n")
     }
@@ -144,63 +196,125 @@ impl SessionStatisticsCell {
 }
 
 impl HistoryCell for SessionStatisticsCell {
-    fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut content_lines: Vec<Line<'static>> = Vec::new();
 
-        // Title
+        // Calculate inner width for separator lines (accounting for border padding)
+        let inner_width = width.saturating_sub(4).max(20) as usize;
+
+        // Title with icon
         content_lines.push(Line::from(vec![
-            Span::from("Nori Session Statistics").bold(),
+            Span::from("📊 ").dim(),
+            Span::from("Nori Session Statistics").bold().cyan(),
         ]));
         content_lines.push(Line::from(""));
 
-        // Messages section
-        let messages_line = Line::from(vec![
+        // Messages section with visual counts
+        let total_messages = self.stats.user_messages + self.stats.assistant_messages;
+        content_lines.push(Line::from(vec![
+            Span::from("💬 ").dim(),
             Span::from("Messages").bold(),
-            Span::from("          "),
-            Span::from(format!("User: {}", self.stats.user_messages)),
-            Span::from("    "),
-            Span::from(format!("Assistant: {}", self.stats.assistant_messages)),
-        ]);
-        content_lines.push(messages_line);
+            Span::from(format!("  {} total", total_messages)).dim(),
+        ]));
+        content_lines.push(Line::from(vec![
+            Span::from("   User: ").dim(),
+            Span::from(format!("{}", self.stats.user_messages)).green(),
+            Span::from("  │  ").dim(),
+            Span::from("Assistant: ").dim(),
+            Span::from(format!("{}", self.stats.assistant_messages)).cyan(),
+        ]));
 
-        // Tool Calls section
-        let tool_calls_text = if self.stats.tool_calls.is_empty() {
-            "(none)".to_string()
-        } else {
-            let mut sorted: Vec<_> = self.stats.tool_calls.iter().collect();
-            sorted.sort_by(|a, b| a.0.cmp(b.0));
-            sorted
-                .iter()
-                .map(|(name, count)| format!("{name}: {count}"))
-                .collect::<Vec<_>>()
-                .join("  ")
-        };
-        let tool_calls_line = Line::from(vec![
+        // Section separator
+        content_lines.push(Line::from("─".repeat(inner_width.min(50)).dim()));
+
+        // Tool Calls section with sorted table
+        let total_tool_calls: u32 = self.stats.tool_calls.values().sum();
+        content_lines.push(Line::from(vec![
+            Span::from("🔧 ").dim(),
             Span::from("Tool Calls").bold(),
-            Span::from("        "),
-            Span::from(tool_calls_text),
-        ]);
-        content_lines.push(tool_calls_line);
-        content_lines.push(Line::from(""));
+            Span::from(format!("  {} total", total_tool_calls)).dim(),
+        ]));
 
-        // Skills Used section
-        content_lines.push(Line::from(vec![Span::from("Skills Used").bold()]));
-        if self.stats.skills_used.is_empty() {
-            content_lines.push(Line::from("  (none)"));
+        if self.stats.tool_calls.is_empty() {
+            content_lines.push(Line::from(vec![Span::from("   (none)").dim().italic()]));
         } else {
-            for skill in &self.stats.skills_used {
-                content_lines.push(Line::from(format!("  {skill}")));
+            // Sort by count (descending), then by name
+            let mut sorted: Vec<_> = self.stats.tool_calls.iter().collect();
+            sorted.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+
+            // Calculate column widths for aligned display
+            let max_name_width = sorted.iter().map(|(n, _)| n.width()).max().unwrap_or(0);
+            let max_count_width = sorted
+                .iter()
+                .map(|(_, c)| c.to_string().len())
+                .max()
+                .unwrap_or(0);
+
+            // Display as a compact table, 2 columns per row if width allows
+            let items_per_row = if inner_width > 40 { 2 } else { 1 };
+            let mut row_items: Vec<Span<'static>> = Vec::new();
+
+            for (idx, (name, count)) in sorted.iter().enumerate() {
+                let padded_name = format!("{:width$}", name, width = max_name_width);
+                let padded_count = format!("{:>width$}", count, width = max_count_width);
+
+                if idx % items_per_row == 0 {
+                    if !row_items.is_empty() {
+                        content_lines.push(Line::from(row_items.clone()));
+                        row_items.clear();
+                    }
+                    row_items.push(Span::from("   "));
+                } else {
+                    row_items.push(Span::from("  │  ").dim());
+                }
+
+                row_items.push(Span::from(padded_name).cyan());
+                row_items.push(Span::from(": ").dim());
+                row_items.push(Span::from(padded_count).bold());
+            }
+
+            if !row_items.is_empty() {
+                content_lines.push(Line::from(row_items));
             }
         }
-        content_lines.push(Line::from(""));
+
+        // Section separator
+        content_lines.push(Line::from("─".repeat(inner_width.min(50)).dim()));
+
+        // Skills Used section
+        content_lines.push(Line::from(vec![
+            Span::from("✨ ").dim(),
+            Span::from("Skills Used").bold(),
+            Span::from(format!("  {}", self.stats.skills_used.len())).dim(),
+        ]));
+        if self.stats.skills_used.is_empty() {
+            content_lines.push(Line::from(vec![Span::from("   (none)").dim().italic()]));
+        } else {
+            for skill in &self.stats.skills_used {
+                content_lines.push(Line::from(vec![
+                    Span::from("   • ").dim(),
+                    Span::from(skill.clone()).magenta(),
+                ]));
+            }
+        }
+
+        // Section separator
+        content_lines.push(Line::from("─".repeat(inner_width.min(50)).dim()));
 
         // Subagents Used section
-        content_lines.push(Line::from(vec![Span::from("Subagents Used").bold()]));
+        content_lines.push(Line::from(vec![
+            Span::from("🤖 ").dim(),
+            Span::from("Subagents Used").bold(),
+            Span::from(format!("  {}", self.stats.subagents_used.len())).dim(),
+        ]));
         if self.stats.subagents_used.is_empty() {
-            content_lines.push(Line::from("  (none)"));
+            content_lines.push(Line::from(vec![Span::from("   (none)").dim().italic()]));
         } else {
             for subagent in &self.stats.subagents_used {
-                content_lines.push(Line::from(format!("  {subagent}")));
+                content_lines.push(Line::from(vec![
+                    Span::from("   • ").dim(),
+                    Span::from(subagent.clone()).yellow(),
+                ]));
             }
         }
 
@@ -797,8 +911,18 @@ mod tests {
     fn to_display_string_has_border() {
         let stats = SessionStats::new();
         let output = stats.to_display_string();
-        assert!(output.contains("┌"), "Expected top-left corner");
-        assert!(output.contains("└"), "Expected bottom-left corner");
-        assert!(output.contains("┘"), "Expected bottom-right corner");
+        // Accept both rounded (╭╰╯) and square (┌└┘) corner variants
+        assert!(
+            output.contains("╭") || output.contains("┌"),
+            "Expected top-left corner"
+        );
+        assert!(
+            output.contains("╰") || output.contains("└"),
+            "Expected bottom-left corner"
+        );
+        assert!(
+            output.contains("╯") || output.contains("┘"),
+            "Expected bottom-right corner"
+        );
     }
 }
