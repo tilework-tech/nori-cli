@@ -302,14 +302,20 @@ impl BottomPaneView for ListSelectionView {
                 && !modifiers.contains(KeyModifiers::CONTROL)
                 && !modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(idx) = c
-                    .to_digit(10)
-                    .map(|d| d as usize)
-                    .and_then(|d| d.checked_sub(1))
-                    && idx < self.items.len()
-                {
-                    self.state.selected_idx = Some(idx);
-                    self.accept();
+                match c {
+                    'k' => self.move_up(),
+                    'j' => self.move_down(),
+                    _ => {
+                        if let Some(idx) = c
+                            .to_digit(10)
+                            .map(|d| d as usize)
+                            .and_then(|d| d.checked_sub(1))
+                            && idx < self.items.len()
+                        {
+                            self.state.selected_idx = Some(idx);
+                            self.accept();
+                        }
+                    }
                 }
             }
             KeyEvent {
@@ -712,5 +718,127 @@ mod tests {
             "list_selection_narrow_width_preserves_rows",
             render_lines_with_width(&view, 24)
         );
+    }
+
+    #[test]
+    fn test_jk_navigation_when_not_searchable() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Item 1".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Item 2".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Item 3".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items,
+                is_searchable: false, // explicitly false
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Initial selection should be at index 0
+        assert_eq!(view.state.selected_idx, Some(0));
+
+        // Press 'j' to move down
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(1),
+            "j should move selection down"
+        );
+
+        // Press 'j' again to move to index 2
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(2),
+            "j should move selection down again"
+        );
+
+        // Press 'k' to move up
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(1),
+            "k should move selection up"
+        );
+
+        // Press 'k' again to go back to index 0
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(0),
+            "k should move selection up again"
+        );
+
+        // Press 'k' at index 0 should wrap to last item
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(2),
+            "k at first item should wrap to last"
+        );
+    }
+
+    #[test]
+    fn test_jk_goes_to_search_when_searchable() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Item 1".to_string(),
+                search_value: Some("junk".to_string()), // contains 'j' so it won't be filtered
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Item 2".to_string(),
+                search_value: Some("kite".to_string()), // contains 'k' so it won't be filtered
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items,
+                is_searchable: true, // searchable mode
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Initial selection should be at index 0
+        assert_eq!(view.state.selected_idx, Some(0));
+
+        // Press 'j' - should go to search query, not navigate
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(view.search_query, "j", "j should be added to search query");
+        // After filtering for 'j', only "junk" matches, so selection stays at 0
+        assert_eq!(
+            view.state.selected_idx,
+            Some(0),
+            "selection should stay at first match"
+        );
+
+        // Clear search and try 'k'
+        view.search_query.clear();
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(view.search_query, "k", "k should be added to search query");
     }
 }
