@@ -45,6 +45,8 @@ use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::style::Styled;
 use ratatui::style::Stylize;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 use std::any::Any;
@@ -64,11 +66,24 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>>;
 
     fn desired_height(&self, width: u16) -> u16 {
-        Paragraph::new(Text::from(self.display_lines(width)))
+        let block = self.border_block();
+        let inner_width = if block.is_some() {
+            width.saturating_sub(2) // Account for left/right borders
+        } else {
+            width
+        };
+
+        let content_height: u16 = Paragraph::new(Text::from(self.display_lines(inner_width)))
             .wrap(Wrap { trim: false })
-            .line_count(width)
+            .line_count(inner_width)
             .try_into()
-            .unwrap_or(0)
+            .unwrap_or(0);
+
+        if block.is_some() {
+            content_height.saturating_add(2) // Account for top/bottom borders
+        } else {
+            content_height
+        }
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -97,20 +112,35 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     fn is_stream_continuation(&self) -> bool {
         false
     }
+
+    /// Returns an optional Block to wrap the cell's content.
+    /// When Some, the Renderable impl will use this block for rendering
+    /// and pass the inner area width to display_lines.
+    fn border_block(&self) -> Option<Block<'static>> {
+        None
+    }
 }
 
 impl Renderable for Box<dyn HistoryCell> {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let lines = self.display_lines(area.width);
-        let y = if area.height == 0 {
+        let block = self.border_block();
+        let inner_area = block.as_ref().map(|b| b.inner(area)).unwrap_or(area);
+
+        let lines = self.display_lines(inner_area.width);
+        let y = if inner_area.height == 0 {
             0
         } else {
-            let overflow = lines.len().saturating_sub(usize::from(area.height));
+            let overflow = lines.len().saturating_sub(usize::from(inner_area.height));
             u16::try_from(overflow).unwrap_or(u16::MAX)
         };
-        Paragraph::new(Text::from(lines))
-            .scroll((y, 0))
-            .render(area, buf);
+
+        let paragraph = Paragraph::new(Text::from(lines)).scroll((y, 0));
+
+        if let Some(b) = block {
+            paragraph.block(b).render(area, buf);
+        } else {
+            paragraph.render(area, buf);
+        }
     }
     fn desired_height(&self, width: u16) -> u16 {
         HistoryCell::desired_height(self.as_ref(), width)

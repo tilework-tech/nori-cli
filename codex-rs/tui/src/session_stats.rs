@@ -4,9 +4,10 @@
 //! during a conversation session. Displays as a bordered table at session end.
 
 use crate::history_cell::HistoryCell;
-use crate::history_cell::with_border;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
@@ -199,8 +200,8 @@ impl HistoryCell for SessionStatisticsCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut content_lines: Vec<Line<'static>> = Vec::new();
 
-        // Calculate inner width for separator lines (accounting for border padding)
-        let inner_width = width.saturating_sub(4).max(20) as usize;
+        // Use the full width for separator lines (border is handled by Block)
+        let inner_width = width.max(20) as usize;
 
         // Title
         content_lines.push(Line::from(vec![
@@ -215,7 +216,7 @@ impl HistoryCell for SessionStatisticsCell {
             Span::from(format!("  {} total", total_messages)).dim(),
         ]));
         content_lines.push(Line::from(vec![
-            Span::from("   User: ").dim(),
+            Span::from("  User: ").dim(),
             Span::from(format!("{}", self.stats.user_messages)).green(),
             Span::from("  │  ").dim(),
             Span::from("Assistant: ").dim(),
@@ -223,7 +224,9 @@ impl HistoryCell for SessionStatisticsCell {
         ]));
 
         // Section separator
-        content_lines.push(Line::from("─".repeat(inner_width.min(50)).dim()));
+        content_lines.push(Line::from(
+            "─".repeat(inner_width.saturating_sub(2).min(50)).dim(),
+        ));
 
         // Tool Calls section with sorted table
         let total_tool_calls: u32 = self.stats.tool_calls.values().sum();
@@ -233,7 +236,7 @@ impl HistoryCell for SessionStatisticsCell {
         ]));
 
         if self.stats.tool_calls.is_empty() {
-            content_lines.push(Line::from(vec![Span::from("   (none)").dim().italic()]));
+            content_lines.push(Line::from(vec![Span::from("  (none)").dim().italic()]));
         } else {
             // Sort by count (descending), then by name
             let mut sorted: Vec<_> = self.stats.tool_calls.iter().collect();
@@ -260,7 +263,7 @@ impl HistoryCell for SessionStatisticsCell {
                         content_lines.push(Line::from(row_items.clone()));
                         row_items.clear();
                     }
-                    row_items.push(Span::from("   "));
+                    row_items.push(Span::from("  "));
                 } else {
                     row_items.push(Span::from("  │  ").dim());
                 }
@@ -276,7 +279,9 @@ impl HistoryCell for SessionStatisticsCell {
         }
 
         // Section separator
-        content_lines.push(Line::from("─".repeat(inner_width.min(50)).dim()));
+        content_lines.push(Line::from(
+            "─".repeat(inner_width.saturating_sub(2).min(50)).dim(),
+        ));
 
         // Skills Used section
         content_lines.push(Line::from(vec![
@@ -284,18 +289,20 @@ impl HistoryCell for SessionStatisticsCell {
             Span::from(format!("  {}", self.stats.skills_used.len())).dim(),
         ]));
         if self.stats.skills_used.is_empty() {
-            content_lines.push(Line::from(vec![Span::from("   (none)").dim().italic()]));
+            content_lines.push(Line::from(vec![Span::from("  (none)").dim().italic()]));
         } else {
             for skill in &self.stats.skills_used {
                 content_lines.push(Line::from(vec![
-                    Span::from("   • ").dim(),
+                    Span::from("  • ").dim(),
                     Span::from(skill.clone()).magenta(),
                 ]));
             }
         }
 
         // Section separator
-        content_lines.push(Line::from("─".repeat(inner_width.min(50)).dim()));
+        content_lines.push(Line::from(
+            "─".repeat(inner_width.saturating_sub(2).min(50)).dim(),
+        ));
 
         // Subagents Used section
         content_lines.push(Line::from(vec![
@@ -303,17 +310,25 @@ impl HistoryCell for SessionStatisticsCell {
             Span::from(format!("  {}", self.stats.subagents_used.len())).dim(),
         ]));
         if self.stats.subagents_used.is_empty() {
-            content_lines.push(Line::from(vec![Span::from("   (none)").dim().italic()]));
+            content_lines.push(Line::from(vec![Span::from("  (none)").dim().italic()]));
         } else {
             for subagent in &self.stats.subagents_used {
                 content_lines.push(Line::from(vec![
-                    Span::from("   • ").dim(),
+                    Span::from("  • ").dim(),
                     Span::from(subagent.clone()).yellow(),
                 ]));
             }
         }
 
-        with_border(content_lines)
+        content_lines
+    }
+
+    fn border_block(&self) -> Option<Block<'static>> {
+        Some(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().dim()),
+        )
     }
 }
 
@@ -827,25 +842,14 @@ mod tests {
     }
 
     #[test]
-    fn display_lines_has_border() {
+    fn display_lines_has_border_block() {
         let stats = SessionStats::new();
         let cell = SessionStatisticsCell::new(stats);
-        let lines = cell.display_lines(60);
 
-        let text: String = lines
-            .iter()
-            .flat_map(|l| l.spans.iter())
-            .map(|s| s.content.as_ref())
-            .collect();
-
-        // Should have box-drawing characters for border
+        // Border is now provided by the Block widget via border_block()
         assert!(
-            text.contains("╭") || text.contains("┌"),
-            "Expected top-left corner"
-        );
-        assert!(
-            text.contains("╯") || text.contains("┘"),
-            "Expected bottom-right corner"
+            cell.border_block().is_some(),
+            "Expected border_block to return Some(Block)"
         );
     }
 
