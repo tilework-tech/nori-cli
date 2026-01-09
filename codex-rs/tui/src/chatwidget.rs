@@ -102,6 +102,8 @@ use crate::history_cell::McpToolCallCell;
 use crate::history_cell::PlainHistoryCell;
 use crate::login_handler::AgentLoginSupport;
 use crate::login_handler::LoginHandler;
+#[allow(unused_imports)]
+use crate::login_handler::LoginMethod;
 use crate::markdown::append_markdown;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
@@ -3283,6 +3285,7 @@ impl ChatWidget {
             AgentLoginSupport::Supported {
                 agent,
                 is_installed,
+                login_method,
             } => {
                 if !is_installed {
                     // Agent not installed - show installation instructions
@@ -3296,6 +3299,9 @@ impl ChatWidget {
                     );
                     return;
                 }
+
+                // Currently only OAuthBrowser is supported
+                let LoginMethod::OAuthBrowser = login_method;
 
                 // Create and start the login handler
                 let mut handler = LoginHandler::new();
@@ -3311,12 +3317,23 @@ impl ChatWidget {
                 self.start_oauth_login_flow(handler);
             }
             AgentLoginSupport::NotSupported { agent_name } => {
-                self.add_info_message(
-                    format!(
-                        "In-app login for '{agent_name}' is not yet supported. Please authenticate externally using the agent's native login command or API keys."
-                    ),
-                    None,
-                );
+                // Provide agent-specific instructions
+                let instructions = match agent_name.as_str() {
+                    "Gemini" => {
+                        "In-app login for Gemini is not yet supported.\n\n\
+                         To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
+                         Alternatively, set the GOOGLE_API_KEY environment variable."
+                    }
+                    "Claude Code" => {
+                        "In-app login for Claude Code is not yet supported.\n\n\
+                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
+                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
+                    }
+                    _ => {
+                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
+                    }
+                };
+                self.add_info_message(instructions.to_string(), None);
             }
             AgentLoginSupport::Unknown { model_name } => {
                 self.add_info_message(
