@@ -373,7 +373,7 @@ impl AcpAgentInfo {
             agent,
             model_name: agent.slug().to_string(),
             display_name: agent.display_name().to_string(),
-            description: format!("{} via ACP", agent.provider().display_name()),
+            description: agent.provider().display_name().to_string(),
             provider_slug: agent.slug().to_string(),
             is_installed,
             managed_by,

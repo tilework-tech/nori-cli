@@ -1,11 +1,22 @@
 //! Login handler for /login slash command.
 //!
-//! This module handles OAuth browser authentication flow for ACP agents,
-//! starting with Codex.
+//! This module handles authentication flows for ACP agents:
+//! - OAuth browser flow (Codex)
+//! - External CLI passthrough (Gemini, Claude Code)
 
 use codex_acp::AgentKind;
 use codex_acp::list_available_agents;
 use codex_login::ShutdownHandle;
+
+/// Method used for authentication
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoginMethod {
+    /// OAuth browser flow - starts local server, opens browser
+    OAuthBrowser,
+    // Note: External CLI passthrough support is planned for future implementation
+    // when input forwarding to PTY is added. For now, agents that require interactive
+    // CLI auth (like Gemini) show instructions instead.
+}
 
 /// State of the login flow
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +38,7 @@ pub enum AgentLoginSupport {
     Supported {
         agent: AgentKind,
         is_installed: bool,
+        login_method: LoginMethod,
     },
     /// Agent doesn't support in-app login yet
     NotSupported { agent_name: String },
@@ -67,10 +79,15 @@ impl LoginHandler {
         match agent_info {
             Some(info) => {
                 match info.agent {
-                    // Codex supports in-app login
+                    // Codex supports in-app login via OAuth browser flow
                     AgentKind::Codex => AgentLoginSupport::Supported {
                         agent: AgentKind::Codex,
                         is_installed: info.is_installed,
+                        login_method: LoginMethod::OAuthBrowser,
+                    },
+                    // Gemini requires interactive CLI for auth - show instructions
+                    AgentKind::Gemini => AgentLoginSupport::NotSupported {
+                        agent_name: "Gemini".to_string(),
                     },
                     // Other agents don't support in-app login yet
                     other => AgentLoginSupport::NotSupported {
@@ -120,12 +137,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn check_agent_support_returns_supported_for_codex() {
+    fn check_agent_support_returns_supported_for_codex_with_oauth() {
         let support = LoginHandler::check_agent_support("codex");
 
         match support {
-            AgentLoginSupport::Supported { agent, .. } => {
+            AgentLoginSupport::Supported {
+                agent,
+                login_method,
+                ..
+            } => {
                 assert_eq!(agent, AgentKind::Codex);
+                assert_eq!(login_method, LoginMethod::OAuthBrowser);
             }
             _ => panic!("Expected Supported variant for codex"),
         }
@@ -133,6 +155,7 @@ mod tests {
 
     #[test]
     fn check_agent_support_returns_not_supported_for_claude() {
+        // Claude Code login support will be added later
         let support = LoginHandler::check_agent_support("claude-code");
 
         match support {
@@ -145,6 +168,7 @@ mod tests {
 
     #[test]
     fn check_agent_support_returns_not_supported_for_gemini() {
+        // Gemini requires interactive CLI for auth, so we show instructions instead
         let support = LoginHandler::check_agent_support("gemini");
 
         match support {
