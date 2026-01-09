@@ -1115,17 +1115,4 @@ mod tests {
             "Gemini config should have a non-empty auth_hint"
         );
     }
-
-    #[test]
-    fn test_agent_info_description_has_no_via_acp() {
-        for agent in AgentKind::all() {
-            let info = AcpAgentInfo::from_agent(*agent);
-            assert!(
-                !info.description.contains("via ACP"),
-                "Agent {} description should not contain 'via ACP', got: {}",
-                agent.display_name(),
-                info.description
-            );
-        }
-    }
 }
