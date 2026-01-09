@@ -79,7 +79,7 @@ impl SessionStats {
         lines.push(format!("╭{}╮", border_line));
         lines.push(format!(
             "│{:^width$}│",
-            "📊 Nori Session Statistics",
+            "Nori Session Statistics",
             width = WIDTH
         ));
         lines.push(format!("├{}┤", border_line));
@@ -87,10 +87,10 @@ impl SessionStats {
         // Messages section
         let total_messages = self.user_messages + self.assistant_messages;
         lines.push(format!(
-            "│ 💬 Messages  ({} total){:>pad$}│",
+            "│ Messages  ({} total){:>pad$}│",
             total_messages,
             "",
-            pad = WIDTH - 21 - total_messages.to_string().len()
+            pad = WIDTH - 18 - total_messages.to_string().len()
         ));
         let msg_line = format!(
             "│    User: {}  │  Assistant: {}",
@@ -104,10 +104,10 @@ impl SessionStats {
         // Tool calls section
         let total_tool_calls: u32 = self.tool_calls.values().sum();
         lines.push(format!(
-            "│ 🔧 Tool Calls  ({} total){:>pad$}│",
+            "│ Tool Calls  ({} total){:>pad$}│",
             total_tool_calls,
             "",
-            pad = WIDTH - 23 - total_tool_calls.to_string().len()
+            pad = WIDTH - 20 - total_tool_calls.to_string().len()
         ));
 
         if self.tool_calls.is_empty() {
@@ -142,10 +142,10 @@ impl SessionStats {
 
         // Skills section
         lines.push(format!(
-            "│ ✨ Skills Used  ({}){:>pad$}│",
+            "│ Skills Used  ({}){:>pad$}│",
             self.skills_used.len(),
             "",
-            pad = WIDTH - 19 - self.skills_used.len().to_string().len()
+            pad = WIDTH - 16 - self.skills_used.len().to_string().len()
         ));
         if self.skills_used.is_empty() {
             lines.push(format!("│    (none){:>pad$}│", "", pad = WIDTH - 10));
@@ -161,10 +161,10 @@ impl SessionStats {
 
         // Subagents section
         lines.push(format!(
-            "│ 🤖 Subagents Used  ({}){:>pad$}│",
+            "│ Subagents Used  ({}){:>pad$}│",
             self.subagents_used.len(),
             "",
-            pad = WIDTH - 22 - self.subagents_used.len().to_string().len()
+            pad = WIDTH - 19 - self.subagents_used.len().to_string().len()
         ));
         if self.subagents_used.is_empty() {
             lines.push(format!("│    (none){:>pad$}│", "", pad = WIDTH - 10));
@@ -202,9 +202,8 @@ impl HistoryCell for SessionStatisticsCell {
         // Calculate inner width for separator lines (accounting for border padding)
         let inner_width = width.saturating_sub(4).max(20) as usize;
 
-        // Title with icon
+        // Title
         content_lines.push(Line::from(vec![
-            Span::from("📊 ").dim(),
             Span::from("Nori Session Statistics").bold().cyan(),
         ]));
         content_lines.push(Line::from(""));
@@ -212,7 +211,6 @@ impl HistoryCell for SessionStatisticsCell {
         // Messages section with visual counts
         let total_messages = self.stats.user_messages + self.stats.assistant_messages;
         content_lines.push(Line::from(vec![
-            Span::from("💬 ").dim(),
             Span::from("Messages").bold(),
             Span::from(format!("  {} total", total_messages)).dim(),
         ]));
@@ -230,7 +228,6 @@ impl HistoryCell for SessionStatisticsCell {
         // Tool Calls section with sorted table
         let total_tool_calls: u32 = self.stats.tool_calls.values().sum();
         content_lines.push(Line::from(vec![
-            Span::from("🔧 ").dim(),
             Span::from("Tool Calls").bold(),
             Span::from(format!("  {} total", total_tool_calls)).dim(),
         ]));
@@ -283,7 +280,6 @@ impl HistoryCell for SessionStatisticsCell {
 
         // Skills Used section
         content_lines.push(Line::from(vec![
-            Span::from("✨ ").dim(),
             Span::from("Skills Used").bold(),
             Span::from(format!("  {}", self.stats.skills_used.len())).dim(),
         ]));
@@ -303,7 +299,6 @@ impl HistoryCell for SessionStatisticsCell {
 
         // Subagents Used section
         content_lines.push(Line::from(vec![
-            Span::from("🤖 ").dim(),
             Span::from("Subagents Used").bold(),
             Span::from(format!("  {}", self.stats.subagents_used.len())).dim(),
         ]));
