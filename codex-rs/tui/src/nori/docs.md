@@ -35,8 +35,6 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 │   ~/project/AGENTS.md              (dimmed)       │
 ╰───────────────────────────────────────────────────╯
 
-  Powered by Nori AI
-
   Run 'npx nori-ai install' to set up Nori AI enhancements
 ```
 

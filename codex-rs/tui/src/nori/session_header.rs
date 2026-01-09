@@ -429,14 +429,7 @@ pub(crate) fn new_nori_session_info(
         let header = NoriSessionHeaderCell::new(model, config.cwd.clone());
 
         // Help lines below the header
-        let mut help_lines: Vec<Line<'static>> = vec![
-            Line::from(""),
-            Line::from(vec![
-                "  🍙 ".into(),
-                "Powered by Nori AI".bold(),
-                " 🍙".into(),
-            ]),
-        ];
+        let mut help_lines: Vec<Line<'static>> = vec![];
 
         // Only show install hint if nori-ai is not already installed
         if !is_nori_ai_installed() {
