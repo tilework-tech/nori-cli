@@ -867,9 +867,9 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
 /// In debug builds, the agent picker should show:
 /// - Mock ACP (mock agent for testing)
 /// - Mock ACP Alt (alternate mock agent for testing)
-/// - Claude (Anthropic Claude via ACP)
-/// - Codex (OpenAI Codex via ACP)
-/// - Gemini (Google Gemini via ACP)
+/// - Claude Code (Anthropic)
+/// - Codex (OpenAI)
+/// - Gemini (Google)
 ///
 /// Note: In release builds, only the 3 production agents (Claude, Codex, Gemini)
 /// would be shown. This test validates the debug build behavior.

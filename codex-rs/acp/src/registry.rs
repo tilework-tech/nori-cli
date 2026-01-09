@@ -373,7 +373,7 @@ impl AcpAgentInfo {
             agent,
             model_name: agent.slug().to_string(),
             display_name: agent.display_name().to_string(),
-            description: format!("{} via ACP", agent.provider().display_name()),
+            description: agent.provider().display_name().to_string(),
             provider_slug: agent.slug().to_string(),
             is_installed,
             managed_by,
@@ -1114,5 +1114,18 @@ mod tests {
             !config.auth_hint.is_empty(),
             "Gemini config should have a non-empty auth_hint"
         );
+    }
+
+    #[test]
+    fn test_agent_info_description_has_no_via_acp() {
+        for agent in AgentKind::all() {
+            let info = AcpAgentInfo::from_agent(*agent);
+            assert!(
+                !info.description.contains("via ACP"),
+                "Agent {} description should not contain 'via ACP', got: {}",
+                agent.display_name(),
+                info.description
+            );
+        }
     }
 }
