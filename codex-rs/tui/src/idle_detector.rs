@@ -3,7 +3,8 @@
 //! Tracks the last activity timestamp and determines when the system
 //! has been idle long enough to warrant a notification.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 /// Tracks idle state for notification purposes.
 ///
