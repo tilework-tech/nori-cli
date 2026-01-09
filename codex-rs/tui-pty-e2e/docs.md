@@ -224,7 +224,7 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
    - Test coverage: `test_normalize_acp_error_messages()` in `@/codex-rs/tui-pty-e2e/src/lib.rs`
 
 2. **Startup Header Stripping** (Phase 2):
-   - Detects the header block (lines containing `╭──`, `Powered by Nori AI`, or `'npx nori-ai install'`)
+   - Detects the header block (lines containing `╭──`, `Nori CLI`, or `'npx nori-ai install'`)
    - Removes the entire header section including trailing empty lines
    - Used by input handling tests in `@/codex-rs/tui-pty-e2e/tests/input_handling.rs`
    - Prevents flaky snapshots when header scrolls partially in/out of viewport

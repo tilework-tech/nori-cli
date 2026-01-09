@@ -71,8 +71,10 @@ fn test_startup_with_dimensions() {
     let mut session =
         TuiSession::spawn_with_config(10, 120, SessionConfig::default()).expect("Failed to spawn");
 
+    // Wait for prompt - in a 10-row terminal, the header may scroll off
+    // so we wait for footer elements that are always visible
     session
-        .wait_for_text("Powered by Nori AI", TIMEOUT)
+        .wait_for_text("? for shortcuts", TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
@@ -89,9 +91,7 @@ fn test_runs_in_temp_directory_by_default() {
 
     session
         .wait_for(
-            |contents| {
-                contents.contains("Powered by Nori AI") || contents.contains("Welcome to Nori")
-            },
+            |contents| contents.contains("Nori CLI") || contents.contains("Welcome to Nori"),
             TIMEOUT,
         )
         .expect("Prompt did not appear");
@@ -154,7 +154,7 @@ fn test_startup_shows_nori_banner() {
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
     // Wait for the install instructions to appear (this is the key indicator that nori-ai is not installed)
-    // We wait for this specifically since it appears after "Powered by Nori AI" and ensures full render
+    // We wait for this specifically since it ensures the full banner render including the install hint
     session
         .wait_for_text("npx nori-ai install", TIMEOUT)
         .expect("Install instructions did not appear - nori-ai might be in PATH");
@@ -167,11 +167,6 @@ fn test_startup_shows_nori_banner() {
     assert!(
         contents.contains("Nori CLI v0"),
         "Expected NORI header, but got: {}",
-        contents
-    );
-    assert!(
-        contents.contains("Powered by Nori AI"),
-        "Expected 'Powered by Nori AI' text, but got: {}",
         contents
     );
 
@@ -214,15 +209,15 @@ fn test_startup_hides_install_hint_when_nori_installed() {
 
     // Wait for the Nori branding to appear
     session
-        .wait_for_text("Powered by Nori AI", TIMEOUT)
+        .wait_for_text("Nori CLI", TIMEOUT)
         .expect("Nori branding did not appear");
 
     let contents = session.screen_contents();
 
     // Verify Nori branding is present
     assert!(
-        contents.contains("Powered by Nori AI"),
-        "Expected 'Powered by Nori AI' text, but got: {}",
+        contents.contains("Nori CLI"),
+        "Expected 'Nori CLI' text, but got: {}",
         contents
     );
 
