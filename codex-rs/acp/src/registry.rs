@@ -96,13 +96,9 @@ impl AgentKind {
     /// Returns actionable instructions on how to authenticate with this agent's provider.
     pub fn auth_hint(&self) -> &'static str {
         match self {
-            AgentKind::ClaudeCode => "Run `claude login` to authenticate with Anthropic.",
-            AgentKind::Codex => {
-                "Run `codex login` or set OPENAI_API_KEY to authenticate with OpenAI."
-            }
-            AgentKind::Gemini => {
-                "Run `gemini login` or set GOOGLE_API_KEY to authenticate with Google."
-            }
+            AgentKind::ClaudeCode => "Run /login for instructions, or set ANTHROPIC_API_KEY.",
+            AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
+            AgentKind::Gemini => "Run /login for instructions, or set GOOGLE_API_KEY.",
         }
     }
 
@@ -1065,54 +1061,64 @@ mod tests {
 
     #[test]
     fn test_auth_hint_returns_actionable_instructions() {
-        // Claude Code should mention `claude login`
+        // Claude Code should mention `/login` for instructions
         let claude_hint = AgentKind::ClaudeCode.auth_hint();
         assert!(
-            claude_hint.contains("claude login"),
-            "Claude hint should mention 'claude login', got: {claude_hint}"
+            claude_hint.contains("/login"),
+            "Claude hint should mention '/login', got: {claude_hint}"
         );
 
-        // Codex should mention `codex login` or OPENAI_API_KEY
+        // Codex should mention `/login` to authenticate
         let codex_hint = AgentKind::Codex.auth_hint();
         assert!(
-            codex_hint.contains("codex login") || codex_hint.contains("OPENAI_API_KEY"),
-            "Codex hint should mention login or API key, got: {codex_hint}"
+            codex_hint.contains("/login"),
+            "Codex hint should mention '/login', got: {codex_hint}"
         );
 
-        // Gemini should mention `gemini login` or GOOGLE_API_KEY
+        // Gemini should mention `/login` for instructions
         let gemini_hint = AgentKind::Gemini.auth_hint();
         assert!(
-            gemini_hint.contains("gemini login") || gemini_hint.contains("GOOGLE_API_KEY"),
-            "Gemini hint should mention login or API key, got: {gemini_hint}"
+            gemini_hint.contains("/login"),
+            "Gemini hint should mention '/login', got: {gemini_hint}"
         );
     }
 
     #[test]
     fn test_agent_config_includes_auth_hint() {
-        // Get config for claude-code and verify it has an auth hint
+        // Get config for claude-code and verify it has an auth hint with /login
         let config = get_agent_config("claude-code").expect("Should return config");
         assert!(
             !config.auth_hint.is_empty(),
             "Config should have a non-empty auth_hint"
         );
         assert!(
-            config.auth_hint.contains("claude login"),
-            "Claude config auth_hint should mention 'claude login', got: {}",
+            config.auth_hint.contains("/login"),
+            "Claude config auth_hint should mention '/login', got: {}",
             config.auth_hint
         );
 
-        // Get config for codex
+        // Get config for codex and verify it has an auth hint with /login
         let config = get_agent_config("codex").expect("Should return config");
         assert!(
             !config.auth_hint.is_empty(),
             "Codex config should have a non-empty auth_hint"
         );
+        assert!(
+            config.auth_hint.contains("/login"),
+            "Codex config auth_hint should mention '/login', got: {}",
+            config.auth_hint
+        );
 
-        // Get config for gemini
+        // Get config for gemini and verify it has an auth hint with /login
         let config = get_agent_config("gemini").expect("Should return config");
         assert!(
             !config.auth_hint.is_empty(),
             "Gemini config should have a non-empty auth_hint"
+        );
+        assert!(
+            config.auth_hint.contains("/login"),
+            "Gemini config auth_hint should mention '/login', got: {}",
+            config.auth_hint
         );
     }
 }

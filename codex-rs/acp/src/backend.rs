@@ -1985,8 +1985,8 @@ mod tests {
             "Should mention auth required, got: {enhanced}"
         );
         assert!(
-            enhanced.contains("claude login"),
-            "Should include auth hint with 'claude login', got: {enhanced}"
+            enhanced.contains("/login"),
+            "Should include auth hint with '/login', got: {enhanced}"
         );
     }
 
