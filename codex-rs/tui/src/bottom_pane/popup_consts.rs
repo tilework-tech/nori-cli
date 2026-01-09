@@ -9,12 +9,25 @@ use crate::key_hint;
 /// Keep this consistent across all popups for a uniform feel.
 pub(crate) const MAX_POPUP_ROWS: usize = 8;
 
-/// Standard footer hint text used by popups.
+/// Standard footer hint text used by non-searchable popups.
+/// Includes j/k vim-style navigation hint.
 pub(crate) fn standard_popup_hint_line() -> Line<'static> {
     Line::from(vec![
-        "Press ".into(),
+        "↑/k ↓/j to navigate, ".into(),
         key_hint::plain(KeyCode::Enter).into(),
-        " to confirm or ".into(),
+        " to confirm, ".into(),
+        key_hint::plain(KeyCode::Esc).into(),
+        " to go back".into(),
+    ])
+}
+
+/// Footer hint text for searchable popups.
+/// Does not include j/k because those characters are used for search input.
+pub(crate) fn searchable_popup_hint_line() -> Line<'static> {
+    Line::from(vec![
+        "↑/↓ to navigate, ".into(),
+        key_hint::plain(KeyCode::Enter).into(),
+        " to confirm, ".into(),
         key_hint::plain(KeyCode::Esc).into(),
         " to go back".into(),
     ])
