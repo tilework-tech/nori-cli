@@ -99,7 +99,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 
 **/login Slash Command (`login_handler.rs`):**
 
-The `/login` slash command provides in-app authentication for supported ACP agents:
+The `/login` slash command provides in-app authentication for supported ACP agents via two methods: OAuth browser flow (Codex) and external CLI passthrough (Gemini):
 
 ```
 ┌─────────────────────┐
@@ -111,13 +111,14 @@ The `/login` slash command provides in-app authentication for supported ACP agen
 │ LoginHandler::check_agent_support()     │
 │ - Queries codex_acp::list_available_agents() │
 │ - Returns Supported/NotSupported/Unknown │
+│ - Supported includes LoginMethod enum   │
 └──────────────────┬──────────────────────┘
                    │
      ┌─────────────┼─────────────┐
      ▼             ▼             ▼
  Supported    NotSupported    Unknown
- (Codex)      (Claude/Gemini)  (other)
-     │             │             │
+ (Codex,      (Claude Code)   (other)
+  Gemini)          │             │
      │             └──────┬──────┘
      │                    ▼
      │         Show "not yet supported"
@@ -133,21 +134,33 @@ The `/login` slash command provides in-app authentication for supported ACP agen
 Not Installed   Installed
     │               │
     ▼               ▼
-Show npm         Start OAuth
-install          via codex_login
-instructions     crate
+Show npm      Branch on LoginMethod
+install       ┌────────────────────┐
+instructions  │                    │
+              ▼                    ▼
+         OAuthBrowser      ExternalCli
+              │                    │
+              ▼                    ▼
+         start_oauth_     start_external_cli_
+         login_flow()     login_flow()
 ```
+
+**LoginMethod Enum:**
+
+The `LoginMethod` enum determines how authentication is performed:
+- `OAuthBrowser`: Starts local server, opens browser (used by Codex)
+- `ExternalCli { command, args }`: Spawns external CLI for interactive auth (used by Gemini)
 
 **Agent Support Matrix:**
 
-| Agent | In-App Login | Behavior |
-|-------|-------------|----------|
-| Codex | Supported | OAuth browser flow via `codex_login::run_login_server()` |
-| Claude Code | Not supported | Shows "authenticate externally" message |
-| Gemini | Not supported | Shows "authenticate externally" message |
-| Unknown | Error | Shows "unknown agent" error |
+| Agent | In-App Login | LoginMethod | Behavior |
+|-------|-------------|-------------|----------|
+| Codex | Supported | `OAuthBrowser` | OAuth browser flow via `codex_login::run_login_server()` |
+| Gemini | Supported | `ExternalCli { command: "gemini", args: [] }` | Spawns `gemini` CLI with PTY passthrough |
+| Claude Code | Not supported | N/A | Shows "authenticate externally" message |
+| Unknown | Error | N/A | Shows "unknown agent" error |
 
-**OAuth Flow Integration:**
+**OAuth Flow Integration (Codex):**
 
 When OAuth is initiated for Codex:
 1. `ChatWidget::start_oauth_login_flow()` spawns `codex_login::run_login_server()`
@@ -158,15 +171,27 @@ When OAuth is initiated for Codex:
 6. On success: `LoginHandler.oauth_complete()` updates state, `auth_manager.reload()` is called
 7. On failure: `LoginHandler.cancel()` shuts down the OAuth server and shows error message
 
-**LoginHandler State Machine:**
+**External CLI Flow Integration (Gemini):**
+
+When external CLI login is initiated:
+1. `ChatWidget::start_external_cli_login_flow()` spawns agent CLI with PTY via `codex_utils_pty::spawn_pty_process()`
+2. PTY makes the CLI think it's in an interactive terminal (required for Gemini auth)
+3. Output streaming task sends `AppEvent::ExternalCliLoginOutput { data }` for each chunk
+4. On process exit, sends `AppEvent::ExternalCliLoginComplete { success, agent_name }`
+5. `App::handle_event()` routes to `ChatWidget::handle_external_cli_login_output()` and `handle_external_cli_login_complete()`
+6. Output is displayed as info messages; completion shows success/failure message
+
+**LoginFlowState Machine:**
 
 ```
 Idle ──▶ AwaitingBrowserAuth ──▶ Success
-                   │
-                   └──▶ Cancelled
+   │              │
+   │              └──▶ Cancelled
+   │
+   └──▶ AwaitingExternalCli ──▶ (handled via AppEvents)
 ```
 
-The handler is stored as `Option<LoginHandler>` in `ChatWidget` and only instantiated when `/login` is invoked. It primarily manages the shutdown handle for cancelling the OAuth server. Credentials are stored in `~/.nori/cli/auth.json` via existing `codex-core` infrastructure
+The handler is stored as `Option<LoginHandler>` in `ChatWidget` and only instantiated when `/login` is invoked. For OAuth, it manages the shutdown handle for cancellation. For external CLI, state is tracked via AppEvents rather than the handler. Credentials are stored in `~/.nori/cli/auth.json` via existing `codex-core` infrastructure
 
 **ACP Agent Switching:**
 
@@ -255,7 +280,7 @@ The TUI crate uses Cargo feature flags to enable modular builds with two primary
 | Feature | Optional Dep | Default | Description |
 |---------|-------------|---------|-------------|
 | `full` | - | No | Meta-feature enabling all optional features |
-| `login` | `codex-login` | **Yes** | ChatGPT/API login functionality (enables `/login` command) |
+| `login` | `codex-login`, `codex-utils-pty` | **Yes** | Agent login functionality (OAuth for Codex, PTY passthrough for Gemini) |
 | `feedback` | `codex-feedback` | No | Sentry feedback integration |
 | `backend-client` | `codex-backend-client` | No | Cloud tasks backend client |
 | `upstream-updates` | - | No | OpenAI/Codex update checking mechanism |

@@ -102,6 +102,8 @@ use crate::history_cell::McpToolCallCell;
 use crate::history_cell::PlainHistoryCell;
 use crate::login_handler::AgentLoginSupport;
 use crate::login_handler::LoginHandler;
+#[allow(unused_imports)]
+use crate::login_handler::LoginMethod;
 use crate::markdown::append_markdown;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
@@ -1936,6 +1938,15 @@ impl ChatWidget {
             return;
         }
 
+        // Special-case: "/login <agent>" triggers login for a specific agent
+        // This intercepts before the message is sent to the agent
+        if let Some(agent_name) = text.strip_prefix("/login ").map(str::trim)
+            && !agent_name.is_empty()
+        {
+            self.handle_login_command_with_agent(agent_name);
+            return;
+        }
+
         // Track user message for session statistics
         self.session_stats.record_user_message();
 
@@ -3277,12 +3288,19 @@ impl ChatWidget {
 
     /// Handle the /login slash command
     fn handle_login_command(&mut self) {
-        let model_name = &self.config.model;
+        // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
+        // otherwise use the current config model
+        let model_name = self
+            .pending_agent
+            .as_ref()
+            .map(|p| p.model_name.as_str())
+            .unwrap_or(&self.config.model);
 
         match LoginHandler::check_agent_support(model_name) {
             AgentLoginSupport::Supported {
                 agent,
                 is_installed,
+                login_method,
             } => {
                 if !is_installed {
                     // Agent not installed - show installation instructions
@@ -3296,6 +3314,9 @@ impl ChatWidget {
                     );
                     return;
                 }
+
+                // Currently only OAuthBrowser is supported
+                let LoginMethod::OAuthBrowser = login_method;
 
                 // Create and start the login handler
                 let mut handler = LoginHandler::new();
@@ -3311,12 +3332,82 @@ impl ChatWidget {
                 self.start_oauth_login_flow(handler);
             }
             AgentLoginSupport::NotSupported { agent_name } => {
+                // Provide agent-specific instructions
+                let instructions = match agent_name.as_str() {
+                    "Gemini" => {
+                        "In-app login for Gemini is not yet supported.\n\n\
+                         To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
+                         Alternatively, set the GOOGLE_API_KEY environment variable."
+                    }
+                    "Claude Code" => {
+                        "In-app login for Claude Code is not yet supported.\n\n\
+                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
+                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
+                    }
+                    _ => {
+                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
+                    }
+                };
+                self.add_info_message(instructions.to_string(), None);
+            }
+            AgentLoginSupport::Unknown { model_name } => {
                 self.add_info_message(
-                    format!(
-                        "In-app login for '{agent_name}' is not yet supported. Please authenticate externally using the agent's native login command or API keys."
-                    ),
+                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
                     None,
                 );
+            }
+        }
+    }
+
+    /// Handle the /login <agent> command with explicit agent name
+    fn handle_login_command_with_agent(&mut self, agent_name: &str) {
+        match LoginHandler::check_agent_support(agent_name) {
+            AgentLoginSupport::Supported {
+                agent,
+                is_installed,
+                login_method,
+            } => {
+                if !is_installed {
+                    let display_name = agent.display_name();
+                    let npm_package = agent.npm_package();
+                    self.add_info_message(
+                        format!(
+                            "{display_name} is not installed. To install, run:\n\n  npm install -g {npm_package}\n\nThen run /login again to authenticate."
+                        ),
+                        Some("Install the agent first, then authenticate".to_string()),
+                    );
+                    return;
+                }
+
+                let LoginMethod::OAuthBrowser = login_method;
+
+                let mut handler = LoginHandler::new();
+                handler.start_oauth();
+
+                self.add_info_message(
+                    "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                    Some("Press Esc to cancel".to_string()),
+                );
+
+                self.start_oauth_login_flow(handler);
+            }
+            AgentLoginSupport::NotSupported { agent_name } => {
+                let instructions = match agent_name.as_str() {
+                    "Gemini" => {
+                        "In-app login for Gemini is not yet supported.\n\n\
+                         To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
+                         Alternatively, set the GOOGLE_API_KEY environment variable."
+                    }
+                    "Claude Code" => {
+                        "In-app login for Claude Code is not yet supported.\n\n\
+                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
+                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
+                    }
+                    _ => {
+                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
+                    }
+                };
+                self.add_info_message(instructions.to_string(), None);
             }
             AgentLoginSupport::Unknown { model_name } => {
                 self.add_info_message(
