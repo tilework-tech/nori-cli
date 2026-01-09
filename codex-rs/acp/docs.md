@@ -38,9 +38,9 @@ Each `AgentKind` provides actionable authentication instructions via `auth_hint(
 
 | Agent | Auth Hint |
 |-------|-----------|
-| Claude Code | "Run `claude login` to authenticate with Anthropic." |
-| Codex | "Run `codex login` or set OPENAI_API_KEY to authenticate with OpenAI." |
-| Gemini | "Run `gemini login` or set GOOGLE_API_KEY to authenticate with Google." |
+| Claude Code | "Run /login for instructions, or set ANTHROPIC_API_KEY." |
+| Codex | "Run /login to authenticate, or set OPENAI_API_KEY." |
+| Gemini | "Run /login for instructions, or set GOOGLE_API_KEY." |
 
 These hints are embedded in `AcpAgentConfig.auth_hint` and displayed in enhanced error messages when authentication fails.
 
