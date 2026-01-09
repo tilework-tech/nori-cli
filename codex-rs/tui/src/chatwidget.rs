@@ -128,6 +128,7 @@ use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
 #[cfg(feature = "unstable")]
 pub(crate) use self::agent::AcpAgentHandle;
+use self::agent::spawn_acp_agent_with_resume;
 use self::agent::spawn_agent;
 use self::agent::spawn_agent_from_existing;
 mod session_header;
@@ -1592,6 +1593,104 @@ impl ChatWidget {
             // No ACP handle for existing conversations (they are HTTP mode only)
             #[cfg(feature = "unstable")]
             acp_handle: None,
+            session_stats: SessionStats::new(),
+            login_handler: None,
+        };
+
+        widget.prefetch_rate_limits();
+
+        widget
+    }
+
+    /// Create a ChatWidget that resumes an existing ACP session.
+    pub(crate) fn new_with_acp_resume(
+        common: ChatWidgetInit,
+        _conversation_manager: Arc<ConversationManager>,
+        resume_config: codex_acp::ResumeSessionConfig,
+        nori_home: std::path::PathBuf,
+    ) -> Self {
+        let ChatWidgetInit {
+            config,
+            frame_requester,
+            app_event_tx,
+            initial_prompt,
+            initial_images,
+            enhanced_keys_supported,
+            auth_manager,
+            #[cfg(feature = "feedback")]
+            feedback,
+            expected_model,
+        } = common;
+        let mut rng = rand::rng();
+        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+
+        let spawn_result = spawn_acp_agent_with_resume(
+            config.clone(),
+            app_event_tx.clone(),
+            resume_config,
+            nori_home,
+        );
+
+        let mut widget = Self {
+            app_event_tx: app_event_tx.clone(),
+            frame_requester: frame_requester.clone(),
+            codex_op_tx: spawn_result.op_tx,
+            bottom_pane: BottomPane::new(BottomPaneParams {
+                frame_requester,
+                app_event_tx,
+                has_input_focus: true,
+                enhanced_keys_supported,
+                placeholder_text: placeholder,
+                disable_paste_burst: config.disable_paste_burst,
+                animations_enabled: config.animations,
+                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
+            }),
+            active_cell: None,
+            config: config.clone(),
+            auth_manager,
+            session_header: SessionHeader::new(config.model),
+            initial_user_message: create_initial_user_message(
+                initial_prompt.unwrap_or_default(),
+                initial_images,
+            ),
+            token_info: None,
+            rate_limit_snapshot: None,
+            rate_limit_warnings: RateLimitWarningState::default(),
+            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+            rate_limit_poller: None,
+            stream_controller: None,
+            running_commands: HashMap::new(),
+            suppressed_exec_calls: HashSet::new(),
+            last_unified_wait: None,
+            task_complete_pending: false,
+            mcp_startup_status: None,
+            interrupts: InterruptManager::new(),
+            reasoning_buffer: String::new(),
+            full_reasoning_buffer: String::new(),
+            current_status_header: String::from("Working"),
+            retry_status_header: None,
+            conversation_id: None,
+            queued_user_messages: VecDeque::new(),
+            // Don't show welcome banner for resumed sessions
+            show_welcome_banner: false,
+            suppress_session_configured_redraw: false,
+            pending_notification: None,
+            is_review_mode: false,
+            pre_review_token_info: None,
+            needs_final_message_separator: false,
+            last_rendered_width: std::cell::Cell::new(None),
+            #[cfg(feature = "feedback")]
+            feedback,
+            current_rollout_path: None,
+            pending_exec_cells: PendingExecCellTracker::new(),
+            effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
+            pending_agent: None,
+            expected_model,
+            session_configured_received: false,
+            #[cfg(feature = "unstable")]
+            acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
         };

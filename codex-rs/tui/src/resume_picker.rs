@@ -38,10 +38,24 @@ use codex_protocol::protocol::SessionMetaLine;
 const PAGE_SIZE: usize = 25;
 const LOAD_NEAR_THRESHOLD: usize = 5;
 
+/// Reference to an ACP session for resume
+#[derive(Debug, Clone)]
+pub struct AcpSessionRef {
+    /// The session ID
+    pub session_id: String,
+    /// The agent kind (for display)
+    pub agent_kind: String,
+    /// Path to the nori home directory
+    pub nori_home: PathBuf,
+}
+
 #[derive(Debug, Clone)]
 pub enum ResumeSelection {
     StartFresh,
+    /// Resume an HTTP-mode session from rollout path
     Resume(PathBuf),
+    /// Resume an ACP session
+    ResumeAcp(AcpSessionRef),
     Exit,
 }
 

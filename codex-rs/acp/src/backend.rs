@@ -34,6 +34,10 @@ use crate::connection::AcpModelState;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
 use crate::registry::get_agent_config;
+use crate::session_storage::AcpSessionMeta;
+use crate::session_storage::AcpSessionStorage;
+use crate::session_storage::TurnRole;
+use crate::session_storage::{session_updates_to_turn, user_input_to_turn};
 use crate::translator;
 use crate::translator::is_patch_operation;
 use crate::translator::tool_call_to_file_change;
@@ -129,6 +133,15 @@ pub fn enhanced_error_message(
     }
 }
 
+/// Configuration for resuming an ACP session.
+#[derive(Debug, Clone)]
+pub struct ResumeSessionConfig {
+    /// The session ID to resume
+    pub session_id: String,
+    /// Path to the nori home directory for loading session history
+    pub nori_home: PathBuf,
+}
+
 /// Configuration for spawning an ACP backend.
 ///
 /// This contains the subset of Codex configuration needed for ACP mode,
@@ -143,6 +156,10 @@ pub struct AcpBackendConfig {
     pub approval_policy: AskForApproval,
     /// Sandbox policy for command execution
     pub sandbox_policy: SandboxPolicy,
+    /// Optional configuration for resuming an existing session
+    pub resume_session: Option<ResumeSessionConfig>,
+    /// Path to nori home directory for session storage (required for persistence)
+    pub nori_home: Option<PathBuf>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -158,6 +175,10 @@ pub struct AcpBackend {
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    /// Session storage for persisting turns (optional)
+    session_storage: Option<Arc<AcpSessionStorage>>,
+    /// Internal session ID for storage (string form)
+    storage_session_id: Option<String>,
 }
 
 impl AcpBackend {
@@ -166,9 +187,10 @@ impl AcpBackend {
     /// This will:
     /// 1. Look up the agent config from the registry
     /// 2. Spawn the ACP connection
-    /// 3. Create a session
-    /// 4. Send a synthetic `SessionConfigured` event
-    /// 5. Start background tasks for event translation and approval handling
+    /// 3. Create or load a session (depending on resume config)
+    /// 4. Set up session storage for persistence
+    /// 5. Send a synthetic `SessionConfigured` event
+    /// 6. Start background tasks for event translation and approval handling
     ///
     /// # Arguments
     /// * `config` - The ACP backend configuration
@@ -207,32 +229,139 @@ impl AcpBackend {
             }
         };
 
-        // Create a session with enhanced error handling
-        let session_result = connection.create_session(&cwd).await;
-        let session_id = match session_result {
-            Ok(id) => id,
-            Err(e) => {
-                // Get the full error chain to check for nested auth errors
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
+        // Set up session storage if nori_home is provided
+        let session_storage = config
+            .nori_home
+            .as_ref()
+            .map(|home| Arc::new(AcpSessionStorage::new(home)));
 
-                // Use the display format for the user-facing message
-                let display_error = format!("{e}");
-                let enhanced_message = enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
-                );
+        // Create or load session based on resume config
+        let (session_id, storage_session_id, history_entry_count) =
+            if let Some(resume_config) = &config.resume_session {
+                // Resume existing session
+                let storage = AcpSessionStorage::new(&resume_config.nori_home);
+                let (meta, history) = storage
+                    .load_session_history(&resume_config.session_id)
+                    .await
+                    .with_context(|| {
+                        format!("Failed to load session: {}", resume_config.session_id)
+                    })?;
 
-                return Err(anyhow::anyhow!(enhanced_message));
-            }
-        };
+                let history_count = history.len();
+                let acp_session_id = acp::SessionId::new(resume_config.session_id.clone());
 
-        debug!("ACP session created: {:?}", session_id);
+                // Check if agent supports session loading
+                if connection.supports_session_loading() {
+                    // Use session/load to resume with history
+                    connection
+                        .load_session(acp_session_id.clone(), &cwd, history)
+                        .await
+                        .with_context(|| {
+                            format!("Failed to load session on agent: {}", resume_config.session_id)
+                        })?;
+                    debug!(
+                        "Resumed ACP session {:?} with {} history items",
+                        acp_session_id, history_count
+                    );
+                } else {
+                    // Agent doesn't support session loading - create new session
+                    // and send history as first prompt context
+                    warn!(
+                        "Agent does not support session loading, creating new session for resume"
+                    );
+                    let new_session_id = connection.create_session(&cwd).await.map_err(|e| {
+                        let error_string = format!("{e:?}");
+                        let category = categorize_acp_error(&error_string);
+                        let display_error = format!("{e}");
+                        anyhow::anyhow!(enhanced_error_message(
+                            category,
+                            &display_error,
+                            &agent_config.provider_info.name,
+                            &agent_config.auth_hint,
+                            agent_config.agent.display_name(),
+                            agent_config.agent.npm_package(),
+                        ))
+                    })?;
+                    // Return new session ID but keep storage session ID for persistence
+                    return Ok(Self::create_backend_instance(
+                        connection,
+                        new_session_id,
+                        event_tx,
+                        config,
+                        &cwd,
+                        session_storage,
+                        Some(meta.session_id),
+                        history_count,
+                    )
+                    .await?);
+                }
 
+                (acp_session_id, Some(meta.session_id), history_count)
+            } else {
+                // Create new session
+                let session_result = connection.create_session(&cwd).await;
+                let session_id = match session_result {
+                    Ok(id) => id,
+                    Err(e) => {
+                        let error_string = format!("{e:?}");
+                        let category = categorize_acp_error(&error_string);
+                        let display_error = format!("{e}");
+                        let enhanced_message = enhanced_error_message(
+                            category,
+                            &display_error,
+                            &agent_config.provider_info.name,
+                            &agent_config.auth_hint,
+                            agent_config.agent.display_name(),
+                            agent_config.agent.npm_package(),
+                        );
+                        return Err(anyhow::anyhow!(enhanced_message));
+                    }
+                };
+
+                // Create session storage entry for new session
+                let storage_id = session_id.to_string();
+                if let Some(ref storage) = session_storage {
+                    let meta = AcpSessionMeta::new(
+                        storage_id.clone(),
+                        agent_config.agent,
+                        config.model.clone(),
+                        cwd.clone(),
+                    )
+                    .with_git_branch(Self::get_git_branch(&cwd));
+
+                    if let Err(e) = storage.create_session(&meta) {
+                        warn!("Failed to create session storage: {}", e);
+                    }
+                }
+
+                debug!("ACP session created: {:?}", session_id);
+                (session_id, Some(storage_id), 0)
+            };
+
+        Self::create_backend_instance(
+            connection,
+            session_id,
+            event_tx,
+            config,
+            &cwd,
+            session_storage,
+            storage_session_id,
+            history_entry_count,
+        )
+        .await
+    }
+
+    /// Helper to create the backend instance and start background tasks
+    async fn create_backend_instance(
+        mut connection: AcpConnection,
+        session_id: acp::SessionId,
+        event_tx: mpsc::Sender<Event>,
+        config: &AcpBackendConfig,
+        cwd: &Path,
+        session_storage: Option<Arc<AcpSessionStorage>>,
+        storage_session_id: Option<String>,
+        history_entry_count: usize,
+    ) -> Result<Self> {
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
 
@@ -243,8 +372,10 @@ impl AcpBackend {
             connection,
             session_id,
             event_tx: event_tx.clone(),
-            cwd: cwd.clone(),
+            cwd: cwd.to_path_buf(),
             pending_approvals: Arc::clone(&pending_approvals),
+            session_storage,
+            storage_session_id,
         };
 
         // Send synthetic SessionConfigured event
@@ -254,10 +385,10 @@ impl AcpBackend {
             model_provider_id: "acp".to_string(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
-            cwd: cwd.clone(),
+            cwd: cwd.to_path_buf(),
             reasoning_effort: None,
             history_log_id: 0,
-            history_entry_count: 0,
+            history_entry_count: history_entry_count as u32,
             initial_messages: None,
             rollout_path: cwd.join(".codex-rollout.jsonl"),
         };
@@ -278,6 +409,24 @@ impl AcpBackend {
         ));
 
         Ok(backend)
+    }
+
+    /// Get the current git branch if in a git repository
+    fn get_git_branch(cwd: &Path) -> Option<String> {
+        std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(cwd)
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    String::from_utf8(output.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                } else {
+                    None
+                }
+            })
     }
 
     /// Submit an operation to the ACP backend.
@@ -397,6 +546,16 @@ impl AcpBackend {
             return Ok(());
         }
 
+        // Persist user turn before sending prompt
+        if let (Some(storage), Some(session_id)) =
+            (&self.session_storage, &self.storage_session_id)
+        {
+            let user_turn = user_input_to_turn(&prompt_text);
+            if let Err(e) = storage.append_turn(session_id, &user_turn).await {
+                warn!("Failed to persist user turn: {}", e);
+            }
+        }
+
         let prompt = vec![translator::text_to_content_block(&prompt_text)];
 
         // Create channel for receiving session updates
@@ -407,6 +566,8 @@ impl AcpBackend {
         let session_id = self.session_id.clone();
         let connection = Arc::clone(&self.connection);
         let id_clone = id.to_string();
+        let session_storage = self.session_storage.clone();
+        let storage_session_id = self.storage_session_id.clone();
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -420,11 +581,15 @@ impl AcpBackend {
                 })
                 .await;
 
-            // Spawn update consumer task
+            // Spawn update consumer task that also collects updates for persistence
             let event_tx_clone = event_tx.clone();
             let id_for_updates = id_clone.clone();
+            let (collected_updates_tx, collected_updates_rx) =
+                tokio::sync::oneshot::channel::<Vec<acp::SessionUpdate>>();
+
             let update_handler = tokio::spawn(async move {
                 let mut event_sequence: u64 = 0;
+                let mut collected_updates: Vec<acp::SessionUpdate> = Vec::new();
                 // Track call_ids that have already had ExecCommandBegin emitted.
                 // The ACP protocol can emit multiple ToolCall events for the same call_id
                 // as details become available, but the TUI expects exactly one Begin per call_id.
@@ -437,6 +602,9 @@ impl AcpBackend {
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
+                    // Collect updates for persistence
+                    collected_updates.push(update.clone());
+
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
                     for event_msg in events {
@@ -472,13 +640,27 @@ impl AcpBackend {
                     total_events = event_sequence,
                     "ACP dispatch: update stream completed"
                 );
+
+                // Send collected updates back for persistence
+                let _ = collected_updates_tx.send(collected_updates);
             });
 
             // Send the prompt
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
-            // Wait for all updates to be processed
+            // Wait for all updates to be processed and get collected updates
             let _ = update_handler.await;
+
+            // Persist agent turn after prompt completes
+            if let (Some(storage), Some(sid)) = (&session_storage, &storage_session_id) {
+                if let Ok(updates) = collected_updates_rx.await {
+                    if let Some(agent_turn) = session_updates_to_turn(&updates, TurnRole::Agent) {
+                        if let Err(e) = storage.append_turn(sid, &agent_turn).await {
+                            warn!("Failed to persist agent turn: {}", e);
+                        }
+                    }
+                }
+            }
 
             // If prompt failed, send an error event to the TUI BEFORE TaskComplete
             // This ensures the user sees why their request failed instead of a silent failure
@@ -2086,6 +2268,8 @@ mod tests {
             cwd: temp_dir.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
+            resume_session: None,
+            nori_home: None,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;

@@ -111,6 +111,12 @@ enum AcpCommand {
         cwd: PathBuf,
         response_tx: oneshot::Sender<Result<acp::SessionId>>,
     },
+    LoadSession {
+        session_id: acp::SessionId,
+        cwd: PathBuf,
+        history: Vec<acp::ContentBlock>,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
     Prompt {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
@@ -268,6 +274,60 @@ impl AcpConnection {
     /// Get the agent's capabilities.
     pub fn capabilities(&self) -> &acp::AgentCapabilities {
         &self.agent_capabilities
+    }
+
+    /// Check if the agent supports session loading.
+    ///
+    /// Returns true if the agent advertises the `sessions.load` capability.
+    pub fn supports_session_loading(&self) -> bool {
+        self.agent_capabilities
+            .sessions
+            .as_ref()
+            .and_then(|s| s.load)
+            .unwrap_or(false)
+    }
+
+    /// Load an existing session with history.
+    ///
+    /// This sends a `session/load` request to the ACP agent with the
+    /// reconstructed conversation history. Use this to resume sessions
+    /// that were previously saved.
+    ///
+    /// # Arguments
+    /// * `session_id` - The session ID to load (from saved session)
+    /// * `cwd` - Working directory for the session
+    /// * `history` - Conversation history as ContentBlocks
+    ///
+    /// # Returns
+    /// Ok(()) if the session was loaded successfully.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The agent doesn't support session loading (`sessions.load` capability)
+    /// - The session ID is invalid or not found by the agent
+    /// - The worker thread has died
+    pub async fn load_session(
+        &self,
+        session_id: acp::SessionId,
+        cwd: &Path,
+        history: Vec<acp::ContentBlock>,
+    ) -> Result<()> {
+        // Check if agent supports session loading
+        if !self.supports_session_loading() {
+            anyhow::bail!("Agent does not support session loading");
+        }
+
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::LoadSession {
+                session_id,
+                cwd: cwd.to_path_buf(),
+                history,
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        response_rx.await.context("ACP worker thread died")?
     }
 
     /// Take ownership of the approval request receiver.
@@ -503,6 +563,40 @@ async fn run_command_loop(
                 let result = result
                     .map(|r| r.session_id)
                     .context("Failed to create ACP session");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::LoadSession {
+                session_id,
+                cwd,
+                history,
+                response_tx,
+            } => {
+                // Load an existing session with history using session/load
+                debug!(
+                    "Loading session {:?} with {} history items",
+                    session_id,
+                    history.len()
+                );
+
+                let request = acp::LoadSessionRequest::new(session_id.clone(), cwd).history(history);
+
+                let result = inner.connection.load_session(request).await;
+
+                // Capture model state from the response if available
+                #[cfg(feature = "unstable")]
+                if let Ok(ref response) = result
+                    && let Some(ref models) = response.models
+                    && let Ok(mut state) = model_state.write()
+                {
+                    *state = AcpModelState::from_session_model_state(models);
+                    debug!(
+                        "Model state updated after load: current={:?}, available={}",
+                        state.current_model_id,
+                        state.available_models.len()
+                    );
+                }
+
+                let result = result.map(|_| ()).context("Failed to load ACP session");
                 let _ = response_tx.send(result);
             }
             AcpCommand::Prompt {

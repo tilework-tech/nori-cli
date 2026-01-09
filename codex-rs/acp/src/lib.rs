@@ -11,6 +11,7 @@ pub mod config;
 pub mod connection;
 pub mod registry;
 pub mod session_parser;
+pub mod session_storage;
 pub mod tracing_setup;
 pub mod translator;
 
@@ -22,6 +23,7 @@ pub use config::find_nori_home;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
+pub use backend::ResumeSessionConfig;
 pub use connection::AcpConnection;
 pub use connection::AcpModelState;
 pub use connection::ApprovalRequest;
@@ -45,6 +47,16 @@ pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
+
+// Re-export session storage types
+pub use session_storage::AcpSessionMeta;
+pub use session_storage::AcpSessionStorage;
+pub use session_storage::AcpSessionTurn;
+pub use session_storage::SerializableContentBlock;
+pub use session_storage::ToolCallRecord;
+pub use session_storage::TurnRole;
+pub use session_storage::session_updates_to_turn;
+pub use session_storage::user_input_to_turn;
 
 // Re-export commonly used types from agent-client-protocol
 pub use agent_client_protocol::Agent;

@@ -336,6 +336,31 @@ impl App {
                     resumed.session_configured,
                 )
             }
+            ResumeSelection::ResumeAcp(acp_ref) => {
+                // Resume an ACP session
+                let resume_config = codex_acp::ResumeSessionConfig {
+                    session_id: acp_ref.session_id.clone(),
+                    nori_home: acp_ref.nori_home.clone(),
+                };
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: app_event_tx.clone(),
+                    initial_prompt: initial_prompt.clone(),
+                    initial_images: initial_images.clone(),
+                    enhanced_keys_supported,
+                    auth_manager: auth_manager.clone(),
+                    #[cfg(feature = "feedback")]
+                    feedback: feedback.clone(),
+                    expected_model: None, // No filtering for resumed sessions
+                };
+                ChatWidget::new_with_acp_resume(
+                    init,
+                    conversation_manager.clone(),
+                    resume_config,
+                    acp_ref.nori_home.clone(),
+                )
+            }
         };
 
         chat_widget.maybe_prompt_windows_sandbox_enable();

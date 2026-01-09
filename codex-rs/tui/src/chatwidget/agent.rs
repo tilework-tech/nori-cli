@@ -4,6 +4,7 @@ use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
 #[cfg(feature = "unstable")]
 use codex_acp::AcpModelState;
+use codex_acp::ResumeSessionConfig;
 use codex_acp::get_agent_config;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
@@ -154,6 +155,29 @@ fn spawn_error_agent(
 /// This uses the `codex_acp` crate to spawn an agent subprocess and handle
 /// communication via the Agent Client Protocol.
 fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentResult {
+    spawn_acp_agent_internal(config, app_event_tx, None, None)
+}
+
+/// Spawn an ACP agent backend with resume capability.
+///
+/// This resumes an existing ACP session by loading its history and
+/// sending it to the agent via the session/load protocol.
+pub(crate) fn spawn_acp_agent_with_resume(
+    config: Config,
+    app_event_tx: AppEventSender,
+    resume_config: ResumeSessionConfig,
+    nori_home: std::path::PathBuf,
+) -> SpawnAgentResult {
+    spawn_acp_agent_internal(config, app_event_tx, Some(resume_config), Some(nori_home))
+}
+
+/// Internal function that handles both fresh and resumed ACP agents.
+fn spawn_acp_agent_internal(
+    config: Config,
+    app_event_tx: AppEventSender,
+    resume_config: Option<ResumeSessionConfig>,
+    nori_home: Option<std::path::PathBuf>,
+) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
     // Create the model command channel for model switching operations
@@ -173,6 +197,8 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
+            resume_session: resume_config,
+            nori_home,
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
