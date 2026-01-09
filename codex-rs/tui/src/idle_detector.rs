@@ -65,14 +65,6 @@ impl IdleDetector {
             None
         }
     }
-
-    /// Get the current idle duration without marking as notified.
-    ///
-    /// This is useful for including idle duration in notifications
-    /// without affecting the notification state.
-    pub fn current_idle_duration(&self) -> Duration {
-        self.last_activity.elapsed()
-    }
 }
 
 #[cfg(test)]
@@ -132,20 +124,6 @@ mod tests {
         thread::sleep(Duration::from_millis(60));
 
         // Should be idle again
-        assert!(detector.check_idle().is_some());
-    }
-
-    #[test]
-    fn current_idle_duration_does_not_affect_state() {
-        let mut detector = IdleDetector::new(Duration::from_millis(50));
-
-        thread::sleep(Duration::from_millis(60));
-
-        // Get duration without marking as notified
-        let duration1 = detector.current_idle_duration();
-        assert!(duration1 >= Duration::from_millis(50));
-
-        // check_idle should still return Some
         assert!(detector.check_idle().is_some());
     }
 }
