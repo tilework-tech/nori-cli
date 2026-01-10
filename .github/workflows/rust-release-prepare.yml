@@ -1,8 +1,5 @@
 name: rust-release-prepare
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 */4 * * *"
+on: workflow_dispatch
 
 concurrency:
   group: ${{ github.workflow }}

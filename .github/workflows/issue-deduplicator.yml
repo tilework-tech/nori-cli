@@ -1,10 +1,6 @@
 name: Issue Deduplicator
 
-on:
-  issues:
-    types:
-      - opened
-      - labeled
+on: workflow_dispatch
 
 jobs:
   gather-duplicates:
