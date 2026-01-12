@@ -865,6 +865,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
+            // Session ID: "Session: 019bb411-..." -> "Session: [SESSION_ID]"
+            if let Some(result) = replace_after_marker(&line, "Session:", "[SESSION_ID]") {
+                line = result;
+            }
+
             line
         })
         .collect();

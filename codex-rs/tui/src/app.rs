@@ -599,16 +599,14 @@ impl App {
                     }
                 }
 
+                // Clear the terminal viewport to remove the bottom pane before final draw
+                tui.terminal.clear()?;
+
                 // Force immediate synchronous draw to ensure exit message appears before exit
-                tui.draw(
-                    self.chat_widget.desired_height(tui.terminal.size()?.width),
-                    |frame| {
-                        self.chat_widget.render(frame.area(), frame.buffer);
-                        if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
-                            frame.set_cursor_position((x, y));
-                        }
-                    },
-                )?;
+                // Use height 0 to collapse the viewport and only render history lines to scrollback
+                tui.draw(0, |_frame| {
+                    // No viewport rendering needed - history lines are already inserted above
+                })?;
 
                 // Exit the application
                 return Ok(false);
