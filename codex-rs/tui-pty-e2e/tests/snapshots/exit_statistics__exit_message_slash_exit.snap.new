@@ -1,23 +1,8 @@
 ---
 source: tui-pty-e2e/tests/exit_statistics.rs
-assertion_line: 100
+assertion_line: 124
 expression: normalize_for_snapshot(session.screen_contents())
 ---
-│                                       │
-│  directory: [TMP_DIR]                 │
-│  agent:     mock-model                │
-│  profile:   [PROF]                    │
-│                                       │
-│  Instruction Files                    │
-│    ~/.claude/CLAUDE.md                │
-╰───────────────────────────────────────╯
-
-
-  Run 'npx nori-ai install' to set up Nori AI enhancements
-
-■ Operation 'ListCustomPrompts' is not supported in ACP mode
-
-
 › hello world
 
 
@@ -27,7 +12,20 @@ expression: normalize_for_snapshot(session.screen_contents())
 
 • Sure, I'll help you with that!
 
-Goodbye!
+╭───────────────────────────────────────────────╮
+│  Goodbye! Thanks for using Nori.      │
+│                                       │
+│ Session: 019bb411-f345-7e33-9d57-c3d531fd75f7 │
+│                                       │
+│ Messages      User: 1  Assistant: 0  Total: 1 │
+│  Tool Calls    (none)                 │
+│                                       │
+│  Skills Used                          │
+│    (none)                             │
+│                                       │
+│  Subagents Used                       │
+│    (none)                             │
+╰───────────────────────────────────────╯
 
 
 › [DEFAULT_PROMPT]

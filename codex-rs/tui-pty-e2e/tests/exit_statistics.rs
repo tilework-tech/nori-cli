@@ -41,10 +41,22 @@ fn test_exit_message_displays_on_ctrl_d() {
     session.send_key(Key::Ctrl('d')).unwrap();
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
-    // Verify exit message appears
+    // Verify exit message components appear
     session
         .wait_for_text("Goodbye!", TIMEOUT)
         .expect("Exit message 'Goodbye!' did not appear");
+
+    session
+        .wait_for_text("Session:", TIMEOUT)
+        .expect("Session ID label did not appear");
+
+    session
+        .wait_for_text("Messages", TIMEOUT)
+        .expect("Messages section did not appear");
+
+    session
+        .wait_for_text("Tool Calls", TIMEOUT)
+        .expect("Tool Calls section did not appear");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
@@ -89,10 +101,22 @@ fn test_exit_message_displays_on_slash_exit() {
     session.send_key(Key::Enter).unwrap();
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
-    // Verify exit message appears
+    // Verify exit message components appear
     session
         .wait_for_text("Goodbye!", TIMEOUT)
         .expect("Exit message 'Goodbye!' did not appear");
+
+    session
+        .wait_for_text("Session:", TIMEOUT)
+        .expect("Session ID label did not appear");
+
+    session
+        .wait_for_text("Messages", TIMEOUT)
+        .expect("Messages section did not appear");
+
+    session
+        .wait_for_text("Tool Calls", TIMEOUT)
+        .expect("Tool Calls section did not appear");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 

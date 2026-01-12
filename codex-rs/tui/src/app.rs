@@ -599,6 +599,17 @@ impl App {
                     }
                 }
 
+                // Force immediate synchronous draw to ensure exit message appears before exit
+                tui.draw(
+                    self.chat_widget.desired_height(tui.terminal.size()?.width),
+                    |frame| {
+                        self.chat_widget.render(frame.area(), frame.buffer);
+                        if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
+                            frame.set_cursor_position((x, y));
+                        }
+                    },
+                )?;
+
                 // Exit the application
                 return Ok(false);
             }

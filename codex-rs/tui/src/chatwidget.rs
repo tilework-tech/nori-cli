@@ -2253,11 +2253,15 @@ impl ChatWidget {
     /// Create an exit message cell with session statistics.
     /// Called by app.rs before exiting to display final session summary.
     pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
-        // Start with a simple test message to verify the mechanism works
-        use ratatui::style::Stylize;
-        Box::new(PlainHistoryCell::new(vec![
-            Line::from("Goodbye!".green().bold()),
-        ]))
+        use crate::nori::exit_message::ExitMessageCell;
+
+        let session_id = self.conversation_id()
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "(no session)".to_string());
+
+        let stats = self.session_stats().clone();
+
+        Box::new(ExitMessageCell::new(session_id, stats))
     }
 
     fn request_redraw(&mut self) {

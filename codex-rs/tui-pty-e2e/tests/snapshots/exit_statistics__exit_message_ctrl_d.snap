@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/exit_statistics.rs
-assertion_line: 64
 expression: normalize_for_snapshot(session.screen_contents())
 ---
 › hello world
@@ -15,7 +14,7 @@ expression: normalize_for_snapshot(session.screen_contents())
 ╭───────────────────────────────────────────────╮
 │  Goodbye! Thanks for using Nori.      │
 │                                       │
-│ Session: 019bb411-f346-7ed3-be15-1630c435df32 │
+│ Session: 019bb411-8560-7a72-bd37-9e8402b84f04 │
 │                                       │
 │ Messages      User: 1  Assistant: 0  Total: 1 │
 │  Tool Calls    (none)                 │
