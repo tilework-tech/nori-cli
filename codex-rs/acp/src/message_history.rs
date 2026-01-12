@@ -450,8 +450,7 @@ mod tests {
         let (log_id, count) = history_metadata(temp_dir.path()).await;
         assert_eq!(count, entries.len());
 
-        let second_entry =
-            lookup(log_id, 1, temp_dir.path()).expect("fetch second history entry");
+        let second_entry = lookup(log_id, 1, temp_dir.path()).expect("fetch second history entry");
         assert_eq!(second_entry, entries[1]);
     }
 
@@ -474,7 +473,10 @@ mod tests {
 
         // Try to lookup beyond the end
         let result = lookup(log_id, 5, temp_dir.path());
-        assert!(result.is_none(), "lookup should return None for invalid offset");
+        assert!(
+            result.is_none(),
+            "lookup should return None for invalid offset"
+        );
     }
 
     #[cfg(unix)]

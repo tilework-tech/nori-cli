@@ -389,10 +389,12 @@ impl AcpBackend {
                             codex_protocol::protocol::GetHistoryEntryResponseEvent {
                                 offset,
                                 log_id,
-                                entry: entry_opt.map(|e| codex_protocol::message_history::HistoryEntry {
-                                    conversation_id: e.session_id,
-                                    ts: e.ts,
-                                    text: e.text,
+                                entry: entry_opt.map(|e| {
+                                    codex_protocol::message_history::HistoryEntry {
+                                        conversation_id: e.session_id,
+                                        ts: e.ts,
+                                        text: e.text,
+                                    }
                                 }),
                             },
                         ),
