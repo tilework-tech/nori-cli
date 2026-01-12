@@ -1,0 +1,35 @@
+---
+source: tui-pty-e2e/tests/exit_statistics.rs
+assertion_line: 52
+expression: normalize_for_snapshot(session.screen_contents())
+---
+│  agent:     mock-model                │
+│  profile:   [PROF]                    │
+│                                       │
+│  Instruction Files                    │
+│    ~/.claude/CLAUDE.md                │
+╰───────────────────────────────────────╯
+
+
+  Run 'npx nori-ai install' to set up Nori AI enhancements
+
+■ Operation 'ListCustomPrompts' is not supported in ACP mode
+
+
+› hello world
+
+
+■ Operation 'AddToHistory' is not supported in ACP mode
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Sure, I'll help you with that!
+
+Goodbye!
+
+Goodbye!
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · ? for shortcuts

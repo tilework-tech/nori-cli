@@ -2241,8 +2241,23 @@ impl ChatWidget {
         }
     }
 
-    fn request_exit(&self) {
+    fn request_exit(&mut self) {
+        // Clear the ctrl-c quit hint to make room for the exit message
+        self.bottom_pane.clear_ctrl_c_quit_hint();
+        self.request_redraw();
+        
+        // Send exit request - app.rs will handle adding the exit message cell before exiting
         self.app_event_tx.send(AppEvent::ExitRequest);
+    }
+    
+    /// Create an exit message cell with session statistics.
+    /// Called by app.rs before exiting to display final session summary.
+    pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
+        // Start with a simple test message to verify the mechanism works
+        use ratatui::style::Stylize;
+        Box::new(PlainHistoryCell::new(vec![
+            Line::from("Goodbye!".green().bold()),
+        ]))
     }
 
     fn request_redraw(&mut self) {

@@ -427,7 +427,10 @@ impl App {
                 app.handle_tui_event(tui, event).await?
             }
         } {}
-        tui.terminal.clear()?;
+        
+        // Don't clear terminal to allow exit message to remain visible
+        // tui.terminal.clear()?;
+        
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
@@ -571,6 +574,32 @@ impl App {
                 self.on_conversation_history_for_backtrack(tui, ev).await?;
             }
             AppEvent::ExitRequest => {
+                // Create and insert exit message cell before exiting
+                let exit_cell = self.chat_widget.create_exit_message_cell();
+
+                // Insert the cell directly (inline the InsertHistoryCell logic to avoid recursion)
+                let cell: Arc<dyn HistoryCell> = exit_cell.into();
+                if let Some(Overlay::Transcript(t)) = &mut self.overlay {
+                    t.insert_cell(cell.clone());
+                }
+                self.transcript_cells.push(cell.clone());
+                let mut display = cell.display_lines(tui.terminal.last_known_screen_size.width);
+                if !display.is_empty() {
+                    if !cell.is_stream_continuation() {
+                        if self.has_emitted_history_lines {
+                            display.insert(0, Line::from(""));
+                        } else {
+                            self.has_emitted_history_lines = true;
+                        }
+                    }
+                    if self.overlay.is_some() {
+                        self.deferred_history_lines.extend(display);
+                    } else {
+                        tui.insert_history_lines(display);
+                    }
+                }
+
+                // Exit the application
                 return Ok(false);
             }
             AppEvent::CodexOp(op) => self.chat_widget.submit_op(op),
