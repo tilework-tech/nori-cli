@@ -1,0 +1,18 @@
+---
+source: tui/src/nori/exit_message.rs
+expression: rendered
+---
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: sess_empty                           │
+│                                               │
+│ Messages      User: 0  Assistant: 0  Total: 0 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯

@@ -335,12 +335,6 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
 
 /// Handle the app exit and print the results. Optionally run the update action.
 fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
-    // Print session statistics if there was any activity
-    // if exit_info.session_stats.has_activity() {
-    //     println!("{}", exit_info.session_stats.to_display_string());
-    //     println!();
-    // }
-
     let update_action = exit_info.update_action;
     let color_enabled = supports_color::on(Stream::Stdout).is_some();
     for line in format_exit_messages(exit_info, color_enabled) {
@@ -862,7 +856,6 @@ mod tests {
                 .map(ConversationId::from_string)
                 .map(Result::unwrap),
             update_action: None,
-            session_stats: codex_tui::session_stats::SessionStats::default(),
         }
     }
 
@@ -872,7 +865,6 @@ mod tests {
             token_usage: TokenUsage::default(),
             conversation_id: None,
             update_action: None,
-            session_stats: codex_tui::session_stats::SessionStats::default(),
         };
         let lines = format_exit_messages(exit_info, false);
         assert!(lines.is_empty());

@@ -52,7 +52,7 @@ impl SlashCommand {
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Login => "log in to the current agent",
-            SlashCommand::Logout => "log out of Nori",
+            SlashCommand::Logout => "show logout instructions",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
         }

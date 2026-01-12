@@ -1,0 +1,27 @@
+---
+source: tui-pty-e2e/tests/exit_statistics.rs
+expression: normalize_for_snapshot(session.screen_contents())
+---
+› hello world
+
+
+■ Operation 'AddToHistory' is not supported in ACP mode
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Sure, I'll help you with that!
+
+╭───────────────────────────────────────────────╮
+│  Goodbye! Thanks for using Nori.      │
+│                                       │
+│  Session: [SESSION_ID]                │
+│                                       │
+│ Messages      User: 1  Assistant: 0  Total: 1 │
+│  Tool Calls    (none)                 │
+│                                       │
+│  Skills Used                          │
+│    (none)                             │
+│                                       │
+│  Subagents Used                       │
+│    (none)                             │
+╰───────────────────────────────────────╯
