@@ -4,9 +4,9 @@
 //! quits the session, showing a goodbye message, session ID, and session statistics
 //! including message counts, tool calls, skills used, and subagents invoked.
 
+use crate::history_cell::HistoryCell;
 use crate::history_cell::card_inner_width;
 use crate::history_cell::with_border;
-use crate::history_cell::HistoryCell;
 use crate::session_stats::SessionStats;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
@@ -226,7 +226,10 @@ mod tests {
             rendered.contains("brainstorming"),
             "Exit message should show brainstorming skill"
         );
-        assert!(rendered.contains("tdd"), "Exit message should show tdd skill");
+        assert!(
+            rendered.contains("tdd"),
+            "Exit message should show tdd skill"
+        );
     }
 
     #[test]

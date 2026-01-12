@@ -2245,17 +2245,18 @@ impl ChatWidget {
         // Clear the ctrl-c quit hint to make room for the exit message
         self.bottom_pane.clear_ctrl_c_quit_hint();
         self.request_redraw();
-        
+
         // Send exit request - app.rs will handle adding the exit message cell before exiting
         self.app_event_tx.send(AppEvent::ExitRequest);
     }
-    
+
     /// Create an exit message cell with session statistics.
     /// Called by app.rs before exiting to display final session summary.
     pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
         use crate::nori::exit_message::ExitMessageCell;
 
-        let session_id = self.conversation_id()
+        let session_id = self
+            .conversation_id()
             .map(|id| id.to_string())
             .unwrap_or_else(|| "(no session)".to_string());
 

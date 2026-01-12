@@ -11,8 +11,7 @@ use tui_pty_e2e::normalize_for_snapshot;
 #[test]
 #[cfg(target_os = "linux")]
 fn test_exit_message_displays_on_ctrl_d() {
-    let config = SessionConfig::new()
-        .with_mock_response("Sure, I'll help you with that!");
+    let config = SessionConfig::new().with_mock_response("Sure, I'll help you with that!");
 
     let mut session = TuiSession::spawn_with_config(30, 100, config).unwrap();
 
@@ -71,8 +70,7 @@ fn test_exit_message_displays_on_ctrl_d() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_exit_message_displays_on_slash_exit() {
-    let config = SessionConfig::new()
-        .with_mock_response("Sure, I'll help you with that!");
+    let config = SessionConfig::new().with_mock_response("Sure, I'll help you with that!");
 
     let mut session = TuiSession::spawn_with_config(30, 100, config).unwrap();
 

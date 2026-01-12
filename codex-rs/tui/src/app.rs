@@ -427,10 +427,10 @@ impl App {
                 app.handle_tui_event(tui, event).await?
             }
         } {}
-        
+
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;
-        
+
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
