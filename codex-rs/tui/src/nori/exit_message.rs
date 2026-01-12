@@ -33,16 +33,15 @@ impl HistoryCell for ExitMessageCell {
             return Vec::new();
         };
 
-        let mut lines: Vec<Line<'static>> = Vec::new();
-
-        // Goodbye message
-        lines.push(Line::from(vec![
-            Span::from("Goodbye! ").green().bold(),
-            Span::from("Thanks for using Nori.").dim(),
-        ]));
-
-        // Empty line
-        lines.push(Line::from(""));
+        let mut lines: Vec<Line<'static>> = vec![
+            // Goodbye message
+            Line::from(vec![
+                Span::from("Goodbye! ").green().bold(),
+                Span::from("Thanks for using Nori.").dim(),
+            ]),
+            // Empty line
+            Line::from(""),
+        ];
 
         // Session ID line
         lines.push(Line::from(vec![
@@ -106,11 +105,6 @@ impl HistoryCell for ExitMessageCell {
 
         with_border(lines)
     }
-}
-
-/// Create a new exit message cell to be displayed when the session ends.
-pub(crate) fn new_exit_message(session_id: String, stats: SessionStats) -> ExitMessageCell {
-    ExitMessageCell::new(session_id, stats)
 }
 
 #[cfg(test)]
