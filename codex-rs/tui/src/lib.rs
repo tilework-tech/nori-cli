@@ -154,11 +154,17 @@ pub async fn run_main(
     #[cfg(not(feature = "codex-features"))] cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
-    // Pre-warm the ACP agent installation cache in a background thread.
-    // This runs npm/bun detection early so the agent picker opens quickly.
-    // The detection can take 1-3 seconds per agent, so warming it early improves UX.
+    // Pre-warm the ACP caches in a background thread.
+    // This runs package manager detection, agent installation detection, and
+    // readiness checks early so the agent picker opens quickly.
+    // Detection can take 1-3 seconds, so warming early improves UX.
     std::thread::spawn(|| {
+        // Warm package manager cache first (single subprocess, fastest)
+        codex_acp::prewarm_package_manager_cache();
+        // Then warm installation cache (runs `which` for each agent)
         codex_acp::prewarm_installation_cache();
+        // Finally warm readiness cache (checks package caches)
+        codex_acp::prewarm_readiness_cache();
     });
 
     // When nori-config feature is enabled, set up the Nori config environment
