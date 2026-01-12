@@ -1,0 +1,10 @@
+---
+source: tui/src/nori/exit_message.rs
+expression: rendered
+---
+╭─────────────────────────────────╮
+│ Goodbye! Thanks for using Nori. │
+│                                 │
+│ session:  sess_abc123def456     │
+│ messages: 15 messages           │
+╰─────────────────────────────────╯
