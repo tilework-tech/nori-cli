@@ -1764,13 +1764,11 @@ impl ChatWidget {
                 self.handle_login_command();
             }
             SlashCommand::Logout => {
-                if let Err(e) = codex_core::auth::logout(
-                    &self.config.codex_home,
-                    self.config.cli_auth_credentials_store_mode,
-                ) {
-                    tracing::error!("failed to logout: {e}");
-                }
-                self.request_exit();
+                self.add_info_message(
+                    "To logout, run the agent's logout command directly (e.g., `claude /logout`)"
+                        .to_string(),
+                    None,
+                );
             }
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
@@ -2241,8 +2239,28 @@ impl ChatWidget {
         }
     }
 
-    fn request_exit(&self) {
+    fn request_exit(&mut self) {
+        // Clear the ctrl-c quit hint to make room for the exit message
+        self.bottom_pane.clear_ctrl_c_quit_hint();
+        self.request_redraw();
+
+        // Send exit request - app.rs will handle adding the exit message cell before exiting
         self.app_event_tx.send(AppEvent::ExitRequest);
+    }
+
+    /// Create an exit message cell with session statistics.
+    /// Called by app.rs before exiting to display final session summary.
+    pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
+        use crate::nori::exit_message::ExitMessageCell;
+
+        let session_id = self
+            .conversation_id()
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "(no session)".to_string());
+
+        let stats = self.session_stats().clone();
+
+        Box::new(ExitMessageCell::new(session_id, stats))
     }
 
     fn request_redraw(&mut self) {
