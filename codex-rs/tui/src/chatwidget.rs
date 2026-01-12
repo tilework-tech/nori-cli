@@ -1764,13 +1764,11 @@ impl ChatWidget {
                 self.handle_login_command();
             }
             SlashCommand::Logout => {
-                if let Err(e) = codex_core::auth::logout(
-                    &self.config.codex_home,
-                    self.config.cli_auth_credentials_store_mode,
-                ) {
-                    tracing::error!("failed to logout: {e}");
-                }
-                self.request_exit();
+                self.add_info_message(
+                    "To logout, run the agent's logout command directly (e.g., `claude /logout`)"
+                        .to_string(),
+                    None,
+                );
             }
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
