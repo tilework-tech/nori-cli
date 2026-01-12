@@ -5,8 +5,6 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 › testing!!!
 
 
-────────────────────────────────────────────────────────────────────────────────
-
 • Working (0s • esc to interrupt)
 
 
