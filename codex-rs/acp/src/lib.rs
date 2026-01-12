@@ -9,6 +9,7 @@
 pub mod backend;
 pub mod config;
 pub mod connection;
+pub mod message_history;
 pub mod registry;
 pub mod session_parser;
 pub mod tracing_setup;
@@ -16,9 +17,18 @@ pub mod translator;
 
 // Re-export config types for convenience
 pub use config::ApprovalPolicy;
+pub use config::HistoryPersistence;
 pub use config::NoriConfig;
 pub use config::NoriConfigOverrides;
 pub use config::find_nori_home;
+
+// Re-export message history types
+pub use message_history::HistoryEntry;
+pub use message_history::append_entry;
+pub use message_history::history_filepath;
+pub use message_history::history_metadata;
+#[cfg(any(unix, windows))]
+pub use message_history::lookup;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;

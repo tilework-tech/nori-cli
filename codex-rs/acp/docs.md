@@ -151,6 +151,45 @@ Path semantics:
 - `nori_home` always refers to `~/.nori/cli` (the full path)
 - Config file lives at `{nori_home}/config.toml` (i.e., `~/.nori/cli/config.toml`)
 
+### Message History Support
+
+The ACP module provides cross-session message history persistence, matching the functionality in `codex-core`:
+
+**History File Location:**
+- Stored at `{nori_home}/history.jsonl` (i.e., `~/.nori/cli/history.jsonl`)
+- Uses JSON-Lines format with one entry per line
+
+**History Entry Schema:**
+```json
+{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}
+```
+
+**Key exports from `@/codex-rs/acp/src/message_history.rs`:**
+- `append_entry()`: Async function to add a history entry with file locking
+- `history_metadata()`: Returns (log_id, entry_count) for the history file
+- `lookup()`: Retrieves a specific history entry by offset and log_id
+- `HistoryEntry`: Struct representing a single history entry
+
+**History Persistence Policy:**
+
+The `HistoryPersistence` enum in `@/codex-rs/acp/src/config/types.rs` controls history behavior:
+
+| Policy | Behavior |
+|--------|----------|
+| `SaveAll` (default) | All user messages are persisted to history.jsonl |
+| `None` | No history is written (privacy mode) |
+
+Configured via `history_persistence` in `~/.nori/cli/config.toml`:
+```toml
+history_persistence = "save-all"  # or "none"
+```
+
+**Implementation Details:**
+- Uses advisory file locking for concurrent write safety
+- File permissions set to `0o600` on Unix for security
+- Appends in background task to avoid blocking the main event loop
+- Maximum 10 retries with 100ms backoff for lock acquisition
+
 
 ### Stderr Capture Implementation
 
@@ -329,12 +368,14 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 └─────────────────────────┘                      └─────────────────────────┘
 ```
 
-- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy)
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, nori_home, history_persistence)
 - `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`
   - `Op::Interrupt` → ACP `cancel()`
   - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
+  - `Op::AddToHistory` → Appends to history file (async background task)
+  - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching

@@ -109,6 +109,9 @@ impl NoriConfig {
                 .approval_policy
                 .or(toml.approval_policy)
                 .unwrap_or(ApprovalPolicy::OnRequest),
+            history_persistence: toml
+                .history_persistence
+                .unwrap_or(super::types::HistoryPersistence::SaveAll),
             animations: toml.tui.animations.unwrap_or(true),
             notifications: toml.tui.notifications.unwrap_or(true),
             nori_home,
