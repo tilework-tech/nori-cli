@@ -1,7 +1,4 @@
-use clap::CommandFactory;
 use clap::Parser;
-use clap_complete::Shell;
-use clap_complete::generate;
 use codex_acp::find_nori_home;
 use codex_acp::init_rolling_file_tracing;
 use codex_arg0::arg0_dispatch_or_else;
@@ -111,9 +108,6 @@ enum Subcommand {
     #[cfg(feature = "app-server")]
     AppServer(AppServerCommand),
 
-    /// Generate shell completion scripts.
-    Completion(CompletionCommand),
-
     /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
@@ -148,13 +142,6 @@ enum Subcommand {
     /// Inspect feature flags.
     #[cfg(feature = "codex-features")]
     Features(FeaturesCli),
-}
-
-#[derive(Debug, Parser)]
-struct CompletionCommand {
-    /// Shell to generate completions for
-    #[clap(value_enum, default_value_t = Shell::Bash)]
-    shell: Shell,
 }
 
 #[cfg(feature = "codex-features")]
@@ -611,9 +598,6 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             );
             run_logout(logout_cli.config_overrides).await;
         }
-        Some(Subcommand::Completion(completion_cli)) => {
-            print_completion(completion_cli);
-        }
         #[cfg(feature = "cloud-tasks")]
         Some(Subcommand::Cloud(mut cloud_cli)) => {
             prepend_config_flags(
@@ -800,17 +784,12 @@ fn merge_resume_cli_flags(interactive: &mut TuiCli, resume_cli: TuiCli) {
         .extend(resume_cli.config_overrides.raw_overrides);
 }
 
-fn print_completion(cmd: CompletionCommand) {
-    let mut app = MultitoolCli::command();
-    let name = "nori";
-    generate(cmd.shell, &mut app, name, &mut std::io::stdout());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[cfg(feature = "codex-features")]
     use assert_matches::assert_matches;
+    use clap::CommandFactory;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
@@ -1186,6 +1165,34 @@ mod tests {
         assert!(
             !help.contains("model=\"o3\""),
             "Help should not show model=\"o3\" example"
+        );
+    }
+
+    // @current-session
+    /// The completion subcommand should not appear in help output (legacy Codex feature)
+    #[test]
+    fn completion_subcommand_not_in_help() {
+        let help = MultitoolCli::command().render_help().to_string();
+        assert!(
+            !help.contains("completion"),
+            "Help should not show 'completion' subcommand, got: {help}"
+        );
+    }
+
+    // @current-session
+    /// When "completion" is passed, it should be treated as prompt, not subcommand
+    #[test]
+    fn completion_treated_as_prompt_not_subcommand() {
+        let cli = MultitoolCli::try_parse_from(["nori", "completion"]).expect("should parse");
+        // "completion" should be interpreted as the prompt argument, not a subcommand
+        assert!(
+            cli.subcommand.is_none(),
+            "completion should not be parsed as subcommand"
+        );
+        assert_eq!(
+            cli.interactive.prompt.as_deref(),
+            Some("completion"),
+            "completion should be parsed as prompt"
         );
     }
 }
