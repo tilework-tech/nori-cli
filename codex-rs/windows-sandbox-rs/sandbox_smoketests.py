@@ -39,9 +39,9 @@ def _resolve_codex_cmd() -> List[str]:
 
     raise FileNotFoundError(
         "Codex CLI not found. Build it first, e.g.\n"
-        "  cargo build -p codex-cli --release\n"
+        "  cargo build -p nori-cli --release\n"
         "or for debug:\n"
-        "  cargo build -p codex-cli\n"
+        "  cargo build -p nori-cli\n"
     )
 
 CODEX_CMD = _resolve_codex_cmd()

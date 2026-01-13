@@ -1,0 +1,15 @@
+---
+source: tui/src/nori/session_header.rs
+expression: rendered
+---
+╭──────────────────────────────────────────╮
+│ Nori CLI v0.1.0                          │
+│                                          │
+│ directory: /home/user/project            │
+│ agent:     claude-sonnet                 │
+│ profile:   senior-swe                    │
+│                                          │
+│ Instruction Files                        │
+│   /home/user/project/AGENTS.md           │
+│   /home/user/project/.claude/settings.md │
+╰──────────────────────────────────────────╯

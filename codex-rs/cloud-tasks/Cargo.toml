@@ -23,7 +23,7 @@ codex-cloud-tasks-client = { path = "../cloud-tasks-client", features = [
 codex-common = { path = "../common", features = ["cli"] }
 codex-core = { path = "../core" }
 codex-login = { path = "../login" }
-codex-tui = { path = "../tui" }
+nori-tui = { path = "../tui" }
 crossterm = { workspace = true, features = ["event-stream"] }
 ratatui = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }

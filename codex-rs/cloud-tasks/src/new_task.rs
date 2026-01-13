@@ -1,4 +1,4 @@
-use codex_tui::ComposerInput;
+use nori_tui::ComposerInput;
 
 pub struct NewTaskPage {
     pub composer: ComposerInput,

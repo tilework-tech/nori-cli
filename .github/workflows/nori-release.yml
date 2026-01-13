@@ -169,7 +169,7 @@ jobs:
       # - name: cargo build
       #   working-directory: codex-rs
       #   run: |
-      #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p codex-cli
+      #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p nori-cli
       #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
 
       # - name: cargo test
@@ -177,8 +177,8 @@ jobs:
       #   run: |
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-acp
-      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-tui
-      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-cli
+      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-tui
+      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-cli
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-protocol
 
   # ============================================================================
@@ -287,7 +287,7 @@ jobs:
       - name: Build release binaries
         working-directory: codex-rs
         run: |
-          cargo build --release --target ${{ matrix.target }} -p codex-cli
+          cargo build --release --target ${{ matrix.target }} -p nori-cli
 
           # List built artifacts
           ls -la target/${{ matrix.target }}/release/

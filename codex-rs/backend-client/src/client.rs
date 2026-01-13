@@ -110,7 +110,7 @@ impl Client {
         if let Some(ua) = &self.user_agent {
             h.insert(USER_AGENT, ua.clone());
         } else {
-            h.insert(USER_AGENT, HeaderValue::from_static("codex-cli"));
+            h.insert(USER_AGENT, HeaderValue::from_static("nori-cli"));
         }
         if let Some(token) = &self.bearer_token {
             let value = format!("Bearer {token}");
