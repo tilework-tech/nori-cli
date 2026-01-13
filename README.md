@@ -6,8 +6,7 @@
 
 **One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and Codex. All from the same native CLI.
 
-<!-- TODO: Add TUI screenshot here -->
-<!-- ![Nori TUI Screenshot](assets/screenshot.png) -->
+![Nori TUI Screenshot](assets/nori-cli_2026-01-13.png)
 
 ## Install
 
@@ -23,7 +22,7 @@ Or download binaries from [GitHub Releases](https://github.com/tilework-tech/nor
 nori
 ```
 
-That's it. Nori launches an interactive TUI where you can chat, run commands, and let the AI assist with your codebase.
+That's it. The agent you choose will rely on existing auth if you have previously been using Claude Code, Codex, or Gemini on this system (and if not, login instructions are below). Nori launches an interactive TUI where you can chat, run commands, and let the AI assist with your codebase.
 
 ## Providers
 
@@ -31,15 +30,16 @@ Each provider you plan to use needs to be authenticated separately before use. S
 
 | Provider | Command | Authentication |
 |----------|---------|----------------|
-| Claude | `npm i -g @zed-industries/claude-code-acp` (default) | `npx @anthropic-ai/claude-code setup-token` |
+| Claude | `npm i -g @zed-industries/claude-code-acp` (default) | `npx @anthropic-ai/claude-code` and then follow the login flow |
 | Gemini | `npm i -g @google/gemini-cli --experimental-acp` | `npx @google/gemini-cli` and then `/auth` |
 | OpenAI | `npm i -g @zed-industries/codex-acp` | `npx @openai/codex login` |
 
 ## Features
 
 - **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
-- **Sandboxed execution**: Commands run in OS-level security sandboxes
+- **Improved terminal interface**: Fast incremental renders in Ratatui, double buffered scrollback history, and built in Rust for performance
 - **Coming Soon!**
+    - **Sandboxed execution**: Commands run in OS-level security sandboxes
     - **MCP integration**: Connect to Model Context Protocol servers for extended tools
     - **Session persistence**: Save and resume conversations with `nori resume`
     - **Multi-agent orchestration**: Alternate between multiple agent sessions
@@ -47,6 +47,8 @@ Each provider you plan to use needs to be authenticated separately before use. S
 ## Attribution
 
 Nori CLI is built on the great work within [OpenAI Codex CLI](https://github.com/openai/codex).
+
+Nori CLI is working with the great protocol led by [Zed Industries](https://github.com/agentclientprotocol/agent-client-protocol) for orchestrating agents.
 
 ## License
 

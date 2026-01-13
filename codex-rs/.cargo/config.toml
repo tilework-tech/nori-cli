@@ -9,9 +9,6 @@ rustflags = ["-C", "link-arg=/STACK:8388608"]
 rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
 
 [build]
-# Use sccache to cache compiled artifacts across builds and worktrees.
-# This dramatically reduces disk usage and build times for incremental builds.
-rustc-wrapper = "sccache"
 # Remap the workspace path to a static string so hashes match across worktrees
 rustflags = ["--remap-path-prefix", "$CARGO_MANIFEST_DIR=."]
 
