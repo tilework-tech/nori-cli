@@ -233,7 +233,7 @@ The `onboarding/` module handles first-run experience:
 
 **Session Statistics (`session_stats.rs`):**
 
-Tracks user activity during a session and displays a summary when the TUI exits. The `SessionStats` struct records:
+Tracks user activity during a session. The `SessionStats` struct records:
 - User and assistant message counts
 - Tool calls by category (Bash, Read, Edit, etc.)
 - Skills invoked (deduplicated)
@@ -252,9 +252,9 @@ Data flow:
                                                      │ session_stats()
      ┌───────────────────────────────────────────────┘
      ▼
-┌──────────────────────┐    AppExitInfo    ┌────────────────────┐
-│ App::run() returns   │ ─────────────────▶│ main.rs prints     │
-│ with session_stats   │                   │ to_display_string()│
+┌──────────────────────┐                   ┌────────────────────┐
+│ AppEvent::ExitRequest│ ─────────────────▶│ ExitMessageCell    │
+│                      │                   │ (consumes stats)   │
 └──────────────────────┘                   └────────────────────┘
 ```
 
@@ -270,6 +270,47 @@ All paths call `record_skill()`, which deduplicates by checking if the skill nam
 The module also provides:
 - `SessionStatisticsCell`: Implements `HistoryCell` trait for TUI rendering with bordered display
 - `extract_subagent_from_raw_input()`: Parses Task tool arguments to extract subagent type from `{"subagent_type": "type"}`
+
+**Exit Message Display:**
+
+When users quit the TUI (via Ctrl+D or `/exit`), an exit message cell is displayed in the chat history before terminal restoration. The `ExitMessageCell` (from `@/codex-rs/tui/src/nori/exit_message.rs`) shows:
+- Goodbye message: "Goodbye! Thanks for using Nori."
+- Session ID
+- Session statistics summary (messages, tool calls, skills, subagents)
+
+Exit flow:
+```
+┌─────────────────────┐
+│ AppEvent::ExitRequest│
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ ChatWidget::create_exit_message_cell()   │
+│ - Gets session ID and SessionStats       │
+│ - Creates ExitMessageCell                │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Insert cell into transcript              │
+│ - Add to overlay (if active)             │
+│ - Add to transcript_cells                │
+│ - Display via display_lines()            │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Draw final frame to flush to scrollback  │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Clear viewport and exit                  │
+└──────────────────────────────────────────┘
+```
+
+The exit message uses a bordered display with 60-character max inner width, following the `HistoryCell` pattern. Tool calls are sorted alphabetically, and skills/subagents are displayed as bullet lists (or "(none)" if empty).
 
 ### Things to Know
 

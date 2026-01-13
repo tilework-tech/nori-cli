@@ -59,6 +59,7 @@ use codex_core::features::is_known_feature_key;
 /// If no subcommand is specified, options will be forwarded to the interactive CLI.
 #[derive(Debug, Parser)]
 #[clap(
+    name = "nori-ai-cli",
     author,
     version,
     // If a sub‑command is given, ignore requirements of the default args.
