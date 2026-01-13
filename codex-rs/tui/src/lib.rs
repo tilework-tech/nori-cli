@@ -154,48 +154,10 @@ pub async fn run_main(
     #[cfg(not(feature = "codex-features"))] cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
-    // Pre-warm the ACP caches in a background thread.
-    // This runs package manager detection, agent installation detection, and
-    // readiness checks early so the agent picker opens quickly.
-    // Detection can take 1-3 seconds, so warming early improves UX.
+    // Pre-warm the ACP agent installation cache in a background thread.
+    // This runs `which` commands early so the agent picker opens quickly.
     std::thread::spawn(|| {
-        let start = std::time::Instant::now();
-        tracing::debug!("[TIMING][BACKGROUND_THREAD] prewarm thread - START");
-
-        // Warm package manager cache first (single subprocess, fastest)
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - calling prewarm_package_manager_cache()"
-        );
-        codex_acp::prewarm_package_manager_cache();
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - prewarm_package_manager_cache() done at {:?}",
-            start.elapsed()
-        );
-
-        // Then warm installation cache (runs `which` for each agent)
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - calling prewarm_installation_cache()"
-        );
         codex_acp::prewarm_installation_cache();
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - prewarm_installation_cache() done at {:?}",
-            start.elapsed()
-        );
-
-        // Finally warm readiness cache (checks package caches)
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - calling prewarm_readiness_cache()"
-        );
-        codex_acp::prewarm_readiness_cache();
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - prewarm_readiness_cache() done at {:?}",
-            start.elapsed()
-        );
-
-        tracing::debug!(
-            "[TIMING][BACKGROUND_THREAD] prewarm thread - ALL DONE, total time {:?}",
-            start.elapsed()
-        );
     });
 
     // When nori-config feature is enabled, set up the Nori config environment
