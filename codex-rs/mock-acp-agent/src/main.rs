@@ -167,6 +167,27 @@ impl acp::Agent for MockAgent {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         }
 
+        // Support configurable startup delay for testing "Connecting" status
+        // Check for model-specific delay first (e.g., MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT),
+        // then fall back to generic MOCK_AGENT_STARTUP_DELAY_MS
+        let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
+        let model_specific_var = format!(
+            "MOCK_AGENT_STARTUP_DELAY_MS_{}",
+            model_name.replace("-", "_").to_uppercase()
+        );
+        let delay_ms = std::env::var(&model_specific_var)
+            .or_else(|_| std::env::var("MOCK_AGENT_STARTUP_DELAY_MS"))
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok());
+
+        if let Some(delay) = delay_ms {
+            eprintln!(
+                "Mock agent ({}): sleeping for {}ms during startup",
+                model_name, delay
+            );
+            tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+        }
+
         // Simulate authentication failure if requested
         if std::env::var("MOCK_AGENT_REQUIRE_AUTH").is_ok() {
             eprintln!("Mock agent: simulating authentication failure");

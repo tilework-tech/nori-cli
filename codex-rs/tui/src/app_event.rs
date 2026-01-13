@@ -221,6 +221,13 @@ pub(crate) enum AppEvent {
         error: String,
     },
 
+    /// Agent is connecting (spawning subprocess). Show "Connecting to [Agent]" status.
+    /// Sent before AcpBackend::spawn() and cleared when SessionConfigured is received.
+    AgentConnecting {
+        /// The display name of the agent being connected to
+        display_name: String,
+    },
+
     /// Open the ACP model picker popup with available models from the agent.
     #[cfg(feature = "unstable")]
     OpenAcpModelPicker {

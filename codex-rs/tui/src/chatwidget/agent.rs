@@ -5,6 +5,7 @@ use codex_acp::AcpBackendConfig;
 #[cfg(feature = "unstable")]
 use codex_acp::AcpModelState;
 use codex_acp::get_agent_config;
+use codex_acp::get_agent_display_name;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
@@ -162,6 +163,10 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
 
     #[cfg(feature = "unstable")]
     let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
+
+    // Emit "Connecting" status before spawning the backend
+    let display_name = get_agent_display_name(&config.model);
+    app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
         // Create event channel for backend → TUI

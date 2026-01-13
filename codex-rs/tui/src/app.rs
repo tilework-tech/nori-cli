@@ -1056,6 +1056,13 @@ impl App {
                 // Open agent picker so user can select a different agent
                 self.chat_widget.open_agent_popup();
             }
+            AppEvent::AgentConnecting { display_name } => {
+                tracing::info!(
+                    display_name = %display_name,
+                    "Agent connecting, showing status indicator"
+                );
+                self.chat_widget.show_connecting_status(&display_name);
+            }
             #[cfg(feature = "unstable")]
             AppEvent::OpenAcpModelPicker {
                 models,

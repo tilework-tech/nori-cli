@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::process::Command;
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Default idle timeout for ACP streaming (5 minutes)
 const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -403,8 +403,33 @@ pub struct AcpAgentInfo {
 impl AcpAgentInfo {
     /// Create agent info from an AgentKind enum
     pub fn from_agent(agent: AgentKind) -> Self {
+        let start = Instant::now();
+        tracing::debug!(
+            "[TIMING] AcpAgentInfo::from_agent({}) - START",
+            agent.slug()
+        );
+
+        let install_start = Instant::now();
         let (is_installed, managed_by) = detect_agent_installation(agent);
+        tracing::debug!(
+            "[TIMING] AcpAgentInfo::from_agent({}) - detect_agent_installation took {:?}",
+            agent.slug(),
+            install_start.elapsed()
+        );
+
+        let readiness_start = Instant::now();
         let readiness = get_agent_readiness(agent);
+        tracing::debug!(
+            "[TIMING] AcpAgentInfo::from_agent({}) - get_agent_readiness took {:?}",
+            agent.slug(),
+            readiness_start.elapsed()
+        );
+
+        tracing::debug!(
+            "[TIMING] AcpAgentInfo::from_agent({}) - TOTAL took {:?}",
+            agent.slug(),
+            start.elapsed()
+        );
 
         Self {
             agent,
@@ -442,13 +467,33 @@ static READINESS_CACHE: OnceLock<HashMap<AgentKind, AgentReadiness>> = OnceLock:
 /// Detection is now fast (PATH lookup only), so prewarming is optional.
 /// Call this at app startup to avoid any startup latency from `which` commands.
 pub fn prewarm_installation_cache() {
+    let start = Instant::now();
+    let was_initialized = INSTALLATION_CACHE.get().is_some();
+    tracing::debug!(
+        "[TIMING] prewarm_installation_cache() - START (already_initialized={})",
+        was_initialized
+    );
+
     let _ = INSTALLATION_CACHE.get_or_init(|| {
+        tracing::debug!("[TIMING] prewarm_installation_cache() - initializing cache (cache miss)");
         let mut map = HashMap::new();
         for kind in AgentKind::all() {
-            map.insert(*kind, detect_agent_installation_uncached(*kind));
+            let agent_start = Instant::now();
+            let result = detect_agent_installation_uncached(*kind);
+            tracing::debug!(
+                "[TIMING] prewarm_installation_cache() - detect_agent_installation_uncached({}) took {:?}",
+                kind.slug(),
+                agent_start.elapsed()
+            );
+            map.insert(*kind, result);
         }
         map
     });
+
+    tracing::debug!(
+        "[TIMING] prewarm_installation_cache() - DONE took {:?}",
+        start.elapsed()
+    );
 }
 
 /// Detect if an agent is installed and which package manager manages it.
@@ -523,7 +568,24 @@ fn detect_package_manager_from_path(path: &str) -> Option<PackageManager> {
 /// This runs the `bun --version` check once at startup to avoid
 /// latency when launching the first ACP agent.
 pub fn prewarm_package_manager_cache() {
-    let _ = PACKAGE_MANAGER_CACHE.get_or_init(detect_package_manager_uncached);
+    let start = Instant::now();
+    let was_initialized = PACKAGE_MANAGER_CACHE.get().is_some();
+    tracing::debug!(
+        "[TIMING] prewarm_package_manager_cache() - START (already_initialized={})",
+        was_initialized
+    );
+
+    let _ = PACKAGE_MANAGER_CACHE.get_or_init(|| {
+        tracing::debug!(
+            "[TIMING] prewarm_package_manager_cache() - initializing cache (cache miss)"
+        );
+        detect_package_manager_uncached()
+    });
+
+    tracing::debug!(
+        "[TIMING] prewarm_package_manager_cache() - DONE took {:?}",
+        start.elapsed()
+    );
 }
 
 /// Detect the preferred package manager for launching ACP agents (cached).
@@ -534,25 +596,72 @@ pub fn prewarm_package_manager_cache() {
 /// 3. bun in PATH → use bunx
 /// 4. Default to npx
 pub fn detect_preferred_package_manager() -> PackageManager {
-    *PACKAGE_MANAGER_CACHE.get_or_init(detect_package_manager_uncached)
+    let was_initialized = PACKAGE_MANAGER_CACHE.get().is_some();
+    tracing::debug!(
+        "[TIMING] detect_preferred_package_manager() - called (cache_initialized={})",
+        was_initialized
+    );
+
+    let result = *PACKAGE_MANAGER_CACHE.get_or_init(|| {
+        tracing::debug!(
+            "[TIMING] detect_preferred_package_manager() - CACHE MISS, initializing from main path!"
+        );
+        detect_package_manager_uncached()
+    });
+
+    tracing::debug!(
+        "[TIMING] detect_preferred_package_manager() - returning {:?}",
+        result
+    );
+    result
 }
 
 /// Perform the actual package manager detection (uncached).
 fn detect_package_manager_uncached() -> PackageManager {
+    let start = Instant::now();
+    tracing::debug!("[TIMING] detect_package_manager_uncached() - START");
+
     // Check explicit env var overrides first
     if std::env::var("NORI_MANAGED_BY_BUN").is_ok() {
+        tracing::debug!(
+            "[TIMING] detect_package_manager_uncached() - found NORI_MANAGED_BY_BUN env var, returning Bun (took {:?})",
+            start.elapsed()
+        );
         return PackageManager::Bun;
     }
     if std::env::var("NORI_MANAGED_BY_NPM").is_ok() {
+        tracing::debug!(
+            "[TIMING] detect_package_manager_uncached() - found NORI_MANAGED_BY_NPM env var, returning Npm (took {:?})",
+            start.elapsed()
+        );
         return PackageManager::Npm;
     }
 
     // Check if bun is available in PATH
-    if Command::new("bun").arg("--version").output().is_ok() {
+    let bun_check_start = Instant::now();
+    tracing::debug!(
+        "[TIMING] detect_package_manager_uncached() - spawning 'bun --version' subprocess..."
+    );
+    let bun_result = Command::new("bun").arg("--version").output();
+    tracing::debug!(
+        "[TIMING] detect_package_manager_uncached() - 'bun --version' subprocess took {:?}, success={}",
+        bun_check_start.elapsed(),
+        bun_result.is_ok()
+    );
+
+    if bun_result.is_ok() {
+        tracing::debug!(
+            "[TIMING] detect_package_manager_uncached() - returning Bun (total took {:?})",
+            start.elapsed()
+        );
         return PackageManager::Bun;
     }
 
     // Default to npm
+    tracing::debug!(
+        "[TIMING] detect_package_manager_uncached() - returning Npm (default, total took {:?})",
+        start.elapsed()
+    );
     PackageManager::Npm
 }
 
@@ -562,11 +671,37 @@ fn detect_package_manager_uncached() -> PackageManager {
 
 /// Initialize the readiness cache by detecting readiness for all agents.
 fn init_readiness_cache() -> HashMap<AgentKind, AgentReadiness> {
+    let start = Instant::now();
+    tracing::debug!("[TIMING] init_readiness_cache() - START");
+
+    let pm_start = Instant::now();
     let preferred_pm = detect_preferred_package_manager();
-    AgentKind::all()
+    tracing::debug!(
+        "[TIMING] init_readiness_cache() - detect_preferred_package_manager() took {:?}, result={:?}",
+        pm_start.elapsed(),
+        preferred_pm
+    );
+
+    let result: HashMap<AgentKind, AgentReadiness> = AgentKind::all()
         .iter()
-        .map(|&kind| (kind, detect_agent_readiness_uncached(kind, preferred_pm)))
-        .collect()
+        .map(|&kind| {
+            let agent_start = Instant::now();
+            let readiness = detect_agent_readiness_uncached(kind, preferred_pm);
+            tracing::debug!(
+                "[TIMING] init_readiness_cache() - detect_agent_readiness_uncached({}) took {:?}, result={:?}",
+                kind.slug(),
+                agent_start.elapsed(),
+                readiness
+            );
+            (kind, readiness)
+        })
+        .collect();
+
+    tracing::debug!(
+        "[TIMING] init_readiness_cache() - DONE took {:?}",
+        start.elapsed()
+    );
+    result
 }
 
 /// Pre-warm the agent readiness cache.
@@ -574,16 +709,53 @@ fn init_readiness_cache() -> HashMap<AgentKind, AgentReadiness> {
 /// This performs PATH lookups and npm/bun cache detection for all agents.
 /// Call this at startup after package manager detection is complete.
 pub fn prewarm_readiness_cache() {
-    let _ = READINESS_CACHE.get_or_init(init_readiness_cache);
+    let start = Instant::now();
+    let was_initialized = READINESS_CACHE.get().is_some();
+    tracing::debug!(
+        "[TIMING] prewarm_readiness_cache() - START (already_initialized={})",
+        was_initialized
+    );
+
+    let _ = READINESS_CACHE.get_or_init(|| {
+        tracing::debug!("[TIMING] prewarm_readiness_cache() - initializing cache (cache miss)");
+        init_readiness_cache()
+    });
+
+    tracing::debug!(
+        "[TIMING] prewarm_readiness_cache() - DONE took {:?}",
+        start.elapsed()
+    );
 }
 
 /// Get the readiness state for an agent.
 pub fn get_agent_readiness(agent: AgentKind) -> AgentReadiness {
-    READINESS_CACHE
-        .get_or_init(init_readiness_cache)
+    let start = Instant::now();
+    let was_initialized = READINESS_CACHE.get().is_some();
+    tracing::debug!(
+        "[TIMING] get_agent_readiness({}) - START (cache_initialized={})",
+        agent.slug(),
+        was_initialized
+    );
+
+    let result = READINESS_CACHE
+        .get_or_init(|| {
+            tracing::debug!(
+                "[TIMING] get_agent_readiness({}) - CACHE MISS, initializing readiness cache from main path!",
+                agent.slug()
+            );
+            init_readiness_cache()
+        })
         .get(&agent)
         .copied()
-        .unwrap_or(AgentReadiness::RequiresDownload)
+        .unwrap_or(AgentReadiness::RequiresDownload);
+
+    tracing::debug!(
+        "[TIMING] get_agent_readiness({}) - DONE took {:?}, result={:?}",
+        agent.slug(),
+        start.elapsed(),
+        result
+    );
+    result
 }
 
 /// Detect agent readiness (uncached).
@@ -727,6 +899,8 @@ pub struct AcpAgentConfig {
     pub command: String,
     /// Arguments to pass to the command
     pub args: Vec<String>,
+    /// Environment variables to set for the subprocess
+    pub env: std::collections::HashMap<String, String>,
     /// Provider information for this ACP agent
     pub provider_info: AcpProviderInfo,
     /// Authentication hint for this agent (displayed on auth failures)
@@ -735,6 +909,9 @@ pub struct AcpAgentConfig {
 
 /// Get list of all available ACP agents for the agent picker
 pub fn list_available_agents() -> Vec<AcpAgentInfo> {
+    let start = Instant::now();
+    tracing::debug!("[TIMING] list_available_agents() - START");
+
     let mut agents = Vec::new();
 
     // Mock agents are only available in debug builds (for testing)
@@ -765,10 +942,16 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
     }
 
     // Production agents
+    tracing::debug!("[TIMING] list_available_agents() - about to create production agent infos");
     for agent in AgentKind::all() {
         agents.push(AcpAgentInfo::from_agent(*agent));
     }
 
+    tracing::debug!(
+        "[TIMING] list_available_agents() - DONE, created {} agents in {:?}",
+        agents.len(),
+        start.elapsed()
+    );
     agents
 }
 
@@ -822,6 +1005,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
             provider_slug: agent.slug().to_string(),
             command,
             args,
+            env: std::collections::HashMap::new(),
             provider_info: AcpProviderInfo {
                 name: format!("{} ACP", agent.display_name()),
                 ..Default::default()
@@ -831,6 +1015,33 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
     }
 
     anyhow::bail!("Unknown ACP model: {model_name}")
+}
+
+/// Get the display name for an agent by model name.
+///
+/// Returns the human-readable display name if the agent is registered.
+/// Falls back to the model_name itself if not recognized.
+pub fn get_agent_display_name(model_name: &str) -> String {
+    let normalized = model_name.to_lowercase();
+
+    // Mock agents (debug builds only)
+    #[cfg(debug_assertions)]
+    {
+        if normalized == "mock-model" {
+            return "Mock ACP".to_string();
+        }
+        if normalized == "mock-model-alt" {
+            return "Mock ACP Alt".to_string();
+        }
+    }
+
+    // Production agents
+    if let Some(agent) = AgentKind::from_slug(&normalized) {
+        return agent.display_name().to_string();
+    }
+
+    // Fallback to model name
+    model_name.to_string()
 }
 
 /// Get mock agent configuration (only available in debug builds)
@@ -879,6 +1090,10 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 provider_slug: "mock-acp".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
+                env: std::collections::HashMap::from([(
+                    "MOCK_AGENT_MODEL_NAME".to_string(),
+                    "mock-model".to_string(),
+                )]),
                 provider_info: AcpProviderInfo {
                     name: "Mock ACP".to_string(),
                     ..Default::default()
@@ -921,6 +1136,10 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 provider_slug: "mock-acp-alt".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
+                env: std::collections::HashMap::from([(
+                    "MOCK_AGENT_MODEL_NAME".to_string(),
+                    "mock-model-alt".to_string(),
+                )]),
                 provider_info: AcpProviderInfo {
                     name: "Mock ACP Alt".to_string(),
                     ..Default::default()

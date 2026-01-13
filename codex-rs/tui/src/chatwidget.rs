@@ -3305,6 +3305,18 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// Show "Connecting to [Agent]" status indicator during agent startup.
+    ///
+    /// Called when an ACP agent is being spawned and may take time
+    /// (e.g., npx/bunx resolving dependencies).
+    pub(crate) fn show_connecting_status(&mut self, display_name: &str) {
+        let header = format!("Connecting to {display_name}");
+        self.bottom_pane.ensure_status_indicator();
+        self.bottom_pane.set_interrupt_hint_visible(false); // Can't interrupt during connect
+        self.set_status_header(header);
+        self.request_redraw();
+    }
+
     /// Handle the /login slash command
     fn handle_login_command(&mut self) {
         // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),

@@ -380,6 +380,7 @@ async fn spawn_connection_internal(
 
     let mut child = Command::new(&config.command)
         .args(&config.args)
+        .envs(&config.env)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

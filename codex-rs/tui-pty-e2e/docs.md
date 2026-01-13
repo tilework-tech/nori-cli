@@ -308,6 +308,14 @@ Linux-only tests that verify ACP subprocess lifecycle management and event isola
 - `test_agent_switch_message_flow_mock_to_mock_alt` verifies that after switching agents, the NEW agent receives and responds to prompts (catches race conditions where OLD agent events could leak)
 - `test_agent_switch_logs_correct_sequence` verifies the expected log sequence during agent switch: agent receives prompt, logs receipt, sends response
 
+*Connecting Status Tests:*
+- `test_connecting_status_during_slow_agent_startup` verifies the "Connecting to [Agent]" status indicator appears during slow agent startup
+- Uses `MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT=6000` to configure a 6-second delay for `mock-model-alt`
+- Starts with `mock-model` (no delay) for fast TUI initialization
+- Switches to `mock-model-alt` via `/agent` picker, submits a prompt
+- Verifies "Connecting" text appears within 3 seconds (during the 6-second startup delay)
+- Confirms the prompt eventually appears after the agent finishes connecting
+
 **Binary Discovery:**
 
 `codex_binary_path()` locates the compiled binary:
