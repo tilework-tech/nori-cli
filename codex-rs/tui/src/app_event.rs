@@ -259,6 +259,20 @@ pub(crate) enum AppEvent {
         /// Whether the login was successful
         success: bool,
     },
+
+    /// Output from external CLI login process (e.g., gemini login)
+    ExternalCliLoginOutput {
+        /// Raw output string from the CLI (ANSI codes stripped)
+        data: String,
+    },
+
+    /// External CLI login process completed
+    ExternalCliLoginComplete {
+        /// Whether the process exited successfully (exit code 0)
+        success: bool,
+        /// The agent name for display purposes
+        agent_name: String,
+    },
 }
 
 #[allow(dead_code)]

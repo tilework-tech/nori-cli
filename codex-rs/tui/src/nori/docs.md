@@ -62,6 +62,20 @@ The `discover_all_instruction_files()` function discovers ALL instruction files 
 - `format_directory()`: Relativizes paths to home directory with truncation for narrow terminals
 - `new_nori_status_output()`: Creates the composite cell for `/status` command output
 
+**Exit Message (`exit_message.rs`):**
+
+The `ExitMessageCell` struct implements `HistoryCell` and displays session statistics when users quit the TUI. Called by `ChatWidget::create_exit_message_cell()` when `AppEvent::ExitRequest` is received.
+
+Display format (60-char max inner width, bordered):
+- Goodbye message: "Goodbye! Thanks for using Nori." (green bold + dim styling)
+- Session ID
+- Messages: User/Assistant/Total counts
+- Tool Calls: Sorted alphabetically by name (e.g., "Bash: 3  Read: 5"), or "(none)"
+- Skills Used: Bullet list, or "(none)"
+- Subagents Used: Bullet list, or "(none)"
+
+The cell is inserted into the chat history and displayed before terminal restoration, allowing the exit summary to remain in scrollback after the TUI exits.
+
 **Agent Picker (`agent_picker.rs`):**
 
 - `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry with a `SelectionAction` that sends `AppEvent::SetPendingAgent`

@@ -1093,6 +1093,16 @@ impl App {
             AppEvent::LoginComplete { success } => {
                 self.chat_widget.handle_login_complete(success);
             }
+            AppEvent::ExternalCliLoginOutput { data } => {
+                self.chat_widget.handle_external_cli_login_output(data);
+            }
+            AppEvent::ExternalCliLoginComplete {
+                success,
+                agent_name,
+            } => {
+                self.chat_widget
+                    .handle_external_cli_login_complete(success, agent_name);
+            }
         }
         Ok(true)
     }

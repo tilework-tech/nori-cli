@@ -263,6 +263,54 @@ pub(crate) fn get_limits_duration(windows_minutes: i64) -> String {
     }
 }
 
+/// Strip ANSI escape codes from a string.
+/// Uses a simple state machine approach to handle common escape sequences.
+#[cfg(feature = "login")]
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence
+            if chars.peek() == Some(&'[') {
+                chars.next(); // consume '['
+                // Skip until we hit a letter (the terminator)
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            } else if chars.peek() == Some(&']') {
+                // OSC sequence (Operating System Command)
+                chars.next(); // consume ']'
+                // Skip until BEL (\x07) or ST (ESC \)
+                while let Some(&next) = chars.peek() {
+                    if next == '\x07' {
+                        chars.next();
+                        break;
+                    } else if next == '\x1b' {
+                        chars.next();
+                        if chars.peek() == Some(&'\\') {
+                            chars.next();
+                        }
+                        break;
+                    }
+                    chars.next();
+                }
+            }
+        } else if c == '\r' {
+            // Skip carriage return (handle Windows line endings)
+            continue;
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {
     pub(crate) config: Config,
@@ -3334,30 +3382,48 @@ impl ChatWidget {
                     return;
                 }
 
-                // Currently only OAuthBrowser is supported
-                let LoginMethod::OAuthBrowser = login_method;
+                match login_method {
+                    LoginMethod::OAuthBrowser => {
+                        // Create and start the login handler
+                        let mut handler = LoginHandler::new();
+                        handler.start_oauth();
 
-                // Create and start the login handler
-                let mut handler = LoginHandler::new();
-                handler.start_oauth();
+                        // Show auth method selection message
+                        self.add_info_message(
+                            "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                            Some("Press Esc to cancel".to_string()),
+                        );
 
-                // Show auth method selection message
-                self.add_info_message(
-                    "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
-                    Some("Press Esc to cancel".to_string()),
-                );
+                        // Start the actual login server
+                        self.start_oauth_login_flow(handler);
+                    }
+                    LoginMethod::ExternalCli { command, args } => {
+                        // Create and start the login handler
+                        let mut handler = LoginHandler::new();
+                        let agent_display_name = agent.display_name().to_string();
+                        handler.start_external_cli(agent_display_name.clone());
 
-                // Start the actual login server
-                self.start_oauth_login_flow(handler);
+                        // Show starting message
+                        self.add_info_message(
+                            format!(
+                                "Starting authentication for {agent_display_name}...\n\nThe {agent_display_name} login process will run in-app.",
+                            ),
+                            Some("Press Esc to cancel".to_string()),
+                        );
+
+                        // Start the external CLI login flow
+                        self.start_external_cli_login_flow(
+                            handler,
+                            command,
+                            args,
+                            agent_display_name,
+                        );
+                    }
+                }
             }
             AgentLoginSupport::NotSupported { agent_name } => {
                 // Provide agent-specific instructions
                 let instructions = match agent_name.as_str() {
-                    "Gemini" => {
-                        "In-app login for Gemini is not yet supported.\n\n\
-                         To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
-                         Alternatively, set the GOOGLE_API_KEY environment variable."
-                    }
                     "Claude Code" => {
                         "In-app login for Claude Code is not yet supported.\n\n\
                          To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
@@ -3398,25 +3464,41 @@ impl ChatWidget {
                     return;
                 }
 
-                let LoginMethod::OAuthBrowser = login_method;
+                match login_method {
+                    LoginMethod::OAuthBrowser => {
+                        let mut handler = LoginHandler::new();
+                        handler.start_oauth();
 
-                let mut handler = LoginHandler::new();
-                handler.start_oauth();
+                        self.add_info_message(
+                            "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                            Some("Press Esc to cancel".to_string()),
+                        );
 
-                self.add_info_message(
-                    "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
-                    Some("Press Esc to cancel".to_string()),
-                );
+                        self.start_oauth_login_flow(handler);
+                    }
+                    LoginMethod::ExternalCli { command, args } => {
+                        let mut handler = LoginHandler::new();
+                        let agent_display_name = agent.display_name().to_string();
+                        handler.start_external_cli(agent_display_name.clone());
 
-                self.start_oauth_login_flow(handler);
+                        self.add_info_message(
+                            format!(
+                                "Starting authentication for {agent_display_name}...\n\nThe {agent_display_name} login process will run in-app.",
+                            ),
+                            Some("Press Esc to cancel".to_string()),
+                        );
+
+                        self.start_external_cli_login_flow(
+                            handler,
+                            command,
+                            args,
+                            agent_display_name,
+                        );
+                    }
+                }
             }
             AgentLoginSupport::NotSupported { agent_name } => {
                 let instructions = match agent_name.as_str() {
-                    "Gemini" => {
-                        "In-app login for Gemini is not yet supported.\n\n\
-                         To authenticate, run `gemini` in a separate terminal and select 'Login with Google'.\n\n\
-                         Alternatively, set the GOOGLE_API_KEY environment variable."
-                    }
                     "Claude Code" => {
                         "In-app login for Claude Code is not yet supported.\n\n\
                          To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
@@ -3488,6 +3570,102 @@ impl ChatWidget {
         }
     }
 
+    /// Start the external CLI login flow (e.g., gemini login)
+    #[cfg(feature = "login")]
+    fn start_external_cli_login_flow(
+        &mut self,
+        mut handler: LoginHandler,
+        command: String,
+        args: Vec<String>,
+        agent_display_name: String,
+    ) {
+        use std::collections::HashMap;
+
+        let app_event_tx = self.app_event_tx.clone();
+        let cwd = self.config.cwd.clone();
+
+        // Spawn the PTY process and stream output
+        let task_handle = tokio::spawn(async move {
+            // Build environment - inherit current environment
+            let mut env: HashMap<String, String> = std::env::vars().collect();
+            // Ensure TERM is set for proper terminal behavior
+            env.entry("TERM".to_string())
+                .or_insert_with(|| "xterm-256color".to_string());
+
+            match codex_utils_pty::spawn_pty_process(&command, &args, &cwd, &env, &None).await {
+                Ok(spawned) => {
+                    // Keep session alive so process keeps running
+                    let _session = spawned.session;
+                    let mut output_rx = spawned.output_rx;
+                    let exit_rx = spawned.exit_rx;
+
+                    // Spawn a task to stream output
+                    let output_event_tx = app_event_tx.clone();
+                    let output_task = tokio::spawn(async move {
+                        loop {
+                            match output_rx.recv().await {
+                                Ok(data) => {
+                                    // Convert bytes to string, stripping invalid UTF-8
+                                    let text = String::from_utf8_lossy(&data);
+                                    // Strip ANSI escape codes using a simple regex-like approach
+                                    let stripped = strip_ansi_codes(&text);
+                                    if !stripped.is_empty() {
+                                        output_event_tx.send(AppEvent::ExternalCliLoginOutput {
+                                            data: stripped,
+                                        });
+                                    }
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                    // Receiver lagged, continue
+                                    continue;
+                                }
+                            }
+                        }
+                    });
+
+                    // Wait for process exit
+                    let exit_code = exit_rx.await.unwrap_or(-1);
+
+                    // Cancel output task
+                    output_task.abort();
+
+                    // Send completion event
+                    let success = exit_code == 0;
+                    app_event_tx.send(AppEvent::ExternalCliLoginComplete {
+                        success,
+                        agent_name: agent_display_name,
+                    });
+                }
+                Err(e) => {
+                    tracing::error!("Failed to spawn external CLI login: {e}");
+                    app_event_tx.send(AppEvent::ExternalCliLoginComplete {
+                        success: false,
+                        agent_name: agent_display_name,
+                    });
+                }
+            }
+        });
+
+        // Store the task handle for cancellation support
+        handler.set_pty_task_handle(task_handle);
+        self.login_handler = Some(handler);
+    }
+
+    /// Start the external CLI login flow (stub for non-login builds)
+    #[cfg(not(feature = "login"))]
+    fn start_external_cli_login_flow(
+        &mut self,
+        _handler: LoginHandler,
+        _command: String,
+        _args: Vec<String>,
+        _agent_display_name: String,
+    ) {
+        self.add_error_message(
+            "Login feature is not enabled. Rebuild with --features login".to_string(),
+        );
+    }
+
     /// Handle login completion event
     pub(crate) fn handle_login_complete(&mut self, success: bool) {
         if let Some(mut handler) = self.login_handler.take() {
@@ -3501,6 +3679,32 @@ impl ChatWidget {
                 handler.cancel();
                 self.add_info_message("Login cancelled or failed.".to_string(), None);
             }
+        }
+        self.request_redraw();
+    }
+
+    /// Handle external CLI login output (streaming text from the PTY process)
+    pub(crate) fn handle_external_cli_login_output(&mut self, data: String) {
+        // Display the output as an info message (append to existing or create new)
+        self.add_info_message(data, None);
+        self.request_redraw();
+    }
+
+    /// Handle external CLI login completion
+    pub(crate) fn handle_external_cli_login_complete(&mut self, success: bool, agent_name: String) {
+        if let Some(mut handler) = self.login_handler.take() {
+            handler.cancel(); // Clear any handler state
+        }
+
+        if success {
+            self.add_info_message(
+                format!(
+                    "Successfully authenticated with {agent_name}!\n\nYou can now use {agent_name}."
+                ),
+                None,
+            );
+        } else {
+            self.add_info_message(format!("{agent_name} login failed or was cancelled."), None);
         }
         self.request_redraw();
     }
