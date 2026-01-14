@@ -6,7 +6,7 @@
 
 **One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and Codex. All from the same native CLI.
 
-![Nori TUI Screenshot](assets/nori-cli_2026-01-13.png)
+![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/dev/assets/nori-cli_2026-01-13.png)
 
 ## Install
 

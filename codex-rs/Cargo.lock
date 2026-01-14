@@ -1641,6 +1641,7 @@ dependencies = [
  "codex-file-search",
  "codex-login",
  "codex-protocol",
+ "codex-utils-pty",
  "codex-windows-sandbox",
  "color-eyre",
  "crossterm",

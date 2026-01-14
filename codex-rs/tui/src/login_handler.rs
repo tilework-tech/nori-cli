@@ -7,15 +7,20 @@
 use codex_acp::AgentKind;
 use codex_acp::list_available_agents;
 use codex_login::ShutdownHandle;
+use tokio::task::JoinHandle;
 
 /// Method used for authentication
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoginMethod {
     /// OAuth browser flow - starts local server, opens browser
     OAuthBrowser,
-    // Note: External CLI passthrough support is planned for future implementation
-    // when input forwarding to PTY is added. For now, agents that require interactive
-    // CLI auth (like Gemini) show instructions instead.
+    /// External CLI passthrough - spawns agent CLI with PTY
+    ExternalCli {
+        /// The command to run (e.g., "gemini")
+        command: String,
+        /// Arguments to pass (e.g., ["login"])
+        args: Vec<String>,
+    },
 }
 
 /// State of the login flow
@@ -25,6 +30,11 @@ pub enum LoginFlowState {
     Idle,
     /// OAuth flow in progress - waiting for browser
     AwaitingBrowserAuth,
+    /// External CLI login in progress - spawned PTY process
+    AwaitingExternalCli {
+        /// The agent name for display purposes
+        agent_name: String,
+    },
     /// Login successful
     Success,
     /// Login cancelled by user
@@ -55,6 +65,8 @@ pub struct LoginHandler {
     state: LoginFlowState,
     /// Shutdown handle for cancelling OAuth flow
     shutdown_handle: Option<ShutdownHandle>,
+    /// Task handle for cancelling external CLI PTY process
+    pty_task_handle: Option<JoinHandle<()>>,
 }
 
 impl LoginHandler {
@@ -63,6 +75,7 @@ impl LoginHandler {
         Self {
             state: LoginFlowState::Idle,
             shutdown_handle: None,
+            pty_task_handle: None,
         }
     }
 
@@ -85,9 +98,14 @@ impl LoginHandler {
                         is_installed: info.is_installed,
                         login_method: LoginMethod::OAuthBrowser,
                     },
-                    // Gemini requires interactive CLI for auth - show instructions
-                    AgentKind::Gemini => AgentLoginSupport::NotSupported {
-                        agent_name: "Gemini".to_string(),
+                    // Gemini supports in-app login via external CLI passthrough
+                    AgentKind::Gemini => AgentLoginSupport::Supported {
+                        agent: AgentKind::Gemini,
+                        is_installed: info.is_installed,
+                        login_method: LoginMethod::ExternalCli {
+                            command: "gemini".to_string(),
+                            args: vec!["login".to_string()],
+                        },
                     },
                     // Other agents don't support in-app login yet
                     other => AgentLoginSupport::NotSupported {
@@ -106,9 +124,19 @@ impl LoginHandler {
         self.state = LoginFlowState::AwaitingBrowserAuth;
     }
 
+    /// Start the external CLI login flow
+    pub fn start_external_cli(&mut self, agent_name: String) {
+        self.state = LoginFlowState::AwaitingExternalCli { agent_name };
+    }
+
     /// Set the shutdown handle for cancellation
     pub fn set_shutdown_handle(&mut self, handle: ShutdownHandle) {
         self.shutdown_handle = Some(handle);
+    }
+
+    /// Set the PTY task handle for cancellation
+    pub fn set_pty_task_handle(&mut self, handle: JoinHandle<()>) {
+        self.pty_task_handle = Some(handle);
     }
 
     /// OAuth login completed successfully
@@ -121,6 +149,10 @@ impl LoginHandler {
         // Shutdown OAuth server if running
         if let Some(handle) = self.shutdown_handle.take() {
             handle.shutdown();
+        }
+        // Abort PTY task if running (this will drop the session and kill the process)
+        if let Some(handle) = self.pty_task_handle.take() {
+            handle.abort();
         }
         self.state = LoginFlowState::Cancelled;
     }
@@ -167,15 +199,40 @@ mod tests {
     }
 
     #[test]
-    fn check_agent_support_returns_not_supported_for_gemini() {
-        // Gemini requires interactive CLI for auth, so we show instructions instead
+    fn check_agent_support_returns_supported_for_gemini_with_external_cli() {
+        // Gemini supports in-app login via external CLI passthrough
         let support = LoginHandler::check_agent_support("gemini");
 
         match support {
-            AgentLoginSupport::NotSupported { agent_name } => {
+            AgentLoginSupport::Supported {
+                agent,
+                login_method,
+                ..
+            } => {
+                assert_eq!(agent, AgentKind::Gemini);
+                match login_method {
+                    LoginMethod::ExternalCli { command, args } => {
+                        assert_eq!(command, "gemini");
+                        assert_eq!(args, vec!["login".to_string()]);
+                    }
+                    _ => panic!("Expected ExternalCli login method for gemini"),
+                }
+            }
+            _ => panic!("Expected Supported variant for gemini"),
+        }
+    }
+
+    #[test]
+    fn start_external_cli_transitions_to_awaiting_external_cli() {
+        let mut handler = LoginHandler::new();
+
+        handler.start_external_cli("Gemini".to_string());
+
+        match handler.state {
+            LoginFlowState::AwaitingExternalCli { agent_name } => {
                 assert_eq!(agent_name, "Gemini");
             }
-            _ => panic!("Expected NotSupported variant for gemini"),
+            _ => panic!("Expected AwaitingExternalCli state"),
         }
     }
 

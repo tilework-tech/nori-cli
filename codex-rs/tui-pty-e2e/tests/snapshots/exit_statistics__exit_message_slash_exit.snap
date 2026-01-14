@@ -2,12 +2,13 @@
 source: tui-pty-e2e/tests/exit_statistics.rs
 expression: normalize_for_snapshot(session.screen_contents())
 ---
+  Run 'npx nori-ai install' to set up Nori AI enhancements
+
+■ Operation 'ListCustomPrompts' is not supported in ACP mode
+
+
 › hello world
 
-
-■ Operation 'AddToHistory' is not supported in ACP mode
-
-────────────────────────────────────────────────────────────────────────────────────────────────────
 
 • Sure, I'll help you with that!
 

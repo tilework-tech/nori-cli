@@ -1,11 +1,11 @@
 ---
-source: tui-pty-e2e/tests/streaming.rs
+source: tui-pty-e2e/tests/input_handling.rs
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
-› testing!!!
+› first message
 
 
-• Working (0s • esc to interrupt)
+• Mock response
 
 
 › [DEFAULT_PROMPT]
