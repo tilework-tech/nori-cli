@@ -242,10 +242,28 @@ Model state is stored in `Arc<RwLock<AcpModelState>>` shared between the main th
 
 **Subprocess Lifecycle Management:**
 
-The `run_command_loop()` function manages agent subprocess cleanup:
-- Runs until the command channel is closed (when `AcpConnection` is dropped)
-- On exit, calls `child.kill()` to terminate the subprocess
-- This prevents orphaned/zombie processes when sessions are switched (e.g., via `/new` command)
+The agent subprocess cleanup follows a deterministic two-phase shutdown pattern:
+
+```
+┌─────────────────────────┐   Drop triggered   ┌─────────────────────────┐
+│   AcpConnection::Drop   │───────────────────►│  Worker Thread          │
+│                         │   (command_tx      │  run_command_loop()     │
+│  1. Drop command_tx     │    dropped)        │                         │
+│  2. Wait on             │                    │  - Detects channel      │
+│     shutdown_complete_rx│◄────────────────── │    closed               │
+│  3. Join worker thread  │   signal complete  │  - Kills child process  │
+│                         │                    │  - Sends () on          │
+└─────────────────────────┘                    │    shutdown_complete_tx │
+                                               └─────────────────────────┘
+```
+
+Key implementation details:
+- `run_command_loop()` runs until the command channel is closed (when `AcpConnection` is dropped)
+- On exit, calls `child.kill()` to terminate the subprocess, then signals completion
+- `Drop` implementation waits (with `SHUTDOWN_TIMEOUT` of 2 seconds) for cleanup completion before returning
+- Uses `Mutex<Option<>>` pattern for `worker_thread` and `shutdown_complete_rx` to allow taking in Drop while satisfying `Sync` requirement for `Arc<AcpConnection>`
+- Prevents orphaned/zombie processes when TUI exits (via `/exit`, `/quit`, or Ctrl+C)
+- Also handles session switches (e.g., via `/new` command)
 - Logs subprocess PID at spawn via `debug!("ACP agent spawned (pid: {:?})")` for E2E test verification
 
 **ClientDelegate (`connection.rs`):**

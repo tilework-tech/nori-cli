@@ -1127,7 +1127,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn test_normalize_version_and_profile() {
         // Test that version and profile are normalized correctly

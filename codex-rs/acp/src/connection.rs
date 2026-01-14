@@ -13,8 +13,10 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread;
+use std::time::Duration;
 
 use agent_client_protocol as acp;
 use anyhow::Context;
@@ -129,11 +131,20 @@ enum AcpCommand {
     },
 }
 
+/// Timeout for waiting for worker thread cleanup during Drop.
+/// This should be long enough for the child process kill to complete,
+/// but not so long that it blocks shutdown indefinitely.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// A thread-safe wrapper around an ACP agent subprocess.
 ///
 /// This spawns a dedicated single-threaded tokio runtime on a background thread
 /// to handle the ACP protocol (which requires `!Send` futures), and communicates
 /// with the main runtime via channels.
+///
+/// When dropped, this struct ensures the worker thread completes its cleanup
+/// (including killing the child process) before returning. This prevents
+/// orphaned agent subprocesses when the TUI exits.
 pub struct AcpConnection {
     command_tx: mpsc::Sender<AcpCommand>,
     agent_capabilities: acp::AgentCapabilities,
@@ -143,7 +154,12 @@ pub struct AcpConnection {
     /// Thread-safe model state shared between the main thread and worker thread.
     /// Updated when sessions are created or models are switched.
     model_state: Arc<RwLock<AcpModelState>>,
-    _worker_thread: thread::JoinHandle<()>,
+    /// Worker thread handle. Stored as Option inside Mutex to allow taking in Drop.
+    worker_thread: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Synchronous channel to receive notification when worker thread cleanup is complete.
+    /// This allows Drop to wait for the child process kill to finish.
+    /// Wrapped in Mutex<Option<>> for Sync (required by Arc<AcpConnection>).
+    shutdown_complete_rx: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
 }
 
 impl AcpConnection {
@@ -173,6 +189,10 @@ impl AcpConnection {
         let model_state = Arc::new(RwLock::new(AcpModelState::new()));
         let model_state_for_worker = Arc::clone(&model_state);
 
+        // Create synchronous channel for shutdown completion notification.
+        // This allows Drop to wait for worker thread cleanup to complete.
+        let (shutdown_complete_tx, shutdown_complete_rx) = std::sync::mpsc::channel();
+
         // Spawn a dedicated thread with a single-threaded tokio runtime
         let worker_thread = thread::spawn(move || {
             #[expect(
@@ -191,10 +211,18 @@ impl AcpConnection {
                         match spawn_connection_internal(&config, &cwd, approval_tx).await {
                             Ok((inner, capabilities)) => {
                                 let _ = init_tx.send(Ok(capabilities));
-                                run_command_loop(inner, command_rx, model_state_for_worker).await;
+                                run_command_loop(
+                                    inner,
+                                    command_rx,
+                                    model_state_for_worker,
+                                    shutdown_complete_tx,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 let _ = init_tx.send(Err(e));
+                                // Signal completion even on error so Drop doesn't hang
+                                let _ = shutdown_complete_tx.send(());
                             }
                         }
                     })
@@ -212,7 +240,8 @@ impl AcpConnection {
             agent_capabilities: capabilities,
             approval_rx,
             model_state,
-            _worker_thread: worker_thread,
+            worker_thread: Mutex::new(Some(worker_thread)),
+            shutdown_complete_rx: Mutex::new(Some(shutdown_complete_rx)),
         })
     }
 
@@ -353,6 +382,65 @@ impl AcpConnection {
     // - Debugging by replaying history through a different backend
 }
 
+impl Drop for AcpConnection {
+    fn drop(&mut self) {
+        // Drop command_tx first to signal the worker thread to exit.
+        // This is implicit (field ordering doesn't matter for drop order in Rust),
+        // but we make it explicit by taking ownership to ensure it's dropped early.
+        drop(std::mem::replace(&mut self.command_tx, mpsc::channel(1).0));
+
+        // Take the shutdown completion receiver from the mutex.
+        // We use lock().ok() to handle poisoned mutex gracefully.
+        let shutdown_rx = self
+            .shutdown_complete_rx
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+
+        // Wait for the worker thread to signal that cleanup is complete.
+        // This ensures the child process is killed before we return.
+        // Use a timeout to avoid hanging indefinitely if something goes wrong.
+        if let Some(rx) = shutdown_rx {
+            match rx.recv_timeout(SHUTDOWN_TIMEOUT) {
+                Ok(()) => {
+                    debug!("ACP worker thread signaled cleanup complete");
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    warn!(
+                        "Timeout waiting for ACP worker thread cleanup ({}s)",
+                        SHUTDOWN_TIMEOUT.as_secs()
+                    );
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    // Worker thread already exited (channel was dropped)
+                    debug!("ACP worker thread already exited (channel disconnected)");
+                }
+            }
+        }
+
+        // Take the worker thread handle from the mutex.
+        let worker_handle = self
+            .worker_thread
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+
+        // Join the worker thread to ensure it has fully exited.
+        // This prevents any lingering operations after Drop returns.
+        if let Some(handle) = worker_handle {
+            // Use a short timeout for the join - if the thread hasn't exited
+            // after cleanup completion was signaled, something is wrong.
+            // Note: std::thread::JoinHandle doesn't have join_timeout, so we
+            // rely on the recv_timeout above and just join here.
+            if let Err(e) = handle.join() {
+                warn!("ACP worker thread panicked: {:?}", e);
+            } else {
+                debug!("ACP worker thread joined successfully");
+            }
+        }
+    }
+}
+
 /// Internal connection state that lives on the worker thread.
 struct AcpConnectionInner {
     connection: acp::ClientSideConnection,
@@ -463,10 +551,15 @@ async fn spawn_connection_internal(
 }
 
 /// Main command loop running on the worker thread.
+///
+/// This loop processes commands from the main thread until the command channel
+/// is closed (when AcpConnection is dropped). After the loop exits, it kills
+/// the child process and signals completion via `shutdown_complete_tx`.
 async fn run_command_loop(
     mut inner: AcpConnectionInner,
     mut command_rx: mpsc::Receiver<AcpCommand>,
     model_state: Arc<RwLock<AcpModelState>>,
+    shutdown_complete_tx: std::sync::mpsc::Sender<()>,
 ) {
     use acp::Agent;
 
@@ -615,12 +708,16 @@ async fn run_command_loop(
     }
 
     // Cleanup: terminate the child process when command channel is closed
-    // This happens when the AcpConnection is dropped (e.g., during session switch)
+    // This happens when the AcpConnection is dropped (e.g., during session switch or exit)
     debug!("ACP command loop exiting, terminating child process");
     if let Err(e) = inner.child.kill().await {
         // Log but don't fail - process may have already exited
         debug!("Failed to kill ACP agent child process: {}", e);
     }
+
+    // Signal that cleanup is complete so Drop can return
+    // This ensures the main thread waits for the child process to be killed
+    let _ = shutdown_complete_tx.send(());
 }
 
 /// Client delegate that handles requests from the ACP agent.
