@@ -29,6 +29,9 @@ toml = { workspace = true }
 dirs = { workspace = true }
 diffy = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 serial_test = { workspace = true }

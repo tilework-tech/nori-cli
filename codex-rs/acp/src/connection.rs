@@ -447,9 +447,11 @@ struct AcpConnectionInner {
     #[allow(dead_code)]
     client_delegate: Rc<ClientDelegate>,
     child: Child,
-    #[allow(dead_code)]
+    /// IO task that handles reading from the agent's stdout.
+    /// Aborted during cleanup to prevent hanging on orphaned pipes.
     io_task: tokio::task::JoinHandle<acp::Result<()>>,
-    #[allow(dead_code)]
+    /// Stderr task that logs the agent's stderr output.
+    /// Aborted during cleanup to prevent hanging on orphaned pipes.
     stderr_task: tokio::task::JoinHandle<()>,
 }
 
@@ -466,13 +468,52 @@ async fn spawn_connection_internal(
         cwd.display()
     );
 
-    let mut child = Command::new(&config.command)
-        .args(&config.args)
+    let mut cmd = Command::new(&config.command);
+    cmd.args(&config.args)
         .envs(&config.env)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    // Configure process group isolation and parent death signal for robust cleanup.
+    // This provides kernel-level guarantees that the agent subprocess is terminated
+    // even if the parent process crashes (not just clean exit).
+    #[cfg(unix)]
+    unsafe {
+        #[cfg(target_os = "linux")]
+        let parent_pid = libc::getpid();
+
+        cmd.pre_exec(move || {
+            // Create new process group for isolation.
+            // This allows killing the entire process tree (including grandchildren)
+            // by sending signals to the process group.
+            if libc::setpgid(0, 0) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            // Linux: Set PR_SET_PDEATHSIG to deliver SIGTERM when parent dies.
+            // This is a kernel-level guarantee - if the parent process is killed
+            // (even with SIGKILL), the kernel will send SIGTERM to this child.
+            #[cfg(target_os = "linux")]
+            {
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+
+                // Race condition check: if parent already died during setup,
+                // terminate immediately.
+                if libc::getppid() != parent_pid {
+                    libc::raise(libc::SIGTERM);
+                }
+            }
+
+            Ok(())
+        });
+    }
+
+    let mut child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
 
@@ -710,15 +751,89 @@ async fn run_command_loop(
 
     // Cleanup: terminate the child process when command channel is closed
     // This happens when the AcpConnection is dropped (e.g., during session switch or exit)
-    debug!("ACP command loop exiting, terminating child process");
-    if let Err(e) = inner.child.kill().await {
-        // Log but don't fail - process may have already exited
+    debug!("ACP command loop exiting, aborting IO tasks and terminating child process");
+
+    // First, abort IO tasks to prevent hanging on orphaned file descriptors.
+    // If the agent spawned grandchildren that kept stdout/stderr open, the IO tasks
+    // could block indefinitely waiting for those pipes to close. Aborting them
+    // ensures we don't hang during cleanup.
+    inner.io_task.abort();
+    inner.stderr_task.abort();
+
+    // Give tasks a brief moment to abort cleanly before killing the process.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Second, kill the entire process group to handle grandchildren.
+    // This is critical if the agent spawned its own subprocesses.
+    #[cfg(unix)]
+    if let Err(e) = kill_child_process_group(&mut inner.child) {
+        debug!("Failed to kill process group: {}", e);
+    }
+
+    // Then kill the direct child (this is a no-op if process group kill succeeded).
+    if let Err(e) = inner.child.start_kill() {
         debug!("Failed to kill ACP agent child process: {}", e);
+    }
+
+    // Wait for actual termination with a short timeout.
+    // If grandchildren kept pipes open, this prevents hanging indefinitely.
+    match tokio::time::timeout(Duration::from_millis(500), inner.child.wait()).await {
+        Ok(Ok(status)) => {
+            debug!("ACP agent exited with status: {:?}", status);
+        }
+        Ok(Err(e)) => {
+            debug!("Error waiting for ACP agent exit: {}", e);
+        }
+        Err(_) => {
+            warn!("Timeout waiting for ACP agent to exit after kill");
+        }
     }
 
     // Signal that cleanup is complete so Drop can return
     // This ensures the main thread waits for the child process to be killed
     let _ = shutdown_complete_tx.send(());
+}
+
+/// Kill the entire process group to ensure grandchildren are terminated.
+///
+/// This is critical for agents that spawn their own subprocesses. When we kill
+/// only the direct child, grandchildren can remain running and become orphaned.
+/// By killing the entire process group, we ensure all descendants are terminated.
+///
+/// This function gracefully handles "process not found" errors (ESRCH), which
+/// occur if the process has already exited.
+#[cfg(unix)]
+fn kill_child_process_group(child: &mut Child) -> std::io::Result<()> {
+    use std::io::ErrorKind;
+
+    if let Some(pid) = child.id() {
+        let pid = pid as libc::pid_t;
+
+        // Get the process group ID for this process.
+        // Because we used setpgid(0, 0) during spawn, the child is its own process group leader.
+        let pgid = unsafe { libc::getpgid(pid) };
+        if pgid == -1 {
+            let err = std::io::Error::last_os_error();
+            // ESRCH means process not found - it already exited, which is fine
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err);
+            }
+            return Ok(());
+        }
+
+        // Send SIGKILL to the entire process group.
+        // The negative PGID syntax (-pgid) sends the signal to all processes in the group.
+        let result = unsafe { libc::killpg(pgid, libc::SIGKILL) };
+        if result == -1 {
+            let err = std::io::Error::last_os_error();
+            // ESRCH means process group doesn't exist - already exited, which is fine
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Client delegate that handles requests from the ACP agent.

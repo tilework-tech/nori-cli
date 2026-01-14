@@ -876,6 +876,7 @@ dependencies = [
  "diffy",
  "dirs",
  "futures",
+ "libc",
  "pretty_assertions",
  "serde",
  "serde_json",
