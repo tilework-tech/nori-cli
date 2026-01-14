@@ -173,6 +173,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
+            notify: config.notify.clone(),
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {

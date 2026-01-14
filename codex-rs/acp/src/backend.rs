@@ -143,6 +143,8 @@ pub struct AcpBackendConfig {
     pub approval_policy: AskForApproval,
     /// Sandbox policy for command execution
     pub sandbox_policy: SandboxPolicy,
+    /// Optional external notifier command for OS-level notifications
+    pub notify: Option<Vec<String>>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -158,6 +160,10 @@ pub struct AcpBackend {
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    /// Notifier for OS-level notifications (approval waiting, idle)
+    user_notifier: Arc<codex_core::UserNotifier>,
+    /// Abort handle for the idle detection timer (if running)
+    idle_timer_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
 impl AcpBackend {
@@ -238,13 +244,17 @@ impl AcpBackend {
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(config.notify.clone()));
 
+        let idle_timer_abort = Arc::new(Mutex::new(None));
         let backend = Self {
             connection,
             session_id,
             event_tx: event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
+            user_notifier: Arc::clone(&user_notifier),
+            idle_timer_abort: Arc::clone(&idle_timer_abort),
         };
 
         // Send synthetic SessionConfigured event
@@ -275,6 +285,8 @@ impl AcpBackend {
             approval_rx,
             event_tx.clone(),
             Arc::clone(&pending_approvals),
+            Arc::clone(&user_notifier),
+            cwd.clone(),
         ));
 
         Ok(backend)
@@ -289,6 +301,11 @@ impl AcpBackend {
     /// - Other ops → Send error event (not supported)
     pub async fn submit(&self, op: Op) -> Result<String> {
         let id = generate_id();
+
+        // Cancel any running idle timer on new user activity
+        if let Some(abort_handle) = self.idle_timer_abort.lock().await.take() {
+            abort_handle.abort();
+        }
 
         match op {
             Op::UserInput { items } => {
@@ -407,9 +424,18 @@ impl AcpBackend {
         let session_id = self.session_id.clone();
         let connection = Arc::clone(&self.connection);
         let id_clone = id.to_string();
+        let user_notifier = Arc::clone(&self.user_notifier);
+        let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
+            // Cancel any existing idle timer when a new turn starts processing.
+            // This handles the case where a new prompt arrives while a previous
+            // task's idle timer is pending but before submit() could cancel it.
+            if let Some(abort_handle) = idle_timer_abort.lock().await.take() {
+                abort_handle.abort();
+            }
+
             // Send TaskStarted event
             let _ = event_tx
                 .send(Event {
@@ -474,7 +500,8 @@ impl AcpBackend {
                 );
             });
 
-            // Send the prompt
+            // Send the prompt (clone session_id before moving it since we need it for idle timer)
+            let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
             // Wait for all updates to be processed
@@ -541,6 +568,18 @@ impl AcpBackend {
                     }),
                 })
                 .await;
+
+            // Start idle timer - will send notification after 5 seconds of inactivity
+            let user_notifier_for_timer = Arc::clone(&user_notifier);
+            let idle_task = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                    session_id: session_id_for_timer,
+                    idle_duration_secs: 5,
+                });
+            });
+            // Store the abort handle so the timer can be cancelled on new activity
+            *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
         });
 
         Ok(())
@@ -614,21 +653,40 @@ impl AcpBackend {
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
         event_tx: mpsc::Sender<Event>,
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+        user_notifier: Arc<codex_core::UserNotifier>,
+        cwd: PathBuf,
     ) {
         while let Some(request) = approval_rx.recv().await {
             // Send the appropriate approval request event to TUI based on operation type.
             // Use the call_id as the event wrapper ID so that the TUI can
             // correctly route the user's decision back to this pending request.
-            let (id, msg) = match &request.event {
+            let (id, msg, command_for_notification) = match &request.event {
                 ApprovalEventType::Exec(exec_event) => (
                     exec_event.call_id.clone(),
                     EventMsg::ExecApprovalRequest(exec_event.clone()),
+                    exec_event.command.join(" "),
                 ),
                 ApprovalEventType::Patch(patch_event) => (
                     patch_event.call_id.clone(),
                     EventMsg::ApplyPatchApprovalRequest(patch_event.clone()),
+                    format!(
+                        "patch: {}",
+                        patch_event
+                            .changes
+                            .keys()
+                            .map(|p| p.display().to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
                 ),
             };
+
+            // Send OS notification that we're awaiting approval
+            user_notifier.notify(&codex_core::UserNotification::AwaitingApproval {
+                call_id: id.clone(),
+                command: command_for_notification,
+                cwd: cwd.display().to_string(),
+            });
 
             let _ = event_tx.send(Event { id, msg }).await;
 
@@ -2086,6 +2144,7 @@ mod tests {
             cwd: temp_dir.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
+            notify: None,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;

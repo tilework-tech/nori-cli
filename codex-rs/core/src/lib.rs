@@ -91,6 +91,8 @@ mod function_tool;
 mod state;
 mod tasks;
 mod user_notification;
+pub use user_notification::UserNotification;
+pub use user_notification::UserNotifier;
 mod user_shell_command;
 pub mod util;
 
