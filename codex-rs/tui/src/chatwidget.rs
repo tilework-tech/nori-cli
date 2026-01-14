@@ -470,6 +470,9 @@ impl ChatWidget {
         // when expected_model is set (during agent switching)
         self.session_configured_received = true;
 
+        // Clear the "Connecting to [Agent]" status indicator shown during agent startup
+        self.bottom_pane.hide_status_indicator();
+
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
         self.conversation_id = Some(event.session_id);
