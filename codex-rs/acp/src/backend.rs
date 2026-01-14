@@ -1118,21 +1118,24 @@ fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
     if let Some(raw_output) = &fields.raw_output {
         // Try to extract stdout (most common for shell commands)
         if let Some(stdout) = raw_output.get("stdout").and_then(|v| v.as_str())
-            && !stdout.is_empty() {
-                return strip_markdown_code_blocks(stdout);
-            }
+            && !stdout.is_empty()
+        {
+            return strip_markdown_code_blocks(stdout);
+        }
 
         // Try formatted_output next
         if let Some(formatted) = raw_output.get("formatted_output").and_then(|v| v.as_str())
-            && !formatted.is_empty() {
-                return strip_markdown_code_blocks(formatted);
-            }
+            && !formatted.is_empty()
+        {
+            return strip_markdown_code_blocks(formatted);
+        }
 
         // Try aggregated_output as fallback
         if let Some(aggregated) = raw_output.get("aggregated_output").and_then(|v| v.as_str())
-            && !aggregated.is_empty() {
-                return strip_markdown_code_blocks(aggregated);
-            }
+            && !aggregated.is_empty()
+        {
+            return strip_markdown_code_blocks(aggregated);
+        }
 
         // If none of the direct fields worked, try format_raw_output for summaries
         if let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref()) {
