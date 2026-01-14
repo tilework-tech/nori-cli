@@ -470,6 +470,9 @@ impl ChatWidget {
         // when expected_model is set (during agent switching)
         self.session_configured_received = true;
 
+        // Clear the "Connecting to [Agent]" status indicator shown during agent startup
+        self.bottom_pane.hide_status_indicator();
+
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
         self.conversation_id = Some(event.session_id);
@@ -3350,6 +3353,18 @@ impl ChatWidget {
 
     pub(crate) fn add_error_message(&mut self, message: String) {
         self.add_to_history(history_cell::new_error_event(message));
+        self.request_redraw();
+    }
+
+    /// Show "Connecting to [Agent]" status indicator during agent startup.
+    ///
+    /// Called when an ACP agent is being spawned and may take time
+    /// (e.g., npx/bunx resolving dependencies).
+    pub(crate) fn show_connecting_status(&mut self, display_name: &str) {
+        let header = format!("Connecting to {display_name}");
+        self.bottom_pane.ensure_status_indicator();
+        self.bottom_pane.set_interrupt_hint_visible(false); // Can't interrupt during connect
+        self.set_status_header(header);
         self.request_redraw();
     }
 

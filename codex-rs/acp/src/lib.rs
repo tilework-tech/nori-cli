@@ -48,6 +48,7 @@ pub use registry::codex_known_models;
 pub use registry::detect_preferred_package_manager;
 pub use registry::gemini_known_models;
 pub use registry::get_agent_config;
+pub use registry::get_agent_display_name;
 pub use registry::get_known_models;
 pub use registry::list_available_agents;
 pub use registry::prewarm_installation_cache;
