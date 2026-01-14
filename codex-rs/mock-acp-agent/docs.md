@@ -64,6 +64,20 @@ Path: @/codex-rs/mock-acp-agent
 | `MOCK_AGENT_WRITE_CONTENT` | Content to write when `MOCK_AGENT_WRITE_FILE` is set (defaults to "default content") |
 | `MOCK_AGENT_MULTI_CALL_EXPLORING` | Sends 3 Read tool calls with interleaved text streaming and out-of-order completion (call-2, call-3, call-1) to test multi-call exploring cell handling |
 | `MOCK_AGENT_NO_FINAL_TEXT` | Suppresses final text message after tool calls complete; combine with `MOCK_AGENT_MULTI_CALL_EXPLORING` to test immediate flush without subsequent text |
+| `MOCK_AGENT_MODEL_NAME` | Set by `AcpAgentConfig.env` to identify the model variant (e.g., "mock-model" or "mock-model-alt"); enables model-specific behavior |
+| `MOCK_AGENT_STARTUP_DELAY_MS` | Generic startup delay in ms during `initialize()` (tests "Connecting" status indicator) |
+| `MOCK_AGENT_STARTUP_DELAY_MS_{MODEL}` | Model-specific startup delay (e.g., `MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT`); takes precedence over generic delay when model name matches |
+
+**Model-Specific Startup Delay:**
+
+The agent supports model-specific startup delays for testing the "Connecting to [Agent]" status indicator. During `initialize()`:
+
+1. Reads `MOCK_AGENT_MODEL_NAME` to identify the current model
+2. Checks for model-specific delay: `MOCK_AGENT_STARTUP_DELAY_MS_{MODEL_NAME_UPPERCASE_WITH_UNDERSCORES}`
+3. Falls back to generic `MOCK_AGENT_STARTUP_DELAY_MS` if model-specific not set
+4. Sleeps for the configured delay before returning
+
+This allows E2E tests to configure different delays for different mock models, enabling testing of scenarios where switching agents results in slow startup (e.g., `mock-model` starts instantly, `mock-model-alt` has a 6-second delay).
 
 **Stderr Output for Testing:**
 
