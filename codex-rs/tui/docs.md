@@ -48,7 +48,7 @@ Both backends produce `codex_protocol::Event` for the TUI event loop, enabling u
 
 **ACP Traffic Tracing:**
 
-When `config.acp_trace_enabled` is true (via `--acp-trace` CLI flag or `acp_trace_enabled` in config.toml), `spawn_acp_agent()` constructs an `AcpTraceConfig` with a session-specific log path (`{codex_home}/log/acp-trace-{timestamp}-{pid}.log`) and passes it to `AcpBackendConfig`. See `@/codex-rs/acp/docs.md` for details on traffic tracing.
+When `config.acp_trace_enabled` is true (via `--acp-trace` CLI flag in debug builds or `acp_trace_enabled` in config.toml), `spawn_acp_agent()` constructs an `AcpTraceConfig` with a session-specific log path (`{codex_home}/log/acp-trace-{timestamp}-{pid}.log`) and passes it to `AcpBackendConfig`. **Note: The `--acp-trace` flag is only available in debug builds; in release builds, trace config is silently ignored.** See `@/codex-rs/acp/docs.md` for details on traffic tracing.
 
 **Agent Connecting Status:**
 
@@ -590,7 +590,7 @@ For E2E testing, `NORI_SYNC_SYSTEM_INFO=1` env var enables synchronous collectio
 **Configuration Flow:**
 
 TUI respects config overrides from:
-1. CLI flags (`--model`, `--acp-trace` always available; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
+1. CLI flags (`--model` always available; `--acp-trace` in debug builds only; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
 2. `-c key=value` overrides
 3. Config profiles (`-p profile-name`)
 4. `~/.nori/cli/config.toml`

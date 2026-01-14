@@ -223,7 +223,9 @@ The `init_rolling_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.
 
 ### ACP Traffic Tracing
 
-When enabled via `--acp-trace` CLI flag or `acp_trace_enabled = true` in config, the ACP module captures all JSON-RPC 2.0 traffic between the client and agent subprocess using the `sacp-tee` proxy from the symposium-acp library.
+**Note: This feature is only available in debug builds and is automatically disabled in release builds.**
+
+When enabled via `--acp-trace` CLI flag (debug builds only) or `acp_trace_enabled = true` in config, the ACP module captures all JSON-RPC 2.0 traffic between the client and agent subprocess using the `sacp-tee` proxy from the symposium-acp library.
 
 **Configuration Flow:**
 
@@ -272,6 +274,14 @@ Wrapped:  sacp-tee --log-file /path/to/log.log -- gemini-cli --experimental-acp
 ```
 
 The `sacp-tee` proxy intercepts all stdio traffic and logs JSON-RPC messages while passing them through unchanged. Assumes `sacp-tee` is installed and available in PATH when enabled.
+
+**Debug-Only Enforcement:**
+
+The tracing feature is enforced at compile time using conditional compilation:
+- The `--acp-trace` CLI flag only exists in debug builds (`#[cfg(debug_assertions)]`)
+- The `build_agent_command()` function ignores trace config in release builds
+- Config fields for `acp_trace_enabled` flow through all code unchanged, but are silently ignored at the command spawn boundary
+- This ensures zero runtime overhead in production builds while keeping the codebase simple
 
 ### Core Implementation
 

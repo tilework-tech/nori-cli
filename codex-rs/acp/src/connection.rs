@@ -48,12 +48,13 @@ pub struct AcpTraceConfig {
 
 /// Build the command and arguments for spawning an ACP agent.
 ///
-/// When `trace_config` is `Some`, the command is wrapped with `sacp-tee`
-/// to enable traffic logging. Otherwise, the original command is returned unchanged.
+/// When `trace_config` is `Some` and running in debug builds, the command is wrapped
+/// with `sacp-tee` to enable traffic logging. In release builds, tracing is disabled
+/// and the original command is always returned unchanged.
 ///
 /// # Arguments
 /// * `config` - The ACP agent configuration
-/// * `trace_config` - Optional tracing configuration
+/// * `trace_config` - Optional tracing configuration (ignored in release builds)
 ///
 /// # Returns
 /// A tuple of (command, args) to use when spawning the process
@@ -61,22 +62,32 @@ pub fn build_agent_command(
     config: &AcpAgentConfig,
     trace_config: Option<AcpTraceConfig>,
 ) -> (String, Vec<String>) {
-    match trace_config {
-        Some(trace) => {
-            // Wrap with sacp-tee: sacp-tee --log-file <path> -- <original-command> <original-args>
-            let mut args = vec![
-                "--log-file".to_string(),
-                trace.log_file_path.to_string_lossy().to_string(),
-                "--".to_string(),
-                config.command.clone(),
-            ];
-            args.extend(config.args.clone());
-            ("sacp-tee".to_string(), args)
+    #[cfg(debug_assertions)]
+    {
+        match trace_config {
+            Some(trace) => {
+                // Wrap with sacp-tee: sacp-tee --log-file <path> -- <original-command> <original-args>
+                let mut args = vec![
+                    "--log-file".to_string(),
+                    trace.log_file_path.to_string_lossy().to_string(),
+                    "--".to_string(),
+                    config.command.clone(),
+                ];
+                args.extend(config.args.clone());
+                ("sacp-tee".to_string(), args)
+            }
+            None => {
+                // Pass through unchanged
+                (config.command.clone(), config.args.clone())
+            }
         }
-        None => {
-            // Pass through unchanged
-            (config.command.clone(), config.args.clone())
-        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        // In release builds, always pass through unchanged (ignore trace_config)
+        let _ = trace_config; // Suppress unused variable warning
+        (config.command.clone(), config.args.clone())
     }
 }
 

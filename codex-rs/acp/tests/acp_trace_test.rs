@@ -30,6 +30,62 @@ fn test_acp_trace_enabled_defaults_to_false() {
     );
 }
 
+// =============================================================================
+// Debug-Only Behavior Tests
+// =============================================================================
+
+// @current-session
+#[test]
+fn test_build_command_ignores_trace_in_release_builds() {
+    use codex_acp::connection::build_agent_command;
+    use codex_acp::get_agent_config;
+
+    let config = get_agent_config("mock-model").unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        use codex_acp::connection::AcpTraceConfig;
+        use std::path::PathBuf;
+
+        // In debug builds, trace config should be honored
+        let trace_config = Some(AcpTraceConfig {
+            log_file_path: PathBuf::from("/tmp/debug-trace.log"),
+        });
+
+        let (command, args) = build_agent_command(&config, trace_config);
+
+        assert_eq!(command, "sacp-tee", "Debug build should wrap with sacp-tee");
+        assert!(
+            args.contains(&"--log-file".to_string()),
+            "Debug build should include --log-file arg"
+        );
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        use codex_acp::connection::AcpTraceConfig;
+        use std::path::PathBuf;
+
+        // In release builds, trace config should be ignored
+        let trace_config = Some(AcpTraceConfig {
+            log_file_path: PathBuf::from("/tmp/release-trace.log"),
+        });
+
+        let (command, args) = build_agent_command(&config, trace_config);
+
+        assert!(
+            command.contains("mock_acp_agent"),
+            "Release build should NOT wrap with sacp-tee, got: {}",
+            command
+        );
+        assert!(
+            !args.contains(&"--log-file".to_string()),
+            "Release build should NOT include sacp-tee args, got: {:?}",
+            args
+        );
+    }
+}
+
 // @current-session
 #[test]
 fn test_acp_trace_enabled_can_be_loaded_from_toml() {
