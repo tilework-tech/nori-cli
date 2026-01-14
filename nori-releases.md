@@ -6,10 +6,10 @@ Upstream releases are very rapid (multiple releases per week):
 
 - rust-v0.58.0: Nov 13
 - rust-v0.59.0: Nov 19
-- rust-v0.60.1: Nov 19  (same day!)
+- rust-v0.60.1: Nov 19 (same day!)
 - rust-v0.61.0: Nov 20
 - rust-v0.62.0: Nov 21
-- rust-v0.63.0: Nov 21  (same day!)
+- rust-v0.63.0: Nov 21 (same day!)
 
 Release Workflow (from rust-release.yml):
 
@@ -35,8 +35,8 @@ origin/dev ─────●────●────●────●──
 
 Branch Roles:
 
-| Branch             | Purpose                                      |
-|--------------------|-----------------------------------------------|
+| Branch             | Purpose                                       |
+| ------------------ | --------------------------------------------- |
 | origin/main        | Stable releases of your fork                  |
 | origin/dev         | Active development (ACP features)             |
 | fork/upstream-main | Tracks upstream/main exactly (already exists) |
@@ -77,6 +77,7 @@ gh workflow run upstream-sync.yml -f dry_run=true
 For manual syncing (or if CI is unavailable):
 
 1. Update tracking branch
+
 ```bash
 git fetch upstream --tags
 git branch -f fork/upstream-sync rust-v0.63.0
@@ -84,18 +85,21 @@ git push origin fork/upstream-sync --force
 ```
 
 2. Create sync branch from the release tag
+
 ```bash
 git checkout -b sync/upstream-v0.63.0 rust-v0.63.0
 git push origin sync/upstream-v0.63.0
 ```
 
 3. Merge into dev with conflict resolution
+
 ```bash
 git checkout dev
 git merge sync/upstream-v0.63.0 --no-ff -m "Sync upstream rust-v0.63.0"
 ```
 
 4. Resolve conflicts, test, push
+
 ```bash
 cd codex-rs && cargo test
 cargo insta review  # if snapshot tests need updating
@@ -123,6 +127,7 @@ dev branch:  ──●──●──●──●──●──●──●─�
 ```
 
 **Key benefits:**
+
 - The `dev` branch's `Cargo.toml` never needs manual version bumps
 - Release tags point to immutable snapshots with the correct version
 - No "version bump" PRs cluttering git history
@@ -148,18 +153,21 @@ Use the `create_nori_release` script to create releases:
 ```
 
 The script:
+
 1. Determines the next version (or uses the one you specify)
 2. Creates a synthetic commit via GitHub API with updated `Cargo.toml`
 3. Creates an annotated tag pointing to that commit
 4. Pushes the tag, which triggers the CI workflow
 
 **Requirements:**
+
 - GitHub CLI (`gh`) must be installed and authenticated
 - You need push access to the repository
 
 ### What Happens After Tag Push
 
 The `nori-release.yml` workflow automatically:
+
 1. Validates the tag format
 2. Runs tests
 3. Builds native binaries for all 4 platforms
@@ -200,13 +208,14 @@ npm install -g nori-ai-cli@next
 
 ### Required Secrets
 
-| Secret | Purpose |
-|--------|---------|
+| Secret      | Purpose                                 |
+| ----------- | --------------------------------------- |
 | `NPM_TOKEN` | npm authentication token for publishing |
 
 ### Build Targets
 
 The workflow builds native binaries for:
+
 - Linux x86_64 (`x86_64-unknown-linux-gnu`)
 - Linux ARM64 (`aarch64-unknown-linux-gnu`)
 - macOS x86_64 (`x86_64-apple-darwin`)
@@ -216,10 +225,9 @@ The workflow builds native binaries for:
 
 The script automatically determines the next version:
 
-| Current Latest | `--publish-release` | `--publish-alpha` |
-|----------------|---------------------|-------------------|
-| None           | `0.1.0`             | `0.1.0-alpha.1`   |
-| `0.1.0`        | `0.2.0`             | `0.2.0-alpha.1`   |
-| `0.2.0-alpha.3`| `0.3.0`             | `0.3.0-alpha.1`   |
-| `0.2.0`        | `0.3.0`             | `0.3.0-alpha.1`   |
-
+| Current Latest  | `--publish-release` | `--publish-alpha` |
+| --------------- | ------------------- | ----------------- |
+| None            | `0.1.0`             | `0.1.0-alpha.1`   |
+| `0.1.0`         | `0.2.0`             | `0.2.0-alpha.1`   |
+| `0.2.0-alpha.3` | `0.3.0`             | `0.3.0-alpha.1`   |
+| `0.2.0`         | `0.3.0`             | `0.3.0-alpha.1`   |

@@ -11,7 +11,7 @@ The `codex-cli` crate is the main multitool binary that provides the `nori` comm
 This crate is the primary entry point that ties together all other crates:
 
 - **Always included:** `codex-tui`, `codex-acp`, `codex-core` (minimal build)
-- **Optional via features:** `codex-exec`, `codex-mcp-server`, `codex-app-server`, `codex-cloud-tasks`, `codex-login`, `codex-chatgpt`, `codex-responses-api-proxy`
+- **Optional via features:** `codex-exec`, `codex-mcp-server`, `codex-app-server`, `codex-cloud-tasks`, `codex-login`, `codex-chatgpt`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 
 ### Core Implementation
@@ -103,7 +103,6 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 | `upstream-updates` | `codex-tui/upstream-updates` | OpenAI update mechanism (vs Nori's) |
 | `mcp-server` | `codex-mcp-server`, `codex-rmcp-client` | `mcp`, `mcp-server` subcommands |
 | `chatgpt` | `codex-chatgpt` | `apply` subcommand |
-| `responses-api-proxy` | `codex-responses-api-proxy` | `responses-api-proxy` subcommand |
 | `oss-providers` | `codex-tui/oss-providers`, `codex-common/oss-providers` | Ollama/LM Studio local model support |
 | `codex-features` | `codex-tui/codex-features` | `exec`, `resume`, `features` subcommands + power-user CLI flags + TUI `/undo`, `/compact`, `/review` |
 

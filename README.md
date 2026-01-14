@@ -28,21 +28,21 @@ That's it. The agent you choose will rely on existing auth if you have previousl
 
 Each provider you plan to use needs to be authenticated separately before use. Switch between AI providers with the `/agent` command:
 
-| Provider | Command | Authentication |
-|----------|---------|----------------|
-| Claude | `npm i -g @zed-industries/claude-code-acp` (default) | `npx @anthropic-ai/claude-code` and then follow the login flow |
-| Gemini | `npm i -g @google/gemini-cli --experimental-acp` | `npx @google/gemini-cli` and then `/auth` |
-| OpenAI | `npm i -g @zed-industries/codex-acp` | `npx @openai/codex login` |
+| Provider | Command                                              | Authentication                                                 |
+| -------- | ---------------------------------------------------- | -------------------------------------------------------------- |
+| Claude   | `npm i -g @zed-industries/claude-code-acp` (default) | `npx @anthropic-ai/claude-code` and then follow the login flow |
+| Gemini   | `npm i -g @google/gemini-cli --experimental-acp`     | `npx @google/gemini-cli` and then `/auth`                      |
+| OpenAI   | `npm i -g @zed-industries/codex-acp`                 | `npx @openai/codex login`                                      |
 
 ## Features
 
 - **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
 - **Improved terminal interface**: Fast incremental renders in Ratatui, double buffered scrollback history, and built in Rust for performance
 - **Coming Soon!**
-    - **Sandboxed execution**: Commands run in OS-level security sandboxes
-    - **MCP integration**: Connect to Model Context Protocol servers for extended tools
-    - **Session persistence**: Save and resume conversations with `nori resume`
-    - **Multi-agent orchestration**: Alternate between multiple agent sessions
+  - **Sandboxed execution**: Commands run in OS-level security sandboxes
+  - **MCP integration**: Connect to Model Context Protocol servers for extended tools
+  - **Session persistence**: Save and resume conversations with `nori resume`
+  - **Multi-agent orchestration**: Alternate between multiple agent sessions
 
 ## Attribution
 

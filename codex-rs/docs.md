@@ -4,16 +4,16 @@ Path: @/codex-rs
 
 ### Overview
 
-This is the root of the Rust Cargo workspace containing the Codex CLI implementation. Codex is a local coding agent that provides AI-assisted coding capabilities through terminal-based and programmatic interfaces. The workspace contains the core business logic, multiple client interfaces (TUI, exec, MCP server, app-server), and supporting utilities for authentication, sandboxing, patch application, and model communication.
+This is the root of the Rust Cargo workspace containing the Nori CLI implementation. Nori is a local coding agent that provides AI-assisted coding capabilities through terminal-based and programmatic interfaces. The workspace contains the core business logic, multiple client interfaces (TUI, exec, MCP server, app-server), and supporting utilities for authentication, sandboxing, patch application, and model communication.
 
 ### How it fits into the larger codebase
 
 The `codex-rs` directory is the primary source code location for all Rust components. It provides:
 
-- **CLI entry points**: The `cli` crate serves as the main multitool binary, dispatching to TUI (`tui`), headless execution (`exec`), MCP server (`mcp-server`), and app server (`app-server`) modes
+- **CLI entry points**: The `cli` crate serves as the main multitool binary (`nori`), dispatching to TUI (`tui`), headless execution (`exec`), MCP server (`mcp-server`), and app server (`app-server`) modes
 - **Core library**: The `core` crate contains shared business logic used by all interfaces
 - **Protocol definitions**: The `protocol` crate defines message types shared across the codebase
-- **Model providers**: Support for OpenAI, Claude, Ollama, LM Studio, and Gemini ACP through various backend crates
+- **Model providers**: Support for OpenAI, Gemini ACP, Ollama, and LM Studio through various backend crates
 
 ### Core Implementation
 
@@ -81,6 +81,6 @@ The `codex-linux-sandbox` binary can be embedded into the main CLI via arg0 disp
 
 External dependencies are patched: `crossterm` and `ratatui` use custom forks for color query support.
 
-Configuration is stored in `~/.codex/config.toml` with profile support for different model providers and settings.
+Configuration is stored in `~/.nori/cli/config.toml` with profile support for different model providers and settings.
 
 Created and maintained by Nori.

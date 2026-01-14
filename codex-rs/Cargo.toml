@@ -16,9 +16,7 @@ members = [
     "common",
     "core",
     "exec",
-    "exec-server",
     "execpolicy",
-    "execpolicy-legacy",
     "keyring-store",
     "file-search",
     "linux-sandbox",
@@ -30,7 +28,6 @@ members = [
     "process-hardening",
     "protocol",
     "rmcp-client",
-    "responses-api-proxy",
     "stdio-to-uds",
     "otel",
     "tui",
@@ -88,7 +85,6 @@ codex-ollama = { path = "ollama" }
 codex-otel = { path = "otel" }
 codex-process-hardening = { path = "process-hardening" }
 codex-protocol = { path = "protocol" }
-codex-responses-api-proxy = { path = "responses-api-proxy" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
 codex-tui = { path = "tui" }

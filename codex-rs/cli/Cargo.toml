@@ -28,7 +28,6 @@ full = [
     "upstream-updates",
     "mcp-server",
     "chatgpt",
-    "responses-api-proxy",
     "oss-providers",
     "codex-features",
 ]
@@ -65,9 +64,6 @@ mcp-server = ["dep:codex-mcp-server", "dep:codex-rmcp-client"]
 # ChatGPT/apply command
 chatgpt = ["dep:codex-chatgpt"]
 
-# Responses API proxy
-responses-api-proxy = ["dep:codex-responses-api-proxy"]
-
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
@@ -86,7 +82,6 @@ codex-login = { workspace = true, optional = true }
 codex-mcp-server = { workspace = true, optional = true }
 codex-process-hardening = { workspace = true }
 codex-protocol = { workspace = true }
-codex-responses-api-proxy = { workspace = true, optional = true }
 codex-rmcp-client = { workspace = true, optional = true }
 codex-stdio-to-uds = { workspace = true }
 codex-tui = { workspace = true }
