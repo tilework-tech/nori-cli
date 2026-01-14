@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests.rs
+assertion_line: 1587
 expression: popup
 ---
   Select Approval Mode
@@ -10,4 +11,4 @@ expression: popup
                           commands with network access. Exercise caution when
                           using.
 
-  Press enter to confirm or esc to go back
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

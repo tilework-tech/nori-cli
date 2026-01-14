@@ -425,7 +425,10 @@ impl App {
                 app.handle_tui_event(tui, event).await?
             }
         } {}
-        tui.terminal.clear()?;
+
+        // Don't clear terminal to allow exit message to remain visible
+        // tui.terminal.clear()?;
+
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
@@ -568,6 +571,47 @@ impl App {
                 self.on_conversation_history_for_backtrack(tui, ev).await?;
             }
             AppEvent::ExitRequest => {
+                // Create and insert exit message cell before exiting
+                let exit_cell = self.chat_widget.create_exit_message_cell();
+
+                // Insert the cell directly (inline the InsertHistoryCell logic to avoid recursion)
+                let cell: Arc<dyn HistoryCell> = exit_cell.into();
+                if let Some(Overlay::Transcript(t)) = &mut self.overlay {
+                    t.insert_cell(cell.clone());
+                }
+                self.transcript_cells.push(cell.clone());
+                let mut display = cell.display_lines(tui.terminal.last_known_screen_size.width);
+                if !display.is_empty() {
+                    if !cell.is_stream_continuation() {
+                        if self.has_emitted_history_lines {
+                            display.insert(0, Line::from(""));
+                        } else {
+                            self.has_emitted_history_lines = true;
+                        }
+                    }
+                    if self.overlay.is_some() {
+                        self.deferred_history_lines.extend(display);
+                    } else {
+                        tui.insert_history_lines(display);
+                    }
+                }
+
+                // Force immediate synchronous draw to flush all history lines to scrollback
+                // This will temporarily show the bottom pane in the viewport
+                tui.draw(
+                    self.chat_widget.desired_height(tui.terminal.size()?.width),
+                    |frame| {
+                        self.chat_widget.render(frame.area(), frame.buffer);
+                        if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
+                            frame.set_cursor_position((x, y));
+                        }
+                    },
+                )?;
+
+                // Clear the viewport to remove the bottom pane, but keep scrollback intact
+                tui.terminal.clear()?;
+
+                // Exit the application
                 return Ok(false);
             }
             AppEvent::CodexOp(op) => self.chat_widget.submit_op(op),
@@ -998,6 +1042,27 @@ impl App {
                     None,
                 );
             }
+            AppEvent::AgentSpawnFailed { model_name, error } => {
+                tracing::warn!(
+                    model = %model_name,
+                    error = %error,
+                    "Agent failed to spawn, opening agent picker"
+                );
+
+                // Show error message to the user
+                self.chat_widget
+                    .add_error_message(format!("Failed to start agent '{model_name}': {error}"));
+
+                // Open agent picker so user can select a different agent
+                self.chat_widget.open_agent_popup();
+            }
+            AppEvent::AgentConnecting { display_name } => {
+                tracing::info!(
+                    display_name = %display_name,
+                    "Agent connecting, showing status indicator"
+                );
+                self.chat_widget.show_connecting_status(&display_name);
+            }
             #[cfg(feature = "unstable")]
             AppEvent::OpenAcpModelPicker {
                 models,
@@ -1021,6 +1086,9 @@ impl App {
                 error,
             } => {
                 if success {
+                    // Update the approval dialog display name to reflect the new model
+                    self.chat_widget
+                        .update_model_display_name(display_name.clone());
                     self.chat_widget
                         .add_info_message(format!("Model switched to: {display_name}"), None);
                 } else {
@@ -1028,6 +1096,19 @@ impl App {
                     self.chat_widget
                         .add_info_message(format!("Failed to switch model: {error_msg}"), None);
                 }
+            }
+            AppEvent::LoginComplete { success } => {
+                self.chat_widget.handle_login_complete(success);
+            }
+            AppEvent::ExternalCliLoginOutput { data } => {
+                self.chat_widget.handle_external_cli_login_output(data);
+            }
+            AppEvent::ExternalCliLoginComplete {
+                success,
+                agent_name,
+            } => {
+                self.chat_widget
+                    .handle_external_cli_login_complete(success, agent_name);
             }
         }
         Ok(true)
@@ -1169,6 +1250,7 @@ mod tests {
     use super::*;
     use crate::app_backtrack::BacktrackState;
     use crate::app_backtrack::user_count;
+    use crate::chatwidget::tests::make_chatwidget_manual;
     use crate::chatwidget::tests::make_chatwidget_manual_with_sender;
     use crate::file_search::FileSearchManager;
     use crate::history_cell::AgentMessageCell;
@@ -1506,5 +1588,37 @@ mod tests {
             config_content.contains("agent = \"gemini\""),
             "Config should contain 'agent = \"gemini\"', got: {config_content}"
         );
+    }
+
+    /// Test that AgentSpawnFailed event can be constructed and matches expected structure
+    #[test]
+    fn agent_spawn_failed_event_exists() {
+        // This test verifies the AgentSpawnFailed event variant exists
+        // and has the expected fields
+        let event = AppEvent::AgentSpawnFailed {
+            model_name: "codex".to_string(),
+            error: "Failed to spawn ACP agent: npx not found".to_string(),
+        };
+
+        // Verify it matches the expected pattern
+        match event {
+            AppEvent::AgentSpawnFailed { model_name, error } => {
+                assert_eq!(model_name, "codex");
+                assert!(error.contains("Failed to spawn"));
+            }
+            _ => panic!("Expected AgentSpawnFailed event"),
+        }
+    }
+
+    /// Test that App has a method to handle spawn failures by opening the agent picker
+    #[test]
+    fn chat_widget_can_open_agent_popup() {
+        let (mut chat, _rx, _ops) = make_chatwidget_manual();
+
+        // Before opening, we should be able to call open_agent_popup without panic
+        chat.open_agent_popup();
+
+        // The popup should now be showing (we can't easily check internal state,
+        // but the call should succeed without panicking)
     }
 }

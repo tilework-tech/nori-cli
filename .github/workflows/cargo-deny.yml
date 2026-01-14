@@ -11,6 +11,10 @@ jobs:
     defaults:
       run:
         working-directory: ./codex-rs
+    env:
+      # Disable sccache wrapper from .cargo/config.toml since it's not available
+      # in the cargo-deny Docker container.
+      RUSTC_WRAPPER: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v6

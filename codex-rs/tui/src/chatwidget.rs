@@ -87,6 +87,7 @@ use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::custom_prompt_view::CustomPromptView;
+use crate::bottom_pane::popup_consts::searchable_popup_hint_line;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::clipboard_paste::paste_image_to_temp_png;
 use crate::diff_render::display_path_for;
@@ -100,6 +101,10 @@ use crate::history_cell::AgentMessageCell;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::McpToolCallCell;
 use crate::history_cell::PlainHistoryCell;
+use crate::login_handler::AgentLoginSupport;
+use crate::login_handler::LoginHandler;
+#[allow(unused_imports)]
+use crate::login_handler::LoginMethod;
 use crate::markdown::append_markdown;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
@@ -107,6 +112,11 @@ use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableExt;
 use crate::render::renderable::RenderableItem;
+use crate::session_stats::SessionStats;
+use crate::session_stats::extract_skill_from_raw_input;
+use crate::session_stats::extract_skill_from_read_path;
+use crate::session_stats::extract_skills_from_text;
+use crate::session_stats::extract_subagent_from_raw_input;
 use crate::slash_command::SlashCommand;
 use crate::status::RateLimitSnapshotDisplay;
 use crate::text_formatting::truncate_text;
@@ -253,6 +263,54 @@ pub(crate) fn get_limits_duration(windows_minutes: i64) -> String {
     }
 }
 
+/// Strip ANSI escape codes from a string.
+/// Uses a simple state machine approach to handle common escape sequences.
+#[cfg(feature = "login")]
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence
+            if chars.peek() == Some(&'[') {
+                chars.next(); // consume '['
+                // Skip until we hit a letter (the terminator)
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            } else if chars.peek() == Some(&']') {
+                // OSC sequence (Operating System Command)
+                chars.next(); // consume ']'
+                // Skip until BEL (\x07) or ST (ESC \)
+                while let Some(&next) = chars.peek() {
+                    if next == '\x07' {
+                        chars.next();
+                        break;
+                    } else if next == '\x1b' {
+                        chars.next();
+                        if chars.peek() == Some(&'\\') {
+                            chars.next();
+                        }
+                        break;
+                    }
+                    chars.next();
+                }
+            }
+        } else if c == '\r' {
+            // Skip carriage return (handle Windows line endings)
+            continue;
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {
     pub(crate) config: Config,
@@ -348,6 +406,10 @@ pub(crate) struct ChatWidget {
     // ACP agent handle for model switching (only present in ACP mode)
     #[cfg(feature = "unstable")]
     acp_handle: Option<AcpAgentHandle>,
+    // Session statistics tracking
+    session_stats: SessionStats,
+    // Login handler for /login command
+    login_handler: Option<LoginHandler>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -407,6 +469,9 @@ impl ChatWidget {
         // Mark that we've received SessionConfigured - this unlocks event processing
         // when expected_model is set (during agent switching)
         self.session_configured_received = true;
+
+        // Clear the "Connecting to [Agent]" status indicator shown during agent startup
+        self.bottom_pane.hide_status_indicator();
 
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
@@ -469,6 +534,9 @@ impl ChatWidget {
     }
 
     fn on_agent_message(&mut self, message: String) {
+        // Track assistant message for session statistics
+        self.session_stats.record_assistant_message();
+
         // If we have a stream_controller, then the final agent message is redundant and will be a
         // duplicate of what has already been streamed.
         if self.stream_controller.is_none() {
@@ -828,6 +896,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_begin(&mut self, event: PatchApplyBeginEvent) {
+        // Track Edit tool call for session statistics
+        self.session_stats.record_tool_call("Edit");
+
         // Observe directories from file paths to potentially update footer git info.
         self.observe_directories_from_changes(&event.changes);
 
@@ -838,6 +909,9 @@ impl ChatWidget {
     }
 
     fn on_view_image_tool_call(&mut self, event: ViewImageToolCallEvent) {
+        // Track ViewImage tool call for session statistics
+        self.session_stats.record_tool_call("ViewImage");
+
         self.flush_answer_stream_with_separator();
         self.add_to_history(history_cell::new_view_image_tool_call(
             event.path,
@@ -874,6 +948,9 @@ impl ChatWidget {
     }
 
     fn on_web_search_end(&mut self, ev: WebSearchEndEvent) {
+        // Track WebSearch tool call for session statistics
+        self.session_stats.record_tool_call("WebSearch");
+
         self.flush_answer_stream_with_separator();
         self.add_to_history(history_cell::new_web_search_call(format!(
             "Searched: {}",
@@ -1235,6 +1312,18 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
+        // Track Bash tool call for session statistics
+        self.session_stats.record_tool_call("Bash");
+
+        // Check if any parsed commands are Read operations to SKILL.md files
+        for parsed_cmd in &ev.parsed_cmd {
+            if let codex_protocol::parse_command::ParsedCommand::Read { path, .. } = parsed_cmd
+                && let Some(skill_name) = extract_skill_from_read_path(path.to_str())
+            {
+                self.session_stats.record_skill(&skill_name);
+            }
+        }
+
         // Observe the command's working directory to potentially update footer git info.
         // If the effective CWD changes (after debounce), trigger a system info refresh.
         if self.effective_cwd_tracker.observe_directory(ev.cwd.clone()) {
@@ -1305,6 +1394,24 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_mcp_begin_now(&mut self, ev: McpToolCallBeginEvent) {
+        // Track tool call for session statistics
+        self.session_stats.record_tool_call(&ev.invocation.tool);
+
+        // Check if this is a Skill tool call and extract skill name
+        if ev.invocation.tool == "Skill"
+            && let Some(skill_name) = extract_skill_from_raw_input(ev.invocation.arguments.as_ref())
+        {
+            self.session_stats.record_skill(&skill_name);
+        }
+
+        // Check if this is a Task tool call and extract subagent type
+        if ev.invocation.tool == "Task"
+            && let Some(subagent_type) =
+                extract_subagent_from_raw_input(ev.invocation.arguments.as_ref())
+        {
+            self.session_stats.record_subagent(&subagent_type);
+        }
+
         self.flush_answer_stream_with_separator();
         self.flush_active_cell();
         self.active_cell = Some(Box::new(history_cell::new_active_mcp_tool_call(
@@ -1323,6 +1430,20 @@ impl ChatWidget {
             duration,
             result,
         } = ev;
+
+        // If this is a Task tool call, scan the result text for skill paths
+        // This captures skills used by subagents whose tool calls are not directly visible
+        if invocation.tool == "Task"
+            && let Ok(tool_result) = &result
+        {
+            for content_block in &tool_result.content {
+                if let mcp_types::ContentBlock::TextContent(text_content) = content_block {
+                    for skill_name in extract_skills_from_text(&text_content.text) {
+                        self.session_stats.record_skill(&skill_name);
+                    }
+                }
+            }
+        }
 
         let extra_cell = match self
             .active_cell
@@ -1381,6 +1502,9 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
             }),
             active_cell: None,
             config: config.clone(),
@@ -1425,6 +1549,8 @@ impl ChatWidget {
             session_configured_received: false,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
+            session_stats: SessionStats::new(),
+            login_handler: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1468,6 +1594,9 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
             }),
             active_cell: None,
             config: config.clone(),
@@ -1514,6 +1643,8 @@ impl ChatWidget {
             // No ACP handle for existing conversations (they are HTTP mode only)
             #[cfg(feature = "unstable")]
             acp_handle: None,
+            session_stats: SessionStats::new(),
+            login_handler: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1523,6 +1654,9 @@ impl ChatWidget {
 
     /// Set a pending agent to switch to on the next prompt submission.
     pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
+        // Update the bottom pane's model display name for approval dialogs
+        self.bottom_pane
+            .set_model_display_name(display_name.clone());
         self.pending_agent = Some(PendingAgentInfo {
             model_name,
             display_name,
@@ -1677,14 +1811,15 @@ impl ChatWidget {
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_exit();
             }
+            SlashCommand::Login => {
+                self.handle_login_command();
+            }
             SlashCommand::Logout => {
-                if let Err(e) = codex_core::auth::logout(
-                    &self.config.codex_home,
-                    self.config.cli_auth_credentials_store_mode,
-                ) {
-                    tracing::error!("failed to logout: {e}");
-                }
-                self.request_exit();
+                self.add_info_message(
+                    "To logout, run the agent's logout command directly (e.g., `claude /logout`)"
+                        .to_string(),
+                    None,
+                );
             }
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
@@ -1852,6 +1987,18 @@ impl ChatWidget {
         if text.is_empty() && image_paths.is_empty() {
             return;
         }
+
+        // Special-case: "/login <agent>" triggers login for a specific agent
+        // This intercepts before the message is sent to the agent
+        if let Some(agent_name) = text.strip_prefix("/login ").map(str::trim)
+            && !agent_name.is_empty()
+        {
+            self.handle_login_command_with_agent(agent_name);
+            return;
+        }
+
+        // Track user message for session statistics
+        self.session_stats.record_user_message();
 
         // Check if there's a pending agent switch - if so, send the message through
         // the App to trigger the switch first
@@ -2143,8 +2290,28 @@ impl ChatWidget {
         }
     }
 
-    fn request_exit(&self) {
+    fn request_exit(&mut self) {
+        // Clear the ctrl-c quit hint to make room for the exit message
+        self.bottom_pane.clear_ctrl_c_quit_hint();
+        self.request_redraw();
+
+        // Send exit request - app.rs will handle adding the exit message cell before exiting
         self.app_event_tx.send(AppEvent::ExitRequest);
+    }
+
+    /// Create an exit message cell with session statistics.
+    /// Called by app.rs before exiting to display final session summary.
+    pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
+        use crate::nori::exit_message::ExitMessageCell;
+
+        let session_id = self
+            .conversation_id()
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "(no session)".to_string());
+
+        let stats = self.session_stats().clone();
+
+        Box::new(ExitMessageCell::new(session_id, stats))
     }
 
     fn request_redraw(&mut self) {
@@ -3160,6 +3327,18 @@ impl ChatWidget {
     pub(crate) fn set_model(&mut self, model: &str) {
         self.session_header.set_model(model);
         self.config.model = model.to_string();
+        // Update the bottom pane's model display name for approval dialogs
+        let display_name = crate::nori::agent_picker::get_agent_info(model)
+            .map(|info| info.display_name)
+            .unwrap_or_else(|| model.to_string());
+        self.bottom_pane.set_model_display_name(display_name);
+    }
+
+    /// Update the model display name shown in approval dialogs.
+    /// Used when ACP model switch completes successfully.
+    #[cfg(feature = "unstable")]
+    pub(crate) fn update_model_display_name(&mut self, display_name: String) {
+        self.bottom_pane.set_model_display_name(display_name);
     }
 
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
@@ -3174,6 +3353,374 @@ impl ChatWidget {
 
     pub(crate) fn add_error_message(&mut self, message: String) {
         self.add_to_history(history_cell::new_error_event(message));
+        self.request_redraw();
+    }
+
+    /// Show "Connecting to [Agent]" status indicator during agent startup.
+    ///
+    /// Called when an ACP agent is being spawned and may take time
+    /// (e.g., npx/bunx resolving dependencies).
+    pub(crate) fn show_connecting_status(&mut self, display_name: &str) {
+        let header = format!("Connecting to {display_name}");
+        self.bottom_pane.ensure_status_indicator();
+        self.bottom_pane.set_interrupt_hint_visible(false); // Can't interrupt during connect
+        self.set_status_header(header);
+        self.request_redraw();
+    }
+
+    /// Handle the /login slash command
+    fn handle_login_command(&mut self) {
+        // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
+        // otherwise use the current config model
+        let model_name = self
+            .pending_agent
+            .as_ref()
+            .map(|p| p.model_name.as_str())
+            .unwrap_or(&self.config.model);
+
+        match LoginHandler::check_agent_support(model_name) {
+            AgentLoginSupport::Supported {
+                agent,
+                is_installed,
+                login_method,
+            } => {
+                if !is_installed {
+                    // Agent not installed - show installation instructions
+                    let display_name = agent.display_name();
+                    let npm_package = agent.npm_package();
+                    self.add_info_message(
+                        format!(
+                            "{display_name} is not installed. To install, run:\n\n  npm install -g {npm_package}\n\nThen run /login again to authenticate."
+                        ),
+                        Some("Install the agent first, then authenticate".to_string()),
+                    );
+                    return;
+                }
+
+                match login_method {
+                    LoginMethod::OAuthBrowser => {
+                        // Create and start the login handler
+                        let mut handler = LoginHandler::new();
+                        handler.start_oauth();
+
+                        // Show auth method selection message
+                        self.add_info_message(
+                            "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                            Some("Press Esc to cancel".to_string()),
+                        );
+
+                        // Start the actual login server
+                        self.start_oauth_login_flow(handler);
+                    }
+                    LoginMethod::ExternalCli { command, args } => {
+                        // Create and start the login handler
+                        let mut handler = LoginHandler::new();
+                        let agent_display_name = agent.display_name().to_string();
+                        handler.start_external_cli(agent_display_name.clone());
+
+                        // Show starting message
+                        self.add_info_message(
+                            format!(
+                                "Starting authentication for {agent_display_name}...\n\nThe {agent_display_name} login process will run in-app.",
+                            ),
+                            Some("Press Esc to cancel".to_string()),
+                        );
+
+                        // Start the external CLI login flow
+                        self.start_external_cli_login_flow(
+                            handler,
+                            command,
+                            args,
+                            agent_display_name,
+                        );
+                    }
+                }
+            }
+            AgentLoginSupport::NotSupported { agent_name } => {
+                // Provide agent-specific instructions
+                let instructions = match agent_name.as_str() {
+                    "Claude Code" => {
+                        "In-app login for Claude Code is not yet supported.\n\n\
+                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
+                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
+                    }
+                    _ => {
+                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
+                    }
+                };
+                self.add_info_message(instructions.to_string(), None);
+            }
+            AgentLoginSupport::Unknown { model_name } => {
+                self.add_info_message(
+                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
+                    None,
+                );
+            }
+        }
+    }
+
+    /// Handle the /login <agent> command with explicit agent name
+    fn handle_login_command_with_agent(&mut self, agent_name: &str) {
+        match LoginHandler::check_agent_support(agent_name) {
+            AgentLoginSupport::Supported {
+                agent,
+                is_installed,
+                login_method,
+            } => {
+                if !is_installed {
+                    let display_name = agent.display_name();
+                    let npm_package = agent.npm_package();
+                    self.add_info_message(
+                        format!(
+                            "{display_name} is not installed. To install, run:\n\n  npm install -g {npm_package}\n\nThen run /login again to authenticate."
+                        ),
+                        Some("Install the agent first, then authenticate".to_string()),
+                    );
+                    return;
+                }
+
+                match login_method {
+                    LoginMethod::OAuthBrowser => {
+                        let mut handler = LoginHandler::new();
+                        handler.start_oauth();
+
+                        self.add_info_message(
+                            "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
+                            Some("Press Esc to cancel".to_string()),
+                        );
+
+                        self.start_oauth_login_flow(handler);
+                    }
+                    LoginMethod::ExternalCli { command, args } => {
+                        let mut handler = LoginHandler::new();
+                        let agent_display_name = agent.display_name().to_string();
+                        handler.start_external_cli(agent_display_name.clone());
+
+                        self.add_info_message(
+                            format!(
+                                "Starting authentication for {agent_display_name}...\n\nThe {agent_display_name} login process will run in-app.",
+                            ),
+                            Some("Press Esc to cancel".to_string()),
+                        );
+
+                        self.start_external_cli_login_flow(
+                            handler,
+                            command,
+                            args,
+                            agent_display_name,
+                        );
+                    }
+                }
+            }
+            AgentLoginSupport::NotSupported { agent_name } => {
+                let instructions = match agent_name.as_str() {
+                    "Claude Code" => {
+                        "In-app login for Claude Code is not yet supported.\n\n\
+                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
+                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
+                    }
+                    _ => {
+                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
+                    }
+                };
+                self.add_info_message(instructions.to_string(), None);
+            }
+            AgentLoginSupport::Unknown { model_name } => {
+                self.add_info_message(
+                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
+                    None,
+                );
+            }
+        }
+    }
+
+    /// Start the OAuth login flow
+    fn start_oauth_login_flow(&mut self, mut handler: LoginHandler) {
+        use codex_core::auth::CLIENT_ID;
+        use codex_login::ServerOptions;
+        use codex_login::run_login_server;
+
+        let opts = ServerOptions::new(
+            self.config.codex_home.clone(),
+            CLIENT_ID.to_string(),
+            None, // No forced workspace ID
+            self.config.cli_auth_credentials_store_mode,
+        );
+
+        match run_login_server(opts) {
+            Ok(child) => {
+                let auth_url = child.auth_url.clone();
+                handler.set_shutdown_handle(child.cancel_handle());
+
+                // Store the handler
+                self.login_handler = Some(handler);
+
+                // Update the info message with the URL
+                self.add_info_message(
+                    format!(
+                        "Opening browser for authentication...\n\nIf the browser doesn't open automatically, visit:\n{auth_url}\n\nWaiting for authentication to complete..."
+                    ),
+                    Some("Press Esc to cancel".to_string()),
+                );
+
+                // Spawn a task to wait for completion
+                let app_event_tx = self.app_event_tx.clone();
+                let auth_manager = self.auth_manager.clone();
+                tokio::spawn(async move {
+                    match child.block_until_done().await {
+                        Ok(()) => {
+                            auth_manager.reload();
+                            app_event_tx.send(AppEvent::LoginComplete { success: true });
+                        }
+                        Err(e) => {
+                            tracing::error!("OAuth login failed: {e}");
+                            app_event_tx.send(AppEvent::LoginComplete { success: false });
+                        }
+                    }
+                });
+            }
+            Err(e) => {
+                self.add_error_message(format!("Failed to start login server: {e}"));
+            }
+        }
+    }
+
+    /// Start the external CLI login flow (e.g., gemini login)
+    #[cfg(feature = "login")]
+    fn start_external_cli_login_flow(
+        &mut self,
+        mut handler: LoginHandler,
+        command: String,
+        args: Vec<String>,
+        agent_display_name: String,
+    ) {
+        use std::collections::HashMap;
+
+        let app_event_tx = self.app_event_tx.clone();
+        let cwd = self.config.cwd.clone();
+
+        // Spawn the PTY process and stream output
+        let task_handle = tokio::spawn(async move {
+            // Build environment - inherit current environment
+            let mut env: HashMap<String, String> = std::env::vars().collect();
+            // Ensure TERM is set for proper terminal behavior
+            env.entry("TERM".to_string())
+                .or_insert_with(|| "xterm-256color".to_string());
+
+            match codex_utils_pty::spawn_pty_process(&command, &args, &cwd, &env, &None).await {
+                Ok(spawned) => {
+                    // Keep session alive so process keeps running
+                    let _session = spawned.session;
+                    let mut output_rx = spawned.output_rx;
+                    let exit_rx = spawned.exit_rx;
+
+                    // Spawn a task to stream output
+                    let output_event_tx = app_event_tx.clone();
+                    let output_task = tokio::spawn(async move {
+                        loop {
+                            match output_rx.recv().await {
+                                Ok(data) => {
+                                    // Convert bytes to string, stripping invalid UTF-8
+                                    let text = String::from_utf8_lossy(&data);
+                                    // Strip ANSI escape codes using a simple regex-like approach
+                                    let stripped = strip_ansi_codes(&text);
+                                    if !stripped.is_empty() {
+                                        output_event_tx.send(AppEvent::ExternalCliLoginOutput {
+                                            data: stripped,
+                                        });
+                                    }
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                    // Receiver lagged, continue
+                                    continue;
+                                }
+                            }
+                        }
+                    });
+
+                    // Wait for process exit
+                    let exit_code = exit_rx.await.unwrap_or(-1);
+
+                    // Cancel output task
+                    output_task.abort();
+
+                    // Send completion event
+                    let success = exit_code == 0;
+                    app_event_tx.send(AppEvent::ExternalCliLoginComplete {
+                        success,
+                        agent_name: agent_display_name,
+                    });
+                }
+                Err(e) => {
+                    tracing::error!("Failed to spawn external CLI login: {e}");
+                    app_event_tx.send(AppEvent::ExternalCliLoginComplete {
+                        success: false,
+                        agent_name: agent_display_name,
+                    });
+                }
+            }
+        });
+
+        // Store the task handle for cancellation support
+        handler.set_pty_task_handle(task_handle);
+        self.login_handler = Some(handler);
+    }
+
+    /// Start the external CLI login flow (stub for non-login builds)
+    #[cfg(not(feature = "login"))]
+    fn start_external_cli_login_flow(
+        &mut self,
+        _handler: LoginHandler,
+        _command: String,
+        _args: Vec<String>,
+        _agent_display_name: String,
+    ) {
+        self.add_error_message(
+            "Login feature is not enabled. Rebuild with --features login".to_string(),
+        );
+    }
+
+    /// Handle login completion event
+    pub(crate) fn handle_login_complete(&mut self, success: bool) {
+        if let Some(mut handler) = self.login_handler.take() {
+            if success {
+                handler.oauth_complete();
+                self.add_info_message(
+                    "Successfully authenticated with OpenAI!\n\nYou can now use Codex.".to_string(),
+                    None,
+                );
+            } else {
+                handler.cancel();
+                self.add_info_message("Login cancelled or failed.".to_string(), None);
+            }
+        }
+        self.request_redraw();
+    }
+
+    /// Handle external CLI login output (streaming text from the PTY process)
+    pub(crate) fn handle_external_cli_login_output(&mut self, data: String) {
+        // Display the output as an info message (append to existing or create new)
+        self.add_info_message(data, None);
+        self.request_redraw();
+    }
+
+    /// Handle external CLI login completion
+    pub(crate) fn handle_external_cli_login_complete(&mut self, success: bool, agent_name: String) {
+        if let Some(mut handler) = self.login_handler.take() {
+            handler.cancel(); // Clear any handler state
+        }
+
+        if success {
+            self.add_info_message(
+                format!(
+                    "Successfully authenticated with {agent_name}!\n\nYou can now use {agent_name}."
+                ),
+                None,
+            );
+        } else {
+            self.add_info_message(format!("{agent_name} login failed or was cancelled."), None);
+        }
         self.request_redraw();
     }
 
@@ -3354,7 +3901,7 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             title: Some("Select a base branch".to_string()),
-            footer_hint: Some(standard_popup_hint_line()),
+            footer_hint: Some(searchable_popup_hint_line()),
             items,
             is_searchable: true,
             search_placeholder: Some("Type to search branches".to_string()),
@@ -3394,7 +3941,7 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             title: Some("Select a commit to review".to_string()),
-            footer_hint: Some(standard_popup_hint_line()),
+            footer_hint: Some(searchable_popup_hint_line()),
             items,
             is_searchable: true,
             search_placeholder: Some("Type to search commits".to_string()),
@@ -3443,6 +3990,11 @@ impl ChatWidget {
     /// runtime overrides applied via TUI, e.g., model or approval policy).
     pub(crate) fn config_ref(&self) -> &Config {
         &self.config
+    }
+
+    /// Get a reference to the session statistics tracker.
+    pub(crate) fn session_stats(&self) -> &SessionStats {
+        &self.session_stats
     }
 
     pub(crate) fn clear_token_usage(&mut self) {
@@ -3654,7 +4206,7 @@ pub(crate) fn show_review_commit_picker_with_entries(
 
     chat.bottom_pane.show_selection_view(SelectionViewParams {
         title: Some("Select a commit to review".to_string()),
-        footer_hint: Some(standard_popup_hint_line()),
+        footer_hint: Some(searchable_popup_hint_line()),
         items,
         is_searchable: true,
         search_placeholder: Some("Type to search commits".to_string()),

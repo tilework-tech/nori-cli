@@ -4,6 +4,7 @@
 //! the default Codex TUI behavior.
 
 pub(crate) mod agent_picker;
+pub(crate) mod exit_message;
 pub(crate) mod onboarding;
 pub(crate) mod session_header;
 

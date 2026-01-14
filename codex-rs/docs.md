@@ -38,6 +38,39 @@ Key architectural patterns:
 - **Sandbox enforcement**: Platform-specific sandboxing (Seatbelt on macOS, Landlock on Linux, restricted tokens on Windows)
 - **Session persistence**: Rollout recording enables session resume
 
+### Build Optimization
+
+The workspace is configured with build optimizations in `.cargo/config.toml`:
+
+- **sccache (optional)**: Compilation cache that shares artifacts across builds and worktrees. Enable with `export RUSTC_WRAPPER=sccache`. Reduces build times and disk usage significantly when using multiple worktrees.
+- **mold linker**: Uses the faster mold linker on Linux for faster linking.
+- **Test parallelism**: `RUST_TEST_THREADS=4` limits test parallelism to prevent CPU exhaustion.
+- **Path remapping**: `--remap-path-prefix` ensures build artifact cache hits work across worktrees with different absolute paths.
+
+To enable sccache for local development:
+```bash
+# Install sccache (if not already installed)
+cargo install sccache
+
+# Enable sccache for all builds
+export RUSTC_WRAPPER=sccache
+
+# Add to your shell profile for persistence
+echo 'export RUSTC_WRAPPER=sccache' >> ~/.bashrc  # or ~/.zshrc
+```
+
+To clean old build artifacts and reclaim disk space:
+```bash
+# Clean a specific worktree's target directory
+rm -rf .worktrees/old-branch/codex-rs/target
+
+# View sccache statistics (if using sccache)
+sccache --show-stats
+
+# Clear sccache if needed (rarely necessary)
+sccache --stop-server && rm -rf ~/.cache/sccache && sccache --start-server
+```
+
 ### Things to Know
 
 The workspace uses Rust 2024 edition with strict Clippy lints (`clippy::unwrap_used = "deny"`, `clippy::expect_used = "deny"`).

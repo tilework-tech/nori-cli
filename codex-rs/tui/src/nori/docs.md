@@ -35,8 +35,6 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 │   ~/project/AGENTS.md              (dimmed)       │
 ╰───────────────────────────────────────────────────╯
 
-  Powered by Nori AI
-
   Run 'npx nori-ai install' to set up Nori AI enhancements
 ```
 
@@ -64,11 +62,26 @@ The `discover_all_instruction_files()` function discovers ALL instruction files 
 - `format_directory()`: Relativizes paths to home directory with truncation for narrow terminals
 - `new_nori_status_output()`: Creates the composite cell for `/status` command output
 
+**Exit Message (`exit_message.rs`):**
+
+The `ExitMessageCell` struct implements `HistoryCell` and displays session statistics when users quit the TUI. Called by `ChatWidget::create_exit_message_cell()` when `AppEvent::ExitRequest` is received.
+
+Display format (60-char max inner width, bordered):
+- Goodbye message: "Goodbye! Thanks for using Nori." (green bold + dim styling)
+- Session ID
+- Messages: User/Assistant/Total counts
+- Tool Calls: Sorted alphabetically by name (e.g., "Bash: 3  Read: 5"), or "(none)"
+- Skills Used: Bullet list, or "(none)"
+- Subagents Used: Bullet list, or "(none)"
+
+The cell is inserted into the chat history and displayed before terminal restoration, allowing the exit summary to remain in scrollback after the TUI exits.
+
 **Agent Picker (`agent_picker.rs`):**
 
 - `agent_picker_params()` consumes `codex_acp::list_available_agents()` so `/agent` can display each `AcpAgentInfo` entry with a `SelectionAction` that sends `AppEvent::SetPendingAgent`
 - `acp_model_picker_params()` renders a fallback when the `unstable` feature is disabled
 - `PendingAgentSelection` holds the selected model/display name pair until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`
+- `get_agent_info(model_name)` looks up agent metadata (display name, description) from the available agents list by model name (case-insensitive). Used by `chatwidget.rs` to resolve human-readable display names for approval dialogs.
 
 **Feedback Redirect (`feedback.rs`):**
 

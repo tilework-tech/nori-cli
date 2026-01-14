@@ -95,7 +95,7 @@ fn test_footer_full_startup_with_all_info() {
 
     // Wait for the TUI to fully start
     session
-        .wait_for_text("Powered by Nori AI", TIMEOUT)
+        .wait_for_text("Nori CLI", TIMEOUT)
         .expect("TUI did not start");
 
     // Wait for footer to render

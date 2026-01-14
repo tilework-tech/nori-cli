@@ -24,12 +24,34 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
   - `provider_slug`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "mock-acp-alt", "gemini-acp", "claude-acp")
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
+  - `env`: Environment variables to pass to the subprocess (used by mock agents for model-specific behavior)
   - `provider_info`: Embedded `AcpProviderInfo` with provider configuration (name, retry settings, timeouts)
+  - `auth_hint`: Agent-specific authentication instructions for error messages
 - Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-2.5-Flash" → "gemini-2.5-flash")
 - Uses exact matching only (no prefix matching) - each model must be explicitly registered
 - The `provider_slug` field enables subprocess reuse determination when switching models (same slug can reuse, different slug spawns new process)
 - `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
 - Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
+
+**Agent Display Names:**
+
+`get_agent_display_name()` returns a human-readable display name for any registered agent model:
+- Mock agents: "Mock ACP" / "Mock ACP Alt" (debug builds only)
+- Production agents: Uses `AgentKind::display_name()` (e.g., "Claude Code", "Gemini", "Codex")
+- Fallback: Returns the raw model name if not recognized
+- Used by the TUI for the "Connecting to [Agent]" status indicator during slow agent startup
+
+**Agent Authentication Hints:**
+
+Each `AgentKind` provides actionable authentication instructions via `auth_hint()`:
+
+| Agent | Auth Hint |
+|-------|-----------|
+| Claude Code | "Run /login for instructions, or set ANTHROPIC_API_KEY." |
+| Codex | "Run /login to authenticate, or set OPENAI_API_KEY." |
+| Gemini | "Run /login for instructions, or set GOOGLE_API_KEY." |
+
+These hints are embedded in `AcpAgentConfig.auth_hint` and displayed in enhanced error messages when authentication fails.
 
 ### Agent Picker Metadata
 
@@ -137,6 +159,45 @@ Consumers of these paths:
 Path semantics:
 - `nori_home` always refers to `~/.nori/cli` (the full path)
 - Config file lives at `{nori_home}/config.toml` (i.e., `~/.nori/cli/config.toml`)
+
+### Message History Support
+
+The ACP module provides cross-session message history persistence, matching the functionality in `codex-core`:
+
+**History File Location:**
+- Stored at `{nori_home}/history.jsonl` (i.e., `~/.nori/cli/history.jsonl`)
+- Uses JSON-Lines format with one entry per line
+
+**History Entry Schema:**
+```json
+{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}
+```
+
+**Key exports from `@/codex-rs/acp/src/message_history.rs`:**
+- `append_entry()`: Async function to add a history entry with file locking
+- `history_metadata()`: Returns (log_id, entry_count) for the history file
+- `lookup()`: Retrieves a specific history entry by offset and log_id
+- `HistoryEntry`: Struct representing a single history entry
+
+**History Persistence Policy:**
+
+The `HistoryPersistence` enum in `@/codex-rs/acp/src/config/types.rs` controls history behavior:
+
+| Policy | Behavior |
+|--------|----------|
+| `SaveAll` (default) | All user messages are persisted to history.jsonl |
+| `None` | No history is written (privacy mode) |
+
+Configured via `history_persistence` in `~/.nori/cli/config.toml`:
+```toml
+history_persistence = "save-all"  # or "none"
+```
+
+**Implementation Details:**
+- Uses advisory file locking for concurrent write safety
+- File permissions set to `0o600` on Unix for security
+- Appends in background task to avoid blocking the main event loop
+- Maximum 10 retries with 100ms backoff for lock acquisition
 
 
 ### Stderr Capture Implementation
@@ -576,6 +637,13 @@ The `run_command_loop()` function manages agent subprocess cleanup:
 - This prevents orphaned/zombie processes when sessions are switched (e.g., via `/new` command)
 - Logs subprocess PID at spawn via `debug!("ACP agent spawned (pid: {:?})")` for E2E test verification
 
+**Subprocess Environment Variables:**
+
+The `spawn_connection_internal()` function passes environment variables to the subprocess via `.envs(&config.env)`:
+- Enables model-specific behavior for mock agents (e.g., `MOCK_AGENT_MODEL_NAME` identifies which mock model variant is running)
+- Used by E2E tests to configure model-specific startup delays (`MOCK_AGENT_STARTUP_DELAY_MS_{MODEL}`)
+- Production agents typically have an empty `env` map
+
 **ClientDelegate (`connection.rs`):**
 
 - Implements `acp::Client` trait to handle agent requests
@@ -696,12 +764,14 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 └─────────────────────────┘                      └─────────────────────────┘
 ```
 
-- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy)
-- `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, nori_home, history_persistence)
+- `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`
   - `Op::Interrupt` → ACP `cancel()`
   - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
+  - `Op::AddToHistory` → Appends to history file (async background task)
+  - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching
@@ -806,6 +876,51 @@ The approval translation maps between Codex's binary approve/deny model and ACP'
 - Last resort: first option for approve, last option for deny
 
 ### Things to Know
+
+**ACP Error Categorization:**
+
+The `AcpBackend::spawn()` method provides actionable error messages when agent initialization fails. Error categorization uses pattern matching on the full error chain (via `format!("{e:?}")` debug format) to catch nested error messages:
+
+| Category | Detection Patterns | User Message |
+|----------|-------------------|--------------|
+| `Authentication` | "auth", "-32000" (JSON-RPC code), "api key", "unauthorized", "not logged in" | "Authentication required for {provider}. {auth_hint}" |
+| `QuotaExceeded` | "quota", "rate limit", "too many requests", "429" | "Rate limit or quota exceeded. Please wait and try again." |
+| `ExecutableNotFound` | "not found", "no such file", "command not found" | "Could not find the {agent} CLI. Please install with: npm install -g {package}" |
+| `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}. Original error: {err}" |
+| `Unknown` | (fallback) | Original error message passed through |
+
+Key implementation details:
+- Uses `format!("{e:?}")` (debug format) to inspect the full anyhow error chain, not just top-level message
+- Uses `format!("{e}")` (display format) for user-facing error text
+- Agent-specific auth hints come from `AgentKind::auth_hint()` via `AcpAgentConfig.auth_hint`
+- Installation instructions use `AgentKind::npm_package()` and `AgentKind::display_name()`
+
+**ACP Prompt Failure Error Propagation:**
+
+When `connection.prompt()` fails at runtime (after successful spawn), the error is propagated to the TUI via `ErrorEvent`:
+
+```
+┌────────────────────┐   prompt() fails    ┌────────────────────┐
+│  AcpBackend        │─────────────────────│  ACP Connection    │
+│  (on_submit task)  │                     │                    │
+└────────────────────┘                     └────────────────────┘
+         │
+         │ categorize_acp_error()
+         ▼
+┌────────────────────┐   ErrorEvent        ┌────────────────────┐
+│  Generate user     │────────────────────►│  TUI               │
+│  message           │                     │  (displays error)  │
+└────────────────────┘   TaskComplete      └────────────────────┘
+```
+
+The error handling flow in `AcpBackend::on_submit()`:
+1. Prompt fails with error (e.g., auth failure, rate limit)
+2. Error categorized using `categorize_acp_error()` (same as spawn-time errors)
+3. User-friendly message generated based on category
+4. `ErrorEvent` sent to TUI **before** `TaskComplete`
+5. `TaskComplete` always sent to end the turn
+
+This ensures prompt failures are visible to users rather than appearing as silent failures where the "Working" indicator disappears with no response.
 
 **Event Flow Tracing:**
 

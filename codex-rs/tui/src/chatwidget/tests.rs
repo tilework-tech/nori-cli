@@ -324,7 +324,7 @@ async fn helpers_are_available_and_do_not_panic() {
 }
 
 // --- Helpers for tests that need direct construction and event draining ---
-fn make_chatwidget_manual() -> (
+pub(crate) fn make_chatwidget_manual() -> (
     ChatWidget,
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     tokio::sync::mpsc::UnboundedReceiver<Op>,
@@ -341,6 +341,7 @@ fn make_chatwidget_manual() -> (
         placeholder_text: "Ask Codex to do anything".to_string(),
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
+        model_display_name: String::new(),
     });
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test"));
     let widget = ChatWidget {
@@ -388,6 +389,8 @@ fn make_chatwidget_manual() -> (
         session_configured_received: false,
         #[cfg(feature = "unstable")]
         acp_handle: None,
+        session_stats: crate::session_stats::SessionStats::new(),
+        login_handler: None,
     };
     (widget, rx, op_rx)
 }
@@ -3656,4 +3659,143 @@ fn patch_apply_resolves_relative_paths_against_cwd() {
 
     // The effective CWD tracker should have observed /home/user/worktree/src
     // but since it's within the current CWD hierarchy, behavior depends on implementation
+}
+
+// Test that skill detection works for Read exec commands to SKILL.md files
+#[test]
+fn exec_read_skill_md_records_skill() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Create a Read parsed command for a SKILL.md file
+    let skill_path = PathBuf::from("/home/user/.claude/skills/brainstorming/SKILL.md");
+    let parsed_cmd = vec![ParsedCommand::Read {
+        cmd: "cat".to_string(),
+        name: "SKILL.md".to_string(),
+        path: skill_path.clone(),
+    }];
+
+    // Send ExecCommandBegin event with the Read command
+    chat.handle_codex_event(Event {
+        id: "skill-read-1".into(),
+        msg: EventMsg::ExecCommandBegin(ExecCommandBeginEvent {
+            call_id: "skill-read-1".into(),
+            process_id: None,
+            turn_id: "turn-1".into(),
+            command: vec!["cat".to_string(), skill_path.to_string_lossy().to_string()],
+            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            parsed_cmd,
+            source: ExecCommandSource::Agent,
+            interaction_input: None,
+        }),
+    });
+
+    // Verify the skill was recorded
+    assert!(
+        chat.session_stats()
+            .skills_used
+            .contains(&"brainstorming".to_string()),
+        "Expected 'brainstorming' skill to be recorded, but skills_used was: {:?}",
+        chat.session_stats().skills_used
+    );
+}
+
+// Test that non-SKILL.md Read commands don't record skills
+#[test]
+fn exec_read_non_skill_file_does_not_record_skill() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Create a Read parsed command for a regular file
+    let file_path = PathBuf::from("/home/user/code/project/src/main.rs");
+    let parsed_cmd = vec![ParsedCommand::Read {
+        cmd: "cat".to_string(),
+        name: "main.rs".to_string(),
+        path: file_path.clone(),
+    }];
+
+    // Send ExecCommandBegin event
+    chat.handle_codex_event(Event {
+        id: "regular-read-1".into(),
+        msg: EventMsg::ExecCommandBegin(ExecCommandBeginEvent {
+            call_id: "regular-read-1".into(),
+            process_id: None,
+            turn_id: "turn-1".into(),
+            command: vec!["cat".to_string(), file_path.to_string_lossy().to_string()],
+            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            parsed_cmd,
+            source: ExecCommandSource::Agent,
+            interaction_input: None,
+        }),
+    });
+
+    // Verify no skill was recorded
+    assert!(
+        chat.session_stats().skills_used.is_empty(),
+        "Expected no skills to be recorded, but skills_used was: {:?}",
+        chat.session_stats().skills_used
+    );
+}
+
+/// Tests for the strip_ansi_codes function (only available with login feature)
+#[cfg(feature = "login")]
+mod strip_ansi_codes_tests {
+    use super::super::strip_ansi_codes;
+
+    #[test]
+    fn strips_csi_color_codes() {
+        // CSI sequence: ESC [ followed by params and ending with letter
+        assert_eq!(strip_ansi_codes("\x1b[31mred text\x1b[0m"), "red text");
+    }
+
+    #[test]
+    fn strips_multiple_csi_sequences() {
+        assert_eq!(
+            strip_ansi_codes("\x1b[1m\x1b[32mbold green\x1b[0m normal"),
+            "bold green normal"
+        );
+    }
+
+    #[test]
+    fn strips_osc_sequence_with_bel() {
+        // OSC sequence: ESC ] ... BEL
+        assert_eq!(
+            strip_ansi_codes("\x1b]0;window title\x07some text"),
+            "some text"
+        );
+    }
+
+    #[test]
+    fn strips_osc_sequence_with_st() {
+        // OSC sequence: ESC ] ... ESC \
+        assert_eq!(
+            strip_ansi_codes("\x1b]0;window title\x1b\\some text"),
+            "some text"
+        );
+    }
+
+    #[test]
+    fn strips_carriage_return() {
+        // Windows-style line endings should become Unix-style
+        assert_eq!(strip_ansi_codes("line1\r\nline2"), "line1\nline2");
+    }
+
+    #[test]
+    fn preserves_plain_text() {
+        assert_eq!(strip_ansi_codes("plain text"), "plain text");
+    }
+
+    #[test]
+    fn handles_empty_string() {
+        assert_eq!(strip_ansi_codes(""), "");
+    }
+
+    #[test]
+    fn handles_text_with_only_ansi() {
+        assert_eq!(strip_ansi_codes("\x1b[31m\x1b[0m"), "");
+    }
+
+    #[test]
+    fn strips_cursor_movement_codes() {
+        // CSI sequences for cursor movement
+        assert_eq!(strip_ansi_codes("\x1b[2Jtext\x1b[H"), "text");
+    }
 }

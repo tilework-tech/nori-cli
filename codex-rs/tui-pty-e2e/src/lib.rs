@@ -349,6 +349,12 @@ name = "Mock ACP provider for tests"
         // This returns a constant list (~/.claude/CLAUDE.md) instead of discovering real files
         cmd.env("NORI_MOCK_INSTRUCTION_FILES", "1");
 
+        // Enable debug logging for codex_acp to capture timing information
+        cmd.env(
+            "RUST_LOG",
+            "codex_core=info,codex_tui=info,codex_rmcp_client=info,codex_acp=debug",
+        );
+
         let _child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
@@ -865,6 +871,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
+            // Session ID: "Session: 019bb411-..." -> "Session: [SESSION_ID]"
+            if let Some(result) = replace_after_marker(&line, "Session:", "[SESSION_ID]") {
+                line = result;
+            }
+
             line
         })
         .collect();
@@ -950,15 +961,15 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // Strip startup header block if present (prevents flaky snapshots due to scroll timing)
     // The header can appear in two forms:
     // 1. Boxed header with "╭──" border
-    // 2. Plain text "Powered by Nori AI"
+    // 2. Plain text "Nori CLI"
     // The header ends with either:
     // - nori-ai install command (when nori-ai is not installed)
-    // - "Powered by Nori AI" line (when nori-ai is already installed)
+    // - bottom border "╰──" (when nori-ai is already installed)
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
     let has_header = lines.iter().any(|l| {
-        l.contains("╭──") || l.contains("Powered by Nori AI") || l.contains("'npx nori-ai install'")
+        l.contains("╭──") || l.contains("Nori CLI") || l.contains("'npx nori-ai install'")
     });
 
     let mut result = if has_header {
@@ -970,8 +981,8 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
                 skip_until = i + 1;
                 break;
             }
-            // If no install line, use "Powered by Nori AI" as the end marker
-            if line.contains("Powered by Nori AI") {
+            // If no install line, use the bottom border as the end marker
+            if line.contains("╰──") {
                 skip_until = i + 1;
                 // Don't break yet - install line may follow
             }

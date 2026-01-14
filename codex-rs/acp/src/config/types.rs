@@ -2,9 +2,21 @@
 
 use codex_protocol::config_types::SandboxMode;
 use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
+
+/// History persistence policy
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HistoryPersistence {
+    /// Save all history entries to disk.
+    #[default]
+    SaveAll,
+    /// Do not write history to disk.
+    None,
+}
 
 /// Default model for ACP-only mode
 pub const DEFAULT_MODEL: &str = "claude-code";
@@ -28,6 +40,9 @@ pub struct NoriConfigToml {
 
     /// Enable ACP traffic tracing via sacp-tee proxy
     pub acp_trace_enabled: Option<bool>,
+
+    /// History persistence policy
+    pub history_persistence: Option<HistoryPersistence>,
 
     /// TUI settings
     #[serde(default)]
@@ -124,6 +139,9 @@ pub struct NoriConfig {
     /// Enable ACP traffic tracing via sacp-tee proxy
     pub acp_trace_enabled: bool,
 
+    /// History persistence policy
+    pub history_persistence: HistoryPersistence,
+
     /// Enable TUI animations
     pub animations: bool,
 
@@ -159,6 +177,7 @@ impl Default for NoriConfig {
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,
             acp_trace_enabled: false,
+            history_persistence: HistoryPersistence::default(),
             animations: true,
             notifications: true,
             nori_home: PathBuf::from(".nori/cli"),
@@ -368,5 +387,24 @@ mod tests {
     fn test_mcp_server_resolve_error_neither() {
         let toml = McpServerConfigToml::default();
         assert!(toml.resolve().is_err());
+    }
+
+    #[test]
+    fn test_history_persistence_deserialize() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            persistence: HistoryPersistence,
+        }
+
+        let w: Wrapper = toml::from_str(r#"persistence = "save-all""#).unwrap();
+        assert_eq!(w.persistence, HistoryPersistence::SaveAll);
+
+        let w: Wrapper = toml::from_str(r#"persistence = "none""#).unwrap();
+        assert_eq!(w.persistence, HistoryPersistence::None);
+    }
+
+    #[test]
+    fn test_history_persistence_default() {
+        assert_eq!(HistoryPersistence::default(), HistoryPersistence::SaveAll);
     }
 }

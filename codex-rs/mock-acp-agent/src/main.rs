@@ -167,6 +167,33 @@ impl acp::Agent for MockAgent {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         }
 
+        // Support configurable startup delay for testing "Connecting" status
+        // Check for model-specific delay first (e.g., MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT),
+        // then fall back to generic MOCK_AGENT_STARTUP_DELAY_MS
+        let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
+        let model_specific_var = format!(
+            "MOCK_AGENT_STARTUP_DELAY_MS_{}",
+            model_name.replace("-", "_").to_uppercase()
+        );
+        let delay_ms = std::env::var(&model_specific_var)
+            .or_else(|_| std::env::var("MOCK_AGENT_STARTUP_DELAY_MS"))
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok());
+
+        if let Some(delay) = delay_ms {
+            eprintln!(
+                "Mock agent ({}): sleeping for {}ms during startup",
+                model_name, delay
+            );
+            tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+        }
+
+        // Simulate authentication failure if requested
+        if std::env::var("MOCK_AGENT_REQUIRE_AUTH").is_ok() {
+            eprintln!("Mock agent: simulating authentication failure");
+            return Err(acp::Error::new(-32000, "Authentication required"));
+        }
+
         eprintln!("Mock agent: initialize");
         Ok(acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
             .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))
@@ -238,6 +265,12 @@ impl acp::Agent for MockAgent {
 
         // Check for special test modes first before sending default messages
         // Each special mode should return early to avoid executing default behavior
+
+        // Support simulating prompt failures for testing error propagation
+        if std::env::var("MOCK_AGENT_PROMPT_FAIL").is_ok() {
+            eprintln!("Mock agent: simulating prompt failure");
+            return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
+        }
 
         // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
         if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {

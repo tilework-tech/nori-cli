@@ -1,6 +1,6 @@
 ---
 source: tui/src/chatwidget/tests.rs
-assertion_line: 1548
+assertion_line: 1699
 expression: popup
 ---
   Select Reasoning Level for gpt-5.1-codex-max
@@ -13,4 +13,4 @@ expression: popup
                            ⚠ Extra high reasoning effort can quickly consume
                            Plus plan rate limits.
 
-  Press enter to confirm or esc to go back
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

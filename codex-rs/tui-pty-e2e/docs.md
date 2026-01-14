@@ -159,12 +159,13 @@ This delay allows the PTY subprocess time to process input and update the displa
 |------|----------|
 | `@/codex-rs/tui-pty-e2e/tests/startup.rs` | TUI initialization, prompt display, trust screen skipping, snapshot testing for startup scenarios, non-blocking PTY verification, trust directory config persistence verification |
 | `@/codex-rs/tui-pty-e2e/tests/prompt_flow.rs` | Prompt submission and agent responses |
-| `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing |
+| `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing, input history navigation (Up/Down arrows), input history persistence across multiple messages |
 | `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
 | `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
 | `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace and `/tmp/claude/` allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_tool_calls.rs` | ACP tool call rendering and multi-call exploring cells - verifies tool calls appear correctly in TUI, tests grouping of Read/Search operations, validates cells don't disappear during streaming with out-of-order completion events; uses `MOCK_AGENT_MULTI_CALL_EXPLORING` and `MOCK_AGENT_NO_FINAL_TEXT` env vars (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/acp_prompt_errors.rs` | ACP prompt failure error propagation - verifies that when `prompt()` fails, the error is displayed to the user (not silently swallowed) and the TUI remains responsive; uses `MOCK_AGENT_PROMPT_FAIL` env var (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -172,7 +173,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | File | Test Coverage |
 |------|---------------|
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/startup__*.snap` | Various startup screen scenarios (welcome, dimensions, temp directory, trust screen) |
-| `@/codex-rs/tui-pty-e2e/tests/snapshots/input_handling__*.snap` | Input handling scenarios (ctrl-c clear, typing/backspace, model changed) |
+| `@/codex-rs/tui-pty-e2e/tests/snapshots/input_handling__*.snap` | Input handling scenarios (ctrl-c clear, typing/backspace, model changed, history navigation) |
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/streaming__submit_input.snap` | Prompt submission and streaming response |
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/acp_mode__*.snap` | ACP mode startup screen |
 
@@ -223,7 +224,7 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
    - Test coverage: `test_normalize_acp_error_messages()` in `@/codex-rs/tui-pty-e2e/src/lib.rs`
 
 2. **Startup Header Stripping** (Phase 2):
-   - Detects the header block (lines containing `╭──`, `Powered by Nori AI`, or `'npx nori-ai install'`)
+   - Detects the header block (lines containing `╭──`, `Nori CLI`, or `'npx nori-ai install'`)
    - Removes the entire header section including trailing empty lines
    - Used by input handling tests in `@/codex-rs/tui-pty-e2e/tests/input_handling.rs`
    - Prevents flaky snapshots when header scrolls partially in/out of viewport
@@ -283,6 +284,7 @@ Tests control mock agent behavior via environment variables:
 - `MOCK_AGENT_REQUEST_PERMISSION` - Trigger permission request to test approval bridging
 - `MOCK_AGENT_MULTI_CALL_EXPLORING` - Send 3 Read tool calls with interleaved text and out-of-order completion
 - `MOCK_AGENT_NO_FINAL_TEXT` - Suppress final agent text (combine with MULTI_CALL_EXPLORING to test immediate flush)
+- `MOCK_AGENT_PROMPT_FAIL` - Return error from prompt() to test error propagation to TUI
 
 See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
 
@@ -305,6 +307,14 @@ Linux-only tests that verify ACP subprocess lifecycle management and event isola
 - `extract_agent_messages_from_log()` helper parses `Mock agent:` log entries from ACP log file
 - `test_agent_switch_message_flow_mock_to_mock_alt` verifies that after switching agents, the NEW agent receives and responds to prompts (catches race conditions where OLD agent events could leak)
 - `test_agent_switch_logs_correct_sequence` verifies the expected log sequence during agent switch: agent receives prompt, logs receipt, sends response
+
+*Connecting Status Tests:*
+- `test_connecting_status_during_slow_agent_startup` verifies the "Connecting to [Agent]" status indicator appears during slow agent startup
+- Uses `MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT=6000` to configure a 6-second delay for `mock-model-alt`
+- Starts with `mock-model` (no delay) for fast TUI initialization
+- Switches to `mock-model-alt` via `/agent` picker, submits a prompt
+- Verifies "Connecting" text appears within 3 seconds (during the 6-second startup delay)
+- Confirms the prompt eventually appears after the agent finishes connecting
 
 **Binary Discovery:**
 

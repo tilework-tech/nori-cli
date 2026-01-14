@@ -121,6 +121,9 @@ impl NoriConfig {
                 .acp_trace_enabled
                 .or(toml.acp_trace_enabled)
                 .unwrap_or(false),
+            history_persistence: toml
+                .history_persistence
+                .unwrap_or(super::types::HistoryPersistence::SaveAll),
             animations: toml.tui.animations.unwrap_or(true),
             notifications: toml.tui.notifications.unwrap_or(true),
             nori_home,

@@ -1,6 +1,6 @@
 ---
 source: tui/src/chatwidget/tests.rs
-assertion_line: 1548
+assertion_line: 2176
 expression: terminal.backend()
 ---
 "                                                                                "
@@ -14,6 +14,6 @@ expression: terminal.backend()
 "                                                                                "
 "› 1. Yes, proceed (y)                                                           "
 "  2. Yes, and don't ask again for this command (a)                              "
-"  3. No, and tell Codex what to do differently (esc)                            "
+"  3. No, and tell the agent what to do differently (esc)                        "
 "                                                                                "
 "  Press enter to confirm or esc to cancel                                       "

@@ -13,7 +13,6 @@ use anyhow::Result;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
-#[cfg(debug_assertions)]
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
@@ -40,6 +39,97 @@ use crate::translator;
 use crate::translator::is_patch_operation;
 use crate::translator::tool_call_to_file_change;
 
+// =============================================================================
+// Error Categorization
+// =============================================================================
+
+/// Categories of ACP spawn errors for providing actionable user messages.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AcpErrorCategory {
+    /// Authentication required or failed
+    Authentication,
+    /// Rate limit or quota exceeded
+    QuotaExceeded,
+    /// Command/executable not found
+    ExecutableNotFound,
+    /// General initialization failure
+    Initialization,
+    /// Unknown error (fallback)
+    Unknown,
+}
+
+/// Categorize an ACP error based on error string patterns.
+///
+/// This function analyzes error messages and categorizes them to enable
+/// providing actionable instructions to users.
+pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
+    let error_lower = error.to_lowercase();
+
+    if error_lower.contains("auth")
+        || error_lower.contains("-32000") // JSON-RPC auth error code
+        || error_lower.contains("api key")
+        || error_lower.contains("unauthorized")
+        || error_lower.contains("not logged in")
+    {
+        AcpErrorCategory::Authentication
+    } else if error_lower.contains("quota")
+        || error_lower.contains("rate limit")
+        || error_lower.contains("too many requests")
+        || error_lower.contains("429")
+    {
+        AcpErrorCategory::QuotaExceeded
+    } else if error_lower.contains("command not found")
+        || (error_lower.contains("no such file") && error_lower.contains("directory"))
+        || error_lower.contains("os error 2") // ENOENT on Unix
+        || error_lower.contains("cannot find the path")
+    // Windows
+    {
+        AcpErrorCategory::ExecutableNotFound
+    } else if error_lower.contains("initialization")
+        || error_lower.contains("handshake")
+        || error_lower.contains("protocol")
+    {
+        AcpErrorCategory::Initialization
+    } else {
+        AcpErrorCategory::Unknown
+    }
+}
+
+/// Generate an enhanced error message with actionable instructions.
+///
+/// Based on the error category, this function produces a user-friendly message
+/// that explains the problem and provides steps to resolve it.
+pub fn enhanced_error_message(
+    category: AcpErrorCategory,
+    original_error: &str,
+    provider_name: &str,
+    auth_hint: &str,
+    display_name: &str,
+    npm_package: &str,
+) -> String {
+    match category {
+        AcpErrorCategory::Authentication => {
+            format!("Authentication required for {provider_name}. {auth_hint}")
+        }
+        AcpErrorCategory::QuotaExceeded => {
+            format!(
+                "Rate limit or quota exceeded for {provider_name}. Please wait and try again, or check your usage limits."
+            )
+        }
+        AcpErrorCategory::ExecutableNotFound => {
+            format!(
+                "Could not find the {display_name} CLI. Please install it with: npm install -g {npm_package}"
+            )
+        }
+        AcpErrorCategory::Initialization => {
+            format!(
+                "Failed to initialize {provider_name}. The agent may be incompatible or experiencing issues. Original error: {original_error}"
+            )
+        }
+        AcpErrorCategory::Unknown => original_error.to_string(),
+    }
+}
+
 /// Configuration for spawning an ACP backend.
 ///
 /// This contains the subset of Codex configuration needed for ACP mode,
@@ -56,6 +146,10 @@ pub struct AcpBackendConfig {
     pub sandbox_policy: SandboxPolicy,
     /// Optional trace configuration for ACP traffic debugging
     pub trace_config: Option<AcpTraceConfig>,
+    /// Nori home directory for history storage
+    pub nori_home: PathBuf,
+    /// History persistence policy
+    pub history_persistence: crate::config::HistoryPersistence,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -71,6 +165,12 @@ pub struct AcpBackend {
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    /// Nori home directory for history storage
+    nori_home: PathBuf,
+    /// History persistence policy
+    history_persistence: crate::config::HistoryPersistence,
+    /// Conversation ID for this session (used for history entries)
+    conversation_id: ConversationId,
 }
 
 impl AcpBackend {
@@ -95,12 +195,55 @@ impl AcpBackend {
 
         debug!("Spawning ACP backend for model: {}", config.model);
 
-        // Spawn the ACP connection
-        let mut connection =
-            AcpConnection::spawn(&agent_config, &cwd, config.trace_config.clone()).await?;
+        // Spawn the ACP connection with enhanced error handling
+        let connection_result =
+            AcpConnection::spawn(&agent_config, &cwd, config.trace_config.clone()).await;
 
-        // Create a session
-        let session_id = connection.create_session(&cwd).await?;
+        let mut connection = match connection_result {
+            Ok(conn) => conn,
+            Err(e) => {
+                // Get the full error chain to check for nested auth errors
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+
+                // Use the display format for the user-facing message
+                let display_error = format!("{e}");
+                let enhanced_message = enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                );
+
+                return Err(anyhow::anyhow!(enhanced_message));
+            }
+        };
+
+        // Create a session with enhanced error handling
+        let session_result = connection.create_session(&cwd).await;
+        let session_id = match session_result {
+            Ok(id) => id,
+            Err(e) => {
+                // Get the full error chain to check for nested auth errors
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+
+                // Use the display format for the user-facing message
+                let display_error = format!("{e}");
+                let enhanced_message = enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                );
+
+                return Err(anyhow::anyhow!(enhanced_message));
+            }
+        };
 
         debug!("ACP session created: {:?}", session_id);
 
@@ -110,25 +253,35 @@ impl AcpBackend {
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
 
+        // Create conversation ID for this session
+        let conversation_id = ConversationId::new();
+
+        // Get history metadata
+        let (history_log_id, history_entry_count) =
+            crate::message_history::history_metadata(&config.nori_home).await;
+
         let backend = Self {
             connection,
             session_id,
             event_tx: event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
+            nori_home: config.nori_home.clone(),
+            history_persistence: config.history_persistence,
+            conversation_id,
         };
 
         // Send synthetic SessionConfigured event
         let session_configured = SessionConfiguredEvent {
-            session_id: ConversationId::new(),
+            session_id: conversation_id,
             model: config.model.clone(),
             model_provider_id: "acp".to_string(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
             cwd: cwd.clone(),
             reasoning_effort: None,
-            history_log_id: 0,
-            history_entry_count: 0,
+            history_log_id,
+            history_entry_count,
             initial_messages: None,
             rollout_path: cwd.join(".codex-rollout.jsonl"),
         };
@@ -203,11 +356,60 @@ impl AcpBackend {
                     })
                     .await;
             }
+            Op::AddToHistory { text } => {
+                // Append to history file in the background
+                let nori_home = self.nori_home.clone();
+                let conversation_id = self.conversation_id;
+                let persistence = self.history_persistence;
+                tokio::spawn(async move {
+                    if let Err(e) = crate::message_history::append_entry(
+                        &text,
+                        &conversation_id,
+                        &nori_home,
+                        persistence,
+                    )
+                    .await
+                    {
+                        warn!("failed to append to message history: {e}");
+                    }
+                });
+            }
+            Op::GetHistoryEntryRequest { offset, log_id } => {
+                // Look up history entry in the background
+                let nori_home = self.nori_home.clone();
+                let event_tx = self.event_tx.clone();
+                let id_clone = id.clone();
+                tokio::spawn(async move {
+                    // Run lookup in blocking thread because it does file IO + locking.
+                    let entry_opt = tokio::task::spawn_blocking(move || {
+                        crate::message_history::lookup(log_id, offset, &nori_home)
+                    })
+                    .await
+                    .unwrap_or(None);
+
+                    let event = Event {
+                        id: id_clone,
+                        msg: EventMsg::GetHistoryEntryResponse(
+                            codex_protocol::protocol::GetHistoryEntryResponseEvent {
+                                offset,
+                                log_id,
+                                entry: entry_opt.map(|e| {
+                                    codex_protocol::message_history::HistoryEntry {
+                                        conversation_id: e.session_id,
+                                        ts: e.ts,
+                                        text: e.text,
+                                    }
+                                }),
+                            },
+                        ),
+                    };
+
+                    let _ = event_tx.send(event).await;
+                });
+            }
             // Unsupported operations - only show error in debug builds
             Op::Compact
             | Op::Undo
-            | Op::GetHistoryEntryRequest { .. }
-            | Op::AddToHistory { .. }
             | Op::ListMcpTools
             | Op::ListCustomPrompts
             | Op::Review { .. }
@@ -351,7 +553,59 @@ impl AcpBackend {
             // Wait for all updates to be processed
             let _ = update_handler.await;
 
-            // Send TaskComplete event
+            // If prompt failed, send an error event to the TUI BEFORE TaskComplete
+            // This ensures the user sees why their request failed instead of a silent failure
+            if let Err(ref e) = result {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+
+                // Generate user-friendly message based on error category
+                let user_message = match category {
+                    AcpErrorCategory::Authentication => {
+                        format!(
+                            "Authentication error: {display_error}. Please check your credentials or re-authenticate."
+                        )
+                    }
+                    AcpErrorCategory::QuotaExceeded => {
+                        "Rate limit or quota exceeded. Please wait and try again, or check your usage limits.".to_string()
+                    }
+                    AcpErrorCategory::ExecutableNotFound => {
+                        format!("Agent executable not found: {display_error}")
+                    }
+                    AcpErrorCategory::Initialization => {
+                        format!("Agent initialization failed: {display_error}")
+                    }
+                    AcpErrorCategory::Unknown => {
+                        format!("ACP prompt failed: {display_error}")
+                    }
+                };
+
+                warn!("ACP prompt failed: {}", e);
+                debug!(
+                    target: "acp_event_flow",
+                    user_message = %user_message,
+                    "ACP prompt failure: sending ErrorEvent to TUI"
+                );
+
+                // Send error event to TUI so user sees the error
+                let _ = event_tx
+                    .send(Event {
+                        id: id_clone.clone(),
+                        msg: EventMsg::Error(ErrorEvent {
+                            message: user_message.clone(),
+                            codex_error_info: None,
+                        }),
+                    })
+                    .await;
+
+                debug!(
+                    target: "acp_event_flow",
+                    "ACP prompt failure: ErrorEvent sent to TUI"
+                );
+            }
+
+            // Send TaskComplete event (always, to end the turn)
             let _ = event_tx
                 .send(Event {
                     id: id_clone,
@@ -360,10 +614,6 @@ impl AcpBackend {
                     }),
                 })
                 .await;
-
-            if let Err(e) = result {
-                warn!("ACP prompt failed: {}", e);
-            }
         });
 
         Ok(())
@@ -1143,6 +1393,7 @@ fn classify_tool_by_title(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     /// Test that translate_session_update_to_events correctly translates
     /// AgentMessageChunk to AgentMessageDelta events.
@@ -1640,5 +1891,302 @@ mod tests {
             }
             _ => panic!("Expected ExecCommandEnd event"),
         }
+    }
+
+    // ==================== Error Categorization Tests ====================
+
+    /// Test that authentication errors are correctly categorized
+    #[test]
+    fn test_categorize_acp_error_authentication() {
+        // Test various authentication error patterns
+        assert_eq!(
+            categorize_acp_error("Authentication required"),
+            AcpErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_acp_error("Error code -32000: not authenticated"),
+            AcpErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_acp_error("Invalid API key"),
+            AcpErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_acp_error("Unauthorized access"),
+            AcpErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_acp_error("User not logged in"),
+            AcpErrorCategory::Authentication
+        );
+    }
+
+    /// Test that quota/rate limit errors are correctly categorized
+    #[test]
+    fn test_categorize_acp_error_quota() {
+        assert_eq!(
+            categorize_acp_error("Quota exceeded"),
+            AcpErrorCategory::QuotaExceeded
+        );
+        assert_eq!(
+            categorize_acp_error("Rate limit reached"),
+            AcpErrorCategory::QuotaExceeded
+        );
+        assert_eq!(
+            categorize_acp_error("Too many requests"),
+            AcpErrorCategory::QuotaExceeded
+        );
+        assert_eq!(
+            categorize_acp_error("HTTP 429: Too Many Requests"),
+            AcpErrorCategory::QuotaExceeded
+        );
+    }
+
+    /// Test that executable not found errors are correctly categorized
+    #[test]
+    fn test_categorize_acp_error_executable_not_found() {
+        assert_eq!(
+            categorize_acp_error("npx: command not found"),
+            AcpErrorCategory::ExecutableNotFound
+        );
+        assert_eq!(
+            categorize_acp_error("bunx: command not found"),
+            AcpErrorCategory::ExecutableNotFound
+        );
+        assert_eq!(
+            categorize_acp_error("No such file or directory: /usr/bin/claude"),
+            AcpErrorCategory::ExecutableNotFound
+        );
+        assert_eq!(
+            categorize_acp_error("command not found: gemini"),
+            AcpErrorCategory::ExecutableNotFound
+        );
+    }
+
+    /// Test that initialization errors are correctly categorized
+    #[test]
+    fn test_categorize_acp_error_initialization() {
+        assert_eq!(
+            categorize_acp_error("ACP initialization failed"),
+            AcpErrorCategory::Initialization
+        );
+        assert_eq!(
+            categorize_acp_error("Protocol handshake error"),
+            AcpErrorCategory::Initialization
+        );
+        assert_eq!(
+            categorize_acp_error("Protocol version mismatch"),
+            AcpErrorCategory::Initialization
+        );
+    }
+
+    /// Test that unknown errors fall back to Unknown category
+    #[test]
+    fn test_categorize_acp_error_unknown() {
+        assert_eq!(
+            categorize_acp_error("Some random error message"),
+            AcpErrorCategory::Unknown
+        );
+        assert_eq!(
+            categorize_acp_error("Connection timeout"),
+            AcpErrorCategory::Unknown
+        );
+        assert_eq!(
+            categorize_acp_error("Unexpected end of input"),
+            AcpErrorCategory::Unknown
+        );
+    }
+
+    /// Test that error categorization is case-insensitive
+    #[test]
+    fn test_categorize_acp_error_case_insensitive() {
+        assert_eq!(
+            categorize_acp_error("AUTHENTICATION REQUIRED"),
+            AcpErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_acp_error("QUOTA EXCEEDED"),
+            AcpErrorCategory::QuotaExceeded
+        );
+        assert_eq!(
+            categorize_acp_error("NPX: COMMAND NOT FOUND"),
+            AcpErrorCategory::ExecutableNotFound
+        );
+    }
+
+    /// Test that protocol "not found" errors are NOT classified as ExecutableNotFound.
+    /// These are legitimate ACP errors that should fall through to Unknown.
+    #[test]
+    fn test_protocol_not_found_is_not_executable_not_found() {
+        // Resource not found is a protocol error, not a missing executable
+        assert_ne!(
+            categorize_acp_error("Resource not found: session-123"),
+            AcpErrorCategory::ExecutableNotFound,
+            "Protocol errors should not be ExecutableNotFound"
+        );
+        // Model not found is a business error, not a missing executable
+        assert_ne!(
+            categorize_acp_error("Model not found: gpt-999"),
+            AcpErrorCategory::ExecutableNotFound,
+            "Model errors should not be ExecutableNotFound"
+        );
+        // File not found (without "directory") should not trigger false positive
+        assert_ne!(
+            categorize_acp_error("File not found"),
+            AcpErrorCategory::ExecutableNotFound,
+            "Generic 'file not found' should not be ExecutableNotFound"
+        );
+    }
+
+    /// Test that enhanced_error_message produces actionable auth error messages
+    #[test]
+    fn test_enhanced_error_message_auth() {
+        use crate::registry::AgentKind;
+
+        let auth_hint = AgentKind::ClaudeCode.auth_hint();
+        let enhanced = enhanced_error_message(
+            AcpErrorCategory::Authentication,
+            "Authentication required",
+            "Claude Code ACP",
+            auth_hint,
+            AgentKind::ClaudeCode.display_name(),
+            AgentKind::ClaudeCode.npm_package(),
+        );
+
+        assert!(
+            enhanced.contains("Authentication required"),
+            "Should mention auth required, got: {enhanced}"
+        );
+        assert!(
+            enhanced.contains("/login"),
+            "Should include auth hint with '/login', got: {enhanced}"
+        );
+    }
+
+    /// Test that enhanced_error_message produces actionable quota error messages
+    #[test]
+    fn test_enhanced_error_message_quota() {
+        use crate::registry::AgentKind;
+
+        let enhanced = enhanced_error_message(
+            AcpErrorCategory::QuotaExceeded,
+            "Rate limit exceeded",
+            "Codex ACP",
+            AgentKind::Codex.auth_hint(),
+            AgentKind::Codex.display_name(),
+            AgentKind::Codex.npm_package(),
+        );
+
+        assert!(
+            enhanced.contains("Rate limit") || enhanced.contains("quota"),
+            "Should mention rate limit or quota, got: {enhanced}"
+        );
+    }
+
+    /// Test that enhanced_error_message produces actionable executable not found messages
+    #[test]
+    fn test_enhanced_error_message_executable_not_found() {
+        use crate::registry::AgentKind;
+
+        let enhanced = enhanced_error_message(
+            AcpErrorCategory::ExecutableNotFound,
+            "npx: command not found",
+            "Gemini ACP",
+            AgentKind::Gemini.auth_hint(),
+            AgentKind::Gemini.display_name(),
+            AgentKind::Gemini.npm_package(),
+        );
+
+        assert!(
+            enhanced.contains("install") || enhanced.contains("npm"),
+            "Should mention installation instructions, got: {enhanced}"
+        );
+    }
+
+    /// Test that enhanced_error_message passes through unknown errors
+    #[test]
+    fn test_enhanced_error_message_unknown() {
+        use crate::registry::AgentKind;
+
+        let original_error = "Some random error";
+        let enhanced = enhanced_error_message(
+            AcpErrorCategory::Unknown,
+            original_error,
+            "Mock ACP",
+            AgentKind::ClaudeCode.auth_hint(),
+            AgentKind::ClaudeCode.display_name(),
+            AgentKind::ClaudeCode.npm_package(),
+        );
+
+        assert_eq!(
+            enhanced, original_error,
+            "Unknown errors should pass through unchanged"
+        );
+    }
+
+    /// Integration test: Mock agent auth failure produces actionable error message.
+    ///
+    /// This test uses the real mock-acp-agent binary with MOCK_AGENT_REQUIRE_AUTH=true
+    /// to simulate an authentication failure and verify the error message is actionable.
+    #[tokio::test]
+    #[serial]
+    async fn test_mock_agent_auth_failure_produces_actionable_error() {
+        // Get the mock agent config to check if the binary exists
+        let mock_config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+
+        // Check if mock agent binary exists
+        if !std::path::Path::new(&mock_config.command).exists() {
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                mock_config.command
+            );
+            return;
+        }
+
+        // Set the environment variable to trigger auth failure
+        // SAFETY: This is a test that manipulates environment variables.
+        // It's safe because this test runs in isolation and we clean up after.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_REQUIRE_AUTH", "true");
+        }
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let (event_tx, _event_rx) = mpsc::channel(32);
+
+        let config = AcpBackendConfig {
+            model: "mock-model".to_string(),
+            cwd: temp_dir.path().to_path_buf(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::new_read_only_policy(),
+            trace_config: None,
+            nori_home: temp_dir.path().to_path_buf(),
+            history_persistence: crate::config::HistoryPersistence::SaveAll,
+        };
+
+        let result = AcpBackend::spawn(&config, event_tx).await;
+
+        // Clean up env var
+        // SAFETY: Cleaning up the environment variable we set above.
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_REQUIRE_AUTH");
+        }
+
+        // Verify spawn failed
+        let error_message = match result {
+            Ok(_) => {
+                panic!("Expected spawn to fail with auth error, but it succeeded");
+            }
+            Err(e) => e.to_string(),
+        };
+
+        // Verify error message is actionable - should mention auth and provide instructions
+        // The mock agent returns error code -32000 which should be categorized as auth
+        assert!(
+            error_message.contains("Authentication")
+                || error_message.contains("auth")
+                || error_message.contains("login"),
+            "Error message should mention authentication or provide login instructions, got: {error_message}"
+        );
     }
 }

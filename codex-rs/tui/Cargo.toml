@@ -13,7 +13,7 @@ name = "codex_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["unstable", "nori-config"]
+default = ["unstable", "nori-config", "login"]
 
 # Full feature set - enables all upstream/legacy functionality
 full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers", "otel", "codex-features"]
@@ -37,7 +37,7 @@ unstable = ["codex-acp/unstable"]
 nori-config = []
 
 # ChatGPT/API login functionality
-login = ["dep:codex-login"]
+login = ["dep:codex-login", "dep:codex-utils-pty"]
 
 # Feedback to Sentry (legacy OpenAI feedback system)
 # Future Nori feedback: https://github.com/tilework-tech/nori-cli/issues
@@ -77,6 +77,7 @@ nori-installed = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true, optional = true }
 codex-protocol = { workspace = true }
+codex-utils-pty = { workspace = true, optional = true }
 color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["bracketed-paste", "event-stream"] }
 derive_more = { workspace = true, features = ["is_variant"] }

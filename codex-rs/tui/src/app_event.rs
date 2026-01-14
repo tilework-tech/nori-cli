@@ -212,6 +212,22 @@ pub(crate) enum AppEvent {
         image_paths: Vec<PathBuf>,
     },
 
+    /// Agent failed to spawn (ACP or HTTP backend). Show error and prompt user
+    /// to select a different agent.
+    AgentSpawnFailed {
+        /// The model name of the agent that failed to spawn
+        model_name: String,
+        /// The error message describing the failure
+        error: String,
+    },
+
+    /// Agent is connecting (spawning subprocess). Show "Connecting to [Agent]" status.
+    /// Sent before AcpBackend::spawn() and cleared when SessionConfigured is received.
+    AgentConnecting {
+        /// The display name of the agent being connected to
+        display_name: String,
+    },
+
     /// Open the ACP model picker popup with available models from the agent.
     #[cfg(feature = "unstable")]
     OpenAcpModelPicker {
@@ -243,6 +259,26 @@ pub(crate) enum AppEvent {
         display_name: String,
         /// Error message on failure
         error: Option<String>,
+    },
+
+    /// Result of OAuth login flow completion.
+    LoginComplete {
+        /// Whether the login was successful
+        success: bool,
+    },
+
+    /// Output from external CLI login process (e.g., gemini login)
+    ExternalCliLoginOutput {
+        /// Raw output string from the CLI (ANSI codes stripped)
+        data: String,
+    },
+
+    /// External CLI login process completed
+    ExternalCliLoginComplete {
+        /// Whether the process exited successfully (exit code 0)
+        success: bool,
+        /// The agent name for display purposes
+        agent_name: String,
     },
 }
 

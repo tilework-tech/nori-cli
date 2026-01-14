@@ -42,11 +42,61 @@ The TUI supports two backend modes, selected automatically at startup based on m
 - `spawn_agent()`: Entry point that detects ACP vs HTTP mode via `codex_acp::get_agent_config()`
 - `spawn_acp_agent()`: Uses `AcpBackend` for ACP-registered models (e.g., "mock-model", "mock-model-alt", "claude-acp", "gemini-acp")
 - `spawn_http_agent()`: Uses `codex-core` for HTTP-based LLM providers (OpenAI, Anthropic, etc.)
-- `spawn_error_agent()`: Displays error and exits for unregistered models when HTTP fallback is disabled
+- `spawn_error_agent()`: Handles unregistered models when HTTP fallback is disabled
 
 Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
 
-When `config.acp_trace_enabled` is true (via `--acp-trace` CLI flag or `acp.trace_enabled` in config.toml), `spawn_acp_agent()` constructs an `AcpTraceConfig` with a session-specific log path (`{codex_home}/log/acp-trace-{timestamp}-{pid}.log`) and passes it to `AcpBackendConfig`. See `@/codex-rs/acp/docs.md` for details on traffic tracing.
+**ACP Traffic Tracing:**
+
+When `config.acp_trace_enabled` is true (via `--acp-trace` CLI flag or `acp_trace_enabled` in config.toml), `spawn_acp_agent()` constructs an `AcpTraceConfig` with a session-specific log path (`{codex_home}/log/acp-trace-{timestamp}-{pid}.log`) and passes it to `AcpBackendConfig`. See `@/codex-rs/acp/docs.md` for details on traffic tracing.
+
+**Agent Connecting Status:**
+
+When an ACP agent subprocess is being spawned, the TUI shows a "Connecting to [Agent]" status indicator with shimmer animation:
+
+```
+┌─────────────────────┐  AgentConnecting    ┌─────────────────────┐
+│  spawn_acp_agent()  │ ──────────────────▶ │  App::handle_event()│
+│  (before tokio::    │                     │                     │
+│   spawn)            │                     │  chat_widget.show_  │
+└─────────────────────┘                     │  connecting_status()│
+                                            └──────────┬──────────┘
+                                                       │
+                                                       ▼
+                                            ┌─────────────────────┐
+         SessionConfigured                  │  BottomPane shows:  │
+         ◄──────────────────────────────────│  "Connecting to X"  │
+         (clears status implicitly)         │  + shimmer animation│
+                                            └─────────────────────┘
+```
+
+This provides user feedback during slow agent startup (e.g., when npx/bunx needs to resolve and download dependencies for the first time).
+
+- `AppEvent::AgentConnecting { display_name }` is emitted synchronously before the async spawn
+- `ChatWidget::show_connecting_status()` displays the status via `BottomPane`
+- No interrupt hint is shown (nothing to interrupt during connection)
+- Status is implicitly cleared when `SessionConfigured` event arrives from the agent
+
+**Agent Spawn Failure Recovery:**
+
+All agent spawn paths use graceful failure recovery via the `AgentSpawnFailed` event instead of exiting the application:
+
+```
+┌─────────────────────┐     spawn fails      ┌──────────────────────────┐
+│  spawn_acp_agent()  │ ────────────────────▶│ AppEvent::AgentSpawnFailed│
+│  spawn_http_agent() │                      │  { model_name, error }   │
+│  spawn_error_agent()│                      └───────────┬──────────────┘
+└─────────────────────┘                                  │
+                                                         ▼
+                        ┌────────────────────────────────────────────────┐
+                        │  App::handle_event()                           │
+                        │  1. Log warning with model and error           │
+                        │  2. add_error_message() - show inline error    │
+                        │  3. open_agent_popup() - let user pick another │
+                        └────────────────────────────────────────────────┘
+```
+
+This prevents crash loops: if a user selects an agent that fails to spawn (e.g., ACP session creation fails), the agent is still persisted to `config.toml` as user intent. On restart, the same failing agent would load, causing repeated failures. By showing an error and opening the agent picker, users can select a working agent without exiting.
 
 **ACP Backend Arc Reference Handling:**
 
@@ -69,6 +119,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `nori/`: Nori-specific branding and customization (see `@/codex-rs/tui/src/nori/docs.md`)
 - `system_info.rs`: Background system info collection for footer (git branch, Nori profile/version, git stats, worktree detection)
 - `effective_cwd_tracker.rs`: Tracks effective CWD from tool call locations with debounce logic
+- `session_stats.rs`: Session activity tracking and exit summary display
 
 **Input Handling:**
 
@@ -76,6 +127,102 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `clipboard_paste.rs`: Clipboard integration
 - `slash_command.rs`: `/command` parsing and execution
 - `file_search.rs`: Fuzzy file finder
+
+**/login Slash Command (`login_handler.rs`):**
+
+The `/login` slash command provides in-app authentication for supported ACP agents via two methods: OAuth browser flow (Codex) and external CLI passthrough (Gemini):
+
+```
+┌─────────────────────┐
+│  /login invoked     │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────────────────────────┐
+│ LoginHandler::check_agent_support()     │
+│ - Queries codex_acp::list_available_agents() │
+│ - Returns Supported/NotSupported/Unknown │
+│ - Supported includes LoginMethod enum   │
+└──────────────────┬──────────────────────┘
+                   │
+     ┌─────────────┼─────────────┐
+     ▼             ▼             ▼
+ Supported    NotSupported    Unknown
+ (Codex,      (Claude Code)   (other)
+  Gemini)          │             │
+     │             └──────┬──────┘
+     │                    ▼
+     │         Show "not yet supported"
+     │         message and return
+     ▼
+┌───────────────────────┐
+│ Agent Installed?      │
+│ (via AcpAgentInfo)    │
+└───────────┬───────────┘
+            │
+    ┌───────┴───────┐
+    ▼               ▼
+Not Installed   Installed
+    │               │
+    ▼               ▼
+Show npm      Branch on LoginMethod
+install       ┌────────────────────┐
+instructions  │                    │
+              ▼                    ▼
+         OAuthBrowser      ExternalCli
+              │                    │
+              ▼                    ▼
+         start_oauth_     start_external_cli_
+         login_flow()     login_flow()
+```
+
+**LoginMethod Enum:**
+
+The `LoginMethod` enum determines how authentication is performed:
+- `OAuthBrowser`: Starts local server, opens browser (used by Codex)
+- `ExternalCli { command, args }`: Spawns external CLI for interactive auth (used by Gemini)
+
+**Agent Support Matrix:**
+
+| Agent | In-App Login | LoginMethod | Behavior |
+|-------|-------------|-------------|----------|
+| Codex | Supported | `OAuthBrowser` | OAuth browser flow via `codex_login::run_login_server()` |
+| Gemini | Supported | `ExternalCli { command: "gemini", args: [] }` | Spawns `gemini` CLI with PTY passthrough |
+| Claude Code | Not supported | N/A | Shows "authenticate externally" message |
+| Unknown | Error | N/A | Shows "unknown agent" error |
+
+**OAuth Flow Integration (Codex):**
+
+When OAuth is initiated for Codex:
+1. `ChatWidget::start_oauth_login_flow()` spawns `codex_login::run_login_server()`
+2. Browser opens to the auth URL automatically
+3. A tokio task waits on `child.block_until_done()`
+4. On completion, sends `AppEvent::LoginComplete { success }` to the event loop
+5. `App::handle_event()` routes to `ChatWidget::handle_login_complete()`
+6. On success: `LoginHandler.oauth_complete()` updates state, `auth_manager.reload()` is called
+7. On failure: `LoginHandler.cancel()` shuts down the OAuth server and shows error message
+
+**External CLI Flow Integration (Gemini):**
+
+When external CLI login is initiated:
+1. `ChatWidget::start_external_cli_login_flow()` spawns agent CLI with PTY via `codex_utils_pty::spawn_pty_process()`
+2. PTY makes the CLI think it's in an interactive terminal (required for Gemini auth)
+3. Output streaming task sends `AppEvent::ExternalCliLoginOutput { data }` for each chunk
+4. On process exit, sends `AppEvent::ExternalCliLoginComplete { success, agent_name }`
+5. `App::handle_event()` routes to `ChatWidget::handle_external_cli_login_output()` and `handle_external_cli_login_complete()`
+6. Output is displayed as info messages; completion shows success/failure message
+
+**LoginFlowState Machine:**
+
+```
+Idle ──▶ AwaitingBrowserAuth ──▶ Success
+   │              │
+   │              └──▶ Cancelled
+   │
+   └──▶ AwaitingExternalCli ──▶ (handled via AppEvents)
+```
+
+The handler is stored as `Option<LoginHandler>` in `ChatWidget` and only instantiated when `/login` is invoked. For OAuth, it manages the shutdown handle for cancellation. For external CLI, state is tracked via AppEvents rather than the handler. Credentials are stored in `~/.nori/cli/auth.json` via existing `codex-core` infrastructure
 
 **ACP Agent Switching:**
 
@@ -115,21 +262,104 @@ The `onboarding/` module handles first-run experience:
 - `resume_picker.rs`: UI for selecting sessions to resume
 - `session_log.rs`: High-fidelity session event logging
 
+**Session Statistics (`session_stats.rs`):**
+
+Tracks user activity during a session. The `SessionStats` struct records:
+- User and assistant message counts
+- Tool calls by category (Bash, Read, Edit, etc.)
+- Skills invoked (deduplicated)
+- Subagents invoked via the Task tool
+
+Data flow:
+```
+┌─────────────────────┐  record_*()         ┌──────────────────┐
+│ ChatWidget handlers │ ──────────────────▶ │  SessionStats    │
+│ - on_agent_message  │                     │  (in ChatWidget) │
+│ - handle_exec_begin │                     └────────┬─────────┘
+│ - handle_mcp_begin  │                              │
+│ - on_patch_apply    │                              │
+│ - send_user_message │                              │
+└─────────────────────┘                              │
+                                                     │ session_stats()
+     ┌───────────────────────────────────────────────┘
+     ▼
+┌──────────────────────┐                   ┌────────────────────┐
+│ AppEvent::ExitRequest│ ─────────────────▶│ ExitMessageCell    │
+│                      │                   │ (consumes stats)   │
+└──────────────────────┘                   └────────────────────┘
+```
+
+*Skill Detection:*
+
+Skills are detected via multiple paths:
+1. **Skill tool invocations** (slash commands like `/commit`): In `handle_mcp_begin_now()`, `extract_skill_from_raw_input()` parses `{"skill": "name"}` from MCP tool arguments
+2. **Read exec commands to SKILL.md files**: In `handle_exec_begin_now()`, `extract_skill_from_read_path()` checks `ParsedCommand::Read` paths for SKILL.md patterns
+3. **Task tool results**: In `handle_mcp_end_now()`, `extract_skills_from_text()` scans Task tool output for SKILL.md paths (captures skills used by subagents)
+
+All paths call `record_skill()`, which deduplicates by checking if the skill name already exists in `skills_used`.
+
+The module also provides:
+- `SessionStatisticsCell`: Implements `HistoryCell` trait for TUI rendering with bordered display
+- `extract_subagent_from_raw_input()`: Parses Task tool arguments to extract subagent type from `{"subagent_type": "type"}`
+
+**Exit Message Display:**
+
+When users quit the TUI (via Ctrl+D or `/exit`), an exit message cell is displayed in the chat history before terminal restoration. The `ExitMessageCell` (from `@/codex-rs/tui/src/nori/exit_message.rs`) shows:
+- Goodbye message: "Goodbye! Thanks for using Nori."
+- Session ID
+- Session statistics summary (messages, tool calls, skills, subagents)
+
+Exit flow:
+```
+┌─────────────────────┐
+│ AppEvent::ExitRequest│
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ ChatWidget::create_exit_message_cell()   │
+│ - Gets session ID and SessionStats       │
+│ - Creates ExitMessageCell                │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Insert cell into transcript              │
+│ - Add to overlay (if active)             │
+│ - Add to transcript_cells                │
+│ - Display via display_lines()            │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Draw final frame to flush to scrollback  │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Clear viewport and exit                  │
+└──────────────────────────────────────────┘
+```
+
+The exit message uses a bordered display with 60-character max inner width, following the `HistoryCell` pattern. Tool calls are sorted alphabetically, and skills/subagents are displayed as bullet lists (or "(none)" if empty).
+
 ### Things to Know
 
 **Feature Flags Architecture:**
 
 The TUI crate uses Cargo feature flags to enable modular builds with two primary modes:
 
-| Feature | Optional Dep | Description |
-|---------|-------------|-------------|
-| `full` | - | Meta-feature enabling all optional features |
-| `login` | `codex-login` | ChatGPT/API login functionality |
-| `feedback` | `codex-feedback` | Sentry feedback integration |
-| `backend-client` | `codex-backend-client` | Cloud tasks backend client |
-| `upstream-updates` | - | OpenAI/Codex update checking mechanism |
-| `oss-providers` | `codex-common/oss-providers` | Ollama/LM Studio local model support |
-| `codex-features` | - | Gates `/undo`, `/compact`, `/review` slash commands |
+| Feature | Optional Dep | Default | Description |
+|---------|-------------|---------|-------------|
+| `full` | - | No | Meta-feature enabling all optional features |
+| `login` | `codex-login`, `codex-utils-pty` | **Yes** | Agent login functionality (OAuth for Codex, PTY passthrough for Gemini) |
+| `feedback` | `codex-feedback` | No | Sentry feedback integration |
+| `backend-client` | `codex-backend-client` | No | Cloud tasks backend client |
+| `upstream-updates` | - | No | OpenAI/Codex update checking mechanism |
+| `oss-providers` | `codex-common/oss-providers` | No | Ollama/LM Studio local model support |
+| `codex-features` | - | No | Gates `/undo`, `/compact`, `/review` slash commands |
+| `unstable` | `codex-acp/unstable` | **Yes** | Unstable ACP features like model switching |
+| `nori-config` | - | **Yes** | Nori's simplified ACP-only config |
 
 Feature gating patterns:
 - Import gating: `#[cfg(feature = "backend-client")] use codex_backend_client::Client`
@@ -203,6 +433,18 @@ Most event types (exec begin/end, MCP calls, elicitation) are queued during acti
 - If approval were deferred, the agent would wait for approval, but TaskComplete (which flushes the queue) wouldn't arrive until the agent finished
 - The `InterruptManager` still contains `ExecApproval` and `ApplyPatchApproval` variants for completeness, but these methods are marked `#[allow(dead_code)]`
 - `on_task_complete()` calls `flush_interrupt_queue()` for any remaining queued items
+
+**Approval Overlay Model Display Name:**
+
+The approval overlay displays the current agent's display name (e.g., "Claude", "Gemini") instead of a hardcoded name in options like "No, and tell Claude what to do differently". The display name flows through:
+
+1. `ChatWidget` initialization resolves the display name via `nori::agent_picker::get_agent_info(model)`, falling back to the raw model name if not found
+2. `BottomPaneParams.model_display_name` carries the name to `BottomPane`
+3. `BottomPane.set_model_display_name()` allows dynamic updates when agent switches
+4. `ApprovalOverlay::new()` receives the display name and passes it to `exec_options()` / `patch_options()`
+5. If the display name is empty, "the agent" is used as fallback
+
+Updates occur via `set_pending_agent()` (when user selects new agent) and `set_model()` (when model changes), ensuring the approval dialog always reflects the active agent.
 
 **Pending ExecCell Tracking:**
 
