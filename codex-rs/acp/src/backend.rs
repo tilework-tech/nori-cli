@@ -1115,30 +1115,79 @@ fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String
 /// Extract tool output from ToolCallUpdateFields for display.
 ///
 /// Returns a formatted string containing the tool's output content.
+/// Prioritizes rawOutput fields (Codex format) over content field, and strips
+/// markdown code blocks from the output.
 fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
-    let mut output_parts: Vec<String> = Vec::new();
+    // Try rawOutput first (Codex provides structured output here)
+    if let Some(raw_output) = &fields.raw_output {
+        // Try to extract stdout (most common for shell commands)
+        if let Some(stdout) = raw_output.get("stdout").and_then(|v| v.as_str())
+            && !stdout.is_empty() {
+                return strip_markdown_code_blocks(stdout);
+            }
 
-    // Extract text content from the content field
+        // Try formatted_output next
+        if let Some(formatted) = raw_output.get("formatted_output").and_then(|v| v.as_str())
+            && !formatted.is_empty() {
+                return strip_markdown_code_blocks(formatted);
+            }
+
+        // Try aggregated_output as fallback
+        if let Some(aggregated) = raw_output.get("aggregated_output").and_then(|v| v.as_str())
+            && !aggregated.is_empty() {
+                return strip_markdown_code_blocks(aggregated);
+            }
+
+        // If none of the direct fields worked, try format_raw_output for summaries
+        if let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref()) {
+            return output_str;
+        }
+    }
+
+    // Fallback to content field (existing behavior for non-Codex agents)
+    let mut output_parts: Vec<String> = Vec::new();
     if let Some(content) = &fields.content {
         for item in content {
             if let acp::ToolCallContent::Content(c) = item
                 && let acp::ContentBlock::Text(text) = &c.content
                 && !text.text.is_empty()
             {
-                output_parts.push(text.text.clone());
+                // Strip markdown from content field too
+                output_parts.push(strip_markdown_code_blocks(&text.text));
             }
         }
     }
 
-    // If no text content, try to extract meaningful info from raw_output
-    if output_parts.is_empty()
-        && let Some(raw_output) = &fields.raw_output
-        && let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref())
-    {
-        output_parts.push(output_str);
+    output_parts.join("\n")
+}
+
+/// Strip markdown code block formatting from output.
+///
+/// Codex wraps output in markdown code blocks like:
+/// ````
+/// ```sh
+/// output here
+/// ```
+/// ````
+///
+/// This function removes the wrapper and returns just the content.
+fn strip_markdown_code_blocks(text: &str) -> String {
+    let text = text.trim();
+
+    // Check for code block pattern: ```language\n...\n```
+    if text.starts_with("```") {
+        // Find the end of the opening marker (first newline after ```)
+        if let Some(start) = text.find('\n') {
+            // Find the closing ```
+            if let Some(end) = text.rfind("\n```") {
+                // Extract content between markers
+                return text[start + 1..end].to_string();
+            }
+        }
     }
 
-    output_parts.join("\n")
+    // No markdown wrapper found, return as-is
+    text.to_string()
 }
 
 /// Format raw_output JSON into a human-readable string based on tool type.
