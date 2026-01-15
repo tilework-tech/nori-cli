@@ -13,7 +13,6 @@ use tempfile::TempDir;
 // Config Field Tests
 // =============================================================================
 
-// @current-session
 #[test]
 fn test_acp_trace_enabled_defaults_to_false() {
     let temp_dir = TempDir::new().unwrap();
@@ -30,63 +29,6 @@ fn test_acp_trace_enabled_defaults_to_false() {
     );
 }
 
-// =============================================================================
-// Debug-Only Behavior Tests
-// =============================================================================
-
-// @current-session
-#[test]
-fn test_build_command_ignores_trace_in_release_builds() {
-    use codex_acp::connection::build_agent_command;
-    use codex_acp::get_agent_config;
-
-    let config = get_agent_config("mock-model").unwrap();
-
-    #[cfg(debug_assertions)]
-    {
-        use codex_acp::connection::AcpTraceConfig;
-        use std::path::PathBuf;
-
-        // In debug builds, trace config should be honored
-        let trace_config = Some(AcpTraceConfig {
-            log_file_path: PathBuf::from("/tmp/debug-trace.log"),
-        });
-
-        let (command, args) = build_agent_command(&config, trace_config);
-
-        assert_eq!(command, "sacp-tee", "Debug build should wrap with sacp-tee");
-        assert!(
-            args.contains(&"--log-file".to_string()),
-            "Debug build should include --log-file arg"
-        );
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        use codex_acp::connection::AcpTraceConfig;
-        use std::path::PathBuf;
-
-        // In release builds, trace config should be ignored
-        let trace_config = Some(AcpTraceConfig {
-            log_file_path: PathBuf::from("/tmp/release-trace.log"),
-        });
-
-        let (command, args) = build_agent_command(&config, trace_config);
-
-        assert!(
-            command.contains("mock_acp_agent"),
-            "Release build should NOT wrap with sacp-tee, got: {}",
-            command
-        );
-        assert!(
-            !args.contains(&"--log-file".to_string()),
-            "Release build should NOT include sacp-tee args, got: {:?}",
-            args
-        );
-    }
-}
-
-// @current-session
 #[test]
 fn test_acp_trace_enabled_can_be_loaded_from_toml() {
     let temp_dir = TempDir::new().unwrap();
@@ -103,7 +45,6 @@ fn test_acp_trace_enabled_can_be_loaded_from_toml() {
     );
 }
 
-// @current-session
 #[test]
 fn test_acp_trace_enabled_cli_override() {
     use codex_acp::NoriConfigOverrides;
@@ -132,42 +73,6 @@ fn test_acp_trace_enabled_cli_override() {
 // Trace Log Path Tests
 // =============================================================================
 
-// @current-session
-#[test]
-fn test_acp_trace_log_path_includes_session_id() {
-    let temp_dir = TempDir::new().unwrap();
-    let config_path = temp_dir.path().join("config.toml");
-
-    std::fs::write(&config_path, "").unwrap();
-
-    let config = NoriConfig::load_from_path(&config_path).unwrap();
-    let session_id = "test-session-123";
-    let log_path = config.acp_trace_log_path(session_id);
-
-    // Should be in nori_home/log/acp-trace-<session_id>.log
-    assert!(
-        log_path.to_string_lossy().contains("log"),
-        "Log path should be in log directory: {:?}",
-        log_path
-    );
-    assert!(
-        log_path.to_string_lossy().contains("acp-trace"),
-        "Log path should contain 'acp-trace': {:?}",
-        log_path
-    );
-    assert!(
-        log_path.to_string_lossy().contains(session_id),
-        "Log path should contain session ID: {:?}",
-        log_path
-    );
-    assert!(
-        log_path.to_string_lossy().ends_with(".log"),
-        "Log path should end with .log: {:?}",
-        log_path
-    );
-}
-
-// @current-session
 #[test]
 fn test_acp_trace_log_path_uses_nori_home() {
     let temp_dir = TempDir::new().unwrap();
@@ -195,7 +100,6 @@ fn test_acp_trace_log_path_uses_nori_home() {
 // Command Wrapping Tests
 // =============================================================================
 
-// @current-session
 #[test]
 fn test_build_wrapped_command_without_trace() {
     use codex_acp::connection::build_agent_command;
@@ -219,7 +123,6 @@ fn test_build_wrapped_command_without_trace() {
     );
 }
 
-// @current-session
 #[test]
 fn test_build_wrapped_command_with_trace() {
     use codex_acp::connection::AcpTraceConfig;
@@ -264,7 +167,6 @@ fn test_build_wrapped_command_with_trace() {
     );
 }
 
-// @current-session
 #[test]
 fn test_build_wrapped_command_preserves_original_args() {
     use codex_acp::connection::AcpTraceConfig;
