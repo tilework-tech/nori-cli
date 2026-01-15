@@ -1,18 +1,41 @@
 use serde::Serialize;
+use tracing::debug;
 use tracing::error;
 use tracing::warn;
 
+/// User notifier that sends OS-level desktop notifications.
+///
+/// Supports two modes:
+/// 1. **Native notifications**: Uses `notify-rust` to send desktop
+///    notifications directly, with support for click-to-focus on X11.
+///    Enabled by setting `use_native: true` in the constructor.
+/// 2. **External script**: Invokes a user-configured command with JSON payload.
 #[derive(Debug, Default)]
 pub struct UserNotifier {
+    /// External command to invoke for notifications (legacy mode).
     notify_command: Option<Vec<String>>,
+    /// Whether to use native notifications when no external command is configured.
+    use_native: bool,
+    /// Process ID for window focus (used in click handlers on X11 Linux).
+    #[cfg_attr(
+        not(all(target_os = "linux", not(target_env = "musl"))),
+        allow(dead_code)
+    )]
+    process_id: Option<u32>,
 }
 
 impl UserNotifier {
+    /// Send a notification using the configured method.
+    ///
+    /// If an external command is configured, uses that (legacy behavior).
+    /// If native notifications are enabled, sends a native desktop notification.
     pub fn notify(&self, notification: &UserNotification) {
         if let Some(notify_command) = &self.notify_command
             && !notify_command.is_empty()
         {
             self.invoke_notify(notify_command, notification)
+        } else if self.use_native {
+            self.send_native(notification);
         }
     }
 
@@ -34,12 +57,136 @@ impl UserNotifier {
         }
     }
 
-    pub fn new(notify: Option<Vec<String>>) -> Self {
+    /// Send a native desktop notification using notify-rust.
+    fn send_native(&self, notification: &UserNotification) {
+        use notify_rust::Notification;
+
+        let title = notification.title();
+        let body = notification.body();
+
+        debug!("Sending native notification: {title}");
+
+        // Build the notification
+        let mut notif = Notification::new();
+        notif.summary(title).body(&body).appname("Nori");
+
+        // On Linux with X11, we can add a click action to focus the terminal
+        #[cfg(all(target_os = "linux", not(target_env = "musl")))]
+        {
+            // Check if we're on X11 (not Wayland) by checking XDG_SESSION_TYPE
+            let is_x11 = std::env::var("XDG_SESSION_TYPE")
+                .map(|v| v == "x11")
+                .unwrap_or(false)
+                || std::env::var("DISPLAY").is_ok() && std::env::var("WAYLAND_DISPLAY").is_err();
+
+            if is_x11 && let Some(pid) = self.process_id {
+                // Add action for click-to-focus
+                notif.action("default", "Focus Terminal");
+                notif.hint(notify_rust::Hint::Resident(true));
+
+                // Spawn a thread to handle the click action
+                std::thread::spawn(move || {
+                    if let Ok(handle) = notif.show() {
+                        handle.wait_for_action(|action| {
+                            if action == "default" {
+                                focus_window_by_pid(pid);
+                            }
+                        });
+                    }
+                });
+                return;
+            }
+        }
+
+        // Default: just show the notification without click handling
+        // Note: macOS click-to-focus could be implemented via AppleScript in the future
+        if let Err(e) = notif.show() {
+            warn!("failed to show native notification: {e}");
+        }
+    }
+
+    /// Create a new UserNotifier.
+    ///
+    /// # Arguments
+    /// * `notify` - Optional external command for notifications (legacy mode)
+    /// * `use_native` - Whether to use native desktop notifications when no command is configured
+    pub fn new(notify: Option<Vec<String>>, use_native: bool) -> Self {
         Self {
             notify_command: notify,
+            use_native,
+            process_id: Some(std::process::id()),
         }
     }
 }
+
+/// Focus a window by process ID using wmctrl or xdotool (X11 only).
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+fn focus_window_by_pid(pid: u32) {
+    use std::process::Command;
+
+    debug!("Attempting to focus window for PID {pid}");
+
+    // Try wmctrl first (more reliable for focusing)
+    // wmctrl -i -a <window_id> can focus by window ID
+    // We need to find the window ID from the PID first
+    let wmctrl_result = Command::new("wmctrl")
+        .args(["-l", "-p"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Find line containing our PID
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 3
+                        && let Ok(window_pid) = parts[2].parse::<u32>()
+                        && window_pid == pid
+                    {
+                        // Found our window, activate it
+                        let window_id = parts[0];
+                        return Command::new("wmctrl")
+                            .args(["-i", "-a", window_id])
+                            .status()
+                            .ok();
+                    }
+                }
+            }
+            None
+        });
+
+    if wmctrl_result.is_some() {
+        debug!("Successfully focused window using wmctrl");
+        return;
+    }
+
+    // Fallback to xdotool
+    let xdotool_result = Command::new("xdotool")
+        .args(["search", "--pid", &pid.to_string(), "--onlyvisible"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Some(window_id) = stdout.lines().next() {
+                    return Command::new("xdotool")
+                        .args(["windowactivate", window_id.trim()])
+                        .status()
+                        .ok();
+                }
+            }
+            None
+        });
+
+    if xdotool_result.is_some() {
+        debug!("Successfully focused window using xdotool");
+    } else {
+        debug!("Could not focus window - wmctrl and xdotool both failed");
+    }
+}
+
+/// Maximum length for command strings in notification body before truncation.
+const MAX_COMMAND_LENGTH: usize = 100;
 
 /// User can configure a program that will receive notifications. Each
 /// notification is serialized as JSON and passed as an argument to the
@@ -74,6 +221,66 @@ pub enum UserNotification {
         session_id: String,
         idle_duration_secs: u64,
     },
+}
+
+impl UserNotification {
+    /// Returns a human-readable title for the notification.
+    pub fn title(&self) -> &'static str {
+        match self {
+            UserNotification::AgentTurnComplete { .. } => "Nori: Task Complete",
+            UserNotification::AwaitingApproval { .. } => "Nori: Approval Required",
+            UserNotification::Idle { .. } => "Nori: Session Idle",
+        }
+    }
+
+    /// Returns a human-readable body for the notification.
+    pub fn body(&self) -> String {
+        match self {
+            UserNotification::AgentTurnComplete {
+                last_assistant_message,
+                input_messages,
+                cwd,
+                ..
+            } => {
+                if let Some(msg) = last_assistant_message {
+                    truncate_string(msg, MAX_COMMAND_LENGTH)
+                } else if let Some(first_input) = input_messages.first() {
+                    format!(
+                        "Completed: {}",
+                        truncate_string(first_input, MAX_COMMAND_LENGTH)
+                    )
+                } else {
+                    format!("Task completed in {cwd}")
+                }
+            }
+            UserNotification::AwaitingApproval { command, cwd, .. } => {
+                let truncated_command = truncate_string(command, MAX_COMMAND_LENGTH);
+                format!("{truncated_command}\nin {cwd}")
+            }
+            UserNotification::Idle {
+                idle_duration_secs, ..
+            } => {
+                format!("Session has been idle for {idle_duration_secs} seconds")
+            }
+        }
+    }
+}
+
+/// Truncates a string to max_len bytes, adding "..." if truncated.
+/// Ensures we don't slice in the middle of a multi-byte UTF-8 character.
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        // Find the last valid char boundary at or before max_len
+        let boundary = s
+            .char_indices()
+            .take_while(|(i, _)| *i < max_len)
+            .last()
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(0);
+        format!("{}...", &s[..boundary])
+    }
 }
 
 #[cfg(test)]
@@ -127,5 +334,89 @@ mod tests {
             r#"{"type":"idle","session-id":"session-456","idle-duration-secs":5}"#
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_awaiting_approval_title_and_body() {
+        let notification = UserNotification::AwaitingApproval {
+            call_id: "call-123".to_string(),
+            command: "rm -rf /tmp/test".to_string(),
+            cwd: "/home/user/project".to_string(),
+        };
+
+        assert_eq!(notification.title(), "Nori: Approval Required");
+        assert!(notification.body().contains("rm -rf /tmp/test"));
+        assert!(notification.body().contains("/home/user/project"));
+    }
+
+    #[test]
+    fn test_awaiting_approval_body_truncates_long_commands() {
+        let long_command = "a".repeat(200);
+        let notification = UserNotification::AwaitingApproval {
+            call_id: "call-123".to_string(),
+            command: long_command,
+            cwd: "/home/user/project".to_string(),
+        };
+
+        let body = notification.body();
+        // Body should be truncated and include ellipsis
+        assert!(body.len() < 250);
+        assert!(body.contains("..."));
+    }
+
+    #[test]
+    fn test_idle_title_and_body() {
+        let notification = UserNotification::Idle {
+            session_id: "session-456".to_string(),
+            idle_duration_secs: 5,
+        };
+
+        assert_eq!(notification.title(), "Nori: Session Idle");
+        assert!(notification.body().contains("5"));
+        assert!(notification.body().to_lowercase().contains("idle"));
+    }
+
+    #[test]
+    fn test_agent_turn_complete_title_and_body() {
+        let notification = UserNotification::AgentTurnComplete {
+            thread_id: "thread-123".to_string(),
+            turn_id: "turn-456".to_string(),
+            cwd: "/home/user/project".to_string(),
+            input_messages: vec!["Fix the bug".to_string()],
+            last_assistant_message: Some("Done fixing the bug".to_string()),
+        };
+
+        assert_eq!(notification.title(), "Nori: Task Complete");
+        assert!(notification.body().contains("Done fixing the bug"));
+    }
+
+    #[test]
+    fn test_agent_turn_complete_body_without_assistant_message() {
+        let notification = UserNotification::AgentTurnComplete {
+            thread_id: "thread-123".to_string(),
+            turn_id: "turn-456".to_string(),
+            cwd: "/home/user/project".to_string(),
+            input_messages: vec!["Fix the bug".to_string()],
+            last_assistant_message: None,
+        };
+
+        let body = notification.body();
+        // Should fall back to showing input or a generic message
+        assert!(!body.is_empty());
+    }
+
+    #[test]
+    fn test_truncate_handles_multibyte_unicode() {
+        // Test that truncation doesn't panic on emoji/unicode
+        let emoji_command = "echo \u{1F600}".repeat(50); // 50 emoji faces
+        let notification = UserNotification::AwaitingApproval {
+            call_id: "call-123".to_string(),
+            command: emoji_command,
+            cwd: "/home/user".to_string(),
+        };
+
+        let body = notification.body();
+        // Should not panic and should be truncated
+        assert!(body.contains("..."));
     }
 }

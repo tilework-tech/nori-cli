@@ -110,18 +110,47 @@ ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/ac
 
 **User Notifications:**
 
-The `user_notification.rs` module provides OS-level notification support via external scripts. Key exports:
+The `user_notification.rs` module provides OS-level notification support. Key exports:
 
-- `UserNotifier`: Manages external notification command execution
-- `UserNotification`: Enum of notification event types
+- `UserNotifier`: Manages notification delivery via native or external command
+- `UserNotification`: Enum of notification event types with human-readable content
 
-| Notification Type | Purpose | Payload |
-|-------------------|---------|---------|
-| `AgentTurnComplete` | Agent finished a turn | thread_id, turn_id, cwd, input_messages, last_assistant_message |
-| `AwaitingApproval` | Waiting for user approval | call_id, command, cwd |
-| `Idle` | System idle after completion | session_id, idle_duration_secs |
+| Notification Type | Title | Body Content |
+|-------------------|-------|--------------|
+| `AgentTurnComplete` | "Nori: Task Complete" | Last assistant message, or "Completed: {input}" fallback |
+| `AwaitingApproval` | "Nori: Approval Required" | Truncated command and cwd |
+| `Idle` | "Nori: Session Idle" | Idle duration in seconds |
 
-Notifications serialize to JSON (kebab-case keys) and are passed as an argument to the configured notifier command. The notifier is invoked fire-and-forget via `std::process::Command::spawn()`.
+**Notification Modes:**
+
+The `UserNotifier` supports two delivery modes:
+
+1. **Native notifications** (`use_native: true`): Uses `notify-rust` to send desktop notifications directly. On X11 Linux, supports click-to-focus via `wmctrl` or `xdotool`.
+2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload as argument.
+
+```
+┌─────────────────────┐   use_native=true    ┌─────────────────────┐
+│  UserNotifier       │─────────────────────►│  notify-rust        │
+│  .notify()          │   (no command)       │  (desktop notif)    │
+│                     │                      │                     │
+│                     │   command set        ┌─────────────────────┐
+│                     │─────────────────────►│  External script    │
+│                     │   (legacy mode)      │  (JSON arg)         │
+└─────────────────────┘                      └─────────────────────┘
+```
+
+The `use_native` flag controls whether native notifications are sent when no external command is configured. Production code passes `true`, test code passes `false` to avoid notification spam during tests.
+
+**Window Focus (X11 Linux):**
+
+When a native notification is clicked on X11 Linux, the `focus_window_by_pid()` function attempts to focus the terminal window:
+- Tries `wmctrl -l -p` to find window by PID, then `wmctrl -i -a` to activate
+- Falls back to `xdotool search --pid` and `windowactivate`
+- Only works on X11 (not Wayland), detected via `XDG_SESSION_TYPE` or `DISPLAY`/`WAYLAND_DISPLAY` environment variables
+
+**JSON Serialization:**
+
+Notifications serialize to JSON (kebab-case keys) for external scripts. The `title()` and `body()` methods provide human-readable content for native notifications, with command strings truncated to 100 characters.
 
 **Session Recording:**
 

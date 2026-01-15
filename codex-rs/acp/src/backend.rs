@@ -254,7 +254,7 @@ impl AcpBackend {
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
-        let user_notifier = Arc::new(codex_core::UserNotifier::new(config.notify.clone()));
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(config.notify.clone(), true));
 
         let idle_timer_abort = Arc::new(Mutex::new(None));
 

@@ -556,31 +556,35 @@ The approval translation maps between Codex's binary approve/deny model and ACP'
 
 ### OS-Level Notifications
 
-The ACP backend supports OS-level notifications via external scripts, using `codex_core::UserNotifier`. This enables alerting users when the terminal is not focused.
+The ACP backend supports OS-level notifications using `codex_core::UserNotifier`. This enables alerting users when the terminal is not focused. Notifications are delivered via native desktop notifications (using `notify-rust`) or an external script if configured.
 
 **Configuration:**
-- `AcpBackendConfig.notify`: Optional `Vec<String>` specifying the notifier command and args
+- `AcpBackendConfig.notify`: Optional `Vec<String>` specifying an external notifier command and args
+- If no external command is configured, native desktop notifications are used
 - The TUI passes `config.notify` from the main Config to `AcpBackendConfig`
 
 **Notification Types:**
 
-| Event | When Triggered | JSON Payload Fields |
-|-------|----------------|---------------------|
-| `AwaitingApproval` | Approval request arrives | `call_id`, `command`, `cwd` |
-| `Idle` | 5 seconds after task completes | `session_id`, `idle_duration_secs` |
+| Event | Title | Body Content |
+|-------|-------|--------------|
+| `AwaitingApproval` | "Nori: Approval Required" | Command (truncated) and cwd |
+| `Idle` | "Nori: Session Idle" | Idle duration in seconds |
 
 **Implementation Details:**
 
-- Notifications are fire-and-forget (spawns subprocess, does not wait)
+- Native notifications display human-readable titles and bodies (see `UserNotification::title()` and `body()` in `@/codex-rs/core`)
+- Notifications are fire-and-forget (does not block on delivery)
 - Idle timer uses `tokio::task::AbortHandle` for cancellation
 - Timer is cancelled when `submit()` is called (new user activity)
 - Approval handler sends notification before queuing the approval request
+- On X11 Linux, clicking a native notification focuses the terminal window
 
 ```
 ┌─────────────────────┐   AwaitingApproval    ┌─────────────────────┐
 │  ApprovalRequest    │──────────────────────►│  UserNotifier       │
-│  arrives            │                       │  (spawns script)    │
-└─────────────────────┘                       └─────────────────────┘
+│  arrives            │                       │  (desktop notif or  │
+└─────────────────────┘                       │   external script)  │
+                                              └─────────────────────┘
 
 ┌─────────────────────┐   5 sec timer         ┌─────────────────────┐
 │  TaskComplete       │──────────────────────►│  Idle notification  │
