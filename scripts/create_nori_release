@@ -13,8 +13,11 @@ Usage:
     # Create next stable release (bumps minor version)
     ./scripts/create_nori_release --publish-release
 
-    # Create next alpha release
+    # Create next alpha release (for upcoming version)
     ./scripts/create_nori_release --publish-alpha
+
+    # Create next dev snapshot (for internal testing)
+    ./scripts/create_nori_release --publish-next
 
     # Create specific version
     ./scripts/create_nori_release --version 0.3.0
@@ -52,6 +55,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Publish the next alpha release for the upcoming minor version.",
     )
     group.add_argument(
+        "--publish-next",
+        action="store_true",
+        help="Publish a dev snapshot based on the current stable version (for internal testing).",
+    )
+    group.add_argument(
         "--publish-release",
         action="store_true",
         help="Publish the next stable release by bumping the minor version.",
@@ -63,8 +71,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
 
     args = parser.parse_args(argv[1:])
-    if not (args.publish_alpha or args.publish_release or args.version):
-        parser.error("Must specify --publish-alpha, --publish-release, or --version.")
+    if not (args.publish_alpha or args.publish_next or args.publish_release or args.version):
+        parser.error("Must specify --publish-alpha, --publish-next, --publish-release, or --version.")
     return args
 
 
@@ -329,14 +337,39 @@ def determine_version(args: argparse.Namespace) -> str:
         # No existing releases, start at 0.1.0
         if args.publish_release:
             return "0.1.0"
+        elif args.publish_next:
+            return "0.0.0-next.1"
         else:
             return "0.1.0-alpha.1"
 
     major, minor, patch = parse_semver(latest_version)
     next_minor_version = format_version(major, minor + 1, 0)
+    current_stable_version = format_version(major, minor, patch)
 
     if args.publish_release:
         return next_minor_version
+
+    if args.publish_next:
+        # For next releases, use the current stable version as base
+        # e.g., if latest stable is 0.2.0, create 0.2.0-next.1, 0.2.0-next.2, etc.
+        # NOTE: This logic is mirrored in .github/workflows/nori-release.yml
+        # Keep them in sync if changes are made
+        next_prefix = f"{current_stable_version}-next."
+        releases = list_releases()
+        highest_next = 0
+
+        for release in releases:
+            tag = release.get("tag_name", "")
+            candidate = strip_tag_prefix(tag)
+            if candidate and candidate.startswith(next_prefix):
+                suffix = candidate[len(next_prefix) :]
+                try:
+                    next_number = int(suffix)
+                except ValueError:
+                    continue
+                highest_next = max(highest_next, next_number)
+
+        return f"{next_prefix}{highest_next + 1}"
 
     # For alpha releases, find the highest alpha number
     alpha_prefix = f"{next_minor_version}-alpha."
