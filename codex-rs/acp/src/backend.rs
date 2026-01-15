@@ -1163,7 +1163,7 @@ fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
 /// Strip markdown code block formatting from output.
 ///
 /// Codex wraps output in markdown code blocks like:
-/// ````
+/// ````text
 /// ```sh
 /// output here
 /// ```

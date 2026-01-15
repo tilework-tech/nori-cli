@@ -215,7 +215,7 @@ fn truncate_str(s: &str, max_len: usize) -> String {
 /// Strip markdown code block formatting from output.
 ///
 /// Codex wraps output in markdown code blocks like:
-/// ````
+/// ````text
 /// ```sh
 /// output here
 /// ```
