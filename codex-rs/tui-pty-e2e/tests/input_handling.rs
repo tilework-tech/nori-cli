@@ -80,7 +80,6 @@ fn test_arrows() {
     );
 }
 
-// @current-session
 #[test]
 #[cfg(target_os = "linux")]
 fn test_history_navigation_up_down() {
@@ -141,7 +140,6 @@ fn test_history_navigation_up_down() {
     );
 }
 
-// @current-session
 #[test]
 #[cfg(target_os = "linux")]
 fn test_history_navigation_multiple_messages() {

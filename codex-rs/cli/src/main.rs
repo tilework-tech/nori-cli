@@ -1168,7 +1168,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// The completion subcommand should not appear in help output (legacy Codex feature)
     #[test]
     fn completion_subcommand_not_in_help() {
@@ -1179,7 +1178,6 @@ mod tests {
         );
     }
 
-    // @current-session
     /// When "completion" is passed, it should be treated as prompt, not subcommand
     #[test]
     fn completion_treated_as_prompt_not_subcommand() {

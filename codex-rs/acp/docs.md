@@ -641,11 +641,70 @@ Model state is stored in `Arc<RwLock<AcpModelState>>` shared between the main th
 
 **Subprocess Lifecycle Management:**
 
-The `run_command_loop()` function manages agent subprocess cleanup:
-- Runs until the command channel is closed (when `AcpConnection` is dropped)
-- On exit, calls `child.kill()` to terminate the subprocess
-- This prevents orphaned/zombie processes when sessions are switched (e.g., via `/new` command)
+The agent subprocess cleanup follows a deterministic multi-layer shutdown pattern with robust guarantees against orphaned processes:
+
+```
+┌─────────────────────────┐   Drop triggered   ┌─────────────────────────────────────────┐
+│   AcpConnection::Drop   │───────────────────►│  Worker Thread (run_command_loop)       │
+│                         │   (command_tx      │                                          │
+│  1. Drop command_tx     │    dropped)        │  - Detects channel closed                │
+│  2. Wait on             │                    │  - Abort IO tasks (prevents pipe hangs) │
+│     shutdown_complete_rx│                    │  - Kill process group (handles           │
+│  3. Join worker thread  │                    │    grandchildren)                        │
+│                         │◄───────────────────│  - Kill direct child                     │
+│                         │   signal complete  │  - Wait for termination (500ms timeout)  │
+│                         │                    │  - Send () on shutdown_complete_tx       │
+└─────────────────────────┘                    └──────────────────────────────────────────┘
+```
+
+**Multi-Layer Cleanup Strategy:**
+
+The implementation uses several defense layers to ensure robust cleanup:
+
+1. **Process Group Isolation (Unix):**
+   - Agent spawns in its own process group via `setpgid(0, 0)` in `pre_exec`
+   - Enables killing entire process tree with `killpg(pgid, SIGKILL)`
+   - Handles grandchildren spawned by agent (e.g., Python agent using subprocess)
+
+2. **Kernel-Level Parent Death Signal (Linux):**
+   - `PR_SET_PDEATHSIG` set to `SIGTERM` during spawn
+   - Kernel guarantees agent receives `SIGTERM` if parent crashes (even on SIGKILL)
+   - Race condition handling: checks parent PID and self-terminates if parent already died
+   - Provides cleanup even when Drop doesn't run (crashes, forced kills)
+
+3. **IO Task Abort:**
+   - `io_task` and `stderr_task` explicitly aborted before killing child
+   - Prevents hanging on orphaned file descriptors from grandchildren
+   - 50ms grace period for tasks to abort cleanly
+   - Similar to 2-second IO drain timeout pattern in `exec.rs`
+
+4. **Process Group Kill:**
+   - `kill_child_process_group()` sends `SIGKILL` to entire process group
+   - Gracefully handles "process not found" errors (ESRCH)
+   - Ensures grandchildren are terminated along with direct child
+   - Pattern reused from `codex-rs/core/src/exec.rs:720-749`
+
+5. **Synchronous Drop Cleanup:**
+   - `Drop` waits for `shutdown_complete_rx` signal (2-second timeout)
+   - Worker thread joins before Drop returns
+   - Ensures child process is fully terminated before continuing
+
+Key implementation details:
+- `run_command_loop()` runs until the command channel is closed (when `AcpConnection` is dropped)
+- Cleanup sequence: abort IO tasks → kill process group → kill direct child → wait for exit → signal completion
+- `Drop` implementation waits (with `SHUTDOWN_TIMEOUT` of 2 seconds) for cleanup completion before returning
+- Uses `Mutex<Option<>>` pattern for `worker_thread` and `shutdown_complete_rx` to allow taking in Drop while satisfying `Sync` requirement for `Arc<AcpConnection>`
+- Prevents orphaned/zombie processes when TUI exits (via `/exit`, `/quit`, or Ctrl+C)
+- Also handles session switches (e.g., via `/new` command)
 - Logs subprocess PID at spawn via `debug!("ACP agent spawned (pid: {:?})")` for E2E test verification
+
+**Platform Support:**
+- Process group and PR_SET_PDEATHSIG: Linux only
+- Process group isolation: All Unix platforms (Linux, macOS, FreeBSD)
+- Basic kill: All platforms (Windows uses tokio's kill implementation)
+
+**Dependencies:**
+- `libc` crate required for Unix-specific process control (added as `[target.'cfg(unix)'.dependencies]`)
 
 **Subprocess Environment Variables:**
 

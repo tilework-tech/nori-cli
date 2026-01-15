@@ -166,6 +166,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace and `/tmp/claude/` allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_tool_calls.rs` | ACP tool call rendering and multi-call exploring cells - verifies tool calls appear correctly in TUI, tests grouping of Read/Search operations, validates cells don't disappear during streaming with out-of-order completion events; uses `MOCK_AGENT_MULTI_CALL_EXPLORING` and `MOCK_AGENT_NO_FINAL_TEXT` env vars (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_prompt_errors.rs` | ACP prompt failure error propagation - verifies that when `prompt()` fails, the error is displayed to the user (not silently swallowed) and the TUI remains responsive; uses `MOCK_AGENT_PROMPT_FAIL` env var (Linux only) |
+| `@/codex-rs/tui-pty-e2e/tests/acp_exit_cleanup.rs` | ACP agent subprocess cleanup on TUI exit - verifies agent processes are terminated immediately (not orphaned) when TUI exits via `/exit`, `/quit`, or Ctrl+C; tests synchronous cleanup behavior of `AcpConnection::Drop` (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
 
 **Snapshot Files:**
@@ -288,7 +289,7 @@ Tests control mock agent behavior via environment variables:
 
 See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
 
-**Agent Subprocess Lifecycle Testing (`agent_switching.rs`):**
+**Agent Subprocess Lifecycle Testing (`agent_switching.rs`, `acp_exit_cleanup.rs`):**
 
 Linux-only tests that verify ACP subprocess lifecycle management and event isolation:
 
@@ -302,6 +303,13 @@ Linux-only tests that verify ACP subprocess lifecycle management and event isola
   - Old subprocess is terminated (not zombie) after session switch
   - Cleanup happens when session switches, not when individual prompt turns end
   - Different models (`mock-model` vs `mock-model-alt`) spawn different subprocesses
+
+*Exit Cleanup Tests (`acp_exit_cleanup.rs`):*
+- Verifies agent subprocess cleanup when TUI exits (not just session switch)
+- Tests three exit paths: `/exit` command, `/quit` command, and Ctrl+C
+- Validates that cleanup is **synchronous** - agent should be terminated immediately when TUI exits, not eventually via async cleanup
+- Uses `process_exists_and_not_zombie()` helper to check `/proc/{pid}/status` for zombie state
+- Critical test pattern: checks immediately after TUI exit (within 100ms) to catch async cleanup races
 
 *Event Isolation Tests:*
 - `extract_agent_messages_from_log()` helper parses `Mock agent:` log entries from ACP log file
