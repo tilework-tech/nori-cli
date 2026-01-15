@@ -49,13 +49,19 @@ pub struct ApprovalRequest {
 }
 
 /// Minimum supported ACP protocol version
-const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::V1;
+const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
 
 /// Commands sent from the main thread to the ACP worker thread.
 enum AcpCommand {
     CreateSession {
         cwd: PathBuf,
         response_tx: oneshot::Sender<Result<acp::SessionId>>,
+    },
+    LoadSession {
+        session_id: acp::SessionId,
+        cwd: PathBuf,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+        response_tx: oneshot::Sender<Result<acp::LoadSessionResponse>>,
     },
     Prompt {
         session_id: acp::SessionId,
@@ -159,6 +165,42 @@ impl AcpConnection {
             .await
             .context("ACP worker thread died")?;
         response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Load an existing session from the agent.
+    ///
+    /// The agent will replay the entire conversation history via `session/update`
+    /// notifications sent to the `update_tx` channel.
+    ///
+    /// # Arguments
+    /// * `session_id` - The ID of the session to load
+    /// * `cwd` - Working directory for the session
+    /// * `update_tx` - Channel to receive session updates (history replay)
+    ///
+    /// # Returns
+    /// The `LoadSessionResponse` after all history has been replayed.
+    pub async fn load_session(
+        &self,
+        session_id: acp::SessionId,
+        cwd: &Path,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+    ) -> Result<acp::LoadSessionResponse> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::LoadSession {
+                session_id,
+                cwd: cwd.to_path_buf(),
+                update_tx,
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Check if the agent supports loading sessions.
+    pub fn supports_load_session(&self) -> bool {
+        self.agent_capabilities.load_session
     }
 
     /// Send a prompt to an existing session and receive streaming updates.
@@ -305,24 +347,20 @@ async fn spawn_connection_internal(
     // Perform initialization handshake using the Agent trait
     use acp::Agent;
     let response = connection
-        .initialize(acp::InitializeRequest {
-            protocol_version: acp::VERSION,
-            client_capabilities: acp::ClientCapabilities {
-                fs: acp::FileSystemCapability {
-                    read_text_file: true,
-                    write_text_file: true,
-                    meta: None,
-                },
-                terminal: false, // Not supporting terminals yet
-                meta: None,
-            },
-            client_info: Some(acp::Implementation {
-                name: "codex".to_string(),
-                title: Some("Codex CLI".to_string()),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            }),
-            meta: None,
-        })
+        .initialize(
+            acp::InitializeRequest::new(acp::ProtocolVersion::LATEST)
+                .client_capabilities(
+                    acp::ClientCapabilities::default()
+                        .fs(acp::FileSystemCapability::default()
+                            .read_text_file(true)
+                            .write_text_file(true))
+                        .terminal(false), // Not supporting terminals yet
+                )
+                .client_info(
+                    acp::Implementation::new("codex", env!("CARGO_PKG_VERSION"))
+                        .title("Codex CLI"),
+                ),
+        )
         .await
         .context("ACP initialization failed")?;
 
@@ -357,24 +395,34 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
             AcpCommand::CreateSession { cwd, response_tx } => {
-                // TODO: [Future] Resume/Fork Integration
-                // When creating a session, check if there's an existing session to resume.
-                // This would require:
-                // 1. Accepting an optional session_id parameter to resume
-                // 2. Loading persisted history from Codex rollout format
-                // 3. Sending history to the agent via the session initialization
-                // See: codex-core/src/rollout.rs for the persistence format
-
                 let result = inner
                     .connection
-                    .new_session(acp::NewSessionRequest {
-                        mcp_servers: vec![],
-                        cwd,
-                        meta: None,
-                    })
+                    .new_session(acp::NewSessionRequest::new(cwd))
                     .await
                     .map(|r| r.session_id)
                     .context("Failed to create ACP session");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::LoadSession {
+                session_id,
+                cwd,
+                update_tx,
+                response_tx,
+            } => {
+                // Register session for receiving updates before loading
+                inner
+                    .client_delegate
+                    .register_session(session_id.clone(), update_tx);
+
+                let result = inner
+                    .connection
+                    .load_session(acp::LoadSessionRequest::new(session_id.clone(), cwd))
+                    .await
+                    .context("Failed to load ACP session");
+
+                // Keep session registered for subsequent prompts
+                // (don't unregister like in Prompt command)
+
                 let _ = response_tx.send(result);
             }
             AcpCommand::Prompt {
@@ -388,11 +436,9 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
                     .register_session(session_id.clone(), update_tx);
 
                 // Use tokio::select! to allow Cancel commands to be processed while prompting
-                let prompt_future = inner.connection.prompt(acp::PromptRequest {
-                    session_id: session_id.clone(),
-                    prompt,
-                    meta: None,
-                });
+                let prompt_future = inner
+                    .connection
+                    .prompt(acp::PromptRequest::new(session_id.clone(), prompt));
                 tokio::pin!(prompt_future);
 
                 let result = loop {
@@ -410,10 +456,7 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
                                     // Process the cancel command immediately
                                     let cancel_result = inner
                                         .connection
-                                        .cancel(acp::CancelNotification {
-                                            session_id: cancel_session_id,
-                                            meta: None,
-                                        })
+                                        .cancel(acp::CancelNotification::new(cancel_session_id))
                                         .await
                                         .context("Failed to cancel ACP session");
                                     let _ = cancel_response_tx.send(cancel_result);
@@ -453,10 +496,7 @@ async fn run_command_loop(inner: AcpConnectionInner, mut command_rx: mpsc::Recei
             } => {
                 let result = inner
                     .connection
-                    .cancel(acp::CancelNotification {
-                        session_id,
-                        meta: None,
-                    })
+                    .cancel(acp::CancelNotification::new(session_id))
                     .await
                     .context("Failed to cancel ACP session");
                 let _ = response_tx.send(result);
@@ -523,13 +563,14 @@ impl acp::Client for ClientDelegate {
             let option_id = arguments
                 .options
                 .first()
-                .map(|opt| opt.id.clone())
-                .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()));
+                .map(|opt| opt.option_id.clone())
+                .unwrap_or_else(|| acp::PermissionOptionId::new("allow"));
 
-            return Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Selected { option_id },
-                meta: None,
-            });
+            return Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(
+                    acp::SelectedPermissionOutcome::new(option_id),
+                ),
+            ));
         }
 
         // Wait for the UI's decision
@@ -538,10 +579,7 @@ impl acp::Client for ClientDelegate {
                 // Translate the Codex ReviewDecision back to ACP outcome
                 let outcome =
                     translator::review_decision_to_permission_outcome(decision, &arguments.options);
-                Ok(acp::RequestPermissionResponse {
-                    outcome,
-                    meta: None,
-                })
+                Ok(acp::RequestPermissionResponse::new(outcome))
             }
             Err(_) => {
                 // Response channel was dropped (UI didn't respond), fall back to deny
@@ -556,13 +594,14 @@ impl acp::Client for ClientDelegate {
                                 | acp::PermissionOptionKind::RejectAlways
                         )
                     })
-                    .map(|opt| opt.id.clone())
-                    .unwrap_or_else(|| acp::PermissionOptionId::from("deny".to_string()));
+                    .map(|opt| opt.option_id.clone())
+                    .unwrap_or_else(|| acp::PermissionOptionId::new("deny"));
 
-                Ok(acp::RequestPermissionResponse {
-                    outcome: acp::RequestPermissionOutcome::Selected { option_id },
-                    meta: None,
-                })
+                Ok(acp::RequestPermissionResponse::new(
+                    acp::RequestPermissionOutcome::Selected(
+                    acp::SelectedPermissionOutcome::new(option_id),
+                ),
+                ))
             }
         }
     }
@@ -582,10 +621,7 @@ impl acp::Client for ClientDelegate {
         // Read file content
         let content =
             std::fs::read_to_string(&arguments.path).map_err(acp::Error::into_internal_error)?;
-        Ok(acp::ReadTextFileResponse {
-            content,
-            meta: None,
-        })
+        Ok(acp::ReadTextFileResponse::new(content))
     }
 
     async fn session_notification(
@@ -682,11 +718,7 @@ mod tests {
 
         // Send prompt and collect updates
         let (tx, mut rx) = mpsc::channel(32);
-        let prompt = vec![acp::ContentBlock::Text(acp::TextContent {
-            text: "Hello".to_string(),
-            annotations: None,
-            meta: None,
-        })];
+        let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))];
 
         let stop_reason = conn
             .prompt(session_id, prompt, tx)
@@ -713,5 +745,103 @@ mod tests {
             "Should contain test message, got: {messages:?}"
         );
         assert_eq!(stop_reason, acp::StopReason::EndTurn);
+    }
+
+    /// Test that we can check load_session capability.
+    #[tokio::test]
+    async fn test_supports_load_session() {
+        // Get the mock agent config
+        let config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+
+        // Check if mock agent binary exists
+        if !std::path::Path::new(&config.command).exists() {
+            // Skip test if binary not built
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                config.command
+            );
+            return;
+        }
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+
+        // Spawn connection
+        let conn = AcpConnection::spawn(&config, temp_dir.path())
+            .await
+            .expect("Failed to spawn ACP connection");
+
+        // Mock agent should support load_session
+        assert!(
+            conn.supports_load_session(),
+            "Mock agent should support load_session"
+        );
+    }
+
+    /// Test loading a session and receiving replay updates.
+    #[tokio::test]
+    async fn test_load_session() {
+        // Get the mock agent config
+        let config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+
+        // Check if mock agent binary exists
+        if !std::path::Path::new(&config.command).exists() {
+            // Skip test if binary not built
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                config.command
+            );
+            return;
+        }
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+
+        // Spawn connection
+        let conn = AcpConnection::spawn(&config, temp_dir.path())
+            .await
+            .expect("Failed to spawn ACP connection");
+
+        // First create a session to get a valid session ID
+        let session_id = conn
+            .create_session(temp_dir.path())
+            .await
+            .expect("Failed to create session");
+
+        // Now try to load that session
+        let (update_tx, mut update_rx) = mpsc::channel(32);
+        let _response = conn
+            .load_session(session_id, temp_dir.path(), update_tx)
+            .await
+            .expect("Failed to load session");
+
+        // Collect replay updates
+        let mut user_messages = Vec::new();
+        let mut agent_messages = Vec::new();
+        while let Ok(update) = update_rx.try_recv() {
+            match update {
+                acp::SessionUpdate::UserMessageChunk(chunk) => {
+                    if let acp::ContentBlock::Text(text) = chunk.content {
+                        user_messages.push(text.text);
+                    }
+                }
+                acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                    if let acp::ContentBlock::Text(text) = chunk.content {
+                        agent_messages.push(text.text);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Mock agent replays "Previous user message" and "Previous agent response"
+        assert!(
+            user_messages.iter().any(|m| m.contains("Previous user")),
+            "Should have received user message replay, got: {user_messages:?}"
+        );
+        assert!(
+            agent_messages.iter().any(|m| m.contains("Previous agent")),
+            "Should have received agent message replay, got: {agent_messages:?}"
+        );
     }
 }
