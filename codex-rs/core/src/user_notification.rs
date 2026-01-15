@@ -28,13 +28,20 @@ impl UserNotifier {
     /// Send a notification using the configured method.
     ///
     /// If an external command is configured, uses that (legacy behavior).
-    /// If native notifications are enabled, sends a native desktop notification.
+    /// If native notifications are enabled and no external command is configured,
+    /// sends a native desktop notification.
+    ///
+    /// Note: If `notify_command` is `Some` but empty, no notification is sent.
+    /// This allows tests to disable notifications by setting `config.notify = Some(vec![])`.
     pub fn notify(&self, notification: &UserNotification) {
-        if let Some(notify_command) = &self.notify_command
-            && !notify_command.is_empty()
-        {
-            self.invoke_notify(notify_command, notification)
+        if let Some(notify_command) = &self.notify_command {
+            // External command is configured - use it if non-empty, otherwise skip entirely
+            if !notify_command.is_empty() {
+                self.invoke_notify(notify_command, notification)
+            }
+            // Empty notify_command means notifications are explicitly disabled
         } else if self.use_native {
+            // No external command configured - use native notifications if enabled
             self.send_native(notification);
         }
     }
