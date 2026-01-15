@@ -1,0 +1,11 @@
+---
+source: tui-pty-e2e/tests/acp_tracing.rs
+expression: normalized
+---
+→ {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":true,"writeTextFile":true},"terminal":false},"clientInfo":{"name":"codex","title":"Codex CLI","version":"0.0.0"}}}
+← {"jsonrpc":"2.0","id":0,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":false,"promptCapabilities":{"image":false,"audio":false,"embeddedContext":false},"mcpCapabilities":{"http":false,"sse":false},"sessionCapabilities":{}},"authMethods":[],"agentInfo":{"name":"mock-agent","title":"Mock Agent","version":"0.1.0"}}}
+→ {"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"[TMP_DIR]
+← {"jsonrpc":"2.0","id":1,"result":{"sessionId":"0","models":{"currentModelId":"mock-model-default","availableModels":[{"modelId":"mock-model-default","name":"Mock Default Model","description":"The default mock model"},{"modelId":"mock-model-fast","name":"Mock Fast Model","description":"A faster mock model variant"},{"modelId":"mock-model-powerful","name":"Mock Powerful Model","description":"A more powerful mock model variant"}]}}}
+→ {"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"0","prompt":[{"type":"text","text":"Snapshot test prompt"}]}}
+← {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"0","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Snapshot test response"}}}}
+← {"jsonrpc":"2.0","id":2,"result":{"stopReason":"end_turn"}}

@@ -270,11 +270,21 @@ impl TuiSession {
                     .as_ref()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_else(|| codex_home.to_string_lossy().into_owned());
-                let acp_section = if config.allow_http_fallback {
-                    "\n[acp]\nallow_http_fallback = true\n"
+
+                // Build ACP section with both allow_http_fallback and trace_enabled
+                let mut acp_settings = Vec::new();
+                if config.allow_http_fallback {
+                    acp_settings.push("allow_http_fallback = true");
+                }
+                if config.acp_trace_enabled {
+                    acp_settings.push("trace_enabled = true");
+                }
+                let acp_section = if !acp_settings.is_empty() {
+                    format!("\n[acp]\n{}\n", acp_settings.join("\n"))
                 } else {
-                    ""
+                    String::new()
                 };
+
                 format!(
                     r#"model = "{model}"
 model_provider = "mock_provider"
@@ -622,6 +632,16 @@ name = "Mock ACP provider for tests"
     pub fn nori_home_path(&self) -> Option<std::path::PathBuf> {
         self._temp_dir.as_ref().map(|d| d.path().to_path_buf())
     }
+
+    /// Get the path to the ACP trace log file (if temp directory exists and tracing is enabled)
+    ///
+    /// This is useful for E2E tests that need to verify sacp-tee wire protocol logging.
+    /// Logs are stored in `$NORI_HOME/log/` with the pattern `acp-trace-*.log`.
+    pub fn acp_trace_log_path(&self) -> Option<std::path::PathBuf> {
+        self._temp_dir
+            .as_ref()
+            .and_then(|d| find_acp_trace_log_file(d.path()))
+    }
 }
 
 /// Find the ACP log file in the given NORI_HOME directory.
@@ -642,6 +662,29 @@ fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> 
                 .file_name()
                 .to_str()
                 .is_some_and(|name| name.starts_with("nori-acp."))
+        })
+        .max_by_key(|entry| entry.metadata().ok().and_then(|m| m.modified().ok()))
+        .map(|entry| entry.path())
+}
+
+/// Find the ACP trace log file in the given NORI_HOME directory.
+///
+/// Searches for files matching `acp-trace-*` in the `log/` subdirectory,
+/// returning the most recently modified one.
+fn find_acp_trace_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> {
+    let log_dir = nori_home.join("log");
+    if !log_dir.exists() {
+        return None;
+    }
+
+    std::fs::read_dir(&log_dir)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with("acp-trace-") && name.ends_with(".log"))
         })
         .max_by_key(|entry| entry.metadata().ok().and_then(|m| m.modified().ok()))
         .map(|entry| entry.path())
@@ -671,6 +714,9 @@ pub struct SessionConfig {
     /// Binary names to exclude from PATH (filters out directories containing these binaries).
     /// Useful for testing behavior when certain commands are "not installed".
     pub exclude_binaries: Vec<String>,
+    /// Enable ACP wire protocol tracing via sacp-tee proxy.
+    /// When true, writes `acp_trace_enabled = true` to config.toml.
+    pub acp_trace_enabled: bool,
 }
 
 impl Default for SessionConfig {
@@ -694,6 +740,7 @@ impl SessionConfig {
             // Exclude nori-ai by default since it won't be in PATH on CI runners.
             // Tests that need nori-ai should explicitly add it via with_extra_path().
             exclude_binaries: vec!["nori-ai".to_string()],
+            acp_trace_enabled: false, // Tracing disabled by default
         }
     }
 
@@ -763,6 +810,13 @@ impl SessionConfig {
     /// Useful for testing behavior when certain commands are "not installed".
     pub fn with_excluded_binary(mut self, binary_name: impl Into<String>) -> Self {
         self.exclude_binaries.push(binary_name.into());
+        self
+    }
+
+    /// Enable ACP wire protocol tracing via sacp-tee proxy.
+    /// When enabled, sets `acp_trace_enabled = true` in config.toml.
+    pub fn with_acp_trace_enabled(mut self, enabled: bool) -> Self {
+        self.acp_trace_enabled = enabled;
         self
     }
 }
