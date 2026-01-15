@@ -113,13 +113,11 @@ fn test_build_wrapped_command_without_trace() {
     // Without tracing, command should be unchanged
     assert!(
         command.contains("mock_acp_agent"),
-        "Command should be the original agent command: {}",
-        command
+        "Command should be the original agent command: {command}"
     );
     assert!(
         args.is_empty(),
-        "Args should be unchanged (empty for mock): {:?}",
-        args
+        "Args should be unchanged (empty for mock): {args:?}"
     );
 }
 
@@ -143,18 +141,15 @@ fn test_build_wrapped_command_with_trace() {
     // Args should include --log-file, the path, --, and the original command
     assert!(
         args.contains(&"--log-file".to_string()),
-        "Args should contain --log-file: {:?}",
-        args
+        "Args should contain --log-file: {args:?}"
     );
     assert!(
         args.contains(&log_path.to_string_lossy().to_string()),
-        "Args should contain log path: {:?}",
-        args
+        "Args should contain log path: {args:?}"
     );
     assert!(
         args.contains(&"--".to_string()),
-        "Args should contain -- separator: {:?}",
-        args
+        "Args should contain -- separator: {args:?}"
     );
     // The original command should be after --
     let separator_pos = args.iter().position(|a| a == "--").unwrap();
@@ -162,8 +157,7 @@ fn test_build_wrapped_command_with_trace() {
         args[separator_pos + 1..]
             .iter()
             .any(|a| a.contains("mock_acp_agent")),
-        "Original command should be after --: {:?}",
-        args
+        "Original command should be after --: {args:?}"
     );
 }
 
@@ -191,12 +185,10 @@ fn test_build_wrapped_command_preserves_original_args() {
     // Should have the original command and its args
     assert!(
         downstream_args.iter().any(|a| a.contains("gemini-cli")),
-        "Should contain original gemini-cli: {:?}",
-        downstream_args
+        "Should contain original gemini-cli: {downstream_args:?}"
     );
     assert!(
         downstream_args.iter().any(|a| a == "--experimental-acp"),
-        "Should preserve original --experimental-acp arg: {:?}",
-        downstream_args
+        "Should preserve original --experimental-acp arg: {downstream_args:?}"
     );
 }
