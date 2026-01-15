@@ -11,6 +11,7 @@
 #   # Create a release (from local machine with gh CLI authenticated)
 #   ./scripts/create_nori_release --publish-release      # stable release
 #   ./scripts/create_nori_release --publish-alpha        # alpha release
+#   ./scripts/create_nori_release --publish-next         # dev snapshot for testing
 #   ./scripts/create_nori_release --version 0.3.0        # specific version
 #   ./scripts/create_nori_release --dry-run --publish-release  # preview
 #
@@ -19,6 +20,9 @@
 # For testing the build process without releasing:
 #   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
 #   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true -f skip_tests=true
+#
+# For publishing a dev snapshot directly from GitHub UI:
+#   gh workflow run nori-release.yml -f publish_next=true
 #
 name: Nori Release
 
@@ -29,9 +33,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to test build (e.g., 0.2.0) - dry run only"
-        required: true
+        description: "Version to build (e.g., 0.2.0) - ignored if publish_next is true"
+        required: false
         type: string
+      publish_next:
+        description: "Publish a dev snapshot (@next) - auto-determines version"
+        required: false
+        default: false
+        type: boolean
       dry_run:
         description: "Dry run mode (builds but does not publish)"
         required: false
@@ -61,30 +70,83 @@ jobs:
       tag_name: ${{ steps.validate.outputs.tag_name }}
       is_prerelease: ${{ steps.validate.outputs.is_prerelease }}
       is_tag_push: ${{ steps.validate.outputs.is_tag_push }}
+      publish_next: ${{ steps.validate.outputs.publish_next }}
       checkout_ref: ${{ steps.validate.outputs.checkout_ref }}
       skip_tests: ${{ steps.validate.outputs.skip_tests }}
     steps:
       - name: Validate version and determine refs
         id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           IS_TAG_PUSH="false"
+          PUBLISH_NEXT="false"
+
           if [[ "${{ github.event_name }}" == "push" ]]; then
             IS_TAG_PUSH="true"
             # Extract version from tag name (nori-v0.2.0 -> 0.2.0)
             VERSION="${GITHUB_REF_NAME#${{ env.TAG_PREFIX }}}"
             TAG_NAME="${GITHUB_REF_NAME}"
             CHECKOUT_REF="${GITHUB_REF}"
+          elif [[ "${{ inputs.publish_next }}" == "true" ]]; then
+            PUBLISH_NEXT="true"
+            # Auto-determine the next -next.N version
+            # NOTE: This logic mirrors scripts/create_nori_release determine_version()
+            # Keep them in sync if changes are made
+            echo "Determining next dev snapshot version..."
+
+            # Get the latest stable release version
+            LATEST_STABLE=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+            if [[ -z "$LATEST_STABLE" || "$LATEST_STABLE" == "null" ]]; then
+              # No releases yet, use 0.0.0 as base
+              BASE_VERSION="0.0.0"
+            else
+              # Strip the tag prefix to get version
+              BASE_VERSION="${LATEST_STABLE#${{ env.TAG_PREFIX }}}"
+              # Strip any prerelease suffix to get the stable base
+              BASE_VERSION="${BASE_VERSION%%-*}"
+            fi
+
+            echo "Base stable version: $BASE_VERSION"
+
+            # Find the highest existing -next.N for this base version
+            NEXT_PREFIX="${BASE_VERSION}-next."
+            HIGHEST_NEXT=0
+
+            # List all releases and find -next versions
+            RELEASES=$(gh api repos/${{ github.repository }}/releases --paginate --jq '.[].tag_name' 2>/dev/null || echo "")
+            while IFS= read -r tag; do
+              if [[ "$tag" == "${{ env.TAG_PREFIX }}${NEXT_PREFIX}"* ]]; then
+                SUFFIX="${tag#${{ env.TAG_PREFIX }}${NEXT_PREFIX}}"
+                if [[ "$SUFFIX" =~ ^[0-9]+$ ]]; then
+                  if (( SUFFIX > HIGHEST_NEXT )); then
+                    HIGHEST_NEXT=$SUFFIX
+                  fi
+                fi
+              fi
+            done <<< "$RELEASES"
+
+            VERSION="${NEXT_PREFIX}$((HIGHEST_NEXT + 1))"
+            TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
+            CHECKOUT_REF="dev"
+
+            echo "Auto-determined version: $VERSION"
           else
             VERSION="${{ inputs.version }}"
+            if [[ -z "$VERSION" ]]; then
+              echo "::error::Must specify either 'version' or 'publish_next=true'"
+              exit 1
+            fi
             TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
             # For dispatch dry run, checkout dev branch
             CHECKOUT_REF="dev"
           fi
 
           echo "is_tag_push=$IS_TAG_PUSH" >> "$GITHUB_OUTPUT"
+          echo "publish_next=$PUBLISH_NEXT" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
 
-          # Validate semver format (X.Y.Z or X.Y.Z-alpha.N, X.Y.Z-beta.N, etc.)
+          # Validate semver format (X.Y.Z or X.Y.Z-alpha.N, X.Y.Z-beta.N, X.Y.Z-next.N, etc.)
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z]+\.[0-9]+)?$'; then
             echo "::error::Invalid version format: $VERSION"
             echo "Expected format: X.Y.Z or X.Y.Z-alpha.N"
@@ -108,6 +170,14 @@ jobs:
           fi
           echo "skip_tests=$SKIP_TESTS" >> "$GITHUB_OUTPUT"
 
+          # Determine run mode
+          RUN_MODE="Dry Run (build test only)"
+          if [[ "$IS_TAG_PUSH" == "true" ]]; then
+            RUN_MODE="Release (tag push)"
+          elif [[ "$PUBLISH_NEXT" == "true" && "${{ inputs.dry_run }}" != "true" ]]; then
+            RUN_MODE="Publish @next"
+          fi
+
           echo "## Release Validation" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
@@ -117,8 +187,8 @@ jobs:
           echo "| Pre-release | $IS_PRERELEASE |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Checkout Ref | \`$CHECKOUT_REF\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Mode | $RUN_MODE |" >> "$GITHUB_STEP_SUMMARY"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "| Mode | Dry Run (build test only) |" >> "$GITHUB_STEP_SUMMARY"
             echo "| Skip Tests | $SKIP_TESTS |" >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -430,13 +500,103 @@ jobs:
           retention-days: 7
 
   # ============================================================================
+  # CREATE TAG FOR PUBLISH_NEXT (only for workflow_dispatch with publish_next=true and dry_run=false)
+  # ============================================================================
+  create-next-tag:
+    name: Create @next Tag
+    needs: [validate, stage-npm]
+    # Only run when publish_next=true and dry_run=false (not for tag pushes)
+    if: ${{ !failure() && !cancelled() && needs.validate.outputs.publish_next == 'true' && inputs.dry_run == false }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+
+      - name: Create synthetic commit and tag
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG_NAME="${{ needs.validate.outputs.tag_name }}"
+          CARGO_TOML_PATH="codex-rs/Cargo.toml"
+
+          echo "Creating synthetic commit for version $VERSION"
+
+          # Get the dev branch head SHA
+          BASE_COMMIT=$(gh api repos/${{ github.repository }}/git/refs/heads/dev --jq '.object.sha')
+          echo "Base commit: $BASE_COMMIT"
+
+          # Get the tree SHA for the base commit
+          BASE_TREE=$(gh api repos/${{ github.repository }}/git/commits/$BASE_COMMIT --jq '.tree.sha')
+          echo "Base tree: $BASE_TREE"
+
+          # Fetch current Cargo.toml contents
+          CARGO_CONTENT=$(gh api repos/${{ github.repository }}/contents/$CARGO_TOML_PATH?ref=$BASE_COMMIT --jq '.content' | base64 -d)
+
+          # Update the version in Cargo.toml
+          UPDATED_CONTENT=$(echo "$CARGO_CONTENT" | sed "0,/^version = \"[^\"]*\"/s//version = \"$VERSION\"/")
+
+          # Create a blob with the updated content
+          BLOB_SHA=$(echo "$UPDATED_CONTENT" | gh api repos/${{ github.repository }}/git/blobs -X POST -f content=@- -f encoding=utf-8 --jq '.sha')
+          echo "Blob SHA: $BLOB_SHA"
+
+          # Create a new tree with the updated file
+          TREE_SHA=$(gh api repos/${{ github.repository }}/git/trees -X POST \
+            -f base_tree="$BASE_TREE" \
+            -f "tree[][path]=$CARGO_TOML_PATH" \
+            -f "tree[][mode]=100644" \
+            -f "tree[][type]=blob" \
+            -f "tree[][sha]=$BLOB_SHA" \
+            --jq '.sha')
+          echo "Tree SHA: $TREE_SHA"
+
+          # Create a commit
+          COMMIT_SHA=$(gh api repos/${{ github.repository }}/git/commits -X POST \
+            -f message="Release $VERSION" \
+            -f tree="$TREE_SHA" \
+            -f "parents[]=$BASE_COMMIT" \
+            --jq '.sha')
+          echo "Commit SHA: $COMMIT_SHA"
+
+          # Create an annotated tag
+          TAG_SHA=$(gh api repos/${{ github.repository }}/git/tags -X POST \
+            -f tag="$TAG_NAME" \
+            -f message="Nori release $VERSION" \
+            -f object="$COMMIT_SHA" \
+            -f type="commit" \
+            --jq '.sha')
+          echo "Tag SHA: $TAG_SHA"
+
+          # Create the tag ref (check if exists first for idempotency on retry)
+          if gh api repos/${{ github.repository }}/git/refs/tags/$TAG_NAME 2>/dev/null; then
+            echo "Tag $TAG_NAME already exists, skipping creation"
+          else
+            gh api repos/${{ github.repository }}/git/refs -X POST \
+              -f ref="refs/tags/$TAG_NAME" \
+              -f sha="$TAG_SHA"
+          fi
+
+          echo "## Tag Created" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`$VERSION\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | \`$TAG_NAME\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`$COMMIT_SHA\` |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
   # PUBLISH TO NPM (only for tag push, not dry run)
   # ============================================================================
   publish-npm:
     name: Publish to npm
-    needs: [validate, stage-npm]
-    # Only publish for actual tag pushes, not workflow_dispatch (which is dry run only)
-    if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
+    needs: [validate, stage-npm, create-next-tag]
+    # Publish for tag pushes OR when publish_next=true with dry_run=false
+    # Note: create-next-tag is skipped for tag pushes but we still need the dependency for ordering
+    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || (needs.validate.outputs.publish_next == 'true' && inputs.dry_run == false)) }}
     runs-on: ubuntu-24.04
     environment: npm-publish
     permissions:
@@ -514,9 +674,10 @@ jobs:
   # ============================================================================
   create-release:
     name: Create GitHub Release
-    needs: [validate, build-native, publish-npm]
-    # Only create release for actual tag pushes
-    if: ${{ !failure() && !cancelled() && github.event_name == 'push' }}
+    needs: [validate, build-native, publish-npm, create-next-tag]
+    # Create release for tag pushes OR when publish_next=true with dry_run=false
+    # Note: create-next-tag is skipped for tag pushes but we still need the dependency for ordering
+    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || (needs.validate.outputs.publish_next == 'true' && inputs.dry_run == false)) }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -524,6 +685,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          # For tag pushes use the tag, for publish_next use the tag that was just created
           ref: ${{ needs.validate.outputs.tag_name }}
           fetch-depth: 0
 
@@ -628,12 +790,13 @@ jobs:
           echo "| GitHub Release | [$TAG_NAME](https://github.com/${{ github.repository }}/releases/tag/$TAG_NAME) |" >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
-  # DRY RUN SUMMARY (only for workflow_dispatch)
+  # DRY RUN SUMMARY (only for workflow_dispatch with dry_run=true)
   # ============================================================================
   dry-run-summary:
     name: Dry Run Summary
     needs: [validate, stage-npm]
-    if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' }}
+    # Only show dry run summary when dry_run is true (not when actually publishing)
+    if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Download npm package
@@ -647,6 +810,7 @@ jobs:
           VERSION="${{ needs.validate.outputs.version }}"
           TAG_NAME="${{ needs.validate.outputs.tag_name }}"
           IS_PRERELEASE="${{ needs.validate.outputs.is_prerelease }}"
+          PUBLISH_NEXT="${{ needs.validate.outputs.publish_next }}"
 
           echo "## Dry Run Complete" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -658,13 +822,29 @@ jobs:
           echo "| npm Package | \`${{ env.NPM_PACKAGE_NAME }}@$VERSION\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| npm Tag | \`$([ \"$IS_PRERELEASE\" == \"true\" ] && echo \"next\" || echo \"latest\")\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pre-release | $IS_PRERELEASE |" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$PUBLISH_NEXT" == "true" ]]; then
+            echo "| Mode | Dev Snapshot (@next) |" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Staged Package" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           ls -la dist/ >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "To create an actual release, use the release script:" >> "$GITHUB_STEP_SUMMARY"
-          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
-          echo "./scripts/create_nori_release --version $VERSION" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "To create an actual release:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$PUBLISH_NEXT" == "true" ]]; then
+            echo "**Option 1: From GitHub UI**" >> "$GITHUB_STEP_SUMMARY"
+            echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+            echo "gh workflow run nori-release.yml -f publish_next=true -f dry_run=false" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Option 2: Using the release script**" >> "$GITHUB_STEP_SUMMARY"
+            echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+            echo "./scripts/create_nori_release --publish-next" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+            echo "./scripts/create_nori_release --version $VERSION" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

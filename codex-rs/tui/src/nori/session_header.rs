@@ -379,7 +379,7 @@ impl HistoryCell for NoriSessionHeaderCell {
             .clone()
             .unwrap_or_else(|| "(none)".to_string());
         lines.push(Line::from(vec![
-            Span::from("profile:   ").dim(),
+            Span::from("skillset:  ").dim(),
             Span::from(profile_display),
         ]));
 
@@ -634,8 +634,8 @@ mod tests {
         assert!(rendered.contains("agent:"), "Should show agent label");
         assert!(rendered.contains("test-agent"), "Should show agent name");
 
-        // Should contain profile
-        assert!(rendered.contains("profile:"), "Should show profile label");
+        // Should contain skillset
+        assert!(rendered.contains("skillset:"), "Should show skillset label");
     }
 
     #[test]
