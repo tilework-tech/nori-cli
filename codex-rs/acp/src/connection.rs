@@ -953,20 +953,21 @@ impl acp::Client for ClientDelegate {
         // Emit synthetic ToolCall event for TUI rendering (Gemini compatibility)
         // Gemini agents use client capability methods instead of session/update notifications,
         // so we synthesize the events here to enable proper TUI display.
-        let tool_call_id = acp::ToolCallId::from(format!("write_text_file-{}", arguments.path.display()));
+        let tool_call_id =
+            acp::ToolCallId::from(format!("write_text_file-{}", arguments.path.display()));
         let title = format!("Writing {}", arguments.path.display());
-        
+
         let tool_call = acp::ToolCall::new(tool_call_id, title)
             .kind(acp::ToolKind::Execute)
             .status(acp::ToolCallStatus::Pending);
-        
+
         // Send the ToolCall update to the session if registered
         let sessions = self.sessions.borrow();
         if let Some(tx) = sessions.get(&arguments.session_id) {
             let _ = tx.try_send(acp::SessionUpdate::ToolCall(tool_call));
         }
         drop(sessions); // Release borrow before performing I/O
-        
+
         let path = &arguments.path;
 
         // Resolve relative paths against the working directory
@@ -1043,20 +1044,21 @@ impl acp::Client for ClientDelegate {
         // Emit synthetic ToolCall event for TUI rendering (Gemini compatibility)
         // Gemini agents use client capability methods instead of session/update notifications,
         // so we synthesize the events here to enable proper TUI display.
-        let tool_call_id = acp::ToolCallId::from(format!("read_text_file-{}", arguments.path.display()));
+        let tool_call_id =
+            acp::ToolCallId::from(format!("read_text_file-{}", arguments.path.display()));
         let title = format!("Reading {}", arguments.path.display());
-        
+
         let tool_call = acp::ToolCall::new(tool_call_id, title)
             .kind(acp::ToolKind::Execute)
             .status(acp::ToolCallStatus::Pending);
-        
+
         // Send the ToolCall update to the session if registered
         let sessions = self.sessions.borrow();
         if let Some(tx) = sessions.get(&arguments.session_id) {
             let _ = tx.try_send(acp::SessionUpdate::ToolCall(tool_call));
         }
         drop(sessions); // Release borrow before performing I/O
-        
+
         // Read file content
         let content =
             std::fs::read_to_string(&arguments.path).map_err(acp::Error::into_internal_error)?;
@@ -1262,7 +1264,11 @@ mod tests {
 
         // Call write_text_file
         let content = "Hello, world!";
-        let request = acp::WriteTextFileRequest::new(session_id.clone(), test_file.clone(), content.to_string());
+        let request = acp::WriteTextFileRequest::new(
+            session_id.clone(),
+            test_file.clone(),
+            content.to_string(),
+        );
         let response = delegate
             .write_text_file(request)
             .await
