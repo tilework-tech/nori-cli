@@ -23,9 +23,14 @@ install:
     rustup show active-toolchain
     cargo fetch
 
+# Prefer running targeted tests on single packages,
+# for faster work within the monorepo
+test *args:
+    cargo test "$@"
+
 # Run `cargo nextest` since it's faster than `cargo test`, though including
 # --no-fail-fast is important to ensure all tests are run.
 #
 # Run `cargo install cargo-nextest` if you don't have it installed.
-test:
+nextest:
     cargo nextest run --no-fail-fast
