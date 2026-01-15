@@ -212,6 +212,79 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     }
 }
 
+// ==================== Command Extraction Functions ====================
+
+/// Extract command string from either array or string format.
+///
+/// Codex sends commands as arrays: `["bash", "-lc", "cd /path && command"]`
+/// Claude Code sends commands as strings: `"git status"`
+///
+/// This function handles both formats and extracts the actual command.
+fn extract_command_string(raw_input: Option<&serde_json::Value>) -> Option<String> {
+    raw_input.and_then(|input| {
+        // Try array format first (Codex style)
+        if let Some(cmd_array) = input.get("command").and_then(|v| v.as_array()) {
+            // Check for bash wrapper: ["bash", "-lc", "cd ... && command"]
+            if cmd_array.len() == 3
+                && cmd_array.first().and_then(|v| v.as_str()) == Some("bash")
+                && cmd_array.get(1).and_then(|v| v.as_str()) == Some("-lc")
+            {
+                // Extract the actual command from the shell wrapper
+                if let Some(shell_cmd) = cmd_array.get(2).and_then(|v| v.as_str()) {
+                    return extract_command_from_shell_wrapper(shell_cmd);
+                }
+            }
+            // Fallback: join array elements
+            return Some(
+                cmd_array
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+        }
+
+        // Try string format (Claude Code style)
+        input
+            .get("command")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    })
+}
+
+/// Extract actual command from "cd /path && command" format.
+///
+/// Codex wraps commands in shell wrappers like:
+/// `bash -lc "cd /home/user/project && git status"`
+///
+/// This function extracts just the "git status" part.
+fn extract_command_from_shell_wrapper(shell_cmd: &str) -> Option<String> {
+    // Look for "cd ... && command" pattern
+    if let Some(pos) = shell_cmd.find(" && ") {
+        Some(shell_cmd[pos + 4..].trim().to_string())
+    } else {
+        Some(shell_cmd.to_string())
+    }
+}
+
+/// Extract parsed_cmd array from Codex rawInput for command metadata.
+///
+/// Codex provides a `parsed_cmd` array with command metadata:
+/// ```json
+/// "parsed_cmd": [{"cmd": "git status -sb", "type": "unknown"}]
+/// ```
+fn extract_parsed_cmd_string(raw_input: Option<&serde_json::Value>) -> Option<String> {
+    raw_input.and_then(|input| {
+        input
+            .get("parsed_cmd")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|first| first.get("cmd"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    })
+}
+
 // ==================== Format Functions ====================
 
 /// Format an Edit command with git-style summary: "Edit filename (+added -removed)"
@@ -238,10 +311,10 @@ fn format_write_command(raw_input: Option<&serde_json::Value>) -> Vec<String> {
 
 /// Format an Execute command: "Execute: command"
 fn format_execute_command(_title: &str, raw_input: Option<&serde_json::Value>) -> Vec<String> {
-    let cmd = raw_input
-        .and_then(|i| i.get("command").or_else(|| i.get("cmd")))
-        .and_then(|v| v.as_str())
-        .unwrap_or("command");
+    // Try parsed_cmd first (Codex metadata), then extract from command field
+    let cmd = extract_parsed_cmd_string(raw_input)
+        .or_else(|| extract_command_string(raw_input))
+        .unwrap_or_else(|| "command".to_string());
 
     vec![format!("Execute: {}", cmd)]
 }
@@ -355,11 +428,11 @@ fn extract_reason_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Option<Stri
             format!("Delete {short_path}")
         }
         Some(acp::ToolKind::Execute) => {
-            let cmd = raw_input
-                .and_then(|i| i.get("command"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("command");
-            let truncated = truncate_str(cmd, 60);
+            // Try parsed_cmd first (Codex metadata), then extract from command field
+            let cmd = extract_parsed_cmd_string(raw_input)
+                .or_else(|| extract_command_string(raw_input))
+                .unwrap_or_else(|| "command".to_string());
+            let truncated = truncate_str(&cmd, 60);
             format!("Execute: {truncated}")
         }
         Some(acp::ToolKind::Move) => {

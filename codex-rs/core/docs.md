@@ -108,6 +108,21 @@ The `WireApi` enum defines two HTTP-based protocols:
 
 ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
 
+**User Notifications:**
+
+The `user_notification.rs` module provides OS-level notification support via external scripts. Key exports:
+
+- `UserNotifier`: Manages external notification command execution
+- `UserNotification`: Enum of notification event types
+
+| Notification Type | Purpose | Payload |
+|-------------------|---------|---------|
+| `AgentTurnComplete` | Agent finished a turn | thread_id, turn_id, cwd, input_messages, last_assistant_message |
+| `AwaitingApproval` | Waiting for user approval | call_id, command, cwd |
+| `Idle` | System idle after completion | session_id, idle_duration_secs |
+
+Notifications serialize to JSON (kebab-case keys) and are passed as an argument to the configured notifier command. The notifier is invoked fire-and-forget via `std::process::Command::spawn()`.
+
 **Session Recording:**
 
 The `rollout/` module handles session persistence:

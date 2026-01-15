@@ -144,12 +144,40 @@ Use the `create_nori_release` script to create releases:
 # Create next stable release (auto-increments minor version)
 ./scripts/create_nori_release --publish-release
 
-# Create next alpha release
+# Create next alpha release (for upcoming version, e.g., 0.3.0-alpha.1)
 ./scripts/create_nori_release --publish-alpha
+
+# Create a dev snapshot for internal testing (e.g., 0.2.0-next.1)
+./scripts/create_nori_release --publish-next
 
 # Create a specific version
 ./scripts/create_nori_release --version 0.3.0
 ./scripts/create_nori_release --version 0.3.0-alpha.1
+```
+
+### Creating Dev Snapshots (@next)
+
+For internal testing before a stable release, use the `--publish-next` flag:
+
+```bash
+# Preview what version would be created
+./scripts/create_nori_release --dry-run --publish-next
+
+# Create and publish a dev snapshot
+./scripts/create_nori_release --publish-next
+```
+
+This creates versions like `0.2.0-next.1`, `0.2.0-next.2`, etc., based on the latest
+stable release. These are published to npm with the `next` tag.
+
+**From GitHub UI (no local tooling required):**
+
+```bash
+# Publish a dev snapshot directly from GitHub Actions
+gh workflow run nori-release.yml -f publish_next=true -f dry_run=false
+
+# Preview what version would be created (dry run)
+gh workflow run nori-release.yml -f publish_next=true
 ```
 
 The script:
@@ -225,9 +253,12 @@ The workflow builds native binaries for:
 
 The script automatically determines the next version:
 
-| Current Latest  | `--publish-release` | `--publish-alpha` |
-| --------------- | ------------------- | ----------------- |
-| None            | `0.1.0`             | `0.1.0-alpha.1`   |
-| `0.1.0`         | `0.2.0`             | `0.2.0-alpha.1`   |
-| `0.2.0-alpha.3` | `0.3.0`             | `0.3.0-alpha.1`   |
-| `0.2.0`         | `0.3.0`             | `0.3.0-alpha.1`   |
+| Current Latest  | `--publish-release` | `--publish-alpha` | `--publish-next` |
+| --------------- | ------------------- | ----------------- | ---------------- |
+| None            | `0.1.0`             | `0.1.0-alpha.1`   | `0.0.0-next.1`   |
+| `0.1.0`         | `0.2.0`             | `0.2.0-alpha.1`   | `0.1.0-next.1`   |
+| `0.2.0-alpha.3` | `0.3.0`             | `0.3.0-alpha.1`   | `0.2.0-next.1`\* |
+| `0.2.0`         | `0.3.0`             | `0.3.0-alpha.1`   | `0.2.0-next.1`   |
+| `0.2.0-next.5`  | `0.3.0`             | `0.3.0-alpha.1`   | `0.2.0-next.6`   |
+
+\*Note: `-next` versions are always based on the latest **stable** release, not alphas.

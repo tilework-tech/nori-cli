@@ -950,6 +950,24 @@ impl acp::Client for ClientDelegate {
         &self,
         arguments: acp::WriteTextFileRequest,
     ) -> acp::Result<acp::WriteTextFileResponse> {
+        // Emit synthetic ToolCall event for TUI rendering (Gemini compatibility)
+        // Gemini agents use client capability methods instead of session/update notifications,
+        // so we synthesize the events here to enable proper TUI display.
+        let tool_call_id =
+            acp::ToolCallId::from(format!("write_text_file-{}", arguments.path.display()));
+        let title = format!("Writing {}", arguments.path.display());
+
+        let tool_call = acp::ToolCall::new(tool_call_id, title)
+            .kind(acp::ToolKind::Execute)
+            .status(acp::ToolCallStatus::Pending);
+
+        // Send the ToolCall update to the session if registered
+        let sessions = self.sessions.borrow();
+        if let Some(tx) = sessions.get(&arguments.session_id) {
+            let _ = tx.try_send(acp::SessionUpdate::ToolCall(tool_call));
+        }
+        drop(sessions); // Release borrow before performing I/O
+
         let path = &arguments.path;
 
         // Resolve relative paths against the working directory
@@ -1023,6 +1041,24 @@ impl acp::Client for ClientDelegate {
         &self,
         arguments: acp::ReadTextFileRequest,
     ) -> acp::Result<acp::ReadTextFileResponse> {
+        // Emit synthetic ToolCall event for TUI rendering (Gemini compatibility)
+        // Gemini agents use client capability methods instead of session/update notifications,
+        // so we synthesize the events here to enable proper TUI display.
+        let tool_call_id =
+            acp::ToolCallId::from(format!("read_text_file-{}", arguments.path.display()));
+        let title = format!("Reading {}", arguments.path.display());
+
+        let tool_call = acp::ToolCall::new(tool_call_id, title)
+            .kind(acp::ToolKind::Execute)
+            .status(acp::ToolCallStatus::Pending);
+
+        // Send the ToolCall update to the session if registered
+        let sessions = self.sessions.borrow();
+        if let Some(tx) = sessions.get(&arguments.session_id) {
+            let _ = tx.try_send(acp::SessionUpdate::ToolCall(tool_call));
+        }
+        drop(sessions); // Release borrow before performing I/O
+
         // Read file content
         let content =
             std::fs::read_to_string(&arguments.path).map_err(acp::Error::into_internal_error)?;
@@ -1152,5 +1188,119 @@ mod tests {
             "Should contain test message, got: {messages:?}"
         );
         assert_eq!(stop_reason, acp::StopReason::EndTurn);
+    }
+
+    /// Test that read_text_file emits a ToolCall SessionUpdate event.
+    /// This enables TUI rendering of file read operations for agents like Gemini
+    /// that use client capability methods instead of session/update notifications.
+    #[tokio::test]
+    async fn test_read_text_file_emits_tool_call_event() {
+        use acp::Client;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let test_file = temp_dir.path().join("test.txt");
+        std::fs::write(&test_file, "test content").expect("Failed to write test file");
+
+        // Create ClientDelegate with a session registered
+        let (approval_tx, _approval_rx) = mpsc::channel(16);
+        let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+
+        // Register a session and capture updates
+        let session_id = acp::SessionId::from("test-session-123".to_string());
+        let (update_tx, mut update_rx) = mpsc::channel(32);
+        delegate.register_session(session_id.clone(), update_tx);
+
+        // Call read_text_file
+        let request = acp::ReadTextFileRequest::new(session_id.clone(), test_file.clone());
+        let response = delegate
+            .read_text_file(request)
+            .await
+            .expect("read_text_file should succeed");
+
+        // Verify the file was read
+        assert_eq!(response.content, "test content");
+
+        // Verify that a ToolCall SessionUpdate was emitted
+        let update = update_rx
+            .try_recv()
+            .expect("Should have received a SessionUpdate");
+
+        match update {
+            acp::SessionUpdate::ToolCall(tool_call) => {
+                assert_eq!(tool_call.status, acp::ToolCallStatus::Pending);
+                assert!(
+                    tool_call.title.contains("read_text_file")
+                        || tool_call.title.contains("Reading")
+                        || tool_call.title.contains("test.txt"),
+                    "Title should indicate file read operation, got: {}",
+                    tool_call.title
+                );
+                assert_eq!(tool_call.kind, acp::ToolKind::Execute);
+            }
+            other => panic!("Expected ToolCall update, got: {other:?}"),
+        }
+
+        delegate.unregister_session(&session_id);
+    }
+
+    /// Test that write_text_file emits a ToolCall SessionUpdate event.
+    /// This enables TUI rendering of file write operations for agents like Gemini
+    /// that use client capability methods instead of session/update notifications.
+    #[tokio::test]
+    async fn test_write_text_file_emits_tool_call_event() {
+        use acp::Client;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let test_file = temp_dir.path().join("output.txt");
+
+        // Create ClientDelegate with a session registered
+        let (approval_tx, _approval_rx) = mpsc::channel(16);
+        let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+
+        // Register a session and capture updates
+        let session_id = acp::SessionId::from("test-session-456".to_string());
+        let (update_tx, mut update_rx) = mpsc::channel(32);
+        delegate.register_session(session_id.clone(), update_tx);
+
+        // Call write_text_file
+        let content = "Hello, world!";
+        let request = acp::WriteTextFileRequest::new(
+            session_id.clone(),
+            test_file.clone(),
+            content.to_string(),
+        );
+        let response = delegate
+            .write_text_file(request)
+            .await
+            .expect("write_text_file should succeed");
+
+        // Verify the response is valid
+        assert_eq!(response, acp::WriteTextFileResponse::new());
+
+        // Verify the file was written
+        let written_content = std::fs::read_to_string(&test_file).expect("File should exist");
+        assert_eq!(written_content, content);
+
+        // Verify that a ToolCall SessionUpdate was emitted
+        let update = update_rx
+            .try_recv()
+            .expect("Should have received a SessionUpdate");
+
+        match update {
+            acp::SessionUpdate::ToolCall(tool_call) => {
+                assert_eq!(tool_call.status, acp::ToolCallStatus::Pending);
+                assert!(
+                    tool_call.title.contains("write_text_file")
+                        || tool_call.title.contains("Writing")
+                        || tool_call.title.contains("output.txt"),
+                    "Title should indicate file write operation, got: {}",
+                    tool_call.title
+                );
+                assert_eq!(tool_call.kind, acp::ToolKind::Execute);
+            }
+            other => panic!("Expected ToolCall update, got: {other:?}"),
+        }
+
+        delegate.unregister_session(&session_id);
     }
 }

@@ -312,12 +312,12 @@ mod tests {
 
         // Observation of dir2 before threshold - resets candidate to dir2
         let before_threshold = start + Duration::from_millis(400);
-        tracker.observe_directory_at(dir2.clone(), before_threshold);
+        tracker.observe_directory_at(dir2, before_threshold);
 
         // Observation of dir1 after original threshold would have passed
         // Should not promote dir1 because we switched to dir2
         let after_threshold = start + Duration::from_millis(600);
-        let changed = tracker.observe_directory_at(dir1.clone(), after_threshold);
+        let changed = tracker.observe_directory_at(dir1, after_threshold);
         assert!(!changed); // dir1 was reset, so it's a new candidate now
     }
 
@@ -334,12 +334,12 @@ mod tests {
 
         // Go back to effective CWD - should clear candidate
         let mid = start + Duration::from_millis(300);
-        tracker.observe_directory_at(initial.clone(), mid);
+        tracker.observe_directory_at(initial, mid);
 
         // Now observe new_dir again after what would have been the threshold
         // It should start fresh because candidate was cleared
         let after = start + Duration::from_millis(600);
-        let changed = tracker.observe_directory_at(new_dir.clone(), after);
+        let changed = tracker.observe_directory_at(new_dir, after);
         assert!(!changed); // New candidate started, not promoted yet
     }
 

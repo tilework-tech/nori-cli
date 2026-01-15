@@ -438,12 +438,12 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 │   - spawn_acp_agent()   │  codex_protocol::    │   - spawn()             │
 │   - forwards events     │  Event               │   - submit(Op)          │
 │                         │                      │   - approval handling   │
-│                         │  ─────────────────►  │                         │
+│                         │  ─────────────────►  │   - OS notifications    │
 │                         │  Op channel          │                         │
 └─────────────────────────┘                      └─────────────────────────┘
 ```
 
-- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, nori_home, history_persistence)
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, notify, nori_home, history_persistence)
 - `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`
@@ -553,6 +553,40 @@ The approval translation maps between Codex's binary approve/deny model and ACP'
 - `Denied`/`Abort` → Finds option with `RejectOnce` or `RejectAlways` kind
 - Falls back to text matching ("allow", "approve", "yes" vs "deny", "reject", "no") if kind-based matching fails
 - Last resort: first option for approve, last option for deny
+
+### OS-Level Notifications
+
+The ACP backend supports OS-level notifications via external scripts, using `codex_core::UserNotifier`. This enables alerting users when the terminal is not focused.
+
+**Configuration:**
+- `AcpBackendConfig.notify`: Optional `Vec<String>` specifying the notifier command and args
+- The TUI passes `config.notify` from the main Config to `AcpBackendConfig`
+
+**Notification Types:**
+
+| Event | When Triggered | JSON Payload Fields |
+|-------|----------------|---------------------|
+| `AwaitingApproval` | Approval request arrives | `call_id`, `command`, `cwd` |
+| `Idle` | 5 seconds after task completes | `session_id`, `idle_duration_secs` |
+
+**Implementation Details:**
+
+- Notifications are fire-and-forget (spawns subprocess, does not wait)
+- Idle timer uses `tokio::task::AbortHandle` for cancellation
+- Timer is cancelled when `submit()` is called (new user activity)
+- Approval handler sends notification before queuing the approval request
+
+```
+┌─────────────────────┐   AwaitingApproval    ┌─────────────────────┐
+│  ApprovalRequest    │──────────────────────►│  UserNotifier       │
+│  arrives            │                       │  (spawns script)    │
+└─────────────────────┘                       └─────────────────────┘
+
+┌─────────────────────┐   5 sec timer         ┌─────────────────────┐
+│  TaskComplete       │──────────────────────►│  Idle notification  │
+│  event              │  (if no new input)    │  (if not cancelled) │
+└─────────────────────┘                       └─────────────────────┘
+```
 
 ### Things to Know
 

@@ -106,16 +106,24 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
 /// Create selection view parameters for the ACP model picker with actual models.
 ///
 /// This function creates a picker showing models available from the ACP agent.
+/// Only shows model options when there are multiple models to choose from.
 #[cfg(feature = "unstable")]
 pub fn acp_model_picker_params_with_models(
     models: &[crate::app_event::AcpModelInfo],
     current_model_id: Option<&str>,
 ) -> SelectionViewParams {
-    if models.is_empty() {
-        // No models available - show a message
+    // Only show model picker when there are multiple models to choose from
+    if models.len() <= 1 {
+        // No model switching available - show a message
+        let message = if models.is_empty() {
+            "The ACP agent did not provide any models"
+        } else {
+            "The ACP agent only supports one model"
+        };
+
         let items: Vec<SelectionItem> = vec![SelectionItem {
-            name: "No models available".to_string(),
-            description: Some("The ACP agent did not provide any models".to_string()),
+            name: "Model switching not available".to_string(),
+            description: Some(message.to_string()),
             is_current: false,
             actions: vec![],
             dismiss_on_select: true,
@@ -124,7 +132,7 @@ pub fn acp_model_picker_params_with_models(
 
         return SelectionViewParams {
             title: Some("Select Model".to_string()),
-            subtitle: Some("No models available from agent".to_string()),
+            subtitle: Some("Model switching not supported by this agent".to_string()),
             footer_hint: Some(Line::from("Press esc to dismiss.")),
             items,
             ..Default::default()

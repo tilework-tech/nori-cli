@@ -27,7 +27,7 @@ The `NoriSessionHeaderCell` struct implements `HistoryCell` and renders:
 │                                                   │
 │ directory: ~/path/to/project                      │
 │ agent:     claude-sonnet                          │
-│ profile:   senior-swe                             │
+│ skillset:  senior-swe                             │
 │                                                   │
 │ Instruction Files                                 │
 │   ~/.claude/CLAUDE.md              (active)       │
@@ -96,9 +96,9 @@ Compiled only when `upstream-updates` feature is disabled. Provides Nori-specifi
 
 ### Things to Know
 
-**Profile Display:**
+**Skillset Display:**
 
-- Profile is resolved by walking from cwd upward through parent directories, using the nearest ancestor containing `.nori-config.json`
+- Skillset is resolved by walking from cwd upward through parent directories, using the nearest ancestor containing `.nori-config.json`
 - Supports both new format (`agents.claude-code.profile.baseProfile`) and old format (`profile.baseProfile`)
 - When no config file is found in any ancestor, displays "(none)"
 
