@@ -6,7 +6,7 @@ expression: "normalize_for_snapshot(header_lines.join(\"\\n\"))"
 │                                       │
 │  directory: [TMP_DIR]                 │
 │  agent:     mock-model                │
-│  profile:   [PROF]                    │
+│  skillset:  (none)                    │
 │                                       │
 │  Instruction Files                    │
 │    ~/.claude/CLAUDE.md                │
