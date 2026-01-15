@@ -27,8 +27,7 @@ use codex_common::CliConfigOverrides;
 #[cfg(feature = "codex-features")]
 use codex_exec::Cli as ExecCli;
 use codex_execpolicy::ExecPolicyCheckCommand;
-#[cfg(feature = "responses-api-proxy")]
-use codex_responses_api_proxy::Args as ResponsesApiProxyArgs;
+
 use codex_tui::AppExitInfo;
 use codex_tui::Cli as TuiCli;
 use codex_tui::update_action::UpdateAction;
@@ -129,11 +128,6 @@ enum Subcommand {
     #[cfg(feature = "cloud-tasks")]
     #[clap(name = "cloud", alias = "cloud-tasks")]
     Cloud(CloudTasksCli),
-
-    /// Internal: run the responses API proxy.
-    #[cfg(feature = "responses-api-proxy")]
-    #[clap(hide = true)]
-    ResponsesApiProxy(ResponsesApiProxyArgs),
 
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
@@ -651,11 +645,6 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 root_config_overrides.clone(),
             );
             run_apply_command(apply_cli, None).await?;
-        }
-        #[cfg(feature = "responses-api-proxy")]
-        Some(Subcommand::ResponsesApiProxy(args)) => {
-            tokio::task::spawn_blocking(move || codex_responses_api_proxy::run_main(args))
-                .await??;
         }
         Some(Subcommand::StdioToUds(cmd)) => {
             let socket_path = cmd.socket_path;

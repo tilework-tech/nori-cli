@@ -1,21 +1,19 @@
-# Noridoc: nori-cli (Codex CLI)
+# Noridoc: nori-cli
 
 Path: @/
 
 ### Overview
 
-This repository contains the Codex CLI, a local coding agent from OpenAI that runs on your computer. It provides AI-assisted coding capabilities through a terminal-based interface, with support for multiple model providers, sandboxed command execution, and IDE integration. The primary implementation is in Rust (`codex-rs`), with supporting TypeScript components for Node.js distribution.
+This repository contains the Nori AI CLI, a local coding agent that runs on your computer. It provides AI-assisted coding capabilities through a terminal-based interface, with support for multiple model providers including ACP (Agent Context Protocol), sandboxed command execution, and IDE integration. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`codex-cli`).
 
 ### How it fits into the larger codebase
 
-This is the root of a monorepo containing:
+This is a monorepo containing:
 
-- **`codex-rs/`**: Main Rust implementation (Cargo workspace)
-- **`codex-cli/`**: Node.js wrapper for npm distribution
-- **`sdk/typescript/`**: TypeScript SDK for programmatic Codex usage
-- **`docs/`**: User documentation
+- **`codex-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
+- **`codex-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
 
-The Rust codebase in `codex-rs` is the core implementation, with Node.js and TypeScript components providing distribution and integration interfaces.
+The Rust codebase in `codex-rs` contains the entire implementation. The `codex-cli` package provides the `nori` command via npm.
 
 ### Core Implementation
 
@@ -23,7 +21,7 @@ The Rust codebase in `codex-rs` is the core implementation, with Node.js and Typ
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                   codex CLI                     │
+│                   nori CLI                      │
 │  (codex-rs/cli - main binary dispatcher)        │
 ├─────────┬─────────┬────────────┬────────────────┤
 │   TUI   │  Exec   │ App Server │   MCP Server   │
@@ -39,39 +37,36 @@ The Rust codebase in `codex-rs` is the core implementation, with Node.js and Typ
 
 **Entry Points:**
 
-| Command            | Description        | Implementation        |
-| ------------------ | ------------------ | --------------------- |
-| `codex`            | Interactive TUI    | `codex-rs/tui`        |
-| `codex exec`       | Headless execution | `codex-rs/exec`       |
-| `codex app-server` | IDE integration    | `codex-rs/app-server` |
-| `codex mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
-| `codex login`      | Authentication     | `codex-rs/login`      |
-| `codex apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
+| Command           | Description        | Implementation        |
+| ----------------- | ------------------ | --------------------- |
+| `nori`            | Interactive TUI    | `codex-rs/tui`        |
+| `nori exec`       | Headless execution | `codex-rs/exec`       |
+| `nori app-server` | IDE integration    | `codex-rs/app-server` |
+| `nori mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
+| `nori login`      | Authentication     | `codex-rs/login`      |
+| `nori apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
 
 **Model Providers:**
 
 - OpenAI (default)
-- Ollama (local, --oss)
-- LM Studio (local, --oss)
 - Gemini ACP (via Agent Context Protocol)
+- Ollama (local, --oss, requires `oss-providers` feature)
+- LM Studio (local, --oss, requires `oss-providers` feature)
 
 ### Things to Know
 
 **Installation:**
 
 ```bash
-npm i -g @openai/codex   # npm
-brew install --cask codex # Homebrew
+npm i -g nori-ai-cli   # npm
 ```
 
 **Configuration:**
 
-Stored in `~/.codex/`:
+Stored in `~/.nori/cli/`:
 
 - `config.toml`: Main configuration
-- `auth.json`: Authentication tokens
 - `sessions/`: Saved conversations
-- `projects.toml`: Per-project trust settings
 
 **Sandbox Enforcement:**
 
@@ -85,20 +80,20 @@ Modes: `ReadOnly`, `WorkspaceWrite`, `DangerFullAccess`
 
 **Session Management:**
 
-Conversations are recorded to `~/.codex/sessions/` and can be resumed:
+Conversations are recorded to `~/.nori/cli/sessions/` and can be resumed:
 
 ```bash
-codex resume              # Show picker
-codex resume --last       # Most recent
-codex resume <SESSION_ID> # Specific session
+nori resume              # Show picker
+nori resume --last       # Most recent
+nori resume <SESSION_ID> # Specific session
 ```
 
 **MCP Support:**
 
-Codex acts as both MCP client and server:
+Nori acts as both MCP client and server:
 
 - **Client**: Connects to MCP servers defined in config
-- **Server**: Exposes Codex tools via `codex mcp-server`
+- **Server**: Exposes Nori tools via `nori mcp-server`
 
 **Development:**
 
