@@ -1,10 +1,6 @@
 name: Issue Labeler
 
-on:
-  issues:
-    types:
-      - opened
-      - labeled
+on: workflow_dispatch
 
 jobs:
   gather-labels:
