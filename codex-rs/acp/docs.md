@@ -24,6 +24,7 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
   - `provider_slug`: Identifies which agent subprocess to spawn (e.g., "mock-acp", "mock-acp-alt", "gemini-acp", "claude-acp")
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
+  - `env`: Environment variables to pass to the subprocess (used by mock agents for model-specific behavior)
   - `provider_info`: Embedded `AcpProviderInfo` with provider configuration (name, retry settings, timeouts)
   - `auth_hint`: Agent-specific authentication instructions for error messages
 - Model names are normalized to lowercase for case-insensitive matching (e.g., "Gemini-2.5-Flash" → "gemini-2.5-flash")
@@ -31,6 +32,14 @@ The ACP registry in `@/codex-rs/acp/src/registry.rs` is **model-centric** rather
 - The `provider_slug` field enables subprocess reuse determination when switching models (same slug can reuse, different slug spawns new process)
 - `mock-model-alt` uses the same binary as `mock-model` but with provider_slug `mock-acp-alt` for E2E testing agent switching between different configurations
 - Claude ACP is registered for both "claude-4.5" and "claude-acp" model names, using `npx @zed-industries/claude-code-acp` command with no arguments
+
+**Agent Display Names:**
+
+`get_agent_display_name()` returns a human-readable display name for any registered agent model:
+- Mock agents: "Mock ACP" / "Mock ACP Alt" (debug builds only)
+- Production agents: Uses `AgentKind::display_name()` (e.g., "Claude Code", "Gemini", "Codex")
+- Fallback: Returns the raw model name if not recognized
+- Used by the TUI for the "Connecting to [Agent]" status indicator during slow agent startup
 
 **Agent Authentication Hints:**
 
@@ -151,6 +160,45 @@ Path semantics:
 - `nori_home` always refers to `~/.nori/cli` (the full path)
 - Config file lives at `{nori_home}/config.toml` (i.e., `~/.nori/cli/config.toml`)
 
+### Message History Support
+
+The ACP module provides cross-session message history persistence, matching the functionality in `codex-core`:
+
+**History File Location:**
+- Stored at `{nori_home}/history.jsonl` (i.e., `~/.nori/cli/history.jsonl`)
+- Uses JSON-Lines format with one entry per line
+
+**History Entry Schema:**
+```json
+{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}
+```
+
+**Key exports from `@/codex-rs/acp/src/message_history.rs`:**
+- `append_entry()`: Async function to add a history entry with file locking
+- `history_metadata()`: Returns (log_id, entry_count) for the history file
+- `lookup()`: Retrieves a specific history entry by offset and log_id
+- `HistoryEntry`: Struct representing a single history entry
+
+**History Persistence Policy:**
+
+The `HistoryPersistence` enum in `@/codex-rs/acp/src/config/types.rs` controls history behavior:
+
+| Policy | Behavior |
+|--------|----------|
+| `SaveAll` (default) | All user messages are persisted to history.jsonl |
+| `None` | No history is written (privacy mode) |
+
+Configured via `history_persistence` in `~/.nori/cli/config.toml`:
+```toml
+history_persistence = "save-all"  # or "none"
+```
+
+**Implementation Details:**
+- Uses advisory file locking for concurrent write safety
+- File permissions set to `0o600` on Unix for security
+- Appends in background task to avoid blocking the main event loop
+- Maximum 10 retries with 100ms backoff for lock acquisition
+
 
 ### Stderr Capture Implementation
 
@@ -203,11 +251,77 @@ Model state is stored in `Arc<RwLock<AcpModelState>>` shared between the main th
 
 **Subprocess Lifecycle Management:**
 
-The `run_command_loop()` function manages agent subprocess cleanup:
-- Runs until the command channel is closed (when `AcpConnection` is dropped)
-- On exit, calls `child.kill()` to terminate the subprocess
-- This prevents orphaned/zombie processes when sessions are switched (e.g., via `/new` command)
+The agent subprocess cleanup follows a deterministic multi-layer shutdown pattern with robust guarantees against orphaned processes:
+
+```
+┌─────────────────────────┐   Drop triggered   ┌─────────────────────────────────────────┐
+│   AcpConnection::Drop   │───────────────────►│  Worker Thread (run_command_loop)       │
+│                         │   (command_tx      │                                          │
+│  1. Drop command_tx     │    dropped)        │  - Detects channel closed                │
+│  2. Wait on             │                    │  - Abort IO tasks (prevents pipe hangs) │
+│     shutdown_complete_rx│                    │  - Kill process group (handles           │
+│  3. Join worker thread  │                    │    grandchildren)                        │
+│                         │◄───────────────────│  - Kill direct child                     │
+│                         │   signal complete  │  - Wait for termination (500ms timeout)  │
+│                         │                    │  - Send () on shutdown_complete_tx       │
+└─────────────────────────┘                    └──────────────────────────────────────────┘
+```
+
+**Multi-Layer Cleanup Strategy:**
+
+The implementation uses several defense layers to ensure robust cleanup:
+
+1. **Process Group Isolation (Unix):**
+   - Agent spawns in its own process group via `setpgid(0, 0)` in `pre_exec`
+   - Enables killing entire process tree with `killpg(pgid, SIGKILL)`
+   - Handles grandchildren spawned by agent (e.g., Python agent using subprocess)
+
+2. **Kernel-Level Parent Death Signal (Linux):**
+   - `PR_SET_PDEATHSIG` set to `SIGTERM` during spawn
+   - Kernel guarantees agent receives `SIGTERM` if parent crashes (even on SIGKILL)
+   - Race condition handling: checks parent PID and self-terminates if parent already died
+   - Provides cleanup even when Drop doesn't run (crashes, forced kills)
+
+3. **IO Task Abort:**
+   - `io_task` and `stderr_task` explicitly aborted before killing child
+   - Prevents hanging on orphaned file descriptors from grandchildren
+   - 50ms grace period for tasks to abort cleanly
+   - Similar to 2-second IO drain timeout pattern in `exec.rs`
+
+4. **Process Group Kill:**
+   - `kill_child_process_group()` sends `SIGKILL` to entire process group
+   - Gracefully handles "process not found" errors (ESRCH)
+   - Ensures grandchildren are terminated along with direct child
+   - Pattern reused from `codex-rs/core/src/exec.rs:720-749`
+
+5. **Synchronous Drop Cleanup:**
+   - `Drop` waits for `shutdown_complete_rx` signal (2-second timeout)
+   - Worker thread joins before Drop returns
+   - Ensures child process is fully terminated before continuing
+
+Key implementation details:
+- `run_command_loop()` runs until the command channel is closed (when `AcpConnection` is dropped)
+- Cleanup sequence: abort IO tasks → kill process group → kill direct child → wait for exit → signal completion
+- `Drop` implementation waits (with `SHUTDOWN_TIMEOUT` of 2 seconds) for cleanup completion before returning
+- Uses `Mutex<Option<>>` pattern for `worker_thread` and `shutdown_complete_rx` to allow taking in Drop while satisfying `Sync` requirement for `Arc<AcpConnection>`
+- Prevents orphaned/zombie processes when TUI exits (via `/exit`, `/quit`, or Ctrl+C)
+- Also handles session switches (e.g., via `/new` command)
 - Logs subprocess PID at spawn via `debug!("ACP agent spawned (pid: {:?})")` for E2E test verification
+
+**Platform Support:**
+- Process group and PR_SET_PDEATHSIG: Linux only
+- Process group isolation: All Unix platforms (Linux, macOS, FreeBSD)
+- Basic kill: All platforms (Windows uses tokio's kill implementation)
+
+**Dependencies:**
+- `libc` crate required for Unix-specific process control (added as `[target.'cfg(unix)'.dependencies]`)
+
+**Subprocess Environment Variables:**
+
+The `spawn_connection_internal()` function passes environment variables to the subprocess via `.envs(&config.env)`:
+- Enables model-specific behavior for mock agents (e.g., `MOCK_AGENT_MODEL_NAME` identifies which mock model variant is running)
+- Used by E2E tests to configure model-specific startup delays (`MOCK_AGENT_STARTUP_DELAY_MS_{MODEL}`)
+- Production agents typically have an empty `env` map
 
 **ClientDelegate (`connection.rs`):**
 
@@ -329,12 +443,14 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 └─────────────────────────┘                      └─────────────────────────┘
 ```
 
-- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, notify)
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, notify, nori_home, history_persistence)
 - `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`
   - `Op::Interrupt` → ACP `cancel()`
   - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
+  - `Op::AddToHistory` → Appends to history file (async background task)
+  - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching

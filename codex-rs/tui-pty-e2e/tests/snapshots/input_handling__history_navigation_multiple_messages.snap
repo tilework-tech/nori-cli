@@ -1,0 +1,19 @@
+---
+source: tui-pty-e2e/tests/input_handling.rs
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+› first message
+
+
+• Mock response
+
+
+› second message
+
+
+• Mock response
+
+
+› first message
+
+  ⎇ master

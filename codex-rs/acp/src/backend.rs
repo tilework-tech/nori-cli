@@ -145,6 +145,10 @@ pub struct AcpBackendConfig {
     pub sandbox_policy: SandboxPolicy,
     /// Optional external notifier command for OS-level notifications
     pub notify: Option<Vec<String>>,
+    /// Nori home directory for history storage
+    pub nori_home: PathBuf,
+    /// History persistence policy
+    pub history_persistence: crate::config::HistoryPersistence,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -164,6 +168,12 @@ pub struct AcpBackend {
     user_notifier: Arc<codex_core::UserNotifier>,
     /// Abort handle for the idle detection timer (if running)
     idle_timer_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Nori home directory for history storage
+    nori_home: PathBuf,
+    /// History persistence policy
+    history_persistence: crate::config::HistoryPersistence,
+    /// Conversation ID for this session (used for history entries)
+    conversation_id: ConversationId,
 }
 
 impl AcpBackend {
@@ -247,6 +257,14 @@ impl AcpBackend {
         let user_notifier = Arc::new(codex_core::UserNotifier::new(config.notify.clone()));
 
         let idle_timer_abort = Arc::new(Mutex::new(None));
+
+        // Create conversation ID for this session
+        let conversation_id = ConversationId::new();
+
+        // Get history metadata
+        let (history_log_id, history_entry_count) =
+            crate::message_history::history_metadata(&config.nori_home).await;
+
         let backend = Self {
             connection,
             session_id,
@@ -255,19 +273,22 @@ impl AcpBackend {
             pending_approvals: Arc::clone(&pending_approvals),
             user_notifier: Arc::clone(&user_notifier),
             idle_timer_abort: Arc::clone(&idle_timer_abort),
+            nori_home: config.nori_home.clone(),
+            history_persistence: config.history_persistence,
+            conversation_id,
         };
 
         // Send synthetic SessionConfigured event
         let session_configured = SessionConfiguredEvent {
-            session_id: ConversationId::new(),
+            session_id: conversation_id,
             model: config.model.clone(),
             model_provider_id: "acp".to_string(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
             cwd: cwd.clone(),
             reasoning_effort: None,
-            history_log_id: 0,
-            history_entry_count: 0,
+            history_log_id,
+            history_entry_count,
             initial_messages: None,
             rollout_path: cwd.join(".codex-rollout.jsonl"),
         };
@@ -349,11 +370,60 @@ impl AcpBackend {
                     })
                     .await;
             }
+            Op::AddToHistory { text } => {
+                // Append to history file in the background
+                let nori_home = self.nori_home.clone();
+                let conversation_id = self.conversation_id;
+                let persistence = self.history_persistence;
+                tokio::spawn(async move {
+                    if let Err(e) = crate::message_history::append_entry(
+                        &text,
+                        &conversation_id,
+                        &nori_home,
+                        persistence,
+                    )
+                    .await
+                    {
+                        warn!("failed to append to message history: {e}");
+                    }
+                });
+            }
+            Op::GetHistoryEntryRequest { offset, log_id } => {
+                // Look up history entry in the background
+                let nori_home = self.nori_home.clone();
+                let event_tx = self.event_tx.clone();
+                let id_clone = id.clone();
+                tokio::spawn(async move {
+                    // Run lookup in blocking thread because it does file IO + locking.
+                    let entry_opt = tokio::task::spawn_blocking(move || {
+                        crate::message_history::lookup(log_id, offset, &nori_home)
+                    })
+                    .await
+                    .unwrap_or(None);
+
+                    let event = Event {
+                        id: id_clone,
+                        msg: EventMsg::GetHistoryEntryResponse(
+                            codex_protocol::protocol::GetHistoryEntryResponseEvent {
+                                offset,
+                                log_id,
+                                entry: entry_opt.map(|e| {
+                                    codex_protocol::message_history::HistoryEntry {
+                                        conversation_id: e.session_id,
+                                        ts: e.ts,
+                                        text: e.text,
+                                    }
+                                }),
+                            },
+                        ),
+                    };
+
+                    let _ = event_tx.send(event).await;
+                });
+            }
             // Unsupported operations - only show error in debug builds
             Op::Compact
             | Op::Undo
-            | Op::GetHistoryEntryRequest { .. }
-            | Op::AddToHistory { .. }
             | Op::ListMcpTools
             | Op::ListCustomPrompts
             | Op::Review { .. }
@@ -2145,6 +2215,8 @@ mod tests {
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             notify: None,
+            nori_home: temp_dir.path().to_path_buf(),
+            history_persistence: crate::config::HistoryPersistence::SaveAll,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;

@@ -155,8 +155,7 @@ pub async fn run_main(
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
     // Pre-warm the ACP agent installation cache in a background thread.
-    // This runs npm/bun detection early so the agent picker opens quickly.
-    // The detection can take 1-3 seconds per agent, so warming it early improves UX.
+    // This runs `which` commands early so the agent picker opens quickly.
     std::thread::spawn(|| {
         codex_acp::prewarm_installation_cache();
     });

@@ -534,6 +534,8 @@ pub struct AcpAgentConfig {
     pub command: String,
     /// Arguments to pass to the command
     pub args: Vec<String>,
+    /// Environment variables to set for the subprocess
+    pub env: HashMap<String, String>,
     /// Provider information for this ACP agent
     pub provider_info: AcpProviderInfo,
     /// Authentication hint for this agent (displayed on auth failures)
@@ -627,6 +629,7 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
             provider_slug: agent.slug().to_string(),
             command,
             args,
+            env: HashMap::new(),
             provider_info: AcpProviderInfo {
                 name: format!("{} ACP", agent.display_name()),
                 ..Default::default()
@@ -636,6 +639,33 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
     }
 
     anyhow::bail!("Unknown ACP model: {model_name}")
+}
+
+/// Get the display name for an agent by model name.
+///
+/// Returns the human-readable display name if the agent is registered.
+/// Falls back to the model_name itself if not recognized.
+pub fn get_agent_display_name(model_name: &str) -> String {
+    let normalized = model_name.to_lowercase();
+
+    // Mock agents (debug builds only)
+    #[cfg(debug_assertions)]
+    {
+        if normalized == "mock-model" {
+            return "Mock ACP".to_string();
+        }
+        if normalized == "mock-model-alt" {
+            return "Mock ACP Alt".to_string();
+        }
+    }
+
+    // Production agents
+    if let Some(agent) = AgentKind::from_slug(&normalized) {
+        return agent.display_name().to_string();
+    }
+
+    // Fallback to model name
+    model_name.to_string()
 }
 
 /// Get mock agent configuration (only available in debug builds)
@@ -684,6 +714,10 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 provider_slug: "mock-acp".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
+                env: HashMap::from([(
+                    "MOCK_AGENT_MODEL_NAME".to_string(),
+                    "mock-model".to_string(),
+                )]),
                 provider_info: AcpProviderInfo {
                     name: "Mock ACP".to_string(),
                     ..Default::default()
@@ -726,6 +760,10 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 provider_slug: "mock-acp-alt".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
+                env: HashMap::from([(
+                    "MOCK_AGENT_MODEL_NAME".to_string(),
+                    "mock-model-alt".to_string(),
+                )]),
                 provider_info: AcpProviderInfo {
                     name: "Mock ACP Alt".to_string(),
                     ..Default::default()

@@ -46,6 +46,33 @@ The TUI supports two backend modes, selected automatically at startup based on m
 
 Both backends produce `codex_protocol::Event` for the TUI event loop, enabling unified event handling.
 
+**Agent Connecting Status:**
+
+When an ACP agent subprocess is being spawned, the TUI shows a "Connecting to [Agent]" status indicator with shimmer animation:
+
+```
+┌─────────────────────┐  AgentConnecting    ┌─────────────────────┐
+│  spawn_acp_agent()  │ ──────────────────▶ │  App::handle_event()│
+│  (before tokio::    │                     │                     │
+│   spawn)            │                     │  chat_widget.show_  │
+└─────────────────────┘                     │  connecting_status()│
+                                            └──────────┬──────────┘
+                                                       │
+                                                       ▼
+                                            ┌─────────────────────┐
+         SessionConfigured                  │  BottomPane shows:  │
+         ◄──────────────────────────────────│  "Connecting to X"  │
+         (clears status implicitly)         │  + shimmer animation│
+                                            └─────────────────────┘
+```
+
+This provides user feedback during slow agent startup (e.g., when npx/bunx needs to resolve and download dependencies for the first time).
+
+- `AppEvent::AgentConnecting { display_name }` is emitted synchronously before the async spawn
+- `ChatWidget::show_connecting_status()` displays the status via `BottomPane`
+- No interrupt hint is shown (nothing to interrupt during connection)
+- Status is implicitly cleared when `SessionConfigured` event arrives from the agent
+
 **Agent Spawn Failure Recovery:**
 
 All agent spawn paths use graceful failure recovery via the `AgentSpawnFailed` event instead of exiting the application:

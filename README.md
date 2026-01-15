@@ -26,13 +26,16 @@ That's it. The agent you choose will rely on existing auth if you have previousl
 
 ## Providers
 
-Each provider you plan to use needs to be authenticated separately before use. Switch between AI providers with the `/agent` command:
+Each provider you plan to use needs to be authenticated separately before use. Then switch between AI providers with the `/agent` command.
 
-| Provider | Command | Authentication |
-|----------|---------|----------------|
-| Claude | `npm i -g @zed-industries/claude-code-acp` (default) | `npx @anthropic-ai/claude-code` and then follow the login flow |
-| Gemini | `npm i -g @google/gemini-cli --experimental-acp` | `npx @google/gemini-cli` and then `/auth` |
-| OpenAI | `npm i -g @zed-industries/codex-acp` | `npx @openai/codex login` |
+Currently each agent relies on an existing authenticated session on your system. If you're coming in from another CLI tool, great!
+You should be good to go. If not, first follow the authentication for your desired provider:
+
+| Provider | Authentication |
+|----------|----------------|
+| Claude   | `npx @anthropic-ai/claude-code` and then `/login` |
+| Gemini   | `npx @google/gemini-cli` and then `/auth` |
+| OpenAI   | `/agent` to Codex, then `/login` within Nori |
 
 ## Features
 

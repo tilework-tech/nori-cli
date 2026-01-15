@@ -1048,3 +1048,74 @@ fn test_agent_switch_logs_correct_sequence() {
         prompt_count
     );
 }
+
+// ============================================================================
+// Test: Connecting Status During Slow Agent Startup
+// ============================================================================
+
+// @current-session
+/// Test that "Connecting to [Agent]" status appears during slow agent startup.
+///
+/// When an ACP agent takes time to start (e.g., npx/bunx resolving dependencies),
+/// the TUI should show a "Connecting" status indicator with shimmer animation
+/// to provide feedback to the user.
+///
+/// This test works by:
+/// 1. Starting with mock-model (no delay) so TUI initializes normally
+/// 2. Selecting mock-model-alt via the agent picker
+/// 3. Submitting a prompt to trigger the agent switch
+/// 4. mock-model-alt has a 6-second startup delay configured
+/// 5. Verifying "Connecting" appears during that delay
+#[test]
+#[cfg(target_os = "linux")]
+fn test_connecting_status_during_slow_agent_startup() {
+    // Configure mock-model-alt with a 6-second startup delay to simulate slow npx/bunx
+    // mock-model has no delay so TUI starts up quickly
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT", "6000");
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    // Wait for TUI to fully start with mock-model
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start with mock-model");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Open agent picker with /agent command
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for agent picker to appear
+    session
+        .wait_for(
+            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            Duration::from_secs(8),
+        )
+        .expect("Agent picker should appear");
+
+    // Select mock-model-alt (one down from mock-model)
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Submit a prompt to trigger the agent switch
+    session.send_str("test").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Should see "Connecting" status while the new agent is starting up
+    // The 6-second delay gives us plenty of time to catch this
+    session
+        .wait_for_text("Connecting", Duration::from_secs(3))
+        .expect("Should show 'Connecting' status during slow agent startup");
+
+    // Eventually the agent should be ready (prompt appears after startup delay)
+    session
+        .wait_for_text("›", Duration::from_secs(15))
+        .expect("TUI should eventually show prompt after agent connects");
+}

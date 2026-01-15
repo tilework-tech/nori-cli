@@ -349,6 +349,12 @@ name = "Mock ACP provider for tests"
         // This returns a constant list (~/.claude/CLAUDE.md) instead of discovering real files
         cmd.env("NORI_MOCK_INSTRUCTION_FILES", "1");
 
+        // Enable debug logging for codex_acp to capture timing information
+        cmd.env(
+            "RUST_LOG",
+            "codex_core=info,codex_tui=info,codex_rmcp_client=info,codex_acp=debug",
+        );
+
         let _child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
@@ -1127,7 +1133,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn test_normalize_version_and_profile() {
         // Test that version and profile are normalized correctly

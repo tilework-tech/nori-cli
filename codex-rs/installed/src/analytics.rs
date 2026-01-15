@@ -170,7 +170,6 @@ mod tests {
         )
     }
 
-    // @current-session
     #[test]
     fn test_create_first_install_event() {
         let state = create_test_state();
@@ -196,7 +195,6 @@ mod tests {
         assert!(params.get("is_first_install").is_none());
     }
 
-    // @current-session
     #[test]
     fn test_create_upgrade_event() {
         let mut state = create_test_state();
@@ -230,7 +228,6 @@ mod tests {
         assert!(params.get("previous_version").is_none());
     }
 
-    // @current-session
     #[test]
     fn test_create_session_event() {
         let state = create_test_state();
@@ -271,7 +268,6 @@ mod tests {
         assert!(json.contains("\"eventParams\""));
     }
 
-    // @current-session
     #[test]
     fn test_install_source_unknown() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();

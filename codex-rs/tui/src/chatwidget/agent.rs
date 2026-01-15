@@ -4,7 +4,10 @@ use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
 #[cfg(feature = "unstable")]
 use codex_acp::AcpModelState;
+use codex_acp::HistoryPersistence;
+use codex_acp::find_nori_home;
 use codex_acp::get_agent_config;
+use codex_acp::get_agent_display_name;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
@@ -163,17 +166,24 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
     #[cfg(feature = "unstable")]
     let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
 
+    // Emit "Connecting" status before spawning the backend
+    let display_name = get_agent_display_name(&config.model);
+    app_event_tx.send(AppEvent::AgentConnecting { display_name });
+
     tokio::spawn(async move {
         // Create event channel for backend → TUI
         let (event_tx, mut event_rx) = mpsc::channel(32);
 
         // Create ACP backend config from codex config
+        let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         let acp_config = AcpBackendConfig {
             model: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
             notify: config.notify.clone(),
+            nori_home,
+            history_persistence: HistoryPersistence::SaveAll,
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {

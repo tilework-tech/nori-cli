@@ -13,8 +13,10 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread;
+use std::time::Duration;
 
 use agent_client_protocol as acp;
 use anyhow::Context;
@@ -129,11 +131,20 @@ enum AcpCommand {
     },
 }
 
+/// Timeout for waiting for worker thread cleanup during Drop.
+/// This should be long enough for the child process kill to complete,
+/// but not so long that it blocks shutdown indefinitely.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// A thread-safe wrapper around an ACP agent subprocess.
 ///
 /// This spawns a dedicated single-threaded tokio runtime on a background thread
 /// to handle the ACP protocol (which requires `!Send` futures), and communicates
 /// with the main runtime via channels.
+///
+/// When dropped, this struct ensures the worker thread completes its cleanup
+/// (including killing the child process) before returning. This prevents
+/// orphaned agent subprocesses when the TUI exits.
 pub struct AcpConnection {
     command_tx: mpsc::Sender<AcpCommand>,
     agent_capabilities: acp::AgentCapabilities,
@@ -143,7 +154,12 @@ pub struct AcpConnection {
     /// Thread-safe model state shared between the main thread and worker thread.
     /// Updated when sessions are created or models are switched.
     model_state: Arc<RwLock<AcpModelState>>,
-    _worker_thread: thread::JoinHandle<()>,
+    /// Worker thread handle. Stored as Option inside Mutex to allow taking in Drop.
+    worker_thread: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Synchronous channel to receive notification when worker thread cleanup is complete.
+    /// This allows Drop to wait for the child process kill to finish.
+    /// Wrapped in Mutex<Option<>> for Sync (required by Arc<AcpConnection>).
+    shutdown_complete_rx: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
 }
 
 impl AcpConnection {
@@ -173,6 +189,10 @@ impl AcpConnection {
         let model_state = Arc::new(RwLock::new(AcpModelState::new()));
         let model_state_for_worker = Arc::clone(&model_state);
 
+        // Create synchronous channel for shutdown completion notification.
+        // This allows Drop to wait for worker thread cleanup to complete.
+        let (shutdown_complete_tx, shutdown_complete_rx) = std::sync::mpsc::channel();
+
         // Spawn a dedicated thread with a single-threaded tokio runtime
         let worker_thread = thread::spawn(move || {
             #[expect(
@@ -191,10 +211,18 @@ impl AcpConnection {
                         match spawn_connection_internal(&config, &cwd, approval_tx).await {
                             Ok((inner, capabilities)) => {
                                 let _ = init_tx.send(Ok(capabilities));
-                                run_command_loop(inner, command_rx, model_state_for_worker).await;
+                                run_command_loop(
+                                    inner,
+                                    command_rx,
+                                    model_state_for_worker,
+                                    shutdown_complete_tx,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 let _ = init_tx.send(Err(e));
+                                // Signal completion even on error so Drop doesn't hang
+                                let _ = shutdown_complete_tx.send(());
                             }
                         }
                     })
@@ -212,7 +240,8 @@ impl AcpConnection {
             agent_capabilities: capabilities,
             approval_rx,
             model_state,
-            _worker_thread: worker_thread,
+            worker_thread: Mutex::new(Some(worker_thread)),
+            shutdown_complete_rx: Mutex::new(Some(shutdown_complete_rx)),
         })
     }
 
@@ -353,15 +382,76 @@ impl AcpConnection {
     // - Debugging by replaying history through a different backend
 }
 
+impl Drop for AcpConnection {
+    fn drop(&mut self) {
+        // Drop command_tx first to signal the worker thread to exit.
+        // This is implicit (field ordering doesn't matter for drop order in Rust),
+        // but we make it explicit by taking ownership to ensure it's dropped early.
+        drop(std::mem::replace(&mut self.command_tx, mpsc::channel(1).0));
+
+        // Take the shutdown completion receiver from the mutex.
+        // We use lock().ok() to handle poisoned mutex gracefully.
+        let shutdown_rx = self
+            .shutdown_complete_rx
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+
+        // Wait for the worker thread to signal that cleanup is complete.
+        // This ensures the child process is killed before we return.
+        // Use a timeout to avoid hanging indefinitely if something goes wrong.
+        if let Some(rx) = shutdown_rx {
+            match rx.recv_timeout(SHUTDOWN_TIMEOUT) {
+                Ok(()) => {
+                    debug!("ACP worker thread signaled cleanup complete");
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    warn!(
+                        "Timeout waiting for ACP worker thread cleanup ({}s)",
+                        SHUTDOWN_TIMEOUT.as_secs()
+                    );
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    // Worker thread already exited (channel was dropped)
+                    debug!("ACP worker thread already exited (channel disconnected)");
+                }
+            }
+        }
+
+        // Take the worker thread handle from the mutex.
+        let worker_handle = self
+            .worker_thread
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+
+        // Join the worker thread to ensure it has fully exited.
+        // This prevents any lingering operations after Drop returns.
+        if let Some(handle) = worker_handle {
+            // Use a short timeout for the join - if the thread hasn't exited
+            // after cleanup completion was signaled, something is wrong.
+            // Note: std::thread::JoinHandle doesn't have join_timeout, so we
+            // rely on the recv_timeout above and just join here.
+            if let Err(e) = handle.join() {
+                warn!("ACP worker thread panicked: {:?}", e);
+            } else {
+                debug!("ACP worker thread joined successfully");
+            }
+        }
+    }
+}
+
 /// Internal connection state that lives on the worker thread.
 struct AcpConnectionInner {
     connection: acp::ClientSideConnection,
     #[allow(dead_code)]
     client_delegate: Rc<ClientDelegate>,
     child: Child,
-    #[allow(dead_code)]
+    /// IO task that handles reading from the agent's stdout.
+    /// Aborted during cleanup to prevent hanging on orphaned pipes.
     io_task: tokio::task::JoinHandle<acp::Result<()>>,
-    #[allow(dead_code)]
+    /// Stderr task that logs the agent's stderr output.
+    /// Aborted during cleanup to prevent hanging on orphaned pipes.
     stderr_task: tokio::task::JoinHandle<()>,
 }
 
@@ -378,12 +468,52 @@ async fn spawn_connection_internal(
         cwd.display()
     );
 
-    let mut child = Command::new(&config.command)
-        .args(&config.args)
+    let mut cmd = Command::new(&config.command);
+    cmd.args(&config.args)
+        .envs(&config.env)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    // Configure process group isolation and parent death signal for robust cleanup.
+    // This provides kernel-level guarantees that the agent subprocess is terminated
+    // even if the parent process crashes (not just clean exit).
+    #[cfg(unix)]
+    unsafe {
+        #[cfg(target_os = "linux")]
+        let parent_pid = libc::getpid();
+
+        cmd.pre_exec(move || {
+            // Create new process group for isolation.
+            // This allows killing the entire process tree (including grandchildren)
+            // by sending signals to the process group.
+            if libc::setpgid(0, 0) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            // Linux: Set PR_SET_PDEATHSIG to deliver SIGTERM when parent dies.
+            // This is a kernel-level guarantee - if the parent process is killed
+            // (even with SIGKILL), the kernel will send SIGTERM to this child.
+            #[cfg(target_os = "linux")]
+            {
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+
+                // Race condition check: if parent already died during setup,
+                // terminate immediately.
+                if libc::getppid() != parent_pid {
+                    libc::raise(libc::SIGTERM);
+                }
+            }
+
+            Ok(())
+        });
+    }
+
+    let mut child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
 
@@ -463,10 +593,15 @@ async fn spawn_connection_internal(
 }
 
 /// Main command loop running on the worker thread.
+///
+/// This loop processes commands from the main thread until the command channel
+/// is closed (when AcpConnection is dropped). After the loop exits, it kills
+/// the child process and signals completion via `shutdown_complete_tx`.
 async fn run_command_loop(
     mut inner: AcpConnectionInner,
     mut command_rx: mpsc::Receiver<AcpCommand>,
     model_state: Arc<RwLock<AcpModelState>>,
+    shutdown_complete_tx: std::sync::mpsc::Sender<()>,
 ) {
     use acp::Agent;
 
@@ -615,12 +750,90 @@ async fn run_command_loop(
     }
 
     // Cleanup: terminate the child process when command channel is closed
-    // This happens when the AcpConnection is dropped (e.g., during session switch)
-    debug!("ACP command loop exiting, terminating child process");
-    if let Err(e) = inner.child.kill().await {
-        // Log but don't fail - process may have already exited
+    // This happens when the AcpConnection is dropped (e.g., during session switch or exit)
+    debug!("ACP command loop exiting, aborting IO tasks and terminating child process");
+
+    // First, abort IO tasks to prevent hanging on orphaned file descriptors.
+    // If the agent spawned grandchildren that kept stdout/stderr open, the IO tasks
+    // could block indefinitely waiting for those pipes to close. Aborting them
+    // ensures we don't hang during cleanup.
+    inner.io_task.abort();
+    inner.stderr_task.abort();
+
+    // Give tasks a brief moment to abort cleanly before killing the process.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Second, kill the entire process group to handle grandchildren.
+    // This is critical if the agent spawned its own subprocesses.
+    #[cfg(unix)]
+    if let Err(e) = kill_child_process_group(&mut inner.child) {
+        debug!("Failed to kill process group: {}", e);
+    }
+
+    // Then kill the direct child (this is a no-op if process group kill succeeded).
+    if let Err(e) = inner.child.start_kill() {
         debug!("Failed to kill ACP agent child process: {}", e);
     }
+
+    // Wait for actual termination with a short timeout.
+    // If grandchildren kept pipes open, this prevents hanging indefinitely.
+    match tokio::time::timeout(Duration::from_millis(500), inner.child.wait()).await {
+        Ok(Ok(status)) => {
+            debug!("ACP agent exited with status: {:?}", status);
+        }
+        Ok(Err(e)) => {
+            debug!("Error waiting for ACP agent exit: {}", e);
+        }
+        Err(_) => {
+            warn!("Timeout waiting for ACP agent to exit after kill");
+        }
+    }
+
+    // Signal that cleanup is complete so Drop can return
+    // This ensures the main thread waits for the child process to be killed
+    let _ = shutdown_complete_tx.send(());
+}
+
+/// Kill the entire process group to ensure grandchildren are terminated.
+///
+/// This is critical for agents that spawn their own subprocesses. When we kill
+/// only the direct child, grandchildren can remain running and become orphaned.
+/// By killing the entire process group, we ensure all descendants are terminated.
+///
+/// This function gracefully handles "process not found" errors (ESRCH), which
+/// occur if the process has already exited.
+#[cfg(unix)]
+fn kill_child_process_group(child: &mut Child) -> std::io::Result<()> {
+    use std::io::ErrorKind;
+
+    if let Some(pid) = child.id() {
+        let pid = pid as libc::pid_t;
+
+        // Get the process group ID for this process.
+        // Because we used setpgid(0, 0) during spawn, the child is its own process group leader.
+        let pgid = unsafe { libc::getpgid(pid) };
+        if pgid == -1 {
+            let err = std::io::Error::last_os_error();
+            // ESRCH means process not found - it already exited, which is fine
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err);
+            }
+            return Ok(());
+        }
+
+        // Send SIGKILL to the entire process group.
+        // The negative PGID syntax (-pgid) sends the signal to all processes in the group.
+        let result = unsafe { libc::killpg(pgid, libc::SIGKILL) };
+        if result == -1 {
+            let err = std::io::Error::last_os_error();
+            // ESRCH means process group doesn't exist - already exited, which is fine
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Client delegate that handles requests from the ACP agent.
