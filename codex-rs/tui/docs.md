@@ -113,7 +113,7 @@ In `spawn_acp_agent()`, the main task must drop its `Arc<AcpBackend>` reference 
 - `shimmer.rs`: Loading animation effects
 - `status_indicator_widget.rs`: Status display
 - `nori/`: Nori-specific branding and customization (see `@/codex-rs/tui/src/nori/docs.md`)
-- `system_info.rs`: Background system info collection for footer (git branch, Nori profile/version, git stats, worktree detection)
+- `system_info.rs`: Background system info collection for footer (git branch, Nori skillset/version, git stats, worktree detection)
 - `effective_cwd_tracker.rs`: Tracks effective CWD from tool call locations with debounce logic
 - `session_stats.rs`: Session activity tracking and exit summary display
 
@@ -525,7 +525,7 @@ The `color.rs` and `terminal_palette.rs` modules handle terminal color detection
 
 **System Info and Effective CWD Tracking:**
 
-The footer displays system information (git branch, Nori profile, Nori version, git stats) that is collected asynchronously. The system also dynamically updates when the agent works in different directories (e.g., git worktrees).
+The footer displays system information (git branch, Nori skillset, Nori version, git stats) that is collected asynchronously. The system also dynamically updates when the agent works in different directories (e.g., git worktrees).
 
 *Initial Collection:*
 
