@@ -212,35 +212,6 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Strip markdown code block formatting from output.
-///
-/// Codex wraps output in markdown code blocks like:
-/// ````text
-/// ```sh
-/// output here
-/// ```
-/// ````
-///
-/// This function removes the wrapper and returns just the content.
-fn strip_markdown_code_blocks(text: &str) -> String {
-    let text = text.trim();
-
-    // Check for code block pattern: ```language\n...\n```
-    if text.starts_with("```") {
-        // Find the end of the opening marker (first newline after ```)
-        if let Some(start) = text.find('\n') {
-            // Find the closing ```
-            if let Some(end) = text.rfind("\n```") {
-                // Extract content between markers
-                return text[start + 1..end].to_string();
-            }
-        }
-    }
-
-    // No markdown wrapper found, return as-is
-    text.to_string()
-}
-
 // ==================== Command Extraction Functions ====================
 
 /// Extract command string from either array or string format.
