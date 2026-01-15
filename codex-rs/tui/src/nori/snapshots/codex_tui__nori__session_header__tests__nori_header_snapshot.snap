@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/session_header.rs
-assertion_line: 740
 expression: rendered
 ---
 ╭──────────────────────────────────────────╮
@@ -8,7 +7,7 @@ expression: rendered
 │                                          │
 │ directory: /home/user/project            │
 │ agent:     claude-sonnet                 │
-│ profile:   senior-swe                    │
+│ skillset:  senior-swe                    │
 │                                          │
 │ Instruction Files                        │
 │   /home/user/project/AGENTS.md           │

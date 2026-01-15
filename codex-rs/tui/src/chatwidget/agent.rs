@@ -207,6 +207,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
             trace_config,
+            notify: config.notify.clone(),
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
         };

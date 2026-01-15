@@ -254,16 +254,16 @@ fn build_footer_line(props: &FooterProps) -> Line<'static> {
         spans.push(Span::from(" · ").dim());
     }
 
-    // Add nori profile if available: "Profile: name" (cyan)
+    // Add nori profile if available: "Skillset: name" (cyan)
     if let Some(profile) = &props.nori_profile {
-        spans.push(Span::from("Profile: ").cyan());
+        spans.push(Span::from("Skillset: ").cyan());
         spans.push(Span::from(profile.clone()).cyan());
         spans.push(Span::from(" · ").dim());
     }
 
-    // Add nori version if available: "Nori v19.1.1" (green)
+    // Add nori version if available: "Skillsets v19.1.1" (green)
     if let Some(version) = &props.nori_version {
-        spans.push(Span::from("Profiles v").green());
+        spans.push(Span::from("Skillsets v").green());
         spans.push(Span::from(version.clone()).green());
         spans.push(Span::from(" · ").dim());
     }

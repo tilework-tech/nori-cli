@@ -39,14 +39,14 @@ The Rust codebase in `codex-rs` is the core implementation, with Node.js and Typ
 
 **Entry Points:**
 
-| Command | Description | Implementation |
-|---------|-------------|----------------|
-| `codex` | Interactive TUI | `codex-rs/tui` |
-| `codex exec` | Headless execution | `codex-rs/exec` |
-| `codex app-server` | IDE integration | `codex-rs/app-server` |
-| `codex mcp-server` | MCP tool provider | `codex-rs/mcp-server` |
-| `codex login` | Authentication | `codex-rs/login` |
-| `codex apply` | Apply cloud diffs | `codex-rs/chatgpt` |
+| Command            | Description        | Implementation        |
+| ------------------ | ------------------ | --------------------- |
+| `codex`            | Interactive TUI    | `codex-rs/tui`        |
+| `codex exec`       | Headless execution | `codex-rs/exec`       |
+| `codex app-server` | IDE integration    | `codex-rs/app-server` |
+| `codex mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
+| `codex login`      | Authentication     | `codex-rs/login`      |
+| `codex apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
 
 **Model Providers:**
 
@@ -67,6 +67,7 @@ brew install --cask codex # Homebrew
 **Configuration:**
 
 Stored in `~/.codex/`:
+
 - `config.toml`: Main configuration
 - `auth.json`: Authentication tokens
 - `sessions/`: Saved conversations
@@ -75,6 +76,7 @@ Stored in `~/.codex/`:
 **Sandbox Enforcement:**
 
 Commands run in a security sandbox:
+
 - macOS: Seatbelt (`/usr/bin/sandbox-exec`)
 - Linux: Landlock + seccomp
 - Windows: Restricted process tokens
@@ -84,6 +86,7 @@ Modes: `ReadOnly`, `WorkspaceWrite`, `DangerFullAccess`
 **Session Management:**
 
 Conversations are recorded to `~/.codex/sessions/` and can be resumed:
+
 ```bash
 codex resume              # Show picker
 codex resume --last       # Most recent
@@ -93,12 +96,14 @@ codex resume <SESSION_ID> # Specific session
 **MCP Support:**
 
 Codex acts as both MCP client and server:
+
 - **Client**: Connects to MCP servers defined in config
 - **Server**: Exposes Codex tools via `codex mcp-server`
 
 **Development:**
 
 The project uses:
+
 - Rust 2024 edition with strict Clippy lints
 - pnpm for Node.js workspace management
 - `just` for build automation in `codex-rs`

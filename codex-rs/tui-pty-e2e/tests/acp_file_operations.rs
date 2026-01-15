@@ -321,7 +321,7 @@ fn test_acp_write_to_tmp_allowed() {
 
     // Wait for success
     session
-        .wait_for_text("File written successfully", Duration::from_secs(10))
+        .wait_for_text("Verified content", Duration::from_secs(10))
         .expect("Should allow writes to /tmp");
 
     let contents = session.screen_contents();

@@ -146,6 +146,8 @@ pub struct AcpBackendConfig {
     pub sandbox_policy: SandboxPolicy,
     /// Optional trace configuration for ACP traffic debugging
     pub trace_config: Option<AcpTraceConfig>,
+    /// Optional external notifier command for OS-level notifications
+    pub notify: Option<Vec<String>>,
     /// Nori home directory for history storage
     pub nori_home: PathBuf,
     /// History persistence policy
@@ -165,6 +167,10 @@ pub struct AcpBackend {
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    /// Notifier for OS-level notifications (approval waiting, idle)
+    user_notifier: Arc<codex_core::UserNotifier>,
+    /// Abort handle for the idle detection timer (if running)
+    idle_timer_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     /// Nori home directory for history storage
     nori_home: PathBuf,
     /// History persistence policy
@@ -252,6 +258,9 @@ impl AcpBackend {
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(config.notify.clone()));
+
+        let idle_timer_abort = Arc::new(Mutex::new(None));
 
         // Create conversation ID for this session
         let conversation_id = ConversationId::new();
@@ -266,6 +275,8 @@ impl AcpBackend {
             event_tx: event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
+            user_notifier: Arc::clone(&user_notifier),
+            idle_timer_abort: Arc::clone(&idle_timer_abort),
             nori_home: config.nori_home.clone(),
             history_persistence: config.history_persistence,
             conversation_id,
@@ -299,6 +310,8 @@ impl AcpBackend {
             approval_rx,
             event_tx.clone(),
             Arc::clone(&pending_approvals),
+            Arc::clone(&user_notifier),
+            cwd.clone(),
         ));
 
         Ok(backend)
@@ -313,6 +326,11 @@ impl AcpBackend {
     /// - Other ops → Send error event (not supported)
     pub async fn submit(&self, op: Op) -> Result<String> {
         let id = generate_id();
+
+        // Cancel any running idle timer on new user activity
+        if let Some(abort_handle) = self.idle_timer_abort.lock().await.take() {
+            abort_handle.abort();
+        }
 
         match op {
             Op::UserInput { items } => {
@@ -480,9 +498,18 @@ impl AcpBackend {
         let session_id = self.session_id.clone();
         let connection = Arc::clone(&self.connection);
         let id_clone = id.to_string();
+        let user_notifier = Arc::clone(&self.user_notifier);
+        let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
+            // Cancel any existing idle timer when a new turn starts processing.
+            // This handles the case where a new prompt arrives while a previous
+            // task's idle timer is pending but before submit() could cancel it.
+            if let Some(abort_handle) = idle_timer_abort.lock().await.take() {
+                abort_handle.abort();
+            }
+
             // Send TaskStarted event
             let _ = event_tx
                 .send(Event {
@@ -547,7 +574,8 @@ impl AcpBackend {
                 );
             });
 
-            // Send the prompt
+            // Send the prompt (clone session_id before moving it since we need it for idle timer)
+            let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
             // Wait for all updates to be processed
@@ -614,6 +642,18 @@ impl AcpBackend {
                     }),
                 })
                 .await;
+
+            // Start idle timer - will send notification after 5 seconds of inactivity
+            let user_notifier_for_timer = Arc::clone(&user_notifier);
+            let idle_task = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                    session_id: session_id_for_timer,
+                    idle_duration_secs: 5,
+                });
+            });
+            // Store the abort handle so the timer can be cancelled on new activity
+            *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
         });
 
         Ok(())
@@ -687,21 +727,40 @@ impl AcpBackend {
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
         event_tx: mpsc::Sender<Event>,
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+        user_notifier: Arc<codex_core::UserNotifier>,
+        cwd: PathBuf,
     ) {
         while let Some(request) = approval_rx.recv().await {
             // Send the appropriate approval request event to TUI based on operation type.
             // Use the call_id as the event wrapper ID so that the TUI can
             // correctly route the user's decision back to this pending request.
-            let (id, msg) = match &request.event {
+            let (id, msg, command_for_notification) = match &request.event {
                 ApprovalEventType::Exec(exec_event) => (
                     exec_event.call_id.clone(),
                     EventMsg::ExecApprovalRequest(exec_event.clone()),
+                    exec_event.command.join(" "),
                 ),
                 ApprovalEventType::Patch(patch_event) => (
                     patch_event.call_id.clone(),
                     EventMsg::ApplyPatchApprovalRequest(patch_event.clone()),
+                    format!(
+                        "patch: {}",
+                        patch_event
+                            .changes
+                            .keys()
+                            .map(|p| p.display().to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
                 ),
             };
+
+            // Send OS notification that we're awaiting approval
+            user_notifier.notify(&codex_core::UserNotification::AwaitingApproval {
+                call_id: id.clone(),
+                command: command_for_notification,
+                cwd: cwd.display().to_string(),
+            });
 
             let _ = event_tx.send(Event { id, msg }).await;
 
@@ -1115,30 +1174,82 @@ fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String
 /// Extract tool output from ToolCallUpdateFields for display.
 ///
 /// Returns a formatted string containing the tool's output content.
+/// Prioritizes rawOutput fields (Codex format) over content field, and strips
+/// markdown code blocks from the output.
 fn extract_tool_output(fields: &acp::ToolCallUpdateFields) -> String {
-    let mut output_parts: Vec<String> = Vec::new();
+    // Try rawOutput first (Codex provides structured output here)
+    if let Some(raw_output) = &fields.raw_output {
+        // Try to extract stdout (most common for shell commands)
+        if let Some(stdout) = raw_output.get("stdout").and_then(|v| v.as_str())
+            && !stdout.is_empty()
+        {
+            return strip_markdown_code_blocks(stdout);
+        }
 
-    // Extract text content from the content field
+        // Try formatted_output next
+        if let Some(formatted) = raw_output.get("formatted_output").and_then(|v| v.as_str())
+            && !formatted.is_empty()
+        {
+            return strip_markdown_code_blocks(formatted);
+        }
+
+        // Try aggregated_output as fallback
+        if let Some(aggregated) = raw_output.get("aggregated_output").and_then(|v| v.as_str())
+            && !aggregated.is_empty()
+        {
+            return strip_markdown_code_blocks(aggregated);
+        }
+
+        // If none of the direct fields worked, try format_raw_output for summaries
+        if let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref()) {
+            return output_str;
+        }
+    }
+
+    // Fallback to content field (existing behavior for non-Codex agents)
+    let mut output_parts: Vec<String> = Vec::new();
     if let Some(content) = &fields.content {
         for item in content {
             if let acp::ToolCallContent::Content(c) = item
                 && let acp::ContentBlock::Text(text) = &c.content
                 && !text.text.is_empty()
             {
-                output_parts.push(text.text.clone());
+                // Strip markdown from content field too
+                output_parts.push(strip_markdown_code_blocks(&text.text));
             }
         }
     }
 
-    // If no text content, try to extract meaningful info from raw_output
-    if output_parts.is_empty()
-        && let Some(raw_output) = &fields.raw_output
-        && let Some(output_str) = format_raw_output(raw_output, fields.title.as_deref())
-    {
-        output_parts.push(output_str);
+    output_parts.join("\n")
+}
+
+/// Strip markdown code block formatting from output.
+///
+/// Codex wraps output in markdown code blocks like:
+/// ````text
+/// ```sh
+/// output here
+/// ```
+/// ````
+///
+/// This function removes the wrapper and returns just the content.
+fn strip_markdown_code_blocks(text: &str) -> String {
+    let text = text.trim();
+
+    // Check for code block pattern: ```language\n...\n```
+    if text.starts_with("```") {
+        // Find the end of the opening marker (first newline after ```)
+        if let Some(start) = text.find('\n') {
+            // Find the closing ```
+            if let Some(end) = text.rfind("\n```") {
+                // Extract content between markers
+                return text[start + 1..end].to_string();
+            }
+        }
     }
 
-    output_parts.join("\n")
+    // No markdown wrapper found, return as-is
+    text.to_string()
 }
 
 /// Format raw_output JSON into a human-readable string based on tool type.
@@ -2160,6 +2271,7 @@ mod tests {
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             trace_config: None,
+            notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
         };

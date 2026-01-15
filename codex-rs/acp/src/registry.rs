@@ -191,151 +191,6 @@ impl fmt::Display for PackageManager {
 }
 
 // =============================================================================
-// Known Models
-// =============================================================================
-
-/// A preset known model for an agent
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KnownModel {
-    /// Model identifier (used in API calls)
-    pub id: String,
-    /// Display name shown in the picker
-    pub display_name: String,
-    /// Description of the model's capabilities
-    pub description: String,
-    /// Whether this model can be selected (some agents don't support model switching yet)
-    pub enabled: bool,
-    /// Whether this is the default model for the agent
-    pub is_default: bool,
-}
-
-/// Optional reasoning effort level for Codex models
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReasoningEffort {
-    Low,
-    Medium,
-    High,
-    ExtraHigh,
-}
-
-impl ReasoningEffort {
-    pub fn slug(&self) -> &'static str {
-        match self {
-            ReasoningEffort::Low => "low",
-            ReasoningEffort::Medium => "medium",
-            ReasoningEffort::High => "high",
-            ReasoningEffort::ExtraHigh => "extra-high",
-        }
-    }
-}
-
-/// Get known models for Claude Code
-pub fn claude_code_known_models() -> Vec<KnownModel> {
-    vec![
-        KnownModel {
-            id: "default".to_string(),
-            display_name: "Default (recommended)".to_string(),
-            description: "Opus 4.5 · Most capable for complex work".to_string(),
-            enabled: true,
-            is_default: true,
-        },
-        KnownModel {
-            id: "sonnet".to_string(),
-            display_name: "Sonnet".to_string(),
-            description: "Sonnet 4.5 · Best for everyday tasks".to_string(),
-            enabled: true,
-            is_default: false,
-        },
-        KnownModel {
-            id: "sonnet-1m".to_string(),
-            display_name: "Sonnet (1M context)".to_string(),
-            description: "Sonnet 4.5 with 1M context · Uses rate limits faster".to_string(),
-            enabled: true,
-            is_default: false,
-        },
-        KnownModel {
-            id: "haiku".to_string(),
-            display_name: "Haiku".to_string(),
-            description: "Haiku 4.5 · Fastest for quick answers".to_string(),
-            enabled: true,
-            is_default: false,
-        },
-    ]
-}
-
-/// Get known models for Gemini
-pub fn gemini_known_models() -> Vec<KnownModel> {
-    vec![
-        KnownModel {
-            id: "auto".to_string(),
-            display_name: "Auto".to_string(),
-            description: "Let the system choose the best model for your task".to_string(),
-            enabled: false, // Model switching not yet supported
-            is_default: true,
-        },
-        KnownModel {
-            id: "pro".to_string(),
-            display_name: "Pro".to_string(),
-            description: "gemini-3-pro-preview, gemini-2.5-pro · For complex tasks requiring deep reasoning and creativity".to_string(),
-            enabled: false,
-            is_default: false,
-        },
-        KnownModel {
-            id: "flash".to_string(),
-            display_name: "Flash".to_string(),
-            description: "gemini-2.5-flash · For tasks needing a balance of speed and reasoning".to_string(),
-            enabled: false,
-            is_default: false,
-        },
-        KnownModel {
-            id: "flash-lite".to_string(),
-            display_name: "Flash-Lite".to_string(),
-            description: "gemini-2.5-flash-lite · For simple tasks that need to be done quickly".to_string(),
-            enabled: false,
-            is_default: false,
-        },
-    ]
-}
-
-/// Get known models for Codex
-pub fn codex_known_models() -> Vec<KnownModel> {
-    vec![
-        KnownModel {
-            id: "gpt-5.1-codex-max".to_string(),
-            display_name: "gpt-5.1-codex-max (current)".to_string(),
-            description: "Codex-optimized flagship for deep and fast reasoning".to_string(),
-            enabled: false, // Model switching not yet supported
-            is_default: true,
-        },
-        KnownModel {
-            id: "gpt-5.1-codex-mini".to_string(),
-            display_name: "gpt-5.1-codex-mini".to_string(),
-            description: "Optimized for Codex · Cheaper, faster, but less capable".to_string(),
-            enabled: false,
-            is_default: false,
-        },
-        KnownModel {
-            id: "gpt-5.2".to_string(),
-            display_name: "gpt-5.2".to_string(),
-            description:
-                "Latest frontier model with improvements across knowledge, reasoning and coding"
-                    .to_string(),
-            enabled: false,
-            is_default: false,
-        },
-    ]
-}
-
-/// Get known models for an agent
-pub fn get_known_models(agent: AgentKind) -> Vec<KnownModel> {
-    match agent {
-        AgentKind::ClaudeCode => claude_code_known_models(),
-        AgentKind::Codex => codex_known_models(),
-        AgentKind::Gemini => gemini_known_models(),
-    }
-}
-
-// =============================================================================
 // Agent Info (for UI)
 // =============================================================================
 
@@ -356,8 +211,6 @@ pub struct AcpAgentInfo {
     pub is_installed: bool,
     /// Package manager used to manage this agent (if installed)
     pub managed_by: Option<PackageManager>,
-    /// Known models for this agent (preset)
-    pub known_models: Vec<KnownModel>,
 }
 
 impl AcpAgentInfo {
@@ -373,7 +226,6 @@ impl AcpAgentInfo {
             provider_slug: agent.slug().to_string(),
             is_installed,
             managed_by,
-            known_models: get_known_models(agent),
         }
     }
 }
@@ -557,7 +409,6 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
             provider_slug: "mock-acp".to_string(),
             is_installed: true,
             managed_by: None,
-            known_models: vec![],
         });
         agents.push(AcpAgentInfo {
             agent: AgentKind::ClaudeCode, // Dummy, not really used
@@ -567,7 +418,6 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
             provider_slug: "mock-acp-alt".to_string(),
             is_installed: true,
             managed_by: None,
-            known_models: vec![],
         });
     }
 
@@ -848,50 +698,6 @@ mod tests {
     }
 
     #[test]
-    fn test_claude_code_known_models() {
-        let models = claude_code_known_models();
-        assert_eq!(models.len(), 4);
-
-        let default = models.iter().find(|m| m.is_default).unwrap();
-        assert_eq!(default.id, "default");
-        assert!(default.enabled);
-
-        let sonnet = models.iter().find(|m| m.id == "sonnet").unwrap();
-        assert!(sonnet.enabled);
-
-        let haiku = models.iter().find(|m| m.id == "haiku").unwrap();
-        assert!(haiku.enabled);
-    }
-
-    #[test]
-    fn test_gemini_known_models() {
-        let models = gemini_known_models();
-        assert_eq!(models.len(), 4);
-
-        // All models should be disabled (model switching not supported yet)
-        for model in &models {
-            assert!(!model.enabled, "Model {} should be disabled", model.id);
-        }
-
-        let auto = models.iter().find(|m| m.id == "auto").unwrap();
-        assert!(auto.is_default);
-    }
-
-    #[test]
-    fn test_codex_known_models() {
-        let models = codex_known_models();
-        assert_eq!(models.len(), 3);
-
-        // All models should be disabled (model switching not supported yet)
-        for model in &models {
-            assert!(!model.enabled, "Model {} should be disabled", model.id);
-        }
-
-        let default = models.iter().find(|m| m.is_default).unwrap();
-        assert_eq!(default.id, "gpt-5.1-codex-max");
-    }
-
-    #[test]
     #[cfg(debug_assertions)]
     fn test_get_mock_model_config() {
         let config = get_agent_config("mock-model").expect("Should return config for mock-model");
@@ -1058,43 +864,6 @@ mod tests {
         assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
         assert!(names.contains(&"Gemini"), "Should have Gemini");
-    }
-
-    #[test]
-    fn test_agent_info_has_known_models() {
-        let agents = list_available_agents();
-
-        // Find Claude Code agent
-        let claude = agents
-            .iter()
-            .find(|a| a.model_name == "claude-code")
-            .expect("Should have Claude Code agent");
-        assert!(!claude.known_models.is_empty());
-        assert_eq!(claude.known_models.len(), 4);
-
-        // Find Gemini agent
-        let gemini = agents
-            .iter()
-            .find(|a| a.model_name == "gemini")
-            .expect("Should have Gemini agent");
-        assert!(!gemini.known_models.is_empty());
-        assert_eq!(gemini.known_models.len(), 4);
-
-        // Find Codex agent
-        let codex = agents
-            .iter()
-            .find(|a| a.model_name == "codex")
-            .expect("Should have Codex agent");
-        assert!(!codex.known_models.is_empty());
-        assert_eq!(codex.known_models.len(), 3);
-    }
-
-    #[test]
-    fn test_reasoning_effort_slugs() {
-        assert_eq!(ReasoningEffort::Low.slug(), "low");
-        assert_eq!(ReasoningEffort::Medium.slug(), "medium");
-        assert_eq!(ReasoningEffort::High.slug(), "high");
-        assert_eq!(ReasoningEffort::ExtraHigh.slug(), "extra-high");
     }
 
     #[test]

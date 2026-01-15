@@ -31,21 +31,21 @@ Each provider you plan to use needs to be authenticated separately before use. T
 Currently each agent relies on an existing authenticated session on your system. If you're coming in from another CLI tool, great!
 You should be good to go. If not, first follow the authentication for your desired provider:
 
-| Provider | Authentication |
-|----------|----------------|
+| Provider | Authentication                                    |
+| -------- | ------------------------------------------------- |
 | Claude   | `npx @anthropic-ai/claude-code` and then `/login` |
-| Gemini   | `npx @google/gemini-cli` and then `/auth` |
-| OpenAI   | `/agent` to Codex, then `/login` within Nori |
+| Gemini   | `npx @google/gemini-cli` and then `/auth`         |
+| OpenAI   | `/agent` to Codex, then `/login` within Nori      |
 
 ## Features
 
 - **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
 - **Improved terminal interface**: Fast incremental renders in Ratatui, double buffered scrollback history, and built in Rust for performance
 - **Coming Soon!**
-    - **Sandboxed execution**: Commands run in OS-level security sandboxes
-    - **MCP integration**: Connect to Model Context Protocol servers for extended tools
-    - **Session persistence**: Save and resume conversations with `nori resume`
-    - **Multi-agent orchestration**: Alternate between multiple agent sessions
+  - **Sandboxed execution**: Commands run in OS-level security sandboxes
+  - **MCP integration**: Connect to Model Context Protocol servers for extended tools
+  - **Session persistence**: Save and resume conversations with `nori resume`
+  - **Multi-agent orchestration**: Alternate between multiple agent sessions
 
 ## Attribution
 

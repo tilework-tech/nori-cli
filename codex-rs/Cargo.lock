@@ -891,6 +891,7 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "async-trait",
+ "codex-core",
  "codex-protocol",
  "diffy",
  "dirs",

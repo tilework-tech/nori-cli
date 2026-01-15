@@ -10,15 +10,15 @@ name: upstream-sync
 on:
   schedule:
     # Daily at 9 AM UTC (reasonable time for review in US timezones)
-    - cron: '0 9 * * *'
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Specific tag to sync (optional, defaults to latest stable)'
+        description: "Specific tag to sync (optional, defaults to latest stable)"
         required: false
         type: string
       dry_run:
-        description: 'Dry run mode (log actions without creating branches/PRs)'
+        description: "Dry run mode (log actions without creating branches/PRs)"
         required: false
         type: boolean
         default: false
