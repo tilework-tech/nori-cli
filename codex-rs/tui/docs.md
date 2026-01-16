@@ -455,7 +455,8 @@ The `PendingExecCellTracker` (`chatwidget/pending_exec_cells.rs`) prevents dupli
 The tracker intercepts this by:
 - `save_pending()`: Called during flush if the ExecCell has pending (incomplete) call_ids - saves the cell with ALL pending call_ids mapped to it (multi-key storage)
 - `retrieve()`: Called in `handle_exec_end_now()` - retrieves and removes the saved cell by any of its call_ids, restoring it to `active_cell` for completion
-- `drain_failed()`: Called in `on_task_complete()` - marks any uncompleted pending cells as failed and returns them for insertion into history
+- `discard_all_with_warning()`: Called in `on_task_complete()` - discards any uncompleted pending cells with detailed warnings (prevents out-of-order history entries)
+- `discard_timed_out()`: Called periodically in `on_commit_tick()` - discards cells pending longer than 60 seconds with detailed warnings
 
 **Multi-Key Storage for Multi-Call Exploring Cells:**
 
@@ -490,7 +491,7 @@ RUST_LOG=tui_event_flow=debug,cell_flushing=debug,pending_exec_cells=debug cargo
 |--------|-------------|
 | `tui_event_flow` | Event reception (`on_exec_command_begin`, `on_exec_command_end`) with cell state |
 | `cell_flushing` | `flush_active_cell` decisions (save to pending vs flush to history) |
-| `pending_exec_cells` | `save_pending`, `retrieve`, `drain_failed` operations with call_id mappings |
+| `pending_exec_cells` | `save_pending`, `retrieve`, `check_timeouts`, `discard_*` operations with call_id mappings |
 
 Combined with `acp_event_flow` from the ACP backend, these enable full end-to-end debugging of tool call display issues. See `@/codex-rs/tui/src/chatwidget/EXEC_CELL_LIFECYCLE.md` for comprehensive documentation.
 

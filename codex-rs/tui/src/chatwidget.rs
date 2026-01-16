@@ -178,6 +178,12 @@ const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
 const NUDGE_MODEL_SLUG: &str = "gpt-5.1-codex-mini";
 const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
 
+/// Timeout for pending exec cells before they are discarded with a warning.
+/// Cells that have been pending longer than this duration are assumed to have
+/// had their completion events lost and are cleaned up rather than being
+/// committed to history out of order.
+const PENDING_CELL_TIMEOUT: Duration = Duration::from_secs(60);
+
 #[derive(Default)]
 struct RateLimitWarningState {
     secondary_index: usize,
@@ -609,12 +615,11 @@ impl ChatWidget {
         // separate AgentMessage event to trigger handle_stream_finished().
         self.flush_interrupt_queue();
 
-        // Flush any pending ExecCells that weren't completed (e.g., due to interruption).
-        for pending_cell in self.pending_exec_cells.drain_failed() {
-            self.needs_final_message_separator = true;
-            self.app_event_tx
-                .send(AppEvent::InsertHistoryCell(pending_cell));
-        }
+        // Discard any pending ExecCells that weren't completed (e.g., due to interruption).
+        // These are discarded rather than inserted into history to avoid dumping them
+        // out of order at the end of the transcript. Detailed warnings are logged for
+        // debugging purposes.
+        self.pending_exec_cells.discard_all_with_warning();
 
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);
@@ -1042,6 +1047,13 @@ impl ChatWidget {
                 self.app_event_tx.send(AppEvent::StopCommitAnimation);
             }
         }
+
+        // Check for pending cells that have timed out. These are cells that were
+        // flushed from active_cell during streaming but never received their
+        // completion events. Discard them with warnings to avoid accumulating
+        // orphaned cells.
+        self.pending_exec_cells
+            .discard_timed_out(PENDING_CELL_TIMEOUT);
     }
 
     fn flush_interrupt_queue(&mut self) {

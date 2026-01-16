@@ -23,9 +23,21 @@ completed. These cells are **INVISIBLE** - they are not rendered anywhere.
 
 Structure:
 ```
-call_id_to_primary: HashMap<String, String>  // Maps any call_id -> primary_key
-cells: HashMap<String, Box<dyn HistoryCell>> // Maps primary_key -> cell
+call_id_to_primary: HashMap<String, String>    // Maps any call_id -> primary_key
+cells: HashMap<String, PendingCellEntry>       // Maps primary_key -> entry
 ```
+
+Each `PendingCellEntry` contains:
+```
+cell: Box<dyn HistoryCell>  // The pending cell
+saved_at: Instant           // When the cell was saved (for timeout)
+call_ids: Vec<String>       // All call_ids for logging
+```
+
+**Timeout behavior**: Cells are timestamped when saved. During periodic tick, cells
+older than `PENDING_CELL_TIMEOUT` (60 seconds) are discarded with detailed warnings.
+At task completion, all remaining cells are discarded rather than being dumped to
+history out of order.
 
 ### 3. History (Scrollback)
 
@@ -43,7 +55,6 @@ Each ExecCell tracks multiple tool calls:
 ## State Diagram
 
 ```
-
                             +------------------+
                             |   (invisible)    |
                             | pending_exec_    |
@@ -61,11 +72,27 @@ Each ExecCell tracks multiple tool calls:
       |                              | (if incomplete)
       |                              v
       |                      +------------------+
-      +----------------------|   (invisible)    |
-         drain_failed        | pending_exec_    |
-         (on TaskComplete)   |     cells        |
+      |                      |   (invisible)    |
+      |                      | pending_exec_    |
+      |                      |     cells        |
+      |                      +--------+---------+
+      |                               |
+      |            discard_timed_out  |  discard_all_with_warning
+      |            (periodic, 60s)    |  (on TaskComplete)
+      |                               v
+      |                      +------------------+
+      +----------------------|    (discarded)   |
+                             | warn log + drop  |
                              +------------------+
 ```
+
+**Important**: Pending cells are NO LONGER drained to history. Instead:
+1. During streaming: `discard_timed_out()` is called periodically (every commit tick)
+   to discard cells that have been pending for more than 60 seconds
+2. At task completion: `discard_all_with_warning()` discards any remaining cells
+
+This prevents pending cells from appearing out of order at the end of the transcript.
+Discarded cells are logged with detailed warnings for debugging.
 
 ## Event Flow Scenarios
 
@@ -313,8 +340,19 @@ the cell stays in `active_cell` instead of being saved to pending.
 
 ### TUI-side tracing
 - `cell_flushing` - All cell state transitions (flush_active_cell, handle_exec_*_now)
-- `pending_exec_cells` - PendingExecCellTracker operations (save_pending, retrieve, drain_failed)
+- `pending_exec_cells` - PendingExecCellTracker operations (save_pending, retrieve, check_timeouts, discard_*)
 - `tui_event_flow` - Event reception in the TUI (on_agent_message_delta, on_exec_command_begin, on_exec_command_end)
+
+### Debugging Discarded Pending Cells
+
+When cells are discarded (via timeout or task completion), detailed warnings are logged
+with the following information:
+- `call_ids` - All call_ids associated with the cell
+- `elapsed_ms` - How long the cell was pending before being discarded
+- `reason` - Why the cell was discarded ("timed out" or "task completed")
+- `cell_debug` - Full debug representation of the cell
+- `exec_commands` - For ExecCells: the commands that were being executed
+- `exec_pending_ids` - For ExecCells: call_ids that never received completion
 
 ### ACP-side tracing
 - `acp_event_flow` - Event emission from ACP backend (translate_session_update_to_events, dispatch loop)
