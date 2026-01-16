@@ -765,9 +765,10 @@ impl ChatWidget {
     }
 
     fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {
+        // Tool call begins are ALWAYS handled immediately to show them inline.
+        // This creates "stream segmentation" - we break the stream when a tool call happens.
         self.flush_answer_stream_with_separator();
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
+        self.handle_exec_begin_now(ev);
     }
 
     fn on_exec_command_output_delta(
@@ -802,18 +803,30 @@ impl ChatWidget {
     }
 
     fn on_exec_command_end(&mut self, ev: ExecCommandEndEvent) {
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
+        // Only defer if the corresponding begin was deferred (to maintain ordering).
+        // Since begins are now always handled immediately, ends should also be immediate.
+        if self.interrupts.has_deferred_begin(&ev.call_id) {
+            self.interrupts.push_exec_end(ev);
+        } else {
+            self.handle_exec_end_now(ev);
+        }
     }
 
     fn on_mcp_tool_call_begin(&mut self, ev: McpToolCallBeginEvent) {
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_mcp_begin(ev), |s| s.handle_mcp_begin_now(ev2));
+        // Tool call begins are ALWAYS handled immediately to show them inline.
+        // This creates "stream segmentation" - we break the stream when a tool call happens.
+        // Note: handle_mcp_begin_now() calls flush_answer_stream_with_separator() internally.
+        self.handle_mcp_begin_now(ev);
     }
 
     fn on_mcp_tool_call_end(&mut self, ev: McpToolCallEndEvent) {
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_mcp_end(ev), |s| s.handle_mcp_end_now(ev2));
+        // Only defer if the corresponding begin was deferred (to maintain ordering).
+        // Since begins are now always handled immediately, ends should also be immediate.
+        if self.interrupts.has_deferred_begin(&ev.call_id) {
+            self.interrupts.push_mcp_end(ev);
+        } else {
+            self.handle_mcp_end_now(ev);
+        }
     }
 
     fn on_web_search_begin(&mut self, _ev: WebSearchBeginEvent) {

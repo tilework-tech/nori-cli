@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use codex_core::protocol::ApplyPatchApprovalRequestEvent;
@@ -31,18 +32,29 @@ pub(crate) enum QueuedInterrupt {
 #[derive(Default)]
 pub(crate) struct InterruptManager {
     queue: VecDeque<QueuedInterrupt>,
+    /// Track call_ids that have deferred begin events.
+    /// End events should only be deferred if their corresponding begin was deferred.
+    deferred_begins: HashSet<String>,
 }
 
 impl InterruptManager {
     pub(crate) fn new() -> Self {
         Self {
             queue: VecDeque::new(),
+            deferred_begins: HashSet::new(),
         }
     }
 
     #[inline]
     pub(crate) fn is_empty(&self) -> bool {
         self.queue.is_empty()
+    }
+
+    /// Check if a begin event for the given call_id was deferred.
+    /// End events should only be deferred if their begin was deferred.
+    #[inline]
+    pub(crate) fn has_deferred_begin(&self, call_id: &str) -> bool {
+        self.deferred_begins.contains(call_id)
     }
 
     /// Queue an exec approval request. Currently unused since approval requests
@@ -68,7 +80,11 @@ impl InterruptManager {
         self.queue.push_back(QueuedInterrupt::Elicitation(ev));
     }
 
+    /// Queue an exec command begin event. Currently unused since begins are
+    /// handled immediately for inline rendering, but kept for potential edge cases.
+    #[allow(dead_code)]
     pub(crate) fn push_exec_begin(&mut self, ev: ExecCommandBeginEvent) {
+        self.deferred_begins.insert(ev.call_id.clone());
         self.queue.push_back(QueuedInterrupt::ExecBegin(ev));
     }
 
@@ -76,7 +92,11 @@ impl InterruptManager {
         self.queue.push_back(QueuedInterrupt::ExecEnd(ev));
     }
 
+    /// Queue an MCP tool call begin event. Currently unused since begins are
+    /// handled immediately for inline rendering, but kept for potential edge cases.
+    #[allow(dead_code)]
     pub(crate) fn push_mcp_begin(&mut self, ev: McpToolCallBeginEvent) {
+        self.deferred_begins.insert(ev.call_id.clone());
         self.queue.push_back(QueuedInterrupt::McpBegin(ev));
     }
 
@@ -97,9 +117,15 @@ impl InterruptManager {
                 }
                 QueuedInterrupt::Elicitation(ev) => chat.handle_elicitation_request_now(ev),
                 QueuedInterrupt::ExecBegin(ev) => chat.handle_exec_begin_now(ev),
-                QueuedInterrupt::ExecEnd(ev) => chat.handle_exec_end_now(ev),
+                QueuedInterrupt::ExecEnd(ref ev) => {
+                    self.deferred_begins.remove(&ev.call_id);
+                    chat.handle_exec_end_now(ev.clone());
+                }
                 QueuedInterrupt::McpBegin(ev) => chat.handle_mcp_begin_now(ev),
-                QueuedInterrupt::McpEnd(ev) => chat.handle_mcp_end_now(ev),
+                QueuedInterrupt::McpEnd(ref ev) => {
+                    self.deferred_begins.remove(&ev.call_id);
+                    chat.handle_mcp_end_now(ev.clone());
+                }
                 QueuedInterrupt::PatchEnd(ev) => chat.handle_patch_apply_end_now(ev),
             }
         }
