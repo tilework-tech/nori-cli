@@ -485,6 +485,16 @@ impl ChatWidget {
             event,
             self.show_welcome_banner,
         ));
+
+        // Emit session_header_visible event for startup profiling
+        // This marks the moment the session header is added to the history
+        tracing::info!(
+            target: "startup_profiling",
+            milestone = "session_header_visible",
+            model = %model_for_header,
+            "Session header displayed"
+        );
+
         if let Some(messages) = initial_messages {
             self.replay_initial_messages(messages);
         }

@@ -32,11 +32,19 @@ use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use tracing::error;
+#[cfg(feature = "startup-profiling")]
+use tracing::info_span;
 use tracing_appender::non_blocking;
 use tracing_subscriber::EnvFilter;
 #[allow(unused_imports)]
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::prelude::*;
+
+// Startup profiling support with tracing-flame
+// To use tokio-console, build with RUSTFLAGS="--cfg tokio_unstable" and add
+// console-subscriber to your dependencies. This requires a different build setup.
+#[cfg(feature = "startup-profiling")]
+use tracing_flame::FlameLayer;
 
 mod additional_dirs;
 mod app;
@@ -82,6 +90,8 @@ mod session_log;
 pub mod session_stats;
 mod shimmer;
 mod slash_command;
+#[cfg(feature = "startup-profiling")]
+pub(crate) mod startup_metrics;
 mod status;
 mod status_indicator_widget;
 mod streaming;
@@ -154,11 +164,26 @@ pub async fn run_main(
     #[cfg(not(feature = "codex-features"))] cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
+    // === Startup profiling instrumentation ===
+    // When startup-profiling feature is enabled, track timing milestones
+    // and wrap the entire startup in a span for flame graph generation.
+    #[cfg(feature = "startup-profiling")]
+    let mut startup_metrics = startup_metrics::StartupMetrics::new();
+
+    #[cfg(feature = "startup-profiling")]
+    let _startup_span = info_span!("tui_startup").entered();
+
     // Pre-warm the ACP agent installation cache in a background thread.
     // This runs `which` commands early so the agent picker opens quickly.
+    #[cfg(feature = "startup-profiling")]
+    let _prewarm_span = info_span!("acp_prewarm").entered();
+
     std::thread::spawn(|| {
         codex_acp::prewarm_installation_cache();
     });
+
+    #[cfg(feature = "startup-profiling")]
+    drop(_prewarm_span);
 
     // When nori-config feature is enabled, set up the Nori config environment
     // This redirects config loading to ~/.nori/cli instead of ~/.codex
@@ -336,7 +361,16 @@ pub async fn run_main(
         additional_writable_roots: additional_dirs,
     };
 
+    #[cfg(feature = "startup-profiling")]
+    let _config_span = info_span!("config_load").entered();
+
     let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
+
+    #[cfg(feature = "startup-profiling")]
+    {
+        drop(_config_span);
+        startup_metrics.mark(startup_metrics::milestones::CONFIG_LOADED);
+    }
 
     if let Some(warning) = add_dir_warning_message(&cli.add_dir, &config.sandbox_policy) {
         #[allow(clippy::print_stderr)]
@@ -399,6 +433,16 @@ pub async fn run_main(
         .with_target(false)
         .with_filter(targets);
 
+    // === Startup profiling FlameLayer setup ===
+    // The flame file path for startup-profile.folded output.
+    // The FlushGuard must be kept alive for the duration of profiling, so we store it
+    // outside the subscriber init blocks and assign it inside.
+    #[cfg(feature = "startup-profiling")]
+    let flame_file_path = log_dir.join("startup-profile.folded");
+    #[cfg(feature = "startup-profiling")]
+    let mut _flame_guard: Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>> =
+        None;
+
     #[cfg(feature = "codex-features")]
     if cli.oss && model_provider_override.is_some() {
         // We're in the oss section, so provider_id should be Some
@@ -415,7 +459,7 @@ pub async fn run_main(
         ensure_oss_provider_ready(provider_id, &config).await?;
     }
 
-    // Initialize tracing subscriber with optional OTEL support
+    // Initialize tracing subscriber with optional OTEL and startup-profiling support
     #[cfg(feature = "otel")]
     {
         let otel = codex_core::otel_init::build_provider(&config, env!("CARGO_PKG_VERSION"));
@@ -434,40 +478,146 @@ pub async fn run_main(
                 tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
             );
 
-            #[cfg(feature = "feedback")]
+            #[cfg(all(feature = "feedback", feature = "startup-profiling"))]
+            {
+                if let Ok((flame_layer, guard)) = FlameLayer::with_file(&flame_file_path) {
+                    _flame_guard = Some(guard);
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(feedback_layer)
+                        .with(otel_layer)
+                        .with(flame_layer)
+                        .try_init();
+                } else {
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(feedback_layer)
+                        .with(otel_layer)
+                        .try_init();
+                }
+            }
+            #[cfg(all(feature = "feedback", not(feature = "startup-profiling")))]
             let _ = tracing_subscriber::registry()
                 .with(file_layer)
                 .with(feedback_layer)
                 .with(otel_layer)
                 .try_init();
-            #[cfg(not(feature = "feedback"))]
+            #[cfg(all(not(feature = "feedback"), feature = "startup-profiling"))]
+            {
+                if let Ok((flame_layer, guard)) = FlameLayer::with_file(&flame_file_path) {
+                    _flame_guard = Some(guard);
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(otel_layer)
+                        .with(flame_layer)
+                        .try_init();
+                } else {
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(otel_layer)
+                        .try_init();
+                }
+            }
+            #[cfg(all(not(feature = "feedback"), not(feature = "startup-profiling")))]
             let _ = tracing_subscriber::registry()
                 .with(file_layer)
                 .with(otel_layer)
                 .try_init();
         } else {
-            #[cfg(feature = "feedback")]
+            #[cfg(all(feature = "feedback", feature = "startup-profiling"))]
+            {
+                if let Ok((flame_layer, guard)) = FlameLayer::with_file(&flame_file_path) {
+                    _flame_guard = Some(guard);
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(feedback_layer)
+                        .with(flame_layer)
+                        .try_init();
+                } else {
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(feedback_layer)
+                        .try_init();
+                }
+            }
+            #[cfg(all(feature = "feedback", not(feature = "startup-profiling")))]
             let _ = tracing_subscriber::registry()
                 .with(file_layer)
                 .with(feedback_layer)
                 .try_init();
-            #[cfg(not(feature = "feedback"))]
+            #[cfg(all(not(feature = "feedback"), feature = "startup-profiling"))]
+            {
+                if let Ok((flame_layer, guard)) = FlameLayer::with_file(&flame_file_path) {
+                    _flame_guard = Some(guard);
+                    let _ = tracing_subscriber::registry()
+                        .with(file_layer)
+                        .with(flame_layer)
+                        .try_init();
+                } else {
+                    let _ = tracing_subscriber::registry().with(file_layer).try_init();
+                }
+            }
+            #[cfg(all(not(feature = "feedback"), not(feature = "startup-profiling")))]
             let _ = tracing_subscriber::registry().with(file_layer).try_init();
         }
     }
 
     #[cfg(not(feature = "otel"))]
     {
-        #[cfg(feature = "feedback")]
+        #[cfg(all(feature = "feedback", feature = "startup-profiling"))]
+        {
+            if let Ok((flame_layer, guard)) = FlameLayer::with_file(&flame_file_path) {
+                _flame_guard = Some(guard);
+                let _ = tracing_subscriber::registry()
+                    .with(file_layer)
+                    .with(feedback_layer)
+                    .with(flame_layer)
+                    .try_init();
+            } else {
+                let _ = tracing_subscriber::registry()
+                    .with(file_layer)
+                    .with(feedback_layer)
+                    .try_init();
+            }
+        }
+        #[cfg(all(feature = "feedback", not(feature = "startup-profiling")))]
         let _ = tracing_subscriber::registry()
             .with(file_layer)
             .with(feedback_layer)
             .try_init();
-        #[cfg(not(feature = "feedback"))]
+        #[cfg(all(not(feature = "feedback"), feature = "startup-profiling"))]
+        {
+            if let Ok((flame_layer, guard)) = FlameLayer::with_file(&flame_file_path) {
+                _flame_guard = Some(guard);
+                let _ = tracing_subscriber::registry()
+                    .with(file_layer)
+                    .with(flame_layer)
+                    .try_init();
+            } else {
+                let _ = tracing_subscriber::registry().with(file_layer).try_init();
+            }
+        }
+        #[cfg(all(not(feature = "feedback"), not(feature = "startup-profiling")))]
         let _ = tracing_subscriber::registry().with(file_layer).try_init();
     }
 
-    #[cfg(feature = "feedback")]
+    #[cfg(feature = "startup-profiling")]
+    startup_metrics.mark(startup_metrics::milestones::TRACING_INITIALIZED);
+
+    #[cfg(all(feature = "feedback", feature = "startup-profiling"))]
+    return run_ratatui_app(
+        cli,
+        config,
+        overrides,
+        cli_kv_overrides,
+        active_profile,
+        feedback,
+        startup_metrics,
+    )
+    .await
+    .map_err(|err| std::io::Error::other(err.to_string()));
+
+    #[cfg(all(feature = "feedback", not(feature = "startup-profiling")))]
     return run_ratatui_app(
         cli,
         config,
@@ -479,7 +629,19 @@ pub async fn run_main(
     .await
     .map_err(|err| std::io::Error::other(err.to_string()));
 
-    #[cfg(not(feature = "feedback"))]
+    #[cfg(all(not(feature = "feedback"), feature = "startup-profiling"))]
+    return run_ratatui_app(
+        cli,
+        config,
+        overrides,
+        cli_kv_overrides,
+        active_profile,
+        startup_metrics,
+    )
+    .await
+    .map_err(|err| std::io::Error::other(err.to_string()));
+
+    #[cfg(all(not(feature = "feedback"), not(feature = "startup-profiling")))]
     return run_ratatui_app(cli, config, overrides, cli_kv_overrides, active_profile)
         .await
         .map_err(|err| std::io::Error::other(err.to_string()));
@@ -492,6 +654,7 @@ async fn run_ratatui_app(
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
     #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
+    #[cfg(feature = "startup-profiling")] mut startup_metrics: startup_metrics::StartupMetrics,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -504,8 +667,18 @@ async fn run_ratatui_app(
         tracing::error!("panic: {info}");
         prev_hook(info);
     }));
+
+    #[cfg(feature = "startup-profiling")]
+    let _terminal_init_span = info_span!("terminal_init").entered();
+
     let mut terminal = tui::init()?;
     terminal.clear()?;
+
+    #[cfg(feature = "startup-profiling")]
+    {
+        drop(_terminal_init_span);
+        startup_metrics.mark(startup_metrics::milestones::TERMINAL_INITIALIZED);
+    }
 
     let mut tui = Tui::new(terminal);
 
@@ -644,6 +817,23 @@ async fn run_ratatui_app(
     };
 
     let Cli { prompt, images, .. } = cli;
+
+    // Mark "chat interactive" milestone - chat window is about to accept user input
+    #[cfg(feature = "startup-profiling")]
+    {
+        startup_metrics.mark(startup_metrics::milestones::CHAT_INTERACTIVE);
+        // Log time to interactive for easy extraction from logs
+        tracing::info!(
+            target: "startup_profiling",
+            time_to_interactive_ms = startup_metrics.elapsed().as_millis() as u64,
+            "TUI ready for user interaction"
+        );
+        // Report all milestones before entering the main event loop
+        startup_metrics.report();
+    }
+
+    #[cfg(feature = "startup-profiling")]
+    let _app_run_span = info_span!("app_run").entered();
 
     #[cfg(feature = "feedback")]
     let app_result = App::run(

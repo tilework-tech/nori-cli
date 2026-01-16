@@ -52,6 +52,14 @@ upstream-updates = []
 # OSS providers (Ollama, LM Studio) - forwarded to codex-common
 oss-providers = ["codex-common/oss-providers"]
 
+# Startup performance profiling with tracing-flame
+# Enables detailed span instrumentation and flamegraph output for profiling
+# TUI launch performance. Output goes to $NORI_HOME/log/startup-profile.folded
+#
+# Note: For tokio-console support, build with RUSTFLAGS="--cfg tokio_unstable"
+# and add console-subscriber manually. This feature only enables tracing-flame.
+startup-profiling = ["dep:tracing-flame"]
+
 [lints]
 workspace = true
 
@@ -120,6 +128,7 @@ tokio-stream = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 tracing-appender = { workspace = true }
+tracing-flame = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tree-sitter-bash = { workspace = true }
 tree-sitter-highlight = { workspace = true }

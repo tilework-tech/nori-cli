@@ -498,6 +498,39 @@ Combined with `acp_event_flow` from the ACP backend, these enable full end-to-en
 
 - ACP rolling file tracing is initialized by the CLI (`cli/src/main.rs`) at startup, writing to `$NORI_HOME/log/nori-acp.YYYY-MM-DD`. Every mock agent logs `ACP agent spawned (pid: ...)` there, which makes the agent-switching tests in `tui-pty-e2e` deterministic and ensures developers can inspect agent subprocess lifecycles during debugging.
 
+**Startup Performance Profiling:**
+
+The TUI supports detailed startup performance profiling via the `startup-profiling` Cargo feature. When enabled, it instruments the startup path with tracing spans and outputs a folded stack file for flame graph visualization.
+
+Build with profiling:
+```bash
+cargo build -p codex-tui --features startup-profiling
+```
+
+When running, the TUI will:
+1. Track timing milestones: `config_loaded`, `tracing_initialized`, `terminal_initialized`, `chat_interactive`, `session_header_visible`
+2. Output folded stacks to `$NORI_HOME/log/startup-profile.folded`
+3. Log time-to-interactive (TTI) via tracing
+
+Generate a flame chart for visualization:
+```bash
+cargo install inferno
+cat ~/.nori/cli/log/startup-profile.folded | inferno-flamegraph --flamechart > startup.svg
+```
+
+The profiling output shows the hierarchical timing of startup phases:
+- `tui_startup` (root span)
+  - `acp_prewarm` - Background ACP installation cache pre-warming
+  - `config_load` - Configuration loading
+  - `terminal_init` - Terminal initialization
+  - `app_run` - Main application event loop
+
+For tokio-console integration (async task debugging), build with:
+```bash
+RUSTFLAGS="--cfg tokio_unstable" cargo build -p codex-tui --features startup-profiling
+```
+Then add `console-subscriber` to dependencies and connect with `tokio-console`.
+
 **Agent Switch Event Filtering:**
 
 When switching between ACP agents (e.g., via `/agent` command), `ChatWidget` uses an event filtering mechanism to prevent race conditions:
