@@ -609,12 +609,8 @@ impl ChatWidget {
         // separate AgentMessage event to trigger handle_stream_finished().
         self.flush_interrupt_queue();
 
-        // Flush any pending ExecCells that weren't completed (e.g., due to interruption).
-        for pending_cell in self.pending_exec_cells.drain_failed() {
-            self.needs_final_message_separator = true;
-            self.app_event_tx
-                .send(AppEvent::InsertHistoryCell(pending_cell));
-        }
+        // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
+        self.pending_exec_cells.drain_failed();
 
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);

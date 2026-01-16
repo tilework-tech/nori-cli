@@ -153,7 +153,7 @@ Without filtering, the TUI would receive both events and try to create cells for
 2. Second ToolCall (same call_id) → `with_added_call` rejects duplicate → Creates NEW cell
 3. Old cell A gets flushed to `pending_exec_cells`
 4. When ExecEnd arrives, cell A was already "processed" but is stuck in pending
-5. Cell only reappears at `drain_failed()` when the turn completes
+5. Cell is discarded (with warnings) at `drain_failed()` when the turn completes
 
 ### The Solution: Two-Layer Filtering
 
