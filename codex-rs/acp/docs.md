@@ -443,7 +443,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 └─────────────────────────┘                      └─────────────────────────┘
 ```
 
-- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, notify, nori_home, history_persistence)
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, notify, nori_home, history_persistence, resume_session_id)
 - `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`
@@ -684,10 +684,9 @@ Client advertises these capabilities to agents:
 
 The following features are marked with TODO comments in the codebase:
 
-**Resume/Fork Integration (connection.rs:343-350):**
-- Accept optional session_id parameter to resume existing sessions
+**History-aware Resume/Fork Integration (connection.rs):**
 - Load persisted history from Codex rollout format
-- Send history to agent via session initialization
+- Send history to agents via `session/load` when full transcript replay is needed
 
 **Codex-format History Persistence (connection.rs:385-394):**
 - Collect all SessionUpdates during prompts

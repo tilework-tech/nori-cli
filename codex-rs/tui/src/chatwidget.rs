@@ -326,6 +326,8 @@ pub(crate) struct ChatWidgetInit {
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching model. This prevents race conditions when switching agents.
     pub(crate) expected_model: Option<String>,
+    /// ACP-only: optional session ID to resume via `session/resume`.
+    pub(crate) acp_resume_session_id: Option<String>,
 }
 
 #[derive(Default)]
@@ -1481,10 +1483,16 @@ impl ChatWidget {
             #[cfg(feature = "feedback")]
             feedback,
             expected_model,
+            acp_resume_session_id,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-        let spawn_result = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
+        let spawn_result = spawn_agent(
+            config.clone(),
+            app_event_tx.clone(),
+            conversation_manager,
+            acp_resume_session_id,
+        );
 
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
@@ -1571,6 +1579,7 @@ impl ChatWidget {
             #[cfg(feature = "feedback")]
             feedback,
             expected_model,
+            acp_resume_session_id: _,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();

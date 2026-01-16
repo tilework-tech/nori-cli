@@ -149,6 +149,8 @@ pub struct AcpBackendConfig {
     pub nori_home: PathBuf,
     /// History persistence policy
     pub history_persistence: crate::config::HistoryPersistence,
+    /// Optional ACP session ID to resume via `session/resume`.
+    pub resume_session_id: Option<String>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -223,8 +225,37 @@ impl AcpBackend {
             }
         };
 
+        let resume_session_id = config
+            .resume_session_id
+            .as_ref()
+            .map(|session_id| acp::SessionId::from(session_id.clone()));
+
         // Create a session with enhanced error handling
-        let session_result = connection.create_session(&cwd).await;
+        let session_result = if let Some(resume_session_id) = resume_session_id.clone() {
+            #[cfg(feature = "unstable")]
+            {
+                let supports_resume = connection
+                    .capabilities()
+                    .session_capabilities
+                    .resume
+                    .is_some();
+                if !supports_resume {
+                    return Err(anyhow::anyhow!(
+                        "Agent does not support session/resume. Start a new session or choose a different agent."
+                    ));
+                }
+            }
+            #[cfg(not(feature = "unstable"))]
+            {
+                return Err(anyhow::anyhow!(
+                    "Session resume is unavailable because unstable ACP features are disabled."
+                ));
+            }
+
+            connection.resume_session(&resume_session_id, &cwd).await
+        } else {
+            connection.create_session(&cwd).await
+        };
         let session_id = match session_result {
             Ok(id) => id,
             Err(e) => {
@@ -247,7 +278,11 @@ impl AcpBackend {
             }
         };
 
-        debug!("ACP session created: {:?}", session_id);
+        if resume_session_id.is_some() {
+            debug!("ACP session resumed: {:?}", session_id);
+        } else {
+            debug!("ACP session created: {:?}", session_id);
+        }
 
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
@@ -300,6 +335,18 @@ impl AcpBackend {
             })
             .await
             .ok();
+
+        if let Some(resume_session_id) = resume_session_id {
+            let message = format!(
+                "Resumed ACP session {resume_session_id}. Previous messages are not shown."
+            );
+            let _ = event_tx
+                .send(Event {
+                    id: String::new(),
+                    msg: EventMsg::Warning(codex_protocol::protocol::WarningEvent { message }),
+                })
+                .await;
+        }
 
         // Spawn approval handler task
         tokio::spawn(Self::run_approval_handler(
@@ -2269,6 +2316,7 @@ mod tests {
             notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            resume_session_id: None,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;

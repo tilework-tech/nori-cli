@@ -349,6 +349,7 @@ impl App {
             #[cfg(feature = "feedback")]
             feedback: self.feedback.clone(),
             expected_model: None, // No filtering for backtracked conversations
+            acp_resume_session_id: None,
         };
         self.chat_widget =
             crate::chatwidget::ChatWidget::new_from_existing(init, conv, session_configured);

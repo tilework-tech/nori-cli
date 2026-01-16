@@ -2,6 +2,7 @@ use std::fmt::{self};
 use std::io::Write;
 use std::io::{self};
 
+use crossterm::style::force_color_output;
 use ratatui::prelude::CrosstermBackend;
 
 use ratatui::backend::Backend;
@@ -25,6 +26,7 @@ pub struct VT100Backend {
 impl VT100Backend {
     /// Creates a new `TestBackend` with the specified width and height.
     pub fn new(width: u16, height: u16) -> Self {
+        force_color_output(true);
         Self {
             crossterm_backend: CrosstermBackend::new(vt100::Parser::new(height, width, 0)),
         }

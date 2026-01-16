@@ -254,6 +254,7 @@ impl App {
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
+        acp_resume_session_id: Option<String>,
         #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
@@ -302,6 +303,7 @@ impl App {
                     #[cfg(feature = "feedback")]
                     feedback: feedback.clone(),
                     expected_model: None, // No filtering for fresh sessions
+                    acp_resume_session_id: acp_resume_session_id.clone(),
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
@@ -327,6 +329,7 @@ impl App {
                     #[cfg(feature = "feedback")]
                     feedback: feedback.clone(),
                     expected_model: None, // No filtering for resumed sessions
+                    acp_resume_session_id: None,
                 };
                 ChatWidget::new_from_existing(
                     init,
@@ -498,6 +501,7 @@ impl App {
                     #[cfg(feature = "feedback")]
                     feedback: self.feedback.clone(),
                     expected_model: None, // No filtering for /new command
+                    acp_resume_session_id: None,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 if let Some(summary) = summary {
@@ -1034,6 +1038,7 @@ impl App {
                     #[cfg(feature = "feedback")]
                     feedback: self.feedback.clone(),
                     expected_model: Some(model_name.clone()),
+                    acp_resume_session_id: None,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
 

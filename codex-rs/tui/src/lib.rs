@@ -578,8 +578,17 @@ async fn run_ratatui_app(
         initial_config
     };
 
+    let is_acp_model = codex_acp::get_agent_config(&config.model).is_ok();
+    let acp_resume_session_id = if is_acp_model {
+        cli.resume_session_id.clone()
+    } else {
+        None
+    };
+
     // Determine resume behavior: explicit id, then resume last, then picker.
-    let resume_selection = if let Some(id_str) = cli.resume_session_id.as_deref() {
+    let resume_selection = if acp_resume_session_id.is_some() {
+        resume_picker::ResumeSelection::StartFresh
+    } else if let Some(id_str) = cli.resume_session_id.as_deref() {
         match find_conversation_path_by_id_str(&config.codex_home, id_str).await? {
             Some(path) => resume_picker::ResumeSelection::Resume(path),
             None => {
@@ -654,6 +663,7 @@ async fn run_ratatui_app(
         prompt,
         images,
         resume_selection,
+        acp_resume_session_id,
         feedback,
     )
     .await;
@@ -666,6 +676,7 @@ async fn run_ratatui_app(
         prompt,
         images,
         resume_selection,
+        acp_resume_session_id,
     )
     .await;
 

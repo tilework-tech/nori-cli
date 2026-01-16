@@ -113,6 +113,11 @@ enum AcpCommand {
         cwd: PathBuf,
         response_tx: oneshot::Sender<Result<acp::SessionId>>,
     },
+    ResumeSession {
+        session_id: acp::SessionId,
+        cwd: PathBuf,
+        response_tx: oneshot::Sender<Result<acp::SessionId>>,
+    },
     Prompt {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
@@ -250,6 +255,24 @@ impl AcpConnection {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(AcpCommand::CreateSession {
+                cwd: cwd.to_path_buf(),
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Resume an existing session with the agent.
+    pub async fn resume_session(
+        &self,
+        session_id: &acp::SessionId,
+        cwd: &Path,
+    ) -> Result<acp::SessionId> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::ResumeSession {
+                session_id: session_id.clone(),
                 cwd: cwd.to_path_buf(),
                 response_tx,
             })
@@ -608,14 +631,6 @@ async fn run_command_loop(
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
             AcpCommand::CreateSession { cwd, response_tx } => {
-                // TODO: [Future] Resume/Fork Integration
-                // When creating a session, check if there's an existing session to resume.
-                // This would require:
-                // 1. Accepting an optional session_id parameter to resume
-                // 2. Loading persisted history from Codex rollout format
-                // 3. Sending history to the agent via the session initialization
-                // See: codex-core/src/rollout.rs for the persistence format
-
                 let result = inner
                     .connection
                     .new_session(acp::NewSessionRequest::new(cwd))
@@ -638,6 +653,34 @@ async fn run_command_loop(
                 let result = result
                     .map(|r| r.session_id)
                     .context("Failed to create ACP session");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::ResumeSession {
+                session_id,
+                cwd,
+                response_tx,
+            } => {
+                let result = inner
+                    .connection
+                    .resume_session(acp::ResumeSessionRequest::new(session_id.clone(), cwd))
+                    .await;
+
+                #[cfg(feature = "unstable")]
+                if let Ok(ref response) = result
+                    && let Some(ref models) = response.models
+                    && let Ok(mut state) = model_state.write()
+                {
+                    *state = AcpModelState::from_session_model_state(models);
+                    debug!(
+                        "Model state updated after resume: current={:?}, available={}",
+                        state.current_model_id,
+                        state.available_models.len()
+                    );
+                }
+
+                let result = result
+                    .map(|_| session_id)
+                    .context("Failed to resume ACP session");
                 let _ = response_tx.send(result);
             }
             AcpCommand::Prompt {

@@ -317,6 +317,7 @@ async fn helpers_are_available_and_do_not_panic() {
         #[cfg(feature = "feedback")]
         feedback: crate::feedback_compat::CodexFeedback::new(),
         expected_model: None,
+        acp_resume_session_id: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
     // Basic construction sanity.
