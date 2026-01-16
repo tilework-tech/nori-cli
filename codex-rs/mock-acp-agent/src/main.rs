@@ -243,7 +243,10 @@ impl acp::Agent for MockAgent {
         &self,
         arguments: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
-        eprintln!("Mock agent: load_session for session {:?}", arguments.session_id);
+        eprintln!(
+            "Mock agent: load_session for session {:?}",
+            arguments.session_id
+        );
 
         // Support configurable replay behavior for testing session load
         // Set MOCK_AGENT_LOAD_SESSION_REPLAY to enable replay updates

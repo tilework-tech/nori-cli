@@ -245,10 +245,8 @@ impl AcpBackend {
                     let mut events = Vec::new();
                     let mut pending_patch_changes = std::collections::HashMap::new();
                     while let Ok(update) = update_rx.try_recv() {
-                        let translated = translate_session_update_to_events(
-                            &update,
-                            &mut pending_patch_changes,
-                        );
+                        let translated =
+                            translate_session_update_to_events(&update, &mut pending_patch_changes);
                         events.extend(translated);
                     }
                     debug!(
