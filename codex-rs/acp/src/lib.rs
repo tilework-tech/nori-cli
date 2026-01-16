@@ -61,6 +61,7 @@ pub use agent_client_protocol::NewSessionRequest;
 pub use agent_client_protocol::NewSessionResponse;
 pub use agent_client_protocol::PromptRequest;
 pub use agent_client_protocol::PromptResponse;
+pub use agent_client_protocol::SessionId;
 pub use agent_client_protocol::SessionNotification;
 pub use agent_client_protocol::SessionUpdate;
 

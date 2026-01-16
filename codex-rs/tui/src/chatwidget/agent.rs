@@ -95,12 +95,13 @@ pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
     server: Arc<ConversationManager>,
+    acp_session_id: Option<String>,
 ) -> SpawnAgentResult {
     let acp_agent_result = get_agent_config(&config.model);
 
     match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
         // Model is registered in ACP registry -> use ACP
-        (true, _) => spawn_acp_agent(config, app_event_tx),
+        (true, _) => spawn_acp_agent(config, app_event_tx, acp_session_id),
 
         // Model NOT registered, but HTTP fallback is allowed -> use HTTP
         (false, true) => {
@@ -156,7 +157,11 @@ fn spawn_error_agent(
 ///
 /// This uses the `codex_acp` crate to spawn an agent subprocess and handle
 /// communication via the Agent Client Protocol.
-fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentResult {
+fn spawn_acp_agent(
+    config: Config,
+    app_event_tx: AppEventSender,
+    acp_session_id: Option<String>,
+) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
     // Create the model command channel for model switching operations
@@ -176,9 +181,14 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
 
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
+        let session_id = acp_session_id
+            .filter(|id| !id.is_empty())
+            .map(codex_acp::SessionId::new);
         let acp_config = AcpBackendConfig {
             model: config.model.clone(),
             cwd: config.cwd.clone(),
+            session_id,
+            mcp_servers: config.mcp_servers.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
             notify: config.notify.clone(),

@@ -348,6 +348,7 @@ impl App {
             auth_manager: self.auth_manager.clone(),
             #[cfg(feature = "feedback")]
             feedback: self.feedback.clone(),
+            acp_session_id: None,
             expected_model: None, // No filtering for backtracked conversations
         };
         self.chat_widget =

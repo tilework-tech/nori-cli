@@ -578,8 +578,33 @@ async fn run_ratatui_app(
         initial_config
     };
 
+    let is_acp_model = codex_acp::get_agent_config(&config.model).is_ok();
+    let acp_resume_session_id = if is_acp_model {
+        cli.resume_session_id.clone()
+    } else {
+        None
+    };
+
     // Determine resume behavior: explicit id, then resume last, then picker.
-    let resume_selection = if let Some(id_str) = cli.resume_session_id.as_deref() {
+    let resume_selection = if is_acp_model {
+        if cli.resume_last || cli.resume_picker {
+            restore();
+            session_log::log_session_end();
+            let _ = tui.terminal.clear();
+            if let Err(err) = writeln!(
+                std::io::stdout(),
+                "ACP agents do not support session listing yet. Use `codex resume <SESSION_ID>` to load a specific ACP session."
+            ) {
+                error!("Failed to write ACP resume error message: {err}");
+            }
+            return Ok(AppExitInfo {
+                token_usage: codex_core::protocol::TokenUsage::default(),
+                conversation_id: None,
+                update_action: None,
+            });
+        }
+        resume_picker::ResumeSelection::StartFresh
+    } else if let Some(id_str) = cli.resume_session_id.as_deref() {
         match find_conversation_path_by_id_str(&config.codex_home, id_str).await? {
             Some(path) => resume_picker::ResumeSelection::Resume(path),
             None => {
@@ -654,6 +679,7 @@ async fn run_ratatui_app(
         prompt,
         images,
         resume_selection,
+        acp_resume_session_id,
         feedback,
     )
     .await;
@@ -666,6 +692,7 @@ async fn run_ratatui_app(
         prompt,
         images,
         resume_selection,
+        acp_resume_session_id,
     )
     .await;
 

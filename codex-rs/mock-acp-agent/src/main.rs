@@ -82,6 +82,20 @@ impl MockAgent {
         .await
     }
 
+    async fn send_user_text_chunk(
+        &self,
+        session_id: acp::SessionId,
+        text: &str,
+    ) -> Result<(), acp::Error> {
+        self.send_update(
+            session_id,
+            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(acp::ContentBlock::Text(
+                acp::TextContent::new(text),
+            ))),
+        )
+        .await
+    }
+
     /// Send a tool call notification
     async fn send_tool_call(
         &self,
@@ -157,6 +171,26 @@ impl MockAgent {
     }
 }
 
+fn mock_session_model_state() -> acp::SessionModelState {
+    acp::SessionModelState::new(
+        acp::ModelId::new("mock-model-default"),
+        vec![
+            acp::ModelInfo::new(
+                acp::ModelId::new("mock-model-default"),
+                "Mock Default Model",
+            )
+            .description("The default mock model"),
+            acp::ModelInfo::new(acp::ModelId::new("mock-model-fast"), "Mock Fast Model")
+                .description("A faster mock model variant"),
+            acp::ModelInfo::new(
+                acp::ModelId::new("mock-model-powerful"),
+                "Mock Powerful Model",
+            )
+            .description("A more capable mock model variant"),
+        ],
+    )
+}
+
 #[async_trait::async_trait(?Send)]
 impl acp::Agent for MockAgent {
     async fn initialize(
@@ -196,6 +230,7 @@ impl acp::Agent for MockAgent {
 
         eprintln!("Mock agent: initialize");
         Ok(acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
+            .agent_capabilities(acp::AgentCapabilities::new().load_session(true))
             .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))
     }
 
@@ -215,23 +250,7 @@ impl acp::Agent for MockAgent {
         eprintln!("Mock agent: new_session id={}", session_id);
 
         // Include model state with available models for testing model switching
-        let session_model_state = acp::SessionModelState::new(
-            acp::ModelId::new("mock-model-default"),
-            vec![
-                acp::ModelInfo::new(
-                    acp::ModelId::new("mock-model-default"),
-                    "Mock Default Model",
-                )
-                .description("The default mock model"),
-                acp::ModelInfo::new(acp::ModelId::new("mock-model-fast"), "Mock Fast Model")
-                    .description("A faster mock model variant"),
-                acp::ModelInfo::new(
-                    acp::ModelId::new("mock-model-powerful"),
-                    "Mock Powerful Model",
-                )
-                .description("A more powerful mock model variant"),
-            ],
-        );
+        let session_model_state = mock_session_model_state();
 
         Ok(
             acp::NewSessionResponse::new(acp::SessionId::new(session_id.to_string()))
@@ -241,9 +260,24 @@ impl acp::Agent for MockAgent {
 
     async fn load_session(
         &self,
-        _arguments: acp::LoadSessionRequest,
+        arguments: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
-        Ok(acp::LoadSessionResponse::new())
+        let session_id = arguments.session_id.clone();
+        eprintln!("Mock agent: load_session id={session_id}");
+
+        if std::env::var("MOCK_AGENT_LOAD_SESSION_REPLAY").is_ok() {
+            self.send_user_text_chunk(session_id.clone(), "Replayed user message")
+                .await?;
+            self.send_text_chunk(session_id.clone(), "Replayed assistant message")
+                .await?;
+        }
+
+        let mut response = acp::LoadSessionResponse::new();
+        #[cfg(feature = "unstable")]
+        {
+            response = response.models(mock_session_model_state());
+        }
+        Ok(response)
     }
 
     async fn prompt(

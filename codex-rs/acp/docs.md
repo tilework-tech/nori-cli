@@ -95,6 +95,21 @@ Re-exported types under `unstable`:
 - `SessionModelState`, `ModelInfo`, `ModelId`: Model information from agent
 - `SetSessionModelRequest`, `SetSessionModelResponse`: Protocol messages for switching
 
+### Session Loading (`session/load`)
+
+The ACP backend supports resuming an existing session when the agent advertises the
+`loadSession` capability:
+
+- `AcpBackendConfig.session_id` (when set) triggers `session/load` instead of `session/new`.
+- The backend streams the replayed conversation via `session/update` notifications and
+  forwards them through the same translation pipeline used for live prompts.
+- MCP servers from `AcpBackendConfig.mcp_servers` are passed to both `session/new` and
+  `session/load`. Stdio env vars (`env_vars`) and HTTP header env vars (`env_http_headers`)
+  are resolved from the current process environment at startup.
+
+This enables the TUI to reconstruct chat history for ACP sessions without relying on
+local rollout files.
+
 ### Embedded Provider Info
 
 ACP providers embed their configuration directly in `AcpAgentConfig` via `AcpProviderInfo`:
@@ -443,7 +458,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
 └─────────────────────────┘                      └─────────────────────────┘
 ```
 
-- `AcpBackendConfig`: Configuration for spawning (model, cwd, approval_policy, sandbox_policy, notify, nori_home, history_persistence)
+- `AcpBackendConfig`: Configuration for spawning (model, cwd, session_id, mcp_servers, approval_policy, sandbox_policy, notify, nori_home, history_persistence)
 - `AcpBackend::spawn()`: Creates AcpConnection, session, and starts approval handler task. Uses enhanced error handling to provide actionable error messages on spawn or session creation failure.
 - `AcpBackend::submit(Op)`: Translates Codex Ops to ACP actions:
   - `Op::UserInput` → ACP `prompt()`

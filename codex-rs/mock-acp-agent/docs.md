@@ -20,7 +20,7 @@ Path: @/codex-rs/mock-acp-agent
 
 **Entry Point:** `main()` in `@/mock-acp-agent/src/main.rs`
 
-- Uses `agent_client_protocol` v0.9 crate with `unstable` feature for model switching support
+- Uses `agent_client_protocol` v0.9.3 crate with `unstable` feature for model switching support
 - Uses builder patterns for protocol types (e.g., `ToolCall::new()`, `ModelInfo::new()`)
 - Runs on single-threaded tokio runtime with `LocalSet` for `!Send` futures
 - Communicates via stdin/stdout with newline-delimited JSON-RPC messages
@@ -31,6 +31,7 @@ Path: @/codex-rs/mock-acp-agent
 |--------|----------|
 | `initialize` | Returns mock capabilities, emits "Mock agent: initialize" to stderr |
 | `new_session` | Generates incrementing session IDs, returns `session_model_state` with 3 test models |
+| `load_session` | Replays stored content via `session/update` when `MOCK_AGENT_LOAD_SESSION_REPLAY` is set |
 | `prompt` | Sends two text chunks, optionally reads files via client |
 | `cancel` | Sets flag to stop streaming |
 | `set_session_model` | Updates the current model ID in the session |
@@ -64,6 +65,7 @@ Path: @/codex-rs/mock-acp-agent
 | `MOCK_AGENT_WRITE_CONTENT` | Content to write when `MOCK_AGENT_WRITE_FILE` is set (defaults to "default content") |
 | `MOCK_AGENT_MULTI_CALL_EXPLORING` | Sends 3 Read tool calls with interleaved text streaming and out-of-order completion (call-2, call-3, call-1) to test multi-call exploring cell handling |
 | `MOCK_AGENT_NO_FINAL_TEXT` | Suppresses final text message after tool calls complete; combine with `MOCK_AGENT_MULTI_CALL_EXPLORING` to test immediate flush without subsequent text |
+| `MOCK_AGENT_LOAD_SESSION_REPLAY` | Replays a synthetic conversation history during `session/load` |
 | `MOCK_AGENT_MODEL_NAME` | Set by `AcpAgentConfig.env` to identify the model variant (e.g., "mock-model" or "mock-model-alt"); enables model-specific behavior |
 | `MOCK_AGENT_STARTUP_DELAY_MS` | Generic startup delay in ms during `initialize()` (tests "Connecting" status indicator) |
 | `MOCK_AGENT_STARTUP_DELAY_MS_{MODEL}` | Model-specific startup delay (e.g., `MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT`); takes precedence over generic delay when model name matches |

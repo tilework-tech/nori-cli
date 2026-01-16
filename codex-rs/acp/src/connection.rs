@@ -111,6 +111,14 @@ impl AcpModelState {
 enum AcpCommand {
     CreateSession {
         cwd: PathBuf,
+        mcp_servers: Vec<acp::McpServer>,
+        response_tx: oneshot::Sender<Result<acp::SessionId>>,
+    },
+    LoadSession {
+        session_id: acp::SessionId,
+        cwd: PathBuf,
+        mcp_servers: Vec<acp::McpServer>,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
         response_tx: oneshot::Sender<Result<acp::SessionId>>,
     },
     Prompt {
@@ -246,11 +254,16 @@ impl AcpConnection {
     }
 
     /// Create a new session with the agent.
-    pub async fn create_session(&self, cwd: &Path) -> Result<acp::SessionId> {
+    pub async fn create_session(
+        &self,
+        cwd: &Path,
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<acp::SessionId> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(AcpCommand::CreateSession {
                 cwd: cwd.to_path_buf(),
+                mcp_servers,
                 response_tx,
             })
             .await
@@ -287,6 +300,32 @@ impl AcpConnection {
         self.command_tx
             .send(AcpCommand::Cancel {
                 session_id: session_id.clone(),
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Load an existing session and stream replayed updates.
+    pub async fn load_session(
+        &self,
+        session_id: acp::SessionId,
+        cwd: &Path,
+        mcp_servers: Vec<acp::McpServer>,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+    ) -> Result<acp::SessionId> {
+        if !self.agent_capabilities.load_session {
+            return Err(anyhow::anyhow!("ACP agent does not support session/load"));
+        }
+
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::LoadSession {
+                session_id,
+                cwd: cwd.to_path_buf(),
+                mcp_servers,
+                update_tx,
                 response_tx,
             })
             .await
@@ -607,7 +646,11 @@ async fn run_command_loop(
 
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
-            AcpCommand::CreateSession { cwd, response_tx } => {
+            AcpCommand::CreateSession {
+                cwd,
+                mcp_servers,
+                response_tx,
+            } => {
                 // TODO: [Future] Resume/Fork Integration
                 // When creating a session, check if there's an existing session to resume.
                 // This would require:
@@ -618,7 +661,7 @@ async fn run_command_loop(
 
                 let result = inner
                     .connection
-                    .new_session(acp::NewSessionRequest::new(cwd))
+                    .new_session(acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers))
                     .await;
 
                 // Capture model state from the response if available
@@ -638,6 +681,45 @@ async fn run_command_loop(
                 let result = result
                     .map(|r| r.session_id)
                     .context("Failed to create ACP session");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::LoadSession {
+                session_id,
+                cwd,
+                mcp_servers,
+                update_tx,
+                response_tx,
+            } => {
+                inner
+                    .client_delegate
+                    .register_session(session_id.clone(), update_tx);
+
+                let result = inner
+                    .connection
+                    .load_session(
+                        acp::LoadSessionRequest::new(session_id.clone(), cwd)
+                            .mcp_servers(mcp_servers),
+                    )
+                    .await;
+
+                #[cfg(feature = "unstable")]
+                if let Ok(ref response) = result
+                    && let Some(ref models) = response.models
+                    && let Ok(mut state) = model_state.write()
+                {
+                    *state = AcpModelState::from_session_model_state(models);
+                    debug!(
+                        "Model state updated after session load: current={:?}, available={}",
+                        state.current_model_id,
+                        state.available_models.len()
+                    );
+                }
+
+                inner.client_delegate.unregister_session(&session_id);
+
+                let result = result
+                    .map(|_| session_id)
+                    .context("Failed to load ACP session");
                 let _ = response_tx.send(result);
             }
             AcpCommand::Prompt {
@@ -1155,7 +1237,7 @@ mod tests {
 
         // Create session
         let session_id = conn
-            .create_session(temp_dir.path())
+            .create_session(temp_dir.path(), Vec::new())
             .await
             .expect("Failed to create session");
 

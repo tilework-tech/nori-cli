@@ -10,6 +10,8 @@ use std::sync::Arc;
 
 use agent_client_protocol as acp;
 use anyhow::Result;
+use codex_core::config::types::McpServerConfig;
+use codex_core::config::types::McpServerTransportConfig;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
@@ -139,6 +141,10 @@ pub struct AcpBackendConfig {
     pub model: String,
     /// Working directory for the session
     pub cwd: PathBuf,
+    /// Optional ACP session id to load
+    pub session_id: Option<acp::SessionId>,
+    /// MCP servers to connect to
+    pub mcp_servers: std::collections::HashMap<String, McpServerConfig>,
     /// Approval policy for command execution
     pub approval_policy: AskForApproval,
     /// Sandbox policy for command execution
@@ -223,8 +229,28 @@ impl AcpBackend {
             }
         };
 
-        // Create a session with enhanced error handling
-        let session_result = connection.create_session(&cwd).await;
+        let mcp_servers = mcp_servers_to_acp(&config.mcp_servers);
+
+        // Create or load a session with enhanced error handling
+        let session_result = if let Some(session_id) = config.session_id.clone() {
+            let (update_tx, update_rx) = mpsc::channel(32);
+
+            let update_handler = tokio::spawn(forward_session_updates(
+                update_rx,
+                event_tx.clone(),
+                String::new(),
+            ));
+
+            let result = connection
+                .load_session(session_id, &cwd, mcp_servers, update_tx)
+                .await;
+
+            let _ = update_handler.await;
+            result
+        } else {
+            connection.create_session(&cwd, mcp_servers).await
+        };
+
         let session_id = match session_result {
             Ok(id) => id,
             Err(e) => {
@@ -487,7 +513,7 @@ impl AcpBackend {
         let prompt = vec![translator::text_to_content_block(&prompt_text)];
 
         // Create channel for receiving session updates
-        let (update_tx, mut update_rx) = mpsc::channel(32);
+        let (update_tx, update_rx) = mpsc::channel(32);
 
         // Clone what we need for the background task
         let event_tx = self.event_tx.clone();
@@ -517,58 +543,11 @@ impl AcpBackend {
                 .await;
 
             // Spawn update consumer task
-            let event_tx_clone = event_tx.clone();
-            let id_for_updates = id_clone.clone();
-            let update_handler = tokio::spawn(async move {
-                let mut event_sequence: u64 = 0;
-                // Track call_ids that have already had ExecCommandBegin emitted.
-                // The ACP protocol can emit multiple ToolCall events for the same call_id
-                // as details become available, but the TUI expects exactly one Begin per call_id.
-                let mut emitted_begin_call_ids: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
-                // Track pending patch operations: store FileChange data from ToolCall events
-                // so we can emit PatchApplyBegin on ToolCallUpdate (after approval).
-                let mut pending_patch_changes: std::collections::HashMap<
-                    String,
-                    std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
-                > = std::collections::HashMap::new();
-                while let Some(update) = update_rx.recv().await {
-                    let events =
-                        translate_session_update_to_events(&update, &mut pending_patch_changes);
-                    for event_msg in events {
-                        // Deduplicate ExecCommandBegin events - only emit the first one per call_id
-                        if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
-                            if emitted_begin_call_ids.contains(&begin_ev.call_id) {
-                                debug!(
-                                    target: "acp_event_flow",
-                                    call_id = %begin_ev.call_id,
-                                    "ACP dispatch: skipping duplicate ExecCommandBegin"
-                                );
-                                continue;
-                            }
-                            emitted_begin_call_ids.insert(begin_ev.call_id.clone());
-                        }
-                        event_sequence += 1;
-                        debug!(
-                            target: "acp_event_flow",
-                            seq = event_sequence,
-                            event_type = get_event_msg_type(&event_msg),
-                            "ACP dispatch: sending event to TUI"
-                        );
-                        let _ = event_tx_clone
-                            .send(Event {
-                                id: id_for_updates.clone(),
-                                msg: event_msg,
-                            })
-                            .await;
-                    }
-                }
-                debug!(
-                    target: "acp_event_flow",
-                    total_events = event_sequence,
-                    "ACP dispatch: update stream completed"
-                );
-            });
+            let update_handler = tokio::spawn(forward_session_updates(
+                update_rx,
+                event_tx.clone(),
+                id_clone.clone(),
+            ));
 
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
@@ -766,12 +745,143 @@ impl AcpBackend {
     }
 }
 
+async fn forward_session_updates(
+    mut update_rx: mpsc::Receiver<acp::SessionUpdate>,
+    event_tx: mpsc::Sender<Event>,
+    id: String,
+) {
+    let mut event_sequence: u64 = 0;
+    // Track call_ids that have already had ExecCommandBegin emitted.
+    // The ACP protocol can emit multiple ToolCall events for the same call_id
+    // as details become available, but the TUI expects exactly one Begin per call_id.
+    let mut emitted_begin_call_ids: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    // Track pending patch operations: store FileChange data from ToolCall events
+    // so we can emit PatchApplyBegin on ToolCallUpdate (after approval).
+    let mut pending_patch_changes: std::collections::HashMap<
+        String,
+        std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
+    > = std::collections::HashMap::new();
+    while let Some(update) = update_rx.recv().await {
+        let events = translate_session_update_to_events(&update, &mut pending_patch_changes);
+        for event_msg in events {
+            // Deduplicate ExecCommandBegin events - only emit the first one per call_id
+            if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
+                if emitted_begin_call_ids.contains(&begin_ev.call_id) {
+                    debug!(
+                        target: "acp_event_flow",
+                        call_id = %begin_ev.call_id,
+                        "ACP dispatch: skipping duplicate ExecCommandBegin"
+                    );
+                    continue;
+                }
+                emitted_begin_call_ids.insert(begin_ev.call_id.clone());
+            }
+            event_sequence += 1;
+            debug!(
+                target: "acp_event_flow",
+                seq = event_sequence,
+                event_type = get_event_msg_type(&event_msg),
+                "ACP dispatch: sending event to TUI"
+            );
+            let _ = event_tx
+                .send(Event {
+                    id: id.clone(),
+                    msg: event_msg,
+                })
+                .await;
+        }
+    }
+    debug!(
+        target: "acp_event_flow",
+        total_events = event_sequence,
+        "ACP dispatch: update stream completed"
+    );
+}
+
 /// Generate a unique ID for operations
 fn generate_id() -> String {
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::Ordering;
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     format!("acp-{}", COUNTER.fetch_add(1, Ordering::Relaxed))
+}
+
+fn mcp_servers_to_acp(
+    servers: &std::collections::HashMap<String, McpServerConfig>,
+) -> Vec<acp::McpServer> {
+    let mut resolved = Vec::new();
+    for (name, server) in servers {
+        if !server.enabled {
+            continue;
+        }
+
+        match &server.transport {
+            McpServerTransportConfig::Stdio {
+                command,
+                args,
+                env,
+                env_vars,
+                ..
+            } => {
+                let mut env_entries = Vec::new();
+                if let Some(env_map) = env {
+                    env_entries.extend(
+                        env_map
+                            .iter()
+                            .map(|(key, value)| acp::EnvVariable::new(key.clone(), value.clone())),
+                    );
+                }
+                for env_var in env_vars {
+                    if let Ok(value) = std::env::var(env_var) {
+                        env_entries.push(acp::EnvVariable::new(env_var.clone(), value));
+                    }
+                }
+
+                let stdio = acp::McpServerStdio::new(name.clone(), command.clone())
+                    .args(args.clone())
+                    .env(env_entries);
+                resolved.push(acp::McpServer::Stdio(stdio));
+            }
+            McpServerTransportConfig::StreamableHttp {
+                url,
+                bearer_token_env_var,
+                http_headers,
+                env_http_headers,
+            } => {
+                let mut headers = Vec::new();
+                if let Some(header_map) = http_headers {
+                    headers.extend(
+                        header_map
+                            .iter()
+                            .map(|(key, value)| acp::HttpHeader::new(key.clone(), value.clone())),
+                    );
+                }
+                if let Some(header_env_map) = env_http_headers {
+                    headers.extend(header_env_map.iter().filter_map(|(key, env_var)| {
+                        std::env::var(env_var)
+                            .ok()
+                            .map(|value| acp::HttpHeader::new(key.clone(), value))
+                    }));
+                }
+                if let Some(env_var) = bearer_token_env_var
+                    && let Ok(token) = std::env::var(env_var)
+                    && !headers
+                        .iter()
+                        .any(|header| header.name.eq_ignore_ascii_case("authorization"))
+                {
+                    headers.push(acp::HttpHeader::new(
+                        "Authorization",
+                        format!("Bearer {token}"),
+                    ));
+                }
+
+                let http = acp::McpServerHttp::new(name.clone(), url.clone()).headers(headers);
+                resolved.push(acp::McpServer::Http(http));
+            }
+        }
+    }
+    resolved
 }
 
 /// Get a human-readable name for an Op variant
@@ -2264,6 +2374,8 @@ mod tests {
         let config = AcpBackendConfig {
             model: "mock-model".to_string(),
             cwd: temp_dir.path().to_path_buf(),
+            session_id: None,
+            mcp_servers: std::collections::HashMap::new(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             notify: None,

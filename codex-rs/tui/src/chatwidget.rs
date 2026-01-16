@@ -322,6 +322,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) auth_manager: Arc<AuthManager>,
     #[cfg(feature = "feedback")]
     pub(crate) feedback: crate::feedback_compat::CodexFeedback,
+    pub(crate) acp_session_id: Option<String>,
     /// Expected model name for this widget. When set, events from other models
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching model. This prevents race conditions when switching agents.
@@ -1484,11 +1485,17 @@ impl ChatWidget {
             auth_manager,
             #[cfg(feature = "feedback")]
             feedback,
+            acp_session_id,
             expected_model,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-        let spawn_result = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
+        let spawn_result = spawn_agent(
+            config.clone(),
+            app_event_tx.clone(),
+            conversation_manager,
+            acp_session_id,
+        );
 
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
@@ -1574,11 +1581,13 @@ impl ChatWidget {
             auth_manager,
             #[cfg(feature = "feedback")]
             feedback,
+            acp_session_id,
             expected_model,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
 
+        let _ = acp_session_id;
         let codex_op_tx =
             spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
 
