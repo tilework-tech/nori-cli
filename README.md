@@ -31,11 +31,11 @@ Each provider you plan to use needs to be authenticated separately before use. T
 Currently each agent relies on an existing authenticated session on your system. If you're coming in from another CLI tool, great!
 You should be good to go. If not, first follow the authentication for your desired provider:
 
-| Provider | Authentication                                    |
-| -------- | ------------------------------------------------- |
-| Claude   | `npx @anthropic-ai/claude-code` and then `/login` |
-| Gemini   | `npx @google/gemini-cli` and then `/auth`         |
-| OpenAI   | `/agent` to Codex, then `/login` within Nori      |
+| Provider | Authentication                                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude   | Run `npx @anthropic-ai/claude-code` in your terminal, then when the Claude CLI opens, type `/login` there.                                              |
+| Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                                      |
+| OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed.        |
 
 ## Features
 
