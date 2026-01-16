@@ -83,17 +83,20 @@ impl PendingExecCellTracker {
         }
 
         // Store the cell under the primary key
-        self.cells
-            .entry(primary_key.clone())
-            .and_modify(|entry| {
-                entry.cell = cell;
-                entry.last_update_at = now;
-            })
-            .or_insert_with(|| PendingCellEntry {
-                cell,
-                initial_pending_at: now,
-                last_update_at: now,
-            });
+        match self.cells.entry(primary_key.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let e = entry.get_mut();
+                e.cell = cell;
+                e.last_update_at = now;
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(PendingCellEntry {
+                    cell,
+                    initial_pending_at: now,
+                    last_update_at: now,
+                });
+            }
+        }
 
         debug!(
             target: "pending_exec_cells",
