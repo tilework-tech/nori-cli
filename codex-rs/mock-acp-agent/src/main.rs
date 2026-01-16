@@ -241,8 +241,36 @@ impl acp::Agent for MockAgent {
 
     async fn load_session(
         &self,
-        _arguments: acp::LoadSessionRequest,
+        arguments: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
+        eprintln!("Mock agent: load_session for session {:?}", arguments.session_id);
+
+        // Support configurable replay behavior for testing session load
+        // Set MOCK_AGENT_LOAD_SESSION_REPLAY to enable replay updates
+        if std::env::var("MOCK_AGENT_LOAD_SESSION_REPLAY").is_ok() {
+            let session_id = arguments.session_id.clone();
+
+            // Send a replayed user message
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
+                    acp::ContentBlock::Text(acp::TextContent::new("Previous user message")),
+                )),
+            )
+            .await?;
+
+            // Send a replayed agent response
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+                    acp::ContentBlock::Text(acp::TextContent::new("Previous agent response")),
+                )),
+            )
+            .await?;
+
+            eprintln!("Mock agent: sent replay updates for session load");
+        }
+
         Ok(acp::LoadSessionResponse::new())
     }
 

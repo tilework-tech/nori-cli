@@ -149,6 +149,10 @@ pub struct AcpBackendConfig {
     pub nori_home: PathBuf,
     /// History persistence policy
     pub history_persistence: crate::config::HistoryPersistence,
+    /// Optional session ID to resume instead of creating a new session.
+    /// When provided, the backend will load the existing session from the agent,
+    /// replaying conversation history via session/update notifications.
+    pub resume_session_id: Option<acp::SessionId>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -223,31 +227,96 @@ impl AcpBackend {
             }
         };
 
-        // Create a session with enhanced error handling
-        let session_result = connection.create_session(&cwd).await;
-        let session_id = match session_result {
-            Ok(id) => id,
-            Err(e) => {
-                // Get the full error chain to check for nested auth errors
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
+        // Create or load session based on resume_session_id
+        let (session_id, initial_events) = if let Some(resume_id) = &config.resume_session_id {
+            // Resume existing session - load and collect replay events
+            debug!("Loading existing ACP session: {:?}", resume_id);
+            let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
 
-                // Use the display format for the user-facing message
-                let display_error = format!("{e}");
-                let enhanced_message = enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
-                );
+            let load_result = connection
+                .load_session(resume_id.clone(), cwd.clone(), update_tx)
+                .await;
 
-                return Err(anyhow::anyhow!(enhanced_message));
+            match load_result {
+                Ok(_response) => {
+                    // Collect all replay updates and translate them to events.
+                    // Use a persistent HashMap for pending_patch_changes in case any
+                    // ToolCall updates appear during replay.
+                    let mut events = Vec::new();
+                    let mut pending_patch_changes = std::collections::HashMap::new();
+                    while let Ok(update) = update_rx.try_recv() {
+                        let translated = translate_session_update_to_events(
+                            &update,
+                            &mut pending_patch_changes,
+                        );
+                        events.extend(translated);
+                    }
+                    debug!(
+                        "Loaded session {:?} with {} replay events",
+                        resume_id,
+                        events.len()
+                    );
+                    (resume_id.clone(), Some(events))
+                }
+                Err(e) => {
+                    // Get the full error chain to check for nested auth errors
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+
+                    // Use the display format for the user-facing message
+                    let display_error = format!("{e}");
+                    let enhanced_message = enhanced_error_message(
+                        category,
+                        &display_error,
+                        &agent_config.provider_info.name,
+                        &agent_config.auth_hint,
+                        agent_config.agent.display_name(),
+                        agent_config.agent.npm_package(),
+                    );
+
+                    return Err(anyhow::anyhow!(enhanced_message));
+                }
             }
+        } else {
+            // Create new session
+            let session_result = connection.create_session(&cwd).await;
+            let session_id = match session_result {
+                Ok(id) => id,
+                Err(e) => {
+                    // Get the full error chain to check for nested auth errors
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+
+                    // Use the display format for the user-facing message
+                    let display_error = format!("{e}");
+                    let enhanced_message = enhanced_error_message(
+                        category,
+                        &display_error,
+                        &agent_config.provider_info.name,
+                        &agent_config.auth_hint,
+                        agent_config.agent.display_name(),
+                        agent_config.agent.npm_package(),
+                    );
+
+                    return Err(anyhow::anyhow!(enhanced_message));
+                }
+            };
+            debug!("ACP session created: {:?}", session_id);
+            (session_id, None)
         };
 
-        debug!("ACP session created: {:?}", session_id);
+        // Send initial replay events if we resumed a session
+        if let Some(event_msgs) = initial_events {
+            for msg in event_msgs {
+                event_tx
+                    .send(Event {
+                        id: String::new(),
+                        msg,
+                    })
+                    .await
+                    .ok();
+            }
+        }
 
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
@@ -859,6 +928,27 @@ fn translate_session_update_to_events(
                     },
                 )]
             } else {
+                vec![]
+            }
+        }
+        acp::SessionUpdate::UserMessageChunk(chunk) => {
+            // Handle user message chunks during session load replay
+            if let acp::ContentBlock::Text(text) = &chunk.content {
+                debug!(
+                    target: "acp_event_flow",
+                    event_type = "UserMessageChunk",
+                    message_len = text.text.len(),
+                    message_preview = %truncate_for_log(&text.text, 50),
+                    "ACP -> TUI: user message replay"
+                );
+                vec![EventMsg::UserMessage(
+                    codex_protocol::protocol::UserMessageEvent {
+                        message: text.text.clone(),
+                        images: None,
+                    },
+                )]
+            } else {
+                // For non-text content blocks (e.g., images), we skip for now
                 vec![]
             }
         }
@@ -1676,12 +1766,30 @@ mod tests {
         assert!(events.is_empty());
     }
 
-    /// Test that unsupported session update types produce no events.
+    /// Test that UserMessageChunk produces a UserMessage event (for session load replay).
     #[test]
-    fn test_unsupported_updates_produce_no_events() {
+    fn test_user_message_chunk_produces_user_message_event() {
         let update = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
             acp::ContentBlock::Text(acp::TextContent::new("User message")),
         ));
+
+        let mut pending = std::collections::HashMap::new();
+        let events = translate_session_update_to_events(&update, &mut pending);
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            EventMsg::UserMessage(event) => {
+                assert_eq!(event.message, "User message");
+            }
+            other => panic!("Expected UserMessage event, got: {other:?}"),
+        }
+    }
+
+    /// Test that unsupported session update types produce no events.
+    #[test]
+    fn test_unsupported_updates_produce_no_events() {
+        // AvailableCommandsUpdate is an unsupported update type
+        let update =
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![]));
 
         let mut pending = std::collections::HashMap::new();
         let events = translate_session_update_to_events(&update, &mut pending);
@@ -2269,6 +2377,7 @@ mod tests {
             notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            resume_session_id: None,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;

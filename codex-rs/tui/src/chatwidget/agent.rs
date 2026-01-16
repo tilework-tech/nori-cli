@@ -184,6 +184,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             notify: config.notify.clone(),
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
+            resume_session_id: None, // TODO: Support session resume from TUI
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
