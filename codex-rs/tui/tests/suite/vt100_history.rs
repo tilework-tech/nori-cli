@@ -23,20 +23,20 @@ macro_rules! assert_contains {
 }
 
 struct TestScenario {
-    term: codex_tui::custom_terminal::Terminal<VT100Backend>,
+    term: nori_tui::custom_terminal::Terminal<VT100Backend>,
 }
 
 impl TestScenario {
     fn new(width: u16, height: u16, viewport: Rect) -> Self {
         let backend = VT100Backend::new(width, height);
-        let mut term = codex_tui::custom_terminal::Terminal::with_options(backend)
+        let mut term = nori_tui::custom_terminal::Terminal::with_options(backend)
             .expect("failed to construct terminal");
         term.set_viewport_area(viewport);
         Self { term }
     }
 
     fn run_insert(&mut self, lines: Vec<Line<'static>>) {
-        codex_tui::insert_history::insert_history_lines(&mut self.term, lines)
+        nori_tui::insert_history::insert_history_lines(&mut self.term, lines)
             .expect("Failed to insert history lines in test");
     }
 }

@@ -509,7 +509,7 @@ pub async fn run_main(cli: Cli, _codex_linux_sandbox_exe: Option<PathBuf>) -> an
                 if let Some(page) = app.new_task.as_mut() {
                     if page.composer.flush_paste_burst_if_due() { needs_redraw = true; }
                     if page.composer.is_in_paste_burst() {
-                        let _ = frame_tx.send(Instant::now() + codex_tui::ComposerInput::recommended_flush_delay());
+                        let _ = frame_tx.send(Instant::now() + nori_tui::ComposerInput::recommended_flush_delay());
                     }
                 }
                 // Keep spinner pulsing only while loading.
@@ -1070,7 +1070,7 @@ pub async fn run_main(cli: Cli, _codex_linux_sandbox_exe: Option<PathBuf>) -> an
                                 _ => {
                                     if page.submitting {
                                         // Ignore input while submitting
-                                    } else if let codex_tui::ComposerAction::Submitted(text) = page.composer.input(key) {
+                                    } else if let nori_tui::ComposerAction::Submitted(text) = page.composer.input(key) {
                                             // Submit only if we have an env id
                                             if let Some(env) = page.env_id.clone() {
                                                 append_error_log(format!(
@@ -1110,7 +1110,7 @@ pub async fn run_main(cli: Cli, _codex_linux_sandbox_exe: Option<PathBuf>) -> an
                                     needs_redraw = true;
                                     // If paste‑burst is active, schedule a micro‑flush frame.
                                     if page.composer.is_in_paste_burst() {
-                                        let _ = frame_tx.send(Instant::now() + codex_tui::ComposerInput::recommended_flush_delay());
+                                        let _ = frame_tx.send(Instant::now() + nori_tui::ComposerInput::recommended_flush_delay());
                                     }
                                     // Always schedule an immediate redraw for key edits in the composer.
                                     let _ = frame_tx.send(Instant::now());
@@ -1712,11 +1712,11 @@ fn pretty_lines_from_error(raw: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use codex_tui::ComposerAction;
-    use codex_tui::ComposerInput;
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
+    use nori_tui::ComposerAction;
+    use nori_tui::ComposerInput;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
 

@@ -4,13 +4,13 @@ Path: @/codex-rs/cli
 
 ### Overview
 
-The `codex-cli` crate is the main multitool binary that provides the `nori` command. It serves as the central dispatcher routing to different modes: interactive TUI, headless exec, MCP server, app server, login management, and sandbox debugging tools. The crate handles CLI argument parsing, subcommand routing, and cross-cutting concerns like feature toggles.
+The `nori-cli` crate is the main multitool binary that provides the `nori` command. It serves as the central dispatcher routing to different modes: interactive TUI, headless exec, MCP server, app server, login management, and sandbox debugging tools. The crate handles CLI argument parsing, subcommand routing, and cross-cutting concerns like feature toggles.
 
 ### How it fits into the larger codebase
 
 This crate is the primary entry point that ties together all other crates:
 
-- **Always included:** `codex-tui`, `codex-acp`, `codex-core` (minimal build)
+- **Always included:** `nori-tui`, `codex-acp`, `codex-core` (minimal build)
 - **Optional via features:** `codex-exec`, `codex-mcp-server`, `codex-app-server`, `codex-cloud-tasks`, `codex-login`, `codex-chatgpt`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 
@@ -22,7 +22,7 @@ This crate is the primary entry point that ties together all other crates:
 
 ```rust
 match subcommand {
-    None => codex_tui::run_main(...),           // Interactive
+    None => nori_tui::run_main(...),           // Interactive
     Some(Subcommand::Exec(cli)) => codex_exec::run_main(...),
     Some(Subcommand::McpServer) => codex_mcp_server::run_main(...),
     Some(Subcommand::Login(cli)) => run_login_*(...),
@@ -97,32 +97,32 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 | `full` | All features | Complete legacy binary |
 | `app-server` | `codex-app-server` | `app-server` subcommand |
 | `cloud-tasks` | `codex-cloud-tasks` | `cloud` subcommand |
-| `login` | `codex-login`, `codex-tui/login` | `login`/`logout` subcommands + TUI login |
-| `feedback` | `codex-tui/feedback` | Sentry feedback in TUI |
-| `backend-client` | `codex-tui/backend-client` | Cloud tasks backend client |
-| `upstream-updates` | `codex-tui/upstream-updates` | OpenAI update mechanism (vs Nori's) |
+| `login` | `codex-login`, `nori-tui/login` | `login`/`logout` subcommands + TUI login |
+| `feedback` | `nori-tui/feedback` | Sentry feedback in TUI |
+| `backend-client` | `nori-tui/backend-client` | Cloud tasks backend client |
+| `upstream-updates` | `nori-tui/upstream-updates` | OpenAI update mechanism (vs Nori's) |
 | `mcp-server` | `codex-mcp-server`, `codex-rmcp-client` | `mcp`, `mcp-server` subcommands |
 | `chatgpt` | `codex-chatgpt` | `apply` subcommand |
-| `oss-providers` | `codex-tui/oss-providers`, `codex-common/oss-providers` | Ollama/LM Studio local model support |
-| `codex-features` | `codex-tui/codex-features` | `exec`, `resume`, `features` subcommands + power-user CLI flags + TUI `/undo`, `/compact`, `/review` |
+| `oss-providers` | `nori-tui/oss-providers`, `codex-common/oss-providers` | Ollama/LM Studio local model support |
+| `codex-features` | `nori-tui/codex-features` | `exec`, `resume`, `features` subcommands + power-user CLI flags + TUI `/undo`, `/compact`, `/review` |
 
 **Feature Propagation to TUI:**
 
 Several CLI features propagate to the TUI crate for coordinated behavior:
-- `login` -> `codex-tui/login`: Enables login screens and `/login` command in TUI
-- `feedback` -> `codex-tui/feedback`: Enables Sentry feedback and `/feedback` command
-- `backend-client` -> `codex-tui/backend-client`: Enables cloud tasks backend
-- `upstream-updates` -> `codex-tui/upstream-updates`: Uses OpenAI update system instead of Nori's
-- `oss-providers` -> `codex-tui/oss-providers` -> `codex-common/oss-providers`: Enables Ollama/LM Studio local model support
-- `codex-features` -> `codex-tui/codex-features`: Enables `/undo`, `/compact`, `/review` commands in TUI + power-user CLI flags
+- `login` -> `nori-tui/login`: Enables login screens and `/login` command in TUI
+- `feedback` -> `nori-tui/feedback`: Enables Sentry feedback and `/feedback` command
+- `backend-client` -> `nori-tui/backend-client`: Enables cloud tasks backend
+- `upstream-updates` -> `nori-tui/upstream-updates`: Uses OpenAI update system instead of Nori's
+- `oss-providers` -> `nori-tui/oss-providers` -> `codex-common/oss-providers`: Enables Ollama/LM Studio local model support
+- `codex-features` -> `nori-tui/codex-features`: Enables `/undo`, `/compact`, `/review` commands in TUI + power-user CLI flags
 
 Without these features, the TUI uses Nori-specific alternatives (e.g., GitHub Discussions for feedback, GitHub releases for updates). For OSS providers, the `codex-common` crate provides stub implementations that return `None` or errors when the feature is disabled.
 
 Build examples:
 ```bash
-cargo build -p codex-cli                    # Minimal (TUI + ACP only, no power-user flags)
-cargo build -p codex-cli --features full    # All functionality (OpenAI-compatible)
-cargo build -p codex-cli --features login,mcp-server  # Selective
+cargo build -p nori-cli                    # Minimal (TUI + ACP only, no power-user flags)
+cargo build -p nori-cli --features full    # All functionality (OpenAI-compatible)
+cargo build -p nori-cli --features login,mcp-server  # Selective
 ```
 
 Feature-gated code uses `#[cfg(feature = "...")]` on imports, enum variants, match arms, and struct definitions in `main.rs`. Integration tests that require specific features use `required-features` in `Cargo.toml` (e.g., MCP tests require `mcp-server`).

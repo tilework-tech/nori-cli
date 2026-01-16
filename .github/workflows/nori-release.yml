@@ -357,7 +357,7 @@ jobs:
       - name: Build release binaries
         working-directory: codex-rs
         run: |
-          cargo build --release --target ${{ matrix.target }} -p codex-cli
+          cargo build --release --target ${{ matrix.target }} -p nori-cli
 
           # List built artifacts
           ls -la target/${{ matrix.target }}/release/
