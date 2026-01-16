@@ -272,6 +272,48 @@ impl acp::Agent for MockAgent {
             return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
         }
 
+        // Support testing interrupt chronology - starts a tool call, sends text (to flush
+        // the cell to pending_exec_cells), then streams until cancelled. This tests that
+        // pending cells are drained before the interrupt message appears in the transcript.
+        if std::env::var("MOCK_AGENT_PENDING_TOOL_THEN_STREAM").is_ok() {
+            eprintln!("Mock agent: sending pending tool call then streaming until cancel");
+
+            let tool_call_id = acp::ToolCallId::new("pending-tool-001");
+
+            // Step 1: Send tool call (pending)
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(tool_call_id.clone(), "Long running operation")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"command": "sleep 60"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(50)).await;
+
+            // Step 2: Send text to trigger flush of incomplete ExecCell to pending_exec_cells
+            self.send_text_chunk(session_id.clone(), "Starting long operation...")
+                .await?;
+
+            sleep(Duration::from_millis(50)).await;
+
+            // Step 3: Stream until cancelled (tool call remains pending)
+            let mut iterations = 0usize;
+            while !self.cancel_requested.get() && iterations < 10_000 {
+                self.send_text_chunk(session_id.clone(), ".").await?;
+                iterations += 1;
+                sleep(Duration::from_millis(100)).await;
+            }
+
+            // Note: Tool call is NOT completed - it remains pending when interrupted
+            return Ok(acp::PromptResponse::new(if self.cancel_requested.get() {
+                acp::StopReason::Cancelled
+            } else {
+                acp::StopReason::EndTurn
+            }));
+        }
+
         // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
         if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {
             eprintln!("Mock agent: sending mixed exploring and exec workflow");

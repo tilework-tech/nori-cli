@@ -605,3 +605,114 @@ fn test_explored_cells_appear_after_assistant_message() {
     //     final_msg_pos
     // );
 }
+
+/// Test that pending tool cells appear BEFORE the interrupt message when a turn is interrupted.
+///
+/// This is a regression test for a bug where pending ExecCells were drained only at TaskComplete,
+/// causing them to appear at the bottom of the transcript after the "Conversation interrupted"
+/// message. The fix moves drain_failed() to finalize_turn(), ensuring cells appear in
+/// chronological order (tool call happened BEFORE the interrupt).
+///
+/// The test:
+/// 1. Starts a tool call that sends text (flushing the cell to pending_exec_cells)
+/// 2. Interrupts the turn before the tool call completes
+/// 3. Verifies the failed tool cell appears BEFORE the interrupt message
+#[test]
+#[cfg(target_os = "linux")]
+fn test_pending_cells_appear_before_interrupt_message() {
+    // Configure mock agent to:
+    // 1. Start a tool call (pending)
+    // 2. Send text (to flush cell to pending_exec_cells)
+    // 3. Stream until cancelled (tool call stays pending)
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_PENDING_TOOL_THEN_STREAM", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the tool call
+    session.send_str("Run long operation").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the tool call to appear (shown as "Running 'Long running operation...")
+    session
+        .wait_for_text("Long running operation", Duration::from_secs(5))
+        .expect("Should see tool call indicator showing the operation started");
+
+    // Wait a moment for the cell to be flushed to pending_exec_cells
+    std::thread::sleep(Duration::from_millis(200));
+
+    // Interrupt the turn
+    session.send_key(Key::Escape).unwrap();
+
+    // Wait for the interrupt message to appear
+    session
+        .wait_for_text("Conversation interrupted", Duration::from_secs(5))
+        .expect("Should see interrupt message");
+
+    // Give a moment for the transcript to settle
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // The key assertion: the failed tool cell (marked with ✗) should appear BEFORE
+    // the "Conversation interrupted" message, not after.
+    //
+    // Look for the tool call indicator (✗ for failed, or the command itself)
+    // The cell should show the failed tool call with a red ✗
+
+    let interrupt_pos = contents
+        .find("Conversation interrupted")
+        .expect("Should contain interrupt message");
+
+    // Look for evidence of the tool cell before the interrupt message
+    // The tool cell could show as:
+    // - "✗" (failed marker)
+    // - "Long running operation" (the tool call title)
+    // - "sleep 60" (the command in the tool call)
+    let content_before_interrupt = &contents[..interrupt_pos];
+
+    // The tool call should be visible before the interrupt message
+    // Either as a failed marker or the tool call content
+    let has_tool_evidence = content_before_interrupt.contains("✗")
+        || content_before_interrupt.contains("Long running")
+        || content_before_interrupt.contains("sleep");
+
+    assert!(
+        has_tool_evidence,
+        "The tool cell should appear BEFORE the 'Conversation interrupted' message. \
+         This ensures pending cells are drained at turn finalization, not at TaskComplete. \
+         Content before interrupt:\n{}\n\nFull screen:\n{}",
+        content_before_interrupt, contents
+    );
+
+    // Additionally verify the tool cell is NOT duplicated after the interrupt message
+    let content_after_interrupt = &contents[interrupt_pos..];
+
+    // Count tool call indicators - should be minimal after interrupt
+    // (Some UI elements may repeat, but the main tool cell should be before)
+    let tool_indicators_after = content_after_interrupt.matches("Long running").count();
+
+    assert!(
+        tool_indicators_after == 0,
+        "Tool cell should NOT appear after the interrupt message (found {} occurrences). \
+         Screen contents:\n{}",
+        tool_indicators_after,
+        contents
+    );
+
+    // Snapshot for visual verification
+    insta::assert_snapshot!(
+        "acp_pending_cell_before_interrupt",
+        normalize_for_input_snapshot(contents)
+    );
+}

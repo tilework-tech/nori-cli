@@ -609,7 +609,10 @@ impl ChatWidget {
         // separate AgentMessage event to trigger handle_stream_finished().
         self.flush_interrupt_queue();
 
-        // Flush any pending ExecCells that weren't completed (e.g., due to interruption).
+        // Defensive: drain any remaining pending cells. In normal error/interrupt flows,
+        // finalize_turn() already drained these, but this handles edge cases where
+        // TaskComplete arrives without a prior finalization (e.g., normal completion
+        // where some tool calls never received completion events).
         for pending_cell in self.pending_exec_cells.drain_failed() {
             self.needs_final_message_separator = true;
             self.app_event_tx
@@ -725,6 +728,15 @@ impl ChatWidget {
     }
     /// Finalize any active exec as failed and stop/clear running UI state.
     fn finalize_turn(&mut self) {
+        // Drain any pending ExecCells first - they chronologically occurred BEFORE
+        // whatever event is finalizing the turn (error, interrupt, etc.). This ensures
+        // cells appear in correct chronological order in the transcript.
+        for pending_cell in self.pending_exec_cells.drain_failed() {
+            self.needs_final_message_separator = true;
+            self.app_event_tx
+                .send(AppEvent::InsertHistoryCell(pending_cell));
+        }
+
         // Ensure any spinner is replaced by a red ✗ and flushed into history.
         self.finalize_active_cell_as_failed();
         // Reset running state and clear streaming buffers.

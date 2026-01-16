@@ -1,0 +1,17 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› Run long operation
+
+
+• Ran 'Long running operation(sleep 60)'
+  └ (no output)
+
+■ Conversation interrupted - tell the model what to do differently. Something
+went wrong? Hit `/feedback` to report the issue.
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · ? for shortcuts
