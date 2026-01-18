@@ -455,7 +455,7 @@ The `PendingExecCellTracker` (`chatwidget/pending_exec_cells.rs`) prevents dupli
 The tracker intercepts this by:
 - `save_pending()`: Called during flush if the ExecCell has pending (incomplete) call_ids - saves the cell with ALL pending call_ids mapped to it (multi-key storage)
 - `retrieve()`: Called in `handle_exec_end_now()` - retrieves and removes the saved cell by any of its call_ids, restoring it to `active_cell` for completion
-- `drain_failed()`: Called in `on_task_complete()` - marks any uncompleted pending cells as failed and returns them for insertion into history
+- `drain_failed()`: Called in `on_task_complete()` - logs and discards any uncompleted pending cells (so they do not disrupt the transcript)
 
 **Multi-Key Storage for Multi-Call Exploring Cells:**
 

@@ -223,14 +223,14 @@ Note: Tests are always run for actual releases (tag pushes). The `skip_tests` fl
 ### npm Package
 
 - **Package name:** `nori-ai-cli`
-- **Stable releases:** Published with `latest` tag
-- **Pre-releases:** Published with `next` tag (e.g., `0.2.0-alpha.1`)
+- **Stable releases:** Published with `latest` tag, and `next` tag is also updated to point to the stable version
+- **Pre-releases:** Published with `next` tag only (e.g., `0.2.0-alpha.1`)
 
 ```bash
 # Install stable version
 npm install -g nori-ai-cli
 
-# Install pre-release
+# Install pre-release or latest stable (both work after a stable release)
 npm install -g nori-ai-cli@next
 ```
 

@@ -6,7 +6,9 @@
 //! arrives, preventing duplicate entries in history.
 
 use std::collections::HashMap;
+use std::time::SystemTime;
 use tracing::debug;
+use tracing::warn;
 
 use crate::exec_cell::ExecCell;
 use crate::history_cell::HistoryCell;
@@ -24,7 +26,14 @@ pub(crate) struct PendingExecCellTracker {
     /// Maps call_id to primary_key for multi-key lookup.
     call_id_to_primary: HashMap<String, String>,
     /// Stores the actual cells keyed by primary_key.
-    cells: HashMap<String, Box<dyn HistoryCell>>,
+    cells: HashMap<String, PendingCellEntry>,
+}
+
+#[derive(Debug)]
+struct PendingCellEntry {
+    cell: Box<dyn HistoryCell>,
+    initial_pending_at: SystemTime,
+    last_update_at: SystemTime,
 }
 
 impl PendingExecCellTracker {
@@ -56,6 +65,7 @@ impl PendingExecCellTracker {
 
         // Use the first call_id as the primary key
         let primary_key = call_ids[0].clone();
+        let now = SystemTime::now();
 
         debug!(
             target: "pending_exec_cells",
@@ -73,7 +83,20 @@ impl PendingExecCellTracker {
         }
 
         // Store the cell under the primary key
-        self.cells.insert(primary_key.clone(), cell);
+        match self.cells.entry(primary_key.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let e = entry.get_mut();
+                e.cell = cell;
+                e.last_update_at = now;
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(PendingCellEntry {
+                    cell,
+                    initial_pending_at: now,
+                    last_update_at: now,
+                });
+            }
+        }
 
         debug!(
             target: "pending_exec_cells",
@@ -122,7 +145,7 @@ impl PendingExecCellTracker {
         self.call_id_to_primary.retain(|_, pk| pk != &primary_key);
 
         // Remove and return the cell
-        let cell = self.cells.remove(&primary_key);
+        let cell = self.cells.remove(&primary_key).map(|entry| entry.cell);
 
         debug!(
             target: "pending_exec_cells",
@@ -142,45 +165,65 @@ impl PendingExecCellTracker {
         self.cells.len()
     }
 
-    /// Drains all pending cells, marking them as failed.
+    /// Drains all pending cells, logging and discarding them.
     ///
     /// Called on task completion to clean up any cells that weren't completed
-    /// (e.g., due to interruption). Returns the cells for insertion into history.
-    pub(crate) fn drain_failed(&mut self) -> Vec<Box<dyn HistoryCell>> {
+    /// (e.g., due to interruption). Returns the number of discarded cells.
+    pub(crate) fn drain_failed(&mut self) -> usize {
         let count = self.cells.len();
-        debug!(
-            target: "pending_exec_cells",
-            count = count,
-            "drain_failed: draining all pending cells"
-        );
+        if count == 0 {
+            debug!(
+                target: "pending_exec_cells",
+                "drain_failed: no pending cells to drain"
+            );
+            return 0;
+        }
+
+        let drain_time = SystemTime::now();
+        let mut call_ids_by_primary: HashMap<String, Vec<String>> = HashMap::new();
+        for (call_id, primary_key) in &self.call_id_to_primary {
+            call_ids_by_primary
+                .entry(primary_key.clone())
+                .or_default()
+                .push(call_id.clone());
+        }
 
         // Clear the call_id mappings
         self.call_id_to_primary.clear();
 
-        // Drain and mark all cells as failed
-        let cells: Vec<_> = self
-            .cells
-            .drain()
-            .map(|(key, mut cell)| {
-                debug!(
-                    target: "pending_exec_cells",
-                    primary_key = %key,
-                    "drain_failed: marking cell as failed"
-                );
-                if let Some(exec) = cell.as_any_mut().downcast_mut::<ExecCell>() {
-                    exec.mark_failed();
-                }
-                cell
-            })
-            .collect();
+        for (primary_key, mut entry) in self.cells.drain() {
+            let call_ids = call_ids_by_primary.remove(&primary_key).unwrap_or_default();
+            let pending_duration = drain_time.duration_since(entry.initial_pending_at).ok();
+            let since_update = drain_time.duration_since(entry.last_update_at).ok();
+            let (pending_call_ids, total_calls) =
+                if let Some(exec) = entry.cell.as_any_mut().downcast_mut::<ExecCell>() {
+                    (exec.pending_call_ids(), exec.iter_calls().count())
+                } else {
+                    (Vec::new(), 0)
+                };
 
-        debug!(
+            warn!(
+                target: "pending_exec_cells",
+                primary_key = %primary_key,
+                call_ids = ?call_ids,
+                pending_call_ids = ?pending_call_ids,
+                total_calls = total_calls,
+                initial_pending_at = ?entry.initial_pending_at,
+                last_update_at = ?entry.last_update_at,
+                drain_time = ?drain_time,
+                pending_duration = ?pending_duration,
+                since_last_update = ?since_update,
+                "drain_failed: discarding pending cell after incomplete execution"
+            );
+        }
+
+        warn!(
             target: "pending_exec_cells",
-            drained_count = cells.len(),
-            "drain_failed: completed"
+            drained_count = count,
+            "drain_failed: discarded all pending cells"
         );
 
-        cells
+        count
     }
 }
 
@@ -225,14 +268,14 @@ mod tests {
     }
 
     #[test]
-    fn drain_failed_returns_all_cells_and_empties_tracker() {
+    fn drain_failed_discards_all_cells_and_empties_tracker() {
         let mut tracker = PendingExecCellTracker::new();
 
         tracker.save_pending(vec!["call-1".to_string()], make_test_exec_cell("call-1"));
         tracker.save_pending(vec!["call-2".to_string()], make_test_exec_cell("call-2"));
 
-        let drained = tracker.drain_failed();
-        assert_eq!(drained.len(), 2, "Should drain all pending cells");
+        let drained_count = tracker.drain_failed();
+        assert_eq!(drained_count, 2, "Should drain all pending cells");
 
         // Tracker should be empty now
         assert!(
@@ -243,26 +286,6 @@ mod tests {
             tracker.retrieve("call-2").is_none(),
             "Tracker should be empty after drain"
         );
-    }
-
-    #[test]
-    fn drain_failed_marks_exec_cells_as_failed() {
-        let mut tracker = PendingExecCellTracker::new();
-        tracker.save_pending(vec!["call-1".to_string()], make_test_exec_cell("call-1"));
-
-        let drained = tracker.drain_failed();
-        assert_eq!(drained.len(), 1);
-
-        // The cell should no longer be active (mark_failed sets output on all calls)
-        let cell = &drained[0];
-        if let Some(exec) = cell.as_any().downcast_ref::<ExecCell>() {
-            assert!(
-                !exec.is_active(),
-                "ExecCell should be marked as failed (not active)"
-            );
-        } else {
-            panic!("Expected ExecCell");
-        }
     }
 
     /// Test that a multi-call ExecCell can be retrieved by any of its pending call_ids.
