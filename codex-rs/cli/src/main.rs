@@ -1070,15 +1070,31 @@ mod tests {
         );
     }
 
-    /// When codex-features is disabled, --dangerously-bypass-approvals-and-sandbox flag should not be recognized
+    /// The --dangerously-bypass-approvals-and-sandbox (--yolo) flag should be recognized
+    /// in all builds, regardless of whether codex-features is enabled
     #[test]
     #[cfg(not(feature = "codex-features"))]
-    fn dangerous_bypass_flag_rejected_without_codex_features() {
-        let result =
-            MultitoolCli::try_parse_from(["nori", "--dangerously-bypass-approvals-and-sandbox"]);
+    fn dangerous_bypass_flag_accepted_without_codex_features() {
+        let cli =
+            MultitoolCli::try_parse_from(["nori", "--dangerously-bypass-approvals-and-sandbox"])
+                .expect(
+                    "--dangerously-bypass-approvals-and-sandbox should be accepted in all builds",
+                );
         assert!(
-            result.is_err(),
-            "--dangerously-bypass-approvals-and-sandbox should be rejected when codex-features is disabled"
+            cli.interactive.dangerously_bypass_approvals_and_sandbox,
+            "--dangerously-bypass-approvals-and-sandbox should set the field to true"
+        );
+    }
+
+    /// The --yolo alias should be recognized in all builds
+    #[test]
+    #[cfg(not(feature = "codex-features"))]
+    fn yolo_alias_accepted_without_codex_features() {
+        let cli = MultitoolCli::try_parse_from(["nori", "--yolo"])
+            .expect("--yolo should be accepted in all builds");
+        assert!(
+            cli.interactive.dangerously_bypass_approvals_and_sandbox,
+            "--yolo should set dangerously_bypass_approvals_and_sandbox to true"
         );
     }
 
