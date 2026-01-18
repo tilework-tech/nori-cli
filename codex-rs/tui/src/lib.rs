@@ -201,7 +201,14 @@ pub async fn run_main(
 
     #[cfg(not(feature = "codex-features"))]
     let (sandbox_mode, approval_policy): (Option<SandboxMode>, Option<AskForApproval>) =
-        (None, None);
+        if cli.dangerously_bypass_approvals_and_sandbox {
+            (
+                Some(SandboxMode::DangerFullAccess),
+                Some(AskForApproval::Never),
+            )
+        } else {
+            (None, None)
+        };
 
     // Map the legacy --search flag to the new feature toggle.
     #[cfg(feature = "codex-features")]

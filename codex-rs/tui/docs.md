@@ -586,9 +586,17 @@ For E2E testing, `NORI_SYNC_SYSTEM_INFO=1` env var enables synchronous collectio
 **Configuration Flow:**
 
 TUI respects config overrides from:
-1. CLI flags (`--model` always available; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
+1. CLI flags (`--model` and `--yolo` always available; `--sandbox`, `--oss`, `-a`, `--full-auto`, etc. require `codex-features`)
 2. `-c key=value` overrides
 3. Config profiles (`-p profile-name`)
 4. `~/.nori/cli/config.toml`
+
+**YOLO Mode:**
+
+The `--yolo` flag (alias: `--dangerously-bypass-approvals-and-sandbox`) bypasses all safety mechanisms:
+- Sets `SandboxMode::DangerFullAccess` (no filesystem restrictions)
+- Sets `AskForApproval::Never` (no confirmation prompts for commands or file writes)
+
+This flag works in all builds (with or without `codex-features`). In `run_main()`, when enabled, the flag overrides any configured sandbox or approval policies before passing to `ConfigOverrides`.
 
 Created and maintained by Nori.

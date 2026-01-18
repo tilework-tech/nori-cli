@@ -139,7 +139,8 @@ The `UserNotifier` supports two delivery modes:
 └─────────────────────┘                      └─────────────────────┘
 ```
 
-The `use_native` flag controls whether native notifications are sent when no external command is configured. Production code passes `true`, test code passes `false` to avoid notification spam during tests.
+
+Notification dispatch priority: external command takes precedence over native. If `notify_command` is `Some` (even if empty), native notifications are skipped. An empty `notify_command` (`Some(vec![])`) disables all notifications - the test infrastructure uses this by default via `load_default_config_for_test()`.
 
 **Window Focus (X11 Linux):**
 

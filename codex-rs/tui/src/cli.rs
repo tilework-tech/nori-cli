@@ -71,12 +71,22 @@ pub struct Cli {
 
     /// Skip all confirmation prompts and execute commands without sandboxing.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed.
-    #[cfg(feature = "codex-features")]
-    #[arg(
-        long = "dangerously-bypass-approvals-and-sandbox",
-        alias = "yolo",
-        default_value_t = false,
-        conflicts_with_all = ["approval_policy", "full_auto"]
+    #[cfg_attr(
+        feature = "codex-features",
+        arg(
+            long = "dangerously-bypass-approvals-and-sandbox",
+            alias = "yolo",
+            default_value_t = false,
+            conflicts_with_all = ["approval_policy", "full_auto"]
+        )
+    )]
+    #[cfg_attr(
+        not(feature = "codex-features"),
+        arg(
+            long = "dangerously-bypass-approvals-and-sandbox",
+            alias = "yolo",
+            default_value_t = false
+        )
     )]
     pub dangerously_bypass_approvals_and_sandbox: bool,
 
@@ -106,4 +116,42 @@ pub struct Cli {
     /// Intended for testing and automation scenarios.
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    /// Test that --yolo flag is recognized and sets dangerously_bypass_approvals_and_sandbox to true.
+    /// This flag should work without the codex-features feature flag.
+    #[test]
+    fn test_yolo_flag_is_recognized() {
+        let cli = Cli::try_parse_from(["nori", "--yolo"]).expect("--yolo should be a valid flag");
+        assert!(
+            cli.dangerously_bypass_approvals_and_sandbox,
+            "--yolo should set dangerously_bypass_approvals_and_sandbox to true"
+        );
+    }
+
+    /// Test that --dangerously-bypass-approvals-and-sandbox works as the full flag name.
+    #[test]
+    fn test_dangerously_bypass_flag_is_recognized() {
+        let cli = Cli::try_parse_from(["nori", "--dangerously-bypass-approvals-and-sandbox"])
+            .expect("--dangerously-bypass-approvals-and-sandbox should be a valid flag");
+        assert!(
+            cli.dangerously_bypass_approvals_and_sandbox,
+            "--dangerously-bypass-approvals-and-sandbox should set the field to true"
+        );
+    }
+
+    /// Test that without --yolo, the field defaults to false.
+    #[test]
+    fn test_yolo_flag_defaults_to_false() {
+        let cli = Cli::try_parse_from(["nori"]).expect("basic parsing should work");
+        assert!(
+            !cli.dangerously_bypass_approvals_and_sandbox,
+            "dangerously_bypass_approvals_and_sandbox should default to false"
+        );
+    }
 }
