@@ -308,6 +308,7 @@ impl AcpBackend {
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             cwd.clone(),
+            config.approval_policy,
         ));
 
         Ok(backend)
@@ -719,14 +720,29 @@ impl AcpBackend {
     }
 
     /// Background task to handle approval requests from the ACP connection.
+    ///
+    /// When `approval_policy` is `AskForApproval::Never` (yolo mode), requests
+    /// are auto-approved without prompting the user.
     async fn run_approval_handler(
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
         event_tx: mpsc::Sender<Event>,
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
         user_notifier: Arc<codex_core::UserNotifier>,
         cwd: PathBuf,
+        approval_policy: AskForApproval,
     ) {
         while let Some(request) = approval_rx.recv().await {
+            // If approval_policy is Never (yolo mode), auto-approve immediately
+            if approval_policy == AskForApproval::Never {
+                debug!(
+                    target: "acp_event_flow",
+                    call_id = %request.event.call_id(),
+                    "Auto-approving request (approval_policy=Never)"
+                );
+                let _ = request.response_tx.send(ReviewDecision::Approved);
+                continue;
+            }
+
             // Send the appropriate approval request event to TUI based on operation type.
             // Use the call_id as the event wrapper ID so that the TUI can
             // correctly route the user's decision back to this pending request.

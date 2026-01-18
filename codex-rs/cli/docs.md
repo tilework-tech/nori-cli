@@ -68,12 +68,15 @@ The following CLI flags are gated behind the `codex-features` Cargo feature and 
 | `--sandbox` | `-s` | Select sandbox policy |
 | `--ask-for-approval` | `-a` | Configure approval policy |
 | `--full-auto` | | Sandboxed automatic execution mode |
-| `--dangerously-bypass-approvals-and-sandbox` | | Skip all safety checks (dangerous) |
 | `--search` | | Enable web search tool |
 | `--enable` | | Enable a feature toggle |
 | `--disable` | | Disable a feature toggle |
 
 Without `codex-features`, passing these flags results in a clap parse error.
+
+**Always-Available Safety Override:**
+
+The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) is available in all builds regardless of `codex-features`. When set, it configures `approval_policy: AskForApproval::Never`, causing the ACP backend to auto-approve all tool operations without prompting the user.
 
 **Resume Logic (requires `codex-features`):**
 

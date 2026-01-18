@@ -377,7 +377,21 @@ Session discovery logic (finding files in ~/.codex, ~/.gemini, ~/.claude) is def
 
 **Approval Bridging:**
 
-The ACP module bridges permission requests to Codex's approval UI. Approval requests are handled **immediately** (not deferred) to avoid deadlocks:
+The ACP module bridges permission requests to Codex's approval UI via `run_approval_handler()`. The handler respects the configured `approval_policy` from `AcpBackendConfig`:
+
+| Policy | Behavior |
+|--------|----------|
+| `AskForApproval::Never` | Auto-approve all requests immediately (yolo mode) |
+| `AskForApproval::OnFailure` | Prompt only when operations fail |
+| `AskForApproval::UnlessAllowListed` | Prompt except for allowed operations |
+
+When `approval_policy == AskForApproval::Never` (set via `--yolo` or `--dangerously-bypass-approvals-and-sandbox` CLI flags), the approval handler sends `ReviewDecision::Approved` without forwarding requests to the TUI. This completes the data flow:
+
+```
+CLI --yolo flag → AskForApproval::Never → AcpBackendConfig → run_approval_handler() → auto-approve
+```
+
+For all other policies, approval requests are handled **immediately** (not deferred) to avoid deadlocks:
 
 ```
 ┌─────────────────────────┐   ApprovalRequest     ┌─────────────────────────┐
