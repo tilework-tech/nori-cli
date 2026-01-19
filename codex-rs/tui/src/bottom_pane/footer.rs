@@ -19,6 +19,8 @@ pub(crate) struct FooterProps {
     pub(crate) is_task_running: bool,
     pub(crate) _context_window_percent: Option<i64>,
     pub(crate) git_branch: Option<String>,
+    /// The approval mode label to display (e.g., "Read Only", "Agent", "Full Access").
+    pub(crate) approval_mode_label: Option<String>,
     pub(crate) nori_profile: Option<String>,
     pub(crate) nori_version: Option<String>,
     pub(crate) git_lines_added: Option<i32>,
@@ -254,6 +256,13 @@ fn build_footer_line(props: &FooterProps) -> Line<'static> {
         spans.push(Span::from(" · ").dim());
     }
 
+    // Add approval mode if available: "Approval Mode: Agent" (magenta)
+    if let Some(label) = &props.approval_mode_label {
+        spans.push(Span::from("Approval Mode: ").magenta());
+        spans.push(Span::from(label.clone()).magenta());
+        spans.push(Span::from(" · ").dim());
+    }
+
     // Add nori profile if available: "Skillset: name" (cyan)
     if let Some(profile) = &props.nori_profile {
         spans.push(Span::from("Skillset: ").cyan());
@@ -459,6 +468,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: None,
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -476,6 +486,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: None,
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -493,6 +504,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: None,
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -510,6 +522,7 @@ mod tests {
                 is_task_running: true,
                 _context_window_percent: None,
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -527,6 +540,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: None,
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -544,6 +558,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: None,
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -561,6 +576,7 @@ mod tests {
                 is_task_running: true,
                 _context_window_percent: Some(72),
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -581,6 +597,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
+                approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
                 git_lines_added: Some(10),
@@ -601,6 +618,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: Some(100),
                 git_branch: Some("main".to_string()),
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: Some(5),
@@ -621,6 +639,7 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: Some(85),
                 git_branch: None,
+                approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
                 git_lines_added: None,
@@ -642,11 +661,78 @@ mod tests {
                 is_task_running: false,
                 _context_window_percent: Some(72),
                 git_branch: Some("feature/worktree-branch".to_string()),
+                approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: true,
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_approval_mode() {
+        // Test that approval mode label is displayed in the footer
+        snapshot_footer(
+            "footer_with_approval_mode_agent",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                _context_window_percent: Some(72),
+                git_branch: Some("feature/test".to_string()),
+                approval_mode_label: Some("Agent".to_string()),
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+                is_worktree: false,
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_approval_mode_read_only() {
+        // Test Read Only mode display
+        snapshot_footer(
+            "footer_with_approval_mode_read_only",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                _context_window_percent: None,
+                git_branch: Some("main".to_string()),
+                approval_mode_label: Some("Read Only".to_string()),
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
+                is_worktree: false,
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_approval_mode_full_access() {
+        // Test Full Access mode display
+        snapshot_footer(
+            "footer_with_approval_mode_full_access",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                _context_window_percent: None,
+                git_branch: Some("main".to_string()),
+                approval_mode_label: Some("Full Access".to_string()),
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
+                is_worktree: false,
             },
         );
     }

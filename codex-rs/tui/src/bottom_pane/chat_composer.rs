@@ -114,6 +114,8 @@ pub(crate) struct ChatComposer {
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
     system_info: Option<crate::system_info::SystemInfo>,
+    /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
+    approval_mode_label: Option<String>,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -158,6 +160,7 @@ impl ChatComposer {
             footer_hint_override: None,
             context_window_percent: None,
             system_info: None,
+            approval_mode_label: None,
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -1403,6 +1406,7 @@ impl ChatComposer {
             is_task_running: self.is_task_running,
             _context_window_percent: self.context_window_percent,
             git_branch,
+            approval_mode_label: self.approval_mode_label.clone(),
             nori_profile,
             nori_version,
             git_lines_added,
@@ -1550,6 +1554,10 @@ impl ChatComposer {
 
     pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
         self.system_info = Some(info);
+    }
+
+    pub(crate) fn set_approval_mode_label(&mut self, label: Option<String>) {
+        self.approval_mode_label = label;
     }
 
     pub(crate) fn set_esc_backtrack_hint(&mut self, show: bool) {

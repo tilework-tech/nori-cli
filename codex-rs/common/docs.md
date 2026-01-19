@@ -14,6 +14,7 @@ Common is a utility dependency for TUI, exec, and CLI:
 - **Config display**: `create_config_summary_entries()` for status displays
 - **Model selection**: `model_presets` for available models
 - **OSS support**: `oss` module for Ollama/LM Studio integration
+- **Approval mode display**: `approval_mode_label()` for TUI status line
 
 ### Core Implementation
 
@@ -58,7 +59,12 @@ pub struct CliConfigOverrides {
 
 **Approval Presets:**
 
-`approval_presets` provides named combinations like "full-auto" that set both approval policy and sandbox mode together.
+`approval_presets` provides named combinations like "full-auto" that set both approval policy and sandbox mode together. The module includes:
+
+- `builtin_approval_presets()`: Returns the list of preset combinations (Read Only, Agent, Full Access)
+- `approval_mode_label()`: Maps current approval policy and sandbox policy back to a display label for status line display
+
+The `approval_mode_label()` function matches current config against builtin presets using fuzzy sandbox matching (ignores `writable_roots` differences for `WorkspaceWrite` policies). Returns `None` if no preset matches.
 
 **OSS Provider Utilities:**
 

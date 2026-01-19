@@ -583,6 +583,25 @@ The footer uses visual differentiation:
 
 For E2E testing, `NORI_SYNC_SYSTEM_INFO=1` env var enables synchronous collection in debug builds. This is set automatically by `@/codex-rs/tui-pty-e2e` to ensure footer data appears immediately in tests.
 
+*Approval Mode Display:*
+
+The footer displays the current approval mode (e.g., "Approval Mode: Agent") to provide users visibility into their permission settings without opening the `/approvals` popup.
+
+Data flow:
+1. `ChatWidget` computes the label using `approval_mode_label()` from `@/codex-rs/common/src/approval_presets.rs`
+2. The function matches current `approval_policy` and `sandbox_policy` against builtin presets
+3. Label is passed through `BottomPane` → `ChatComposer` → `FooterProps` → `build_footer_line()`
+4. Footer renders it in magenta styling, positioned after git branch and before skillset
+
+The label updates dynamically when the user changes approval settings via `/approvals`:
+- `ChatWidget::set_approval_policy()` and `set_sandbox_policy()` both call `update_approval_mode_label()`
+- Initial setup occurs in `on_session_configured()` when the session starts
+
+Display values:
+- "Read Only" - Read-only sandbox, approval on every action
+- "Agent" - Workspace write access, approval on every action
+- "Full Access" - Full disk access, no approval required
+
 **Configuration Flow:**
 
 TUI respects config overrides from:

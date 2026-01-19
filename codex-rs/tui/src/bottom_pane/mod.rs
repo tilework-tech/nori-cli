@@ -407,6 +407,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update the approval mode label displayed in the footer.
+    pub(crate) fn set_approval_mode_label(&mut self, label: Option<String>) {
+        self.composer.set_approval_mode_label(label);
+        self.request_redraw();
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.composer.is_empty()
     }

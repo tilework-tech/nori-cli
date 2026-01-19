@@ -137,6 +137,7 @@ use std::path::Path;
 
 use chrono::Local;
 use codex_common::approval_presets::ApprovalPreset;
+use codex_common::approval_presets::approval_mode_label;
 use codex_common::approval_presets::builtin_approval_presets;
 use codex_common::model_presets::ModelPreset;
 use codex_common::model_presets::builtin_model_presets;
@@ -472,6 +473,9 @@ impl ChatWidget {
 
         // Clear the "Connecting to [Agent]" status indicator shown during agent startup
         self.bottom_pane.hide_status_indicator();
+
+        // Update footer with current approval mode
+        self.update_approval_mode_label();
 
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
@@ -3275,6 +3279,7 @@ impl ChatWidget {
     /// Set the approval policy in the widget's config copy.
     pub(crate) fn set_approval_policy(&mut self, policy: AskForApproval) {
         self.config.approval_policy = policy;
+        self.update_approval_mode_label();
     }
 
     /// Set the sandbox policy in the widget's config copy.
@@ -3289,6 +3294,14 @@ impl ChatWidget {
         if should_clear_downgrade {
             self.config.forced_auto_mode_downgraded_on_windows = false;
         }
+
+        self.update_approval_mode_label();
+    }
+
+    /// Update the approval mode label displayed in the footer based on current config.
+    fn update_approval_mode_label(&mut self) {
+        let label = approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
+        self.bottom_pane.set_approval_mode_label(label);
     }
 
     pub(crate) fn set_full_access_warning_acknowledged(&mut self, acknowledged: bool) {
