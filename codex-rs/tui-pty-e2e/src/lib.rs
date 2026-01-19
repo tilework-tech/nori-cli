@@ -264,11 +264,25 @@ impl TuiSession {
             let config_path = codex_home.join("config.toml");
             let config_content = config.config_toml.clone().unwrap_or_else(|| {
                 // Generate default config with model, trusted project path,
-                // and mock_provider that doesn't require OpenAI auth
+                // and mock_provider that doesn't require OpenAI auth.
+                //
+                // IMPORTANT: Canonicalize the cwd path for the projects section.
+                // On macOS, /tmp is a symlink to /private/tmp, so paths like
+                // /var/folders/... can become /private/var/folders/... after
+                // canonicalization. The config loader canonicalizes CODEX_HOME
+                // and resolved_cwd, so we must use the same canonicalized path
+                // here to ensure the project trust level is properly matched.
                 let cwd_path = config
                     .cwd
                     .as_ref()
+                    .and_then(|p| std::fs::canonicalize(p).ok())
                     .map(|p| p.to_string_lossy().into_owned())
+                    .or_else(|| {
+                        config
+                            .cwd
+                            .as_ref()
+                            .map(|p| p.to_string_lossy().into_owned())
+                    })
                     .unwrap_or_else(|| codex_home.to_string_lossy().into_owned());
                 let acp_section = if config.allow_http_fallback {
                     "\n[acp]\nallow_http_fallback = true\n"
