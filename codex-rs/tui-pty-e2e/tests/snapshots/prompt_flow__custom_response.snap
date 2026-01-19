@@ -10,4 +10,4 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 › [DEFAULT_PROMPT]
 
-  ⎇ master · ? for shortcuts
+  ⎇ master · Approval Mode: Agent · ? for shortcuts

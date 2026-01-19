@@ -1,7 +1,10 @@
 ---
 source: tui-pty-e2e/tests/prompt_flow.rs
+assertion_line: 82
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › Line 1
   Line 2
   Line 3
+
+  Approval Mode: Agent
