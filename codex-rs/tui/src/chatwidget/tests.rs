@@ -3799,3 +3799,60 @@ mod strip_ansi_codes_tests {
         assert_eq!(strip_ansi_codes("\x1b[2Jtext\x1b[H"), "text");
     }
 }
+
+/// Submitting a user message triggers a system info refresh to update the branch marker.
+/// This ensures the branch marker in the footer is updated on every transcript activity,
+/// catching branch changes that happened between interactions (e.g., user switched
+/// branches in another terminal).
+#[test]
+fn user_message_submission_triggers_system_info_refresh() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Drain any events from widget construction
+    drain_refresh_system_info_events(&mut rx);
+
+    // Submit a user message
+    chat.bottom_pane
+        .set_composer_text("test message".to_string());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    // Verify that RefreshSystemInfoForDirectory was sent
+    let refresh_dirs = drain_refresh_system_info_events(&mut rx);
+    assert!(
+        !refresh_dirs.is_empty(),
+        "expected RefreshSystemInfoForDirectory event after user message submission"
+    );
+}
+
+/// Task completion triggers a system info refresh to update the branch marker.
+/// This ensures any branch changes that occurred during the agent's turn are reflected.
+#[test]
+fn task_complete_triggers_system_info_refresh() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Start a task
+    chat.handle_codex_event(Event {
+        id: "task-start".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Drain any events from task start
+    drain_refresh_system_info_events(&mut rx);
+
+    // Complete the task
+    chat.handle_codex_event(Event {
+        id: "task-complete".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: Some("Done".to_string()),
+        }),
+    });
+
+    // Verify that RefreshSystemInfoForDirectory was sent
+    let refresh_dirs = drain_refresh_system_info_events(&mut rx);
+    assert!(
+        !refresh_dirs.is_empty(),
+        "expected RefreshSystemInfoForDirectory event after task completion"
+    );
+}

@@ -573,6 +573,15 @@ The ACP protocol sets CWD at session creation and it is immutable. However, when
 │ ChatWidget        │ ─────────────────────────▶│ BottomPane │
 └───────────────────┘                          └────────────┘
 ```
+*Transcript Activity Refresh:*
+
+In addition to CWD tracking, system info refreshes on transcript activity to catch branch changes that occur outside the agent's operations (e.g., user switching branches in another terminal):
+
+- **User message submission**: `submit_user_message()` sends `RefreshSystemInfoForDirectory(config.cwd)` when the user submits a new message
+- **Task completion**: `on_task_complete()` sends `RefreshSystemInfoForDirectory(config.cwd)` when an agent turn finishes
+
+These triggers use the session CWD (not the effective CWD from tracking) since they detect changes made by the user rather than by agent operations.
+
 *Git Worktree Detection:*
 
 `SystemInfo` includes an `is_worktree: bool` field that indicates whether the current directory is a git worktree (not the main repository). Detection works by comparing `git rev-parse --git-common-dir` with `--git-dir` - in a worktree, these paths differ.
