@@ -619,6 +619,13 @@ impl ChatWidget {
         self.last_unified_wait = None;
         self.request_redraw();
 
+        // Refresh system info (including git branch) on task completion.
+        // This catches any branch changes that occurred during the agent's turn.
+        self.app_event_tx
+            .send(AppEvent::RefreshSystemInfoForDirectory(
+                self.config.cwd.clone(),
+            ));
+
         // If there is a queued user message, send exactly one now to begin the next turn.
         self.maybe_send_next_queued_input();
         // Emit a notification when the turn completes (suppressed if focused).
@@ -1995,6 +2002,14 @@ impl ChatWidget {
 
         // Track user message for session statistics
         self.session_stats.record_user_message();
+
+        // Refresh system info (including git branch) on user message submission.
+        // This catches branch changes that happened between interactions
+        // (e.g., user switched branches in another terminal).
+        self.app_event_tx
+            .send(AppEvent::RefreshSystemInfoForDirectory(
+                self.config.cwd.clone(),
+            ));
 
         // Check if there's a pending agent switch - if so, send the message through
         // the App to trigger the switch first
