@@ -391,6 +391,25 @@ When `approval_policy == AskForApproval::Never` (set via `--yolo` or `--dangerou
 CLI --yolo flag → AskForApproval::Never → AcpBackendConfig → run_approval_handler() → auto-approve
 ```
 
+**Dynamic Approval Policy Updates:**
+
+The approval policy can be changed mid-session via the `/approvals` command (which sends `Op::OverrideTurnContext`). The ACP backend uses a `tokio::sync::watch` channel to broadcast policy changes to the long-running approval handler:
+
+```
+┌─────────────────────────┐                        ┌─────────────────────────┐
+│   AcpBackend::submit()  │   watch::Sender        │   run_approval_handler  │
+│                         │  ─────────────────►    │                         │
+│   Op::OverrideTurnContext                        │   watch::Receiver       │
+│   { approval_policy }   │                        │   *rx.borrow() on each  │
+│                         │                        │   request               │
+└─────────────────────────┘                        └─────────────────────────┘
+```
+
+- `approval_policy_tx: watch::Sender<AskForApproval>` field in `AcpBackend` broadcasts updates
+- `approval_policy_rx: watch::Receiver<AskForApproval>` passed to `run_approval_handler()` at spawn
+- Handler reads `*approval_policy_rx.borrow()` on each incoming request to get the current policy
+- Pattern enables immediate policy changes without restarting the approval handler task
+
 For all other policies, approval requests are handled **immediately** (not deferred) to avoid deadlocks:
 
 ```
@@ -465,6 +484,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
   - `Op::ExecApproval`/`PatchApproval` → Resolves pending approval
   - `Op::AddToHistory` → Appends to history file (async background task)
   - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
+  - `Op::OverrideTurnContext` → Updates approval policy via watch channel (enables `/approvals` command)
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching

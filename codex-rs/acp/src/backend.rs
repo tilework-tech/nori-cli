@@ -26,6 +26,7 @@ use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::user_input::UserInput;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::debug;
 use tracing::warn;
 
@@ -174,6 +175,8 @@ pub struct AcpBackend {
     history_persistence: crate::config::HistoryPersistence,
     /// Conversation ID for this session (used for history entries)
     conversation_id: ConversationId,
+    /// Sender for broadcasting approval policy updates to the handler
+    approval_policy_tx: watch::Sender<AskForApproval>,
 }
 
 impl AcpBackend {
@@ -258,6 +261,9 @@ impl AcpBackend {
 
         let idle_timer_abort = Arc::new(Mutex::new(None));
 
+        // Create watch channel for dynamic approval policy updates
+        let (approval_policy_tx, approval_policy_rx) = watch::channel(config.approval_policy);
+
         // Create conversation ID for this session
         let conversation_id = ConversationId::new();
 
@@ -276,6 +282,7 @@ impl AcpBackend {
             nori_home: config.nori_home.clone(),
             history_persistence: config.history_persistence,
             conversation_id,
+            approval_policy_tx,
         };
 
         // Send synthetic SessionConfigured event
@@ -308,7 +315,7 @@ impl AcpBackend {
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             cwd.clone(),
-            config.approval_policy,
+            approval_policy_rx,
         ));
 
         Ok(backend)
@@ -437,10 +444,18 @@ impl AcpBackend {
                 ))
                 .await;
             }
+            Op::OverrideTurnContext {
+                approval_policy, ..
+            } => {
+                // Update approval policy if provided
+                if let Some(policy) = approval_policy {
+                    debug!("Updating approval policy to {policy:?} in ACP mode");
+                    // Send the new policy to the approval handler via watch channel
+                    let _ = self.approval_policy_tx.send(policy);
+                }
+            }
             // These ops are internal/context-related, silently ignore
-            Op::UserTurn { .. }
-            | Op::OverrideTurnContext { .. }
-            | Op::ResolveElicitation { .. } => {
+            Op::UserTurn { .. } | Op::ResolveElicitation { .. } => {
                 debug!("Ignoring internal Op in ACP mode: {}", get_op_name(&op));
             }
             // Catch any new Op variants we haven't handled - only show error in debug builds
@@ -729,11 +744,14 @@ impl AcpBackend {
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
         user_notifier: Arc<codex_core::UserNotifier>,
         cwd: PathBuf,
-        approval_policy: AskForApproval,
+        approval_policy_rx: watch::Receiver<AskForApproval>,
     ) {
         while let Some(request) = approval_rx.recv().await {
+            // Check current approval policy (may have changed via OverrideTurnContext)
+            let current_policy = *approval_policy_rx.borrow();
+
             // If approval_policy is Never (yolo mode), auto-approve immediately
-            if approval_policy == AskForApproval::Never {
+            if current_policy == AskForApproval::Never {
                 debug!(
                     target: "acp_event_flow",
                     call_id = %request.event.call_id(),
@@ -2310,6 +2328,121 @@ mod tests {
                 || error_message.contains("auth")
                 || error_message.contains("login"),
             "Error message should mention authentication or provide login instructions, got: {error_message}"
+        );
+    }
+
+    /// Test that updating the approval policy via watch channel dynamically changes
+    /// the approval handler's behavior. This verifies that `/approvals` command
+    /// selecting "full access" makes it equivalent to `--yolo`.
+    #[tokio::test]
+    async fn test_approval_policy_dynamic_update() {
+        use codex_protocol::approvals::ExecApprovalRequestEvent;
+        use tokio::sync::oneshot;
+        use tokio::sync::watch;
+
+        // Create channels for the test
+        let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
+        let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+        let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+        let cwd = PathBuf::from("/tmp/test");
+
+        // Create watch channel starting with OnRequest policy (requires approval)
+        let (policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
+
+        // Spawn the approval handler with the watch receiver
+        tokio::spawn(AcpBackend::run_approval_handler(
+            approval_rx,
+            event_tx.clone(),
+            Arc::clone(&pending_approvals),
+            Arc::clone(&user_notifier),
+            cwd.clone(),
+            policy_rx,
+        ));
+
+        // Create a mock approval request
+        let (response_tx1, mut response_rx1) = oneshot::channel();
+        let request1 = ApprovalRequest {
+            event: ApprovalEventType::Exec(ExecApprovalRequestEvent {
+                call_id: "call-1".to_string(),
+                turn_id: String::new(),
+                command: vec!["ls".to_string()],
+                cwd: cwd.clone(),
+                reason: None,
+                risk: None,
+                parsed_cmd: vec![],
+            }),
+            options: vec![],
+            response_tx: response_tx1,
+        };
+
+        // Send first request - should be forwarded to TUI (not auto-approved)
+        approval_tx.send(request1).await.unwrap();
+
+        // Give the handler time to process
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Should have received an approval request event in the TUI
+        let event = event_rx.try_recv();
+        assert!(
+            event.is_ok(),
+            "Should have received approval request event for OnRequest policy"
+        );
+        if let Ok(Event {
+            msg: EventMsg::ExecApprovalRequest(req),
+            ..
+        }) = event
+        {
+            assert_eq!(req.call_id, "call-1");
+        } else {
+            panic!("Expected ExecApprovalRequest event");
+        }
+
+        // The request should be pending (not auto-approved)
+        assert!(
+            response_rx1.try_recv().is_err(),
+            "Request should not be auto-approved with OnRequest policy"
+        );
+
+        // Now update the policy to Never (yolo mode)
+        policy_tx.send(AskForApproval::Never).unwrap();
+
+        // Give the handler time to see the policy change
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Send second request - should be auto-approved
+        let (response_tx2, mut response_rx2) = oneshot::channel();
+        let request2 = ApprovalRequest {
+            event: ApprovalEventType::Exec(ExecApprovalRequestEvent {
+                call_id: "call-2".to_string(),
+                turn_id: String::new(),
+                command: vec!["echo".to_string(), "hello".to_string()],
+                cwd: cwd.clone(),
+                reason: None,
+                risk: None,
+                parsed_cmd: vec![],
+            }),
+            options: vec![],
+            response_tx: response_tx2,
+        };
+
+        approval_tx.send(request2).await.unwrap();
+
+        // Give the handler time to process
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Should NOT have received another approval request event (auto-approved)
+        let event2 = event_rx.try_recv();
+        assert!(
+            event2.is_err(),
+            "Should NOT receive approval request event when policy is Never (yolo mode)"
+        );
+
+        // The request should have been auto-approved
+        let decision = response_rx2.try_recv();
+        assert!(
+            matches!(decision, Ok(ReviewDecision::Approved)),
+            "Request should be auto-approved with Never policy, got: {decision:?}"
         );
     }
 }
