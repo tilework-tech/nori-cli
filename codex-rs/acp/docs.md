@@ -797,6 +797,42 @@ This pairs with TUI-side tracing targets (`tui_event_flow`, `cell_flushing`, `pe
 - Updates for unregistered sessions are silently dropped
 - Uses `try_send()` (non-blocking) - full/closed channels cause update loss
 
+**LocalSet Cooperative Scheduling and Message Draining:**
+
+The ACP connection uses a single-threaded `LocalSet` runtime because `agent-client-protocol` types are `!Send`. Within this LocalSet, two tasks run cooperatively:
+- `io_task`: Reads from agent subprocess stdout and dispatches notifications via `session_notification()`
+- `run_command_loop`: Processes commands from the main thread (Prompt, Cancel, etc.)
+
+Both tasks only yield control at `.await` points. A race condition exists when the agent sends notifications followed immediately by a PromptResponse:
+
+```
+┌─────────────────────┐   notifications   ┌─────────────────────┐
+│   Agent subprocess  │──────────────────►│   io_task           │
+│                     │   PromptResponse  │   (buffered)        │
+│                     │──────────────────►│                     │
+└─────────────────────┘                   └─────────────────────┘
+                                                    │
+                                                    │ try_send() to session channel
+                                                    ▼
+┌─────────────────────┐   prompt_future   ┌─────────────────────┐
+│   run_command_loop  │◄──────────────────│   resolves          │
+│                     │   (no yield)      │                     │
+│   unregister_session│                   │   notifications     │
+│   (too early!)      │                   │   still pending     │
+└─────────────────────┘                   └─────────────────────┘
+```
+
+Without explicit yields, `run_command_loop` would call `unregister_session()` immediately after `prompt_future` resolves, removing the session from the map before `io_task` can forward late-arriving notifications. This causes message loss where text appears to "drain" only when the user types the next prompt.
+
+The fix adds a yield loop before `unregister_session()`:
+```rust
+for _ in 0..10 {
+    tokio::task::yield_now().await;
+}
+```
+
+Each `yield_now()` gives the `io_task` exactly one opportunity to process a buffered message. Ten yields provides sufficient headroom for any realistic burst of trailing notifications.
+
 **Agent Initialization:**
 
 Client advertises these capabilities to agents:
