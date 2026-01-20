@@ -360,7 +360,12 @@ The `session_parser` module provides parsers to extract token usage and metadata
 Key types:
 - `TokenUsageReport`: Unified report wrapping `TokenUsage` (from codex-protocol) with agent type, session ID, and transcript path
 - `AgentKind`: Enum identifying the agent (Claude, Codex, Gemini)
-- `ParseError`: Error cases (EmptyFile, MissingSessionId, TokenOverflow, IoError, JsonError)
+- `ParseError`: Error variants with semantic distinctions:
+  - `IoError`: File cannot be read (e.g., missing file, permission denied). Automatically converted via `#[from]` attribute.
+  - `JsonError`: Root-level JSON parse failure (entire file is malformed). Automatically converted via `#[from]` attribute.
+  - `EmptyFile`: Either file is empty, OR all JSONL lines failed to parse, OR valid structure exists but no token data found
+  - `MissingSessionId`: Valid JSON structure but session ID field not present
+  - `TokenOverflow`: Arithmetic overflow during token aggregation
 
 Parser functions:
 - `parse_codex_session()`: Parses Codex JSONL with cumulative `token_count` events. Session ID derived from filename since not embedded in content. Extracts `model_context_window` when available.
@@ -368,12 +373,44 @@ Parser functions:
 - `parse_claude_session()`: Parses Claude JSONL with per-message usage objects (nested in `.message.usage`). Maps `cache_read_input_tokens` to `cached_input_tokens`. No separate reasoning tokens.
 
 Implementation details:
-- **Line-by-line JSONL parsing**: Resilient error handling logs warnings and continues on malformed lines
+- **Line-by-line JSONL parsing**: Resilient error handling logs warnings and continues on malformed lines. Individual line parse failures do NOT cause the entire parse to fail.
+- **Valid line tracking**: Both `parse_codex_session()` and `parse_claude_session()` track `valid_lines` counter (incremented after successful JSON parse). If `valid_lines == 0` after processing all lines, returns `ParseError::EmptyFile` to distinguish "all lines malformed" from "missing token data".
+- **Error semantics**: The implementation distinguishes between three failure modes:
+  1. **Structural failure** (IoError, JsonError): File is inaccessible or fundamentally malformed
+  2. **All-malformed JSONL** (EmptyFile): Every line in JSONL failed to parse (valid_lines == 0)
+  3. **Missing data** (EmptyFile, MissingSessionId): Valid JSON but required fields absent
+- **Zero tokens vs. no token information**: Zero token count is semantically valid (e.g., session just started). The error case is when token information is completely inaccessible or missing from the transcript structure.
 - **Checked arithmetic**: Uses `.checked_add()` for token aggregation to prevent overflow
 - **Agent-specific token mapping**: Each parser maps agent-specific token fields to the unified `TokenUsage` struct
 - **Codex as external agent**: Treats Codex sessions as external data (like Gemini/Claude), not relying on internal Codex state
 
+Error handling pattern:
+```rust
+// In parse_codex_session and parse_claude_session:
+let mut valid_lines = 0;
+for line in text.lines() {
+    let v: serde_json::Value = match serde_json::from_str(line) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("failed to parse line: {e}");
+            continue; // Skip this line, continue processing
+        }
+    };
+    valid_lines += 1; // Only count successfully parsed lines
+    // ... process valid JSON ...
+}
+if valid_lines == 0 {
+    return Err(ParseError::EmptyFile); // All lines failed to parse
+}
+```
+
+This ensures:
+- **Lenient per-line**: One bad line in a JSONL file doesn't invalidate the entire session
+- **Strict overall**: If EVERY line is malformed, that's a fundamental problem that should error
+- **Semantic accuracy**: `EmptyFile` when all-malformed prevents misleading `MissingSessionId` errors
+
 Session discovery logic (finding files in ~/.codex, ~/.gemini, ~/.claude) is deferred for future TUI integration.
+
 
 **Approval Bridging:**
 
@@ -485,6 +522,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
   - `Op::AddToHistory` → Appends to history file (async background task)
   - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
   - `Op::OverrideTurnContext` → Updates approval policy via watch channel (enables `/approvals` command)
+  - `Op::Compact` → Sends summarization prompt, stores response for next user input
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching
@@ -625,6 +663,58 @@ The ACP backend supports OS-level notifications using `codex_core::UserNotifier`
 │  event              │  (if no new input)    │  (if not cancelled) │
 └─────────────────────┘                       └─────────────────────┘
 ```
+
+### Conversation Compaction
+
+The ACP backend supports the `/compact` command to summarize conversation history and reduce token usage. Unlike the core backend which has direct access to conversation history, ACP implements compaction using a **prompt-based approach**:
+
+```
+┌─────────────────────┐   SUMMARIZATION_PROMPT   ┌─────────────────────┐
+│   /compact command  │─────────────────────────►│   ACP Agent         │
+│   (Op::Compact)     │                          │   (subprocess)      │
+│                     │◄─────────────────────────│                     │
+│   Store summary in  │   Agent's summary        │   Generates summary │
+│   pending_compact   │   response               │   from its context  │
+└─────────────────────┘                          └─────────────────────┘
+            │
+            │ Next Op::UserInput
+            ▼
+┌─────────────────────┐
+│   "{SUMMARY_PREFIX} │
+│    {summary}        │
+│                     │
+│    {user_prompt}"   │
+└─────────────────────┘
+```
+
+**Implementation Details:**
+
+- `handle_compact()` sends `codex_core::compact::SUMMARIZATION_PROMPT` to the agent
+- Agent's text response is captured and stored in `pending_compact_summary: Arc<Mutex<Option<String>>>`
+- On the next `Op::UserInput`, `handle_user_input()` checks for a pending summary
+- If present, prepends `SUMMARY_PREFIX` + summary to the user's prompt
+- Emits `ContextCompacted` event to notify the TUI of successful compaction
+- Emits `Warning` event to alert users about accuracy degradation in long conversations
+
+**Event Sequence:**
+
+| Step | Event | Purpose |
+|------|-------|---------|
+| 1 | `TaskStarted` | Indicates compact operation has begun |
+| 2 | `AgentMessageDelta` | Streams agent's summary response (displayed in TUI) |
+| 3 | `ContextCompacted` | Signals successful compaction |
+| 4 | `Warning` | Advises starting new conversations when possible |
+| 5 | `TaskComplete` | Ends the compact turn |
+
+**Key Difference from Core Backend:**
+
+The core backend (`@/codex-rs/core/src/compact.rs`) directly accesses and manipulates conversation history. The ACP backend cannot access the agent's internal conversation state, so it:
+1. Asks the agent to summarize via a prompt
+2. Captures the response
+3. Injects the summary into the next user message
+
+Both backends use the same `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants from `@/codex-rs/core/src/compact.rs` for consistency.
+
 
 ### Things to Know
 
