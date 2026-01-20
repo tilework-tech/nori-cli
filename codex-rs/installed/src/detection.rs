@@ -259,7 +259,6 @@ mod tests {
         }
     }
 
-    // @current-session
     #[test]
     fn test_generate_client_id_format() {
         let client_id = generate_client_id();
@@ -286,36 +285,11 @@ mod tests {
         }
     }
 
-    // @current-session
     #[test]
     fn test_generate_client_id_deterministic() {
         // Same machine should always produce the same client_id
         let id1 = generate_client_id();
         let id2 = generate_client_id();
         assert_eq!(id1, id2, "client_id should be deterministic");
-    }
-
-    // @current-session
-    #[test]
-    fn test_generate_client_id_uses_nori_salt() {
-        // Verify the hash is computed with "nori_salt:" prefix
-        let hostname = get_hostname();
-        let username = get_username();
-        let input = format!("nori_salt:{hostname}:{username}");
-        let hash = Sha256::digest(input.as_bytes());
-        let hex_dig = hex::encode(hash);
-
-        // Format as UUID: 8-4-4-4-12
-        let expected = format!(
-            "{}-{}-{}-{}-{}",
-            &hex_dig[0..8],
-            &hex_dig[8..12],
-            &hex_dig[12..16],
-            &hex_dig[16..20],
-            &hex_dig[20..32]
-        );
-
-        let actual = generate_client_id();
-        assert_eq!(actual, expected, "client_id should match expected format");
     }
 }

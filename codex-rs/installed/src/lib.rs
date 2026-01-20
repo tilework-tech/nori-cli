@@ -384,7 +384,6 @@ mod tests {
         assert!(read_install_state(&nested_home).is_some());
     }
 
-    // @current-session
     #[test]
     fn test_opt_out_via_env_var() {
         let temp_home = setup_temp_home();
@@ -412,7 +411,6 @@ mod tests {
         // but the send_event function checks this internally
     }
 
-    // @current-session
     #[test]
     fn test_opt_out_via_state_file() {
         let temp_home = setup_temp_home();
@@ -438,7 +436,6 @@ mod tests {
         // but the send_event function checks this internally
     }
 
-    // @current-session
     #[test]
     fn test_user_resurrection_after_30_days() {
         let temp_home = setup_temp_home();
@@ -474,7 +471,6 @@ mod tests {
         assert!(new_state.last_launched_at > old_time);
     }
 
-    // @current-session
     #[test]
     fn test_no_resurrection_before_30_days() {
         let temp_home = setup_temp_home();

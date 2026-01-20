@@ -459,7 +459,6 @@ mod tests {
         assert_eq!(event.event_params["tilework_cli_install_source"], "unknown");
     }
 
-    // @current-session
     #[test]
     fn test_flat_event_schema_app_install() {
         let state = create_test_state();
@@ -485,7 +484,6 @@ mod tests {
         assert!(!json.contains("eventName"));
     }
 
-    // @current-session
     #[test]
     fn test_flat_event_schema_session_start() {
         let state = create_test_state();
@@ -505,7 +503,6 @@ mod tests {
         assert!(!json.contains("eventParams"));
     }
 
-    // @current-session
     #[test]
     fn test_flat_event_schema_user_resurrected() {
         let state = create_test_state();

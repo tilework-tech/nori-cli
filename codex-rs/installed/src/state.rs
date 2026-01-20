@@ -326,7 +326,6 @@ mod tests {
         assert!(result.is_none());
     }
 
-    // @current-session
     #[test]
     fn test_schema_v2_has_opt_out_field() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
@@ -343,7 +342,6 @@ mod tests {
         assert!(json.contains("\"opt_out\":false"));
     }
 
-    // @current-session
     #[test]
     fn test_read_v1_state_file() {
         // V1 state file has client_id="nori-cli" and no opt_out field
@@ -364,7 +362,6 @@ mod tests {
         assert_eq!(state.opt_out, false); // Should default to false
     }
 
-    // @current-session
     #[test]
     fn test_write_v2_state_with_opt_out() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
