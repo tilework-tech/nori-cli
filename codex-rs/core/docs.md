@@ -4,16 +4,13 @@ Path: @/codex-rs/core
 
 ### Overview
 
-The `codex-core` crate is the central business logic library for Codex. It provides the AI conversation management, tool execution, configuration handling, authentication, and sandboxing capabilities that all Codex interfaces depend upon. This is designed as a reusable library crate for building Rust applications that use Codex.
+The `codex-core` crate is the central business logic library for Codex. It provides the AI conversation management, tool execution, configuration handling, authentication, and sandboxing capabilities that the TUI depends upon. This is designed as a reusable library crate for building Rust applications that use Codex.
 
 ### How it fits into the larger codebase
 
-Core serves as the foundation consumed by all entry points:
+Core serves as the foundation consumed by the TUI:
 
 - **TUI** (`@/codex-rs/tui`): Uses `ConversationManager`, `Config`, `AuthManager` for interactive sessions
-- **Exec** (`@/codex-rs/exec`): Uses same core types for headless automation
-- **App Server** (`@/codex-rs/app-server`): Wraps core for JSON-RPC communication
-- **MCP Server** (`@/codex-rs/mcp-server`): Exposes Codex tools to MCP clients
 
 Core depends on:
 - `codex-protocol` for message types and protocol definitions

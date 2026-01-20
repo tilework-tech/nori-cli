@@ -15,13 +15,6 @@ path = "src/lib.rs"
 [features]
 default = ["unstable", "nori-config", "login"]
 
-# Full feature set - enables all upstream/legacy functionality
-full = ["login", "feedback", "backend-client", "upstream-updates", "oss-providers", "otel", "codex-features"]
-
-# Codex-only features (undo, compact, review slash commands)
-# Disabled by default for Nori builds; enabled by 'full' for upstream compatibility
-codex-features = []
-
 # OpenTelemetry tracing export (disabled by default)
 otel = ["dep:opentelemetry-appender-tracing"]
 
@@ -39,19 +32,6 @@ nori-config = []
 # ChatGPT/API login functionality
 login = ["dep:codex-login", "dep:codex-utils-pty"]
 
-# Feedback to Sentry (legacy OpenAI feedback system)
-# Future Nori feedback: https://github.com/tilework-tech/nori-cli/issues
-feedback = ["dep:codex-feedback"]
-
-# Backend client for cloud tasks
-backend-client = ["dep:codex-backend-client"]
-
-# Upstream (OpenAI) update checking
-upstream-updates = []
-
-# OSS providers (Ollama, LM Studio) - forwarded to codex-common
-oss-providers = ["codex-common/oss-providers"]
-
 [lints]
 workspace = true
 
@@ -65,14 +45,12 @@ codex-acp = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
-codex-backend-client = { workspace = true, optional = true }
 codex-common = { workspace = true, features = [
     "cli",
     "elapsed",
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
-codex-feedback = { workspace = true, optional = true }
 nori-installed = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true, optional = true }

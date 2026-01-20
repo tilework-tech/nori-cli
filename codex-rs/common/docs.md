@@ -4,16 +4,15 @@ Path: @/codex-rs/common
 
 ### Overview
 
-The `codex-common` crate provides shared utilities used across multiple Codex crates. It includes CLI argument types, configuration summary generation, sandbox policy display, fuzzy matching, model presets, and OSS provider utilities.
+The `codex-common` crate provides shared utilities used across multiple Codex crates. It includes CLI argument types, configuration summary generation, sandbox policy display, fuzzy matching, model presets, and approval presets.
 
 ### How it fits into the larger codebase
 
-Common is a utility dependency for TUI, exec, and CLI:
+Common is a utility dependency for TUI and CLI:
 
 - **CLI parsing**: `CliConfigOverrides`, `ApprovalModeCliArg`, `SandboxModeCliArg`
 - **Config display**: `create_config_summary_entries()` for status displays
 - **Model selection**: `model_presets` for available models
-- **OSS support**: `oss` module for Ollama/LM Studio integration
 - **Approval mode display**: `approval_mode_label()` for TUI status line
 
 ### Core Implementation
@@ -30,7 +29,6 @@ Common is a utility dependency for TUI, exec, and CLI:
 | `fuzzy_match` | always | Nucleo-based fuzzy matching |
 | `model_presets` | always | Available model definitions |
 | `approval_presets` | always | Approval + sandbox combinations |
-| `oss` | always (stubs without `oss-providers`) | OSS provider utilities |
 | `elapsed` | `elapsed` | Duration formatting |
 
 ### Things to Know
@@ -55,7 +53,7 @@ pub struct CliConfigOverrides {
 - Default reasoning effort levels (set to Medium for all models)
 - Summary generation support
 - Tool capabilities
-- Claude ACP preset added with display_name "Claude" and description "Anthropic's Claude via Agent Context Protocol" to make Claude model visible in TUI model selection
+- Claude ACP preset with display_name "Claude" and description "Anthropic's Claude via Agent Context Protocol"
 
 **Approval Presets:**
 
@@ -65,20 +63,6 @@ pub struct CliConfigOverrides {
 - `approval_mode_label()`: Maps current approval policy and sandbox policy back to a display label for status line display
 
 The `approval_mode_label()` function matches current config against builtin presets using fuzzy sandbox matching (ignores `writable_roots` differences for `WorkspaceWrite` policies). Returns `None` if no preset matches.
-
-**OSS Provider Utilities:**
-
-The `oss` module handles:
-- Provider detection (Ollama vs LM Studio)
-- Model availability checking
-- Default model selection per provider
-- Provider health verification (`ensure_oss_provider_ready()`)
-
-The module uses conditional compilation based on the `oss-providers` feature:
-- **With feature enabled:** Full provider support via `codex-ollama` and `codex-lmstudio` crates
-- **With feature disabled:** Stub implementations that return `None` from `get_default_model_for_oss_provider()` and errors from `ensure_oss_provider_ready()` for known providers
-
-This follows the crate's pattern of providing API-compatible stubs when optional functionality is disabled.
 
 **Format Env Display:**
 

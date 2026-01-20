@@ -8,10 +8,10 @@ The `codex-otel` crate provides OpenTelemetry integration for Codex, enabling di
 
 ### How it fits into the larger codebase
 
-Otel is used by TUI, exec, and app-server for observability:
+Otel is used by the TUI for observability:
 
 - **Core** `otel_init.rs` uses this for provider initialization
-- **All entry points** initialize OTEL tracing
+- **TUI** initializes OTEL tracing on startup
 - **Exports** to configured OTLP endpoints
 
 ### Core Implementation

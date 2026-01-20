@@ -8,7 +8,7 @@ The `codex-ansi-escape` crate provides utilities for parsing and handling ANSI e
 
 ### How it fits into the larger codebase
 
-ANSI escape is used by TUI and exec for terminal output processing:
+ANSI escape is used by the TUI for terminal output processing:
 
 - **Output processing** strips or preserves ANSI codes as needed
 - **Terminal rendering** handles escape sequences properly

@@ -13,7 +13,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 ─ Worked for 0s ────────────────────────────────────────────────────────────────
 
 ■ Conversation interrupted - tell the model what to do differently. Something
-went wrong? Hit `/feedback` to report the issue.
+went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues
 
 
 › [DEFAULT_PROMPT]

@@ -4,16 +4,15 @@ Path: @/codex-rs/tui/src/nori
 
 ### Overview
 
-The `nori` module contains Nori-specific TUI customizations that replace or extend the default Codex UI behavior. It provides branded session headers, agent picking, feedback redirection, and a Nori-specific update checking mechanism that queries GitHub releases instead of OpenAI's update system.
+The `nori` module contains Nori-specific TUI customizations that replace or extend the default Codex UI behavior. It provides branded session headers, agent picking, and a Nori-specific update checking mechanism that queries GitHub releases.
 
 ### How it fits into the larger codebase
 
 - **Called by** `history_cell.rs` via `new_session_info()` which delegates to `new_nori_session_info()`
-- **Replaces** the original Codex session header (preserved as dead code for potential future feature flag selection)
+- **Replaces** the original Codex session header
 - **Uses** `HistoryCell` trait from `@/codex-rs/tui/src/history_cell.rs` for consistent rendering
 - **Reads** `~/.nori-config.json` for Nori profile information
-- **Conditionally compiled** based on feature flags - modules like `feedback.rs`, `updates.rs` are only included when their corresponding upstream features are disabled
-- **Re-exported** by `@/codex-rs/tui/src/lib.rs` to provide unified access to update types regardless of which update system is active
+- **Re-exported** by `@/codex-rs/tui/src/lib.rs` to provide unified access to update types
 
 ### Core Implementation
 
@@ -83,16 +82,13 @@ The cell is inserted into the chat history and displayed before terminal restora
 - `PendingAgentSelection` holds the selected model/display name pair until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`
 - `get_agent_info(model_name)` looks up agent metadata (display name, description) from the available agents list by model name (case-insensitive). Used by `chatwidget.rs` to resolve human-readable display names for approval dialogs.
 
-**Feedback Redirect (`feedback.rs`):**
-
-Compiled only when `feedback` feature is disabled. Redirects `/feedback` command to GitHub Discussions instead of OpenAI's feedback system.
-
 **Update System (`update_action.rs`, `updates.rs`, `update_prompt.rs`):**
 
-Compiled only when `upstream-updates` feature is disabled. Provides Nori-specific update checking:
+Provides Nori-specific update checking:
 - `UpdateAction` enum with `NpmGlobalLatest`, `BunGlobalLatest`, and `Manual` variants
 - `get_update_action()` checks `NORI_MANAGED_BY_BUN` then `NORI_MANAGED_BY_NPM` env vars
 - Queries GitHub releases API with caching in `~/.codex/nori-version.json` (20-hour refresh)
+- `update_prompt.rs` and `updates.rs` are only compiled in release builds (`#[cfg(not(debug_assertions))]`)
 
 ### Things to Know
 
@@ -130,10 +126,10 @@ The session header uses a max inner width of 60 characters. Directory paths are 
 **Conditional Compilation:**
 
 ```
-session_header.rs, agent_picker.rs  -> Always included
-feedback.rs                         -> #[cfg(not(feature = "feedback"))]
-update_action.rs                    -> #[cfg(not(feature = "upstream-updates"))]
-update_prompt.rs, updates.rs        -> #[cfg(all(not(feature = "upstream-updates"), not(debug_assertions)))]
+session_header.rs, agent_picker.rs, exit_message.rs  -> Always included
+config_adapter.rs                                    -> #[cfg(feature = "nori-config")]
+update_action.rs                                     -> Always included
+update_prompt.rs, updates.rs                         -> #[cfg(not(debug_assertions))]
 ```
 
 **Onboarding Module (`onboarding/`):**

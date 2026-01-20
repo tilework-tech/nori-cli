@@ -28,7 +28,6 @@ pub enum SlashCommand {
     Logout,
     Quit,
     Exit,
-    Feedback,
     Rollout,
     TestApproval,
 }
@@ -38,7 +37,6 @@ impl SlashCommand {
     pub fn description(self) -> &'static str {
         match self {
             SlashCommand::Agent => "switch between available ACP agents",
-            SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
@@ -81,7 +79,6 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Mcp
-            | SlashCommand::Feedback
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
             SlashCommand::Rollout => true,
@@ -94,10 +91,6 @@ impl SlashCommand {
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
-            #[cfg(not(feature = "feedback"))]
-            SlashCommand::Feedback => false,
-            #[cfg(not(feature = "codex-features"))]
-            SlashCommand::Undo | SlashCommand::Compact | SlashCommand::Review => false,
             _ => true,
         }
     }
@@ -134,32 +127,6 @@ mod tests {
         assert!(
             has_logout,
             "/logout should be visible when login feature is enabled"
-        );
-    }
-
-    #[test]
-    #[cfg(not(feature = "feedback"))]
-    fn feedback_hidden_when_feedback_feature_disabled() {
-        let commands = built_in_slash_commands();
-        let has_feedback = commands
-            .iter()
-            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
-        assert!(
-            !has_feedback,
-            "/feedback should be hidden when feedback feature is disabled"
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "feedback")]
-    fn feedback_visible_when_feedback_feature_enabled() {
-        let commands = built_in_slash_commands();
-        let has_feedback = commands
-            .iter()
-            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
-        assert!(
-            has_feedback,
-            "/feedback should be visible when feedback feature is enabled"
         );
     }
 

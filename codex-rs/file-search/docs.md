@@ -8,10 +8,9 @@ The `codex-file-search` crate provides fast file search utilities for finding fi
 
 ### How it fits into the larger codebase
 
-File search is used by TUI and app-server:
+File search is used by the TUI:
 
 - **TUI** file picker uses for fuzzy file finding
-- **App-server** `fuzzy_file_search.rs` uses for IDE autocomplete
 - **Respects** gitignore patterns
 
 ### Core Implementation

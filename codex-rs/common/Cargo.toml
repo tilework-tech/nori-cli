@@ -11,8 +11,6 @@ workspace = true
 clap = { workspace = true, features = ["derive", "wrap_help"], optional = true }
 codex-app-server-protocol = { workspace = true }
 codex-core = { workspace = true }
-codex-lmstudio = { workspace = true, optional = true }
-codex-ollama = { workspace = true, optional = true }
 codex-protocol = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true, optional = true }
@@ -24,8 +22,6 @@ default = []
 cli = ["clap", "serde", "toml"]
 elapsed = []
 sandbox_summary = []
-# OSS providers (Ollama, LM Studio) for local model support
-oss-providers = ["dep:codex-ollama", "dep:codex-lmstudio"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

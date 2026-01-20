@@ -2,10 +2,6 @@ use clap::Parser;
 use codex_acp::find_nori_home;
 use codex_acp::init_rolling_file_tracing;
 use codex_arg0::arg0_dispatch_or_else;
-#[cfg(feature = "chatgpt")]
-use codex_chatgpt::apply_command::ApplyCommand;
-#[cfg(feature = "chatgpt")]
-use codex_chatgpt::apply_command::run_apply_command;
 use codex_cli::LandlockCommand;
 use codex_cli::SeatbeltCommand;
 use codex_cli::WindowsCommand;
@@ -21,11 +17,7 @@ use codex_cli::login::run_login_with_chatgpt;
 use codex_cli::login::run_login_with_device_code;
 #[cfg(feature = "login")]
 use codex_cli::login::run_logout;
-#[cfg(feature = "cloud-tasks")]
-use codex_cloud_tasks::Cli as CloudTasksCli;
 use codex_common::CliConfigOverrides;
-#[cfg(feature = "codex-features")]
-use codex_exec::Cli as ExecCli;
 use codex_execpolicy::ExecPolicyCheckCommand;
 
 use codex_tui::AppExitInfo;
@@ -35,20 +27,8 @@ use owo_colors::OwoColorize;
 use std::path::PathBuf;
 use supports_color::Stream;
 
-#[cfg(feature = "mcp-server")]
-mod mcp_cmd;
 #[cfg(not(windows))]
 mod wsl_paths;
-
-#[cfg(feature = "mcp-server")]
-use crate::mcp_cmd::McpCli;
-
-#[cfg(feature = "codex-features")]
-use codex_core::config::Config;
-#[cfg(feature = "codex-features")]
-use codex_core::config::ConfigOverrides;
-#[cfg(feature = "codex-features")]
-use codex_core::features::is_known_feature_key;
 
 /// Nori CLI
 ///
@@ -71,9 +51,6 @@ struct MultitoolCli {
     pub config_overrides: CliConfigOverrides,
 
     #[clap(flatten)]
-    pub feature_toggles: FeatureToggles,
-
-    #[clap(flatten)]
     interactive: TuiCli,
 
     #[clap(subcommand)]
@@ -82,11 +59,6 @@ struct MultitoolCli {
 
 #[derive(Debug, clap::Subcommand)]
 enum Subcommand {
-    /// Run Codex non-interactively.
-    #[cfg(feature = "codex-features")]
-    #[clap(visible_alias = "e")]
-    Exec(ExecCli),
-
     /// Manage login.
     #[cfg(feature = "login")]
     Login(LoginCommand),
@@ -94,18 +66,6 @@ enum Subcommand {
     /// Remove stored authentication credentials.
     #[cfg(feature = "login")]
     Logout(LogoutCommand),
-
-    /// [experimental] Run Codex as an MCP server and manage MCP servers.
-    #[cfg(feature = "mcp-server")]
-    Mcp(McpCli),
-
-    /// [experimental] Run the Codex MCP server (stdio transport).
-    #[cfg(feature = "mcp-server")]
-    McpServer,
-
-    /// [experimental] Run the app server or related tooling.
-    #[cfg(feature = "app-server")]
-    AppServer(AppServerCommand),
 
     /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
@@ -115,47 +75,9 @@ enum Subcommand {
     #[clap(hide = true)]
     Execpolicy(ExecpolicyCommand),
 
-    /// Apply the latest diff produced by Codex agent as a `git apply` to your local working tree.
-    #[cfg(feature = "chatgpt")]
-    #[clap(visible_alias = "a")]
-    Apply(ApplyCommand),
-
-    /// Resume a previous interactive session (picker by default; use --last to continue the most recent).
-    #[cfg(feature = "codex-features")]
-    Resume(ResumeCommand),
-
-    /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
-    #[cfg(feature = "cloud-tasks")]
-    #[clap(name = "cloud", alias = "cloud-tasks")]
-    Cloud(CloudTasksCli),
-
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
     StdioToUds(StdioToUdsCommand),
-
-    /// Inspect feature flags.
-    #[cfg(feature = "codex-features")]
-    Features(FeaturesCli),
-}
-
-#[cfg(feature = "codex-features")]
-#[derive(Debug, Parser)]
-struct ResumeCommand {
-    /// Conversation/session id (UUID). When provided, resumes this session.
-    /// If omitted, use --last to pick the most recent recorded session.
-    #[arg(value_name = "SESSION_ID")]
-    session_id: Option<String>,
-
-    /// Continue the most recent session without showing the picker.
-    #[arg(long = "last", default_value_t = false, conflicts_with = "session_id")]
-    last: bool,
-
-    /// Show all sessions (disables cwd filtering and shows CWD column).
-    #[arg(long = "all", default_value_t = false)]
-    all: bool,
-
-    #[clap(flatten)]
-    config_overrides: TuiCli,
 }
 
 #[derive(Debug, Parser)]
@@ -241,44 +163,6 @@ struct LogoutCommand {
     config_overrides: CliConfigOverrides,
 }
 
-#[cfg(feature = "app-server")]
-#[derive(Debug, Parser)]
-struct AppServerCommand {
-    /// Omit to run the app server; specify a subcommand for tooling.
-    #[command(subcommand)]
-    subcommand: Option<AppServerSubcommand>,
-}
-
-#[cfg(feature = "app-server")]
-#[derive(Debug, clap::Subcommand)]
-enum AppServerSubcommand {
-    /// [experimental] Generate TypeScript bindings for the app server protocol.
-    GenerateTs(GenerateTsCommand),
-
-    /// [experimental] Generate JSON Schema for the app server protocol.
-    GenerateJsonSchema(GenerateJsonSchemaCommand),
-}
-
-#[cfg(feature = "app-server")]
-#[derive(Debug, clap::Args)]
-struct GenerateTsCommand {
-    /// Output directory where .ts files will be written
-    #[arg(short = 'o', long = "out", value_name = "DIR")]
-    out_dir: PathBuf,
-
-    /// Optional path to the Prettier executable to format generated files
-    #[arg(short = 'p', long = "prettier", value_name = "PRETTIER_BIN")]
-    prettier: Option<PathBuf>,
-}
-
-#[cfg(feature = "app-server")]
-#[derive(Debug, clap::Args)]
-struct GenerateJsonSchemaCommand {
-    /// Output directory where the schema bundle will be written
-    #[arg(short = 'o', long = "out", value_name = "DIR")]
-    out_dir: PathBuf,
-}
-
 #[derive(Debug, Parser)]
 struct StdioToUdsCommand {
     /// Path to the Unix domain socket to connect to.
@@ -359,81 +243,12 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
         anyhow::bail!("`{cmd_str}` failed with status {status}");
     }
     println!();
-    println!("🎉 Update ran successfully! Please restart Nori.");
+    println!("Update ran successfully! Please restart Nori.");
     Ok(())
 }
 
 fn run_execpolicycheck(cmd: ExecPolicyCheckCommand) -> anyhow::Result<()> {
     cmd.run()
-}
-
-#[derive(Debug, Default, Parser, Clone)]
-struct FeatureToggles {
-    /// Enable a feature (repeatable). Equivalent to `-c features.<name>=true`.
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "enable", value_name = "FEATURE", action = clap::ArgAction::Append, global = true)]
-    enable: Vec<String>,
-
-    /// Disable a feature (repeatable). Equivalent to `-c features.<name>=false`.
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "disable", value_name = "FEATURE", action = clap::ArgAction::Append, global = true)]
-    disable: Vec<String>,
-}
-
-impl FeatureToggles {
-    #[cfg(feature = "codex-features")]
-    fn to_overrides(&self) -> anyhow::Result<Vec<String>> {
-        let mut v = Vec::new();
-        for feature in &self.enable {
-            Self::validate_feature(feature)?;
-            v.push(format!("features.{feature}=true"));
-        }
-        for feature in &self.disable {
-            Self::validate_feature(feature)?;
-            v.push(format!("features.{feature}=false"));
-        }
-        Ok(v)
-    }
-
-    #[cfg(not(feature = "codex-features"))]
-    fn to_overrides(&self) -> anyhow::Result<Vec<String>> {
-        Ok(Vec::new())
-    }
-
-    #[cfg(feature = "codex-features")]
-    fn validate_feature(feature: &str) -> anyhow::Result<()> {
-        if is_known_feature_key(feature) {
-            Ok(())
-        } else {
-            anyhow::bail!("Unknown feature flag: {feature}")
-        }
-    }
-}
-
-#[cfg(feature = "codex-features")]
-#[derive(Debug, Parser)]
-struct FeaturesCli {
-    #[command(subcommand)]
-    sub: FeaturesSubcommand,
-}
-
-#[cfg(feature = "codex-features")]
-#[derive(Debug, Parser)]
-enum FeaturesSubcommand {
-    /// List known features with their stage and effective state.
-    List,
-}
-
-#[cfg(feature = "codex-features")]
-fn stage_str(stage: codex_core::features::Stage) -> &'static str {
-    use codex_core::features::Stage;
-    match stage {
-        Stage::Experimental => "experimental",
-        Stage::Beta => "beta",
-        Stage::Stable => "stable",
-        Stage::Deprecated => "deprecated",
-        Stage::Removed => "removed",
-    }
 }
 
 /// As early as possible in the process lifecycle, apply hardening measures. We
@@ -453,8 +268,7 @@ fn main() -> anyhow::Result<()> {
 
 async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     let MultitoolCli {
-        config_overrides: mut root_config_overrides,
-        feature_toggles,
+        config_overrides: root_config_overrides,
         mut interactive,
         subcommand,
     } = MultitoolCli::parse();
@@ -488,66 +302,11 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
     }
 
-    // Fold --enable/--disable into config overrides so they flow to all subcommands.
-    let toggle_overrides = feature_toggles.to_overrides()?;
-    root_config_overrides.raw_overrides.extend(toggle_overrides);
-
     match subcommand {
         None => {
             prepend_config_flags(
                 &mut interactive.config_overrides,
                 root_config_overrides.clone(),
-            );
-            let exit_info = codex_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
-            handle_app_exit(exit_info)?;
-        }
-        #[cfg(feature = "codex-features")]
-        Some(Subcommand::Exec(mut exec_cli)) => {
-            prepend_config_flags(
-                &mut exec_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            codex_exec::run_main(exec_cli, codex_linux_sandbox_exe).await?;
-        }
-        #[cfg(feature = "mcp-server")]
-        Some(Subcommand::McpServer) => {
-            codex_mcp_server::run_main(codex_linux_sandbox_exe, root_config_overrides).await?;
-        }
-        #[cfg(feature = "mcp-server")]
-        Some(Subcommand::Mcp(mut mcp_cli)) => {
-            // Propagate any root-level config overrides (e.g. `-c key=value`).
-            prepend_config_flags(&mut mcp_cli.config_overrides, root_config_overrides.clone());
-            mcp_cli.run().await?;
-        }
-        #[cfg(feature = "app-server")]
-        Some(Subcommand::AppServer(app_server_cli)) => match app_server_cli.subcommand {
-            None => {
-                codex_app_server::run_main(codex_linux_sandbox_exe, root_config_overrides).await?;
-            }
-            Some(AppServerSubcommand::GenerateTs(gen_cli)) => {
-                codex_app_server_protocol::generate_ts(
-                    &gen_cli.out_dir,
-                    gen_cli.prettier.as_deref(),
-                )?;
-            }
-            Some(AppServerSubcommand::GenerateJsonSchema(gen_cli)) => {
-                codex_app_server_protocol::generate_json(&gen_cli.out_dir)?;
-            }
-        },
-        #[cfg(feature = "codex-features")]
-        Some(Subcommand::Resume(ResumeCommand {
-            session_id,
-            last,
-            all,
-            config_overrides,
-        })) => {
-            interactive = finalize_resume_interactive(
-                interactive,
-                root_config_overrides.clone(),
-                session_id,
-                last,
-                all,
-                config_overrides,
             );
             let exit_info = codex_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
@@ -592,14 +351,6 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             );
             run_logout(logout_cli.config_overrides).await;
         }
-        #[cfg(feature = "cloud-tasks")]
-        Some(Subcommand::Cloud(mut cloud_cli)) => {
-            prepend_config_flags(
-                &mut cloud_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            codex_cloud_tasks::run_main(cloud_cli, codex_linux_sandbox_exe).await?;
-        }
         Some(Subcommand::Sandbox(sandbox_args)) => match sandbox_args.cmd {
             SandboxCommand::Macos(mut seatbelt_cli) => {
                 prepend_config_flags(
@@ -638,50 +389,11 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         Some(Subcommand::Execpolicy(ExecpolicyCommand { sub })) => match sub {
             ExecpolicySubcommand::Check(cmd) => run_execpolicycheck(cmd)?,
         },
-        #[cfg(feature = "chatgpt")]
-        Some(Subcommand::Apply(mut apply_cli)) => {
-            prepend_config_flags(
-                &mut apply_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            run_apply_command(apply_cli, None).await?;
-        }
         Some(Subcommand::StdioToUds(cmd)) => {
             let socket_path = cmd.socket_path;
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
         }
-        #[cfg(feature = "codex-features")]
-        Some(Subcommand::Features(FeaturesCli { sub })) => match sub {
-            FeaturesSubcommand::List => {
-                // Respect root-level `-c` overrides plus top-level flags like `--profile`.
-                let mut cli_kv_overrides = root_config_overrides
-                    .parse_overrides()
-                    .map_err(anyhow::Error::msg)?;
-
-                // Honor `--search` via the new feature toggle.
-                if interactive.web_search {
-                    cli_kv_overrides.push((
-                        "features.web_search_request".to_string(),
-                        toml::Value::Boolean(true),
-                    ));
-                }
-
-                // Thread through relevant top-level flags (at minimum, `--profile`).
-                let overrides = ConfigOverrides {
-                    config_profile: interactive.config_profile.clone(),
-                    ..Default::default()
-                };
-
-                let config = Config::load_with_cli_overrides(cli_kv_overrides, overrides).await?;
-                for def in codex_core::features::FEATURES.iter() {
-                    let name = def.key;
-                    let stage = stage_str(def.stage);
-                    let enabled = config.features.enabled(def.id);
-                    println!("{name}\t{stage}\t{enabled}");
-                }
-            }
-        },
     }
 
     Ok(())
@@ -698,120 +410,13 @@ fn prepend_config_flags(
         .splice(0..0, cli_config_overrides.raw_overrides);
 }
 
-/// Build the final `TuiCli` for a `codex resume` invocation.
-#[cfg(feature = "codex-features")]
-fn finalize_resume_interactive(
-    mut interactive: TuiCli,
-    root_config_overrides: CliConfigOverrides,
-    session_id: Option<String>,
-    last: bool,
-    show_all: bool,
-    resume_cli: TuiCli,
-) -> TuiCli {
-    // Start with the parsed interactive CLI so resume shares the same
-    // configuration surface area as `codex` without additional flags.
-    let resume_session_id = session_id;
-    interactive.resume_picker = resume_session_id.is_none() && !last;
-    interactive.resume_last = last;
-    interactive.resume_session_id = resume_session_id;
-    interactive.resume_show_all = show_all;
-
-    // Merge resume-scoped flags and overrides with highest precedence.
-    merge_resume_cli_flags(&mut interactive, resume_cli);
-
-    // Propagate any root-level config overrides (e.g. `-c key=value`).
-    prepend_config_flags(&mut interactive.config_overrides, root_config_overrides);
-
-    interactive
-}
-
-/// Merge flags provided to `codex resume` so they take precedence over any
-/// root-level flags. Only overrides fields explicitly set on the resume-scoped
-/// CLI. Also appends `-c key=value` overrides with highest precedence.
-#[cfg(feature = "codex-features")]
-fn merge_resume_cli_flags(interactive: &mut TuiCli, resume_cli: TuiCli) {
-    if let Some(model) = resume_cli.model {
-        interactive.model = Some(model);
-    }
-    if resume_cli.oss {
-        interactive.oss = true;
-    }
-    if let Some(profile) = resume_cli.config_profile {
-        interactive.config_profile = Some(profile);
-    }
-    if let Some(sandbox) = resume_cli.sandbox_mode {
-        interactive.sandbox_mode = Some(sandbox);
-    }
-    if let Some(approval) = resume_cli.approval_policy {
-        interactive.approval_policy = Some(approval);
-    }
-    if resume_cli.full_auto {
-        interactive.full_auto = true;
-    }
-    if resume_cli.dangerously_bypass_approvals_and_sandbox {
-        interactive.dangerously_bypass_approvals_and_sandbox = true;
-    }
-    if let Some(cwd) = resume_cli.cwd {
-        interactive.cwd = Some(cwd);
-    }
-    if resume_cli.web_search {
-        interactive.web_search = true;
-    }
-    if !resume_cli.images.is_empty() {
-        interactive.images = resume_cli.images;
-    }
-    if !resume_cli.add_dir.is_empty() {
-        interactive.add_dir.extend(resume_cli.add_dir);
-    }
-    if let Some(prompt) = resume_cli.prompt {
-        interactive.prompt = Some(prompt);
-    }
-
-    interactive
-        .config_overrides
-        .raw_overrides
-        .extend(resume_cli.config_overrides.raw_overrides);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "codex-features")]
-    use assert_matches::assert_matches;
     use clap::CommandFactory;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
-
-    #[cfg(feature = "codex-features")]
-    fn finalize_from_args(args: &[&str]) -> TuiCli {
-        let cli = MultitoolCli::try_parse_from(args).expect("parse");
-        let MultitoolCli {
-            interactive,
-            config_overrides: root_overrides,
-            subcommand,
-            feature_toggles: _,
-        } = cli;
-
-        let Subcommand::Resume(ResumeCommand {
-            session_id,
-            last,
-            all,
-            config_overrides: resume_cli,
-        }) = subcommand.expect("resume present")
-        else {
-            unreachable!()
-        };
-
-        finalize_resume_interactive(
-            interactive,
-            root_overrides,
-            session_id,
-            last,
-            all,
-            resume_cli,
-        )
-    }
 
     fn sample_exit_info(conversation: Option<&str>) -> AppExitInfo {
         let token_usage = TokenUsage {
@@ -859,276 +464,6 @@ mod tests {
         let lines = format_exit_messages(exit_info, true);
         assert_eq!(lines.len(), 2);
         assert!(lines[1].contains("\u{1b}[36m"));
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_model_flag_applies_when_no_root_flags() {
-        let interactive = finalize_from_args(["nori", "resume", "-m", "gpt-5.1-test"].as_ref());
-
-        assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
-        assert!(interactive.resume_picker);
-        assert!(!interactive.resume_last);
-        assert_eq!(interactive.resume_session_id, None);
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_picker_logic_none_and_not_last() {
-        let interactive = finalize_from_args(["nori", "resume"].as_ref());
-        assert!(interactive.resume_picker);
-        assert!(!interactive.resume_last);
-        assert_eq!(interactive.resume_session_id, None);
-        assert!(!interactive.resume_show_all);
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_picker_logic_last() {
-        let interactive = finalize_from_args(["nori", "resume", "--last"].as_ref());
-        assert!(!interactive.resume_picker);
-        assert!(interactive.resume_last);
-        assert_eq!(interactive.resume_session_id, None);
-        assert!(!interactive.resume_show_all);
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_picker_logic_with_session_id() {
-        let interactive = finalize_from_args(["nori", "resume", "1234"].as_ref());
-        assert!(!interactive.resume_picker);
-        assert!(!interactive.resume_last);
-        assert_eq!(interactive.resume_session_id.as_deref(), Some("1234"));
-        assert!(!interactive.resume_show_all);
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_all_flag_sets_show_all() {
-        let interactive = finalize_from_args(["nori", "resume", "--all"].as_ref());
-        assert!(interactive.resume_picker);
-        assert!(interactive.resume_show_all);
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_merges_option_flags_and_full_auto() {
-        let interactive = finalize_from_args(
-            [
-                "nori",
-                "resume",
-                "sid",
-                "--oss",
-                "--full-auto",
-                "--search",
-                "--sandbox",
-                "workspace-write",
-                "--ask-for-approval",
-                "on-request",
-                "-m",
-                "gpt-5.1-test",
-                "-p",
-                "my-profile",
-                "-C",
-                "/tmp",
-                "-i",
-                "/tmp/a.png,/tmp/b.png",
-            ]
-            .as_ref(),
-        );
-
-        assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
-        assert!(interactive.oss);
-        assert_eq!(interactive.config_profile.as_deref(), Some("my-profile"));
-        assert_matches!(
-            interactive.sandbox_mode,
-            Some(codex_common::SandboxModeCliArg::WorkspaceWrite)
-        );
-        assert_matches!(
-            interactive.approval_policy,
-            Some(codex_common::ApprovalModeCliArg::OnRequest)
-        );
-        assert!(interactive.full_auto);
-        assert_eq!(
-            interactive.cwd.as_deref(),
-            Some(std::path::Path::new("/tmp"))
-        );
-        assert!(interactive.web_search);
-        let has_a = interactive
-            .images
-            .iter()
-            .any(|p| p == std::path::Path::new("/tmp/a.png"));
-        let has_b = interactive
-            .images
-            .iter()
-            .any(|p| p == std::path::Path::new("/tmp/b.png"));
-        assert!(has_a && has_b);
-        assert!(!interactive.resume_picker);
-        assert!(!interactive.resume_last);
-        assert_eq!(interactive.resume_session_id.as_deref(), Some("sid"));
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn resume_merges_dangerously_bypass_flag() {
-        let interactive = finalize_from_args(
-            [
-                "nori",
-                "resume",
-                "--dangerously-bypass-approvals-and-sandbox",
-            ]
-            .as_ref(),
-        );
-        assert!(interactive.dangerously_bypass_approvals_and_sandbox);
-        assert!(interactive.resume_picker);
-        assert!(!interactive.resume_last);
-        assert_eq!(interactive.resume_session_id, None);
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn feature_toggles_known_features_generate_overrides() {
-        let toggles = FeatureToggles {
-            enable: vec!["web_search_request".to_string()],
-            disable: vec!["unified_exec".to_string()],
-        };
-        let overrides = toggles.to_overrides().expect("valid features");
-        assert_eq!(
-            overrides,
-            vec![
-                "features.web_search_request=true".to_string(),
-                "features.unified_exec=false".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "codex-features")]
-    fn feature_toggles_unknown_feature_errors() {
-        let toggles = FeatureToggles {
-            enable: vec!["does_not_exist".to_string()],
-            disable: Vec::new(),
-        };
-        let err = toggles
-            .to_overrides()
-            .expect_err("feature should be rejected");
-        assert_eq!(err.to_string(), "Unknown feature flag: does_not_exist");
-    }
-
-    /// When codex-features is disabled, --oss flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn oss_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--oss"]);
-        assert!(
-            result.is_err(),
-            "--oss should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// When codex-features is disabled, --local-provider flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn local_provider_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--local-provider", "ollama"]);
-        assert!(
-            result.is_err(),
-            "--local-provider should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// When codex-features is disabled, --sandbox flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn sandbox_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--sandbox", "read-only"]);
-        assert!(
-            result.is_err(),
-            "--sandbox should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// When codex-features is disabled, --ask-for-approval flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn approval_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--ask-for-approval", "on-failure"]);
-        assert!(
-            result.is_err(),
-            "--ask-for-approval should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// When codex-features is disabled, --full-auto flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn full_auto_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--full-auto"]);
-        assert!(
-            result.is_err(),
-            "--full-auto should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// The --dangerously-bypass-approvals-and-sandbox (--yolo) flag should be recognized
-    /// in all builds, regardless of whether codex-features is enabled
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn dangerous_bypass_flag_accepted_without_codex_features() {
-        let cli =
-            MultitoolCli::try_parse_from(["nori", "--dangerously-bypass-approvals-and-sandbox"])
-                .expect(
-                    "--dangerously-bypass-approvals-and-sandbox should be accepted in all builds",
-                );
-        assert!(
-            cli.interactive.dangerously_bypass_approvals_and_sandbox,
-            "--dangerously-bypass-approvals-and-sandbox should set the field to true"
-        );
-    }
-
-    /// The --yolo alias should be recognized in all builds
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn yolo_alias_accepted_without_codex_features() {
-        let cli = MultitoolCli::try_parse_from(["nori", "--yolo"])
-            .expect("--yolo should be accepted in all builds");
-        assert!(
-            cli.interactive.dangerously_bypass_approvals_and_sandbox,
-            "--yolo should set dangerously_bypass_approvals_and_sandbox to true"
-        );
-    }
-
-    /// When codex-features is disabled, --search flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn search_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--search"]);
-        assert!(
-            result.is_err(),
-            "--search should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// When codex-features is disabled, --enable flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn enable_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--enable", "web_search_request"]);
-        assert!(
-            result.is_err(),
-            "--enable should be rejected when codex-features is disabled"
-        );
-    }
-
-    /// When codex-features is disabled, --disable flag should not be recognized
-    #[test]
-    #[cfg(not(feature = "codex-features"))]
-    fn disable_flag_rejected_without_codex_features() {
-        let result = MultitoolCli::try_parse_from(["nori", "--disable", "unified_exec"]);
-        assert!(
-            result.is_err(),
-            "--disable should be rejected when codex-features is disabled"
-        );
     }
 
     /// Binary name should be "nori" in help output

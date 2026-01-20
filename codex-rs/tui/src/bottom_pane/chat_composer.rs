@@ -2475,7 +2475,7 @@ mod tests {
             false,
         );
 
-        // Use /di to match /diff (always visible), not /compact (gated by codex-features)
+        // Use /di to match /diff, not /compact
         type_chars_humanlike(&mut composer, &['/', 'd', 'i']);
 
         let (_result, _needs_redraw) =

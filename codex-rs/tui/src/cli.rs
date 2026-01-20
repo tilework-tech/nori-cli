@@ -1,7 +1,5 @@
 use clap::Parser;
 use clap::ValueHint;
-#[cfg(feature = "codex-features")]
-use codex_common::ApprovalModeCliArg;
 use codex_common::CliConfigOverrides;
 use std::path::PathBuf;
 
@@ -37,67 +35,22 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
-    /// Convenience flag to select the local open source model provider. Equivalent to -c
-    /// model_provider=oss; verifies a local LM Studio or Ollama server is running.
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "oss", default_value_t = false)]
-    pub oss: bool,
-
-    /// Specify which local provider to use (lmstudio or ollama).
-    /// If not specified with --oss, will use config default or show selection.
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "local-provider")]
-    pub oss_provider: Option<String>,
-
     /// Configuration profile from config.toml to specify default options.
     #[arg(long = "profile", short = 'p')]
     pub config_profile: Option<String>,
 
-    /// Select the sandbox policy to use when executing model-generated shell
-    /// commands.
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "sandbox", short = 's')]
-    pub sandbox_mode: Option<codex_common::SandboxModeCliArg>,
-
-    /// Configure when the model requires human approval before executing a command.
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "ask-for-approval", short = 'a')]
-    pub approval_policy: Option<ApprovalModeCliArg>,
-
-    /// Convenience alias for low-friction sandboxed automatic execution (-a on-request, --sandbox workspace-write).
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "full-auto", default_value_t = false)]
-    pub full_auto: bool,
-
     /// Skip all confirmation prompts and execute commands without sandboxing.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed.
-    #[cfg_attr(
-        feature = "codex-features",
-        arg(
-            long = "dangerously-bypass-approvals-and-sandbox",
-            alias = "yolo",
-            default_value_t = false,
-            conflicts_with_all = ["approval_policy", "full_auto"]
-        )
-    )]
-    #[cfg_attr(
-        not(feature = "codex-features"),
-        arg(
-            long = "dangerously-bypass-approvals-and-sandbox",
-            alias = "yolo",
-            default_value_t = false
-        )
+    #[arg(
+        long = "dangerously-bypass-approvals-and-sandbox",
+        alias = "yolo",
+        default_value_t = false
     )]
     pub dangerously_bypass_approvals_and_sandbox: bool,
 
     /// Tell the agent to use the specified directory as its working root.
     #[clap(long = "cd", short = 'C', value_name = "DIR")]
     pub cwd: Option<PathBuf>,
-
-    /// Enable web search (off by default). When enabled, the native Responses `web_search` tool is available to the model (no per‑call approval).
-    #[cfg(feature = "codex-features")]
-    #[arg(long = "search", default_value_t = false)]
-    pub web_search: bool,
 
     /// Additional directories that should be writable alongside the primary workspace.
     #[arg(long = "add-dir", value_name = "DIR", value_hint = ValueHint::DirPath)]
@@ -124,7 +77,6 @@ mod tests {
     use clap::Parser;
 
     /// Test that --yolo flag is recognized and sets dangerously_bypass_approvals_and_sandbox to true.
-    /// This flag should work without the codex-features feature flag.
     #[test]
     fn test_yolo_flag_is_recognized() {
         let cli = Cli::try_parse_from(["nori", "--yolo"]).expect("--yolo should be a valid flag");
