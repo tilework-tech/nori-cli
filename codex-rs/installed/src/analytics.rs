@@ -1,284 +1,143 @@
 //! Analytics event sending
 //!
 //! Provides fire-and-forget analytics event sending for install tracking.
-//!
-//! Analytics events are only sent in release builds to avoid noise from
-//! development and E2E testing.
 
-use crate::state::InstallSource;
-use crate::state::InstallState;
+use chrono::DateTime;
+use chrono::SecondsFormat;
+use chrono::Utc;
 use serde::Serialize;
-use tracing::debug;
 
-/// Event name for install/upgrade events
-pub const EVENT_PLUGIN_INSTALL_COMPLETED: &str = "plugin_install_completed";
+/// Default analytics endpoint URL
+pub const DEFAULT_ANALYTICS_URL: &str = "https://noriskillsets.dev/api/analytics/track";
 
-/// Event name for session start events
-pub const EVENT_SESSION_STARTED: &str = "nori_session_started";
+/// Environment variable to override the analytics URL
+pub const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
+
+/// Environment variable to opt out of analytics
+pub const ANALYTICS_OPT_OUT_ENV: &str = "NORI_NO_ANALYTICS";
+
+/// Analytics event types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalyticsEventType {
+    AppInstall,
+    AppUpdate,
+    SessionStart,
+    UserResurrected,
+}
+
+impl AnalyticsEventType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AnalyticsEventType::AppInstall => "app_install",
+            AnalyticsEventType::AppUpdate => "app_update",
+            AnalyticsEventType::SessionStart => "session_start",
+            AnalyticsEventType::UserResurrected => "user_resurrected",
+        }
+    }
+}
 
 /// Analytics event request payload
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TrackEventRequest {
-    /// Client identifier (always "nori-cli")
+    pub event: String,
     pub client_id: String,
-
-    /// Privacy-protecting user identifier
-    pub user_id: String,
-
-    /// Name of the event
-    pub event_name: String,
-
-    /// Event-specific parameters
-    pub event_params: serde_json::Value,
+    pub session_id: String,
+    pub timestamp: String,
+    pub properties: EventProperties,
 }
 
-/// Type of install event
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InstallEventType {
-    /// First time installation
-    FirstInstall,
-    /// Version upgrade
-    Upgrade { previous_version: String },
+#[derive(Debug, Clone, Serialize)]
+pub struct EventProperties {
+    pub version: String,
+    pub os: String,
+    pub arch: String,
+    pub node_version: String,
+    pub is_ci: bool,
 }
 
-/// Create an install/upgrade event
-pub fn create_install_event(
-    state: &InstallState,
-    event_type: InstallEventType,
-    days_since_install: i64,
+impl EventProperties {
+    pub fn new(version: &str) -> Self {
+        Self {
+            version: version.to_string(),
+            os: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+            node_version: node_version(),
+            is_ci: is_ci_env(),
+        }
+    }
+}
+
+pub fn create_event(
+    event_type: AnalyticsEventType,
+    client_id: &str,
+    session_id: &str,
+    timestamp: DateTime<Utc>,
+    properties: EventProperties,
 ) -> TrackEventRequest {
-    let (is_first_install, previous_version) = match &event_type {
-        InstallEventType::FirstInstall => (true, None),
-        InstallEventType::Upgrade { previous_version } => (false, Some(previous_version.clone())),
-    };
-
-    let mut params = serde_json::json!({
-        "tilework_user_id": state.user_id,
-        "tilework_cli_installed_version": state.installed_version,
-        "tilework_cli_install_source": install_source_to_string(state.install_source),
-        "tilework_cli_is_first_install": is_first_install,
-        "tilework_cli_days_since_install": days_since_install,
-    });
-
-    if let Some(prev) = previous_version {
-        params["tilework_cli_previous_version"] = serde_json::Value::String(prev);
-    }
-
     TrackEventRequest {
-        client_id: state.client_id.clone(),
-        user_id: state.user_id.clone(),
-        event_name: EVENT_PLUGIN_INSTALL_COMPLETED.to_string(),
-        event_params: params,
+        event: event_type.as_str().to_string(),
+        client_id: client_id.to_string(),
+        session_id: session_id.to_string(),
+        timestamp: timestamp.to_rfc3339_opts(SecondsFormat::Millis, true),
+        properties,
     }
 }
 
-/// Create a session started event
-pub fn create_session_event(state: &InstallState, days_since_install: i64) -> TrackEventRequest {
-    let params = serde_json::json!({
-        "tilework_user_id": state.user_id,
-        "tilework_cli_installed_version": state.installed_version,
-        "tilework_cli_install_source": install_source_to_string(state.install_source),
-        "tilework_cli_days_since_install": days_since_install,
-    });
-
-    TrackEventRequest {
-        client_id: state.client_id.clone(),
-        user_id: state.user_id.clone(),
-        event_name: EVENT_SESSION_STARTED.to_string(),
-        event_params: params,
-    }
-}
-
-fn install_source_to_string(source: InstallSource) -> &'static str {
-    match source {
-        InstallSource::Npm => "npm",
-        InstallSource::Bun => "bun",
-        InstallSource::Unknown => "unknown",
-    }
-}
-
-/// Send an analytics event to the backend (release builds only)
+/// Send an analytics event to the backend.
 ///
-/// This function is a no-op in debug builds to avoid noise from
-/// development and E2E testing.
-///
-/// In release builds, it sends the event via HTTP POST to the analytics
-/// endpoint. Failures are silently ignored (fire-and-forget).
-#[cfg(not(debug_assertions))]
+/// It sends the event via HTTP POST to the analytics endpoint.
+/// Failures are silently ignored (fire-and-forget).
 pub async fn send_event(event: &TrackEventRequest) {
-    /// Default analytics endpoint URL
-    const DEFAULT_ANALYTICS_URL: &str = "https://demo.tilework.tech/api/analytics/track";
-
-    /// Environment variable to override the analytics URL
-    const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
-
     let url =
         std::env::var(ANALYTICS_URL_ENV).unwrap_or_else(|_| DEFAULT_ANALYTICS_URL.to_string());
-    debug!("Sending analytics event to {}: {:?}", url, event.event_name);
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_millis(500))
         .build();
 
     let client = match client {
         Ok(c) => c,
-        Err(e) => {
-            debug!("Failed to create HTTP client for analytics: {e}");
+        Err(_) => {
             return;
         }
     };
 
-    match client.post(&url).json(event).send().await {
-        Ok(response) => {
-            let status = response.status();
-            if status.is_success() {
-                debug!("Analytics event sent successfully: {}", event.event_name);
-            } else {
-                debug!("Analytics request failed with status {status}");
-            }
-        }
-        Err(e) => {
-            debug!("Failed to send analytics event: {e}");
-        }
-    }
+    let _ = client.post(&url).json(event).send().await;
 }
 
-/// No-op analytics sending for debug builds
-#[cfg(debug_assertions)]
-pub async fn send_event(event: &TrackEventRequest) {
-    debug!(
-        "Analytics event skipped (debug build): {}",
-        event.event_name
-    );
-    let _ = event; // Suppress unused warning
+fn node_version() -> String {
+    std::env::var("NORI_NODE_VERSION")
+        .or_else(|_| std::env::var("NODE_VERSION"))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn is_ci_env() -> bool {
+    std::env::var("CI")
+        .map(|value| value != "0" && !value.is_empty())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::TimeZone;
-    use chrono::Utc;
 
-    fn create_test_state() -> InstallState {
+    #[test]
+    fn test_create_event_payload() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
-        InstallState::new_first_install(
-            "sha256:testhash".to_string(),
-            "1.0.0".to_string(),
-            InstallSource::Bun,
+        let properties = EventProperties::new("1.0.0");
+        let event = create_event(
+            AnalyticsEventType::SessionStart,
+            "c4f24cc9-acde-4d20-87e1-1d6bfa8e7a67",
+            "7b7b7d6d-5a0f-4b76-9c7c-4d7ff6f1b0b3",
             now,
-        )
-    }
-
-    #[test]
-    fn test_create_first_install_event() {
-        let state = create_test_state();
-        let event = create_install_event(&state, InstallEventType::FirstInstall, 0);
-
-        assert_eq!(event.client_id, "nori-cli");
-        assert_eq!(event.user_id, "sha256:testhash");
-        assert_eq!(event.event_name, EVENT_PLUGIN_INSTALL_COMPLETED);
-
-        let params = &event.event_params;
-        // Verify new tilework_cli_ prefixed fields
-        assert_eq!(params["tilework_user_id"], "sha256:testhash");
-        assert_eq!(params["tilework_cli_install_source"], "bun");
-        assert_eq!(params["tilework_cli_installed_version"], "1.0.0");
-        assert_eq!(params["tilework_cli_is_first_install"], true);
-        assert_eq!(params["tilework_cli_days_since_install"], 0);
-        assert!(params.get("tilework_cli_previous_version").is_none());
-
-        // Verify removed fields are NOT present
-        assert!(params.get("install_type").is_none());
-        assert!(params.get("install_source").is_none());
-        assert!(params.get("installed_version").is_none());
-        assert!(params.get("is_first_install").is_none());
-    }
-
-    #[test]
-    fn test_create_upgrade_event() {
-        let mut state = create_test_state();
-        state.installed_version = "2.0.0".to_string();
-        state.install_source = InstallSource::Npm;
-
-        let event = create_install_event(
-            &state,
-            InstallEventType::Upgrade {
-                previous_version: "1.0.0".to_string(),
-            },
-            5, // 5 days since original install
+            properties,
         );
 
-        assert_eq!(event.event_name, EVENT_PLUGIN_INSTALL_COMPLETED);
-
-        let params = &event.event_params;
-        // Verify new tilework_cli_ prefixed fields
-        assert_eq!(params["tilework_user_id"], "sha256:testhash");
-        assert_eq!(params["tilework_cli_install_source"], "npm");
-        assert_eq!(params["tilework_cli_installed_version"], "2.0.0");
-        assert_eq!(params["tilework_cli_is_first_install"], false);
-        assert_eq!(params["tilework_cli_previous_version"], "1.0.0");
-        assert_eq!(params["tilework_cli_days_since_install"], 5);
-
-        // Verify removed fields are NOT present
-        assert!(params.get("install_type").is_none());
-        assert!(params.get("install_source").is_none());
-        assert!(params.get("installed_version").is_none());
-        assert!(params.get("is_first_install").is_none());
-        assert!(params.get("previous_version").is_none());
-    }
-
-    #[test]
-    fn test_create_session_event() {
-        let state = create_test_state();
-        let event = create_session_event(&state, 5);
-
-        assert_eq!(event.client_id, "nori-cli");
-        assert_eq!(event.user_id, "sha256:testhash");
-        assert_eq!(event.event_name, EVENT_SESSION_STARTED);
-
-        let params = &event.event_params;
-        // Verify new tilework_cli_ prefixed fields
-        assert_eq!(params["tilework_user_id"], "sha256:testhash");
-        assert_eq!(params["tilework_cli_installed_version"], "1.0.0");
-        assert_eq!(params["tilework_cli_install_source"], "bun");
-        assert_eq!(params["tilework_cli_days_since_install"], 5);
-
-        // Verify removed fields are NOT present
-        assert!(params.get("install_type").is_none());
-        assert!(params.get("installed_version").is_none());
-        assert!(params.get("install_source").is_none());
-        assert!(params.get("days_since_install").is_none());
-
-        // Verify is_first_install is NOT in session events
-        assert!(params.get("tilework_cli_is_first_install").is_none());
-    }
-
-    #[test]
-    fn test_event_serialization() {
-        let state = create_test_state();
-        let event = create_session_event(&state, 10);
-
-        let json = serde_json::to_string(&event).expect("serialization failed");
-
-        // Verify camelCase field names
-        assert!(json.contains("\"clientId\""));
-        assert!(json.contains("\"userId\""));
-        assert!(json.contains("\"eventName\""));
-        assert!(json.contains("\"eventParams\""));
-    }
-
-    #[test]
-    fn test_install_source_unknown() {
-        let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
-        let state = InstallState::new_first_install(
-            "sha256:test".to_string(),
-            "1.0.0".to_string(),
-            InstallSource::Unknown,
-            now,
-        );
-
-        let event = create_session_event(&state, 0);
-        assert_eq!(event.event_params["tilework_cli_install_source"], "unknown");
+        assert_eq!(event.event, "session_start");
+        assert_eq!(event.client_id, "c4f24cc9-acde-4d20-87e1-1d6bfa8e7a67");
+        assert_eq!(event.session_id, "7b7b7d6d-5a0f-4b76-9c7c-4d7ff6f1b0b3");
+        assert!(event.timestamp.contains("2025-01-15T10:30:00"));
+        assert_eq!(event.properties.version, "1.0.0");
     }
 }

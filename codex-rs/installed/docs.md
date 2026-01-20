@@ -5,14 +5,14 @@ Path: @/codex-rs/installed
 ### Overview
 
 - Tracks CLI lifecycle events (first install, version upgrades, sessions) via a persistent state file
-- Sends analytics events to the Tilework backend for usage insights
-- Generates privacy-protecting user identifiers based on hashed hostname:username
+- Sends analytics events to the Nori analytics proxy for usage insights
+- Generates privacy-protecting client identifiers derived from a salted hostname:username hash
 
 ### How it fits into the larger codebase
 
 - **Called from** `@/codex-rs/tui/src/lib.rs` via `track_launch()` at TUI startup
 - **State persistence**: Writes to `$NORI_HOME/.nori-install.json` (where `NORI_HOME` is typically `~/.nori/cli`)
-- **Analytics endpoint**: Sends events to `https://demo.tilework.tech/api/analytics/track` (configurable via `NORI_ANALYTICS_URL` env var)
+- **Analytics endpoint**: Sends events to `https://noriskillsets.dev/api/analytics/track` (configurable via `NORI_ANALYTICS_URL` env var)
 - **Install source detection**: Reads `NORI_MANAGED_BY_BUN` or `NORI_MANAGED_BY_NPM` environment variables set by the nori.js wrapper
 
 ```
@@ -34,17 +34,17 @@ Path: @/codex-rs/installed
 
 `track_launch(nori_home: &Path)` spawns a background tokio task that:
 1. Reads existing state from `.nori-install.json` (treats missing/corrupt as first install)
-2. Determines event type: `FirstInstall`, `Upgrade`, or `Session`
+2. Determines event type: `app_install`, `app_update`, `user_resurrected`, `session_start`
 3. Updates state and writes atomically (temp file + rename)
-4. Sends analytics event (no-op in debug builds)
+4. Sends analytics events with a 500ms timeout (fire-and-forget)
 
 **State Structure (`state.rs`):**
 
 | Field | Description |
 |-------|-------------|
 | `schema_version` | Forward-compatible versioning (currently 1) |
-| `client_id` | Always "nori-cli" |
-| `user_id` | Privacy hash: `sha256:<hex>` of `hostname:username` |
+| `client_id` | Deterministic UUID derived from `SHA256("nori_salt:<hostname>:<username>")` |
+| `opt_out` | Opt-out flag from config file |
 | `first_installed_at` | Immutable timestamp of first install |
 | `last_updated_at` | When version last changed |
 | `last_launched_at` | Most recent launch time |
@@ -53,23 +53,25 @@ Path: @/codex-rs/installed
 
 **Analytics Events (`analytics.rs`):**
 
-Two event types with standardized `tilework_cli_` prefixed parameters:
+Four event types with a flat payload schema:
 
 | Event | When Sent | Parameters |
 |-------|-----------|------------|
-| `plugin_install_completed` | First install or upgrade | `tilework_user_id`, `tilework_cli_installed_version`, `tilework_cli_install_source`, `tilework_cli_is_first_install`, `tilework_cli_days_since_install`, `tilework_cli_previous_version` (upgrade only) |
-| `nori_session_started` | Every launch (not first/upgrade) | `tilework_user_id`, `tilework_cli_installed_version`, `tilework_cli_install_source`, `tilework_cli_days_since_install` |
+| `app_install` | First install | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
+| `app_update` | Version upgrade | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
+| `user_resurrected` | Launch after 30+ days of inactivity | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
+| `session_start` | Every launch | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
 
 **Detection (`detection.rs`):**
 
 - `detect_install_source()`: Checks `NORI_MANAGED_BY_BUN=1` then `NORI_MANAGED_BY_NPM=1`
-- `generate_user_id()`: SHA256 hash of `{hostname}:{username}` for privacy
+- `generate_client_id()`: Deterministic UUID from `SHA256("nori_salt:<hostname>:<username>")`
 
 ### Things to Know
 
-- **Debug builds skip analytics**: `send_event()` is a no-op when `debug_assertions` is enabled, preventing noise during development and E2E testing
+- **Opt-out precedence**: `NORI_NO_ANALYTICS=1` overrides the local `opt_out` flag
 - **Atomic writes**: State file uses temp file + rename to prevent partial writes on crash
-- **User ID stability**: Once generated, the `user_id` is persisted in the state file and reused across sessions
-- **Version comparison**: Upgrade detection uses simple string equality on `installed_version` vs `CLI_VERSION` constant
+- **Client ID stability**: Once generated, the `client_id` is persisted in the state file and reused across sessions
+- **Version comparison**: Upgrade detection uses semantic versioning comparisons with a string fallback
 
 Created and maintained by Nori.
