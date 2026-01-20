@@ -163,6 +163,7 @@ mod tests {
     fn create_test_state() -> InstallState {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
         InstallState::new_first_install(
+            "550e8400-e29b-41d4-a716-446655440000".to_string(),
             "sha256:testhash".to_string(),
             "1.0.0".to_string(),
             InstallSource::Bun,
@@ -175,7 +176,7 @@ mod tests {
         let state = create_test_state();
         let event = create_install_event(&state, InstallEventType::FirstInstall, 0);
 
-        assert_eq!(event.client_id, "nori-cli");
+        assert_eq!(event.client_id, "550e8400-e29b-41d4-a716-446655440000");
         assert_eq!(event.user_id, "sha256:testhash");
         assert_eq!(event.event_name, EVENT_PLUGIN_INSTALL_COMPLETED);
 
@@ -233,7 +234,7 @@ mod tests {
         let state = create_test_state();
         let event = create_session_event(&state, 5);
 
-        assert_eq!(event.client_id, "nori-cli");
+        assert_eq!(event.client_id, "550e8400-e29b-41d4-a716-446655440000");
         assert_eq!(event.user_id, "sha256:testhash");
         assert_eq!(event.event_name, EVENT_SESSION_STARTED);
 
@@ -272,6 +273,7 @@ mod tests {
     fn test_install_source_unknown() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
         let state = InstallState::new_first_install(
+            "550e8400-e29b-41d4-a716-446655440000".to_string(),
             "sha256:test".to_string(),
             "1.0.0".to_string(),
             InstallSource::Unknown,

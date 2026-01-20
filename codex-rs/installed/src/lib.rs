@@ -28,6 +28,7 @@ pub use analytics::create_install_event;
 pub use analytics::create_session_event;
 pub use analytics::send_event;
 pub use detection::detect_install_source;
+pub use detection::generate_client_id;
 pub use detection::generate_user_id;
 pub use state::InstallSource;
 pub use state::InstallState;
@@ -76,6 +77,7 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
     let now = Utc::now();
     let current_version = CLI_VERSION;
     let install_source = detect_install_source();
+    let client_id = generate_client_id();
     let user_id = generate_user_id();
 
     // Read existing state or treat missing/corrupt file as first install
@@ -86,6 +88,7 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
             // First install
             debug!("First install detected, creating install state");
             let state = InstallState::new_first_install(
+                client_id,
                 user_id,
                 current_version.to_string(),
                 install_source,
@@ -183,7 +186,9 @@ mod tests {
         // Verify state file was created
         let state = read_install_state(temp_home.path()).expect("state should exist");
         assert_eq!(state.installed_version, CLI_VERSION);
-        assert_eq!(state.client_id, "nori-cli");
+        assert_eq!(state.schema_version, 2);
+        assert!(state.client_id.contains('-')); // UUID format
+        assert!(!state.opt_out); // Default opt-out is false
     }
 
     #[test]
@@ -212,6 +217,7 @@ mod tests {
         // Create a state file with an older version
         let now = Utc::now();
         let old_state = InstallState::new_first_install(
+            generate_client_id(),
             generate_user_id(),
             "0.0.1".to_string(), // Old version
             InstallSource::Npm,

@@ -27,6 +27,34 @@ pub fn detect_install_source() -> InstallSource {
     }
 }
 
+/// Generate a deterministic client ID in UUID format
+///
+/// Creates a deterministic UUID from hostname and username that:
+/// - Is stable across sessions on the same machine
+/// - Cannot be reversed to recover the original values
+/// - Matches the format used by other CLIs in the Tilework ecosystem
+///
+/// Format: `8-4-4-4-12` (e.g., "550e8400-e29b-41d4-a716-446655440000")
+pub fn generate_client_id() -> String {
+    let hostname = get_hostname();
+    let username = get_username();
+
+    // Use "nori_salt" prefix as specified
+    let input = format!("nori_salt:{hostname}:{username}");
+    let hash = Sha256::digest(input.as_bytes());
+    let hex_dig = hex::encode(hash);
+
+    // Format as UUID: 8-4-4-4-12
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex_dig[0..8],
+        &hex_dig[8..12],
+        &hex_dig[12..16],
+        &hex_dig[16..20],
+        &hex_dig[20..32]
+    )
+}
+
 /// Generate a privacy-protecting user identifier
 ///
 /// Creates a deterministic hash of hostname and username that:
@@ -229,5 +257,65 @@ mod tests {
                 None => env::remove_var(key),
             }
         }
+    }
+
+    // @current-session
+    #[test]
+    fn test_generate_client_id_format() {
+        let client_id = generate_client_id();
+
+        // Should be in UUID format: 8-4-4-4-12
+        let parts: Vec<&str> = client_id.split('-').collect();
+        assert_eq!(
+            parts.len(),
+            5,
+            "UUID should have 5 parts separated by hyphens"
+        );
+        assert_eq!(parts[0].len(), 8, "First part should be 8 chars");
+        assert_eq!(parts[1].len(), 4, "Second part should be 4 chars");
+        assert_eq!(parts[2].len(), 4, "Third part should be 4 chars");
+        assert_eq!(parts[3].len(), 4, "Fourth part should be 4 chars");
+        assert_eq!(parts[4].len(), 12, "Fifth part should be 12 chars");
+
+        // All parts should be valid hex
+        for part in parts {
+            assert!(
+                part.chars().all(|c| c.is_ascii_hexdigit()),
+                "UUID part should be valid hex: {part}"
+            );
+        }
+    }
+
+    // @current-session
+    #[test]
+    fn test_generate_client_id_deterministic() {
+        // Same machine should always produce the same client_id
+        let id1 = generate_client_id();
+        let id2 = generate_client_id();
+        assert_eq!(id1, id2, "client_id should be deterministic");
+    }
+
+    // @current-session
+    #[test]
+    fn test_generate_client_id_uses_nori_salt() {
+        // Verify the hash is computed with "nori_salt:" prefix
+        let hostname = get_hostname();
+        let username = get_username();
+        let input = format!("nori_salt:{hostname}:{username}");
+        let hash = Sha256::digest(input.as_bytes());
+        let hex_dig = hex::encode(hash);
+
+        // Format as UUID: 8-4-4-4-12
+        let expected = format!(
+            "{}-{}-{}-{}-{}",
+            &hex_dig[0..8],
+            &hex_dig[8..12],
+            &hex_dig[12..16],
+            &hex_dig[16..20],
+            &hex_dig[20..32]
+        );
+
+        let actual = generate_client_id();
+        assert_eq!(actual, expected, "client_id should match expected format");
     }
 }
