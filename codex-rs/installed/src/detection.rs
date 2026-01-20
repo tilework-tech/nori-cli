@@ -1,17 +1,20 @@
-//! Install source and user ID detection
+//! Install source and client ID detection
 //!
 //! Provides functions to detect how the CLI was installed and generate
-//! a privacy-protecting user identifier.
+//! a privacy-preserving client identifier.
 
 use crate::state::InstallSource;
 use sha2::Digest;
 use sha2::Sha256;
+use uuid::Uuid;
 
 /// Environment variable set by nori.js when installed via Bun
 const NORI_MANAGED_BY_BUN: &str = "NORI_MANAGED_BY_BUN";
 
 /// Environment variable set by nori.js when installed via npm
 const NORI_MANAGED_BY_NPM: &str = "NORI_MANAGED_BY_NPM";
+
+const CLIENT_ID_SALT: &str = "nori_salt";
 
 /// Detect the install source from environment variables
 ///
@@ -27,22 +30,26 @@ pub fn detect_install_source() -> InstallSource {
     }
 }
 
-/// Generate a privacy-protecting user identifier
+/// Generate a privacy-preserving client identifier
 ///
 /// Creates a deterministic hash of hostname and username that:
 /// - Is stable across sessions on the same machine
 /// - Cannot be reversed to recover the original values
 /// - Is suitable for analytics without PII exposure
 ///
-/// Format: `sha256:<hex_hash>`
-pub fn generate_user_id() -> String {
+/// Format: UUID string derived from SHA256("nori_salt:<hostname>:<username>")
+pub fn generate_client_id() -> String {
     let hostname = get_hostname();
     let username = get_username();
 
-    let input = format!("{hostname}:{username}");
+    let input = format!("{CLIENT_ID_SALT}:{hostname}:{username}");
     let hash = Sha256::digest(input.as_bytes());
 
-    format!("sha256:{}", hex::encode(hash))
+    let bytes: [u8; 16] = hash
+        .get(..16)
+        .and_then(|slice| <[u8; 16]>::try_from(slice).ok())
+        .unwrap_or_default();
+    Uuid::from_bytes(bytes).to_string()
 }
 
 /// Get the system hostname
@@ -181,44 +188,33 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_user_id_format() {
-        let user_id = generate_user_id();
+    fn test_generate_client_id_format() {
+        let client_id = generate_client_id();
 
-        // Should start with "sha256:"
-        assert!(
-            user_id.starts_with("sha256:"),
-            "user_id should start with 'sha256:'"
-        );
-
-        // Should have a 64-character hex hash after the prefix
-        let hash_part = user_id.strip_prefix("sha256:").expect("prefix not found");
-        assert_eq!(hash_part.len(), 64, "SHA256 hash should be 64 hex chars");
-
-        // Should be valid hex
-        assert!(
-            hash_part.chars().all(|c| c.is_ascii_hexdigit()),
-            "hash should be valid hex"
-        );
+        let parsed = Uuid::parse_str(&client_id).expect("client_id should be a UUID");
+        assert_eq!(parsed.to_string(), client_id);
     }
 
     #[test]
-    fn test_generate_user_id_deterministic() {
+    fn test_generate_client_id_deterministic() {
         // Same machine should always produce the same ID
-        let id1 = generate_user_id();
-        let id2 = generate_user_id();
-        assert_eq!(id1, id2, "user_id should be deterministic");
+        let id1 = generate_client_id();
+        let id2 = generate_client_id();
+        assert_eq!(id1, id2, "client_id should be deterministic");
     }
 
     #[test]
-    fn test_user_id_hash_computation() {
+    fn test_client_id_hash_computation() {
         // Verify the hash is computed correctly for known input
-        let input = "testhost:testuser";
+        let input = "nori_salt:testhost:testuser";
         let hash = Sha256::digest(input.as_bytes());
-        let expected = format!("sha256:{}", hex::encode(hash));
+        let bytes: [u8; 16] = hash[..16]
+            .try_into()
+            .expect("hash slice should be 16 bytes");
+        let expected = Uuid::from_bytes(bytes).to_string();
 
         // Manually check the hash matches what we'd expect
-        assert!(expected.starts_with("sha256:"));
-        assert_eq!(expected.len(), 7 + 64); // "sha256:" + 64 hex chars
+        assert!(Uuid::parse_str(&expected).is_ok());
     }
 
     fn restore_env(key: &str, value: Option<String>) {

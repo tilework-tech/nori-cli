@@ -15,9 +15,6 @@ pub const INSTALL_STATE_FILENAME: &str = ".nori-install.json";
 /// Current schema version
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// Client ID for nori-cli
-pub const CLIENT_ID: &str = "nori-cli";
-
 /// Install source detection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,11 +36,13 @@ pub struct InstallState {
     /// Schema version for forward compatibility
     pub schema_version: u32,
 
-    /// Client identifier (always "nori-cli")
+    /// Client identifier (UUID string)
+    #[serde(default)]
     pub client_id: String,
 
-    /// Privacy-protecting user identifier: sha256(hostname:username)
-    pub user_id: String,
+    /// Whether the user has opted out of analytics
+    #[serde(default)]
+    pub opt_out: bool,
 
     /// Timestamp of first launch (immutable after creation)
     pub first_installed_at: DateTime<Utc>,
@@ -64,15 +63,15 @@ pub struct InstallState {
 impl InstallState {
     /// Create a new install state for first-time installation
     pub fn new_first_install(
-        user_id: String,
+        client_id: String,
         version: String,
         source: InstallSource,
         now: DateTime<Utc>,
     ) -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            client_id: CLIENT_ID.to_string(),
-            user_id,
+            client_id,
+            opt_out: false,
             first_installed_at: now,
             last_updated_at: now,
             last_launched_at: now,
@@ -151,7 +150,7 @@ mod tests {
     fn test_install_state_serialization() {
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
         let state = InstallState::new_first_install(
-            "sha256:abc123".to_string(),
+            "7b9f7433-2b41-4d2f-94cc-2b27fe58b035".to_string(),
             "1.0.0".to_string(),
             InstallSource::Bun,
             now,
@@ -159,8 +158,8 @@ mod tests {
 
         let json = serde_json::to_string(&state).expect("serialization failed");
         assert!(json.contains("\"schema_version\":1"));
-        assert!(json.contains("\"client_id\":\"nori-cli\""));
-        assert!(json.contains("\"user_id\":\"sha256:abc123\""));
+        assert!(json.contains("\"client_id\":\"7b9f7433-2b41-4d2f-94cc-2b27fe58b035\""));
+        assert!(json.contains("\"opt_out\":false"));
         assert!(json.contains("\"installed_version\":\"1.0.0\""));
         assert!(json.contains("\"install_source\":\"bun\""));
     }
@@ -169,8 +168,8 @@ mod tests {
     fn test_install_state_deserialization() {
         let json = r#"{
             "schema_version": 1,
-            "client_id": "nori-cli",
-            "user_id": "sha256:def456",
+            "client_id": "0cd0a97c-e6f0-4f21-9ad5-1def94fa6994",
+            "opt_out": true,
             "first_installed_at": "2025-01-15T10:30:00Z",
             "last_updated_at": "2025-01-20T14:22:00Z",
             "last_launched_at": "2025-01-21T09:00:00Z",
@@ -180,8 +179,8 @@ mod tests {
 
         let state: InstallState = serde_json::from_str(json).expect("deserialization failed");
         assert_eq!(state.schema_version, 1);
-        assert_eq!(state.client_id, "nori-cli");
-        assert_eq!(state.user_id, "sha256:def456");
+        assert_eq!(state.client_id, "0cd0a97c-e6f0-4f21-9ad5-1def94fa6994");
+        assert!(state.opt_out);
         assert_eq!(state.installed_version, "1.2.3");
         assert_eq!(state.install_source, InstallSource::Npm);
     }
@@ -208,7 +207,7 @@ mod tests {
         let upgrade_time = Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
 
         let mut state = InstallState::new_first_install(
-            "sha256:test".to_string(),
+            "4cc4809a-6f7f-4e2d-98c4-c1030dc4097e".to_string(),
             "1.0.0".to_string(),
             InstallSource::Npm,
             initial,
@@ -230,7 +229,7 @@ mod tests {
         let session_time = Utc.with_ymd_and_hms(2025, 1, 10, 8, 0, 0).unwrap();
 
         let mut state = InstallState::new_first_install(
-            "sha256:test".to_string(),
+            "4cc4809a-6f7f-4e2d-98c4-c1030dc4097e".to_string(),
             "1.0.0".to_string(),
             InstallSource::Unknown,
             initial,
@@ -251,7 +250,7 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2025, 1, 6, 0, 0, 0).unwrap();
 
         let state = InstallState::new_first_install(
-            "sha256:test".to_string(),
+            "4cc4809a-6f7f-4e2d-98c4-c1030dc4097e".to_string(),
             "1.0.0".to_string(),
             InstallSource::Bun,
             install_time,
@@ -276,7 +275,7 @@ mod tests {
         let now = Utc::now();
 
         let state = InstallState::new_first_install(
-            "sha256:testuser".to_string(),
+            "4cc4809a-6f7f-4e2d-98c4-c1030dc4097e".to_string(),
             "1.0.0".to_string(),
             InstallSource::Npm,
             now,
@@ -292,7 +291,7 @@ mod tests {
 
         assert_eq!(loaded.schema_version, state.schema_version);
         assert_eq!(loaded.client_id, state.client_id);
-        assert_eq!(loaded.user_id, state.user_id);
+        assert_eq!(loaded.opt_out, state.opt_out);
         assert_eq!(loaded.installed_version, state.installed_version);
         assert_eq!(loaded.install_source, state.install_source);
     }

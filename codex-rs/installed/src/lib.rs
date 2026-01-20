@@ -22,34 +22,41 @@ mod analytics;
 mod detection;
 mod state;
 
-pub use analytics::InstallEventType;
 pub use analytics::TrackEventRequest;
-pub use analytics::create_install_event;
-pub use analytics::create_session_event;
+pub use analytics::build_properties;
+pub use analytics::create_track_event;
 pub use analytics::send_event;
 pub use detection::detect_install_source;
-pub use detection::generate_user_id;
+pub use detection::generate_client_id;
 pub use state::InstallSource;
 pub use state::InstallState;
 pub use state::read_install_state;
 pub use state::write_install_state;
 
+use chrono::Duration;
 use chrono::Utc;
+use semver::Version;
 use std::path::Path;
 use tracing::debug;
+use uuid::Uuid;
 
 /// The current CLI version from Cargo.toml
 pub const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const OPT_OUT_ENV: &str = "NORI_NO_ANALYTICS";
+const LEGACY_CLIENT_ID: &str = "nori-cli";
 
 /// Result of tracking a launch
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LaunchEvent {
     /// First time installation
-    FirstInstall,
+    AppInstall,
     /// Version was upgraded
-    Upgrade { previous_version: String },
+    AppUpdate { previous_version: String },
+    /// Resurrected user after inactivity
+    UserResurrected,
     /// Normal session start
-    Session { days_since_install: i64 },
+    SessionStart,
 }
 
 /// Track a CLI launch. Call this early in main().
@@ -58,7 +65,7 @@ pub enum LaunchEvent {
 /// 1. Read or create the install state file
 /// 2. Determine if this is a first install, upgrade, or normal session
 /// 3. Update the state file
-/// 4. Send analytics events (release builds only)
+/// 4. Send analytics events unless opted out
 ///
 /// The function returns immediately and never blocks startup.
 /// All errors are silently logged at debug level.
@@ -72,29 +79,37 @@ pub fn track_launch(nori_home: &Path) {
 }
 
 /// Internal implementation of launch tracking
-async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
+async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<Vec<LaunchEvent>> {
     let now = Utc::now();
     let current_version = CLI_VERSION;
     let install_source = detect_install_source();
-    let user_id = generate_user_id();
+    let client_id = generate_client_id();
+    let session_id = Uuid::new_v4().to_string();
 
     // Read existing state or treat missing/corrupt file as first install
     let existing_state = read_install_state(nori_home);
+    let resurrected = existing_state
+        .as_ref()
+        .is_some_and(|state| now - state.last_launched_at > Duration::days(30));
 
-    let (event, new_state) = match existing_state {
+    let (mut events, new_state) = match existing_state {
         None => {
             // First install
             debug!("First install detected, creating install state");
             let state = InstallState::new_first_install(
-                user_id,
+                client_id,
                 current_version.to_string(),
                 install_source,
                 now,
             );
-            (LaunchEvent::FirstInstall, state)
+            (vec![LaunchEvent::AppInstall], state)
         }
         Some(mut state) => {
-            if state.installed_version != current_version {
+            if state.client_id.is_empty() || state.client_id == LEGACY_CLIENT_ID {
+                state.client_id = client_id;
+            }
+
+            if is_version_upgrade(current_version, &state.installed_version) {
                 // Version upgrade
                 let previous = state.installed_version.clone();
                 debug!(
@@ -103,51 +118,46 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
                 );
                 state.record_upgrade(current_version.to_string(), install_source, now);
                 (
-                    LaunchEvent::Upgrade {
+                    vec![LaunchEvent::AppUpdate {
                         previous_version: previous,
-                    },
+                    }],
                     state,
                 )
             } else {
                 // Normal session
-                let days = state.days_since_install(now);
-                debug!("Normal session, days since install: {days}");
                 state.record_session(now);
-                (
-                    LaunchEvent::Session {
-                        days_since_install: days,
-                    },
-                    state,
-                )
+                (Vec::new(), state)
             }
         }
     };
+
+    if resurrected {
+        events.insert(0, LaunchEvent::UserResurrected);
+    }
+    events.push(LaunchEvent::SessionStart);
 
     // Write updated state
     write_install_state(nori_home, &new_state).await?;
 
     // Send analytics event (no-op in debug builds)
-    let days = new_state.days_since_install(now);
-    let analytics_event = match &event {
-        LaunchEvent::FirstInstall => {
-            create_install_event(&new_state, InstallEventType::FirstInstall, days)
+    if !is_opted_out(&new_state) {
+        let properties = build_properties(current_version);
+        for event in &events {
+            let event_name = match event {
+                LaunchEvent::AppInstall => "app_install",
+                LaunchEvent::AppUpdate { .. } => "app_update",
+                LaunchEvent::UserResurrected => "user_resurrected",
+                LaunchEvent::SessionStart => "session_start",
+            };
+            let analytics_event =
+                create_track_event(&new_state, event_name, &session_id, now, properties.clone());
+            send_event(&analytics_event).await;
         }
-        LaunchEvent::Upgrade { previous_version } => create_install_event(
-            &new_state,
-            InstallEventType::Upgrade {
-                previous_version: previous_version.clone(),
-            },
-            days,
-        ),
-        LaunchEvent::Session { days_since_install } => {
-            create_session_event(&new_state, *days_since_install)
-        }
-    };
-    send_event(&analytics_event).await;
+    }
 
-    debug!("Install tracking complete: {event:?}");
+    debug!("Install tracking complete: {events:?}");
 
-    Ok(event)
+    Ok(events)
 }
 
 /// Synchronous version of launch tracking for testing
@@ -159,12 +169,27 @@ pub fn track_launch_sync(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    rt.block_on(track_launch_inner(nori_home))
+    let events = rt.block_on(track_launch_inner(nori_home))?;
+    Ok(events.last().cloned().unwrap_or(LaunchEvent::SessionStart))
+}
+
+fn is_version_upgrade(current_version: &str, installed_version: &str) -> bool {
+    let parsed_current = Version::parse(current_version);
+    let parsed_installed = Version::parse(installed_version);
+    match (parsed_current, parsed_installed) {
+        (Ok(current), Ok(installed)) => current > installed,
+        _ => current_version != installed_version,
+    }
+}
+
+fn is_opted_out(state: &InstallState) -> bool {
+    std::env::var(OPT_OUT_ENV).as_deref() == Ok("1") || state.opt_out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use std::fs;
     use tempfile::TempDir;
 
@@ -172,18 +197,30 @@ mod tests {
         tempfile::tempdir().expect("failed to create temp dir")
     }
 
+    fn track_events(nori_home: &Path) -> Vec<LaunchEvent> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        rt.block_on(track_launch_inner(nori_home))
+            .expect("tracking failed")
+    }
+
     #[test]
     fn test_first_install() {
         let temp_home = setup_temp_home();
 
-        let event = track_launch_sync(temp_home.path()).expect("tracking failed");
+        let events = track_events(temp_home.path());
 
-        assert_eq!(event, LaunchEvent::FirstInstall);
+        assert_eq!(
+            events,
+            vec![LaunchEvent::AppInstall, LaunchEvent::SessionStart]
+        );
 
         // Verify state file was created
         let state = read_install_state(temp_home.path()).expect("state should exist");
         assert_eq!(state.installed_version, CLI_VERSION);
-        assert_eq!(state.client_id, "nori-cli");
+        assert!(!state.client_id.is_empty());
     }
 
     #[test]
@@ -191,18 +228,15 @@ mod tests {
         let temp_home = setup_temp_home();
 
         // First launch
-        let event1 = track_launch_sync(temp_home.path()).expect("first tracking failed");
-        assert_eq!(event1, LaunchEvent::FirstInstall);
+        let event1 = track_events(temp_home.path());
+        assert_eq!(
+            event1,
+            vec![LaunchEvent::AppInstall, LaunchEvent::SessionStart]
+        );
 
         // Second launch - should be a normal session
-        let event2 = track_launch_sync(temp_home.path()).expect("second tracking failed");
-
-        match event2 {
-            LaunchEvent::Session { days_since_install } => {
-                assert_eq!(days_since_install, 0); // Same day
-            }
-            _ => panic!("Expected Session event, got {event2:?}"),
-        }
+        let event2 = track_events(temp_home.path());
+        assert_eq!(event2, vec![LaunchEvent::SessionStart]);
     }
 
     #[test]
@@ -212,8 +246,8 @@ mod tests {
         // Create a state file with an older version
         let now = Utc::now();
         let old_state = InstallState::new_first_install(
-            generate_user_id(),
-            "0.0.1".to_string(), // Old version
+            generate_client_id(),
+            "0.0.0-alpha.0".to_string(), // Old version
             InstallSource::Npm,
             now,
         );
@@ -224,14 +258,16 @@ mod tests {
         fs::write(&state_path, format!("{json}\n")).expect("write failed");
 
         // Track launch with current version
-        let event = track_launch_sync(temp_home.path()).expect("tracking failed");
-
-        match event {
-            LaunchEvent::Upgrade { previous_version } => {
-                assert_eq!(previous_version, "0.0.1");
-            }
-            _ => panic!("Expected Upgrade event, got {event:?}"),
-        }
+        let events = track_events(temp_home.path());
+        assert_eq!(
+            events,
+            vec![
+                LaunchEvent::AppUpdate {
+                    previous_version: "0.0.0-alpha.0".to_string()
+                },
+                LaunchEvent::SessionStart
+            ]
+        );
 
         // Verify state was updated
         let state = read_install_state(temp_home.path()).expect("state should exist");
@@ -247,8 +283,11 @@ mod tests {
         fs::write(&state_path, "not valid json {{{").expect("write failed");
 
         // Should treat as first install
-        let event = track_launch_sync(temp_home.path()).expect("tracking failed");
-        assert_eq!(event, LaunchEvent::FirstInstall);
+        let events = track_events(temp_home.path());
+        assert_eq!(
+            events,
+            vec![LaunchEvent::AppInstall, LaunchEvent::SessionStart]
+        );
 
         // Verify state was recreated
         let state = read_install_state(temp_home.path()).expect("state should exist");
@@ -256,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn test_user_id_persisted() {
+    fn test_client_id_persisted() {
         let temp_home = setup_temp_home();
 
         // First launch
@@ -267,8 +306,8 @@ mod tests {
         track_launch_sync(temp_home.path()).expect("second tracking failed");
         let state2 = read_install_state(temp_home.path()).expect("state should exist");
 
-        // User ID should remain the same
-        assert_eq!(state1.user_id, state2.user_id);
+        // Client ID should remain the same
+        assert_eq!(state1.client_id, state2.client_id);
     }
 
     #[test]
@@ -308,6 +347,31 @@ mod tests {
     }
 
     #[test]
+    fn test_user_resurrected_event() {
+        let temp_home = setup_temp_home();
+
+        let now = Utc::now();
+        let mut state = InstallState::new_first_install(
+            generate_client_id(),
+            CLI_VERSION.to_string(),
+            InstallSource::Unknown,
+            now - Duration::days(31),
+        );
+        state.last_launched_at = now - Duration::days(31);
+        state.last_updated_at = now - Duration::days(31);
+
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        let events = track_events(temp_home.path());
+        assert_eq!(
+            events,
+            vec![LaunchEvent::UserResurrected, LaunchEvent::SessionStart]
+        );
+    }
+
+    #[test]
     fn test_creates_directory_if_missing() {
         let temp_home = setup_temp_home();
         let nested_home = temp_home.path().join("nested").join("dir");
@@ -316,8 +380,11 @@ mod tests {
         assert!(!nested_home.exists());
 
         // Track launch should create it
-        let event = track_launch_sync(&nested_home).expect("tracking failed");
-        assert_eq!(event, LaunchEvent::FirstInstall);
+        let events = track_events(&nested_home);
+        assert_eq!(
+            events,
+            vec![LaunchEvent::AppInstall, LaunchEvent::SessionStart]
+        );
 
         // Verify directory and file were created
         assert!(nested_home.exists());
