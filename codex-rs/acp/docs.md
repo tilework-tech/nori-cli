@@ -485,6 +485,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
   - `Op::AddToHistory` → Appends to history file (async background task)
   - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
   - `Op::OverrideTurnContext` → Updates approval policy via watch channel (enables `/approvals` command)
+  - `Op::Compact` → Sends summarization prompt, stores response for next user input
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching
@@ -625,6 +626,58 @@ The ACP backend supports OS-level notifications using `codex_core::UserNotifier`
 │  event              │  (if no new input)    │  (if not cancelled) │
 └─────────────────────┘                       └─────────────────────┘
 ```
+
+### Conversation Compaction
+
+The ACP backend supports the `/compact` command to summarize conversation history and reduce token usage. Unlike the core backend which has direct access to conversation history, ACP implements compaction using a **prompt-based approach**:
+
+```
+┌─────────────────────┐   SUMMARIZATION_PROMPT   ┌─────────────────────┐
+│   /compact command  │─────────────────────────►│   ACP Agent         │
+│   (Op::Compact)     │                          │   (subprocess)      │
+│                     │◄─────────────────────────│                     │
+│   Store summary in  │   Agent's summary        │   Generates summary │
+│   pending_compact   │   response               │   from its context  │
+└─────────────────────┘                          └─────────────────────┘
+            │
+            │ Next Op::UserInput
+            ▼
+┌─────────────────────┐
+│   "{SUMMARY_PREFIX} │
+│    {summary}        │
+│                     │
+│    {user_prompt}"   │
+└─────────────────────┘
+```
+
+**Implementation Details:**
+
+- `handle_compact()` sends `codex_core::compact::SUMMARIZATION_PROMPT` to the agent
+- Agent's text response is captured and stored in `pending_compact_summary: Arc<Mutex<Option<String>>>`
+- On the next `Op::UserInput`, `handle_user_input()` checks for a pending summary
+- If present, prepends `SUMMARY_PREFIX` + summary to the user's prompt
+- Emits `ContextCompacted` event to notify the TUI of successful compaction
+- Emits `Warning` event to alert users about accuracy degradation in long conversations
+
+**Event Sequence:**
+
+| Step | Event | Purpose |
+|------|-------|---------|
+| 1 | `TaskStarted` | Indicates compact operation has begun |
+| 2 | `AgentMessageDelta` | Streams agent's summary response (displayed in TUI) |
+| 3 | `ContextCompacted` | Signals successful compaction |
+| 4 | `Warning` | Advises starting new conversations when possible |
+| 5 | `TaskComplete` | Ends the compact turn |
+
+**Key Difference from Core Backend:**
+
+The core backend (`@/codex-rs/core/src/compact.rs`) directly accesses and manipulates conversation history. The ACP backend cannot access the agent's internal conversation state, so it:
+1. Asks the agent to summarize via a prompt
+2. Captures the response
+3. Injects the summary into the next user message
+
+Both backends use the same `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants from `@/codex-rs/core/src/compact.rs` for consistency.
+
 
 ### Things to Know
 
