@@ -36,7 +36,7 @@ Path: @/codex-rs/installed
 1. Reads existing state from `.nori-install.json` (treats missing/corrupt as first install)
 2. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_start`
 3. Updates state and writes atomically (temp file + rename)
-4. Sends analytics events with a 500ms timeout (fire-and-forget)
+4. Sends analytics events with a 5-second timeout (fire-and-forget, release builds only)
 
 **State Structure (`state.rs`):**
 
@@ -70,9 +70,10 @@ Three event types with a legacy payload schema:
 
 ### Things to Know
 
-- **Opt-out precedence**: `NORI_NO_ANALYTICS=1` overrides the local `opt_out` flag
+- **Opt-out precedence**: `NORI_NO_ANALYTICS=1` overrides the local `opt_out` flag; CI environments (`CI=true`) also skip analytics
+- **Debug builds**: Analytics sending is a no-op in debug builds to avoid noise during development and testing
 - **Atomic writes**: State file uses temp file + rename to prevent partial writes on crash
 - **Client ID stability**: Once generated, the `client_id` is persisted in the state file and reused across sessions
-- **Version comparison**: Upgrade detection uses semantic versioning comparisons with a string fallback
+- **Version changes**: Both upgrades and downgrades emit `nori_install_completed` events; simple string inequality comparison is used
 
 Created and maintained by Nori.

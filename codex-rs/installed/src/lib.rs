@@ -26,6 +26,7 @@ pub use analytics::ANALYTICS_OPT_OUT_ENV;
 pub use analytics::AnalyticsEventType;
 pub use analytics::TrackEventRequest;
 pub use analytics::create_event;
+pub use analytics::is_ci_env;
 pub use analytics::send_event;
 pub use detection::detect_install_source;
 pub use detection::generate_client_id;
@@ -36,7 +37,6 @@ pub use state::write_install_state;
 
 use chrono::Duration;
 use chrono::Utc;
-use semver::Version;
 use std::path::Path;
 use tracing::debug;
 use uuid::Uuid;
@@ -112,11 +112,11 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<Vec<LaunchEvent>
             let resurrected = is_resurrected(&state, now);
             let mut events = Vec::new();
 
-            if is_semver_upgrade(current_version, &state.installed_version) {
-                // Version upgrade
+            if is_version_change(current_version, &state.installed_version) {
+                // Version change (upgrade or downgrade)
                 let previous = state.installed_version.clone();
                 debug!(
-                    "Version upgrade detected: {} -> {}",
+                    "Version change detected: {} -> {}",
                     previous, current_version
                 );
                 state.record_upgrade(current_version.to_string(), install_source, now);
@@ -188,7 +188,7 @@ pub fn track_launch_sync(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
 }
 
 fn should_skip_analytics(state: &InstallState) -> bool {
-    std::env::var(ANALYTICS_OPT_OUT_ENV).as_deref() == Ok("1") || state.opt_out
+    std::env::var(ANALYTICS_OPT_OUT_ENV).as_deref() == Ok("1") || state.opt_out || is_ci_env()
 }
 
 fn is_valid_uuid(value: &str) -> bool {
@@ -199,14 +199,8 @@ fn should_rotate_client_id(value: &str) -> bool {
     value == LEGACY_CLIENT_ID || !is_valid_uuid(value)
 }
 
-fn is_semver_upgrade(current_version: &str, installed_version: &str) -> bool {
-    let Ok(current) = Version::parse(current_version) else {
-        return current_version != installed_version;
-    };
-    let Ok(installed) = Version::parse(installed_version) else {
-        return current_version != installed_version;
-    };
-    current > installed
+fn is_version_change(current_version: &str, installed_version: &str) -> bool {
+    current_version != installed_version
 }
 
 fn is_resurrected(state: &InstallState, now: chrono::DateTime<Utc>) -> bool {
@@ -218,6 +212,7 @@ fn is_resurrected(state: &InstallState, now: chrono::DateTime<Utc>) -> bool {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use semver::Version;
     use std::fs;
     use tempfile::TempDir;
 
@@ -415,6 +410,77 @@ mod tests {
         // Verify directory and file were created
         assert!(nested_home.exists());
         assert!(read_install_state(&nested_home).is_some());
+    }
+
+    #[test]
+    fn test_version_downgrade_triggers_app_update() {
+        let temp_home = setup_temp_home();
+
+        // Create a state file with a HIGHER version than CLI_VERSION (simulating downgrade)
+        let now = Utc::now();
+        let future_version = "999.0.0".to_string();
+        let old_state = InstallState::new_first_install(
+            generate_client_id(),
+            future_version.clone(),
+            InstallSource::Npm,
+            now,
+        );
+
+        // Write the state with "future" version
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&old_state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        // Track launch with current (lower) version - should detect as version change
+        let events = track_launch_events(temp_home.path());
+
+        // Should emit AppUpdate event for downgrade, just like upgrade
+        assert_eq!(
+            events,
+            vec![
+                LaunchEvent::AppUpdate {
+                    previous_version: future_version,
+                },
+                LaunchEvent::SessionStart
+            ]
+        );
+
+        // Verify state was updated to current version
+        let state = read_install_state(temp_home.path()).expect("state should exist");
+        assert_eq!(state.installed_version, CLI_VERSION);
+    }
+
+    #[test]
+    fn test_analytics_skipped_in_ci_environment() {
+        // The should_skip_analytics function should return true when CI=true
+        let state = InstallState::new_first_install(
+            generate_client_id(),
+            "1.0.0".to_string(),
+            InstallSource::Npm,
+            Utc::now(),
+        );
+
+        // Save current CI value
+        let original_ci = std::env::var("CI").ok();
+
+        // Set CI=true
+        // SAFETY: This test runs single-threaded and restores the original value
+        unsafe {
+            std::env::set_var("CI", "true");
+        }
+
+        let should_skip = should_skip_analytics(&state);
+
+        // Restore original CI value
+        // SAFETY: This test runs single-threaded and restores the original value
+        unsafe {
+            match original_ci {
+                Some(val) => std::env::set_var("CI", val),
+                None => std::env::remove_var("CI"),
+            }
+        }
+
+        assert!(should_skip, "Analytics should be skipped when CI=true");
     }
 
     #[test]

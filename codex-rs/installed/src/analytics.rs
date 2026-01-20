@@ -9,11 +9,13 @@ use chrono::SecondsFormat;
 use chrono::Utc;
 use serde::Serialize;
 
-/// Default analytics endpoint URL
-pub const DEFAULT_ANALYTICS_URL: &str = "https://noriskillsets.dev/api/analytics/track";
+/// Default analytics endpoint URL (only used in release builds)
+#[cfg(not(debug_assertions))]
+const DEFAULT_ANALYTICS_URL: &str = "https://noriskillsets.dev/api/analytics/track";
 
-/// Environment variable to override the analytics URL
-pub const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
+/// Environment variable to override the analytics URL (only used in release builds)
+#[cfg(not(debug_assertions))]
+const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
 
 /// Environment variable to opt out of analytics
 pub const ANALYTICS_OPT_OUT_ENV: &str = "NORI_NO_ANALYTICS";
@@ -102,16 +104,19 @@ fn install_source_to_string(source: InstallSource) -> &'static str {
     }
 }
 
-/// Send an analytics event to the backend.
+/// Send an analytics event to the backend (release builds only).
 ///
-/// It sends the event via HTTP POST to the analytics endpoint.
+/// In release builds, sends the event via HTTP POST to the analytics endpoint.
 /// Failures are silently ignored (fire-and-forget).
+///
+/// In debug builds, this is a no-op to avoid noise from development and testing.
+#[cfg(not(debug_assertions))]
 pub async fn send_event(event: &TrackEventRequest) {
     let url =
         std::env::var(ANALYTICS_URL_ENV).unwrap_or_else(|_| DEFAULT_ANALYTICS_URL.to_string());
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(500))
+        .timeout(std::time::Duration::from_secs(5))
         .build();
 
     let client = match client {
@@ -124,13 +129,25 @@ pub async fn send_event(event: &TrackEventRequest) {
     let _ = client.post(&url).json(event).send().await;
 }
 
+/// No-op analytics sending for debug builds.
+#[cfg(debug_assertions)]
+pub async fn send_event(event: &TrackEventRequest) {
+    tracing::debug!(
+        "Analytics event skipped (debug build): {}",
+        event.event_name
+    );
+}
+
 fn node_version() -> String {
     std::env::var("NORI_NODE_VERSION")
         .or_else(|_| std::env::var("NODE_VERSION"))
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
-fn is_ci_env() -> bool {
+/// Check if running in a CI environment.
+///
+/// Returns true if CI environment variable is set to a truthy value.
+pub fn is_ci_env() -> bool {
     std::env::var("CI")
         .map(|value| value != "0" && !value.is_empty())
         .unwrap_or(false)
