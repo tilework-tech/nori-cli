@@ -41,6 +41,8 @@ use std::path::Path;
 use tracing::debug;
 use uuid::Uuid;
 
+const LEGACY_CLIENT_ID: &str = "nori-cli";
+
 /// The current CLI version from Cargo.toml
 pub const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -103,7 +105,7 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<Vec<LaunchEvent>
             )
         }
         Some(mut state) => {
-            if !is_valid_uuid(&state.client_id) {
+            if should_rotate_client_id(&state.client_id) {
                 state.client_id = generate_client_id();
             }
 
@@ -193,6 +195,10 @@ fn is_valid_uuid(value: &str) -> bool {
     Uuid::parse_str(value).is_ok()
 }
 
+fn should_rotate_client_id(value: &str) -> bool {
+    value == LEGACY_CLIENT_ID || !is_valid_uuid(value)
+}
+
 fn is_semver_upgrade(current_version: &str, installed_version: &str) -> bool {
     let Ok(current) = Version::parse(current_version) else {
         return current_version != installed_version;
@@ -211,6 +217,7 @@ fn is_resurrected(state: &InstallState, now: chrono::DateTime<Utc>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::fs;
     use tempfile::TempDir;
 
@@ -408,5 +415,33 @@ mod tests {
         // Verify directory and file were created
         assert!(nested_home.exists());
         assert!(read_install_state(&nested_home).is_some());
+    }
+
+    #[test]
+    fn test_migrates_legacy_v1_state() {
+        let temp_home = setup_temp_home();
+
+        let legacy_json = r#"{
+            "schema_version": 1,
+            "client_id": "nori-cli",
+            "user_id": "sha256:legacy",
+            "first_installed_at": "2025-01-15T10:30:00Z",
+            "last_updated_at": "2025-01-20T14:22:00Z",
+            "last_launched_at": "2025-01-21T09:00:00Z",
+            "installed_version": "0.0.0",
+            "install_source": "npm"
+        }"#;
+
+        let state_path = temp_home.path().join(".nori-install.json");
+        fs::write(&state_path, format!("{legacy_json}\n")).expect("write failed");
+
+        track_launch_events(temp_home.path());
+
+        let state = read_install_state(temp_home.path()).expect("state should exist");
+        assert!(Uuid::parse_str(&state.client_id).is_ok());
+        assert_ne!(state.client_id, LEGACY_CLIENT_ID);
+
+        let contents = fs::read_to_string(&state_path).expect("read failed");
+        assert!(!contents.contains("\"user_id\""));
     }
 }
