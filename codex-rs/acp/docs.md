@@ -725,7 +725,7 @@ The `AcpBackend::spawn()` method provides actionable error messages when agent i
 | Category | Detection Patterns | User Message |
 |----------|-------------------|--------------|
 | `Authentication` | "auth", "-32000" (JSON-RPC code), "api key", "unauthorized", "not logged in" | "Authentication required for {provider}. {auth_hint}" |
-| `QuotaExceeded` | "quota", "rate limit", "too many requests", "429" | "Rate limit or quota exceeded. Please wait and try again." |
+| `QuotaExceeded` | "quota", "rate limit", "too many requests", "429", "out of extra usage", "usage limit", "exceeded your usage" | "Rate limit or quota exceeded for {provider}: {original_error}" |
 | `ExecutableNotFound` | "not found", "no such file", "command not found" | "Could not find the {agent} CLI. Please install with: npm install -g {package}" |
 | `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}. Original error: {err}" |
 | `Unknown` | (fallback) | Original error message passed through |
