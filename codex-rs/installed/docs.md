@@ -34,7 +34,7 @@ Path: @/codex-rs/installed
 
 `track_launch(nori_home: &Path)` spawns a background tokio task that:
 1. Reads existing state from `.nori-install.json` (treats missing/corrupt as first install)
-2. Determines event type: `app_install`, `app_update`, `user_resurrected`, `session_start`
+2. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_start`
 3. Updates state and writes atomically (temp file + rename)
 4. Sends analytics events with a 500ms timeout (fire-and-forget)
 
@@ -53,14 +53,15 @@ Path: @/codex-rs/installed
 
 **Analytics Events (`analytics.rs`):**
 
-Four event types with a flat payload schema:
+Three event types with a legacy payload schema:
 
 | Event | When Sent | Parameters |
 |-------|-----------|------------|
-| `app_install` | First install | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
-| `app_update` | Version upgrade | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
-| `user_resurrected` | Launch after 30+ days of inactivity | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
-| `session_start` | Every launch | `event`, `client_id`, `session_id`, `timestamp`, `properties` |
+| `nori_install_completed` | First install or upgrade | `client_id`, `user_id`, `event_name`, `event_params` |
+| `nori_user_resurrected` | Launch after 30+ days of inactivity | `client_id`, `user_id`, `event_name`, `event_params` |
+| `nori_session_start` | Every launch | `client_id`, `user_id`, `event_name`, `event_params` |
+
+`event_params` contains `tilework_cli_`-prefixed metadata (install source, version, days since install, session/timestamp, platform, node version, CI flag, executable name), plus `previous_version` for `nori_install_completed` upgrades.
 
 **Detection (`detection.rs`):**
 

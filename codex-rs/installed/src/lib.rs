@@ -24,7 +24,6 @@ mod state;
 
 pub use analytics::ANALYTICS_OPT_OUT_ENV;
 pub use analytics::AnalyticsEventType;
-pub use analytics::EventProperties;
 pub use analytics::TrackEventRequest;
 pub use analytics::create_event;
 pub use analytics::send_event;
@@ -142,21 +141,27 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<Vec<LaunchEvent>
 
     // Send analytics events (fire-and-forget)
     if !should_skip_analytics(&new_state) {
-        let properties = EventProperties::new(current_version);
+        let days_since_install = new_state.days_since_install(now);
         for event in &events {
-            let event_type = match event {
-                LaunchEvent::AppInstall => AnalyticsEventType::AppInstall,
-                LaunchEvent::AppUpdate { .. } => AnalyticsEventType::AppUpdate,
-                LaunchEvent::SessionStart => AnalyticsEventType::SessionStart,
-                LaunchEvent::UserResurrected => AnalyticsEventType::UserResurrected,
+            let (event_type, is_first_install, previous_version) = match event {
+                LaunchEvent::AppInstall => (AnalyticsEventType::InstallCompleted, true, None),
+                LaunchEvent::AppUpdate { previous_version } => (
+                    AnalyticsEventType::InstallCompleted,
+                    false,
+                    Some(previous_version.clone()),
+                ),
+                LaunchEvent::SessionStart => (AnalyticsEventType::SessionStart, false, None),
+                LaunchEvent::UserResurrected => (AnalyticsEventType::UserResurrected, false, None),
             };
 
             let analytics_event = create_event(
                 event_type,
-                &new_state.client_id,
+                &new_state,
                 &session_id,
                 now,
-                properties.clone(),
+                days_since_install,
+                is_first_install,
+                previous_version,
             );
             send_event(&analytics_event).await;
         }

@@ -4065,6 +4065,7 @@ dependencies = [
  "chrono",
  "codex-acp",
  "libc",
+ "pretty_assertions",
  "reqwest",
  "semver",
  "serde",
