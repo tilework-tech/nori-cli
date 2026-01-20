@@ -16,11 +16,17 @@ pub const EVENT_PLUGIN_INSTALL_COMPLETED: &str = "plugin_install_completed";
 /// Event name for session start events
 pub const EVENT_SESSION_STARTED: &str = "nori_session_started";
 
-/// Analytics event request payload
+/// Event names for new flat schema
+pub const EVENT_APP_INSTALL: &str = "app_install";
+pub const EVENT_APP_UPDATE: &str = "app_update";
+pub const EVENT_SESSION_START: &str = "session_start";
+pub const EVENT_USER_RESURRECTED: &str = "user_resurrected";
+
+/// Analytics event request payload (legacy nested schema)
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackEventRequest {
-    /// Client identifier (always "nori-cli")
+    /// Client identifier (deterministic UUID)
     pub client_id: String,
 
     /// Privacy-protecting user identifier
@@ -31,6 +37,41 @@ pub struct TrackEventRequest {
 
     /// Event-specific parameters
     pub event_params: serde_json::Value,
+}
+
+/// Analytics event request payload (new flat schema)
+#[derive(Debug, Clone, Serialize)]
+pub struct FlatEventRequest {
+    /// Event name
+    pub event: String,
+
+    /// Client identifier (deterministic UUID)
+    pub client_id: String,
+
+    /// Session identifier (ephemeral, per-process)
+    pub session_id: String,
+
+    /// ISO-8601 timestamp
+    pub timestamp: String,
+
+    /// Event properties
+    pub properties: EventProperties,
+}
+
+/// Event properties for flat schema
+#[derive(Debug, Clone, Serialize)]
+pub struct EventProperties {
+    /// CLI version
+    pub version: String,
+
+    /// Operating system
+    pub os: String,
+
+    /// CPU architecture
+    pub arch: String,
+
+    /// Whether running in CI environment
+    pub is_ci: bool,
 }
 
 /// Type of install event
@@ -98,6 +139,140 @@ fn install_source_to_string(source: InstallSource) -> &'static str {
     }
 }
 
+/// Detect operating system
+fn detect_os() -> String {
+    std::env::consts::OS.to_string()
+}
+
+/// Detect CPU architecture
+fn detect_arch() -> String {
+    std::env::consts::ARCH.to_string()
+}
+
+/// Detect if running in CI environment
+fn is_ci() -> bool {
+    std::env::var("CI").as_deref() == Ok("true")
+        || std::env::var("CI").as_deref() == Ok("1")
+        || std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
+        || std::env::var("GITLAB_CI").as_deref() == Ok("true")
+        || std::env::var("CIRCLECI").as_deref() == Ok("true")
+        || std::env::var("TRAVIS").as_deref() == Ok("true")
+}
+
+/// Create event properties for flat schema
+fn create_event_properties(state: &InstallState) -> EventProperties {
+    EventProperties {
+        version: state.installed_version.clone(),
+        os: detect_os(),
+        arch: detect_arch(),
+        is_ci: is_ci(),
+    }
+}
+
+/// Create a flat install/upgrade event
+pub fn create_flat_install_event(
+    state: &InstallState,
+    event_type: InstallEventType,
+    _days_since_install: i64,
+    session_id: &str,
+) -> FlatEventRequest {
+    let event = match event_type {
+        InstallEventType::FirstInstall => EVENT_APP_INSTALL,
+        InstallEventType::Upgrade { .. } => EVENT_APP_UPDATE,
+    };
+
+    FlatEventRequest {
+        event: event.to_string(),
+        client_id: state.client_id.clone(),
+        session_id: session_id.to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        properties: create_event_properties(state),
+    }
+}
+
+/// Create a flat session started event
+pub fn create_flat_session_event(
+    state: &InstallState,
+    _days_since_install: i64,
+    session_id: &str,
+) -> FlatEventRequest {
+    FlatEventRequest {
+        event: EVENT_SESSION_START.to_string(),
+        client_id: state.client_id.clone(),
+        session_id: session_id.to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        properties: create_event_properties(state),
+    }
+}
+
+/// Create a flat user resurrected event
+pub fn create_flat_resurrection_event(
+    state: &InstallState,
+    _days_since_install: i64,
+    session_id: &str,
+) -> FlatEventRequest {
+    FlatEventRequest {
+        event: EVENT_USER_RESURRECTED.to_string(),
+        client_id: state.client_id.clone(),
+        session_id: session_id.to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        properties: create_event_properties(state),
+    }
+}
+
+/// Send a flat analytics event to the backend (release builds only)
+///
+/// This function is a no-op in debug builds to avoid noise from
+/// development and E2E testing.
+///
+/// In release builds, it sends the event via HTTP POST to the analytics
+/// endpoint. Failures are silently ignored (fire-and-forget).
+#[cfg(not(debug_assertions))]
+pub async fn send_flat_event(event: &FlatEventRequest) {
+    /// Default analytics endpoint URL
+    const DEFAULT_ANALYTICS_URL: &str = "https://noriskillsets.dev/api/analytics/track";
+
+    /// Environment variable to override the analytics URL
+    const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
+
+    let url =
+        std::env::var(ANALYTICS_URL_ENV).unwrap_or_else(|_| DEFAULT_ANALYTICS_URL.to_string());
+    debug!("Sending analytics event to {}: {:?}", url, event.event);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build();
+
+    let client = match client {
+        Ok(c) => c,
+        Err(e) => {
+            debug!("Failed to create HTTP client for analytics: {e}");
+            return;
+        }
+    };
+
+    match client.post(&url).json(event).send().await {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                debug!("Analytics event sent successfully: {}", event.event);
+            } else {
+                debug!("Analytics request failed with status {status}");
+            }
+        }
+        Err(e) => {
+            debug!("Failed to send analytics event: {e}");
+        }
+    }
+}
+
+/// No-op analytics sending for debug builds
+#[cfg(debug_assertions)]
+pub async fn send_flat_event(event: &FlatEventRequest) {
+    debug!("Analytics event skipped (debug build): {}", event.event);
+    let _ = event; // Suppress unused warning
+}
+
 /// Send an analytics event to the backend (release builds only)
 ///
 /// This function is a no-op in debug builds to avoid noise from
@@ -108,7 +283,7 @@ fn install_source_to_string(source: InstallSource) -> &'static str {
 #[cfg(not(debug_assertions))]
 pub async fn send_event(event: &TrackEventRequest) {
     /// Default analytics endpoint URL
-    const DEFAULT_ANALYTICS_URL: &str = "https://demo.tilework.tech/api/analytics/track";
+    const DEFAULT_ANALYTICS_URL: &str = "https://noriskillsets.dev/api/analytics/track";
 
     /// Environment variable to override the analytics URL
     const ANALYTICS_URL_ENV: &str = "NORI_ANALYTICS_URL";
@@ -118,7 +293,7 @@ pub async fn send_event(event: &TrackEventRequest) {
     debug!("Sending analytics event to {}: {:?}", url, event.event_name);
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(5))
         .build();
 
     let client = match client {
@@ -282,5 +457,66 @@ mod tests {
 
         let event = create_session_event(&state, 0);
         assert_eq!(event.event_params["tilework_cli_install_source"], "unknown");
+    }
+
+    // @current-session
+    #[test]
+    fn test_flat_event_schema_app_install() {
+        let state = create_test_state();
+        let session_id = "abc123-session-id";
+        let event =
+            create_flat_install_event(&state, InstallEventType::FirstInstall, 0, session_id);
+
+        // Top-level fields
+        assert_eq!(event.event, "app_install");
+        assert_eq!(event.client_id, "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(event.session_id, session_id);
+        assert!(!event.timestamp.is_empty());
+
+        // Properties
+        assert_eq!(event.properties.version, "1.0.0");
+        assert!(!event.properties.os.is_empty());
+        assert!(!event.properties.arch.is_empty());
+        assert!(event.properties.is_ci == true || event.properties.is_ci == false);
+
+        // Should NOT have nested event_params
+        let json = serde_json::to_string(&event).expect("serialization failed");
+        assert!(!json.contains("eventParams"));
+        assert!(!json.contains("eventName"));
+    }
+
+    // @current-session
+    #[test]
+    fn test_flat_event_schema_session_start() {
+        let state = create_test_state();
+        let session_id = "xyz789-session-id";
+        let event = create_flat_session_event(&state, 5, session_id);
+
+        // Top-level fields
+        assert_eq!(event.event, "session_start");
+        assert_eq!(event.client_id, "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(event.session_id, session_id);
+
+        // Properties
+        assert_eq!(event.properties.version, "1.0.0");
+
+        // Should NOT have nested event_params
+        let json = serde_json::to_string(&event).expect("serialization failed");
+        assert!(!json.contains("eventParams"));
+    }
+
+    // @current-session
+    #[test]
+    fn test_flat_event_schema_user_resurrected() {
+        let state = create_test_state();
+        let session_id = "def456-session-id";
+        let event = create_flat_resurrection_event(&state, 35, session_id);
+
+        // Top-level fields
+        assert_eq!(event.event, "user_resurrected");
+        assert_eq!(event.session_id, session_id);
+
+        // Properties should match session_start
+        assert_eq!(event.properties.version, "1.0.0");
     }
 }

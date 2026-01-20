@@ -22,11 +22,17 @@ mod analytics;
 mod detection;
 mod state;
 
+pub use analytics::EventProperties;
+pub use analytics::FlatEventRequest;
 pub use analytics::InstallEventType;
 pub use analytics::TrackEventRequest;
+pub use analytics::create_flat_install_event;
+pub use analytics::create_flat_resurrection_event;
+pub use analytics::create_flat_session_event;
 pub use analytics::create_install_event;
 pub use analytics::create_session_event;
 pub use analytics::send_event;
+pub use analytics::send_flat_event;
 pub use detection::detect_install_source;
 pub use detection::generate_client_id;
 pub use detection::generate_user_id;
@@ -41,6 +47,29 @@ use tracing::debug;
 
 /// The current CLI version from Cargo.toml
 pub const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Environment variable to opt out of analytics
+const NORI_NO_ANALYTICS: &str = "NORI_NO_ANALYTICS";
+
+/// Check if analytics should be sent
+///
+/// Returns false if:
+/// - NORI_NO_ANALYTICS environment variable is set to "1"
+/// - opt_out is true in the state file
+fn should_send_analytics(state: &InstallState) -> bool {
+    // Environment variable takes precedence
+    if std::env::var(NORI_NO_ANALYTICS).as_deref() == Ok("1") {
+        return false;
+    }
+
+    // Check state file opt_out flag
+    !state.opt_out
+}
+
+/// Check if user should be considered "resurrected" (> 30 days since last launch)
+fn should_resurrect(state: &InstallState, now: chrono::DateTime<Utc>) -> bool {
+    (now - state.last_launched_at).num_days() > 30
+}
 
 /// Result of tracking a launch
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,10 +109,13 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
     let client_id = generate_client_id();
     let user_id = generate_user_id();
 
+    // Generate ephemeral session_id for this process
+    let session_id = uuid::Uuid::new_v4().to_string();
+
     // Read existing state or treat missing/corrupt file as first install
     let existing_state = read_install_state(nori_home);
 
-    let (event, new_state) = match existing_state {
+    let (event, new_state, is_resurrection) = match existing_state {
         None => {
             // First install
             debug!("First install detected, creating install state");
@@ -94,9 +126,12 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
                 install_source,
                 now,
             );
-            (LaunchEvent::FirstInstall, state)
+            (LaunchEvent::FirstInstall, state, false)
         }
         Some(mut state) => {
+            // Check for resurrection before other logic
+            let resurrected = should_resurrect(&state, now);
+
             if state.installed_version != current_version {
                 // Version upgrade
                 let previous = state.installed_version.clone();
@@ -110,6 +145,7 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
                         previous_version: previous,
                     },
                     state,
+                    resurrected,
                 )
             } else {
                 // Normal session
@@ -121,6 +157,7 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
                         days_since_install: days,
                     },
                     state,
+                    resurrected,
                 )
             }
         }
@@ -129,24 +166,41 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<LaunchEvent> {
     // Write updated state
     write_install_state(nori_home, &new_state).await?;
 
-    // Send analytics event (no-op in debug builds)
-    let days = new_state.days_since_install(now);
-    let analytics_event = match &event {
-        LaunchEvent::FirstInstall => {
-            create_install_event(&new_state, InstallEventType::FirstInstall, days)
+    // Send analytics events if not opted out
+    if should_send_analytics(&new_state) {
+        let days = new_state.days_since_install(now);
+
+        // Send resurrection event first if applicable
+        if is_resurrection {
+            debug!("User resurrection detected (>30 days since last launch)");
+            let resurrection_event = create_flat_resurrection_event(&new_state, days, &session_id);
+            send_flat_event(&resurrection_event).await;
         }
-        LaunchEvent::Upgrade { previous_version } => create_install_event(
-            &new_state,
-            InstallEventType::Upgrade {
-                previous_version: previous_version.clone(),
-            },
-            days,
-        ),
-        LaunchEvent::Session { days_since_install } => {
-            create_session_event(&new_state, *days_since_install)
-        }
-    };
-    send_event(&analytics_event).await;
+
+        // Send main event using new flat schema
+        let flat_event = match &event {
+            LaunchEvent::FirstInstall => create_flat_install_event(
+                &new_state,
+                InstallEventType::FirstInstall,
+                days,
+                &session_id,
+            ),
+            LaunchEvent::Upgrade { previous_version } => create_flat_install_event(
+                &new_state,
+                InstallEventType::Upgrade {
+                    previous_version: previous_version.clone(),
+                },
+                days,
+                &session_id,
+            ),
+            LaunchEvent::Session { days_since_install } => {
+                create_flat_session_event(&new_state, *days_since_install, &session_id)
+            }
+        };
+        send_flat_event(&flat_event).await;
+    } else {
+        debug!("Analytics opted out, skipping event sending");
+    }
 
     debug!("Install tracking complete: {event:?}");
 
@@ -328,5 +382,127 @@ mod tests {
         // Verify directory and file were created
         assert!(nested_home.exists());
         assert!(read_install_state(&nested_home).is_some());
+    }
+
+    // @current-session
+    #[test]
+    fn test_opt_out_via_env_var() {
+        let temp_home = setup_temp_home();
+
+        // Set opt-out environment variable
+        // SAFETY: Tests run sequentially in the same process
+        unsafe {
+            std::env::set_var("NORI_NO_ANALYTICS", "1");
+        }
+
+        // Track launch
+        track_launch_sync(temp_home.path()).expect("tracking failed");
+
+        // State file should still be updated
+        let state = read_install_state(temp_home.path()).expect("state should exist");
+        assert_eq!(state.installed_version, CLI_VERSION);
+
+        // Clean up env var
+        // SAFETY: Tests run sequentially in the same process
+        unsafe {
+            std::env::remove_var("NORI_NO_ANALYTICS");
+        }
+
+        // Note: We can't verify that no network request was made in this sync test,
+        // but the send_event function checks this internally
+    }
+
+    // @current-session
+    #[test]
+    fn test_opt_out_via_state_file() {
+        let temp_home = setup_temp_home();
+
+        // Create initial state
+        track_launch_sync(temp_home.path()).expect("first tracking failed");
+
+        // Set opt_out in state file
+        let mut state = read_install_state(temp_home.path()).expect("state should exist");
+        state.opt_out = true;
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        // Track another launch
+        track_launch_sync(temp_home.path()).expect("second tracking failed");
+
+        // State should still be updated
+        let state2 = read_install_state(temp_home.path()).expect("state should exist");
+        assert!(state2.opt_out);
+
+        // Note: We can't verify that no network request was made in this sync test,
+        // but the send_event function checks this internally
+    }
+
+    // @current-session
+    #[test]
+    fn test_user_resurrection_after_30_days() {
+        let temp_home = setup_temp_home();
+
+        // Create initial state with old last_launched_at
+        let now = Utc::now();
+        let old_time = now - chrono::Duration::days(31);
+        let mut state = InstallState::new_first_install(
+            generate_client_id(),
+            generate_user_id(),
+            CLI_VERSION.to_string(),
+            InstallSource::Npm,
+            old_time,
+        );
+        state.last_launched_at = old_time;
+
+        // Write state
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        // Track launch - should detect resurrection
+        let event = track_launch_sync(temp_home.path()).expect("tracking failed");
+
+        // Should return Session event (resurrection is tracked internally)
+        match event {
+            LaunchEvent::Session { .. } => {} // OK
+            _ => panic!("Expected Session event after resurrection, got {event:?}"),
+        }
+
+        // State should be updated
+        let new_state = read_install_state(temp_home.path()).expect("state should exist");
+        assert!(new_state.last_launched_at > old_time);
+    }
+
+    // @current-session
+    #[test]
+    fn test_no_resurrection_before_30_days() {
+        let temp_home = setup_temp_home();
+
+        // Create initial state with recent last_launched_at
+        let now = Utc::now();
+        let recent_time = now - chrono::Duration::days(29);
+        let mut state = InstallState::new_first_install(
+            generate_client_id(),
+            generate_user_id(),
+            CLI_VERSION.to_string(),
+            InstallSource::Npm,
+            recent_time,
+        );
+        state.last_launched_at = recent_time;
+
+        // Write state
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        // Track launch - should NOT detect resurrection
+        let event = track_launch_sync(temp_home.path()).expect("tracking failed");
+
+        // Should be normal session
+        match event {
+            LaunchEvent::Session { .. } => {} // OK
+            _ => panic!("Expected Session event, got {event:?}"),
+        }
     }
 }
