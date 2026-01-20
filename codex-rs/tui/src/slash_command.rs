@@ -96,8 +96,10 @@ impl SlashCommand {
             SlashCommand::Logout => false,
             #[cfg(not(feature = "feedback"))]
             SlashCommand::Feedback => false,
+            // Compact is always visible (works in both core and ACP backends)
+            // Undo and Review are codex-features only
             #[cfg(not(feature = "codex-features"))]
-            SlashCommand::Undo | SlashCommand::Compact | SlashCommand::Review => false,
+            SlashCommand::Undo | SlashCommand::Review => false,
             _ => true,
         }
     }
