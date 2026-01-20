@@ -72,6 +72,7 @@ pub async fn parse_codex_session(path: &std::path::Path) -> Result<TokenUsageRep
 
     let mut last_token_usage: Option<TokenUsage> = None;
     let mut model_context_window: Option<i64> = None;
+    let mut valid_lines = 0;
 
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -85,6 +86,8 @@ pub async fn parse_codex_session(path: &std::path::Path) -> Result<TokenUsageRep
                 continue;
             }
         };
+
+        valid_lines += 1;
 
         // Look for event_msg with type token_count
         if v.get("type").and_then(|t| t.as_str()) == Some("event_msg")
@@ -103,6 +106,10 @@ pub async fn parse_codex_session(path: &std::path::Path) -> Result<TokenUsageRep
                 model_context_window = mcw.as_i64();
             }
         }
+    }
+
+    if valid_lines == 0 {
+        return Err(ParseError::EmptyFile);
     }
 
     let token_usage = last_token_usage.ok_or(ParseError::EmptyFile)?;
@@ -225,6 +232,7 @@ pub async fn parse_claude_session(path: &std::path::Path) -> Result<TokenUsageRe
     let mut total_input = 0i64;
     let mut total_output = 0i64;
     let mut total_cache_read = 0i64;
+    let mut valid_lines = 0;
 
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -238,6 +246,8 @@ pub async fn parse_claude_session(path: &std::path::Path) -> Result<TokenUsageRe
                 continue;
             }
         };
+
+        valid_lines += 1;
 
         // Extract session ID from first message that has it
         if session_id.is_none()
@@ -275,6 +285,10 @@ pub async fn parse_claude_session(path: &std::path::Path) -> Result<TokenUsageRe
                 )
                 .ok_or(ParseError::TokenOverflow)?;
         }
+    }
+
+    if valid_lines == 0 {
+        return Err(ParseError::EmptyFile);
     }
 
     let session_id = session_id.ok_or(ParseError::MissingSessionId)?;

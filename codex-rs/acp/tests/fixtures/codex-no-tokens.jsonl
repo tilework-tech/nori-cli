@@ -1,0 +1,2 @@
+{"type":"event_msg","payload":{"type":"other_event","info":{"some":"data"}}}
+{"type":"event_msg","payload":{"type":"status_update","info":{"status":"running"}}}
