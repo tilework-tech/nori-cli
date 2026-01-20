@@ -27,6 +27,7 @@ use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
 use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tracing::debug;
@@ -161,7 +162,8 @@ pub struct AcpBackendConfig {
 /// - ACP `SessionUpdate` events → `codex_protocol::Event`
 pub struct AcpBackend {
     connection: Arc<AcpConnection>,
-    session_id: acp::SessionId,
+    /// Session ID is wrapped in RwLock to allow replacing it during /compact
+    session_id: Arc<RwLock<acp::SessionId>>,
     event_tx: mpsc::Sender<Event>,
     #[allow(dead_code)]
     cwd: PathBuf,
@@ -277,7 +279,7 @@ impl AcpBackend {
 
         let backend = Self {
             connection,
-            session_id,
+            session_id: Arc::new(RwLock::new(session_id)),
             event_tx: event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
@@ -346,7 +348,9 @@ impl AcpBackend {
                 self.handle_user_input(items, &id).await?;
             }
             Op::Interrupt => {
-                self.connection.cancel(&self.session_id).await?;
+                self.connection
+                    .cancel(&*self.session_id.read().await)
+                    .await?;
                 // Send TurnAborted event to notify the TUI that the turn was interrupted
                 let _ = self
                     .event_tx
@@ -374,7 +378,7 @@ impl AcpBackend {
                 // Cancel any in-progress session and send ShutdownComplete
                 // to allow the TUI to exit properly
                 debug!("Processing Op::Shutdown in ACP mode");
-                let _ = self.connection.cancel(&self.session_id).await;
+                let _ = self.connection.cancel(&*self.session_id.read().await).await;
                 let _ = self
                     .event_tx
                     .send(Event {
@@ -523,7 +527,7 @@ impl AcpBackend {
 
         // Clone what we need for the background task
         let event_tx = self.event_tx.clone();
-        let session_id = self.session_id.clone();
+        let session_id = self.session_id.read().await.clone();
         let connection = Arc::clone(&self.connection);
         let id_clone = id.to_string();
         let user_notifier = Arc::clone(&self.user_notifier);
@@ -717,8 +721,10 @@ impl AcpBackend {
 
         // Clone what we need for capturing the response
         let event_tx = self.event_tx.clone();
-        let session_id = self.session_id.clone();
+        let session_id = self.session_id.read().await.clone();
+        let session_id_lock = Arc::clone(&self.session_id);
         let connection = Arc::clone(&self.connection);
+        let cwd = self.cwd.clone();
         let id_clone = id.to_string();
         let pending_compact_summary = Arc::clone(&self.pending_compact_summary);
         let user_notifier = Arc::clone(&self.user_notifier);
@@ -802,6 +808,21 @@ impl AcpBackend {
                     })
                     .await;
             } else {
+                // Create a new session to clear the agent's conversation history.
+                // The summary we captured will be prepended to the next user prompt,
+                // giving the agent context about the previous conversation.
+                match connection.create_session(&cwd).await {
+                    Ok(new_session_id) => {
+                        debug!("Created new session after compact: {:?}", new_session_id);
+                        *session_id_lock.write().await = new_session_id;
+                    }
+                    Err(e) => {
+                        warn!("Failed to create new session after compact: {e}");
+                        // Continue anyway - summary will still be prepended but agent
+                        // will retain its full history, which is suboptimal but functional
+                    }
+                }
+
                 // Send ContextCompacted event to notify TUI
                 let _ = event_tx
                     .send(Event {
@@ -871,8 +892,10 @@ impl AcpBackend {
     }
 
     /// Get the current session ID.
-    pub fn session_id(&self) -> &acp::SessionId {
-        &self.session_id
+    ///
+    /// Note: This clones the session ID since it may be replaced during /compact.
+    pub async fn session_id(&self) -> acp::SessionId {
+        self.session_id.read().await.clone()
     }
 
     /// Get a reference to the underlying ACP connection.
@@ -896,7 +919,8 @@ impl AcpBackend {
     /// agent doesn't support model switching, or connection error).
     #[cfg(feature = "unstable")]
     pub async fn set_model(&self, model_id: &acp::ModelId) -> Result<()> {
-        self.connection.set_model(&self.session_id, model_id).await
+        let session_id = self.session_id.read().await;
+        self.connection.set_model(&session_id, model_id).await
     }
 
     /// Background task to handle approval requests from the ACP connection.
