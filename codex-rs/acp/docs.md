@@ -522,6 +522,7 @@ The `AcpBackend` provides a TUI-compatible interface that wraps `AcpConnection`:
   - `Op::AddToHistory` → Appends to history file (async background task)
   - `Op::GetHistoryEntryRequest` → Looks up history entry and sends response event
   - `Op::OverrideTurnContext` → Updates approval policy via watch channel (enables `/approvals` command)
+  - `Op::Compact` → Sends summarization prompt, stores response for next user input
   - Unsupported ops → Error event sent to TUI
 - `AcpBackend::model_state()`: Returns current model state (available models and current selection)
 - `AcpBackend::set_model()` [unstable]: Delegates to `AcpConnection::set_model()` for model switching
@@ -663,6 +664,58 @@ The ACP backend supports OS-level notifications using `codex_core::UserNotifier`
 └─────────────────────┘                       └─────────────────────┘
 ```
 
+### Conversation Compaction
+
+The ACP backend supports the `/compact` command to summarize conversation history and reduce token usage. Unlike the core backend which has direct access to conversation history, ACP implements compaction using a **prompt-based approach**:
+
+```
+┌─────────────────────┐   SUMMARIZATION_PROMPT   ┌─────────────────────┐
+│   /compact command  │─────────────────────────►│   ACP Agent         │
+│   (Op::Compact)     │                          │   (subprocess)      │
+│                     │◄─────────────────────────│                     │
+│   Store summary in  │   Agent's summary        │   Generates summary │
+│   pending_compact   │   response               │   from its context  │
+└─────────────────────┘                          └─────────────────────┘
+            │
+            │ Next Op::UserInput
+            ▼
+┌─────────────────────┐
+│   "{SUMMARY_PREFIX} │
+│    {summary}        │
+│                     │
+│    {user_prompt}"   │
+└─────────────────────┘
+```
+
+**Implementation Details:**
+
+- `handle_compact()` sends `codex_core::compact::SUMMARIZATION_PROMPT` to the agent
+- Agent's text response is captured and stored in `pending_compact_summary: Arc<Mutex<Option<String>>>`
+- On the next `Op::UserInput`, `handle_user_input()` checks for a pending summary
+- If present, prepends `SUMMARY_PREFIX` + summary to the user's prompt
+- Emits `ContextCompacted` event to notify the TUI of successful compaction
+- Emits `Warning` event to alert users about accuracy degradation in long conversations
+
+**Event Sequence:**
+
+| Step | Event | Purpose |
+|------|-------|---------|
+| 1 | `TaskStarted` | Indicates compact operation has begun |
+| 2 | `AgentMessageDelta` | Streams agent's summary response (displayed in TUI) |
+| 3 | `ContextCompacted` | Signals successful compaction |
+| 4 | `Warning` | Advises starting new conversations when possible |
+| 5 | `TaskComplete` | Ends the compact turn |
+
+**Key Difference from Core Backend:**
+
+The core backend (`@/codex-rs/core/src/compact.rs`) directly accesses and manipulates conversation history. The ACP backend cannot access the agent's internal conversation state, so it:
+1. Asks the agent to summarize via a prompt
+2. Captures the response
+3. Injects the summary into the next user message
+
+Both backends use the same `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants from `@/codex-rs/core/src/compact.rs` for consistency.
+
+
 ### Things to Know
 
 **ACP Error Categorization:**
@@ -672,7 +725,7 @@ The `AcpBackend::spawn()` method provides actionable error messages when agent i
 | Category | Detection Patterns | User Message |
 |----------|-------------------|--------------|
 | `Authentication` | "auth", "-32000" (JSON-RPC code), "api key", "unauthorized", "not logged in" | "Authentication required for {provider}. {auth_hint}" |
-| `QuotaExceeded` | "quota", "rate limit", "too many requests", "429" | "Rate limit or quota exceeded. Please wait and try again." |
+| `QuotaExceeded` | "quota", "rate limit", "too many requests", "429", "out of extra usage", "usage limit", "exceeded your usage" | "Rate limit or quota exceeded for {provider}: {original_error}" |
 | `ExecutableNotFound` | "not found", "no such file", "command not found" | "Could not find the {agent} CLI. Please install with: npm install -g {package}" |
 | `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}. Original error: {err}" |
 | `Unknown` | (fallback) | Original error message passed through |
@@ -743,6 +796,42 @@ This pairs with TUI-side tracing targets (`tui_event_flow`, `cell_flushing`, `pe
 - `ClientDelegate` maintains `HashMap<SessionId, Sender<SessionUpdate>>`
 - Updates for unregistered sessions are silently dropped
 - Uses `try_send()` (non-blocking) - full/closed channels cause update loss
+
+**LocalSet Cooperative Scheduling and Message Draining:**
+
+The ACP connection uses a single-threaded `LocalSet` runtime because `agent-client-protocol` types are `!Send`. Within this LocalSet, two tasks run cooperatively:
+- `io_task`: Reads from agent subprocess stdout and dispatches notifications via `session_notification()`
+- `run_command_loop`: Processes commands from the main thread (Prompt, Cancel, etc.)
+
+Both tasks only yield control at `.await` points. A race condition exists when the agent sends notifications followed immediately by a PromptResponse:
+
+```
+┌─────────────────────┐   notifications   ┌─────────────────────┐
+│   Agent subprocess  │──────────────────►│   io_task           │
+│                     │   PromptResponse  │   (buffered)        │
+│                     │──────────────────►│                     │
+└─────────────────────┘                   └─────────────────────┘
+                                                    │
+                                                    │ try_send() to session channel
+                                                    ▼
+┌─────────────────────┐   prompt_future   ┌─────────────────────┐
+│   run_command_loop  │◄──────────────────│   resolves          │
+│                     │   (no yield)      │                     │
+│   unregister_session│                   │   notifications     │
+│   (too early!)      │                   │   still pending     │
+└─────────────────────┘                   └─────────────────────┘
+```
+
+Without explicit yields, `run_command_loop` would call `unregister_session()` immediately after `prompt_future` resolves, removing the session from the map before `io_task` can forward late-arriving notifications. This causes message loss where text appears to "drain" only when the user types the next prompt.
+
+The fix adds a yield loop before `unregister_session()`:
+```rust
+for _ in 0..10 {
+    tokio::task::yield_now().await;
+}
+```
+
+Each `yield_now()` gives the `io_task` exactly one opportunity to process a buffered message. Ten yields provides sufficient headroom for any realistic burst of trailing notifications.
 
 **Agent Initialization:**
 

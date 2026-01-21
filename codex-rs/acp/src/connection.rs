@@ -38,6 +38,16 @@ use tracing::warn;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
+/// Number of yields to allow io_task to drain pending session notifications
+/// before unregistering the session. Empirically chosen to handle typical
+/// notification bursts from ACP agents. This is a workaround for the lack of
+/// explicit end-of-turn synchronization in the ACP protocol.
+///
+/// In practice, agents rarely send more than a few notifications between the
+/// last content chunk and the PromptResponse. Ten yields provides sufficient
+/// headroom for any realistic burst.
+const DRAIN_YIELD_COUNT: usize = 10;
+
 /// The type of approval event to send to the UI.
 ///
 /// This enum allows us to use the more appropriate approval UI for different
@@ -702,6 +712,19 @@ async fn run_command_loop(
                 // - Converting them to Codex ResponseItem format using translator functions
                 // - Writing to rollout storage (see codex-core/src/rollout.rs)
 
+                // Yield multiple times to allow the io_task to process any pending
+                // notifications that may have arrived just before the PromptResponse.
+                // The io_task runs on the same LocalSet and each yield gives the
+                // scheduler an opportunity to run other ready tasks. Without these
+                // yields, late-arriving notifications would be dropped because
+                // unregister_session removes the session from the sessions map
+                // before io_task can forward them to the update channel.
+                //
+                // See DRAIN_YIELD_COUNT for the rationale behind the chosen value.
+                for _ in 0..DRAIN_YIELD_COUNT {
+                    tokio::task::yield_now().await;
+                }
+
                 inner.client_delegate.unregister_session(&session_id);
                 let _ = response_tx.send(result);
             }
@@ -1071,8 +1094,24 @@ impl acp::Client for ClientDelegate {
     ) -> acp::Result<()> {
         let sessions = self.sessions.borrow();
         if let Some(tx) = sessions.get(&notification.session_id) {
-            // Non-blocking send - if channel is full or closed, we drop the update
-            let _ = tx.try_send(notification.update);
+            // Non-blocking send - if channel is full or closed, we log and drop the update
+            if let Err(e) = tx.try_send(notification.update) {
+                debug!(
+                    target: "acp_message_draining",
+                    session_id = %notification.session_id,
+                    error = %e,
+                    "Session notification dropped (channel full or closed)"
+                );
+            }
+        } else {
+            // This can happen if a notification arrives after prompt_future resolves
+            // but before we've yielded enough times for io_task to drain the buffer.
+            // With DRAIN_YIELD_COUNT yields, this should be rare in practice.
+            debug!(
+                target: "acp_message_draining",
+                session_id = %notification.session_id,
+                "Notification for unregistered session (late arrival)"
+            );
         }
         Ok(())
     }
