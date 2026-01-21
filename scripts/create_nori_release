@@ -69,10 +69,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         metavar="VERSION",
         help="Publish a specific version (e.g., 0.3.0 or 0.3.0-alpha.1).",
     )
+    group.add_argument(
+        "--get-latest-stable",
+        action="store_true",
+        help="Print the latest stable version from tags and exit.",
+    )
+    group.add_argument(
+        "--get-next-version",
+        action="store_true",
+        help="Print the next -next.N version and exit.",
+    )
 
     args = parser.parse_args(argv[1:])
-    if not (args.publish_alpha or args.publish_next or args.publish_release or args.version):
-        parser.error("Must specify --publish-alpha, --publish-next, --publish-release, or --version.")
+    if not (args.publish_alpha or args.publish_next or args.publish_release or args.version or args.get_latest_stable or args.get_next_version):
+        parser.error("Must specify --publish-alpha, --publish-next, --publish-release, --version, --get-latest-stable, or --get-next-version.")
     return args
 
 
@@ -80,6 +90,22 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
 
     try:
+        # Handle query-only flags first
+        if args.get_latest_stable:
+            latest = get_latest_release_version()
+            if latest is None:
+                print("0.0.0")
+            else:
+                print(latest)
+            return 0
+
+        if args.get_next_version:
+            # Simulate --publish-next to get the version
+            args.publish_next = True
+            version = determine_version(args)
+            print(version)
+            return 0
+
         if args.version:
             version = args.version.lstrip("v")
             # Validate version format
@@ -394,15 +420,59 @@ def determine_version(args: argparse.Namespace) -> str:
     return f"{alpha_prefix}1"
 
 
+def list_tags() -> list[str]:
+    """List all tags matching TAG_PREFIX, returning version strings."""
+    tags: list[str] = []
+    page = 1
+    while True:
+        try:
+            # The refs/tags endpoint returns all tag refs
+            response = run_gh_api(
+                f"/repos/{REPO}/git/refs/tags?per_page=100&page={page}"
+            )
+            if not isinstance(response, list) or not response:
+                break
+            for ref in response:
+                # ref["ref"] is like "refs/tags/nori-v0.4.1"
+                ref_name = ref.get("ref", "")
+                if ref_name.startswith(f"refs/tags/{TAG_PREFIX}"):
+                    version = ref_name[len(f"refs/tags/{TAG_PREFIX}"):]
+                    tags.append(version)
+            if len(response) < 100:
+                break
+            page += 1
+        except ReleaseError:
+            break
+    return tags
+
+
 def get_latest_release_version() -> str | None:
-    """Get the version of the latest stable release."""
-    try:
-        response = run_gh_api(f"/repos/{REPO}/releases/latest")
-        tag = response.get("tag_name")
-        return strip_tag_prefix(tag)
-    except ReleaseError:
-        # No releases yet
+    """Get the version of the latest stable release from git tags.
+
+    This uses git tags instead of GitHub Releases to be robust against
+    incomplete release workflows (where a tag exists but the GitHub Release
+    was never created due to workflow cancellation or failure).
+    """
+    tags = list_tags()
+    stable_versions: list[tuple[int, int, int]] = []
+
+    for version in tags:
+        # Skip prerelease versions (contain '-')
+        if "-" in version:
+            continue
+        try:
+            semver = parse_semver(version)
+            stable_versions.append(semver)
+        except ReleaseError:
+            # Skip malformed versions
+            continue
+
+    if not stable_versions:
         return None
+
+    # Find the highest version
+    highest = max(stable_versions)
+    return format_version(*highest)
 
 
 def list_releases() -> list[dict]:
