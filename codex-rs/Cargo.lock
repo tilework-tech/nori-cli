@@ -4064,15 +4064,17 @@ dependencies = [
  "anyhow",
  "chrono",
  "codex-acp",
- "hex",
  "libc",
+ "pretty_assertions",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "tokio",
  "tracing",
+ "uuid",
  "windows-sys 0.59.0",
 ]
 

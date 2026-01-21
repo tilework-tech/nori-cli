@@ -153,7 +153,15 @@ Use the `create_nori_release` script to create releases:
 # Create a specific version
 ./scripts/create_nori_release --version 0.3.0
 ./scripts/create_nori_release --version 0.3.0-alpha.1
+
+# Query current version info (useful for debugging)
+./scripts/create_nori_release --get-latest-stable  # prints latest stable version
+./scripts/create_nori_release --get-next-version   # prints next -next.N version
 ```
+
+**Version Detection:** The script determines versions from git tags (not GitHub
+Releases). This is robust against incomplete release workflows where a tag exists
+but the GitHub Release was never created due to workflow cancellation or failure.
 
 ### Creating Dev Snapshots (@next)
 
