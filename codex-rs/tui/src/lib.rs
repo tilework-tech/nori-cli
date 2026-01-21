@@ -652,6 +652,16 @@ async fn run_ratatui_app(
 
     let Cli { prompt, images, .. } = cli;
 
+    #[cfg(feature = "nori-config")]
+    let vertical_footer = nori::config_adapter::load_nori_config()
+        .map(|config| config.vertical_footer)
+        .unwrap_or_else(|err| {
+            tracing::warn!("Failed to load Nori config for footer layout: {err}");
+            false
+        });
+    #[cfg(not(feature = "nori-config"))]
+    let vertical_footer = false;
+
     #[cfg(feature = "feedback")]
     let app_result = App::run(
         &mut tui,
@@ -661,6 +671,7 @@ async fn run_ratatui_app(
         prompt,
         images,
         resume_selection,
+        vertical_footer,
         feedback,
     )
     .await;
@@ -673,6 +684,7 @@ async fn run_ratatui_app(
         prompt,
         images,
         resume_selection,
+        vertical_footer,
     )
     .await;
 

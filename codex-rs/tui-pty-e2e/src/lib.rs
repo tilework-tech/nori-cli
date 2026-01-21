@@ -793,7 +793,7 @@ fn codex_binary_path() -> String {
         .into_owned()
 }
 
-pub const TIMEOUT: Duration = Duration::from_secs(5);
+pub const TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
 pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
 

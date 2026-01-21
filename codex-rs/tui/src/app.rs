@@ -201,6 +201,7 @@ pub(crate) struct App {
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
+    pub(crate) vertical_footer: bool,
     pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
@@ -254,6 +255,7 @@ impl App {
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
+        vertical_footer: bool,
         #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
@@ -299,6 +301,7 @@ impl App {
                     initial_images: initial_images.clone(),
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
+                    vertical_footer,
                     #[cfg(feature = "feedback")]
                     feedback: feedback.clone(),
                     expected_model: None, // No filtering for fresh sessions
@@ -324,6 +327,7 @@ impl App {
                     initial_images: initial_images.clone(),
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
+                    vertical_footer,
                     #[cfg(feature = "feedback")]
                     feedback: feedback.clone(),
                     expected_model: None, // No filtering for resumed sessions
@@ -348,6 +352,7 @@ impl App {
             chat_widget,
             auth_manager: auth_manager.clone(),
             config,
+            vertical_footer,
             active_profile,
             file_search,
             enhanced_keys_supported,
@@ -495,6 +500,7 @@ impl App {
                     initial_images: Vec::new(),
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
+                    vertical_footer: self.vertical_footer,
                     #[cfg(feature = "feedback")]
                     feedback: self.feedback.clone(),
                     expected_model: None, // No filtering for /new command
@@ -1031,6 +1037,7 @@ impl App {
                     initial_images: image_paths,
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
+                    vertical_footer: self.vertical_footer,
                     #[cfg(feature = "feedback")]
                     feedback: self.feedback.clone(),
                     expected_model: Some(model_name.clone()),
@@ -1287,6 +1294,7 @@ mod tests {
             chat_widget,
             auth_manager,
             config,
+            vertical_footer: false,
             active_profile: None,
             file_search,
             transcript_cells: Vec::new(),
@@ -1326,6 +1334,7 @@ mod tests {
                 chat_widget,
                 auth_manager,
                 config,
+                vertical_footer: false,
                 active_profile: None,
                 file_search,
                 transcript_cells: Vec::new(),

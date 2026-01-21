@@ -321,6 +321,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) initial_images: Vec<PathBuf>,
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
+    pub(crate) vertical_footer: bool,
     #[cfg(feature = "feedback")]
     pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Expected model name for this widget. When set, events from other models
@@ -1489,6 +1490,7 @@ impl ChatWidget {
             initial_images,
             enhanced_keys_supported,
             auth_manager,
+            vertical_footer,
             #[cfg(feature = "feedback")]
             feedback,
             expected_model,
@@ -1509,6 +1511,7 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                vertical_footer,
                 model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -1579,6 +1582,7 @@ impl ChatWidget {
             initial_images,
             enhanced_keys_supported,
             auth_manager,
+            vertical_footer,
             #[cfg(feature = "feedback")]
             feedback,
             expected_model,
@@ -1601,6 +1605,7 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                vertical_footer,
                 model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),

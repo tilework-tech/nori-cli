@@ -116,6 +116,7 @@ pub(crate) struct ChatComposer {
     system_info: Option<crate::system_info::SystemInfo>,
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
+    vertical_footer: bool,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -161,6 +162,7 @@ impl ChatComposer {
             context_window_percent: None,
             system_info: None,
             approval_mode_label: None,
+            vertical_footer: false,
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -204,6 +206,10 @@ impl ChatComposer {
     /// that the composer can navigate cross-session history.
     pub(crate) fn set_history_metadata(&mut self, log_id: u64, entry_count: usize) {
         self.history.set_metadata(log_id, entry_count);
+    }
+
+    pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
+        self.vertical_footer = vertical_footer;
     }
 
     /// Integrate an asynchronous response to an on-demand history lookup. If
@@ -1404,6 +1410,7 @@ impl ChatComposer {
             esc_backtrack_hint: self.esc_backtrack_hint,
             use_shift_enter_hint: self.use_shift_enter_hint,
             is_task_running: self.is_task_running,
+            vertical_footer: self.vertical_footer,
             _context_window_percent: self.context_window_percent,
             git_branch,
             approval_mode_label: self.approval_mode_label.clone(),

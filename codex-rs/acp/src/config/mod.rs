@@ -67,6 +67,7 @@ mod tests {
         assert_eq!(config.model, "claude-code");
         assert!(config.animations);
         assert!(config.notifications);
+        assert!(!config.vertical_footer);
         assert_eq!(
             config.sandbox_mode,
             codex_protocol::config_types::SandboxMode::WorkspaceWrite
@@ -82,6 +83,7 @@ mod tests {
         assert!(config.model.is_none());
         assert!(config.sandbox_mode.is_none());
         assert!(config.approval_policy.is_none());
+        assert!(config.tui.vertical_footer.is_none());
     }
 
     #[test]
@@ -94,6 +96,7 @@ approval_policy = "always"
 [tui]
 animations = false
 notifications = false
+vertical_footer = true
 "#;
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
 
@@ -105,6 +108,7 @@ notifications = false
         assert_eq!(config.approval_policy, Some(ApprovalPolicy::Always));
         assert_eq!(config.tui.animations, Some(false));
         assert_eq!(config.tui.notifications, Some(false));
+        assert_eq!(config.tui.vertical_footer, Some(true));
     }
 
     #[test]
@@ -119,6 +123,7 @@ model = "gemini"
 
 [tui]
 animations = false
+vertical_footer = true
 "#,
         )
         .unwrap();
@@ -128,6 +133,7 @@ animations = false
         assert_eq!(config.model, "gemini");
         assert!(!config.animations);
         assert!(config.notifications); // default
+        assert!(config.vertical_footer);
     }
 
     #[test]

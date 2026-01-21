@@ -92,6 +92,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) placeholder_text: String,
     pub(crate) disable_paste_burst: bool,
     pub(crate) animations_enabled: bool,
+    pub(crate) vertical_footer: bool,
     pub(crate) model_display_name: String,
 }
 
@@ -105,6 +106,7 @@ impl BottomPane {
             placeholder_text,
             disable_paste_burst,
             animations_enabled,
+            vertical_footer,
             model_display_name,
         } = params;
         let mut composer = ChatComposer::new(
@@ -114,6 +116,7 @@ impl BottomPane {
             placeholder_text,
             disable_paste_burst,
         );
+        composer.set_vertical_footer(vertical_footer);
 
         // In debug builds, allow synchronous system info collection for E2E tests
         // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
@@ -613,6 +616,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
         pane.push_approval_request(exec_request());
@@ -635,6 +639,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
 
@@ -668,6 +673,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
 
@@ -735,6 +741,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
 
@@ -762,6 +769,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
 
@@ -793,6 +801,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
 
@@ -821,6 +830,7 @@ mod tests {
             placeholder_text: "Ask Codex to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            vertical_footer: false,
             model_display_name: String::new(),
         });
 

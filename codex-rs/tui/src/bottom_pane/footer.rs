@@ -17,6 +17,7 @@ pub(crate) struct FooterProps {
     pub(crate) esc_backtrack_hint: bool,
     pub(crate) use_shift_enter_hint: bool,
     pub(crate) is_task_running: bool,
+    pub(crate) vertical_footer: bool,
     pub(crate) _context_window_percent: Option<i64>,
     pub(crate) git_branch: Option<String>,
     /// The approval mode label to display (e.g., "Read Only", "Agent", "Full Access").
@@ -91,23 +92,38 @@ fn footer_lines(props: &FooterProps) -> Vec<Line<'static>> {
             is_task_running: props.is_task_running,
         })],
         FooterMode::ShortcutSummary => {
-            let mut line = build_footer_line(props);
-            // Only add separator if there's already content
-            if !line.spans.is_empty() {
-                line.push_span(" · ".dim());
+            let segments = footer_segments(props);
+            if props.vertical_footer {
+                let mut lines = segments;
+                lines.push(shortcuts_hint_line());
+                lines
+            } else {
+                let mut line = join_footer_segments(&segments);
+                // Only add separator if there's already content
+                if !line.spans.is_empty() {
+                    line.push_span(" · ".dim());
+                }
+                line.extend(shortcuts_hint_line().spans);
+                vec![line]
             }
-            line.extend(vec![
-                key_hint::plain(KeyCode::Char('?')).into(),
-                " for shortcuts".dim(),
-            ]);
-            vec![line]
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(ShortcutsState {
             use_shift_enter_hint: props.use_shift_enter_hint,
             esc_backtrack_hint: props.esc_backtrack_hint,
         }),
         FooterMode::EscHint => vec![esc_hint_line(props.esc_backtrack_hint)],
-        FooterMode::ContextOnly => vec![build_footer_line(props)],
+        FooterMode::ContextOnly => {
+            let segments = footer_segments(props);
+            if props.vertical_footer {
+                if segments.is_empty() {
+                    vec![Line::from("")]
+                } else {
+                    segments
+                }
+            } else {
+                vec![build_footer_line(props)]
+            }
+        }
     }
 }
 
@@ -235,62 +251,87 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
 }
 
 fn build_footer_line(props: &FooterProps) -> Line<'static> {
-    let mut spans = Vec::new();
+    join_footer_segments(&footer_segments(props))
+}
+
+fn shortcuts_hint_line() -> Line<'static> {
+    Line::from(vec![
+        key_hint::plain(KeyCode::Char('?')).into(),
+        " for shortcuts".dim(),
+    ])
+}
+
+fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
+    let mut segments = Vec::new();
 
     // Add git branch if available: "⎇ branch-name"
     // Yellow for main repo, light red (orange-ish) for worktree
     if let Some(branch) = &props.git_branch {
-        if props.is_worktree {
+        let line = if props.is_worktree {
             // Light red for worktree (distinguishable from yellow, works with ANSI)
             #[allow(clippy::disallowed_methods)]
-            spans.push(Span::from("⎇ ").light_red());
-            #[allow(clippy::disallowed_methods)]
-            spans.push(Span::from(branch.clone()).light_red());
+            Line::from(vec![
+                Span::from("⎇ ").light_red(),
+                Span::from(branch.clone()).light_red(),
+            ])
         } else {
             // Yellow for main repo
             #[allow(clippy::disallowed_methods)]
-            spans.push(Span::from("⎇ ").yellow());
-            #[allow(clippy::disallowed_methods)]
-            spans.push(Span::from(branch.clone()).yellow());
-        }
-        spans.push(Span::from(" · ").dim());
+            Line::from(vec![
+                Span::from("⎇ ").yellow(),
+                Span::from(branch.clone()).yellow(),
+            ])
+        };
+        segments.push(line);
     }
 
     // Add approval mode if available: "Approval Mode: Agent" (magenta)
     if let Some(label) = &props.approval_mode_label {
-        spans.push(Span::from("Approval Mode: ").magenta());
-        spans.push(Span::from(label.clone()).magenta());
-        spans.push(Span::from(" · ").dim());
+        segments.push(Line::from(vec![
+            Span::from("Approval Mode: ").magenta(),
+            Span::from(label.clone()).magenta(),
+        ]));
     }
 
     // Add nori profile if available: "Skillset: name" (cyan)
     if let Some(profile) = &props.nori_profile {
-        spans.push(Span::from("Skillset: ").cyan());
-        spans.push(Span::from(profile.clone()).cyan());
-        spans.push(Span::from(" · ").dim());
+        segments.push(Line::from(vec![
+            Span::from("Skillset: ").cyan(),
+            Span::from(profile.clone()).cyan(),
+        ]));
     }
 
     // Add nori version if available: "Skillsets v19.1.1" (green)
     if let Some(version) = &props.nori_version {
-        spans.push(Span::from("Skillsets v").green());
-        spans.push(Span::from(version.clone()).green());
-        spans.push(Span::from(" · ").dim());
+        segments.push(Line::from(vec![
+            Span::from("Skillsets v").green(),
+            Span::from(version.clone()).green(),
+        ]));
     }
 
     // Add git stats if available: "+10 -3" (green for added, red for removed)
-    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed) {
-        if added > 0 || removed > 0 {
-            spans.push(Span::from(format!("+{added}")).green());
-            spans.push(Span::from(" ").dim());
-            spans.push(Span::from(format!("-{removed}")).red());
-            // Don't add separator after stats - the caller will add "? for shortcuts"
-        }
-    } else if !spans.is_empty() {
-        // Remove trailing separator if no stats were added but we have other content
-        spans.pop();
+    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
+        && (added > 0 || removed > 0)
+    {
+        segments.push(Line::from(vec![
+            Span::from(format!("+{added}")).green(),
+            Span::from(" ").dim(),
+            Span::from(format!("-{removed}")).red(),
+        ]));
     }
 
-    Line::from(spans)
+    segments
+}
+
+fn join_footer_segments(segments: &[Line<'static>]) -> Line<'static> {
+    let mut line = Line::from("");
+    for (idx, segment) in segments.iter().enumerate() {
+        if idx > 0 {
+            line.push_span(" · ".dim());
+        }
+        line.extend(segment.spans.clone());
+    }
+    line
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -466,6 +507,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: None,
                 approval_mode_label: None,
@@ -484,6 +526,7 @@ mod tests {
                 esc_backtrack_hint: true,
                 use_shift_enter_hint: true,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: None,
                 approval_mode_label: None,
@@ -502,6 +545,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: None,
                 approval_mode_label: None,
@@ -520,6 +564,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: true,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: None,
                 approval_mode_label: None,
@@ -538,6 +583,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: None,
                 approval_mode_label: None,
@@ -556,6 +602,7 @@ mod tests {
                 esc_backtrack_hint: true,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: None,
                 approval_mode_label: None,
@@ -574,6 +621,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: true,
+                vertical_footer: false,
                 _context_window_percent: Some(72),
                 git_branch: None,
                 approval_mode_label: None,
@@ -595,9 +643,32 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
                 approval_mode_label: None,
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+                is_worktree: false,
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_vertical_layout() {
+        snapshot_footer(
+            "footer_shortcuts_vertical",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                vertical_footer: true,
+                _context_window_percent: Some(72),
+                git_branch: Some("feature/test".to_string()),
+                approval_mode_label: Some("Agent".to_string()),
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
                 git_lines_added: Some(10),
@@ -616,6 +687,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: Some(100),
                 git_branch: Some("main".to_string()),
                 approval_mode_label: None,
@@ -637,6 +709,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: Some(85),
                 git_branch: None,
                 approval_mode_label: None,
@@ -659,6 +732,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: Some(72),
                 git_branch: Some("feature/worktree-branch".to_string()),
                 approval_mode_label: None,
@@ -681,6 +755,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
                 approval_mode_label: Some("Agent".to_string()),
@@ -703,6 +778,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: Some("main".to_string()),
                 approval_mode_label: Some("Read Only".to_string()),
@@ -725,6 +801,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                vertical_footer: false,
                 _context_window_percent: None,
                 git_branch: Some("main".to_string()),
                 approval_mode_label: Some("Full Access".to_string()),
