@@ -34,9 +34,10 @@ Path: @/codex-rs/installed
 
 `track_launch(nori_home: &Path)` spawns a background tokio task that:
 1. Reads existing state from `.nori-install.json` (treats missing/corrupt as first install)
-2. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_start`
-3. Updates state and writes atomically (temp file + rename)
-4. Sends analytics events with a 5-second timeout (fire-and-forget, release builds only)
+2. Generates a session ID from current Unix timestamp in seconds
+3. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_start`
+4. Updates state and writes atomically (temp file + rename)
+5. Sends analytics events with a 5-second timeout (fire-and-forget, release builds only)
 
 **State Structure (`state.rs`):**
 
@@ -53,15 +54,24 @@ Path: @/codex-rs/installed
 
 **Analytics Events (`analytics.rs`):**
 
-Three event types with a legacy payload schema:
+Three event types sent via `TrackEventRequest` (snake_case JSON fields: `client_id`, `user_id`, `event_name`, `event_params`):
 
-| Event | When Sent | Parameters |
-|-------|-----------|------------|
-| `nori_install_completed` | First install or upgrade | `client_id`, `user_id`, `event_name`, `event_params` |
-| `nori_user_resurrected` | Launch after 30+ days of inactivity | `client_id`, `user_id`, `event_name`, `event_params` |
-| `nori_session_start` | Every launch | `client_id`, `user_id`, `event_name`, `event_params` |
+| Event | When Sent |
+|-------|-----------|
+| `nori_install_completed` | First install or upgrade/downgrade |
+| `nori_user_resurrected` | Launch after 30+ days of inactivity |
+| `nori_session_start` | Every launch |
 
-`event_params` contains `tilework_cli_`-prefixed metadata (install source, version, days since install, session/timestamp, platform, node version, CI flag, executable name), plus `previous_version` for `nori_install_completed` upgrades.
+**`event_params` structure:**
+
+| Field | Description |
+|-------|-------------|
+| `tilework_source` | Always `"nori-cli"` (identifies client application) |
+| `tilework_session_id` | Unix timestamp in seconds when session started |
+| `tilework_timestamp` | ISO 8601 timestamp with millisecond precision |
+| `tilework_cli_*` | CLI-specific fields (version, install source, days since install, platform, executable name) |
+
+For `nori_install_completed` events, additional fields: `tilework_cli_is_first_install` (boolean), `tilework_cli_previous_version` (for upgrades/downgrades).
 
 **Detection (`detection.rs`):**
 

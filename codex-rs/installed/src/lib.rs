@@ -84,7 +84,7 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<Vec<LaunchEvent>
     let current_version = CLI_VERSION;
     let install_source = detect_install_source();
     let client_id = generate_client_id();
-    let session_id = Uuid::new_v4().to_string();
+    let session_id = now.timestamp().to_string();
 
     // Read existing state or treat missing/corrupt file as first install
     let existing_state = read_install_state(nori_home);

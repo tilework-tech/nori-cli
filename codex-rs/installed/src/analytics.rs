@@ -42,7 +42,6 @@ impl AnalyticsEventType {
 
 /// Analytics event request payload
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TrackEventRequest {
     pub client_id: String,
     pub user_id: String,
@@ -82,17 +81,17 @@ fn base_event_params(
     days_since_install: i64,
 ) -> serde_json::Value {
     serde_json::json!({
-        "tilework_cli_user_id": state.client_id.as_str(),
+        // Required tilework_* fields (no cli_ prefix)
+        "tilework_source": "nori-cli",
+        "tilework_session_id": session_id,
+        "tilework_timestamp": timestamp.to_rfc3339_opts(SecondsFormat::Millis, true),
+        // CLI-specific fields (tilework_cli_* prefix)
         "tilework_cli_executable_name": EXECUTABLE_NAME,
         "tilework_cli_installed_version": state.installed_version.as_str(),
         "tilework_cli_install_source": install_source_to_string(state.install_source),
         "tilework_cli_days_since_install": days_since_install,
-        "tilework_cli_session_id": session_id,
-        "tilework_cli_timestamp": timestamp.to_rfc3339_opts(SecondsFormat::Millis, true),
         "tilework_cli_os": std::env::consts::OS,
         "tilework_cli_arch": std::env::consts::ARCH,
-        "tilework_cli_node_version": node_version(),
-        "tilework_cli_is_ci": is_ci_env(),
     })
 }
 
@@ -138,12 +137,6 @@ pub async fn send_event(event: &TrackEventRequest) {
     );
 }
 
-fn node_version() -> String {
-    std::env::var("NORI_NODE_VERSION")
-        .or_else(|_| std::env::var("NODE_VERSION"))
-        .unwrap_or_else(|_| "unknown".to_string())
-}
-
 /// Check if running in a CI environment.
 ///
 /// Returns true if CI environment variable is set to a truthy value.
@@ -176,7 +169,7 @@ mod tests {
         let event = create_event(
             AnalyticsEventType::InstallCompleted,
             &state,
-            "7b7b7d6d-5a0f-4b76-9c7c-4d7ff6f1b0b3",
+            "1737373800",
             now,
             0,
             true,
@@ -188,13 +181,26 @@ mod tests {
         assert_eq!(event.user_id, state.client_id);
 
         let params = &event.event_params;
-        assert_eq!(params["tilework_cli_user_id"], state.client_id);
+        // Required tilework_* fields
+        assert_eq!(params["tilework_source"], "nori-cli");
+        assert_eq!(params["tilework_session_id"], "1737373800");
+        assert!(
+            params["tilework_timestamp"]
+                .as_str()
+                .unwrap()
+                .contains("2025-01-15")
+        );
+
+        // CLI-specific fields
         assert_eq!(params["tilework_cli_install_source"], "bun");
         assert_eq!(params["tilework_cli_installed_version"], "1.0.0");
         assert_eq!(params["tilework_cli_is_first_install"], true);
         assert_eq!(params["tilework_cli_days_since_install"], 0);
         assert_eq!(params["tilework_cli_executable_name"], "nori-ai-cli");
         assert!(params.get("tilework_cli_previous_version").is_none());
+
+        // Removed fields should NOT be present
+        assert!(params.get("tilework_cli_user_id").is_none());
     }
 
     #[test]
@@ -207,7 +213,7 @@ mod tests {
         let event = create_event(
             AnalyticsEventType::InstallCompleted,
             &state,
-            "7b7b7d6d-5a0f-4b76-9c7c-4d7ff6f1b0b3",
+            "1737373800",
             now,
             5,
             false,
@@ -215,12 +221,19 @@ mod tests {
         );
 
         let params = &event.event_params;
-        assert_eq!(params["tilework_cli_user_id"], state.client_id);
+        // Required tilework_* fields
+        assert_eq!(params["tilework_source"], "nori-cli");
+        assert_eq!(params["tilework_session_id"], "1737373800");
+
+        // CLI-specific fields
         assert_eq!(params["tilework_cli_install_source"], "npm");
         assert_eq!(params["tilework_cli_installed_version"], "2.0.0");
         assert_eq!(params["tilework_cli_is_first_install"], false);
         assert_eq!(params["tilework_cli_previous_version"], "1.0.0");
         assert_eq!(params["tilework_cli_days_since_install"], 5);
+
+        // Removed fields should NOT be present
+        assert!(params.get("tilework_cli_user_id").is_none());
     }
 
     #[test]
@@ -230,7 +243,7 @@ mod tests {
         let event = create_event(
             AnalyticsEventType::SessionStart,
             &state,
-            "7b7b7d6d-5a0f-4b76-9c7c-4d7ff6f1b0b3",
+            "1737373800",
             now,
             5,
             false,
@@ -240,11 +253,185 @@ mod tests {
         assert_eq!(event.event_name, "nori_session_start");
 
         let params = &event.event_params;
-        assert_eq!(params["tilework_cli_user_id"], state.client_id);
+        // Required tilework_* fields (no cli_ prefix)
+        assert_eq!(params["tilework_source"], "nori-cli");
+        assert_eq!(params["tilework_session_id"], "1737373800");
+        assert!(
+            params["tilework_timestamp"]
+                .as_str()
+                .unwrap()
+                .contains("2025-01-20")
+        );
+
+        // CLI-specific fields
         assert_eq!(params["tilework_cli_installed_version"], "1.0.0");
         assert_eq!(params["tilework_cli_install_source"], "bun");
         assert_eq!(params["tilework_cli_days_since_install"], 5);
+        assert_eq!(params["tilework_cli_executable_name"], "nori-ai-cli");
+        assert_eq!(params["tilework_cli_os"], std::env::consts::OS);
+        assert_eq!(params["tilework_cli_arch"], std::env::consts::ARCH);
+
+        // Install-only fields should NOT be present
         assert!(params.get("tilework_cli_is_first_install").is_none());
         assert!(params.get("tilework_cli_previous_version").is_none());
+
+        // Removed fields should NOT be present
+        assert!(params.get("tilework_cli_user_id").is_none());
+        assert!(params.get("tilework_cli_session_id").is_none());
+        assert!(params.get("tilework_cli_timestamp").is_none());
+        assert!(params.get("tilework_cli_node_version").is_none());
+        assert!(params.get("tilework_cli_is_ci").is_none());
+    }
+
+    // @current-session
+    #[test]
+    fn test_track_event_request_uses_snake_case() {
+        let state = create_test_state();
+        let now = Utc.with_ymd_and_hms(2025, 1, 20, 10, 30, 0).unwrap();
+        let event = create_event(
+            AnalyticsEventType::SessionStart,
+            &state,
+            "1737373800",
+            now,
+            5,
+            false,
+            None,
+        );
+
+        let json = serde_json::to_string(&event).expect("serialization failed");
+
+        // Should use snake_case field names per API spec
+        assert!(json.contains("\"client_id\""), "should contain client_id");
+        assert!(json.contains("\"user_id\""), "should contain user_id");
+        assert!(json.contains("\"event_name\""), "should contain event_name");
+        assert!(
+            json.contains("\"event_params\""),
+            "should contain event_params"
+        );
+
+        // Should NOT use camelCase field names
+        assert!(
+            !json.contains("\"clientId\""),
+            "should not contain clientId"
+        );
+        assert!(!json.contains("\"userId\""), "should not contain userId");
+        assert!(
+            !json.contains("\"eventName\""),
+            "should not contain eventName"
+        );
+        assert!(
+            !json.contains("\"eventParams\""),
+            "should not contain eventParams"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn test_tilework_source_is_nori_cli() {
+        let state = create_test_state();
+        let now = Utc.with_ymd_and_hms(2025, 1, 20, 10, 30, 0).unwrap();
+
+        // Test all event types have tilework_source
+        for event_type in [
+            AnalyticsEventType::SessionStart,
+            AnalyticsEventType::InstallCompleted,
+            AnalyticsEventType::UserResurrected,
+        ] {
+            let event = create_event(event_type, &state, "1737373800", now, 5, false, None);
+            assert_eq!(
+                event.event_params["tilework_source"], "nori-cli",
+                "tilework_source should be 'nori-cli' for {:?}",
+                event_type
+            );
+        }
+    }
+
+    // @current-session
+    #[test]
+    fn test_session_id_format_is_passed_through() {
+        let state = create_test_state();
+        let now = Utc.with_ymd_and_hms(2025, 1, 20, 10, 30, 0).unwrap();
+
+        // Session ID should be Unix timestamp in seconds (passed through from caller)
+        let unix_timestamp = "1737373800";
+        let event = create_event(
+            AnalyticsEventType::SessionStart,
+            &state,
+            unix_timestamp,
+            now,
+            5,
+            false,
+            None,
+        );
+
+        // Should be stored as tilework_session_id (not tilework_cli_session_id)
+        assert_eq!(event.event_params["tilework_session_id"], unix_timestamp);
+
+        // Old field name should not exist
+        assert!(
+            event.event_params.get("tilework_cli_session_id").is_none(),
+            "tilework_cli_session_id should not exist"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn test_timestamp_field_name() {
+        let state = create_test_state();
+        let now = Utc.with_ymd_and_hms(2025, 1, 20, 10, 30, 0).unwrap();
+        let event = create_event(
+            AnalyticsEventType::SessionStart,
+            &state,
+            "1737373800",
+            now,
+            5,
+            false,
+            None,
+        );
+
+        // Should be stored as tilework_timestamp (not tilework_cli_timestamp)
+        let timestamp = event.event_params["tilework_timestamp"].as_str().unwrap();
+        assert!(
+            timestamp.starts_with("2025-01-20"),
+            "timestamp should be ISO 8601 format"
+        );
+
+        // Old field name should not exist
+        assert!(
+            event.event_params.get("tilework_cli_timestamp").is_none(),
+            "tilework_cli_timestamp should not exist"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn test_removed_fields_not_present() {
+        let state = create_test_state();
+        let now = Utc.with_ymd_and_hms(2025, 1, 20, 10, 30, 0).unwrap();
+        let event = create_event(
+            AnalyticsEventType::SessionStart,
+            &state,
+            "1737373800",
+            now,
+            5,
+            false,
+            None,
+        );
+
+        let params = &event.event_params;
+
+        // These fields should be removed per API spec
+        assert!(
+            params.get("tilework_cli_user_id").is_none(),
+            "tilework_cli_user_id should be removed"
+        );
+        assert!(
+            params.get("tilework_cli_node_version").is_none(),
+            "tilework_cli_node_version should be removed"
+        );
+        assert!(
+            params.get("tilework_cli_is_ci").is_none(),
+            "tilework_cli_is_ci should be removed"
+        );
     }
 }
