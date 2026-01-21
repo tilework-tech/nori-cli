@@ -648,15 +648,12 @@ jobs:
           echo "npm install -g ${{ env.NPM_PACKAGE_NAME }}@$VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Update @next tag to point to latest
-        if: ${{ needs.validate.outputs.is_prerelease != 'true' }}
-        continue-on-error: true
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          npm dist-tag add "${{ env.NPM_PACKAGE_NAME }}@${{ needs.validate.outputs.version }}" next
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Also updated \`@next\` tag to point to \`${{ needs.validate.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          # For stable releases, also update @next to point to this version
+          if [[ "$IS_PRERELEASE" != "true" ]]; then
+            npm dist-tag add "${{ env.NPM_PACKAGE_NAME }}@$VERSION" next || echo "Warning: Failed to update @next tag"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Also updated \`@next\` tag to point to \`$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ============================================================================
   # CREATE GITHUB RELEASE (only for tag push)
