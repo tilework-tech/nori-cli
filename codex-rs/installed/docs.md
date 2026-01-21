@@ -35,7 +35,7 @@ Path: @/codex-rs/installed
 `track_launch(nori_home: &Path)` spawns a background tokio task that:
 1. Reads existing state from `.nori-install.json` (treats missing/corrupt as first install)
 2. Generates a session ID from current Unix timestamp in seconds
-3. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_start`
+3. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_started`
 4. Updates state and writes atomically (temp file + rename)
 5. Sends analytics events with a 5-second timeout (fire-and-forget, release builds only)
 
@@ -60,7 +60,7 @@ Three event types sent via `TrackEventRequest` (snake_case JSON fields: `client_
 |-------|-----------|
 | `nori_install_completed` | First install or upgrade/downgrade |
 | `nori_user_resurrected` | Launch after 30+ days of inactivity |
-| `nori_session_start` | Every launch |
+| `nori_session_started` | Every launch |
 
 **`event_params` structure:**
 

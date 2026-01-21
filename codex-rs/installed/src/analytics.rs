@@ -34,7 +34,7 @@ impl AnalyticsEventType {
     pub fn as_str(self) -> &'static str {
         match self {
             AnalyticsEventType::InstallCompleted => "nori_install_completed",
-            AnalyticsEventType::SessionStart => "nori_session_start",
+            AnalyticsEventType::SessionStart => "nori_session_started",
             AnalyticsEventType::UserResurrected => "nori_user_resurrected",
         }
     }
@@ -250,7 +250,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(event.event_name, "nori_session_start");
+        assert_eq!(event.event_name, "nori_session_started");
 
         let params = &event.event_params;
         // Required tilework_* fields (no cli_ prefix)
