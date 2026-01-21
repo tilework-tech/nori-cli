@@ -146,9 +146,9 @@ async fn track_launch_inner(nori_home: &Path) -> anyhow::Result<Vec<LaunchEvent>
         let days_since_install = new_state.days_since_install(now);
         for event in &events {
             let (event_type, is_first_install, previous_version) = match event {
-                LaunchEvent::AppInstall => (AnalyticsEventType::InstallCompleted, true, None),
+                LaunchEvent::AppInstall => (AnalyticsEventType::InstallDetected, true, None),
                 LaunchEvent::AppUpdate { previous_version } => (
-                    AnalyticsEventType::InstallCompleted,
+                    AnalyticsEventType::InstallDetected,
                     false,
                     Some(previous_version.clone()),
                 ),

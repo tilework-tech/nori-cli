@@ -25,7 +25,7 @@ const EXECUTABLE_NAME: &str = "nori-ai-cli";
 /// Analytics event types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalyticsEventType {
-    InstallCompleted,
+    InstallDetected,
     SessionStart,
     UserResurrected,
 }
@@ -33,9 +33,9 @@ pub enum AnalyticsEventType {
 impl AnalyticsEventType {
     pub fn as_str(self) -> &'static str {
         match self {
-            AnalyticsEventType::InstallCompleted => "nori_install_completed",
-            AnalyticsEventType::SessionStart => "nori_session_started",
-            AnalyticsEventType::UserResurrected => "nori_user_resurrected",
+            AnalyticsEventType::InstallDetected => "noricli_install_detected",
+            AnalyticsEventType::SessionStart => "noricli_session_started",
+            AnalyticsEventType::UserResurrected => "noricli_user_resurrected",
         }
     }
 }
@@ -59,7 +59,7 @@ pub fn create_event(
     previous_version: Option<String>,
 ) -> TrackEventRequest {
     let mut params = base_event_params(state, session_id, timestamp, days_since_install);
-    if event_type == AnalyticsEventType::InstallCompleted {
+    if event_type == AnalyticsEventType::InstallDetected {
         params["tilework_cli_is_first_install"] = serde_json::Value::Bool(is_first_install);
         if let Some(prev) = previous_version {
             params["tilework_cli_previous_version"] = serde_json::Value::String(prev);
@@ -163,11 +163,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_install_completed_event_first_install() {
+    fn test_create_install_detected_event_first_install() {
         let state = create_test_state();
         let now = Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap();
         let event = create_event(
-            AnalyticsEventType::InstallCompleted,
+            AnalyticsEventType::InstallDetected,
             &state,
             "1737373800",
             now,
@@ -176,7 +176,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(event.event_name, "nori_install_completed");
+        assert_eq!(event.event_name, "noricli_install_detected");
         assert_eq!(event.client_id, state.client_id);
         assert_eq!(event.user_id, state.client_id);
 
@@ -204,14 +204,14 @@ mod tests {
     }
 
     #[test]
-    fn test_create_install_completed_event_upgrade() {
+    fn test_create_install_detected_event_upgrade() {
         let mut state = create_test_state();
         state.installed_version = "2.0.0".to_string();
         state.install_source = InstallSource::Npm;
 
         let now = Utc.with_ymd_and_hms(2025, 1, 20, 10, 30, 0).unwrap();
         let event = create_event(
-            AnalyticsEventType::InstallCompleted,
+            AnalyticsEventType::InstallDetected,
             &state,
             "1737373800",
             now,
@@ -250,7 +250,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(event.event_name, "nori_session_started");
+        assert_eq!(event.event_name, "noricli_session_started");
 
         let params = &event.event_params;
         // Required tilework_* fields (no cli_ prefix)

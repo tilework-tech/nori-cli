@@ -35,7 +35,7 @@ Path: @/codex-rs/installed
 `track_launch(nori_home: &Path)` spawns a background tokio task that:
 1. Reads existing state from `.nori-install.json` (treats missing/corrupt as first install)
 2. Generates a session ID from current Unix timestamp in seconds
-3. Determines event type: `nori_install_completed`, `nori_user_resurrected`, `nori_session_started`
+3. Determines event type: `noricli_install_detected`, `noricli_user_resurrected`, `noricli_session_started`
 4. Updates state and writes atomically (temp file + rename)
 5. Sends analytics events with a 5-second timeout (fire-and-forget, release builds only)
 
@@ -58,9 +58,9 @@ Three event types sent via `TrackEventRequest` (snake_case JSON fields: `client_
 
 | Event | When Sent |
 |-------|-----------|
-| `nori_install_completed` | First install or upgrade/downgrade |
-| `nori_user_resurrected` | Launch after 30+ days of inactivity |
-| `nori_session_started` | Every launch |
+| `noricli_install_detected` | First install or upgrade/downgrade |
+| `noricli_user_resurrected` | Launch after 30+ days of inactivity |
+| `noricli_session_started` | Every launch |
 
 **`event_params` structure:**
 
@@ -71,7 +71,7 @@ Three event types sent via `TrackEventRequest` (snake_case JSON fields: `client_
 | `tilework_timestamp` | ISO 8601 timestamp with millisecond precision |
 | `tilework_cli_*` | CLI-specific fields (version, install source, days since install, platform, executable name) |
 
-For `nori_install_completed` events, additional fields: `tilework_cli_is_first_install` (boolean), `tilework_cli_previous_version` (for upgrades/downgrades).
+For `noricli_install_detected` events, additional fields: `tilework_cli_is_first_install` (boolean), `tilework_cli_previous_version` (for upgrades/downgrades).
 
 **Detection (`detection.rs`):**
 
@@ -84,6 +84,6 @@ For `nori_install_completed` events, additional fields: `tilework_cli_is_first_i
 - **Debug builds**: Analytics sending is a no-op in debug builds to avoid noise during development and testing
 - **Atomic writes**: State file uses temp file + rename to prevent partial writes on crash
 - **Client ID stability**: Once generated, the `client_id` is persisted in the state file and reused across sessions
-- **Version changes**: Both upgrades and downgrades emit `nori_install_completed` events; simple string inequality comparison is used
+- **Version changes**: Both upgrades and downgrades emit `noricli_install_detected` events; simple string inequality comparison is used
 
 Created and maintained by Nori.
