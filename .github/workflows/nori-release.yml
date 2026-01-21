@@ -650,6 +650,9 @@ jobs:
 
       - name: Update @next tag to point to latest
         if: ${{ needs.validate.outputs.is_prerelease != 'true' }}
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm dist-tag add "${{ env.NPM_PACKAGE_NAME }}@${{ needs.validate.outputs.version }}" next
           echo "" >> "$GITHUB_STEP_SUMMARY"
