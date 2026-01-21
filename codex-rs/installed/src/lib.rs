@@ -510,4 +510,79 @@ mod tests {
         let contents = fs::read_to_string(&state_path).expect("read failed");
         assert!(!contents.contains("\"user_id\""));
     }
+
+    // @current-session
+    #[test]
+    fn test_user_resurrection_emits_multiple_events() {
+        let temp_home = setup_temp_home();
+
+        // Create state with last_launched_at > 30 days ago
+        let now = Utc::now();
+        let last_launch = now - Duration::days(45);
+        let mut state = InstallState::new_first_install(
+            generate_client_id(),
+            CLI_VERSION.to_string(),
+            InstallSource::Npm,
+            last_launch - Duration::days(60), // installed 105 days ago
+        );
+        state.last_launched_at = last_launch;
+
+        // Write the old state
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        // Track launch - should emit both UserResurrected and SessionStart
+        let events = track_launch_events(temp_home.path());
+
+        assert_eq!(
+            events,
+            vec![LaunchEvent::UserResurrected, LaunchEvent::SessionStart],
+            "User returning after 30+ days should trigger both resurrection and session events"
+        );
+
+        // Verify state was updated with current timestamp
+        let updated_state = read_install_state(temp_home.path()).expect("state should exist");
+        assert!(
+            updated_state.last_launched_at > last_launch,
+            "last_launched_at should be updated"
+        );
+    }
+
+    // @current-session
+    #[test]
+    fn test_upgrade_with_resurrection_emits_three_events() {
+        let temp_home = setup_temp_home();
+
+        // Create state with old version AND last_launched_at > 30 days ago
+        let now = Utc::now();
+        let last_launch = now - Duration::days(45);
+        let old_version = "0.0.1".to_string();
+        let mut state = InstallState::new_first_install(
+            generate_client_id(),
+            old_version.clone(),
+            InstallSource::Npm,
+            last_launch - Duration::days(60),
+        );
+        state.last_launched_at = last_launch;
+
+        let state_path = temp_home.path().join(".nori-install.json");
+        let json = serde_json::to_string_pretty(&state).expect("serialize failed");
+        fs::write(&state_path, format!("{json}\n")).expect("write failed");
+
+        // Track launch - should emit AppUpdate, UserResurrected, and SessionStart
+        let events = track_launch_events(temp_home.path());
+
+        assert_eq!(
+            events,
+            vec![
+                LaunchEvent::AppUpdate {
+                    previous_version: old_version,
+                },
+                LaunchEvent::UserResurrected,
+                LaunchEvent::SessionStart
+            ],
+            "Upgrade after 30+ days should trigger update, resurrection, and session events"
+        );
+    }
 }
