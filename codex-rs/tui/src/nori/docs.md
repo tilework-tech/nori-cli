@@ -4,7 +4,7 @@ Path: @/codex-rs/tui/src/nori
 
 ### Overview
 
-The `nori` module contains Nori-specific TUI customizations that replace or extend the default Codex UI behavior. It provides branded session headers, agent picking, and a Nori-specific update checking mechanism that queries GitHub releases.
+The `nori` module contains Nori-specific TUI customizations that replace or extend the default Codex UI behavior. It provides branded session headers, agent picking, config picking, and a Nori-specific update checking mechanism that queries GitHub releases.
 
 ### How it fits into the larger codebase
 
@@ -82,6 +82,29 @@ The cell is inserted into the chat history and displayed before terminal restora
 - `PendingAgentSelection` holds the selected model/display name pair until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`
 - `get_agent_info(model_name)` looks up agent metadata (display name, description) from the available agents list by model name (case-insensitive). Used by `chatwidget.rs` to resolve human-readable display names for approval dialogs.
 
+**Config Picker (`config_picker.rs`):**
+
+Provides the UI for the `/config` slash command, allowing users to toggle TUI settings from within the running TUI:
+
+- `config_picker_params()`: Creates `SelectionViewParams` with toggle items for each configurable setting
+- Each toggle displays current state (on/off) and sends an `AppEvent` when selected
+- Changes are applied immediately to the running TUI AND persisted to `~/.nori/cli/config.toml`
+
+Configurable settings:
+
+| Setting | Config Key | Description |
+|---------|------------|-------------|
+| Animations | `tui.animations` | Shimmer effects and spinners in the UI |
+| Notifications | `tui.notifications` | Desktop notifications when tasks complete |
+| Vertical Footer | `tui.vertical_footer` | Stack footer segments vertically |
+
+The persistence flow:
+1. User selects a toggle item in the popup
+2. `SelectionAction` sends `AppEvent::SetConfig*` (e.g., `SetConfigAnimations`)
+3. `App::handle_event()` calls `persist_config_setting()`
+4. Method updates running TUI state via `ChatWidget` setters
+5. Method persists to config.toml via `ConfigEditsBuilder::set_path()`
+
 **Update System (`update_action.rs`, `updates.rs`, `update_prompt.rs`):**
 
 Provides Nori-specific update checking:
@@ -127,7 +150,7 @@ The session header uses a max inner width of 60 characters. Directory paths are 
 
 ```
 session_header.rs, agent_picker.rs, exit_message.rs  -> Always included
-config_adapter.rs                                    -> #[cfg(feature = "nori-config")]
+config_adapter.rs, config_picker.rs                  -> #[cfg(feature = "nori-config")]
 update_action.rs                                     -> Always included
 update_prompt.rs, updates.rs                         -> #[cfg(not(debug_assertions))]
 ```

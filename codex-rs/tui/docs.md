@@ -67,6 +67,7 @@ Available commands via `/` prefix:
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
+| `/config` | Toggle TUI settings (animations, notifications, vertical footer) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -80,7 +81,7 @@ Available commands via `/` prefix:
 | `/logout` | Show logout instructions |
 | `/quit` | Exit Nori |
 
-The `/login` and `/logout` commands require the `login` feature to be enabled.
+The `/login` and `/logout` commands require the `login` feature to be enabled. The `/config` command requires the `nori-config` feature.
 
 **Status Line Footer:**
 
