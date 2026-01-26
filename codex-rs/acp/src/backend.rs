@@ -184,6 +184,8 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Project key for grouping transcripts (hash of git root or cwd)
+    project_key: String,
 }
 
 impl AcpBackend {
@@ -274,9 +276,39 @@ impl AcpBackend {
         // Create conversation ID for this session
         let conversation_id = ConversationId::new();
 
+        // Compute project key for transcript grouping (based on git root or cwd)
+        let project_key = crate::project_key::project_key_from_cwd(&cwd);
+
         // Get history metadata
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
+
+        // Update project manifest in the background (for informational purposes)
+        let project_root = crate::project_key::resolve_project_root(&cwd);
+        let manifest_nori_home = config.nori_home.clone();
+        let manifest_project_key = project_key.clone();
+        let manifest_cwd = cwd.clone();
+        tokio::spawn(async move {
+            // Collect git info for manifest
+            let git_info = codex_core::git_info::collect_git_info(&manifest_cwd).await;
+            let (git_remote_url, git_branch) = if let Some(info) = git_info {
+                (info.repository_url, info.branch)
+            } else {
+                (None, None)
+            };
+
+            if let Err(e) = crate::transcript::update_project_manifest(
+                &manifest_nori_home,
+                &manifest_project_key,
+                &project_root,
+                git_remote_url,
+                git_branch,
+            )
+            .await
+            {
+                warn!("failed to update project manifest: {e}");
+            }
+        });
 
         let backend = Self {
             connection,
@@ -291,6 +323,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
+            project_key,
         };
 
         // Send synthetic SessionConfigured event
@@ -389,13 +422,14 @@ impl AcpBackend {
                     .await;
             }
             Op::AddToHistory { text } => {
-                // Append to history file in the background
+                // Append to legacy message history file (backward compatibility)
+                let history_text = text.clone();
                 let nori_home = self.nori_home.clone();
                 let conversation_id = self.conversation_id;
                 let persistence = self.history_persistence;
                 tokio::spawn(async move {
                     if let Err(e) = crate::message_history::append_entry(
-                        &text,
+                        &history_text,
                         &conversation_id,
                         &nori_home,
                         persistence,
@@ -403,6 +437,24 @@ impl AcpBackend {
                     .await
                     {
                         warn!("failed to append to message history: {e}");
+                    }
+                });
+
+                // Also append to project-grouped transcript for future session loading
+                let nori_home = self.nori_home.clone();
+                let project_key = self.project_key.clone();
+                let persistence = self.history_persistence;
+                let entry = crate::transcript::user_entry(&self.conversation_id, text);
+                tokio::spawn(async move {
+                    if let Err(e) = crate::transcript::append_transcript(
+                        &entry,
+                        &nori_home,
+                        &project_key,
+                        persistence,
+                    )
+                    .await
+                    {
+                        warn!("failed to append to transcript: {e}");
                     }
                 });
             }
@@ -534,6 +586,12 @@ impl AcpBackend {
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
 
+        // Clone transcript-related context for saving assistant messages
+        let transcript_nori_home = self.nori_home.clone();
+        let transcript_project_key = self.project_key.clone();
+        let transcript_persistence = self.history_persistence;
+        let transcript_conversation_id = self.conversation_id;
+
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
             // Cancel any existing idle timer when a new turn starts processing.
@@ -558,6 +616,8 @@ impl AcpBackend {
             let id_for_updates = id_clone.clone();
             let update_handler = tokio::spawn(async move {
                 let mut event_sequence: u64 = 0;
+                // Accumulate assistant message text for transcript saving
+                let mut assistant_text = String::new();
                 // Track call_ids that have already had ExecCommandBegin emitted.
                 // The ACP protocol can emit multiple ToolCall events for the same call_id
                 // as details become available, but the TUI expects exactly one Begin per call_id.
@@ -570,6 +630,13 @@ impl AcpBackend {
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
+                    // Accumulate assistant message text from AgentMessageChunk events
+                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+                        && let acp::ContentBlock::Text(text) = &chunk.content
+                    {
+                        assistant_text.push_str(&text.text);
+                    }
+
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
                     for event_msg in events {
@@ -605,14 +672,32 @@ impl AcpBackend {
                     total_events = event_sequence,
                     "ACP dispatch: update stream completed"
                 );
+                // Return accumulated assistant text for transcript saving
+                assistant_text
             });
 
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
-            // Wait for all updates to be processed
-            let _ = update_handler.await;
+            // Wait for all updates to be processed and get the accumulated assistant text
+            let assistant_text = update_handler.await.unwrap_or_default();
+
+            // Save assistant message to transcript if not empty
+            if !assistant_text.is_empty() {
+                let entry =
+                    crate::transcript::assistant_entry(&transcript_conversation_id, assistant_text);
+                if let Err(e) = crate::transcript::append_transcript(
+                    &entry,
+                    &transcript_nori_home,
+                    &transcript_project_key,
+                    transcript_persistence,
+                )
+                .await
+                {
+                    warn!("failed to append assistant message to transcript: {e}");
+                }
+            }
 
             // If prompt failed, send an error event to the TUI BEFORE TaskComplete
             // This ensures the user sees why their request failed instead of a silent failure

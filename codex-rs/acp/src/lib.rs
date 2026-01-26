@@ -10,9 +10,11 @@ pub mod backend;
 pub mod config;
 pub mod connection;
 pub mod message_history;
+pub mod project_key;
 pub mod registry;
 pub mod session_parser;
 pub mod tracing_setup;
+pub mod transcript;
 pub mod translator;
 
 // Re-export config types for convenience
@@ -29,6 +31,22 @@ pub use message_history::history_filepath;
 pub use message_history::history_metadata;
 #[cfg(any(unix, windows))]
 pub use message_history::lookup;
+
+// Re-export project key types
+pub use project_key::project_key_from_cwd;
+pub use project_key::resolve_project_root;
+
+// Re-export transcript types
+pub use transcript::ProjectManifest;
+pub use transcript::TranscriptEntry;
+pub use transcript::TranscriptRole;
+pub use transcript::append_transcript;
+pub use transcript::assistant_entry;
+pub use transcript::read_project_manifest;
+pub use transcript::transcript_dir;
+pub use transcript::transcript_filepath;
+pub use transcript::update_project_manifest;
+pub use transcript::user_entry;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;

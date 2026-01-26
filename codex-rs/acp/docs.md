@@ -199,6 +199,98 @@ history_persistence = "save-all"  # or "none"
 - Appends in background task to avoid blocking the main event loop
 - Maximum 10 retries with 100ms backoff for lock acquisition
 
+### Project-Grouped Transcript Storage
+
+In addition to the legacy message history, the ACP module supports project-grouped transcript storage for future session loading. Unlike message history (which stores user messages without roles), transcripts store complete conversation turns with role attribution.
+
+**Storage Location:**
+```
+~/.nori/cli/projects/<project-key>/<session-id>.jsonl
+~/.nori/cli/projects/<project-key>/manifest.json
+```
+
+**Project Key Derivation (`@/codex-rs/acp/src/project_key.rs`):**
+
+The project key is a 12-character hex string derived from the canonical project path:
+
+1. **Git Root Resolution**: Uses `codex_core::git_info::resolve_root_git_project_for_trust()` for worktree-aware detection
+2. **Fallback**: If not in a git repository, uses the canonicalized working directory
+3. **Hashing**: SHA-256 hash of the path, truncated to 12 hex characters
+
+Key exports:
+- `project_key_from_cwd(cwd: &Path) -> String`: Computes project key from working directory
+- `resolve_project_root(cwd: &Path) -> PathBuf`: Resolves the project root path
+
+**Transcript Entry Schema:**
+```json
+{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>","role":"user"}
+{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<response>","role":"assistant"}
+```
+
+**Key Types (`@/codex-rs/acp/src/transcript.rs`):**
+
+| Type | Purpose |
+|------|---------|
+| `TranscriptEntry` | Single transcript entry with session_id, timestamp, text, and role |
+| `TranscriptRole` | Enum: `User` or `Assistant` |
+| `ProjectManifest` | Metadata about the project (path, git info, timestamps) |
+
+**ProjectManifest Schema:**
+```json
+{
+  "project_path": "/path/to/project",
+  "git_remote_url": "git@github.com:org/repo.git",
+  "git_branch": "main",
+  "created_at": 1706000000,
+  "last_session_at": 1706000000
+}
+```
+
+**Key exports from `@/codex-rs/acp/src/transcript.rs`:**
+- `append_transcript()`: Appends a transcript entry to the session file
+- `update_project_manifest()`: Creates or updates the project manifest
+- `user_entry()`: Creates a user role transcript entry
+- `assistant_entry()`: Creates an assistant role transcript entry
+- `transcript_dir()`: Returns the transcript directory for a project key
+
+**Message History vs Transcript:**
+
+| Aspect | Message History | Transcript |
+|--------|-----------------|------------|
+| Purpose | Cross-session history lookup | Session reload/resume |
+| Location | `~/.nori/cli/history.jsonl` | `~/.nori/cli/projects/<key>/<session>.jsonl` |
+| Grouping | Single flat file | Per-project directories |
+| Roles | No role tracking | User and Assistant roles |
+| Content | User messages only | User AND assistant messages |
+
+**Implementation Flow:**
+
+```
+┌─────────────────────────┐   Op::AddToHistory   ┌─────────────────────────┐
+│   TUI                   │─────────────────────►│   AcpBackend            │
+│                         │                      │                         │
+│                         │                      │   1. Append to legacy   │
+│                         │                      │      history.jsonl      │
+│                         │                      │   2. Append user entry  │
+│                         │                      │      to transcript      │
+└─────────────────────────┘                      └─────────────────────────┘
+
+┌─────────────────────────┐   AgentMessageChunk  ┌─────────────────────────┐
+│   ACP Agent             │─────────────────────►│   AcpBackend            │
+│                         │   (accumulated)      │                         │
+│                         │                      │   On TaskComplete:      │
+│                         │                      │   Append assistant      │
+│                         │                      │   entry to transcript   │
+└─────────────────────────┘                      └─────────────────────────┘
+```
+
+**Implementation Details:**
+- Project key is computed once during `AcpBackend::spawn()` and stored in the backend struct
+- Project manifest is updated asynchronously during spawn with git info from `codex_core::git_info::collect_git_info()`
+- Uses advisory file locking for concurrent write safety (same pattern as message history)
+- Transcript writes happen in background tasks to avoid blocking the main event loop
+- Both user and assistant transcript entries use the same session_id (the conversation_id)
+
 
 ### Stderr Capture Implementation
 
