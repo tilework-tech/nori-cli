@@ -60,11 +60,12 @@ mod project_id_tests {
             Some("git@github.com:user/my-project.git".to_string())
         );
 
-        // Git root should be the repo directory
-        assert_eq!(project_id.git_root, Some(repo_dir.clone()));
+        // Git root should be the repo directory (canonicalized for macOS symlink handling)
+        let expected_root = repo_dir.canonicalize().ok();
+        assert_eq!(project_id.git_root, expected_root);
 
-        // cwd should be preserved
-        assert_eq!(project_id.cwd, repo_dir);
+        // cwd should be preserved (canonicalized)
+        assert_eq!(project_id.cwd, repo_dir.canonicalize().unwrap_or(repo_dir));
     }
 
     #[test]
@@ -87,8 +88,9 @@ mod project_id_tests {
         // No git remote
         assert_eq!(project_id.git_remote, None);
 
-        // Git root should still be set
-        assert_eq!(project_id.git_root, Some(repo_dir));
+        // Git root should still be set (canonicalized for macOS symlink handling)
+        let expected_root = repo_dir.canonicalize().ok();
+        assert_eq!(project_id.git_root, expected_root);
     }
 
     #[test]
@@ -137,10 +139,10 @@ mod project_id_tests {
         assert_eq!(id_from_root.git_root, id_from_src.git_root);
         assert_eq!(id_from_root.git_root, id_from_tests.git_root);
 
-        // But cwd should differ
-        assert_eq!(id_from_root.cwd, repo_dir);
-        assert_eq!(id_from_src.cwd, subdir1);
-        assert_eq!(id_from_tests.cwd, subdir2);
+        // But cwd should differ (use canonicalized paths for macOS symlink handling)
+        assert_eq!(id_from_root.cwd, repo_dir.canonicalize().unwrap_or(repo_dir.clone()));
+        assert_eq!(id_from_src.cwd, subdir1.canonicalize().unwrap_or(subdir1.clone()));
+        assert_eq!(id_from_tests.cwd, subdir2.canonicalize().unwrap_or(subdir2.clone()));
     }
 
     #[test]
