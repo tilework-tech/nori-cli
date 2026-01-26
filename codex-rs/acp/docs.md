@@ -200,6 +200,104 @@ history_persistence = "save-all"  # or "none"
 - Maximum 10 retries with 100ms backoff for lock acquisition
 
 
+### Transcript Persistence
+
+The ACP module provides client-side transcript persistence that captures a full view of conversations (user input + assistant responses) without relying on agent-side storage. This enables viewing previous sessions without replaying agent mechanics.
+
+**Storage Structure:**
+
+Transcripts are stored at `{nori_home}/transcripts/by-project/{project-id}/sessions/{session-id}.jsonl`:
+
+```
+~/.nori/cli/
+└── transcripts/
+    └── by-project/
+        └── {project-id}/           # 16-hex-char hash
+            ├── project.json        # Project metadata
+            └── sessions/
+                └── {session-id}.jsonl  # JSONL transcript file
+```
+
+**Project Identification:**
+
+Project IDs are derived from the workspace to group sessions by project:
+- Git repositories: SHA-256 hash of normalized git remote URL (SSH and HTTPS normalize to same hash)
+- Non-git directories: SHA-256 hash of canonicalized path
+- Hash is truncated to 16 hex characters for compact directory names
+
+Key exports from `@/codex-rs/acp/src/transcript/project.rs`:
+- `compute_project_id()`: Computes project ID for a working directory
+- `ProjectId`: Contains id, name, git_remote, git_root, and cwd
+
+**Transcript Schema (JSONL):**
+
+Each line in the transcript file is a JSON object with:
+- `ts`: ISO 8601 timestamp
+- `v`: Schema version (currently 1)
+- `type`: Entry type discriminator
+
+Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
+
+| Type | Description | Key Fields |
+|------|-------------|------------|
+| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, model, cli_version, git |
+| `user` | User message | id, content, attachments |
+| `assistant` | Complete assistant turn | id, content (blocks), model |
+| `tool_call` | Tool execution start | call_id, name, input |
+| `tool_result` | Tool execution result | call_id, output, truncated, exit_code |
+
+**TranscriptRecorder:**
+
+The `TranscriptRecorder` (in `@/codex-rs/acp/src/transcript/recorder.rs`) handles async, non-blocking writes:
+
+```
+┌─────────────────────────┐   mpsc channel   ┌─────────────────────────┐
+│   AcpBackend            │─────────────────►│   Writer Task           │
+│                         │  TranscriptCmd   │   (background)          │
+│   record_user_message() │                  │                         │
+│   record_assistant_msg()│                  │   - Writes to JSONL     │
+│   flush() / shutdown()  │                  │   - Creates directories │
+└─────────────────────────┘                  └─────────────────────────┘
+```
+
+Key methods:
+- `new()`: Creates recorder, writes session_meta and project.json
+- `record_user_message()`: Records user input with optional attachments
+- `record_assistant_message()`: Records complete assistant turn with content blocks
+- `record_tool_call()` / `record_tool_result()`: Records tool execution
+- `flush()`: Ensures pending writes are persisted
+- `shutdown()`: Flushes and terminates writer task
+
+**TranscriptLoader:**
+
+The `TranscriptLoader` (in `@/codex-rs/acp/src/transcript/loader.rs`) reads transcripts for viewing:
+
+Key methods:
+- `list_projects()`: List all projects with transcripts
+- `list_sessions()`: List sessions for a specific project
+- `find_sessions_for_cwd()`: Find sessions for current working directory
+- `load_transcript()`: Load complete transcript with all entries
+- `load_session_meta()`: Load just session metadata (for quick listing)
+
+**ACP Integration:**
+
+The `AcpBackend` automatically:
+1. Creates a `TranscriptRecorder` on spawn (with graceful fallback if creation fails)
+2. Records user messages when `Op::UserInput` is processed
+3. Accumulates assistant text during the turn and records when turn completes
+4. Shuts down recorder on `Op::Shutdown`
+
+Configuration:
+- `AcpBackendConfig.cli_version`: CLI version included in session metadata
+
+**Re-exported Types:**
+
+Public exports from `@/codex-rs/acp/src/transcript/mod.rs`:
+- `TranscriptRecorder`, `TranscriptLoader`
+- `ProjectId`, `ProjectInfo`, `SessionInfo`, `Transcript`
+- Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, etc.
+- `ContentBlock`, `Attachment`, `GitInfo`
+
 ### Stderr Capture Implementation
 
 - Buffer lines per session for access between reader task and caller

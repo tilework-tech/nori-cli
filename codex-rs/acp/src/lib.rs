@@ -13,6 +13,7 @@ pub mod message_history;
 pub mod registry;
 pub mod session_parser;
 pub mod tracing_setup;
+pub mod transcript;
 pub mod translator;
 
 // Re-export config types for convenience
@@ -50,6 +51,14 @@ pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
+
+// Re-export transcript types
+pub use transcript::ProjectId;
+pub use transcript::ProjectInfo;
+pub use transcript::SessionInfo;
+pub use transcript::Transcript;
+pub use transcript::TranscriptLoader;
+pub use transcript::TranscriptRecorder;
 
 // Re-export commonly used types from agent-client-protocol
 pub use agent_client_protocol::Agent;

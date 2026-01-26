@@ -38,6 +38,8 @@ use crate::connection::AcpModelState;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
 use crate::registry::get_agent_config;
+use crate::transcript::ContentBlock;
+use crate::transcript::TranscriptRecorder;
 use crate::translator;
 use crate::translator::is_patch_operation;
 use crate::translator::tool_call_to_file_change;
@@ -154,6 +156,8 @@ pub struct AcpBackendConfig {
     pub nori_home: PathBuf,
     /// History persistence policy
     pub history_persistence: crate::config::HistoryPersistence,
+    /// CLI version for transcript metadata
+    pub cli_version: String,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -184,6 +188,8 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Transcript recorder for session persistence
+    transcript_recorder: Option<Arc<TranscriptRecorder>>,
 }
 
 impl AcpBackend {
@@ -278,6 +284,22 @@ impl AcpBackend {
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
+        // Initialize transcript recorder (non-fatal if it fails)
+        let transcript_recorder = match TranscriptRecorder::new(
+            &config.nori_home,
+            &cwd,
+            Some(config.model.clone()),
+            &config.cli_version,
+        )
+        .await
+        {
+            Ok(recorder) => Some(Arc::new(recorder)),
+            Err(e) => {
+                warn!("Failed to initialize transcript recorder: {e}");
+                None
+            }
+        };
+
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -291,6 +313,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
+            transcript_recorder,
         };
 
         // Send synthetic SessionConfigured event
@@ -380,6 +403,14 @@ impl AcpBackend {
                 // to allow the TUI to exit properly
                 debug!("Processing Op::Shutdown in ACP mode");
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
+
+                // Shutdown transcript recorder
+                if let Some(ref recorder) = self.transcript_recorder
+                    && let Err(e) = recorder.shutdown().await
+                {
+                    warn!("Failed to shutdown transcript recorder: {e}");
+                }
+
                 let _ = self
                     .event_tx
                     .send(Event {
@@ -512,6 +543,13 @@ impl AcpBackend {
             return Ok(());
         }
 
+        // Record user message to transcript
+        if let Some(ref recorder) = self.transcript_recorder
+            && let Err(e) = recorder.record_user_message(id, &prompt_text, vec![]).await
+        {
+            warn!("Failed to record user message to transcript: {e}");
+        }
+
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
         let final_prompt_text = if let Some(summary) = pending_summary {
@@ -533,6 +571,7 @@ impl AcpBackend {
         let id_clone = id.to_string();
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
+        let transcript_recorder = self.transcript_recorder.clone();
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -553,11 +592,13 @@ impl AcpBackend {
                 })
                 .await;
 
-            // Spawn update consumer task
+            // Spawn update consumer task that returns accumulated text for transcript
             let event_tx_clone = event_tx.clone();
             let id_for_updates = id_clone.clone();
             let update_handler = tokio::spawn(async move {
                 let mut event_sequence: u64 = 0;
+                // Accumulate assistant text for transcript recording
+                let mut accumulated_text = String::new();
                 // Track call_ids that have already had ExecCommandBegin emitted.
                 // The ACP protocol can emit multiple ToolCall events for the same call_id
                 // as details become available, but the TUI expects exactly one Begin per call_id.
@@ -585,6 +626,10 @@ impl AcpBackend {
                             }
                             emitted_begin_call_ids.insert(begin_ev.call_id.clone());
                         }
+                        // Accumulate text for transcript
+                        if let EventMsg::AgentMessageDelta(ref delta) = event_msg {
+                            accumulated_text.push_str(&delta.delta);
+                        }
                         event_sequence += 1;
                         debug!(
                             target: "acp_event_flow",
@@ -605,14 +650,30 @@ impl AcpBackend {
                     total_events = event_sequence,
                     "ACP dispatch: update stream completed"
                 );
+                accumulated_text
             });
 
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
-            // Wait for all updates to be processed
-            let _ = update_handler.await;
+            // Wait for all updates to be processed and get accumulated text
+            let accumulated_text = update_handler.await.unwrap_or_default();
+
+            // Record assistant message to transcript if there's accumulated text
+            if !accumulated_text.is_empty()
+                && let Some(ref recorder) = transcript_recorder
+            {
+                let content = vec![ContentBlock::Text {
+                    text: accumulated_text,
+                }];
+                if let Err(e) = recorder
+                    .record_assistant_message(&id_clone, content, None)
+                    .await
+                {
+                    warn!("Failed to record assistant message to transcript: {e}");
+                }
+            }
 
             // If prompt failed, send an error event to the TUI BEFORE TaskComplete
             // This ensures the user sees why their request failed instead of a silent failure
@@ -2493,6 +2554,7 @@ mod tests {
             notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            cli_version: "test".to_string(),
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;
@@ -2670,6 +2732,7 @@ mod tests {
             notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            cli_version: "test".to_string(),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -2781,6 +2844,7 @@ mod tests {
             notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            cli_version: "test".to_string(),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -2914,6 +2978,7 @@ mod tests {
             notify: None,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            cli_version: "test".to_string(),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
