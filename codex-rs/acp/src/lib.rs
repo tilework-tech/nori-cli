@@ -13,6 +13,7 @@ pub mod message_history;
 pub mod registry;
 pub mod session_parser;
 pub mod tracing_setup;
+pub mod transcript;
 pub mod translator;
 
 // Re-export config types for convenience

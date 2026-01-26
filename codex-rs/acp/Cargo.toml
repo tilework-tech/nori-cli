@@ -29,6 +29,10 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 toml = { workspace = true }
 dirs = { workspace = true }
 diffy = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+time = { workspace = true, features = ["macros", "formatting"] }
+uuid = { workspace = true, features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

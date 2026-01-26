@@ -859,4 +859,96 @@ The following features are marked with TODO comments in the codebase:
 - Enable switching from ACP mode to HTTP mode mid-session
 - Support replaying history through different backends
 
+### Transcript Persistence
+
+The ACP module provides session transcript persistence for viewing previous conversation history. Transcripts are organized by project and stored in `$NORI_HOME/transcripts/`.
+
+**Storage Structure:**
+
+```
+$NORI_HOME/transcripts/by-project/{project-id}/sessions/{session-id}.jsonl
+```
+
+Where:
+- `project-id`: 16-character hex hash derived from git remote URL, git root path, or cwd
+- `session-id`: UUID v4 generated at session start
+
+**Key Types (in `transcript/types.rs`):**
+
+| Type | Purpose |
+|------|---------|
+| `TranscriptLine` | Top-level JSONL line wrapper with timestamp, schema version, and entry |
+| `TranscriptEntry` | Enum of entry types: `SessionMeta`, `User`, `Assistant`, `ToolCall`, `ToolResult` |
+| `SessionMetaEntry` | First entry in every transcript with session ID, project ID, cwd, model, git info |
+| `ContentBlock` | Enum for assistant content: `Text`, `Thinking` (for extended reasoning) |
+
+**TranscriptRecorder (`transcript/recorder.rs`):**
+
+Records transcript entries using an async channel pattern for non-blocking writes:
+
+```
+┌─────────────────────┐   mpsc channel     ┌─────────────────────┐
+│   AcpBackend        │───────────────────►│   Writer Task       │
+│                     │   TranscriptCmd    │                     │
+│   record_user_msg() │                    │   JsonlWriter       │
+│   record_tool_call()│                    │   - write_entry()   │
+│   record_assistant()│                    │   - flush()         │
+└─────────────────────┘                    └─────────────────────┘
+```
+
+Key methods:
+- `TranscriptRecorder::new()`: Initializes for a new session, creates directory structure, spawns writer task
+- `record_user_message()`: Records user input
+- `record_tool_call()`: Records tool invocation with call_id, name, input
+- `record_tool_result()`: Records tool output with truncation flag and exit code
+- `record_assistant_message()`: Records assistant response with content blocks
+- `flush()`: Ensures all pending writes are persisted
+- `shutdown()`: Graceful shutdown of writer task
+
+**TranscriptLoader (`transcript/loader.rs`):**
+
+Lists and loads transcripts for viewing:
+
+| Method | Purpose |
+|--------|---------|
+| `list_projects()` | Lists all projects with transcripts, returns `ProjectInfo` with session count |
+| `list_sessions(project_id)` | Lists sessions for a project, sorted by most recent first |
+| `find_sessions_for_cwd(cwd)` | Finds sessions for the current working directory |
+| `load_transcript(project_id, session_id)` | Loads complete transcript with all entries |
+| `load_session_meta(project_id, session_id)` | Loads just the session metadata (fast) |
+
+**Project ID Computation (`transcript/project.rs`):**
+
+Projects are identified by a 16-character hex hash computed from:
+1. Git remote URL (if available) - ensures same repo has same ID across clones
+2. Git repository root path (if no remote)
+3. Working directory path (if not in a git repo)
+
+```rust
+let project = compute_project_id(&cwd)?;
+// project.id = "a1b2c3d4e5f6g7h8" (16 hex chars)
+// project.source = ProjectIdSource::GitRemote("https://github.com/...")
+```
+
+**JSONL Schema (version 1):**
+
+Each line is a JSON object with:
+```json
+{"ts":"2025-01-26T12:34:56.789Z","v":1,"entry":{...}}
+```
+
+Entry types:
+- `SessionMeta`: `{"type":"session_meta","session_id":"...","project_id":"...","started_at":"...","cwd":"...","model":"...","cli_version":"...","git":{...}}`
+- `User`: `{"type":"user","id":"msg-000001","content":"..."}`
+- `Assistant`: `{"type":"assistant","id":"msg-000002","content":[...],"model":"..."}`
+- `ToolCall`: `{"type":"tool_call","call_id":"...","name":"...","input":{...}}`
+- `ToolResult`: `{"type":"tool_result","call_id":"...","output":"...","truncated":false,"exit_code":0}`
+
+**Integration Status:**
+
+The transcript module provides all building blocks for persistence but is not yet wired into `AcpBackend`. Future work:
+- Initialize `TranscriptRecorder` in `AcpBackend::spawn()`
+- Call recorder methods from session update handlers
+- Add TUI commands for browsing transcript history
+
 Created and maintained by Nori.
