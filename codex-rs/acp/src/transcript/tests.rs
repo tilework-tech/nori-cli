@@ -140,9 +140,18 @@ mod project_id_tests {
         assert_eq!(id_from_root.git_root, id_from_tests.git_root);
 
         // But cwd should differ (use canonicalized paths for macOS symlink handling)
-        assert_eq!(id_from_root.cwd, repo_dir.canonicalize().unwrap_or(repo_dir.clone()));
-        assert_eq!(id_from_src.cwd, subdir1.canonicalize().unwrap_or(subdir1.clone()));
-        assert_eq!(id_from_tests.cwd, subdir2.canonicalize().unwrap_or(subdir2.clone()));
+        assert_eq!(
+            id_from_root.cwd,
+            repo_dir.canonicalize().unwrap_or(repo_dir.clone())
+        );
+        assert_eq!(
+            id_from_src.cwd,
+            subdir1.canonicalize().unwrap_or(subdir1.clone())
+        );
+        assert_eq!(
+            id_from_tests.cwd,
+            subdir2.canonicalize().unwrap_or(subdir2.clone())
+        );
     }
 
     #[test]
