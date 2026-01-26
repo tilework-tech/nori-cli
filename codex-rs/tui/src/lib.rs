@@ -1,5 +1,5 @@
 // Forbid accidental stdout/stderr writes in the *library* portion of the TUI.
-// The standalone `codex-tui` binary prints a short help message before the
+// The standalone `nori-tui` binary prints a short help message before the
 // alternate‑screen mode starts; that file opts‑out locally via `allow`.
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 #![deny(clippy::disallowed_methods)]
@@ -148,7 +148,7 @@ pub async fn run_main(
         nori_installed::track_launch(&nori_home);
     }
 
-    // Note: Rolling file tracing is initialized in codex-cli main.rs before run_main() is called.
+    // Note: Rolling file tracing is initialized in nori-cli main.rs before run_main() is called.
     // This ensures a single point of file-based tracing initialization.
 
     let (sandbox_mode, approval_policy): (Option<SandboxMode>, Option<AskForApproval>) =
@@ -258,7 +258,7 @@ pub async fn run_main(
         log_file_opts.mode(0o600);
     }
 
-    let log_file = log_file_opts.open(log_dir.join("codex-tui.log"))?;
+    let log_file = log_file_opts.open(log_dir.join("nori-tui.log"))?;
 
     // Wrap file in non‑blocking writer.
     let (non_blocking, _guard) = non_blocking(log_file);
@@ -266,7 +266,7 @@ pub async fn run_main(
     // use RUST_LOG env var, default to info for codex crates.
     let env_filter = || {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("codex_core=info,codex_tui=info,codex_rmcp_client=info")
+            EnvFilter::new("codex_core=info,nori_tui=info,codex_rmcp_client=info")
         })
     };
 

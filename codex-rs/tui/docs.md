@@ -4,7 +4,7 @@ Path: @/codex-rs/tui
 
 ### Overview
 
-The `codex-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of model responses with markdown rendering.
+The `nori-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of model responses with markdown rendering.
 
 ### How it fits into the larger codebase
 
@@ -16,7 +16,7 @@ TUI is the primary entry point, invoked when running `nori` without a subcommand
 - **Uses** `codex-protocol` types for events and messages
 - **Optionally integrates** `codex-login` via feature flags
 
-The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interactive mode. Feature flags propagate from CLI to TUI for coordinated modular builds.
+The `cli/` crate's `main.rs` dispatches to `nori_tui::run_main()` for interactive mode. Feature flags propagate from CLI to TUI for coordinated modular builds.
 
 ### Core Implementation
 

@@ -4,7 +4,7 @@ Path: @/
 
 ### Overview
 
-This repository contains the Nori AI CLI, a local coding agent that runs on your computer. It provides AI-assisted coding capabilities through a terminal-based interface, with support for multiple model providers including ACP (Agent Context Protocol), sandboxed command execution, and IDE integration. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`codex-cli`).
+This repository contains the Nori AI CLI, a local coding agent that runs on your computer. It provides AI-assisted coding capabilities through a terminal-based interface, with support for multiple model providers including ACP (Agent Context Protocol), sandboxed command execution, and IDE integration. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
 
 ### How it fits into the larger codebase
 
@@ -13,7 +13,7 @@ This is a monorepo containing:
 - **`codex-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
 - **`codex-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
 
-The Rust codebase in `codex-rs` contains the entire implementation. The `codex-cli` package provides the `nori` command via npm.
+The Rust codebase in `codex-rs` contains the entire implementation. The `nori-cli` package provides the `nori` command via npm.
 
 ### Core Implementation
 

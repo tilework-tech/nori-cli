@@ -4,13 +4,13 @@ Path: @/codex-rs/cli
 
 ### Overview
 
-The `codex-cli` crate is the main binary that provides the `nori` command. It serves as the entry point for the interactive TUI mode with optional login management and sandbox debugging tools. The crate handles CLI argument parsing, subcommand routing, and cross-cutting concerns.
+The `nori-cli` crate is the main binary that provides the `nori` command. It serves as the entry point for the interactive TUI mode with optional login management and sandbox debugging tools. The crate handles CLI argument parsing, subcommand routing, and cross-cutting concerns.
 
 ### How it fits into the larger codebase
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `codex-tui`, `codex-acp`, `codex-core`
+- **Always included:** `nori-tui`, `codex-acp`, `codex-core`
 - **Optional via features:** `codex-login`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 
@@ -22,7 +22,7 @@ This crate is the primary entry point that ties together the core crates:
 
 ```rust
 match subcommand {
-    None => codex_tui::run_main(...),           // Interactive TUI
+    None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     // ... other subcommands
@@ -55,17 +55,17 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 
 | Feature | Dependencies | Enables |
 |---------|--------------|---------|
-| `login` | `codex-login`, `codex-tui/login` | `login`/`logout` subcommands + TUI login |
+| `login` | `codex-login`, `nori-tui/login` | `login`/`logout` subcommands + TUI login |
 
 **Feature Propagation to TUI:**
 
 The `login` feature propagates to the TUI crate for coordinated behavior:
-- `login` -> `codex-tui/login`: Enables login screens and `/login` command in TUI
+- `login` -> `nori-tui/login`: Enables login screens and `/login` command in TUI
 
 Build examples:
 ```bash
-cargo build -p codex-cli                    # Minimal (TUI + ACP only)
-cargo build -p codex-cli --features login   # With login support
+cargo build -p nori-cli                    # Minimal (TUI + ACP only)
+cargo build -p nori-cli --features login   # With login support
 ```
 
 Feature-gated code uses `#[cfg(feature = "...")]` on imports, enum variants, match arms, and struct definitions in `main.rs`.
