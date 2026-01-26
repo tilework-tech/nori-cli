@@ -149,3 +149,55 @@ fn test_footer_full_startup_with_all_info() {
 
     assert_snapshot!("full_footer", normalize_for_input_snapshot(contents));
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_footer_vertical_layout_from_config() {
+    let config_toml = r#"
+model = "mock-model"
+model_provider = "mock_provider"
+
+[model_providers.mock_provider]
+name = "Mock ACP provider for tests"
+
+[tui]
+vertical_footer = true
+"#;
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 60, SessionConfig::new().with_config_toml(config_toml))
+            .expect("Failed to spawn");
+
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    let contents = session.screen_contents();
+
+    let lines: Vec<&str> = contents.lines().collect();
+    let branch_line_idx = lines
+        .iter()
+        .position(|line| line.contains("⎇") && line.contains("master"))
+        .expect("Footer should contain git branch line");
+    let shortcuts_line_idx = lines
+        .iter()
+        .position(|line| line.contains("? for shortcuts"))
+        .expect("Footer should contain shortcuts line");
+
+    assert_ne!(
+        branch_line_idx, shortcuts_line_idx,
+        "Branch and shortcuts should render on separate lines in vertical footer. Contents: {contents}"
+    );
+
+    let branch_line = lines[branch_line_idx];
+    let shortcuts_line = lines[shortcuts_line_idx];
+    assert!(
+        !branch_line.contains('·'),
+        "Branch line should not include separators in vertical footer. Line: {branch_line}"
+    );
+    assert!(
+        !shortcuts_line.contains('·'),
+        "Shortcuts line should not include separators in vertical footer. Line: {shortcuts_line}"
+    );
+
+    assert_snapshot!("vertical_footer", normalize_for_input_snapshot(contents));
+}

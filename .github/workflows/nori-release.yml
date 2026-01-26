@@ -74,6 +74,11 @@ jobs:
       checkout_ref: ${{ steps.validate.outputs.checkout_ref }}
       skip_tests: ${{ steps.validate.outputs.skip_tests }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+
       - name: Validate version and determine refs
         id: validate
         env:
@@ -90,43 +95,17 @@ jobs:
             CHECKOUT_REF="${GITHUB_REF}"
           elif [[ "${{ inputs.publish_next }}" == "true" ]]; then
             PUBLISH_NEXT="true"
-            # Auto-determine the next -next.N version
-            # NOTE: This logic mirrors scripts/create_nori_release determine_version()
-            # Keep them in sync if changes are made
+            # Auto-determine the next -next.N version using the Python script
+            # as the single source of truth for version detection logic.
             echo "Determining next dev snapshot version..."
 
-            # Get the latest stable release version
-            LATEST_STABLE=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
-            if [[ -z "$LATEST_STABLE" || "$LATEST_STABLE" == "null" ]]; then
-              # No releases yet, use 0.0.0 as base
-              BASE_VERSION="0.0.0"
-            else
-              # Strip the tag prefix to get version
-              BASE_VERSION="${LATEST_STABLE#${{ env.TAG_PREFIX }}}"
-              # Strip any prerelease suffix to get the stable base
-              BASE_VERSION="${BASE_VERSION%%-*}"
+            VERSION=$(python3 scripts/create_nori_release --get-next-version)
+
+            if [[ -z "$VERSION" ]]; then
+              echo "::error::Failed to determine version from create_nori_release script"
+              exit 1
             fi
 
-            echo "Base stable version: $BASE_VERSION"
-
-            # Find the highest existing -next.N for this base version
-            NEXT_PREFIX="${BASE_VERSION}-next."
-            HIGHEST_NEXT=0
-
-            # List all releases and find -next versions
-            RELEASES=$(gh api repos/${{ github.repository }}/releases --paginate --jq '.[].tag_name' 2>/dev/null || echo "")
-            while IFS= read -r tag; do
-              if [[ "$tag" == "${{ env.TAG_PREFIX }}${NEXT_PREFIX}"* ]]; then
-                SUFFIX="${tag#${{ env.TAG_PREFIX }}${NEXT_PREFIX}}"
-                if [[ "$SUFFIX" =~ ^[0-9]+$ ]]; then
-                  if (( SUFFIX > HIGHEST_NEXT )); then
-                    HIGHEST_NEXT=$SUFFIX
-                  fi
-                fi
-              fi
-            done <<< "$RELEASES"
-
-            VERSION="${NEXT_PREFIX}$((HIGHEST_NEXT + 1))"
             TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
             CHECKOUT_REF="dev"
 
@@ -671,6 +650,9 @@ jobs:
 
       - name: Update @next tag to point to latest
         if: ${{ needs.validate.outputs.is_prerelease != 'true' }}
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm dist-tag add "${{ env.NPM_PACKAGE_NAME }}@${{ needs.validate.outputs.version }}" next
           echo "" >> "$GITHUB_STEP_SUMMARY"

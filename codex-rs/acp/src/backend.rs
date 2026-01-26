@@ -79,6 +79,9 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
         || error_lower.contains("rate limit")
         || error_lower.contains("too many requests")
         || error_lower.contains("429")
+        || error_lower.contains("out of extra usage")
+        || error_lower.contains("usage limit")
+        || error_lower.contains("exceeded your usage")
     {
         AcpErrorCategory::QuotaExceeded
     } else if error_lower.contains("command not found")
@@ -115,9 +118,7 @@ pub fn enhanced_error_message(
             format!("Authentication required for {provider_name}. {auth_hint}")
         }
         AcpErrorCategory::QuotaExceeded => {
-            format!(
-                "Rate limit or quota exceeded for {provider_name}. Please wait and try again, or check your usage limits."
-            )
+            format!("Rate limit or quota exceeded for {provider_name}: {original_error}")
         }
         AcpErrorCategory::ExecutableNotFound => {
             format!(
@@ -628,7 +629,7 @@ impl AcpBackend {
                         )
                     }
                     AcpErrorCategory::QuotaExceeded => {
-                        "Rate limit or quota exceeded. Please wait and try again, or check your usage limits.".to_string()
+                        format!("Rate limit or quota exceeded: {display_error}")
                     }
                     AcpErrorCategory::ExecutableNotFound => {
                         format!("Agent executable not found: {display_error}")
@@ -2972,6 +2973,66 @@ mod tests {
         assert!(
             !unsupported_error,
             "Op::Compact should not emit 'not supported' error. Events: {events:?}"
+        );
+    }
+
+    /// Test that usage limit errors (like "out of extra usage") are categorized as QuotaExceeded.
+    /// These errors come from Claude's API when usage limits are hit.
+    #[test]
+    fn test_categorize_acp_error_usage_limit() {
+        // The exact error message from Claude's stderr when usage is exceeded
+        assert_eq!(
+            categorize_acp_error(
+                "Internal error: You're out of extra usage · resets 4pm (America/New_York)"
+            ),
+            AcpErrorCategory::QuotaExceeded,
+            "Usage limit errors should be categorized as QuotaExceeded"
+        );
+
+        // Variations that might appear
+        assert_eq!(
+            categorize_acp_error("out of extra usage"),
+            AcpErrorCategory::QuotaExceeded,
+            "'out of extra usage' should be QuotaExceeded"
+        );
+
+        assert_eq!(
+            categorize_acp_error("usage limit exceeded"),
+            AcpErrorCategory::QuotaExceeded,
+            "'usage limit exceeded' should be QuotaExceeded"
+        );
+
+        assert_eq!(
+            categorize_acp_error("You have exceeded your usage"),
+            AcpErrorCategory::QuotaExceeded,
+            "'exceeded your usage' should be QuotaExceeded"
+        );
+    }
+
+    /// Test that enhanced_error_message for QuotaExceeded includes the original error details.
+    /// Users need to see the specific error (like "resets 4pm") to know when they can retry.
+    #[test]
+    fn test_enhanced_error_message_quota_includes_original_error() {
+        use crate::registry::AgentKind;
+
+        let original_error = "You're out of extra usage · resets 4pm (America/New_York)";
+        let message = enhanced_error_message(
+            AcpErrorCategory::QuotaExceeded,
+            original_error,
+            "Claude",
+            AgentKind::ClaudeCode.auth_hint(),
+            AgentKind::ClaudeCode.display_name(),
+            AgentKind::ClaudeCode.npm_package(),
+        );
+
+        // The message should include the original error so users know when they can retry
+        assert!(
+            message.contains("resets 4pm"),
+            "QuotaExceeded message should include the original error details. Got: {message}"
+        );
+        assert!(
+            message.contains("Rate limit") || message.contains("quota"),
+            "QuotaExceeded message should mention rate limit/quota. Got: {message}"
         );
     }
 }

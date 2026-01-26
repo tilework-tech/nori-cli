@@ -3753,15 +3753,17 @@ dependencies = [
  "anyhow",
  "chrono",
  "codex-acp",
- "hex",
  "libc",
+ "pretty_assertions",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "tokio",
  "tracing",
+ "uuid",
  "windows-sys 0.59.0",
 ]
 
@@ -5332,6 +5334,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
 
 [[package]]
 name = "serde"

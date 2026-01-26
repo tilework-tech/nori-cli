@@ -59,6 +59,9 @@ pub struct TuiConfigToml {
 
     /// Enable desktop notifications
     pub notifications: Option<bool>,
+
+    /// Stack footer segments vertically in the status footer.
+    pub vertical_footer: Option<bool>,
 }
 
 /// Resolved TUI configuration
@@ -69,6 +72,9 @@ pub struct TuiConfig {
 
     /// Enable desktop notifications
     pub notifications: bool,
+
+    /// Stack footer segments vertically in the status footer.
+    pub vertical_footer: bool,
 }
 
 impl Default for TuiConfig {
@@ -76,6 +82,7 @@ impl Default for TuiConfig {
         Self {
             animations: true,
             notifications: true,
+            vertical_footer: false,
         }
     }
 }
@@ -139,6 +146,9 @@ pub struct NoriConfig {
     /// Enable TUI notifications
     pub notifications: bool,
 
+    /// Stack footer segments vertically in the status footer.
+    pub vertical_footer: bool,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -159,6 +169,7 @@ impl Default for NoriConfig {
             history_persistence: HistoryPersistence::default(),
             animations: true,
             notifications: true,
+            vertical_footer: false,
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),

@@ -314,6 +314,7 @@ async fn helpers_are_available_and_do_not_panic() {
         initial_images: Vec::new(),
         enhanced_keys_supported: false,
         auth_manager,
+        vertical_footer: false,
         expected_model: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
@@ -339,6 +340,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         placeholder_text: "Ask Codex to do anything".to_string(),
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
+        vertical_footer: false,
         model_display_name: String::new(),
     });
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test"));
