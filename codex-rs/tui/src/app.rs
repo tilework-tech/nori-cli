@@ -1098,6 +1098,44 @@ impl App {
                 self.persist_config_setting("vertical_footer", enabled)
                     .await;
             }
+            AppEvent::ShowViewonlySessionPicker {
+                sessions,
+                nori_home,
+            } => {
+                let params = crate::nori::viewonly_session_picker::viewonly_session_picker_params(
+                    sessions,
+                    nori_home,
+                    self.app_event_tx.clone(),
+                );
+                self.chat_widget.show_selection_view(params);
+            }
+            AppEvent::LoadViewonlyTranscript {
+                nori_home,
+                project_id,
+                session_id,
+            } => {
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    let loader = codex_acp::transcript::TranscriptLoader::new(nori_home);
+                    match loader.load_transcript(&project_id, &session_id).await {
+                        Ok(transcript) => {
+                            let entries =
+                                crate::viewonly_transcript::transcript_to_entries(&transcript);
+                            tx.send(AppEvent::DisplayViewonlyTranscript { entries });
+                        }
+                        Err(e) => {
+                            tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                crate::history_cell::new_error_event(format!(
+                                    "Failed to load transcript: {e}"
+                                )),
+                            )));
+                        }
+                    }
+                });
+            }
+            AppEvent::DisplayViewonlyTranscript { entries } => {
+                self.display_viewonly_transcript(entries);
+            }
         }
         Ok(true)
     }
@@ -1120,6 +1158,43 @@ impl App {
     fn on_update_reasoning_effort(&mut self, effort: Option<ReasoningEffortConfig>) {
         self.chat_widget.set_reasoning_effort(effort);
         self.config.model_reasoning_effort = effort;
+    }
+
+    /// Display a loaded transcript in the history view.
+    fn display_viewonly_transcript(
+        &mut self,
+        entries: Vec<crate::viewonly_transcript::ViewonlyEntry>,
+    ) {
+        use crate::viewonly_transcript::ViewonlyEntry;
+
+        // Add a header
+        self.chat_widget.add_info_message(
+            "────────── Viewing Previous Session ──────────".to_string(),
+            None,
+        );
+
+        for entry in entries {
+            match entry {
+                ViewonlyEntry::User { content } => {
+                    // Add user messages with a user prefix to distinguish them
+                    self.chat_widget.add_boxed_history(Box::new(
+                        crate::history_cell::UserHistoryCell { message: content },
+                    ));
+                }
+                ViewonlyEntry::Assistant { content } => {
+                    // Add assistant response
+                    self.chat_widget.add_info_message(content, None);
+                }
+                ViewonlyEntry::Info { content } => {
+                    // Add as an info message
+                    self.chat_widget
+                        .add_info_message(content, Some("transcript".to_string()));
+                }
+            }
+        }
+
+        self.chat_widget
+            .add_info_message("────────── End of Transcript ──────────".to_string(), None);
     }
 
     fn open_external_editor(&mut self, tui: &mut tui::Tui) {

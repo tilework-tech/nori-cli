@@ -483,3 +483,116 @@ fn test_session_meta_fields() {
         first_line
     );
 }
+
+/// Test that transcripts can be viewed via /resume-viewonly command.
+///
+/// This test validates the complete view-only transcript flow:
+/// 1. Create a multi-turn session with recognizable content
+/// 2. Start a new session with /new
+/// 3. Open /resume-viewonly picker
+/// 4. Select the previous session
+/// 5. Verify transcript content is displayed
+#[test]
+#[cfg(target_os = "linux")]
+fn test_resume_viewonly_shows_transcript() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MULTI_TURN", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(30, 100, config).expect("Failed to spawn session");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Turn 1: Send first user message with unique marker
+    session.send_str("UNIQUE_PROMPT_ALPHA_12345").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("RESPONSE_ALPHA", Duration::from_secs(10))
+        .expect("Should receive first response");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Turn 2: Send second user message with different marker
+    session.send_str("UNIQUE_PROMPT_BETA_67890").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("RESPONSE_BETA", Duration::from_secs(10))
+        .expect("Should receive second response");
+
+    // Allow transcript to flush
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Start new session with /new command
+    session.send_str("/new").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("New session should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Open view-only transcript picker
+    session.send_str("/resume-viewonly").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for picker to appear with title
+    session
+        .wait_for_text("View previous session", Duration::from_secs(5))
+        .expect("Should show viewonly session picker");
+
+    // The picker should show navigation hints
+    session
+        .wait_for_text("to navigate", Duration::from_secs(2))
+        .expect("Should show picker footer hint");
+
+    std::thread::sleep(Duration::from_millis(200));
+
+    // The picker lists sessions with newest first. The new empty session (0 messages)
+    // is first, and the session with our messages (4 messages) is second.
+    // Navigate down to select the session with content.
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for async transcript loading to complete
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Verify transcript viewer shows our content
+    session
+        .wait_for_text("UNIQUE_PROMPT_ALPHA", Duration::from_secs(5))
+        .expect("Transcript should show first user prompt");
+
+    session
+        .wait_for_text("UNIQUE_PROMPT_BETA", Duration::from_secs(2))
+        .expect("Transcript should show second user prompt");
+
+    let contents = session.screen_contents();
+    assert!(
+        contents.contains("RESPONSE_ALPHA"),
+        "Transcript should show first response, got:\n{}",
+        contents
+    );
+    assert!(
+        contents.contains("RESPONSE_BETA"),
+        "Transcript should show second response, got:\n{}",
+        contents
+    );
+
+    // Take snapshot for visual verification
+    std::thread::sleep(Duration::from_millis(500));
+
+    insta::assert_snapshot!(
+        "transcript_viewonly_display",
+        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
+    );
+}

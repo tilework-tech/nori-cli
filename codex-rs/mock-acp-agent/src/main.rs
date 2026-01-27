@@ -272,6 +272,35 @@ impl acp::Agent for MockAgent {
             return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
         }
 
+        // Support multi-turn conversations for transcript testing.
+        // Extracts markers (ALPHA, BETA, etc.) from user input and echoes them back.
+        if std::env::var("MOCK_AGENT_MULTI_TURN").is_ok() {
+            let user_text = arguments
+                .prompt
+                .iter()
+                .filter_map(|block| match block {
+                    acp::ContentBlock::Text(t) => Some(t.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            let marker = if user_text.contains("ALPHA") {
+                "ALPHA"
+            } else if user_text.contains("BETA") {
+                "BETA"
+            } else if user_text.contains("GAMMA") {
+                "GAMMA"
+            } else {
+                "ECHO"
+            };
+
+            eprintln!("Mock agent: multi-turn response with marker {marker}");
+            self.send_text_chunk(session_id.clone(), &format!("RESPONSE_{marker}"))
+                .await?;
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
         if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {
             eprintln!("Mock agent: sending mixed exploring and exec workflow");

@@ -1728,6 +1728,9 @@ impl ChatWidget {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
+            SlashCommand::ResumeViewonly => {
+                self.open_viewonly_session_picker();
+            }
             SlashCommand::Init => {
                 let init_target = self.config.cwd.join(DEFAULT_PROJECT_DOC_FILENAME);
                 if init_target.exists() {
@@ -1917,7 +1920,7 @@ impl ChatWidget {
         self.add_boxed_history(Box::new(cell));
     }
 
-    fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
+    pub(crate) fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
         if !cell.display_lines(u16::MAX).is_empty() {
             // Only break exec grouping if the cell renders visible lines.
             // EXCEPT: Don't flush incomplete ExecCells - they should remain visible
@@ -2477,6 +2480,55 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Show a selection view in the bottom pane.
+    pub(crate) fn show_selection_view(&mut self, params: SelectionViewParams) {
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the viewonly session picker to select a previous session to view.
+    pub(crate) fn open_viewonly_session_picker(&mut self) {
+        let cwd = self.config.cwd.clone();
+        let tx = self.app_event_tx.clone();
+
+        // Get NORI_HOME - if not available, show error
+        let nori_home = match crate::nori::config_adapter::get_nori_home() {
+            Ok(home) => home,
+            Err(e) => {
+                self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
+                return;
+            }
+        };
+
+        let nori_home_for_event = nori_home.clone();
+        tokio::spawn(async move {
+            match crate::nori::viewonly_session_picker::load_sessions_with_preview(&nori_home, &cwd)
+                .await
+            {
+                Ok(sessions) => {
+                    if sessions.is_empty() {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(
+                                "No previous sessions found for this project.".to_string(),
+                            ),
+                        )));
+                    } else {
+                        tx.send(crate::app_event::AppEvent::ShowViewonlySessionPicker {
+                            sessions,
+                            nori_home: nori_home_for_event,
+                        });
+                    }
+                }
+                Err(e) => {
+                    tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                        crate::history_cell::new_error_event(format!(
+                            "Failed to load sessions: {e}"
+                        )),
+                    )));
+                }
+            }
+        });
     }
 
     /// Open the config popup for TUI settings.

@@ -270,4 +270,28 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI vertical footer config setting.
     SetConfigVerticalFooter(bool),
+
+    /// Show the viewonly session picker with loaded sessions.
+    ShowViewonlySessionPicker {
+        /// The loaded session metadata for the picker
+        sessions: Vec<crate::nori::viewonly_session_picker::SessionPickerInfo>,
+        /// The NORI_HOME path for loading transcripts
+        nori_home: PathBuf,
+    },
+
+    /// Load and display a transcript in view-only mode.
+    LoadViewonlyTranscript {
+        /// The NORI_HOME path
+        nori_home: PathBuf,
+        /// Project identifier
+        project_id: String,
+        /// Session identifier
+        session_id: String,
+    },
+
+    /// Display a loaded transcript in the history view.
+    DisplayViewonlyTranscript {
+        /// The transcript entries to display
+        entries: Vec<crate::viewonly_transcript::ViewonlyEntry>,
+    },
 }

@@ -79,6 +79,7 @@ mod terminal_palette;
 mod text_formatting;
 mod tui;
 mod ui_consts;
+mod viewonly_transcript;
 
 /// Default model for ACP-only mode when no model is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.

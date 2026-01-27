@@ -18,6 +18,7 @@ pub enum SlashCommand {
     Config,
     Review,
     New,
+    ResumeViewonly,
     Init,
     Compact,
     Undo,
@@ -39,6 +40,7 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::New => "start a new chat during a conversation",
+            SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Review => "review my current changes and find issues",
@@ -69,6 +71,7 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent
             | SlashCommand::New
+            | SlashCommand::ResumeViewonly
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Undo
