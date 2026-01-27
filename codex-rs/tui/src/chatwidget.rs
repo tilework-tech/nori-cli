@@ -3748,6 +3748,10 @@ impl ChatWidget {
         self.submit_op(Op::Shutdown);
     }
 
+    pub(crate) fn composer_text(&self) -> String {
+        self.bottom_pane.composer_text()
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.bottom_pane.composer_is_empty()
     }

@@ -1132,6 +1132,55 @@ impl App {
         self.config.model_reasoning_effort = effort;
     }
 
+    fn open_external_editor(&mut self, tui: &mut tui::Tui) {
+        use crate::editor;
+
+        let current_text = self.chat_widget.composer_text();
+        let editor_cmd = editor::resolve_editor();
+
+        let temp_path = match editor::write_temp_file(&current_text) {
+            Ok(path) => path,
+            Err(err) => {
+                self.chat_widget
+                    .add_error_message(format!("Failed to create temp file: {err}"));
+                return;
+            }
+        };
+
+        // Restore terminal to normal mode so the editor can take over
+        let _ = tui::restore();
+
+        let status = editor::spawn_editor(&editor_cmd, &temp_path);
+
+        // Re-enable TUI mode
+        let _ = tui::set_modes();
+        tui.frame_requester().schedule_frame();
+
+        match status {
+            Ok(exit_status) if exit_status.success() => {
+                match editor::read_and_cleanup_temp_file(&temp_path) {
+                    Ok(content) => {
+                        let trimmed = content.trim_end().to_string();
+                        self.chat_widget.set_composer_text(trimmed);
+                    }
+                    Err(err) => {
+                        self.chat_widget
+                            .add_error_message(format!("Failed to read editor output: {err}"));
+                    }
+                }
+            }
+            Ok(_) => {
+                // Editor exited with non-zero status; discard changes, clean up temp file
+                let _ = std::fs::remove_file(&temp_path);
+            }
+            Err(err) => {
+                let _ = std::fs::remove_file(&temp_path);
+                self.chat_widget
+                    .add_error_message(format!("Failed to launch editor '{editor_cmd}': {err}"));
+            }
+        }
+    }
+
     /// Persist a TUI config setting to config.toml and apply it immediately.
     async fn persist_config_setting(&mut self, setting_name: &str, enabled: bool) {
         // Apply immediately to the running TUI
@@ -1249,6 +1298,14 @@ impl App {
             {
                 // Delegate to helper for clarity; preserves behavior.
                 self.confirm_backtrack_from_main();
+            }
+            KeyEvent {
+                code: KeyCode::Char('g'),
+                modifiers: crossterm::event::KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.open_external_editor(tui);
             }
             KeyEvent {
                 kind: KeyEventKind::Press | KeyEventKind::Repeat,

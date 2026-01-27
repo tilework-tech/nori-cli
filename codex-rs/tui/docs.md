@@ -87,6 +87,18 @@ The footer displays:
 - Model name
 - Key bindings (Ctrl+C, Esc, Enter)
 
+**External Editor Integration (`editor.rs`):**
+
+Ctrl-G opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:
+
+1. Reads current composer text via `ChatWidget::composer_text()`
+2. Writes content to a temp file (`nori-editor-*.md`)
+3. Suspends the TUI via `tui::restore()`
+4. Spawns the editor synchronously (blocking) via shell delegation (`sh -c` on Unix, `cmd /C` on Windows)
+5. Re-enables the TUI via `tui::set_modes()`
+6. On success, reads the temp file content back into the composer; on failure or non-zero exit, discards changes
+
+This uses the same terminal suspend/resume pattern as job control in `lib.rs` (SIGTSTP handling).
 ### Things to Know
 
 **Cargo Feature Flags:**
@@ -118,7 +130,7 @@ When errors occur, users are directed to report bugs at `https://github.com/tile
 - Snapshot testing via `insta` is used extensively - see `snapshots/` directory
 - Markdown rendering uses `pulldown-cmark` for parsing with `tree-sitter-highlight` for syntax highlighting
 - Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
-- Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling
+- Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning).
 - The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
 
 Created and maintained by Nori.
