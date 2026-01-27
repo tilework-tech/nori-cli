@@ -26,9 +26,27 @@ Used by `@/codex-rs/core/` (`exec.rs`) as the sandbox executor on Linux. The cra
 
 ### Things to Know
 
-- Requires Linux kernel 5.13+ with Landlock support
-- Falls back gracefully on older kernels with reduced security
-- Environment variables pass sandbox configuration to avoid arg parsing complexity
-- The binary is typically invoked by the core crate, not directly by users
+**Kernel Requirements:**
+
+Landlock requires Linux kernel 5.13+ with LSM enabled. Falls back gracefully on older kernels with reduced security.
+
+**Environment Variables:**
+
+- `CODEX_SANDBOX`: Set on sandboxed child processes (`seatbelt` on macOS, indicates active sandboxing)
+- Configuration is passed via serialized environment variables to avoid complex arg parsing
+- Landlock applies restrictions directly to the current thread via LSM
+
+**Seccomp Filters:**
+
+Beyond Landlock filesystem restrictions, seccomp filters block dangerous syscalls for defense in depth.
+
+**Testing:**
+
+Tests in `tests/suite/landlock.rs` verify sandbox behavior:
+- File access restrictions
+- Write blocking
+- Network access control
+
+The binary is typically invoked by the core crate (`@/codex-rs/core/src/exec.rs`), not directly by users. It can also be embedded in the main `nori` executable via arg0 dispatch (`codex-arg0` crate) for single-binary distribution.
 
 Created and maintained by Nori.

@@ -58,6 +58,37 @@ Key integrations:
 
 **MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model.
 
+**Data Flow:**
+
+```
+User Input -> Op (UserTurn) -> ConversationManager -> ModelClient -> ResponseStream
+    |
+    v
+Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
+```
+
+**Model Client Architecture:**
+
+`client.rs` provides `ModelClient` for communicating with HTTP-based model providers. The `WireApi` enum defines two HTTP-based protocols:
+- `WireApi::Responses`: OpenAI Responses API (used by some internal models)
+- `WireApi::Chat`: OpenAI Chat Completions API (the default)
+
+ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
+
+**User Notifications:**
+
+The `user_notification.rs` module provides OS-level notification support:
+
+| Notification Type | Title | Body Content |
+|-------------------|-------|--------------|
+| `AgentTurnComplete` | "Nori: Task Complete" | Last assistant message, or "Completed: {input}" fallback |
+| `AwaitingApproval` | "Nori: Approval Required" | Truncated command and cwd |
+| `Idle` | "Nori: Session Idle" | Idle duration in seconds |
+
+Notification modes:
+1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. On X11 Linux, supports click-to-focus via `wmctrl` or `xdotool`.
+2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload.
+
 ### Things to Know
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
@@ -66,5 +97,14 @@ Key integrations:
 - Auth tokens are stored in the system keyring with fallback to file storage
 - The conversation history is stored in `~/.codex/conversations/` (or `~/.nori/cli/conversations/`)
 - Error types are defined in `error.rs` and use `thiserror`
+
+**Test Suite Configuration:**
+
+The integration test suite in `@/codex-rs/core/tests/suite` includes timing-sensitive tests that are excluded from normal CI runs:
+
+- `tool_parallelism.rs`: Tests parallel tool execution with strict timing requirements (<750ms threshold). The `read_file_tools_run_in_parallel` test is marked `#[ignore]`.
+- `rmcp_client.rs`: Tests remote MCP server communication. Several tests are marked `#[ignore]` as they take >60 seconds due to cargo builds and HTTP server startup.
+
+These tests remain available via `cargo test -- --ignored` but are skipped during routine runs to prevent false failures.
 
 Created and maintained by Nori.

@@ -34,6 +34,17 @@ program = "ls"
 - Glob patterns (via `wildmatch`)
 - Argument prefixes
 
+**Argument Types** (`arg_type.rs`, `arg_matcher.rs`):
+
+- Literal values
+- File paths with constraints
+- Optional arguments
+- Variadic arguments
+
+**Special Commands:**
+
+`sed_command.rs` provides special handling for sed commands due to their complex argument patterns.
+
 ### Things to Know
 
 - Default policies are embedded for common safe commands (git status, ls, etc.)

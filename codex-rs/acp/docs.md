@@ -30,23 +30,150 @@ Key files:
 
 ### Core Implementation
 
-**Agent Registry** (`registry.rs`): Defines supported agents (`AgentKind::ClaudeCode`, `AgentKind::Codex`, `AgentKind::Gemini`) and their npm package names. Provides detection of installed agents via `npx` availability checks.
+**Model Registry** (`registry.rs`):
 
-**Connection Management** (`connection.rs`): Each ACP session runs in a dedicated single-threaded runtime because the ACP library uses `!Send` futures. Commands flow through channels:
+The registry is **model-centric** rather than provider-centric:
+- `get_agent_config()` accepts model names (e.g., "claude-code", "gemini-2.5-flash") instead of provider names
+- Returns `AcpAgentConfig` containing:
+  - `provider_slug`: Identifies which agent subprocess to spawn
+  - `command`: Executable path or command name
+  - `args`: Arguments to pass to the subprocess
+  - `env`: Environment variables (used by mock agents for testing)
+  - `provider_info`: Retry settings, timeouts
+  - `auth_hint`: Agent-specific authentication instructions for error messages
 
-| Command | Purpose |
-|---------|---------|
-| `CreateSession` | Initialize a new agent session with working directory |
-| `Prompt` | Send user content and receive streaming updates |
-| `Cancel` | Cancel an in-progress prompt |
-| `SetModel` | Switch models (unstable feature) |
+Agent display names and auth hints:
 
-**Protocol Translation** (`translator.rs`): Converts between:
-- ACP `ContentBlock` <-> Codex `ResponseItem`
-- ACP `PermissionRequest` -> Codex approval events (`ExecApprovalRequestEvent`, `ApplyPatchApprovalRequestEvent`)
-- User `ReviewDecision` -> ACP `PermissionOption`
+| Agent | Display Name | Auth Hint |
+|-------|--------------|-----------|
+| Claude Code | "Claude Code" | "Run /login for instructions, or set ANTHROPIC_API_KEY." |
+| Codex | "Codex" | "Run /login to authenticate, or set OPENAI_API_KEY." |
+| Gemini | "Gemini" | "Run /login for instructions, or set GOOGLE_API_KEY." |
 
-**Backend Implementation** (`backend.rs`): Implements `ConversationClient` trait, routing operations through the ACP connection. Handles session lifecycle, message accumulation, and turn tracking.
+**Nori Config Path Resolution** (`config/`):
+
+The config module provides the **canonical source of truth** for Nori home path resolution:
+- `find_nori_home()`: Returns `~/.nori/cli` or `$NORI_HOME` if set
+- `NORI_HOME_ENV`: Environment variable name (`"NORI_HOME"`)
+- `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
+- `CONFIG_FILE`: Config filename (`"config.toml"`)
+- `DEFAULT_MODEL`: Default agent model (`"claude-code"`)
+
+**Agent vs Model Field Distinction:**
+
+| Field | Purpose | Persistence |
+|-------|---------|-------------|
+| `agent` | User's persistent agent preference | Saved to config.toml |
+| `model` | Active model for current session | Can be overridden by CLI flags |
+
+**Message History** (`message_history.rs`):
+
+- File location: `~/.nori/cli/history.jsonl`
+- Entry schema: `{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}`
+- Uses advisory file locking for concurrent write safety
+- `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
+
+**Connection Management** (`connection.rs`):
+
+Thread-safe wrapper pattern for `!Send` ACP futures:
+
+```
+┌─────────────────────────┐   mpsc channels     ┌─────────────────────────┐
+│   Main Tokio Runtime    │◄───────────────────►│  ACP Worker Thread      │
+│                         │  AcpCommand enum    │  (single-threaded RT)   │
+│   AcpConnection         │                     │                         │
+│   - spawn()             │  ────────────────►  │  AcpConnectionInner     │
+│   - create_session()    │  CreateSession      │  - ClientDelegate       │
+│   - prompt()            │  Prompt             │  - run_command_loop()   │
+│   - cancel()            │  Cancel             │  - model_state Arc      │
+│   - set_model() [unst]  │  SetModel [unstable]│                         │
+└─────────────────────────┘                     └─────────────────────────┘
+```
+
+**Subprocess Lifecycle Management:**
+
+Multi-layer cleanup strategy for robust process termination:
+
+1. **Process Group Isolation (Unix)**: Agent spawns in own process group via `setpgid(0, 0)`. Enables killing entire process tree with `killpg()`.
+
+2. **Kernel-Level Parent Death Signal (Linux)**: `PR_SET_PDEATHSIG` set to `SIGTERM`. Guarantees agent receives signal if parent crashes.
+
+3. **IO Task Abort**: Explicit abort before killing child prevents hanging on orphaned file descriptors.
+
+4. **Process Group Kill**: `SIGKILL` to entire process group ensures grandchildren are terminated.
+
+5. **Synchronous Drop Cleanup**: `Drop` waits for completion signal (2-second timeout) before returning.
+
+**File Write Security Boundaries** (`ClientDelegate`):
+
+- Workspace writes: Any path within or under the workspace directory
+- Temporary writes: Any path under `/tmp` directory
+- System paths: All other paths are rejected
+- Path canonicalization prevents symlink-based directory traversal attacks
+
+**Session Transcript Parsing** (`session_parser.rs`):
+
+Parses token usage from agent session files:
+
+| Agent | Path Format |
+|-------|-------------|
+| Codex | `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-<ISODATE>T<HH-MM-SS>-<SESSION_GUID>.jsonl` |
+| Gemini | `~/.gemini/tmp/<HASHED_PATHS>/chats/session-<ISODATE>T<HH-MM>-<SESSIONID>.json` |
+| Claude | `~/.claude/projects/<PROJECT_PATH>/<SESSIONID>.jsonl` |
+
+**Approval Bridging:**
+
+| Policy | Behavior |
+|--------|----------|
+| `AskForApproval::UnlessTrusted` | Auto-approve known-safe read-only commands, prompt for all else |
+| `AskForApproval::OnFailure` | Auto-approve in sandbox, prompt on failure to escalate |
+| `AskForApproval::OnRequest` | (Default) Model decides when to request approval |
+| `AskForApproval::Never` | Auto-approve all requests (yolo mode) |
+
+Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` command to take effect immediately.
+
+**Patch Event Translation:**
+
+For Edit/Write/Delete operations, ACP emits native patch events:
+
+| Operation | Approval Event | Result Event |
+|-----------|----------------|--------------|
+| Edit (old_string + new_string) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Update` |
+| Write (content only) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Add` |
+| Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
+| Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
+
+**Tool Call Event Filtering:**
+
+Two-layer filtering prevents duplicate `ExecCommandBegin` events:
+
+1. **Skip Generic Events**: Filter ToolCall events lacking useful display info (empty `raw_input`, generic titles)
+2. **Dispatch-Loop Deduplication**: Track `emitted_begin_call_ids` HashSet to skip duplicates
+
+**Tool Classification System:**
+
+| ACP ToolKind | ParsedCommand | TUI Rendering |
+|--------------|---------------|---------------|
+| `Read` | `ParsedCommand::Read` | Exploring (compact, grouped) |
+| `Search` | `ParsedCommand::Search` | Exploring (compact, grouped) |
+| `Execute`, `Edit`, `Delete`, etc. | `ParsedCommand::Unknown` | Command (full display) |
+
+**Conversation Compaction:**
+
+Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
+1. `/compact` sends summarization prompt to agent
+2. Agent's summary response is captured
+3. Summary is prepended to next user message
+4. Emits `ContextCompacted` event to TUI
+
+**ACP Error Categorization:**
+
+| Category | Detection Patterns | User Message |
+|----------|-------------------|--------------|
+| `Authentication` | "auth", "-32000", "api key", "unauthorized" | "Authentication required for {provider}. {auth_hint}" |
+| `QuotaExceeded` | "quota", "rate limit", "429", "usage limit" | "Rate limit or quota exceeded for {provider}" |
+| `ExecutableNotFound` | "not found", "command not found" | "Could not find the {agent} CLI. Install with: npm install -g {package}" |
+| `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}" |
 
 ### Things to Know
 
@@ -56,5 +183,17 @@ Key files:
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - A `DRAIN_YIELD_COUNT` of 10 yields allows pending notifications to drain before session cleanup
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
+
+**Event Flow Tracing:**
+
+```bash
+RUST_LOG=acp_event_flow=debug cargo run
+```
+
+The `acp_event_flow` target logs streaming deltas, tool calls, and dispatch loop event counts. Pairs with TUI-side tracing (`tui_event_flow`, `cell_flushing`).
+
+**LocalSet Cooperative Scheduling:**
+
+The `io_task` and `run_command_loop` tasks run cooperatively in a LocalSet. A race condition exists when the agent sends notifications followed immediately by a PromptResponse. The fix adds a yield loop (`yield_now()` × 10) before `unregister_session()` to allow pending notifications to drain.
 
 Created and maintained by Nori.

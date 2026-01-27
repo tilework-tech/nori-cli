@@ -40,13 +40,71 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`,
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
+**Slash Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/agent` | Switch between available ACP agents |
+| `/model` | Choose model and reasoning effort |
+| `/approvals` | Choose what Nori can do without approval |
+| `/review` | Review current changes and find issues |
+| `/new` | Start a new chat during a conversation |
+| `/init` | Create an AGENTS.md file with instructions |
+| `/compact` | Summarize conversation to prevent context limit |
+| `/undo` | Ask Nori to undo a turn |
+| `/diff` | Show git diff (including untracked files) |
+| `/mention` | Mention a file |
+| `/status` | Show session configuration and token usage |
+| `/mcp` | List configured MCP tools |
+| `/login` | Log in to the current agent |
+| `/logout` | Show logout instructions |
+| `/quit` | Exit Nori |
+| `/exit` | Exit Nori (alias for /quit) |
+
+Debug-only commands (not shown in help): `/rollout`, `/test-approval`
+
+The `/logout` command is only available when the `login` feature is enabled.
+
+**Status Line Footer:**
+
+The footer displays:
+- Current git branch (refreshes on transcript activity)
+- Approval mode label (e.g., "Agent", "Full Access", "Read Only")
+- Model name
+- Key bindings (Ctrl+C, Esc, Enter)
+
 ### Things to Know
 
-- The `nori-config` feature enables Nori-specific paths (`~/.nori/cli/`) instead of legacy Codex paths
-- The `login` feature (enabled by default) adds `/login` command support via `codex-login`
+**Cargo Feature Flags:**
+
+| Feature | Dependencies | Default | Purpose |
+|---------|--------------|---------|---------|
+| `unstable` | `codex-acp/unstable` | Yes | Unstable ACP features like model switching |
+| `nori-config` | - | Yes | Use Nori's simplified ACP-only config |
+| `login` | `codex-login`, `codex-utils-pty` | Yes | ChatGPT/API login functionality |
+| `otel` | `opentelemetry-appender-tracing` | No | OpenTelemetry tracing export |
+| `vt100-tests` | - | No | vt100-based emulator tests |
+| `debug-logs` | - | No | Verbose debug logging |
+
+**--yolo Flag:**
+
+The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in all builds. When enabled, it overrides any configured sandbox or approval policies to auto-approve all tool operations without prompting.
+
+**Update Checking:**
+
+The TUI uses Nori-specific update checking via files in `@/codex-rs/tui/src/nori/`:
+- `update_action.rs`: Update action handling
+- `updates.rs`: Version checking against GitHub releases
+- `update_prompt.rs`: User prompting for updates
+
+**Error Reporting:**
+
+When errors occur, users are directed to report bugs at `https://github.com/tilework-tech/nori-cli/issues`.
+
 - Snapshot testing via `insta` is used extensively - see `snapshots/` directory
-- The `vt100-tests` feature enables terminal emulator-based integration tests
-- Markdown rendering handles streaming content gracefully, updating incrementally as tokens arrive
+- Markdown rendering uses `pulldown-cmark` for parsing with `tree-sitter-highlight` for syntax highlighting
+- Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
+- Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling
 - The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
 
 Created and maintained by Nori.

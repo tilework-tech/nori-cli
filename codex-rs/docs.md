@@ -36,5 +36,7 @@ Architecture:
 - Cross-platform sandboxing uses Landlock on Linux, Seatbelt on macOS, and restricted tokens on Windows
 - The `unstable` feature flag guards experimental ACP features like model switching
 - Snapshot testing via `insta` is used extensively in the TUI for regression testing
+- External dependencies are patched: `crossterm` and `ratatui` use custom forks for color query support
+- Configuration is stored in `~/.nori/cli/config.toml` with profile support for different model providers and settings
 
 Created and maintained by Nori.
