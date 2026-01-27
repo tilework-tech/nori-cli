@@ -264,11 +264,7 @@ impl UserNotification {
                 let truncated_command = truncate_string(command, MAX_COMMAND_LENGTH);
                 format!("{truncated_command}\nin {cwd}")
             }
-            UserNotification::Idle {
-                idle_duration_secs, ..
-            } => {
-                format!("Session has been idle for {idle_duration_secs} seconds")
-            }
+            UserNotification::Idle { .. } => "Session has been idle".to_string(),
         }
     }
 }
@@ -379,8 +375,7 @@ mod tests {
         };
 
         assert_eq!(notification.title(), "Nori: Session Idle");
-        assert!(notification.body().contains("5"));
-        assert!(notification.body().to_lowercase().contains("idle"));
+        assert_eq!(notification.body(), "Session has been idle");
     }
 
     #[test]
