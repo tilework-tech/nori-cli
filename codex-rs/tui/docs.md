@@ -58,6 +58,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/diff` | Show git diff (including untracked files) |
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and token usage |
+| `/first-prompt` | Show the first prompt from this session |
 | `/mcp` | List configured MCP tools |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |

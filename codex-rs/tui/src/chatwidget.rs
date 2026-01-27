@@ -404,6 +404,8 @@ pub(crate) struct ChatWidget {
     session_stats: SessionStats,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    // The first user prompt text, preserved for /first-prompt command
+    first_prompt_text: Option<String>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -1454,6 +1456,7 @@ impl ChatWidget {
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
         let spawn_result = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
 
+        let first_prompt_text = initial_prompt.clone();
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -1514,6 +1517,7 @@ impl ChatWidget {
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
+            first_prompt_text,
         };
 
         widget.prefetch_rate_limits();
@@ -1544,6 +1548,7 @@ impl ChatWidget {
         let codex_op_tx =
             spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
 
+        let first_prompt_text = initial_prompt.clone();
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -1606,6 +1611,7 @@ impl ChatWidget {
             acp_handle: None,
             session_stats: SessionStats::new(),
             login_handler: None,
+            first_prompt_text,
         };
 
         widget.prefetch_rate_limits();
@@ -1813,6 +1819,13 @@ impl ChatWidget {
             SlashCommand::Status => {
                 self.add_status_output();
             }
+            SlashCommand::FirstPrompt => {
+                if let Some(text) = &self.first_prompt_text {
+                    self.add_info_message(text.clone(), None);
+                } else {
+                    self.add_info_message("No prompt has been submitted yet.".to_string(), None);
+                }
+            }
             SlashCommand::Mcp => {
                 self.add_mcp_output();
             }
@@ -1961,6 +1974,10 @@ impl ChatWidget {
         {
             self.handle_login_command_with_agent(agent_name);
             return;
+        }
+
+        if self.first_prompt_text.is_none() {
+            self.first_prompt_text = Some(text.clone());
         }
 
         // Track user message for session statistics
