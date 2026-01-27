@@ -4,7 +4,7 @@ Path: @/
 
 ### Overview
 
-Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI.
+Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
 
 ### How it fits into the larger codebase
 
@@ -16,7 +16,7 @@ This is the root repository containing the Nori CLI project:
 - **`.claude/`**: Skills and configuration for Claude-based development
 - **`scripts/`**: Development scripts
 
-The project was originally forked from OpenAI Codex CLI and has been adapted to support multiple AI providers through ACP integration.
+The project was originally forked from OpenAI Codex CLI and has been adapted to support multiple AI providers through ACP integration. The `nori-cli` package provides the `nori` command via npm.
 
 ### Core Implementation
 

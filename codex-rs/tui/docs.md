@@ -4,7 +4,7 @@ Path: @/codex-rs/tui
 
 ### Overview
 
-The TUI crate provides Nori's terminal-based user interface. Built on Ratatui, it renders an interactive chat interface for communicating with AI agents. The crate produces the main `nori` binary and handles user input, markdown rendering, diff display, and session management.
+The `nori-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of model responses with markdown rendering.
 
 ### How it fits into the larger codebase
 
@@ -20,7 +20,9 @@ The TUI acts as the frontend layer. It:
 - Displays approval requests from the ACP layer and forwards user decisions back
 - Renders streaming AI responses with markdown and syntax highlighting
 
-Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pulldown-cmark` for markdown parsing, `tree-sitter-bash` for syntax highlighting.
+The `cli/` crate's `main.rs` dispatches to `nori_tui::run_main()` for interactive mode. Feature flags propagate from CLI to TUI for coordinated modular builds.
+
+Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pulldown-cmark` for markdown parsing, `tree-sitter-highlight` for syntax highlighting.
 
 ### Core Implementation
 
