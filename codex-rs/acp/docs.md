@@ -68,14 +68,17 @@ The config module provides the **canonical source of truth** for Nori home path 
 
 **Notification Configuration** (`config/types.rs`):
 
-Two enums control independent notification pathways. Both default to `Enabled` and are serialized as kebab-case strings in TOML:
+Three config enums control notification behavior, all stored in the `[tui]` section of `config.toml`:
 
-| Enum | TOML Key | Controls |
-|------|----------|----------|
-| `TerminalNotifications` | `[tui] terminal_notifications` | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`) |
-| `OsNotifications` | `[tui] os_notifications` | Native desktop notifications via `notify-rust` (wired in `backend.rs` to `UserNotifier::new()`) |
+| Enum | TOML Key | Default | Controls |
+|------|----------|---------|----------|
+| `TerminalNotifications` | `terminal_notifications` | `Enabled` | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`) |
+| `OsNotifications` | `os_notifications` | `Enabled` | Native desktop notifications via `notify-rust` (wired in `backend.rs` to `UserNotifier::new()`) |
+| `NotifyAfterIdle` | `notify_after_idle` | `FiveSeconds` (`"5s"`) | Duration to wait before firing an idle notification; `Disabled` suppresses the timer entirely |
 
-The `AcpBackendConfig` struct carries `os_notifications` so the backend can pass the `use_native` flag when constructing a `UserNotifier`. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
+`NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
+
+The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
 
 **Message History** (`message_history.rs`):
 

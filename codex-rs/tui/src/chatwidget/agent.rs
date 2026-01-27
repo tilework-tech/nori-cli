@@ -185,6 +185,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             sandbox_policy: config.sandbox_policy.clone(),
             notify: config.notify.clone(),
             os_notifications: nori_config.os_notifications,
+            notify_after_idle: nori_config.notify_after_idle,
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
         };

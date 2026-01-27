@@ -18,6 +18,7 @@ pub use types::McpServerTransportConfig;
 pub use types::NoriConfig;
 pub use types::NoriConfigOverrides;
 pub use types::NoriConfigToml;
+pub use types::NotifyAfterIdle;
 pub use types::OsNotifications;
 pub use types::TerminalNotifications;
 pub use types::TuiConfig;

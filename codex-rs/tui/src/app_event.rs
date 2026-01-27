@@ -276,4 +276,12 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI OS notifications config setting.
     SetConfigOsNotifications(bool),
+
+    /// Open the notify-after-idle sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenNotifyAfterIdlePicker,
+
+    /// Set the TUI notify-after-idle config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigNotifyAfterIdle(codex_acp::config::NotifyAfterIdle),
 }

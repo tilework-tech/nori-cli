@@ -1106,6 +1106,16 @@ impl App {
                 self.persist_notification_setting("os_notifications", enabled)
                     .await;
             }
+            #[cfg(feature = "nori-config")]
+            AppEvent::OpenNotifyAfterIdlePicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_notify_after_idle_picker(nori_config.notify_after_idle);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigNotifyAfterIdle(value) => {
+                self.persist_notify_after_idle_setting(value).await;
+            }
         }
         Ok(true)
     }
@@ -1212,6 +1222,33 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
+    }
+
+    #[cfg(feature = "nori-config")]
+    async fn persist_notify_after_idle_setting(
+        &mut self,
+        value: codex_acp::config::NotifyAfterIdle,
+    ) {
+        let toml_str = value.toml_value();
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "notify_after_idle"], toml_value(toml_str))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist notify_after_idle setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save notify_after_idle setting: {err}"));
+            return;
+        }
+
+        self.chat_widget.add_info_message(
+            format!("Notify after idle set to {}", value.display_name()),
+            None,
+        );
     }
 
     async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {

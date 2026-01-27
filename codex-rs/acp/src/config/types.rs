@@ -66,6 +66,68 @@ pub enum OsNotifications {
     Disabled,
 }
 
+/// How long after idle before sending a notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum NotifyAfterIdle {
+    #[default]
+    #[serde(rename = "5s")]
+    FiveSeconds,
+    #[serde(rename = "10s")]
+    TenSeconds,
+    #[serde(rename = "30s")]
+    ThirtySeconds,
+    #[serde(rename = "60s")]
+    SixtySeconds,
+    #[serde(rename = "disabled")]
+    Disabled,
+}
+
+impl NotifyAfterIdle {
+    /// Returns the duration for the idle timeout, or `None` if disabled.
+    pub fn as_duration(&self) -> Option<Duration> {
+        match self {
+            Self::FiveSeconds => Some(Duration::from_secs(5)),
+            Self::TenSeconds => Some(Duration::from_secs(10)),
+            Self::ThirtySeconds => Some(Duration::from_secs(30)),
+            Self::SixtySeconds => Some(Duration::from_secs(60)),
+            Self::Disabled => None,
+        }
+    }
+
+    /// Human-readable name for display in the TUI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::FiveSeconds => "5 seconds",
+            Self::TenSeconds => "10 seconds",
+            Self::ThirtySeconds => "30 seconds",
+            Self::SixtySeconds => "1 minute",
+            Self::Disabled => "Disabled",
+        }
+    }
+
+    /// TOML string representation for persistence.
+    pub fn toml_value(&self) -> &'static str {
+        match self {
+            Self::FiveSeconds => "5s",
+            Self::TenSeconds => "10s",
+            Self::ThirtySeconds => "30s",
+            Self::SixtySeconds => "60s",
+            Self::Disabled => "disabled",
+        }
+    }
+
+    /// All variants in order, for building picker UIs.
+    pub fn all_variants() -> &'static [NotifyAfterIdle] {
+        &[
+            Self::FiveSeconds,
+            Self::TenSeconds,
+            Self::ThirtySeconds,
+            Self::SixtySeconds,
+            Self::Disabled,
+        ]
+    }
+}
+
 /// TUI-specific settings (TOML)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -81,6 +143,9 @@ pub struct TuiConfigToml {
 
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: Option<bool>,
+
+    /// How long after idle before sending a notification.
+    pub notify_after_idle: Option<NotifyAfterIdle>,
 }
 
 /// Resolved TUI configuration
@@ -175,6 +240,9 @@ pub struct NoriConfig {
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: bool,
 
+    /// How long after idle before sending a notification.
+    pub notify_after_idle: NotifyAfterIdle,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -197,6 +265,7 @@ impl Default for NoriConfig {
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
+            notify_after_idle: NotifyAfterIdle::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
@@ -423,5 +492,100 @@ mod tests {
     #[test]
     fn test_history_persistence_default() {
         assert_eq!(HistoryPersistence::default(), HistoryPersistence::SaveAll);
+    }
+
+    #[test]
+    fn test_notify_after_idle_deserialize_all_variants() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            value: NotifyAfterIdle,
+        }
+
+        let w: Wrapper = toml::from_str(r#"value = "5s""#).unwrap();
+        assert_eq!(w.value, NotifyAfterIdle::FiveSeconds);
+
+        let w: Wrapper = toml::from_str(r#"value = "10s""#).unwrap();
+        assert_eq!(w.value, NotifyAfterIdle::TenSeconds);
+
+        let w: Wrapper = toml::from_str(r#"value = "30s""#).unwrap();
+        assert_eq!(w.value, NotifyAfterIdle::ThirtySeconds);
+
+        let w: Wrapper = toml::from_str(r#"value = "60s""#).unwrap();
+        assert_eq!(w.value, NotifyAfterIdle::SixtySeconds);
+
+        let w: Wrapper = toml::from_str(r#"value = "disabled""#).unwrap();
+        assert_eq!(w.value, NotifyAfterIdle::Disabled);
+    }
+
+    #[test]
+    fn test_notify_after_idle_default() {
+        assert_eq!(NotifyAfterIdle::default(), NotifyAfterIdle::FiveSeconds);
+    }
+
+    #[test]
+    fn test_notify_after_idle_as_duration() {
+        assert_eq!(
+            NotifyAfterIdle::FiveSeconds.as_duration(),
+            Some(Duration::from_secs(5))
+        );
+        assert_eq!(
+            NotifyAfterIdle::TenSeconds.as_duration(),
+            Some(Duration::from_secs(10))
+        );
+        assert_eq!(
+            NotifyAfterIdle::ThirtySeconds.as_duration(),
+            Some(Duration::from_secs(30))
+        );
+        assert_eq!(
+            NotifyAfterIdle::SixtySeconds.as_duration(),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(NotifyAfterIdle::Disabled.as_duration(), None);
+    }
+
+    #[test]
+    fn test_notify_after_idle_display_name() {
+        assert_eq!(NotifyAfterIdle::FiveSeconds.display_name(), "5 seconds");
+        assert_eq!(NotifyAfterIdle::TenSeconds.display_name(), "10 seconds");
+        assert_eq!(NotifyAfterIdle::ThirtySeconds.display_name(), "30 seconds");
+        assert_eq!(NotifyAfterIdle::SixtySeconds.display_name(), "1 minute");
+        assert_eq!(NotifyAfterIdle::Disabled.display_name(), "Disabled");
+    }
+
+    #[test]
+    fn test_notify_after_idle_toml_value() {
+        assert_eq!(NotifyAfterIdle::FiveSeconds.toml_value(), "5s");
+        assert_eq!(NotifyAfterIdle::TenSeconds.toml_value(), "10s");
+        assert_eq!(NotifyAfterIdle::ThirtySeconds.toml_value(), "30s");
+        assert_eq!(NotifyAfterIdle::SixtySeconds.toml_value(), "60s");
+        assert_eq!(NotifyAfterIdle::Disabled.toml_value(), "disabled");
+    }
+
+    #[test]
+    fn test_notify_after_idle_all_variants() {
+        let variants = NotifyAfterIdle::all_variants();
+        assert_eq!(variants.len(), 5);
+        assert_eq!(variants[0], NotifyAfterIdle::FiveSeconds);
+        assert_eq!(variants[4], NotifyAfterIdle::Disabled);
+    }
+
+    #[test]
+    fn test_tui_config_toml_with_notify_after_idle() {
+        let config: TuiConfigToml = toml::from_str(
+            r#"
+notify_after_idle = "30s"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.notify_after_idle,
+            Some(NotifyAfterIdle::ThirtySeconds)
+        );
+    }
+
+    #[test]
+    fn test_tui_config_toml_without_notify_after_idle() {
+        let config: TuiConfigToml = toml::from_str("").unwrap();
+        assert_eq!(config.notify_after_idle, None);
     }
 }

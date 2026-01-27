@@ -4,6 +4,7 @@
 //! that are persisted to ~/.nori/cli/config.toml.
 
 use codex_acp::config::NoriConfig;
+use codex_acp::config::NotifyAfterIdle;
 use codex_acp::config::OsNotifications;
 use codex_acp::config::TerminalNotifications;
 
@@ -65,6 +66,25 @@ pub fn config_picker_params(
                 }
             },
         ),
+        {
+            let current_idle = config.notify_after_idle;
+            let display_name = format!("Notify After Idle ({})", current_idle.display_name());
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenNotifyAfterIdlePicker);
+                }
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some(
+                    "How long to wait before sending an idle notification".to_string(),
+                ),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
     ];
 
     SelectionViewParams {
@@ -103,6 +123,44 @@ where
     }
 }
 
+/// Create selection view parameters for the notify-after-idle sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently selected NotifyAfterIdle variant
+/// * `app_event_tx` - The app event sender for triggering config change events
+pub fn notify_after_idle_picker_params(
+    current: NotifyAfterIdle,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = NotifyAfterIdle::all_variants()
+        .iter()
+        .map(|&variant| {
+            let is_current = variant == current;
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::SetConfigNotifyAfterIdle(variant));
+                }
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description: None,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Notify After Idle".to_string()),
+        subtitle: Some("Select idle notification delay".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +181,7 @@ mod tests {
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer,
+            notify_after_idle: codex_acp::config::NotifyAfterIdle::FiveSeconds,
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -130,14 +189,14 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_three_items() {
+    fn config_picker_returns_expected_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 3);
+        assert_eq!(params.items.len(), 4);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -165,6 +224,57 @@ mod tests {
     }
 
     #[test]
+    fn config_picker_returns_four_items() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        assert_eq!(params.items.len(), 4);
+        // The 4th item should be Notify After Idle
+        assert!(params.items[3].name.contains("Notify After Idle"));
+    }
+
+    #[test]
+    fn config_picker_notify_after_idle_shows_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        // Default config has FiveSeconds, so should show "5 seconds"
+        let idle_item = &params.items[3];
+        assert!(
+            idle_item.name.contains("5 seconds"),
+            "Expected '5 seconds' in name, got: {}",
+            idle_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_notify_after_idle_action_sends_open_picker_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        // Trigger the notify after idle action (4th item)
+        let idle_item = &params.items[3];
+        for action in &idle_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenNotifyAfterIdlePicker),
+            "expected OpenNotifyAfterIdlePicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
     fn config_picker_vertical_footer_action_sends_correct_event() {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -187,6 +297,66 @@ mod tests {
                 assert!(value, "vertical_footer was off, should toggle to on");
             }
             _ => panic!("expected SetConfigVerticalFooter event"),
+        }
+    }
+
+    #[test]
+    fn notify_after_idle_picker_returns_five_items() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params =
+            notify_after_idle_picker_params(codex_acp::config::NotifyAfterIdle::FiveSeconds, tx);
+
+        assert_eq!(params.items.len(), 5);
+        assert!(params.title.unwrap().contains("Notify After Idle"));
+    }
+
+    #[test]
+    fn notify_after_idle_picker_marks_current_variant() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params =
+            notify_after_idle_picker_params(codex_acp::config::NotifyAfterIdle::ThirtySeconds, tx);
+
+        // Only the "30 seconds" item should be marked current
+        for item in &params.items {
+            if item.name.contains("30 seconds") {
+                assert!(item.is_current, "30 seconds should be marked current");
+            } else {
+                assert!(
+                    !item.is_current,
+                    "{} should not be marked current",
+                    item.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn notify_after_idle_picker_action_sends_set_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = notify_after_idle_picker_params(
+            codex_acp::config::NotifyAfterIdle::FiveSeconds,
+            tx.clone(),
+        );
+
+        // Select the "1 minute" option (index 3)
+        let minute_item = &params.items[3];
+        assert!(minute_item.name.contains("1 minute"));
+        for action in &minute_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigNotifyAfterIdle(value) => {
+                assert_eq!(value, codex_acp::config::NotifyAfterIdle::SixtySeconds);
+            }
+            _ => panic!("expected SetConfigNotifyAfterIdle event, got: {event:?}"),
         }
     }
 }

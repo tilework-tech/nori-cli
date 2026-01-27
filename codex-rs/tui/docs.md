@@ -49,7 +49,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, notify after idle) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -70,12 +70,13 @@ The `/logout` command is only available when the `login` feature is enabled. The
 
 **Notification Configuration:**
 
-Two independent notification pathways are toggled via `/config` and persisted to `config.toml` as `"enabled"`/`"disabled"` strings:
+Three notification settings are toggled via `/config` and persisted to the `[tui]` section of `config.toml`:
 
 - **Terminal Notifications** (`TerminalNotifications` enum from `@/codex-rs/acp/src/config/types.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget.rs::notify()` gates on that bool.
 - **OS Notifications** (`OsNotifications` enum from `@/codex-rs/acp/src/config/types.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend.rs` to set the `use_native` flag on `UserNotifier`.
+- **Notify After Idle** (`NotifyAfterIdle` enum from `@/codex-rs/acp/src/config/types.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
-Config changes emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`, which writes the enum string value to the `[tui]` section of `config.toml`.
+Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
 
 **Status Line Footer:**
 

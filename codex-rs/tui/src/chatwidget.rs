@@ -2488,6 +2488,19 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the notify-after-idle sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_notify_after_idle_picker(
+        &mut self,
+        current: codex_acp::config::NotifyAfterIdle,
+    ) {
+        let params = crate::nori::config_picker::notify_after_idle_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
     ///
