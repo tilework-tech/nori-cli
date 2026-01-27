@@ -24,6 +24,7 @@ pub enum SlashCommand {
     Diff,
     Mention,
     Status,
+    FirstPrompt,
     Mcp,
     Login,
     Logout,
@@ -47,6 +48,7 @@ impl SlashCommand {
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and token usage",
+            SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Config => "toggle TUI settings (vertical footer)",
@@ -81,6 +83,7 @@ impl SlashCommand {
             SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
+            | SlashCommand::FirstPrompt
             | SlashCommand::Mcp
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
@@ -172,6 +175,32 @@ mod tests {
         assert!(
             !SlashCommand::Config.available_during_task(),
             "/config should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn first_prompt_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_first_prompt = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::FirstPrompt);
+        assert!(
+            has_first_prompt,
+            "/first-prompt should be visible in commands list"
+        );
+    }
+
+    #[test]
+    fn first_prompt_has_description() {
+        let desc = SlashCommand::FirstPrompt.description();
+        assert!(!desc.is_empty(), "/first-prompt should have a description");
+    }
+
+    #[test]
+    fn first_prompt_available_during_task() {
+        assert!(
+            SlashCommand::FirstPrompt.available_during_task(),
+            "/first-prompt should be available while task is running"
         );
     }
 }
