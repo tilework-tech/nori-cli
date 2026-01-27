@@ -22,25 +22,66 @@ pub fn config_picker_params(
     app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
     let vertical_footer_enabled = config.vertical_footer;
+    let notification_timeout = config.notification_timeout;
 
-    let items: Vec<SelectionItem> = vec![build_toggle_item(
-        "Vertical Footer",
-        "Stack footer segments vertically instead of horizontally",
-        vertical_footer_enabled,
-        {
-            let tx = app_event_tx;
-            let new_value = !vertical_footer_enabled;
-            move || {
-                tx.send(AppEvent::SetConfigVerticalFooter(new_value));
-            }
-        },
-    )];
+    let items: Vec<SelectionItem> = vec![
+        build_toggle_item(
+            "Vertical Footer",
+            "Stack footer segments vertically instead of horizontally",
+            vertical_footer_enabled,
+            {
+                let tx = app_event_tx.clone();
+                let new_value = !vertical_footer_enabled;
+                move || {
+                    tx.send(AppEvent::SetConfigVerticalFooter(new_value));
+                }
+            },
+        ),
+        build_cycle_item(
+            "Notification Timeout",
+            "Duration for desktop notifications (select to cycle)",
+            &notification_timeout.to_string(),
+            {
+                let tx = app_event_tx;
+                let next_value = notification_timeout.next();
+                move || {
+                    tx.send(AppEvent::SetConfigNotificationTimeout(next_value));
+                }
+            },
+        ),
+    ];
 
     SelectionViewParams {
         title: Some("Configuration".to_string()),
         subtitle: Some("Toggle TUI settings (changes saved to config.toml)".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        ..Default::default()
+    }
+}
+
+/// Build a cycle-style selection item that advances through values on each select.
+fn build_cycle_item<F>(
+    name: &str,
+    description: &str,
+    current_value: &str,
+    on_cycle: F,
+) -> SelectionItem
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let display_name = format!("{name} ({current_value})");
+
+    let actions: Vec<SelectionAction> = vec![Box::new(move |_tx| {
+        on_cycle();
+    })];
+
+    SelectionItem {
+        name: display_name,
+        description: Some(description.to_string()),
+        is_current: false,
+        actions,
+        dismiss_on_select: true,
         ..Default::default()
     }
 }
@@ -89,21 +130,31 @@ mod tests {
             animations: true,
             notifications: true,
             vertical_footer,
+            notification_timeout: codex_acp::config::NotificationTimeout::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
         }
     }
 
+    fn make_test_config_with_timeout(
+        timeout: codex_acp::config::NotificationTimeout,
+    ) -> NoriConfig {
+        NoriConfig {
+            notification_timeout: timeout,
+            ..make_test_config(false)
+        }
+    }
+
     #[test]
-    fn config_picker_returns_one_item() {
+    fn config_picker_returns_two_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 1);
+        assert_eq!(params.items.len(), 2);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -153,6 +204,74 @@ mod tests {
                 assert!(value, "vertical_footer was off, should toggle to on");
             }
             _ => panic!("expected SetConfigVerticalFooter event"),
+        }
+    }
+
+    #[test]
+    fn config_picker_shows_notification_timeout_item() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config =
+            make_test_config_with_timeout(codex_acp::config::NotificationTimeout::ThirtySeconds);
+
+        let params = config_picker_params(&config, tx);
+
+        let timeout_item = &params.items[1];
+        assert!(
+            timeout_item.name.contains("Notification Timeout"),
+            "expected item name to contain 'Notification Timeout', got: {}",
+            timeout_item.name
+        );
+        assert!(
+            timeout_item.name.contains("30s"),
+            "expected item name to contain '30s', got: {}",
+            timeout_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_notification_timeout_shows_disabled() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config =
+            make_test_config_with_timeout(codex_acp::config::NotificationTimeout::Disabled);
+
+        let params = config_picker_params(&config, tx);
+
+        let timeout_item = &params.items[1];
+        assert!(
+            timeout_item.name.contains("disabled"),
+            "expected item name to contain 'disabled', got: {}",
+            timeout_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_notification_timeout_action_sends_next_value() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config =
+            make_test_config_with_timeout(codex_acp::config::NotificationTimeout::FiveSeconds);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let timeout_item = &params.items[1];
+        assert!(timeout_item.name.contains("Notification Timeout"));
+        for action in &timeout_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigNotificationTimeout(value) => {
+                // Was FiveSeconds, next should be TenSeconds
+                assert_eq!(
+                    value,
+                    codex_acp::config::NotificationTimeout::TenSeconds,
+                    "expected next value after FiveSeconds to be TenSeconds"
+                );
+            }
+            _ => panic!("expected SetConfigNotificationTimeout event"),
         }
     }
 }

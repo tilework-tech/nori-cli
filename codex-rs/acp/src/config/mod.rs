@@ -18,6 +18,7 @@ pub use types::McpServerTransportConfig;
 pub use types::NoriConfig;
 pub use types::NoriConfigOverrides;
 pub use types::NoriConfigToml;
+pub use types::NotificationTimeout;
 pub use types::TuiConfig;
 
 #[cfg(test)]

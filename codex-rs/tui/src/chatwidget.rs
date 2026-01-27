@@ -320,6 +320,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
+    pub(crate) notification_timeout: codex_acp::config::NotificationTimeout,
     /// Expected model name for this widget. When set, events from other models
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching model. This prevents race conditions when switching agents.
@@ -376,6 +377,8 @@ pub(crate) struct ChatWidget {
     queued_user_messages: VecDeque<UserMessage>,
     // Pending notification to show when unfocused on next Draw
     pending_notification: Option<Notification>,
+    // Notification timeout duration for desktop notifications
+    notification_timeout: codex_acp::config::NotificationTimeout,
     // Simple review mode flag; used to adjust layout and banners.
     is_review_mode: bool,
     // Snapshot of token usage to restore after review mode exits.
@@ -1450,6 +1453,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             expected_model,
+            notification_timeout,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1501,6 +1505,7 @@ impl ChatWidget {
             show_welcome_banner: true,
             suppress_session_configured_redraw: false,
             pending_notification: None,
+            notification_timeout,
             is_review_mode: false,
             pre_review_token_info: None,
             needs_final_message_separator: false,
@@ -1538,6 +1543,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             expected_model,
+            notification_timeout,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1591,6 +1597,7 @@ impl ChatWidget {
             show_welcome_banner: true,
             suppress_session_configured_redraw: true,
             pending_notification: None,
+            notification_timeout,
             is_review_mode: false,
             pre_review_token_info: None,
             needs_final_message_separator: false,
@@ -2295,6 +2302,12 @@ impl ChatWidget {
 
     fn notify(&mut self, notification: Notification) {
         if !notification.allowed_for(&self.config.tui_notifications) {
+            return;
+        }
+        if matches!(
+            self.notification_timeout,
+            codex_acp::config::NotificationTimeout::Disabled
+        ) {
             return;
         }
         self.pending_notification = Some(notification);
@@ -3302,6 +3315,14 @@ impl ChatWidget {
     /// Set the vertical footer layout flag for the TUI.
     pub(crate) fn set_vertical_footer(&mut self, enabled: bool) {
         self.bottom_pane.set_vertical_footer(enabled);
+    }
+
+    /// Set the notification timeout for desktop notifications.
+    pub(crate) fn set_notification_timeout(
+        &mut self,
+        timeout: codex_acp::config::NotificationTimeout,
+    ) {
+        self.notification_timeout = timeout;
     }
 
     /// Update the model display name shown in approval dialogs.

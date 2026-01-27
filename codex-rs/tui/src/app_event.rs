@@ -270,4 +270,7 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI vertical footer config setting.
     SetConfigVerticalFooter(bool),
+
+    /// Set the TUI notification timeout config setting.
+    SetConfigNotificationTimeout(codex_acp::config::NotificationTimeout),
 }

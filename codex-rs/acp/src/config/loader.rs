@@ -115,6 +115,7 @@ impl NoriConfig {
             animations: toml.tui.animations.unwrap_or(true),
             notifications: toml.tui.notifications.unwrap_or(true),
             vertical_footer: toml.tui.vertical_footer.unwrap_or(false),
+            notification_timeout: toml.tui.notification_timeout.unwrap_or_default(),
             nori_home,
             cwd,
             mcp_servers,

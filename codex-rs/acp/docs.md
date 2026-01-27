@@ -59,6 +59,10 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 - `DEFAULT_MODEL`: Default agent model (`"claude-code"`)
 
+**TUI Config Settings:**
+
+TUI-specific settings are stored under `[tui]` in `config.toml` and resolved through `TuiConfigToml` (optional fields) into `NoriConfig` (resolved defaults). Settings include boolean toggles (e.g., `vertical_footer`) and enum-valued options (e.g., `notification_timeout`). The `NotificationTimeout` enum defines discrete timeout durations for desktop notifications, serialized as string values (`"5s"`, `"10s"`, `"30s"`, `"1m"`, `"disabled"`). It provides a `next()` method for cycling through values and `to_duration()` which returns `None` for the `Disabled` variant.
+
 **Agent vs Model Field Distinction:**
 
 | Field | Purpose | Persistence |

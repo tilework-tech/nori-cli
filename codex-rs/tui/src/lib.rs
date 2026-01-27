@@ -474,14 +474,16 @@ async fn run_ratatui_app(
     let Cli { prompt, images, .. } = cli;
 
     #[cfg(feature = "nori-config")]
-    let vertical_footer = nori::config_adapter::load_nori_config()
-        .map(|config| config.vertical_footer)
+    let (vertical_footer, notification_timeout) = nori::config_adapter::load_nori_config()
+        .map(|config| (config.vertical_footer, config.notification_timeout))
         .unwrap_or_else(|err| {
-            tracing::warn!("Failed to load Nori config for footer layout: {err}");
-            false
+            tracing::warn!("Failed to load Nori config: {err}");
+            (false, codex_acp::config::NotificationTimeout::default())
         });
     #[cfg(not(feature = "nori-config"))]
     let vertical_footer = false;
+    #[cfg(not(feature = "nori-config"))]
+    let notification_timeout = codex_acp::config::NotificationTimeout::default();
 
     let app_result = App::run(
         &mut tui,
@@ -492,6 +494,7 @@ async fn run_ratatui_app(
         images,
         resume_selection,
         vertical_footer,
+        notification_timeout,
     )
     .await;
 

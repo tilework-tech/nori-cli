@@ -49,7 +49,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer) |
+| `/config` | Adjust TUI settings (vertical footer, notification timeout) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -67,6 +67,17 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
+
+**Config Settings Flow:**
+
+The `/config` command opens a picker popup with TUI settings. Each setting follows the same data flow: user selects an option in `config_picker.rs` -> `AppEvent` is sent -> `app.rs` persists to `config.toml` via `ConfigEditsBuilder` and applies the change to `ChatWidget`. Settings use two interaction patterns:
+
+| Pattern | Example | Behavior |
+|---------|---------|----------|
+| Toggle | Vertical Footer | Flips a boolean on/off |
+| Cycle | Notification Timeout | Advances through discrete values (5s -> 10s -> 30s -> 1m -> disabled -> 5s) |
+
+When `NotificationTimeout` is set to `Disabled`, the `ChatWidget::notify()` method suppresses all desktop notifications. The timeout value is defined as the `NotificationTimeout` enum in `@/codex-rs/acp/src/config/types.rs` and stored in `config.toml` under `[tui].notification_timeout`.
 
 **Status Line Footer:**
 

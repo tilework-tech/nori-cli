@@ -347,6 +347,7 @@ impl App {
             enhanced_keys_supported: self.enhanced_keys_supported,
             auth_manager: self.auth_manager.clone(),
             vertical_footer: self.vertical_footer,
+            notification_timeout: self.notification_timeout,
             expected_model: None, // No filtering for backtracked conversations
         };
         self.chat_widget =

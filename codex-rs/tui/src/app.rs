@@ -203,6 +203,7 @@ pub(crate) struct App {
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
     pub(crate) vertical_footer: bool,
+    pub(crate) notification_timeout: codex_acp::config::NotificationTimeout,
     pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
@@ -255,6 +256,7 @@ impl App {
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
+        notification_timeout: codex_acp::config::NotificationTimeout,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -300,6 +302,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
+                    notification_timeout,
                     expected_model: None, // No filtering for fresh sessions
                 };
                 ChatWidget::new(init, conversation_manager.clone())
@@ -324,6 +327,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
+                    notification_timeout,
                     expected_model: None, // No filtering for resumed sessions
                 };
                 ChatWidget::new_from_existing(
@@ -347,6 +351,7 @@ impl App {
             auth_manager: auth_manager.clone(),
             config,
             vertical_footer,
+            notification_timeout,
             active_profile,
             file_search,
             enhanced_keys_supported,
@@ -493,6 +498,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
+                    notification_timeout: self.notification_timeout,
                     expected_model: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
@@ -1017,6 +1023,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
+                    notification_timeout: self.notification_timeout,
                     expected_model: Some(model_name.clone()),
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
@@ -1098,6 +1105,9 @@ impl App {
                 self.persist_config_setting("vertical_footer", enabled)
                     .await;
             }
+            AppEvent::SetConfigNotificationTimeout(timeout) => {
+                self.persist_notification_timeout(timeout).await;
+            }
         }
         Ok(true)
     }
@@ -1155,6 +1165,47 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
+    }
+
+    /// Persist the notification timeout setting to config.toml and apply it immediately.
+    async fn persist_notification_timeout(
+        &mut self,
+        timeout: codex_acp::config::NotificationTimeout,
+    ) {
+        // Persist to config.toml
+        let value_str = timeout.to_string();
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(
+                &["tui", "notification_timeout"],
+                toml_value(value_str.clone()),
+            )
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist notification_timeout setting"
+            );
+            self.chat_widget.add_error_message(format!(
+                "Failed to save notification_timeout setting: {err}"
+            ));
+            return;
+        }
+
+        self.notification_timeout = timeout;
+        self.chat_widget.set_notification_timeout(timeout);
+        self.chat_widget
+            .add_info_message(format!("notification_timeout set to {value_str}"), None);
+
+        // Re-open the config popup so the user sees the updated value
+        match codex_acp::config::NoriConfig::load() {
+            Ok(nori_config) => {
+                self.chat_widget.open_config_popup(&nori_config);
+            }
+            Err(err) => {
+                tracing::error!(error = %err, "failed to reload config after timeout change");
+            }
+        }
     }
 
     async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
@@ -1311,6 +1362,7 @@ mod tests {
             auth_manager,
             config,
             vertical_footer: false,
+            notification_timeout: codex_acp::config::NotificationTimeout::default(),
             active_profile: None,
             file_search,
             transcript_cells: Vec::new(),
@@ -1349,6 +1401,7 @@ mod tests {
                 auth_manager,
                 config,
                 vertical_footer: false,
+                notification_timeout: codex_acp::config::NotificationTimeout::default(),
                 active_profile: None,
                 file_search,
                 transcript_cells: Vec::new(),

@@ -18,6 +18,92 @@ pub enum HistoryPersistence {
     None,
 }
 
+/// Notification timeout duration for desktop notifications.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationTimeout {
+    FiveSeconds,
+    TenSeconds,
+    ThirtySeconds,
+    OneMinute,
+    Disabled,
+}
+
+impl Default for NotificationTimeout {
+    fn default() -> Self {
+        Self::FiveSeconds
+    }
+}
+
+impl NotificationTimeout {
+    /// Return the next value in the cycle.
+    pub fn next(self) -> Self {
+        match self {
+            Self::FiveSeconds => Self::TenSeconds,
+            Self::TenSeconds => Self::ThirtySeconds,
+            Self::ThirtySeconds => Self::OneMinute,
+            Self::OneMinute => Self::Disabled,
+            Self::Disabled => Self::FiveSeconds,
+        }
+    }
+
+    /// Convert to a `Duration`, or `None` if disabled.
+    pub fn to_duration(self) -> Option<Duration> {
+        match self {
+            Self::FiveSeconds => Some(Duration::from_secs(5)),
+            Self::TenSeconds => Some(Duration::from_secs(10)),
+            Self::ThirtySeconds => Some(Duration::from_secs(30)),
+            Self::OneMinute => Some(Duration::from_secs(60)),
+            Self::Disabled => None,
+        }
+    }
+}
+
+impl std::fmt::Display for NotificationTimeout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FiveSeconds => write!(f, "5s"),
+            Self::TenSeconds => write!(f, "10s"),
+            Self::ThirtySeconds => write!(f, "30s"),
+            Self::OneMinute => write!(f, "1m"),
+            Self::Disabled => write!(f, "disabled"),
+        }
+    }
+}
+
+impl std::str::FromStr for NotificationTimeout {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "5s" => Ok(Self::FiveSeconds),
+            "10s" => Ok(Self::TenSeconds),
+            "30s" => Ok(Self::ThirtySeconds),
+            "1m" => Ok(Self::OneMinute),
+            "disabled" => Ok(Self::Disabled),
+            _ => Err(format!("invalid notification timeout: {s}")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for NotificationTimeout {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl Serialize for NotificationTimeout {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 /// Default model for ACP-only mode
 pub const DEFAULT_MODEL: &str = "claude-code";
 
@@ -62,6 +148,9 @@ pub struct TuiConfigToml {
 
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: Option<bool>,
+
+    /// Notification timeout duration.
+    pub notification_timeout: Option<NotificationTimeout>,
 }
 
 /// Resolved TUI configuration
@@ -149,6 +238,9 @@ pub struct NoriConfig {
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: bool,
 
+    /// Notification timeout duration for desktop notifications.
+    pub notification_timeout: NotificationTimeout,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -170,6 +262,7 @@ impl Default for NoriConfig {
             animations: true,
             notifications: true,
             vertical_footer: false,
+            notification_timeout: NotificationTimeout::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
@@ -396,5 +489,102 @@ mod tests {
     #[test]
     fn test_history_persistence_default() {
         assert_eq!(HistoryPersistence::default(), HistoryPersistence::SaveAll);
+    }
+
+    #[test]
+    fn test_notification_timeout_default_is_five_seconds() {
+        assert_eq!(
+            NotificationTimeout::default(),
+            NotificationTimeout::FiveSeconds
+        );
+    }
+
+    #[test]
+    fn test_notification_timeout_display() {
+        assert_eq!(NotificationTimeout::FiveSeconds.to_string(), "5s");
+        assert_eq!(NotificationTimeout::TenSeconds.to_string(), "10s");
+        assert_eq!(NotificationTimeout::ThirtySeconds.to_string(), "30s");
+        assert_eq!(NotificationTimeout::OneMinute.to_string(), "1m");
+        assert_eq!(NotificationTimeout::Disabled.to_string(), "disabled");
+    }
+
+    #[test]
+    fn test_notification_timeout_next_cycles_through_all_values() {
+        let start = NotificationTimeout::FiveSeconds;
+        assert_eq!(start.next(), NotificationTimeout::TenSeconds);
+        assert_eq!(start.next().next(), NotificationTimeout::ThirtySeconds);
+        assert_eq!(start.next().next().next(), NotificationTimeout::OneMinute);
+        assert_eq!(
+            start.next().next().next().next(),
+            NotificationTimeout::Disabled
+        );
+        // Wraps back around
+        assert_eq!(
+            start.next().next().next().next().next(),
+            NotificationTimeout::FiveSeconds
+        );
+    }
+
+    #[test]
+    fn test_notification_timeout_to_duration() {
+        assert_eq!(
+            NotificationTimeout::FiveSeconds.to_duration(),
+            Some(Duration::from_secs(5))
+        );
+        assert_eq!(
+            NotificationTimeout::TenSeconds.to_duration(),
+            Some(Duration::from_secs(10))
+        );
+        assert_eq!(
+            NotificationTimeout::ThirtySeconds.to_duration(),
+            Some(Duration::from_secs(30))
+        );
+        assert_eq!(
+            NotificationTimeout::OneMinute.to_duration(),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(NotificationTimeout::Disabled.to_duration(), None);
+    }
+
+    #[test]
+    fn test_notification_timeout_deserialize_from_toml() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            timeout: NotificationTimeout,
+        }
+
+        let w: Wrapper = toml::from_str(r#"timeout = "5s""#).unwrap();
+        assert_eq!(w.timeout, NotificationTimeout::FiveSeconds);
+
+        let w: Wrapper = toml::from_str(r#"timeout = "10s""#).unwrap();
+        assert_eq!(w.timeout, NotificationTimeout::TenSeconds);
+
+        let w: Wrapper = toml::from_str(r#"timeout = "30s""#).unwrap();
+        assert_eq!(w.timeout, NotificationTimeout::ThirtySeconds);
+
+        let w: Wrapper = toml::from_str(r#"timeout = "1m""#).unwrap();
+        assert_eq!(w.timeout, NotificationTimeout::OneMinute);
+
+        let w: Wrapper = toml::from_str(r#"timeout = "disabled""#).unwrap();
+        assert_eq!(w.timeout, NotificationTimeout::Disabled);
+    }
+
+    #[test]
+    fn test_notification_timeout_tui_config_toml_field() {
+        let toml_str = r#"
+            notification_timeout = "30s"
+        "#;
+        let config: TuiConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(
+            config.notification_timeout,
+            Some(NotificationTimeout::ThirtySeconds)
+        );
+    }
+
+    #[test]
+    fn test_notification_timeout_tui_config_toml_missing_uses_none() {
+        let toml_str = "";
+        let config: TuiConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.notification_timeout, None);
     }
 }

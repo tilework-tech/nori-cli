@@ -315,6 +315,7 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         vertical_footer: false,
+        notification_timeout: codex_acp::config::NotificationTimeout::default(),
         expected_model: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
@@ -389,6 +390,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
+        notification_timeout: codex_acp::config::NotificationTimeout::default(),
     };
     (widget, rx, op_rx)
 }
