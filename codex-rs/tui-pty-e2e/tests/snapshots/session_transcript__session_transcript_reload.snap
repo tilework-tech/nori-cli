@@ -1,0 +1,27 @@
+---
+source: tui-pty-e2e/tests/session_transcript.rs
+expression: normalize_for_input_snapshot(contents)
+---
+/ D I F F / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / 
+Session: [SESSION_ID]                        
+
+--- You ---
+Alpha request - first turn
+
+--- Assistant ---
+Test message 1Test message 2
+
+--- You ---
+Beta request - second turn
+
+--- Assistant ---
+Test message 1Test message 2
+~
+~
+~
+~
+~
+~
+───────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit

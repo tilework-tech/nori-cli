@@ -1,0 +1,11 @@
+---
+source: tui-pty-e2e/tests/session_transcript.rs
+expression: normalize_for_input_snapshot(contents)
+---
+  Select Session
+  View transcript of a previous session (read-only)
+
+› 1. Unique identifier prompt for session picker test  [TIMESTAMP] |
+                                                       4 msgs
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

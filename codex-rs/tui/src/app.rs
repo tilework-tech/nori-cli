@@ -1117,6 +1117,74 @@ impl App {
                 self.chat_widget
                     .handle_external_cli_login_complete(success, agent_name);
             }
+            AppEvent::OpenSessionPicker { current_session_id } => {
+                // Load sessions asynchronously then show picker
+                let cwd = self.config.cwd.clone();
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    let project_key = codex_acp::project_key_from_cwd(&cwd);
+                    if let Ok(nori_home) = codex_acp::find_nori_home() {
+                        match codex_acp::list_project_sessions(
+                            &nori_home,
+                            &project_key,
+                            current_session_id.as_deref(),
+                        )
+                        .await
+                        {
+                            Ok(sessions) => {
+                                tx.send(AppEvent::ShowSessionPicker {
+                                    sessions,
+                                    project_key,
+                                });
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to list sessions: {e}");
+                            }
+                        }
+                    }
+                });
+            }
+            AppEvent::ShowSessionPicker {
+                sessions,
+                project_key,
+            } => {
+                self.chat_widget.show_session_picker(sessions, project_key);
+            }
+            AppEvent::LoadSessionTranscript {
+                project_key,
+                session_id,
+            } => {
+                // Load transcript and display in overlay
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    if let Ok(nori_home) = codex_acp::find_nori_home() {
+                        match codex_acp::load_transcript(&nori_home, &project_key, &session_id)
+                            .await
+                        {
+                            Ok(entries) => {
+                                // Format entries for display
+                                let mut lines: Vec<String> = Vec::new();
+                                lines.push(format!("Session: {session_id}"));
+                                lines.push(String::new());
+                                for entry in entries {
+                                    let role = match entry.role {
+                                        codex_acp::TranscriptRole::User => "You",
+                                        codex_acp::TranscriptRole::Assistant => "Assistant",
+                                    };
+                                    lines.push(format!("--- {role} ---"));
+                                    lines.push(entry.text);
+                                    lines.push(String::new());
+                                }
+                                let transcript_text = lines.join("\n");
+                                tx.send(AppEvent::DiffResult(transcript_text));
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to load transcript: {e}");
+                            }
+                        }
+                    }
+                });
+            }
         }
         Ok(true)
     }

@@ -83,6 +83,16 @@ The cell is inserted into the chat history and displayed before terminal restora
 - `PendingAgentSelection` holds the selected model/display name pair until the next prompt triggers `AppEvent::SubmitWithAgentSwitch`
 - `get_agent_info(model_name)` looks up agent metadata (display name, description) from the available agents list by model name (case-insensitive). Used by `chatwidget.rs` to resolve human-readable display names for approval dialogs.
 
+
+**Session Picker (`session_picker.rs`):**
+
+Provides the UI for the `/resume-viewonly` command to view previous session transcripts:
+- `session_picker_params()` generates `SelectionViewParams` for the session picker popup
+- When sessions exist, displays list with first message preview, timestamp, and message count
+- When no sessions exist, shows informative message with instructions
+- Selecting a session triggers `AppEvent::LoadSessionTranscript` to display the transcript in a read-only overlay
+- Works with project-grouped transcript storage from `@/codex-rs/acp/src/transcript.rs`
+
 **Feedback Redirect (`feedback.rs`):**
 
 Compiled only when `feedback` feature is disabled. Redirects `/feedback` command to GitHub Discussions instead of OpenAI's feedback system.

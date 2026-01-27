@@ -1,0 +1,11 @@
+---
+source: tui-pty-e2e/tests/session_transcript.rs
+expression: normalize_for_input_snapshot(contents)
+---
+  Previous Sessions
+  No previous sessions found for this project
+
+› 1. No previous sessions  Start a conversation and use /new to create a new
+                           session
+
+  Press esc to dismiss.

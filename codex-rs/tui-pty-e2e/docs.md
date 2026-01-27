@@ -168,6 +168,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/acp_prompt_errors.rs` | ACP prompt failure error propagation - verifies that when `prompt()` fails, the error is displayed to the user (not silently swallowed) and the TUI remains responsive; uses `MOCK_AGENT_PROMPT_FAIL` env var (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/acp_exit_cleanup.rs` | ACP agent subprocess cleanup on TUI exit - verifies agent processes are terminated immediately (not orphaned) when TUI exits via `/exit`, `/quit`, or Ctrl+C; tests synchronous cleanup behavior of `AcpConnection::Drop` (Linux only) |
 | `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
+| `@/codex-rs/tui-pty-e2e/tests/session_transcript.rs` | Session transcript storage and `/resume-viewonly` command - verifies transcripts are saved, session picker shows previous sessions, and selecting a session displays its transcript in view-only mode (Linux only) |
 
 **Snapshot Files:**
 
@@ -177,6 +178,7 @@ This delay allows the PTY subprocess time to process input and update the displa
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/input_handling__*.snap` | Input handling scenarios (ctrl-c clear, typing/backspace, model changed, history navigation) |
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/streaming__submit_input.snap` | Prompt submission and streaming response |
 | `@/codex-rs/tui-pty-e2e/tests/snapshots/acp_mode__*.snap` | ACP mode startup screen |
+| `@/codex-rs/tui-pty-e2e/tests/snapshots/session_transcript__*.snap` | Session transcript viewing and picker scenarios |
 
 **Snapshot Testing with Insta:**
 
@@ -213,6 +215,10 @@ Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable s
 6. Random default prompts on lines starting with `› ` → `[DEFAULT_PROMPT]` placeholder
    - Detects specific default prompt patterns: "Find and fix a bug", "Explain this codebase", "Write tests for", etc.
    - Preserves user-entered prompts and UI text like "? for shortcuts"
+7. Timestamp normalization: `"YYYY-MM-DD HH:MM"` → `"[TIMESTAMP]"` placeholder
+   - Detects patterns matching date-time stamps in session picker (e.g., "2026-01-27 05:12")
+   - Uses character-by-character pattern matching to avoid regex dependency
+   - Prevents snapshot flakiness when session timestamps change between test runs
 
 **`normalize_for_input_snapshot()`** - Extends base normalization with three additional phases:
 

@@ -306,6 +306,203 @@ fn current_timestamp() -> u64 {
         .unwrap_or(0)
 }
 
+/// Summary information about a session for display in the session picker.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionSummary {
+    /// The session ID (filename without .jsonl extension).
+    pub session_id: String,
+    /// Unix timestamp of the first message in the session.
+    pub created_at: u64,
+    /// Unix timestamp of the last message in the session.
+    pub last_activity: u64,
+    /// The first user message in the session (truncated for preview).
+    pub first_message_preview: String,
+    /// Total number of messages in the session.
+    pub message_count: usize,
+}
+
+/// Maximum length for the first message preview.
+const PREVIEW_MAX_LEN: usize = 50;
+
+/// List all sessions for a project, sorted by most recent activity first.
+///
+/// Returns session summaries including timestamp, first message preview, and message count.
+/// Excludes the current session if provided.
+///
+/// # Arguments
+/// * `nori_home` - The nori home directory
+/// * `project_key` - The project key
+/// * `exclude_session_id` - Optional session ID to exclude (typically the current session)
+pub async fn list_project_sessions(
+    nori_home: &Path,
+    project_key: &str,
+    exclude_session_id: Option<&str>,
+) -> Result<Vec<SessionSummary>> {
+    let dir = transcript_dir(nori_home, project_key);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut sessions = Vec::new();
+    let mut entries = tokio::fs::read_dir(&dir).await?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+
+        // Only process .jsonl files
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+
+        // Extract session ID from filename
+        let session_id = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+
+        // Skip the excluded session (current session)
+        if exclude_session_id == Some(session_id.as_str()) {
+            continue;
+        }
+
+        // Parse the transcript file to get summary info
+        if let Ok(summary) = parse_session_summary(&path, &session_id).await {
+            sessions.push(summary);
+        }
+    }
+
+    // Sort by last_activity descending (most recent first)
+    sessions.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
+
+    Ok(sessions)
+}
+
+/// Parse a transcript file to extract summary information.
+async fn parse_session_summary(path: &Path, session_id: &str) -> Result<SessionSummary> {
+    let content = tokio::fs::read_to_string(path).await?;
+
+    let mut first_message_preview = String::new();
+    let mut created_at = u64::MAX;
+    let mut last_activity = 0u64;
+    let mut message_count = 0usize;
+
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        match serde_json::from_str::<TranscriptEntry>(line) {
+            Ok(entry) => {
+                message_count += 1;
+
+                // Track timestamps
+                if entry.ts < created_at {
+                    created_at = entry.ts;
+                }
+                if entry.ts > last_activity {
+                    last_activity = entry.ts;
+                }
+
+                // Capture first user message for preview
+                if first_message_preview.is_empty() && entry.role == TranscriptRole::User {
+                    first_message_preview = truncate_preview(&entry.text);
+                }
+            }
+            Err(_) => {
+                // Skip malformed entries
+                continue;
+            }
+        }
+    }
+
+    // If no messages found, return an error
+    if message_count == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "empty or invalid transcript file",
+        ));
+    }
+
+    // If no user message found, use a placeholder
+    if first_message_preview.is_empty() {
+        first_message_preview = "(no user messages)".to_string();
+    }
+
+    Ok(SessionSummary {
+        session_id: session_id.to_string(),
+        created_at: if created_at == u64::MAX {
+            0
+        } else {
+            created_at
+        },
+        last_activity,
+        first_message_preview,
+        message_count,
+    })
+}
+
+/// Truncate text for preview display.
+fn truncate_preview(text: &str) -> String {
+    // Take first line only and truncate
+    let first_line = text.lines().next().unwrap_or(text);
+    if first_line.len() <= PREVIEW_MAX_LEN {
+        first_line.to_string()
+    } else {
+        // Use char_indices to find a safe UTF-8 boundary
+        let truncated: String = first_line
+            .char_indices()
+            .take_while(|(i, _)| *i < PREVIEW_MAX_LEN - 3)
+            .map(|(_, c)| c)
+            .collect();
+        format!("{truncated}...")
+    }
+}
+
+/// Load all transcript entries for a session.
+///
+/// Returns entries in chronological order.
+///
+/// # Arguments
+/// * `nori_home` - The nori home directory
+/// * `project_key` - The project key
+/// * `session_id` - The session ID to load
+pub async fn load_transcript(
+    nori_home: &Path,
+    project_key: &str,
+    session_id: &str,
+) -> Result<Vec<TranscriptEntry>> {
+    let path = transcript_filepath(nori_home, project_key, session_id);
+
+    if !path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("transcript file not found: {}", path.display()),
+        ));
+    }
+
+    let content = tokio::fs::read_to_string(&path).await?;
+    let mut entries = Vec::new();
+
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        match serde_json::from_str::<TranscriptEntry>(line) {
+            Ok(entry) => entries.push(entry),
+            Err(_) => {
+                // Skip malformed entries but continue parsing
+                continue;
+            }
+        }
+    }
+
+    // Sort by timestamp to ensure chronological order
+    entries.sort_by_key(|e| e.ts);
+
+    Ok(entries)
+}
+
 /// On Unix systems, ensure the file permissions are `0o600` (rw-------).
 #[cfg(unix)]
 async fn ensure_owner_only_permissions(file: &File) -> Result<()> {

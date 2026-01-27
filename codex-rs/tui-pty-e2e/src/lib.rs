@@ -835,6 +835,56 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
     Some(result)
 }
 
+/// Replace timestamps in format "YYYY-MM-DD HH:MM" with "[TIMESTAMP]"
+///
+/// This function scans the input for patterns matching date-time stamps
+/// and replaces them to make snapshots deterministic.
+fn replace_timestamps(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        // Check if we have enough characters for a timestamp (16 chars: YYYY-MM-DD HH:MM)
+        if i + 16 <= chars.len() && is_timestamp_at(&chars, i) {
+            result.push_str("[TIMESTAMP]");
+            i += 16;
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Check if there's a timestamp pattern at the given position
+/// Pattern: DDDD-DD-DD DD:DD where D is a digit
+fn is_timestamp_at(chars: &[char], start: usize) -> bool {
+    if start + 16 > chars.len() {
+        return false;
+    }
+
+    // YYYY-MM-DD HH:MM
+    // 0123456789012345
+    chars[start].is_ascii_digit()      // Y
+        && chars[start + 1].is_ascii_digit() // Y
+        && chars[start + 2].is_ascii_digit() // Y
+        && chars[start + 3].is_ascii_digit() // Y
+        && chars[start + 4] == '-'           // -
+        && chars[start + 5].is_ascii_digit() // M
+        && chars[start + 6].is_ascii_digit() // M
+        && chars[start + 7] == '-'           // -
+        && chars[start + 8].is_ascii_digit() // D
+        && chars[start + 9].is_ascii_digit() // D
+        && chars[start + 10] == ' '          // space
+        && chars[start + 11].is_ascii_digit() // H
+        && chars[start + 12].is_ascii_digit() // H
+        && chars[start + 13] == ':'          // :
+        && chars[start + 14].is_ascii_digit() // M
+        && chars[start + 15].is_ascii_digit() // M
+}
+
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = contents;
@@ -848,6 +898,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
             normalized.replace_range(start..end, "[TMP_DIR]");
         }
     }
+
+    // Replace timestamps in session picker: "2026-01-27 05:12" -> "[TIMESTAMP]"
+    // Pattern: YYYY-MM-DD HH:MM (16 chars total)
+    // Using simple string matching to avoid adding regex as a runtime dependency
+    normalized = replace_timestamps(&normalized);
 
     // Replace nix-shell temp directories: /tmp/nix-shell.XXXX/.tmpXXXXXX -> [TMP_DIR]
     // This handles the case where nix creates nested tmp directories

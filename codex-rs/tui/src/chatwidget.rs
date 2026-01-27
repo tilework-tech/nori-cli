@@ -1792,6 +1792,12 @@ impl ChatWidget {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
+            SlashCommand::ResumeViewonly => {
+                // Open session picker to view previous session transcripts
+                let current_session_id = self.conversation_id.map(|id| id.to_string());
+                self.app_event_tx
+                    .send(AppEvent::OpenSessionPicker { current_session_id });
+            }
             SlashCommand::Init => {
                 let init_target = self.config.cwd.join(DEFAULT_PROJECT_DOC_FILENAME);
                 if init_target.exists() {
@@ -2551,6 +2557,21 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Show the session picker popup with available sessions.
+    pub(crate) fn show_session_picker(
+        &mut self,
+        sessions: Vec<codex_acp::SessionSummary>,
+        project_key: String,
+    ) {
+        let params = crate::nori::session_picker::session_picker_params(
+            sessions,
+            project_key,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+        self.request_redraw();
     }
 
     /// Open a popup to choose the model (stage 1). After selecting a model,

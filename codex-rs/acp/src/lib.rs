@@ -38,10 +38,13 @@ pub use project_key::resolve_project_root;
 
 // Re-export transcript types
 pub use transcript::ProjectManifest;
+pub use transcript::SessionSummary;
 pub use transcript::TranscriptEntry;
 pub use transcript::TranscriptRole;
 pub use transcript::append_transcript;
 pub use transcript::assistant_entry;
+pub use transcript::list_project_sessions;
+pub use transcript::load_transcript;
 pub use transcript::read_project_manifest;
 pub use transcript::transcript_dir;
 pub use transcript::transcript_filepath;

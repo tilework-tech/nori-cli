@@ -280,6 +280,30 @@ pub(crate) enum AppEvent {
         /// The agent name for display purposes
         agent_name: String,
     },
+
+    /// Load and display a session transcript in view-only mode.
+    LoadSessionTranscript {
+        /// The project key for locating the transcript
+        project_key: String,
+        /// The session ID to load
+        session_id: String,
+    },
+
+    /// Open the session picker popup to select a previous session transcript.
+    /// The current session ID is passed so it can be excluded from the list.
+    OpenSessionPicker {
+        /// The current session ID to exclude from the list
+        current_session_id: Option<String>,
+    },
+
+    /// Show the session picker with the provided sessions.
+    /// This is sent after sessions are loaded asynchronously.
+    ShowSessionPicker {
+        /// Available sessions for the current project
+        sessions: Vec<codex_acp::SessionSummary>,
+        /// The project key for loading transcripts
+        project_key: String,
+    },
 }
 
 #[allow(dead_code)]

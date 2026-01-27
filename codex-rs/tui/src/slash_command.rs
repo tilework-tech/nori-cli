@@ -17,6 +17,7 @@ pub enum SlashCommand {
     Approvals,
     Review,
     New,
+    ResumeViewonly,
     Init,
     Compact,
     Undo,
@@ -40,6 +41,7 @@ impl SlashCommand {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
+            SlashCommand::ResumeViewonly => "view transcript of a previous session",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Review => "review my current changes and find issues",
@@ -69,6 +71,7 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent
             | SlashCommand::New
+            | SlashCommand::ResumeViewonly
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Undo
@@ -183,6 +186,28 @@ mod tests {
         assert!(
             !SlashCommand::Login.available_during_task(),
             "/login should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn resume_viewonly_command_name() {
+        let cmd = SlashCommand::ResumeViewonly;
+        assert_eq!(
+            cmd.command(),
+            "resume-viewonly",
+            "ResumeViewonly should serialize to 'resume-viewonly'"
+        );
+    }
+
+    #[test]
+    fn resume_viewonly_is_visible() {
+        let commands = built_in_slash_commands();
+        let has_resume = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::ResumeViewonly);
+        assert!(
+            has_resume,
+            "/resume-viewonly should be visible in commands list"
         );
     }
 }
