@@ -12,7 +12,7 @@ Apply-patch is a core tool used throughout Codex:
 
 - **Core** tool handler at `@/codex-rs/core/src/tools/handlers/apply_patch.rs`
 - **TUI** uses `unified_diff_from_chunks()` for diff display
-- **CLI** provides `codex apply` command via `codex-chatgpt` integration
+- **CLI** provides the `nori apply` command via the apply-patch integration
 - **Model instructions** reference `APPLY_PATCH_TOOL_INSTRUCTIONS`
 
 ### Core Implementation

@@ -411,6 +411,10 @@ This ensures:
 
 Session discovery logic (finding files in ~/.codex, ~/.gemini, ~/.claude) is deferred for future TUI integration.
 
+**ACP transcript persistence (Nori rollouts):**
+
+The ACP backend uses a Nori-specific rollout (transcript) persistence format and storage layout under `NORI_HOME`, grouped by git project (or `cwd`). See the implementation specification in `codex-rs/docs/nori_rollout_persistence.md` for the schema, layout, and integration requirements.
+
 
 **Approval Bridging:**
 

@@ -30,7 +30,6 @@ use codex_core::protocol::FileChange;
 use codex_core::protocol::Op;
 use codex_core::protocol::PatchApplyBeginEvent;
 use codex_core::protocol::PatchApplyEndEvent;
-use codex_core::protocol::RateLimitWindow;
 use codex_core::protocol::ReviewCodeLocation;
 use codex_core::protocol::ReviewFinding;
 use codex_core::protocol::ReviewLineRange;
@@ -77,18 +76,6 @@ fn test_config() -> Config {
         std::env::temp_dir(),
     )
     .expect("config")
-}
-
-fn snapshot(percent: f64) -> RateLimitSnapshot {
-    RateLimitSnapshot {
-        primary: Some(RateLimitWindow {
-            used_percent: percent,
-            window_minutes: Some(60),
-            resets_at: None,
-        }),
-        secondary: None,
-        credits: None,
-    }
 }
 
 #[test]
@@ -354,10 +341,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_header: SessionHeader::new(cfg.model),
         initial_user_message: None,
         token_info: None,
-        rate_limit_snapshot: None,
-        rate_limit_warnings: RateLimitWarningState::default(),
-        rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
-        rate_limit_poller: None,
         stream_controller: None,
         running_commands: HashMap::new(),
         suppressed_exec_calls: HashSet::new(),
@@ -444,145 +427,6 @@ fn make_token_info(total_tokens: i64, context_window: i64) -> TokenUsageInfo {
         last_token_usage: usage(total_tokens),
         model_context_window: Some(context_window),
     }
-}
-
-#[test]
-fn rate_limit_warnings_emit_thresholds() {
-    let mut state = RateLimitWarningState::default();
-    let mut warnings: Vec<String> = Vec::new();
-
-    warnings.extend(state.take_warnings(Some(10.0), Some(10079), Some(55.0), Some(299)));
-    warnings.extend(state.take_warnings(Some(55.0), Some(10081), Some(10.0), Some(299)));
-    warnings.extend(state.take_warnings(Some(10.0), Some(10081), Some(80.0), Some(299)));
-    warnings.extend(state.take_warnings(Some(80.0), Some(10081), Some(10.0), Some(299)));
-    warnings.extend(state.take_warnings(Some(10.0), Some(10081), Some(95.0), Some(299)));
-    warnings.extend(state.take_warnings(Some(95.0), Some(10079), Some(10.0), Some(299)));
-
-    assert_eq!(
-        warnings,
-        vec![
-            String::from(
-                "Heads up, you've used over 75% of your 5h limit. Run /status for a breakdown."
-            ),
-            String::from(
-                "Heads up, you've used over 75% of your weekly limit. Run /status for a breakdown.",
-            ),
-            String::from(
-                "Heads up, you've used over 95% of your 5h limit. Run /status for a breakdown."
-            ),
-            String::from(
-                "Heads up, you've used over 95% of your weekly limit. Run /status for a breakdown.",
-            ),
-        ],
-        "expected one warning per limit for the highest crossed threshold"
-    );
-}
-
-#[test]
-fn test_rate_limit_warnings_monthly() {
-    let mut state = RateLimitWarningState::default();
-    let mut warnings: Vec<String> = Vec::new();
-
-    warnings.extend(state.take_warnings(Some(75.0), Some(43199), None, None));
-    assert_eq!(
-        warnings,
-        vec![String::from(
-            "Heads up, you've used over 75% of your monthly limit. Run /status for a breakdown.",
-        ),],
-        "expected one warning per limit for the highest crossed threshold"
-    );
-}
-
-#[test]
-fn rate_limit_switch_prompt_skips_when_on_lower_cost_model() {
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-    chat.config.model = NUDGE_MODEL_SLUG.to_string();
-
-    chat.on_rate_limit_snapshot(Some(snapshot(95.0)));
-
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Idle
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_shows_once_per_session() {
-    let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.config.model = "gpt-5".to_string();
-    chat.auth_manager = AuthManager::from_auth_for_testing(auth);
-
-    chat.on_rate_limit_snapshot(Some(snapshot(90.0)));
-    assert!(
-        chat.rate_limit_warnings.primary_index >= 1,
-        "warnings not emitted"
-    );
-    chat.maybe_show_pending_rate_limit_prompt();
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Shown
-    ));
-
-    chat.on_rate_limit_snapshot(Some(snapshot(95.0)));
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Shown
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_respects_hidden_notice() {
-    let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.config.model = "gpt-5".to_string();
-    chat.auth_manager = AuthManager::from_auth_for_testing(auth);
-    chat.config.notices.hide_rate_limit_model_nudge = Some(true);
-
-    chat.on_rate_limit_snapshot(Some(snapshot(95.0)));
-
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Idle
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_defers_until_task_complete() {
-    let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.config.model = "gpt-5".to_string();
-    chat.auth_manager = AuthManager::from_auth_for_testing(auth);
-
-    chat.bottom_pane.set_task_running(true);
-    chat.on_rate_limit_snapshot(Some(snapshot(90.0)));
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Pending
-    ));
-
-    chat.bottom_pane.set_task_running(false);
-    chat.maybe_show_pending_rate_limit_prompt();
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Shown
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-    chat.auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-    chat.config.model = "gpt-5".to_string();
-
-    chat.on_rate_limit_snapshot(Some(snapshot(92.0)));
-    chat.maybe_show_pending_rate_limit_prompt();
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("rate_limit_switch_prompt_popup", popup);
 }
 
 // (removed experimental resize snapshot test)

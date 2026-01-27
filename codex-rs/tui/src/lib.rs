@@ -69,7 +69,6 @@ mod session_log;
 pub mod session_stats;
 mod shimmer;
 mod slash_command;
-mod status;
 mod status_indicator_widget;
 mod streaming;
 mod style;

@@ -4,7 +4,6 @@ use codex_common::approval_presets::ApprovalPreset;
 use codex_common::model_presets::ModelPreset;
 use codex_core::protocol::ConversationPathResponseEvent;
 use codex_core::protocol::Event;
-use codex_core::protocol::RateLimitSnapshot;
 use codex_file_search::FileMatch;
 
 use crate::bottom_pane::ApprovalRequest;
@@ -61,10 +60,6 @@ pub(crate) enum AppEvent {
     /// Request to refresh system info for a specific directory.
     /// This is triggered when the effective CWD changes during agent operations.
     RefreshSystemInfoForDirectory(PathBuf),
-
-    /// Result of refreshing rate limits
-    #[allow(dead_code)]
-    RateLimitSnapshotFetched(RateLimitSnapshot),
 
     /// Result of computing a `/diff` command.
     DiffResult(String),
@@ -137,18 +132,12 @@ pub(crate) enum AppEvent {
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     UpdateWorldWritableWarningAcknowledged(bool),
 
-    /// Update whether the rate limit switch prompt has been acknowledged for the session.
-    UpdateRateLimitSwitchPromptHidden(bool),
-
     /// Persist the acknowledgement flag for the full access warning prompt.
     PersistFullAccessWarningAcknowledged,
 
     /// Persist the acknowledgement flag for the world-writable directories warning.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     PersistWorldWritableWarningAcknowledged,
-
-    /// Persist the acknowledgement flag for the rate limit switch prompt.
-    PersistRateLimitSwitchPromptHidden,
 
     /// Persist the acknowledgement flag for the model migration prompt.
     PersistModelMigrationPromptAcknowledged {
