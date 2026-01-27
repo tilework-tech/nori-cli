@@ -1246,7 +1246,10 @@ impl App {
         }
 
         self.chat_widget.add_info_message(
-            format!("Notify after idle set to {}", value.display_name()),
+            format!(
+                "Notify after idle set to {}. Changes will take effect after restart.",
+                value.display_name()
+            ),
             None,
         );
     }
