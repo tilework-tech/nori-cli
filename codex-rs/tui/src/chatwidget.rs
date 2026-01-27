@@ -3299,16 +3299,6 @@ impl ChatWidget {
         self.bottom_pane.set_model_display_name(display_name);
     }
 
-    /// Set the animations enabled flag for the TUI.
-    pub(crate) fn set_animations_enabled(&mut self, enabled: bool) {
-        self.config.animations = enabled;
-    }
-
-    /// Set the notifications enabled flag for the TUI.
-    pub(crate) fn set_notifications_enabled(&mut self, enabled: bool) {
-        self.config.tui_notifications = Notifications::Enabled(enabled);
-    }
-
     /// Set the vertical footer layout flag for the TUI.
     pub(crate) fn set_vertical_footer(&mut self, enabled: bool) {
         self.bottom_pane.set_vertical_footer(enabled);

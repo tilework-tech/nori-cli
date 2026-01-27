@@ -21,48 +21,20 @@ pub fn config_picker_params(
     config: &NoriConfig,
     app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
-    let animations_enabled = config.animations;
-    let notifications_enabled = config.notifications;
     let vertical_footer_enabled = config.vertical_footer;
 
-    let items: Vec<SelectionItem> = vec![
-        build_toggle_item(
-            "Animations",
-            "Shimmer effects and spinners in the UI",
-            animations_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !animations_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigAnimations(new_value));
-                }
-            },
-        ),
-        build_toggle_item(
-            "Notifications",
-            "Desktop notifications when tasks complete",
-            notifications_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !notifications_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigNotifications(new_value));
-                }
-            },
-        ),
-        build_toggle_item(
-            "Vertical Footer",
-            "Stack footer segments vertically instead of horizontally",
-            vertical_footer_enabled,
-            {
-                let tx = app_event_tx;
-                let new_value = !vertical_footer_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigVerticalFooter(new_value));
-                }
-            },
-        ),
-    ];
+    let items: Vec<SelectionItem> = vec![build_toggle_item(
+        "Vertical Footer",
+        "Stack footer segments vertically instead of horizontally",
+        vertical_footer_enabled,
+        {
+            let tx = app_event_tx;
+            let new_value = !vertical_footer_enabled;
+            move || {
+                tx.send(AppEvent::SetConfigVerticalFooter(new_value));
+            }
+        },
+    )];
 
     SelectionViewParams {
         title: Some("Configuration".to_string()),
@@ -107,19 +79,15 @@ mod tests {
     use std::path::PathBuf;
     use tokio::sync::mpsc::unbounded_channel;
 
-    fn make_test_config(
-        animations: bool,
-        notifications: bool,
-        vertical_footer: bool,
-    ) -> NoriConfig {
+    fn make_test_config(vertical_footer: bool) -> NoriConfig {
         NoriConfig {
             agent: "claude-code".to_string(),
             model: "claude-code".to_string(),
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: codex_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: codex_acp::config::HistoryPersistence::SaveAll,
-            animations,
-            notifications,
+            animations: true,
+            notifications: true,
             vertical_footer,
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
@@ -128,14 +96,14 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_three_items() {
+    fn config_picker_returns_one_item() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(true, true, false);
+        let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 3);
+        assert_eq!(params.items.len(), 1);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -144,92 +112,34 @@ mod tests {
     fn config_picker_shows_current_state_on() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(true, true, true);
+        let config = make_test_config(true);
 
         let params = config_picker_params(&config, tx);
 
-        // All items should show "(on)" since all are enabled
         assert!(params.items[0].name.contains("(on)"));
-        assert!(params.items[1].name.contains("(on)"));
-        assert!(params.items[2].name.contains("(on)"));
     }
 
     #[test]
     fn config_picker_shows_current_state_off() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(false, false, false);
+        let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        // All items should show "(off)" since all are disabled
         assert!(params.items[0].name.contains("(off)"));
-        assert!(params.items[1].name.contains("(off)"));
-        assert!(params.items[2].name.contains("(off)"));
-    }
-
-    #[test]
-    fn config_picker_animations_action_sends_correct_event() {
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(true, true, false);
-
-        let params = config_picker_params(&config, tx.clone());
-
-        // Trigger the animations toggle action (first item)
-        let animations_item = &params.items[0];
-        assert!(animations_item.name.contains("Animations"));
-        for action in &animations_item.actions {
-            action(&tx);
-        }
-
-        // Verify the event was sent with the toggled value
-        let event = rx.try_recv().expect("should receive event");
-        match event {
-            AppEvent::SetConfigAnimations(value) => {
-                // Was true, should toggle to false
-                assert!(!value, "animations was on, should toggle to off");
-            }
-            _ => panic!("expected SetConfigAnimations event"),
-        }
-    }
-
-    #[test]
-    fn config_picker_notifications_action_sends_correct_event() {
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(true, false, false);
-
-        let params = config_picker_params(&config, tx.clone());
-
-        // Trigger the notifications toggle action (second item)
-        let notifications_item = &params.items[1];
-        assert!(notifications_item.name.contains("Notifications"));
-        for action in &notifications_item.actions {
-            action(&tx);
-        }
-
-        // Verify the event was sent with the toggled value
-        let event = rx.try_recv().expect("should receive event");
-        match event {
-            AppEvent::SetConfigNotifications(value) => {
-                // Was false, should toggle to true
-                assert!(value, "notifications was off, should toggle to on");
-            }
-            _ => panic!("expected SetConfigNotifications event"),
-        }
     }
 
     #[test]
     fn config_picker_vertical_footer_action_sends_correct_event() {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(true, true, false);
+        let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the vertical footer toggle action (third item)
-        let vertical_footer_item = &params.items[2];
+        // Trigger the vertical footer toggle action (first item)
+        let vertical_footer_item = &params.items[0];
         assert!(vertical_footer_item.name.contains("Vertical Footer"));
         for action in &vertical_footer_item.actions {
             action(&tx);

@@ -49,7 +49,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (animations, notifications, vertical footer) |
+| `/config` | Toggle TUI settings (vertical footer) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |

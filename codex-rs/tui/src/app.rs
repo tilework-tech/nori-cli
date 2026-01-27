@@ -1094,12 +1094,6 @@ impl App {
                 self.chat_widget
                     .handle_external_cli_login_complete(success, agent_name);
             }
-            AppEvent::SetConfigAnimations(enabled) => {
-                self.persist_config_setting("animations", enabled).await;
-            }
-            AppEvent::SetConfigNotifications(enabled) => {
-                self.persist_config_setting("notifications", enabled).await;
-            }
             AppEvent::SetConfigVerticalFooter(enabled) => {
                 self.persist_config_setting("vertical_footer", enabled)
                     .await;
@@ -1132,12 +1126,6 @@ impl App {
     async fn persist_config_setting(&mut self, setting_name: &str, enabled: bool) {
         // Apply immediately to the running TUI
         match setting_name {
-            "animations" => {
-                self.chat_widget.set_animations_enabled(enabled);
-            }
-            "notifications" => {
-                self.chat_widget.set_notifications_enabled(enabled);
-            }
             "vertical_footer" => {
                 self.vertical_footer = enabled;
                 self.chat_widget.set_vertical_footer(enabled);

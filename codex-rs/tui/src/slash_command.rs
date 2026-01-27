@@ -49,7 +49,7 @@ impl SlashCommand {
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
-            SlashCommand::Config => "toggle TUI settings (animations, notifications)",
+            SlashCommand::Config => "toggle TUI settings (vertical footer)",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",

@@ -268,12 +268,6 @@ pub(crate) enum AppEvent {
         agent_name: String,
     },
 
-    /// Set the TUI animations config setting.
-    SetConfigAnimations(bool),
-
-    /// Set the TUI notifications config setting.
-    SetConfigNotifications(bool),
-
     /// Set the TUI vertical footer config setting.
     SetConfigVerticalFooter(bool),
 }
