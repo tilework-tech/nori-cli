@@ -38,6 +38,8 @@ use crate::connection::AcpModelState;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
 use crate::registry::get_agent_config;
+use crate::transcript::ContentBlock as TranscriptContentBlock;
+use crate::transcript::TranscriptRecorder;
 use crate::translator;
 use crate::translator::is_patch_operation;
 use crate::translator::tool_call_to_file_change;
@@ -184,6 +186,10 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Transcript recorder for persisting session history
+    transcript_recorder: Option<Arc<TranscriptRecorder>>,
+    /// Model name for transcript recording
+    model: String,
 }
 
 impl AcpBackend {
@@ -278,6 +284,21 @@ impl AcpBackend {
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
+        // Initialize transcript recorder for session persistence
+        let transcript_recorder = match TranscriptRecorder::new(
+            &config.nori_home,
+            &cwd,
+            Some(config.model.clone()),
+        )
+        .await
+        {
+            Ok(recorder) => Some(Arc::new(recorder)),
+            Err(e) => {
+                warn!("Failed to initialize transcript recorder: {e}");
+                None
+            }
+        };
+
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -291,6 +312,8 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
+            transcript_recorder,
+            model: config.model.clone(),
         };
 
         // Send synthetic SessionConfigured event
@@ -380,6 +403,14 @@ impl AcpBackend {
                 // to allow the TUI to exit properly
                 debug!("Processing Op::Shutdown in ACP mode");
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
+
+                // Flush transcript recorder before shutdown
+                if let Some(recorder) = &self.transcript_recorder
+                    && let Err(e) = recorder.shutdown().await
+                {
+                    warn!("Failed to shutdown transcript recorder: {e}");
+                }
+
                 let _ = self
                     .event_tx
                     .send(Event {
@@ -523,6 +554,13 @@ impl AcpBackend {
 
         let prompt = vec![translator::text_to_content_block(&final_prompt_text)];
 
+        // Record user message to transcript
+        if let Some(recorder) = &self.transcript_recorder
+            && let Err(e) = recorder.record_user_message(&final_prompt_text).await
+        {
+            warn!("Failed to record user message to transcript: {e}");
+        }
+
         // Create channel for receiving session updates
         let (update_tx, mut update_rx) = mpsc::channel(32);
 
@@ -533,6 +571,8 @@ impl AcpBackend {
         let id_clone = id.to_string();
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
+        let transcript_recorder = self.transcript_recorder.clone();
+        let model = self.model.clone();
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -556,6 +596,8 @@ impl AcpBackend {
             // Spawn update consumer task
             let event_tx_clone = event_tx.clone();
             let id_for_updates = id_clone.clone();
+            let transcript_recorder_for_updates = transcript_recorder.clone();
+            let model_for_updates = model.clone();
             let update_handler = tokio::spawn(async move {
                 let mut event_sequence: u64 = 0;
                 // Track call_ids that have already had ExecCommandBegin emitted.
@@ -569,7 +611,54 @@ impl AcpBackend {
                     String,
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
+                // Accumulate agent message text for transcript recording
+                let mut agent_message_text = String::new();
+                // Track tool calls that have been recorded (to avoid duplicates)
+                let mut recorded_tool_calls: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
+
                 while let Some(update) = update_rx.recv().await {
+                    // Record to transcript based on update type
+                    if let Some(recorder) = &transcript_recorder_for_updates {
+                        match &update {
+                            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                                if let acp::ContentBlock::Text(text) = &chunk.content {
+                                    agent_message_text.push_str(&text.text);
+                                }
+                            }
+                            acp::SessionUpdate::ToolCall(tool_call) => {
+                                // Only record if we haven't already (due to duplicate events)
+                                let call_id = tool_call.tool_call_id.to_string();
+                                if !recorded_tool_calls.contains(&call_id)
+                                    && let Some(raw_input) = &tool_call.raw_input
+                                {
+                                    if let Err(e) = recorder
+                                        .record_tool_call(&call_id, &tool_call.title, raw_input)
+                                        .await
+                                    {
+                                        warn!("Failed to record tool call to transcript: {e}");
+                                    }
+                                    recorded_tool_calls.insert(call_id);
+                                }
+                            }
+                            acp::SessionUpdate::ToolCallUpdate(tool_update) => {
+                                // Record tool result when status is completed
+                                if tool_update.fields.status == Some(acp::ToolCallStatus::Completed)
+                                {
+                                    let call_id = tool_update.tool_call_id.to_string();
+                                    // ToolCallUpdateFields doesn't have output, use empty string
+                                    // The output will typically be shown in the tool's response
+                                    if let Err(e) =
+                                        recorder.record_tool_result(&call_id, "", false, None).await
+                                    {
+                                        warn!("Failed to record tool result to transcript: {e}");
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
                     for event_msg in events {
@@ -600,6 +689,22 @@ impl AcpBackend {
                             .await;
                     }
                 }
+
+                // Record complete assistant message to transcript
+                if let Some(recorder) = &transcript_recorder_for_updates
+                    && !agent_message_text.is_empty()
+                {
+                    let content = vec![TranscriptContentBlock::Text {
+                        text: agent_message_text,
+                    }];
+                    if let Err(e) = recorder
+                        .record_assistant_message(content, Some(model_for_updates))
+                        .await
+                    {
+                        warn!("Failed to record assistant message to transcript: {e}");
+                    }
+                }
+
                 debug!(
                     target: "acp_event_flow",
                     total_events = event_sequence,

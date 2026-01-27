@@ -7109,6 +7109,7 @@ name = "tui-pty-e2e"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "codex-cli",
  "insta",
  "libc",
  "owo-colors",

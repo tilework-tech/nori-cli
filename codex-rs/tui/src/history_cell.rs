@@ -1488,6 +1488,76 @@ fn format_mcp_invocation<'a>(invocation: McpInvocation) -> Line<'a> {
     invocation_spans.into()
 }
 
+/// Convert a transcript entry to a history cell for display.
+#[cfg(feature = "transcript-viewonly")]
+pub(crate) fn transcript_entry_to_cell(
+    entry: &codex_acp::transcript::TranscriptEntry,
+) -> Option<Box<dyn HistoryCell>> {
+    use codex_acp::transcript::ContentBlock;
+    use codex_acp::transcript::TranscriptEntry;
+
+    match entry {
+        TranscriptEntry::SessionMeta(_) => {
+            // Skip session meta - it's just metadata
+            None
+        }
+        TranscriptEntry::User(user) => Some(Box::new(new_user_prompt(user.content.clone()))),
+        TranscriptEntry::Assistant(assistant) => {
+            // Extract text content from the assistant's response
+            let text = assistant
+                .content
+                .iter()
+                .filter_map(|block| match block {
+                    ContentBlock::Text { text } => Some(text.as_str()),
+                    ContentBlock::Thinking { .. } => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if text.is_empty() {
+                None
+            } else {
+                // Convert markdown to Lines for display
+                let mut lines = Vec::new();
+                crate::markdown::append_markdown(&text, None, &mut lines);
+                Some(Box::new(AgentMessageCell::new(lines, true)))
+            }
+        }
+        TranscriptEntry::ToolCall(tool_call) => {
+            // Display tool calls as info messages
+            let input_preview = serde_json::to_string(&tool_call.input)
+                .map(|s| {
+                    if s.len() > 100 {
+                        format!("{}...", &s[..100])
+                    } else {
+                        s
+                    }
+                })
+                .unwrap_or_else(|_| "...".to_string());
+            Some(Box::new(new_info_event(
+                format!("Tool: {} ({})", tool_call.name, input_preview),
+                None,
+            )))
+        }
+        TranscriptEntry::ToolResult(tool_result) => {
+            // Display tool results as info messages with output preview
+            let output_preview = if tool_result.output.len() > 200 {
+                format!("{}...", &tool_result.output[..200])
+            } else {
+                tool_result.output.clone()
+            };
+            let status = tool_result
+                .exit_code
+                .map(|c| format!(" (exit {c})"))
+                .unwrap_or_default();
+            Some(Box::new(new_info_event(
+                format!("Result{status}: {output_preview}"),
+                None,
+            )))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

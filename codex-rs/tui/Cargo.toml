@@ -22,6 +22,9 @@ full = ["login", "feedback", "backend-client", "upstream-updates", "oss-provider
 # Disabled by default for Nori builds; enabled by 'full' for upstream compatibility
 codex-features = []
 
+# Transcript view-only mode for viewing past sessions (experimental)
+transcript-viewonly = []
+
 # OpenTelemetry tracing export (disabled by default)
 otel = ["dep:opentelemetry-appender-tracing"]
 

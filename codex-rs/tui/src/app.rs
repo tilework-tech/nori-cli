@@ -516,6 +516,43 @@ impl App {
                 }
                 tui.frame_requester().schedule_frame();
             }
+            #[cfg(feature = "transcript-viewonly")]
+            AppEvent::ResumeViewonly => {
+                self.chat_widget.open_transcript_viewer_picker();
+                tui.frame_requester().schedule_frame();
+            }
+            #[cfg(feature = "transcript-viewonly")]
+            AppEvent::OpenTranscriptPicker { sessions } => {
+                tracing::info!(
+                    "AppEvent::OpenTranscriptPicker received with {} sessions",
+                    sessions.len()
+                );
+                self.chat_widget.show_transcript_picker(sessions);
+                tui.frame_requester().schedule_frame();
+            }
+            #[cfg(feature = "transcript-viewonly")]
+            AppEvent::LoadTranscript {
+                project_id,
+                session_id,
+            } => {
+                tracing::debug!(
+                    "AppEvent::LoadTranscript received: project_id={project_id}, session_id={session_id}"
+                );
+                self.chat_widget
+                    .load_transcript_for_viewing(project_id, session_id);
+                tui.frame_requester().schedule_frame();
+            }
+            #[cfg(feature = "transcript-viewonly")]
+            AppEvent::TranscriptViewHeader { session_id } => {
+                use ratatui::style::Stylize;
+                let header_line = Line::from(vec![
+                    "─── Viewing session: ".dim(),
+                    session_id.dim(),
+                    " (read-only) ───".dim(),
+                ]);
+                tui.insert_history_lines(vec![Line::from(""), header_line, Line::from("")]);
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::InsertHistoryCell(cell) => {
                 let cell: Arc<dyn HistoryCell> = cell.into();
                 if let Some(Overlay::Transcript(t)) = &mut self.overlay {

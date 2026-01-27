@@ -36,6 +36,9 @@ full = [
 # Disabled by default for Nori builds; enabled by 'full' for upstream compatibility
 codex-features = ["codex-tui/codex-features"]
 
+# Transcript view-only mode for viewing past sessions - propagate to TUI
+transcript-viewonly = ["codex-tui/transcript-viewonly"]
+
 # App server functionality
 app-server = ["dep:codex-app-server"]
 

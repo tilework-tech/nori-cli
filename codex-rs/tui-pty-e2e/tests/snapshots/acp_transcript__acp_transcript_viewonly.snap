@@ -1,0 +1,19 @@
+---
+source: tui-pty-e2e/tests/acp_transcript.rs
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+› UNIQUE_PROMPT_ALPHA_12345
+
+
+• RESPONSE_ALPHA: This is the first turn response with unique content.
+
+
+› UNIQUE_PROMPT_BETA_67890
+
+
+• RESPONSE_BETA: This is the second turn response with different unique content.
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approval Mode: Agent · ? for shortcuts

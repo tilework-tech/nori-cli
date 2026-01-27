@@ -272,6 +272,48 @@ impl acp::Agent for MockAgent {
             return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
         }
 
+        // Support multi-turn responses based on prompt content
+        // Returns different responses based on keywords in the prompt
+        if std::env::var("MOCK_AGENT_MULTI_TURN").is_ok() {
+            eprintln!("Mock agent: multi-turn mode enabled");
+
+            // Extract text from the prompt content
+            let prompt_text = arguments
+                .prompt
+                .iter()
+                .filter_map(|block| {
+                    if let acp::ContentBlock::Text(text) = block {
+                        Some(text.text.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            eprintln!("Mock agent: received prompt: {}", prompt_text);
+
+            // Return different responses based on prompt content
+            if prompt_text.contains("ALPHA") {
+                self.send_text_chunk(
+                    session_id.clone(),
+                    "RESPONSE_ALPHA: This is the first turn response with unique content.",
+                )
+                .await?;
+            } else if prompt_text.contains("BETA") {
+                self.send_text_chunk(session_id.clone(), "RESPONSE_BETA: This is the second turn response with different unique content.")
+                    .await?;
+            } else {
+                self.send_text_chunk(
+                    session_id.clone(),
+                    "RESPONSE_DEFAULT: Generic multi-turn response.",
+                )
+                .await?;
+            }
+
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
         if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {
             eprintln!("Mock agent: sending mixed exploring and exec workflow");

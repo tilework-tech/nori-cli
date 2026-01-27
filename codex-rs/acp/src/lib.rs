@@ -49,6 +49,8 @@ pub use registry::list_available_agents;
 pub use registry::prewarm_installation_cache;
 pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
+pub use transcript::SessionInfo;
+pub use transcript::TranscriptLoader;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
 

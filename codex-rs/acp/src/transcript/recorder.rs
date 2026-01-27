@@ -17,6 +17,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
+use tracing::debug;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -100,6 +101,13 @@ impl TranscriptRecorder {
             git: git_info,
         };
 
+        debug!(
+            "TranscriptRecorder initialized: project_id={}, session_id={}, path={}",
+            project.id,
+            session_id,
+            transcript_path.display()
+        );
+
         // Spawn writer task with error logging
         tokio::spawn(async move {
             if let Err(e) = transcript_writer(file, rx, session_meta).await {
@@ -124,6 +132,11 @@ impl TranscriptRecorder {
 
     /// Record a user message.
     pub async fn record_user_message(&self, content: &str) -> std::io::Result<()> {
+        debug!(
+            "Recording user message: session={}, content_len={}",
+            self.session_id,
+            content.len()
+        );
         let entry = TranscriptEntry::User(UserEntry {
             id: self.generate_message_id(),
             content: content.to_string(),

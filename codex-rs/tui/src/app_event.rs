@@ -35,6 +35,29 @@ pub(crate) enum AppEvent {
     /// Start a new session.
     NewSession,
 
+    /// Open the transcript viewer to view a previous session (read-only).
+    #[cfg(feature = "transcript-viewonly")]
+    ResumeViewonly,
+
+    /// Open the transcript picker popup with available sessions.
+    #[cfg(feature = "transcript-viewonly")]
+    OpenTranscriptPicker {
+        sessions: Vec<codex_acp::transcript::SessionInfo>,
+    },
+
+    /// Load and display a transcript from a previous session.
+    #[cfg(feature = "transcript-viewonly")]
+    LoadTranscript {
+        project_id: String,
+        session_id: String,
+    },
+
+    /// Display a header indicating we're viewing a previous session.
+    #[cfg(feature = "transcript-viewonly")]
+    TranscriptViewHeader {
+        session_id: String,
+    },
+
     /// Request to exit the application gracefully.
     ExitRequest,
 

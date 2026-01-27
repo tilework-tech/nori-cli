@@ -17,6 +17,7 @@ pub enum SlashCommand {
     Approvals,
     Review,
     New,
+    ResumeViewonly,
     Init,
     Compact,
     Undo,
@@ -40,6 +41,7 @@ impl SlashCommand {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
+            SlashCommand::ResumeViewonly => "view a previous session (read-only)",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Review => "review my current changes and find issues",
@@ -69,6 +71,7 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent
             | SlashCommand::New
+            | SlashCommand::ResumeViewonly
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Undo
@@ -100,6 +103,8 @@ impl SlashCommand {
             // Undo and Review are codex-features only
             #[cfg(not(feature = "codex-features"))]
             SlashCommand::Undo | SlashCommand::Review => false,
+            #[cfg(not(feature = "transcript-viewonly"))]
+            SlashCommand::ResumeViewonly => false,
             _ => true,
         }
     }

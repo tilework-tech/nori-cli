@@ -1792,6 +1792,10 @@ impl ChatWidget {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
+            #[cfg(feature = "transcript-viewonly")]
+            SlashCommand::ResumeViewonly => {
+                self.app_event_tx.send(AppEvent::ResumeViewonly);
+            }
             SlashCommand::Init => {
                 let init_target = self.config.cwd.join(DEFAULT_PROJECT_DOC_FILENAME);
                 if init_target.exists() {
@@ -2551,6 +2555,139 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the transcript viewer picker to view previous sessions (read-only).
+    #[cfg(feature = "transcript-viewonly")]
+    pub(crate) fn open_transcript_viewer_picker(&mut self) {
+        use codex_acp::transcript::TranscriptLoader;
+
+        let nori_home = self.config.codex_home.clone();
+        let cwd = self.config.cwd.clone();
+        let app_event_tx = self.app_event_tx.clone();
+
+        // Spawn a task to load sessions for the current project
+        tokio::spawn(async move {
+            let loader = TranscriptLoader::new(nori_home);
+            match loader.find_sessions_for_cwd(&cwd).await {
+                Ok(sessions) => {
+                    tracing::info!(
+                        "open_transcript_viewer_picker: loaded {} sessions, sending OpenTranscriptPicker",
+                        sessions.len()
+                    );
+                    app_event_tx.send(AppEvent::OpenTranscriptPicker { sessions });
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load transcript sessions: {e}");
+                    app_event_tx.send(AppEvent::OpenTranscriptPicker {
+                        sessions: Vec::new(),
+                    });
+                }
+            }
+        });
+    }
+
+    /// Show the transcript picker popup with the loaded sessions.
+    #[cfg(feature = "transcript-viewonly")]
+    pub(crate) fn show_transcript_picker(
+        &mut self,
+        sessions: Vec<codex_acp::transcript::SessionInfo>,
+    ) {
+        if sessions.is_empty() {
+            self.add_info_message(
+                "No previous sessions found for this project.".to_string(),
+                None,
+            );
+            return;
+        }
+
+        let mut items: Vec<SelectionItem> = Vec::new();
+        for session in sessions {
+            let project_id = session.project_id.clone();
+            let session_id = session.session_id.clone();
+
+            // Format the display: timestamp - model (message count)
+            let description = format!(
+                "{} messages{}",
+                session.message_count,
+                session
+                    .model
+                    .as_ref()
+                    .map(|m| format!(" • {m}"))
+                    .unwrap_or_default()
+            );
+
+            items.push(SelectionItem {
+                name: session.started_at.clone(),
+                description: Some(description),
+                is_current: false,
+                actions: vec![Box::new(move |tx| {
+                    debug!(
+                        "show_transcript_picker: action triggered for session_id={}",
+                        session_id
+                    );
+                    tx.send(AppEvent::LoadTranscript {
+                        project_id: project_id.clone(),
+                        session_id: session_id.clone(),
+                    });
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        tracing::info!(
+            "show_transcript_picker: showing picker with {} items",
+            items.len()
+        );
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("View previous session".to_string()),
+            subtitle: Some("Select a session to view (read-only)".to_string()),
+            items,
+            footer_hint: Some(standard_popup_hint_line()),
+            ..Default::default()
+        });
+    }
+
+    /// Load a transcript and display it in the history.
+    #[cfg(feature = "transcript-viewonly")]
+    pub(crate) fn load_transcript_for_viewing(&mut self, project_id: String, session_id: String) {
+        use codex_acp::transcript::TranscriptLoader;
+
+        debug!("load_transcript_for_viewing: project_id={project_id}, session_id={session_id}");
+
+        let nori_home = self.config.codex_home.clone();
+        let app_event_tx = self.app_event_tx.clone();
+
+        // Spawn a task to load the transcript
+        tokio::spawn(async move {
+            debug!("load_transcript_for_viewing: loading transcript...");
+            let loader = TranscriptLoader::new(nori_home);
+            match loader.load_transcript(&project_id, &session_id).await {
+                Ok(transcript) => {
+                    debug!(
+                        "load_transcript_for_viewing: loaded {} entries",
+                        transcript.entries.len()
+                    );
+                    // Add header to indicate we're viewing a previous session
+                    app_event_tx.send(AppEvent::TranscriptViewHeader {
+                        session_id: session_id.clone(),
+                    });
+
+                    // Convert transcript entries to history cells and display them
+                    for line in transcript.entries {
+                        if let Some(cell) =
+                            crate::history_cell::transcript_entry_to_cell(&line.entry)
+                        {
+                            app_event_tx.send(AppEvent::InsertHistoryCell(cell));
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load transcript: {e}");
+                }
+            }
+        });
     }
 
     /// Open a popup to choose the model (stage 1). After selecting a model,

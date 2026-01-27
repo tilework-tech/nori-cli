@@ -4,7 +4,14 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+# Enable transcript view-only feature in CLI for E2E testing
+transcript-viewonly = ["codex-cli/transcript-viewonly"]
+
 [dependencies]
+# Needed to forward features to codex-cli
+codex-cli = { path = "../cli" }
 portable-pty = "0.8"
 vt100 = "0.15"
 insta = "1"

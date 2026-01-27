@@ -4,6 +4,7 @@ use std::io::Error as IoError;
 use std::path::Path;
 use std::path::PathBuf;
 
+use tracing::debug;
 use tracing::warn;
 
 use super::project::compute_project_id;
@@ -170,6 +171,13 @@ impl TranscriptLoader {
     pub async fn list_sessions(&self, project_id: &str) -> std::io::Result<Vec<SessionInfo>> {
         let sessions_path = self.project_sessions_path(project_id);
 
+        debug!(
+            "list_sessions: project_id={}, sessions_path={}, exists={}",
+            project_id,
+            sessions_path.display(),
+            sessions_path.exists()
+        );
+
         if !sessions_path.exists() {
             return Ok(Vec::new());
         }
@@ -215,6 +223,8 @@ impl TranscriptLoader {
         // Sort by started_at descending (most recent first)
         sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
+        debug!("list_sessions: returning {} sessions", sessions.len());
+
         Ok(sessions)
     }
 
@@ -222,6 +232,12 @@ impl TranscriptLoader {
     pub async fn find_sessions_for_cwd(&self, cwd: &Path) -> std::io::Result<Vec<SessionInfo>> {
         // Compute project ID for this cwd
         let project = compute_project_id(cwd)?;
+        debug!(
+            "find_sessions_for_cwd: cwd={}, project_id={}, nori_home={}",
+            cwd.display(),
+            project.id,
+            self.nori_home.display()
+        );
         self.list_sessions(&project.id).await
     }
 

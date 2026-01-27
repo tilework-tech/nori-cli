@@ -230,10 +230,21 @@ impl ListSelectionView {
     }
 
     fn accept(&mut self) {
+        tracing::info!(
+            "ListSelectionView::accept: selected_idx={:?}, filtered_indices_len={}, items_len={}",
+            self.state.selected_idx,
+            self.filtered_indices.len(),
+            self.items.len()
+        );
         if let Some(idx) = self.state.selected_idx
             && let Some(actual_idx) = self.filtered_indices.get(idx)
             && let Some(item) = self.items.get(*actual_idx)
         {
+            tracing::info!(
+                "ListSelectionView::accept: calling {} actions for item '{}'",
+                item.actions.len(),
+                item.name
+            );
             self.last_selected_actual_idx = Some(*actual_idx);
             for act in &item.actions {
                 act(&self.app_event_tx);
@@ -242,6 +253,7 @@ impl ListSelectionView {
                 self.complete = true;
             }
         } else {
+            tracing::info!("ListSelectionView::accept: no selection, dismissing");
             self.complete = true;
         }
     }
