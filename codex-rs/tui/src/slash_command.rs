@@ -15,6 +15,7 @@ pub enum SlashCommand {
     Agent,
     Model,
     Approvals,
+    Config,
     Review,
     New,
     ResumeViewonly,
@@ -29,7 +30,6 @@ pub enum SlashCommand {
     Logout,
     Quit,
     Exit,
-    Feedback,
     Rollout,
     TestApproval,
 }
@@ -39,7 +39,6 @@ impl SlashCommand {
     pub fn description(self) -> &'static str {
         match self {
             SlashCommand::Agent => "switch between available ACP agents",
-            SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::ResumeViewonly => "view transcript of a previous session",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
@@ -52,6 +51,7 @@ impl SlashCommand {
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
+            SlashCommand::Config => "toggle TUI settings (vertical footer)",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
@@ -77,6 +77,7 @@ impl SlashCommand {
             | SlashCommand::Undo
             | SlashCommand::Model
             | SlashCommand::Approvals
+            | SlashCommand::Config
             | SlashCommand::Review
             | SlashCommand::Login
             | SlashCommand::Logout => false,
@@ -84,7 +85,6 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Mcp
-            | SlashCommand::Feedback
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
             SlashCommand::Rollout => true,
@@ -97,12 +97,6 @@ impl SlashCommand {
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
-            #[cfg(not(feature = "feedback"))]
-            SlashCommand::Feedback => false,
-            // Compact is always visible (works in both core and ACP backends)
-            // Undo and Review are codex-features only
-            #[cfg(not(feature = "codex-features"))]
-            SlashCommand::Undo | SlashCommand::Review => false,
             _ => true,
         }
     }
@@ -139,32 +133,6 @@ mod tests {
         assert!(
             has_logout,
             "/logout should be visible when login feature is enabled"
-        );
-    }
-
-    #[test]
-    #[cfg(not(feature = "feedback"))]
-    fn feedback_hidden_when_feedback_feature_disabled() {
-        let commands = built_in_slash_commands();
-        let has_feedback = commands
-            .iter()
-            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
-        assert!(
-            !has_feedback,
-            "/feedback should be hidden when feedback feature is disabled"
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "feedback")]
-    fn feedback_visible_when_feedback_feature_enabled() {
-        let commands = built_in_slash_commands();
-        let has_feedback = commands
-            .iter()
-            .any(|(_, cmd)| *cmd == SlashCommand::Feedback);
-        assert!(
-            has_feedback,
-            "/feedback should be visible when feedback feature is enabled"
         );
     }
 
@@ -208,6 +176,27 @@ mod tests {
         assert!(
             has_resume,
             "/resume-viewonly should be visible in commands list"
+        );
+    }
+
+    #[test]
+    fn config_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_config = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Config);
+        assert!(has_config, "/config should be visible in commands list");
+    }
+
+    #[test]
+    fn config_has_description() {
+        let desc = SlashCommand::Config.description();
+        assert!(!desc.is_empty(), "/config should have a description");
+    }
+
+    #[test]
+    fn config_not_available_during_task() {
+        assert!(
+            !SlashCommand::Config.available_during_task(),
+            "/config should not be available while task is running"
         );
     }
 }

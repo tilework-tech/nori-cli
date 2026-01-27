@@ -13,7 +13,6 @@ use assert_cmd::cargo::cargo_bin;
 
 pub mod responses;
 pub mod test_codex;
-pub mod test_codex_exec;
 
 #[track_caller]
 pub fn assert_regex_match<'s>(pattern: &str, actual: &'s str) -> regex_lite::Captures<'s> {

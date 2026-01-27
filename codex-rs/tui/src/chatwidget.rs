@@ -8,8 +8,6 @@ use std::time::Duration;
 
 #[allow(unused_imports)]
 use codex_app_server_protocol::AuthMode;
-#[cfg(feature = "backend-client")]
-use codex_backend_client::Client as BackendClient;
 use codex_core::config::Config;
 use codex_core::config::types::Notifications;
 use codex_core::git_info::current_branch_name;
@@ -322,8 +320,6 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
-    #[cfg(feature = "feedback")]
-    pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Expected model name for this widget. When set, events from other models
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching model. This prevents race conditions when switching agents.
@@ -388,9 +384,6 @@ pub(crate) struct ChatWidget {
     needs_final_message_separator: bool,
 
     last_rendered_width: std::cell::Cell<Option<usize>>,
-    // Feedback sink for /feedback
-    #[cfg(feature = "feedback")]
-    feedback: crate::feedback_compat::CodexFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
     // Tracks incomplete ExecCells that were flushed before completion.
@@ -501,41 +494,6 @@ impl ChatWidget {
         if !self.suppress_session_configured_redraw {
             self.request_redraw();
         }
-    }
-
-    #[cfg(feature = "feedback")]
-    pub(crate) fn open_feedback_note(
-        &mut self,
-        category: crate::app_event::FeedbackCategory,
-        include_logs: bool,
-    ) {
-        // Build a fresh snapshot at the time of opening the note overlay.
-        let snapshot = self.feedback.snapshot(self.conversation_id);
-        let rollout = if include_logs {
-            self.current_rollout_path.clone()
-        } else {
-            None
-        };
-        let view = crate::bottom_pane::FeedbackNoteView::new(
-            category,
-            snapshot,
-            rollout,
-            self.app_event_tx.clone(),
-            include_logs,
-        );
-        self.bottom_pane.show_view(Box::new(view));
-        self.request_redraw();
-    }
-
-    #[cfg(feature = "feedback")]
-    pub(crate) fn open_feedback_consent(&mut self, category: crate::app_event::FeedbackCategory) {
-        let params = crate::bottom_pane::feedback_upload_consent_params(
-            self.app_event_tx.clone(),
-            category,
-            self.current_rollout_path.clone(),
-        );
-        self.bottom_pane.show_selection_view(params);
-        self.request_redraw();
     }
 
     fn on_agent_message(&mut self, message: String) {
@@ -835,7 +793,7 @@ impl ChatWidget {
 
         if reason != TurnAbortReason::ReviewEnded {
             self.add_to_history(history_cell::new_error_event(
-                "Conversation interrupted - tell the model what to do differently. Something went wrong? Hit `/feedback` to report the issue.".to_owned(),
+                "Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues".to_owned(),
             ));
         }
 
@@ -1491,8 +1449,6 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            #[cfg(feature = "feedback")]
-            feedback,
             expected_model,
         } = common;
         let mut rng = rand::rng();
@@ -1549,8 +1505,6 @@ impl ChatWidget {
             pre_review_token_info: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
-            #[cfg(feature = "feedback")]
-            feedback,
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
@@ -1583,8 +1537,6 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            #[cfg(feature = "feedback")]
-            feedback,
             expected_model,
         } = common;
         let mut rng = rand::rng();
@@ -1643,8 +1595,6 @@ impl ChatWidget {
             pre_review_token_info: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
-            #[cfg(feature = "feedback")]
-            feedback,
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
@@ -1775,20 +1725,6 @@ impl ChatWidget {
             return;
         }
         match cmd {
-            #[cfg(feature = "feedback")]
-            SlashCommand::Feedback => {
-                // Step 1: pick a category (UI built in feedback_view)
-                let params =
-                    crate::bottom_pane::feedback_selection_params(self.app_event_tx.clone());
-                self.bottom_pane.show_selection_view(params);
-                self.request_redraw();
-            }
-            #[cfg(not(feature = "feedback"))]
-            SlashCommand::Feedback => {
-                // Show Nori-specific feedback message instead
-                use crate::nori::feedback;
-                self.add_info_message(feedback::feedback_message().to_string(), None);
-            }
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
@@ -1825,6 +1761,25 @@ impl ChatWidget {
             }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
+            }
+            #[cfg(feature = "nori-config")]
+            SlashCommand::Config => {
+                // Load NoriConfig from the default path and open the config popup
+                match codex_acp::config::NoriConfig::load() {
+                    Ok(nori_config) => {
+                        self.open_config_popup(&nori_config);
+                    }
+                    Err(err) => {
+                        self.add_error_message(format!("Failed to load config: {err}"));
+                    }
+                }
+            }
+            #[cfg(not(feature = "nori-config"))]
+            SlashCommand::Config => {
+                self.add_info_message(
+                    "Config command requires the nori-config feature".to_string(),
+                    None,
+                );
             }
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_exit();
@@ -2413,37 +2368,8 @@ impl ChatWidget {
         }
     }
 
-    #[cfg(feature = "backend-client")]
     fn prefetch_rate_limits(&mut self) {
-        self.stop_rate_limit_poller();
-
-        let Some(auth) = self.auth_manager.auth() else {
-            return;
-        };
-        if auth.mode != AuthMode::ChatGPT {
-            return;
-        }
-
-        let base_url = self.config.chatgpt_base_url.clone();
-        let app_event_tx = self.app_event_tx.clone();
-
-        let handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(60));
-
-            loop {
-                if let Some(snapshot) = fetch_rate_limits(base_url.clone(), auth.clone()).await {
-                    app_event_tx.send(AppEvent::RateLimitSnapshotFetched(snapshot));
-                }
-                interval.tick().await;
-            }
-        });
-
-        self.rate_limit_poller = Some(handle);
-    }
-
-    #[cfg(not(feature = "backend-client"))]
-    fn prefetch_rate_limits(&mut self) {
-        // Rate limit prefetching requires backend-client feature
+        // Rate limit prefetching is not used in Nori (no backend-client)
     }
 
     fn lower_cost_preset(&self) -> Option<ModelPreset> {
@@ -2572,6 +2498,16 @@ impl ChatWidget {
         );
         self.bottom_pane.show_selection_view(params);
         self.request_redraw();
+    }
+
+    /// Open the config popup for TUI settings.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_config_popup(&mut self, nori_config: &codex_acp::config::NoriConfig) {
+        let params = crate::nori::config_picker::config_picker_params(
+            nori_config,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
     }
 
     /// Open a popup to choose the model (stage 1). After selecting a model,
@@ -3384,6 +3320,11 @@ impl ChatWidget {
         self.bottom_pane.set_model_display_name(display_name);
     }
 
+    /// Set the vertical footer layout flag for the TUI.
+    pub(crate) fn set_vertical_footer(&mut self, enabled: bool) {
+        self.bottom_pane.set_vertical_footer(enabled);
+    }
+
     /// Update the model display name shown in approval dialogs.
     /// Used when ACP model switch completes successfully.
     #[cfg(feature = "unstable")]
@@ -3807,6 +3748,10 @@ impl ChatWidget {
         self.submit_op(Op::Shutdown);
     }
 
+    pub(crate) fn composer_text(&self) -> String {
+        self.bottom_pane.composer_text()
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.bottom_pane.composer_is_empty()
     }
@@ -4203,23 +4148,6 @@ fn extract_first_bold(s: &str) -> Option<String> {
         i += 1;
     }
     None
-}
-
-#[cfg(feature = "backend-client")]
-async fn fetch_rate_limits(base_url: String, auth: CodexAuth) -> Option<RateLimitSnapshot> {
-    match BackendClient::from_auth(base_url, &auth).await {
-        Ok(client) => match client.get_rate_limits().await {
-            Ok(snapshot) => Some(snapshot),
-            Err(err) => {
-                debug!(error = ?err, "failed to fetch rate limits from /usage");
-                None
-            }
-        },
-        Err(err) => {
-            debug!(error = ?err, "failed to construct backend client for rate limits");
-            None
-        }
-    }
 }
 
 #[cfg(test)]

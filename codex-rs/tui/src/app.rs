@@ -28,6 +28,7 @@ use codex_core::AuthManager;
 use codex_core::ConversationManager;
 use codex_core::config::Config;
 use codex_core::config::edit::ConfigEditsBuilder;
+use codex_core::config::edit::toml_value;
 #[cfg(target_os = "windows")]
 use codex_core::features::Feature;
 use codex_core::model_family::find_family_for_model;
@@ -220,8 +221,6 @@ pub(crate) struct App {
 
     // Esc-backtracking state grouped
     pub(crate) backtrack: crate::app_backtrack::BacktrackState,
-    #[cfg(feature = "feedback")]
-    pub(crate) feedback: crate::feedback_compat::CodexFeedback,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
 
@@ -256,7 +255,6 @@ impl App {
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
-        #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -302,8 +300,6 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
-                    #[cfg(feature = "feedback")]
-                    feedback: feedback.clone(),
                     expected_model: None, // No filtering for fresh sessions
                 };
                 ChatWidget::new(init, conversation_manager.clone())
@@ -328,8 +324,6 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
-                    #[cfg(feature = "feedback")]
-                    feedback: feedback.clone(),
                     expected_model: None, // No filtering for resumed sessions
                 };
                 ChatWidget::new_from_existing(
@@ -362,8 +356,6 @@ impl App {
             has_emitted_history_lines: false,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
-            #[cfg(feature = "feedback")]
-            feedback: feedback.clone(),
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
@@ -501,8 +493,6 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
-                    #[cfg(feature = "feedback")]
-                    feedback: self.feedback.clone(),
                     expected_model: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
@@ -688,17 +678,6 @@ impl App {
                     extra_count,
                     failed_scan,
                 );
-            }
-            #[cfg(feature = "feedback")]
-            AppEvent::OpenFeedbackNote {
-                category,
-                include_logs,
-            } => {
-                self.chat_widget.open_feedback_note(category, include_logs);
-            }
-            #[cfg(feature = "feedback")]
-            AppEvent::OpenFeedbackConsent { category } => {
-                self.chat_widget.open_feedback_consent(category);
             }
             AppEvent::OpenWindowsSandboxEnablePrompt { preset } => {
                 self.chat_widget.open_windows_sandbox_enable_prompt(preset);
@@ -1038,8 +1017,6 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
-                    #[cfg(feature = "feedback")]
-                    feedback: self.feedback.clone(),
                     expected_model: Some(model_name.clone()),
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
@@ -1185,6 +1162,10 @@ impl App {
                     }
                 });
             }
+            AppEvent::SetConfigVerticalFooter(enabled) => {
+                self.persist_config_setting("vertical_footer", enabled)
+                    .await;
+            }
         }
         Ok(true)
     }
@@ -1207,6 +1188,90 @@ impl App {
     fn on_update_reasoning_effort(&mut self, effort: Option<ReasoningEffortConfig>) {
         self.chat_widget.set_reasoning_effort(effort);
         self.config.model_reasoning_effort = effort;
+    }
+
+    fn open_external_editor(&mut self, tui: &mut tui::Tui) {
+        use crate::editor;
+
+        let current_text = self.chat_widget.composer_text();
+        let editor_cmd = editor::resolve_editor();
+
+        let temp_path = match editor::write_temp_file(&current_text) {
+            Ok(path) => path,
+            Err(err) => {
+                self.chat_widget
+                    .add_error_message(format!("Failed to create temp file: {err}"));
+                return;
+            }
+        };
+
+        // Restore terminal to normal mode so the editor can take over
+        let _ = tui::restore();
+
+        let status = editor::spawn_editor(&editor_cmd, &temp_path);
+
+        // Re-enable TUI mode
+        let _ = tui::set_modes();
+        tui.frame_requester().schedule_frame();
+
+        match status {
+            Ok(exit_status) if exit_status.success() => {
+                match editor::read_and_cleanup_temp_file(&temp_path) {
+                    Ok(content) => {
+                        let trimmed = content.trim_end().to_string();
+                        self.chat_widget.set_composer_text(trimmed);
+                    }
+                    Err(err) => {
+                        self.chat_widget
+                            .add_error_message(format!("Failed to read editor output: {err}"));
+                    }
+                }
+            }
+            Ok(_) => {
+                // Editor exited with non-zero status; discard changes, clean up temp file
+                let _ = std::fs::remove_file(&temp_path);
+            }
+            Err(err) => {
+                let _ = std::fs::remove_file(&temp_path);
+                self.chat_widget
+                    .add_error_message(format!("Failed to launch editor '{editor_cmd}': {err}"));
+            }
+        }
+    }
+
+    /// Persist a TUI config setting to config.toml and apply it immediately.
+    async fn persist_config_setting(&mut self, setting_name: &str, enabled: bool) {
+        // Apply immediately to the running TUI
+        match setting_name {
+            "vertical_footer" => {
+                self.vertical_footer = enabled;
+                self.chat_widget.set_vertical_footer(enabled);
+            }
+            _ => {
+                tracing::warn!("Unknown config setting: {setting_name}");
+                return;
+            }
+        }
+
+        // Persist to config.toml
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", setting_name], toml_value(enabled))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                setting = %setting_name,
+                "failed to persist TUI config setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save {setting_name} setting: {err}"));
+            return;
+        }
+
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("{setting_name} {status}"), None);
     }
 
     async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
@@ -1250,6 +1315,14 @@ impl App {
             {
                 // Delegate to helper for clarity; preserves behavior.
                 self.confirm_backtrack_from_main();
+            }
+            KeyEvent {
+                code: KeyCode::Char('g'),
+                modifiers: crossterm::event::KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                self.open_external_editor(tui);
             }
             KeyEvent {
                 kind: KeyEventKind::Press | KeyEventKind::Repeat,
@@ -1372,8 +1445,6 @@ mod tests {
             enhanced_keys_supported: false,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
-            #[cfg(feature = "feedback")]
-            feedback: crate::feedback_compat::CodexFeedback::new(),
             pending_update_action: None,
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
@@ -1412,8 +1483,6 @@ mod tests {
                 enhanced_keys_supported: false,
                 commit_anim_running: Arc::new(AtomicBool::new(false)),
                 backtrack: BacktrackState::default(),
-                #[cfg(feature = "feedback")]
-                feedback: crate::feedback_compat::CodexFeedback::new(),
                 pending_update_action: None,
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,

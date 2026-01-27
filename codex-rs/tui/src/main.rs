@@ -1,8 +1,8 @@
 use clap::Parser;
 use codex_arg0::arg0_dispatch_or_else;
 use codex_common::CliConfigOverrides;
-use codex_tui::Cli;
-use codex_tui::run_main;
+use nori_tui::Cli;
+use nori_tui::run_main;
 
 #[derive(Parser, Debug)]
 struct TopCli {

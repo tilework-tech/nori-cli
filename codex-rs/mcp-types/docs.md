@@ -4,44 +4,45 @@ Path: @/codex-rs/mcp-types
 
 ### Overview
 
-The `codex-mcp-types` crate defines JSON-RPC message types for the Model Context Protocol (MCP). It provides the data structures for MCP client-server communication used by both the MCP server and rmcp-client.
+The mcp-types crate provides auto-generated Rust types for the Model Context Protocol (MCP) specification. These types define the JSON-RPC messages for communication between MCP clients and servers.
 
 ### How it fits into the larger codebase
 
-MCP types is a shared dependency:
-
-- **MCP server** uses for message parsing/serialization
-- **RMCP client** uses for MCP server communication
-- **Defines** protocol-compliant message structures
+Used by:
+- `@/codex-rs/core/` - for MCP server communication
+- `@/codex-rs/rmcp-client/` - for MCP client implementation
+- `@/codex-rs/tui/` - for MCP-related type handling
 
 ### Core Implementation
 
-**Key Types:**
+**Generated Types**: The `lib.rs` is auto-generated from the MCP schema. Do not edit directly - regenerate using `./generate_mcp_types.py`.
 
-```rust
-pub enum JSONRPCMessage {
-    Request(Request),
-    Response(Response),
-    Notification(Notification),
-    Error(ErrorResponse),
-}
-```
+**Key Traits**:
+- `ModelContextProtocolRequest` - Paired request/response types with `METHOD`, `Params`, `Result`
+- `ModelContextProtocolNotification` - One-way messages with `METHOD`, `Params`
 
-Plus method-specific request/response types for:
-- `initialize`
-- `tools/list`
-- `tools/call`
-- `resources/list`
-- etc.
+**Core Message Types**:
+
+| Request | Description |
+|---------|-------------|
+| `InitializeRequest` | Handshake and capability negotiation |
+| `ListToolsRequest` | Enumerate available tools |
+| `CallToolRequest` | Invoke a tool with arguments |
+| `ListResourcesRequest` | Enumerate available resources |
+| `ReadResourceRequest` | Fetch resource contents |
+| `ListPromptsRequest` | Enumerate prompt templates |
+| `GetPromptRequest` | Fetch expanded prompt |
+
+**Content Types**: `TextContent`, `ImageContent`, `AudioContent`, `EmbeddedResource`, `ResourceLink`
+
+**JSON-RPC Types**: `JSONRPCRequest`, `JSONRPCResponse`, `JSONRPCError`, `JSONRPCNotification`
 
 ### Things to Know
 
-**Protocol Compliance:**
-
-Types are designed to match the MCP specification for interoperability with other MCP implementations.
-
-**Serde Integration:**
-
-All types derive serde traits for JSON serialization with appropriate rename rules for camelCase JSON fields.
+- Schema version is `2025-06-18` (MCP_SCHEMA_VERSION constant)
+- Types derive `Serialize`, `Deserialize`, `JsonSchema`, and `TS` (TypeScript)
+- The `RequestId` type supports both string and integer IDs
+- `TryFrom` implementations convert raw JSON-RPC to typed enums
+- Includes comprehensive tool annotation hints (destructive, idempotent, read-only)
 
 Created and maintained by Nori.

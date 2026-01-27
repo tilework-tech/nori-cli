@@ -315,8 +315,6 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         vertical_footer: false,
-        #[cfg(feature = "feedback")]
-        feedback: crate::feedback_compat::CodexFeedback::new(),
         expected_model: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
@@ -381,8 +379,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         pre_review_token_info: None,
         needs_final_message_separator: false,
         last_rendered_width: std::cell::Cell::new(None),
-        #[cfg(feature = "feedback")]
-        feedback: crate::feedback_compat::CodexFeedback::new(),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
         effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd),
@@ -1762,30 +1758,6 @@ fn single_reasoning_option_skips_selection() {
             .any(|ev| matches!(ev, AppEvent::UpdateReasoningEffort(Some(effort)) if *effort == ReasoningEffortConfig::High)),
         "expected reasoning effort to be applied automatically; events: {events:?}"
     );
-}
-
-#[cfg(feature = "feedback")]
-#[test]
-fn feedback_selection_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the feedback category selection popup via slash command.
-    chat.dispatch_command(SlashCommand::Feedback);
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("feedback_selection_popup", popup);
-}
-
-#[cfg(feature = "feedback")]
-#[test]
-fn feedback_upload_consent_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the consent popup directly for a chosen category.
-    chat.open_feedback_consent(crate::app_event::FeedbackCategory::Bug);
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("feedback_upload_consent_popup", popup);
 }
 
 #[test]
