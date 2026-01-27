@@ -67,7 +67,7 @@ codex-process-hardening = { path = "process-hardening" }
 codex-protocol = { path = "protocol" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
-codex-tui = { path = "tui" }
+nori-tui = { path = "tui" }
 codex-utils-cache = { path = "utils/cache" }
 codex-utils-image = { path = "utils/image" }
 codex-utils-json-to-toml = { path = "utils/json-to-toml" }

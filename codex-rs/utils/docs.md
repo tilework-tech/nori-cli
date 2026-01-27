@@ -1,44 +1,46 @@
-# Noridoc: utils
+# Noridoc: codex-utils
 
 Path: @/codex-rs/utils
 
 ### Overview
 
-The `utils` directory contains small, focused utility crates that provide specific functionality used across the Codex workspace. Each crate is a standalone library with minimal dependencies.
+The utils directory contains small, focused utility crates that provide shared functionality across the Nori codebase. These crates are designed to be lightweight and independent.
 
 ### How it fits into the larger codebase
 
-Utils crates are workspace members imported by crates that need their functionality:
+These utilities are consumed by various crates throughout the workspace, primarily `@/codex-rs/core/` and `@/codex-rs/tui/`.
 
-- **Core** uses git, cache, image, tokenizer, string
-- **TUI** uses pty for terminal emulation
-- **Various** crates use readiness for async coordination
+### Utility Crates
 
-### Crates
+| Crate | Description |
+|-------|-------------|
+| `cache` | Thread-safe LRU cache with SHA1 hashing |
+| `git` | Git operations (patches, ghost commits, branch operations) |
+| `image` | Image processing (resize, encode, base64) |
+| `json-to-toml` | Converts JSON values to TOML values |
+| `pty` | PTY session management for command execution |
+| `readiness` | Async readiness flag with token-based authorization |
+| `string` | String truncation at char boundaries |
 
-| Crate | Purpose |
-|-------|---------|
-| `git` | Git repository operations (status, diff, log) |
-| `cache` | Generic caching utilities |
-| `image` | Image processing and encoding |
-| `json-to-toml` | JSON to TOML conversion |
-| `pty` | Pseudo-terminal handling |
-| `readiness` | Async readiness signaling |
-| `string` | String manipulation utilities |
-| `tokenizer` | Token counting for context management |
+### Core Implementations
+
+**cache**: `BlockingLruCache<K, V>` provides get-or-insert semantics with Tokio mutex protection. Includes `sha1_digest()` for content hashing.
+
+**git**: Ghost commits allow non-destructive workspace snapshots. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`.
+
+**image**: Resizes images to `MAX_WIDTH=2048` / `MAX_HEIGHT=768` and encodes as JPEG/PNG with base64. Uses LRU cache to avoid re-encoding.
+
+**pty**: `ExecCommandSession` manages PTY-based command execution with async I/O channels for input/output streaming.
+
+**readiness**: `ReadinessFlag` allows multiple subscribers to mark ready, with async waiting via Tokio watch channels.
+
+**string**: `take_bytes_at_char_boundary()` and `take_last_bytes_at_char_boundary()` for safe UTF-8 truncation.
 
 ### Things to Know
 
-**Workspace Dependencies:**
-
-Each util is available as `codex-utils-<name>` in Cargo.toml:
-```toml
-codex-utils-git = { path = "utils/git" }
-codex-utils-image = { path = "utils/image" }
-```
-
-**Minimal Dependencies:**
-
-Utils are designed with minimal dependencies to avoid bloating crates that import them.
+- All crates are designed for async (Tokio) usage
+- The `git` crate handles cross-platform symlink creation
+- Image caching uses SHA1 digests as keys
+- PTY sessions support exit status tracking and async output broadcasting
 
 Created and maintained by Nori.

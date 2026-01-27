@@ -973,41 +973,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codex-cli"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "assert_matches",
- "clap",
- "clap_complete",
- "codex-acp",
- "codex-app-server-protocol",
- "codex-arg0",
- "codex-common",
- "codex-core",
- "codex-execpolicy",
- "codex-login",
- "codex-process-hardening",
- "codex-protocol",
- "codex-stdio-to-uds",
- "codex-tui",
- "codex-windows-sandbox",
- "ctor 0.5.0",
- "libc",
- "owo-colors",
- "predicates",
- "pretty_assertions",
- "regex-lite",
- "serde_json",
- "supports-color",
- "tempfile",
- "tokio",
- "toml",
- "tracing",
-]
-
-[[package]]
 name = "codex-client"
 version = "0.0.0"
 dependencies = [
@@ -1312,74 +1277,6 @@ dependencies = [
  "pretty_assertions",
  "tempfile",
  "uds_windows",
-]
-
-[[package]]
-name = "codex-tui"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "arboard",
- "assert_matches",
- "async-stream",
- "base64",
- "chrono",
- "clap",
- "codex-acp",
- "codex-ansi-escape",
- "codex-app-server-protocol",
- "codex-arg0",
- "codex-common",
- "codex-core",
- "codex-file-search",
- "codex-login",
- "codex-protocol",
- "codex-utils-pty",
- "codex-windows-sandbox",
- "color-eyre",
- "crossterm",
- "derive_more 2.0.1",
- "diffy",
- "dirs",
- "dunce",
- "image",
- "insta",
- "itertools 0.14.0",
- "lazy_static",
- "libc",
- "mcp-types",
- "nori-installed",
- "opentelemetry-appender-tracing",
- "pathdiff",
- "pretty_assertions",
- "pulldown-cmark",
- "rand 0.9.2",
- "ratatui",
- "ratatui-macros",
- "regex-lite",
- "reqwest",
- "serde",
- "serde_json",
- "serial_test",
- "shlex",
- "strum 0.27.2",
- "strum_macros 0.27.2",
- "supports-color",
- "tempfile",
- "textwrap 0.16.2",
- "tokio",
- "tokio-stream",
- "toml",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "tree-sitter-bash",
- "tree-sitter-highlight",
- "unicode-segmentation",
- "unicode-width 0.2.1",
- "url",
- "vt100 0.16.2",
- "which",
 ]
 
 [[package]]
@@ -3747,6 +3644,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "assert_matches",
+ "clap",
+ "clap_complete",
+ "codex-acp",
+ "codex-app-server-protocol",
+ "codex-arg0",
+ "codex-common",
+ "codex-core",
+ "codex-execpolicy",
+ "codex-login",
+ "codex-process-hardening",
+ "codex-protocol",
+ "codex-stdio-to-uds",
+ "codex-windows-sandbox",
+ "ctor 0.5.0",
+ "libc",
+ "nori-tui",
+ "owo-colors",
+ "predicates",
+ "pretty_assertions",
+ "regex-lite",
+ "serde_json",
+ "supports-color",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "nori-installed"
 version = "0.0.0"
 dependencies = [
@@ -3765,6 +3697,74 @@ dependencies = [
  "tracing",
  "uuid",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "nori-tui"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "assert_matches",
+ "async-stream",
+ "base64",
+ "chrono",
+ "clap",
+ "codex-acp",
+ "codex-ansi-escape",
+ "codex-app-server-protocol",
+ "codex-arg0",
+ "codex-common",
+ "codex-core",
+ "codex-file-search",
+ "codex-login",
+ "codex-protocol",
+ "codex-utils-pty",
+ "codex-windows-sandbox",
+ "color-eyre",
+ "crossterm",
+ "derive_more 2.0.1",
+ "diffy",
+ "dirs",
+ "dunce",
+ "image",
+ "insta",
+ "itertools 0.14.0",
+ "lazy_static",
+ "libc",
+ "mcp-types",
+ "nori-installed",
+ "opentelemetry-appender-tracing",
+ "pathdiff",
+ "pretty_assertions",
+ "pulldown-cmark",
+ "rand 0.9.2",
+ "ratatui",
+ "ratatui-macros",
+ "regex-lite",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "shlex",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "supports-color",
+ "tempfile",
+ "textwrap 0.16.2",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tree-sitter-bash",
+ "tree-sitter-highlight",
+ "unicode-segmentation",
+ "unicode-width 0.2.1",
+ "url",
+ "vt100 0.16.2",
+ "which",
 ]
 
 [[package]]

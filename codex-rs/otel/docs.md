@@ -1,34 +1,32 @@
-# Noridoc: otel
+# Noridoc: codex-otel
 
 Path: @/codex-rs/otel
 
 ### Overview
 
-The `codex-otel` crate provides OpenTelemetry integration for Codex, enabling distributed tracing and telemetry export. It configures the OTLP exporter for sending traces to observability backends.
+The otel crate provides OpenTelemetry integration for distributed tracing. When enabled, it propagates trace context through HTTP headers and manages telemetry providers.
 
 ### How it fits into the larger codebase
 
-Otel is used by the TUI for observability:
-
-- **Core** `otel_init.rs` uses this for provider initialization
-- **TUI** initializes OTEL tracing on startup
-- **Exports** to configured OTLP endpoints
+Used by `@/codex-rs/core/` (`otel_init.rs`) to initialize telemetry. Provides trace context propagation for API requests.
 
 ### Core Implementation
 
-Provides utilities for:
-- OTLP exporter configuration
-- Trace propagation
-- Log export filtering
+**OtelProvider** (`otel_provider.rs`, feature-gated): When the `otel` feature is enabled:
+- `from(settings)` - Creates provider from configuration
+- `headers(span)` - Extracts trace context headers for propagation
+
+**OtelSettings** (`config.rs`): Configuration for OpenTelemetry including endpoint, service name, etc.
+
+**Event Manager** (`otel_event_manager.rs`): Manages telemetry event lifecycle.
+
+**Stub Implementation** (when `otel` feature disabled): Returns empty headers and `None` provider.
 
 ### Things to Know
 
-**Configuration:**
-
-OTEL export is configured via environment variables and config.toml settings.
-
-**Filtering:**
-
-`codex_export_filter()` in core determines which traces to export, avoiding noise from unimportant spans.
+- The `otel` feature must be enabled for actual telemetry
+- Without the feature, all operations are no-ops
+- Headers are extracted from tracing spans for context propagation
+- Configuration is loaded from environment or config file
 
 Created and maintained by Nori.

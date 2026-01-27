@@ -2,27 +2,27 @@ use clap::Parser;
 use codex_acp::find_nori_home;
 use codex_acp::init_rolling_file_tracing;
 use codex_arg0::arg0_dispatch_or_else;
-use codex_cli::LandlockCommand;
-use codex_cli::SeatbeltCommand;
-use codex_cli::WindowsCommand;
-#[cfg(feature = "login")]
-use codex_cli::login::read_api_key_from_stdin;
-#[cfg(feature = "login")]
-use codex_cli::login::run_login_status;
-#[cfg(feature = "login")]
-use codex_cli::login::run_login_with_api_key;
-#[cfg(feature = "login")]
-use codex_cli::login::run_login_with_chatgpt;
-#[cfg(feature = "login")]
-use codex_cli::login::run_login_with_device_code;
-#[cfg(feature = "login")]
-use codex_cli::login::run_logout;
 use codex_common::CliConfigOverrides;
 use codex_execpolicy::ExecPolicyCheckCommand;
+use nori_cli::LandlockCommand;
+use nori_cli::SeatbeltCommand;
+use nori_cli::WindowsCommand;
+#[cfg(feature = "login")]
+use nori_cli::login::read_api_key_from_stdin;
+#[cfg(feature = "login")]
+use nori_cli::login::run_login_status;
+#[cfg(feature = "login")]
+use nori_cli::login::run_login_with_api_key;
+#[cfg(feature = "login")]
+use nori_cli::login::run_login_with_chatgpt;
+#[cfg(feature = "login")]
+use nori_cli::login::run_login_with_device_code;
+#[cfg(feature = "login")]
+use nori_cli::login::run_logout;
 
-use codex_tui::AppExitInfo;
-use codex_tui::Cli as TuiCli;
-use codex_tui::update_action::UpdateAction;
+use nori_tui::AppExitInfo;
+use nori_tui::Cli as TuiCli;
+use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
 use std::path::PathBuf;
 use supports_color::Stream;
@@ -308,7 +308,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 &mut interactive.config_overrides,
                 root_config_overrides.clone(),
             );
-            let exit_info = codex_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
         #[cfg(feature = "login")]
@@ -357,7 +357,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                     &mut seatbelt_cli.config_overrides,
                     root_config_overrides.clone(),
                 );
-                codex_cli::debug_sandbox::run_command_under_seatbelt(
+                nori_cli::debug_sandbox::run_command_under_seatbelt(
                     seatbelt_cli,
                     codex_linux_sandbox_exe,
                 )
@@ -368,7 +368,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                     &mut landlock_cli.config_overrides,
                     root_config_overrides.clone(),
                 );
-                codex_cli::debug_sandbox::run_command_under_landlock(
+                nori_cli::debug_sandbox::run_command_under_landlock(
                     landlock_cli,
                     codex_linux_sandbox_exe,
                 )
@@ -379,7 +379,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                     &mut windows_cli.config_overrides,
                     root_config_overrides.clone(),
                 );
-                codex_cli::debug_sandbox::run_command_under_windows(
+                nori_cli::debug_sandbox::run_command_under_windows(
                     windows_cli,
                     codex_linux_sandbox_exe,
                 )

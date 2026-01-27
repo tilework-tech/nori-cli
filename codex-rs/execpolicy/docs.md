@@ -1,48 +1,41 @@
-# Noridoc: execpolicy
+# Noridoc: codex-execpolicy
 
 Path: @/codex-rs/execpolicy
 
 ### Overview
 
-The `codex-execpolicy` crate provides policy-based evaluation of shell commands to determine their safety before execution. It parses commands against a policy specification and classifies them as safe, unsafe, or requiring analysis. This is the first-generation policy engine.
+The execpolicy crate provides parsing and evaluation of execution policies for command approval. Policies define which commands can be auto-approved based on patterns for executables, arguments, and their combinations.
 
 ### How it fits into the larger codebase
 
-Execpolicy is used by core for command safety assessment:
-
-- **Core** `command_safety/is_safe_command.rs` uses this for approval decisions
-- **Sandbox assessment** checks commands before auto-approval
-- **Complements** `execpolicy2` which is the newer policy engine
+Used by `@/codex-rs/core/` (`exec_policy.rs`) to determine whether shell commands require user approval or can be auto-executed.
 
 ### Core Implementation
 
-**Key Components:**
+**Policy Format** (`lib.rs`): Policies are defined as TOML:
 
-- `policy.rs`: Policy definition structures
-- `policy_parser.rs`: Parses policy specifications
-- `exec_call.rs`: Represents parsed command invocations
-- `execv_checker.rs`: Main evaluation logic
-- `valid_exec.rs`: Valid execution patterns
+```toml
+[[rules]]
+program = "git"
+args = ["status", "log", "diff"]  # allowed subcommands
 
-**Evaluation Flow:**
+[[rules]]
+program = "ls"
+# no args restriction = all args allowed
+```
 
-1. Parse command into structured representation
-2. Match against policy rules
-3. Resolve arguments against allowed patterns
-4. Return safety classification
+**Evaluation** (`lib.rs`): The `ExecPolicy::evaluate()` method checks:
+1. Program name matches a rule
+2. Arguments match allowed patterns (if specified)
+3. Returns `Allow` or `RequiresApproval`
 
-### Things to Know
+**Pattern Matching**: Supports:
+- Exact matches
+- Glob patterns (via `wildmatch`)
+- Argument prefixes
 
-**Policy Format:**
+**Argument Types** (`arg_type.rs`, `arg_matcher.rs`):
 
-Policies define allowed command patterns with:
-- Program name (literal or pattern)
-- Argument types and constraints
-- File path restrictions
-
-**Argument Types:**
-
-`arg_type.rs` and `arg_matcher.rs` handle:
 - Literal values
 - File paths with constraints
 - Optional arguments
@@ -52,8 +45,10 @@ Policies define allowed command patterns with:
 
 `sed_command.rs` provides special handling for sed commands due to their complex argument patterns.
 
-**Build-time Policy:**
+### Things to Know
 
-`build.rs` may embed default policies at compile time.
+- Default policies are embedded for common safe commands (git status, ls, etc.)
+- Custom policies can be specified in project configuration
+- The policy is evaluated per-command, not per-session
 
 Created and maintained by Nori.

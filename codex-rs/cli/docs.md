@@ -1,47 +1,43 @@
-# Noridoc: cli
+# Noridoc: nori-cli
 
 Path: @/codex-rs/cli
 
 ### Overview
 
-The `codex-cli` crate is the main binary that provides the `nori` command. It serves as the entry point for the interactive TUI mode with optional login management and sandbox debugging tools. The crate handles CLI argument parsing, subcommand routing, and cross-cutting concerns.
+The `nori-cli` crate is the main binary that provides the `nori` command. It serves as the entry point for the interactive TUI mode with optional login management and sandbox debugging tools. The crate handles CLI argument parsing, subcommand routing, and cross-cutting concerns.
 
 ### How it fits into the larger codebase
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `codex-tui`, `codex-acp`, `codex-core`
+- **Always included:** `nori-tui`, `codex-acp`, `codex-core`
 - **Optional via features:** `codex-login`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 
 ### Core Implementation
 
-**Main Entry:**
+**SeatbeltCommand**: macOS sandbox testing with options:
+- `--full-auto` - Network-disabled sandbox with cwd/TMPDIR write access
+- `--log-denials` - Capture and print sandbox denials via `log stream`
 
-`main.rs` parses CLI using `clap` and routes based on subcommand:
+**LandlockCommand**: Linux sandbox testing with:
+- `--full-auto` - Network-disabled sandbox with cwd/TMPDIR write access
+
+**WindowsCommand**: Windows sandbox testing with:
+- `--full-auto` - Restricted token sandbox with cwd/TMPDIR write access
 
 ```rust
 match subcommand {
-    None => codex_tui::run_main(...),           // Interactive TUI
+    None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     // ... other subcommands
 }
 ```
 
-**Subcommands:**
+**Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 
-| Subcommand | Alias | Description | Required Feature |
-|------------|-------|-------------|------------------|
-| `login` | | Manage authentication | `login` |
-| `logout` | | Remove stored credentials | `login` |
-| `sandbox` | `debug` | Test sandbox enforcement | (always) |
-| `execpolicy` | | Execpolicy tooling (hidden) | (always) |
-| `stdio-to-uds` | | Internal stdio relay (hidden) | (always) |
-
-**Always-Available Safety Override:**
-
-The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) is available in all builds. When set, it configures `approval_policy: AskForApproval::Never`, causing the ACP backend to auto-approve all tool operations without prompting the user.
+**Login** (`login.rs`, feature-gated by `login`): Authentication-related CLI functionality.
 
 ### Things to Know
 
@@ -55,17 +51,17 @@ The CLI uses Cargo features to enable optional functionality. By default (`defau
 
 | Feature | Dependencies | Enables |
 |---------|--------------|---------|
-| `login` | `codex-login`, `codex-tui/login` | `login`/`logout` subcommands + TUI login |
+| `login` | `codex-login`, `nori-tui/login` | `login`/`logout` subcommands + TUI login |
 
 **Feature Propagation to TUI:**
 
 The `login` feature propagates to the TUI crate for coordinated behavior:
-- `login` -> `codex-tui/login`: Enables login screens and `/login` command in TUI
+- `login` -> `nori-tui/login`: Enables login screens and `/login` command in TUI
 
 Build examples:
 ```bash
-cargo build -p codex-cli                    # Minimal (TUI + ACP only)
-cargo build -p codex-cli --features login   # With login support
+cargo build -p nori-cli                    # Minimal (TUI + ACP only)
+cargo build -p nori-cli --features login   # With login support
 ```
 
 Feature-gated code uses `#[cfg(feature = "...")]` on imports, enum variants, match arms, and struct definitions in `main.rs`.
@@ -77,7 +73,7 @@ The `debug_sandbox` module (in `debug_sandbox/`) provides:
 - `nori sandbox linux` (Landlock)
 - `nori sandbox windows` (Restricted token)
 
-These allow testing sandbox behavior without running the full TUI.
+These allow testing sandbox behavior without running the full TUI. All commands accept trailing arguments as the command to sandbox, and `--full-auto` provides sensible defaults. On macOS, `--log-denials` requires elevated permissions for log streaming.
 
 **Login Flow:**
 

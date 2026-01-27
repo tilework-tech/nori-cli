@@ -1,88 +1,48 @@
-# Noridoc: windows-sandbox-rs
+# Noridoc: codex-windows-sandbox
 
 Path: @/codex-rs/windows-sandbox-rs
 
 ### Overview
 
-The `codex-windows-sandbox-rs` crate provides Windows-specific process sandboxing using restricted tokens and ACL manipulation. It enables Codex to run commands with reduced privileges and controlled filesystem access on Windows platforms.
+The windows-sandbox crate implements process sandboxing on Windows using restricted tokens and ACL manipulation. It creates constrained execution environments with controlled filesystem and network access.
 
 ### How it fits into the larger codebase
 
-Windows sandbox is the Windows counterpart to Linux Landlock:
-
-- **Core** uses for sandboxed command execution on Windows
-- **CLI** provides `codex sandbox windows` for testing
-- **Stubs** out to error on non-Windows platforms
+Used by `@/codex-rs/core/` (`exec.rs`) as the sandbox executor on Windows. Provides `run_windows_sandbox_capture()` which is called to execute commands in a restricted environment.
 
 ### Core Implementation
 
-**Main Functions:**
+**Policy Types** (`policy.rs`): `SandboxPolicy` enum:
+- `ReadOnly` - No filesystem writes allowed
+- `WorkspaceWrite` - Write access to specified roots only
+- `DangerFullAccess` - Not supported for sandboxing (errors)
 
-```rust
-pub fn run_windows_sandbox_capture(
-    policy_json_or_preset: &str,
-    sandbox_policy_cwd: &Path,
-    codex_home: &Path,
-    command: Vec<String>,
-    cwd: &Path,
-    env_map: HashMap<String, String>,
-    timeout_ms: Option<u64>,
-) -> Result<CaptureResult>
+**Token Creation** (`token.rs`): Creates restricted Windows tokens with capability SIDs for different access levels.
 
-pub fn preflight_audit_everyone_writable(
-    cwd: &Path,
-    env_map: &HashMap<String, String>,
-    logs_base_dir: Option<&Path>,
-) -> Result<Vec<PathBuf>>
-```
+**ACL Manipulation** (`acl.rs`):
+- `add_allow_ace()` - Grant access to specific paths
+- `add_deny_write_ace()` - Deny write access to paths
+- `revoke_ace()` - Clean up added ACEs after execution
 
-**CaptureResult:**
+**Path Computation** (`allow.rs`): `compute_allow_paths()` calculates which paths need allow/deny ACEs based on policy.
 
-```rust
-pub struct CaptureResult {
-    pub exit_code: i32,
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
-    pub timed_out: bool,
-}
-```
+**Process Execution** (`run_windows_sandbox_capture()`):
+1. Parse and validate sandbox policy
+2. Create restricted token with appropriate capability SID
+3. Set up ACLs for allowed/denied paths
+4. Create process with restricted token via `CreateProcessAsUserW`
+5. Capture stdout/stderr
+6. Clean up ACEs (unless persistent)
 
-**Modules (Windows-only):**
-
-| Module | Purpose |
-|--------|---------|
-| `token.rs` | Restricted token creation |
-| `acl.rs` | ACL entry manipulation |
-| `allow.rs` | Compute allowed paths |
-| `audit.rs` | Security auditing |
-| `policy.rs` | Sandbox policy parsing |
-| `env.rs` | Environment normalization |
+**Network Blocking** (`env.rs`): Modifies environment to disable network access when required.
 
 ### Things to Know
 
-**Sandbox Modes:**
-
-- `ReadOnly` - No filesystem writes
-- `WorkspaceWrite` - Writes to workspace only
-
-**Token Approach:**
-
-Creates restricted tokens with capability SIDs. Processes run with reduced privileges via `CreateProcessAsUserW`.
-
-**ACL Manipulation:**
-
-Adds temporary ACEs for allowed paths, revokes after execution (unless persistent).
-
-**Non-Windows Stub:**
-
-Returns error on non-Windows platforms. Compilation includes all code but runtime checks platform.
-
-**Timeout Handling:**
-
-Process terminated and exit code set to 128+64 on timeout.
-
-**Logging:**
-
-Logs sandbox operations to `codex_home` for debugging.
+- On non-Windows platforms, stub implementations return errors
+- Capability SIDs are persisted to `~/.codex/cap-sids.json`
+- `WorkspaceWrite` mode persists ACEs; `ReadOnly` revokes them after execution
+- Command line arguments are properly quoted for Windows
+- Timeout support with process termination
+- Logging to `~/.codex/` for debugging sandbox issues
 
 Created and maintained by Nori.

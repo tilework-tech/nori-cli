@@ -16,14 +16,14 @@ use tracing_subscriber::util::SubscriberInitExt;
 /// Returns the default log level based on build configuration.
 ///
 /// - Debug builds: `debug` level (captures debug, info, warn, error)
-/// - Release builds: `warn,codex_tui=info,acp=info` (warn default, info for TUI/ACP)
+/// - Release builds: `warn,nori_tui=info,acp=info` (warn default, info for TUI/ACP)
 ///
 /// Note: This can be overridden by setting the RUST_LOG environment variable.
 fn default_log_level() -> &'static str {
     if cfg!(debug_assertions) {
         "debug"
     } else {
-        "warn,codex_tui=info,acp=info"
+        "warn,nori_tui=info,acp=info"
     }
 }
 
@@ -35,7 +35,7 @@ fn default_log_level() -> &'static str {
 /// Log level is determined by the RUST_LOG environment variable if set,
 /// otherwise falls back to build configuration defaults:
 /// - Debug builds: DEBUG and above
-/// - Release builds: WARN by default, INFO for codex_tui and acp crates
+/// - Release builds: WARN by default, INFO for nori_tui and acp crates
 ///
 /// # Arguments
 ///
@@ -104,7 +104,7 @@ pub fn init_rolling_file_tracing(log_dir: &Path, file_prefix: &str) -> Result<()
 /// Log level is determined by the RUST_LOG environment variable if set,
 /// otherwise falls back to build configuration defaults:
 /// - Debug builds: DEBUG and above
-/// - Release builds: WARN by default, INFO for codex_tui and acp crates
+/// - Release builds: WARN by default, INFO for nori_tui and acp crates
 ///
 /// # Arguments
 ///
@@ -177,7 +177,7 @@ mod tests {
     /// Test that default_log_level returns the correct value based on build type.
     ///
     /// - Debug builds: "debug" (all debug and above)
-    /// - Release builds: "warn,codex_tui=info,acp=info" (warn default, but info for TUI/ACP)
+    /// - Release builds: "warn,nori_tui=info,acp=info" (warn default, but info for TUI/ACP)
     #[test]
     fn test_default_log_level_returns_expected_value() {
         let level = default_log_level();
@@ -193,8 +193,8 @@ mod tests {
         #[cfg(not(debug_assertions))]
         {
             assert_eq!(
-                level, "warn,codex_tui=info,acp=info",
-                "Release builds should default to 'warn,codex_tui=info,acp=info'"
+                level, "warn,nori_tui=info,acp=info",
+                "Release builds should default to 'warn,nori_tui=info,acp=info'"
             );
         }
     }
