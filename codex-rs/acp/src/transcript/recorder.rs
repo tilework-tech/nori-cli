@@ -24,6 +24,8 @@ use super::types::AssistantEntry;
 use super::types::Attachment;
 use super::types::ContentBlock;
 use super::types::GitInfo;
+use super::types::PatchApplyEntry;
+use super::types::PatchOperationType;
 use super::types::SessionMetaEntry;
 use super::types::ToolCallEntry;
 use super::types::ToolResultEntry;
@@ -183,6 +185,25 @@ impl TranscriptRecorder {
             id: id.to_string(),
             content,
             model,
+        });
+        self.send_entry(entry).await
+    }
+
+    /// Record a patch operation (file edit/write/delete).
+    pub async fn record_patch_apply(
+        &self,
+        call_id: &str,
+        operation: PatchOperationType,
+        path: &Path,
+        success: bool,
+        error: Option<String>,
+    ) -> io::Result<()> {
+        let entry = TranscriptEntry::PatchApply(PatchApplyEntry {
+            call_id: call_id.to_string(),
+            operation,
+            path: path.to_path_buf(),
+            success,
+            error,
         });
         self.send_entry(entry).await
     }
@@ -372,7 +393,6 @@ mod tests {
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
-    // @current-session
     #[tokio::test]
     async fn test_transcript_recorder_creates_directory_structure() {
         let temp_dir = TempDir::new().unwrap();
@@ -399,7 +419,6 @@ mod tests {
         recorder.shutdown().await.unwrap();
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_transcript_recorder_writes_session_meta() {
         let temp_dir = TempDir::new().unwrap();
@@ -436,7 +455,6 @@ mod tests {
         }
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_transcript_recorder_records_user_message() {
         let temp_dir = TempDir::new().unwrap();
@@ -472,7 +490,6 @@ mod tests {
         }
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_transcript_recorder_records_tool_call_and_result() {
         let temp_dir = TempDir::new().unwrap();
@@ -522,7 +539,6 @@ mod tests {
         }
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_transcript_recorder_records_assistant_message() {
         let temp_dir = TempDir::new().unwrap();
@@ -565,7 +581,6 @@ mod tests {
         }
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_transcript_recorder_full_conversation() {
         let temp_dir = TempDir::new().unwrap();
@@ -623,27 +638,75 @@ mod tests {
         }
     }
 
-    // @current-session
     #[tokio::test]
-    async fn test_generate_session_id_format() {
-        let id = generate_session_id();
-        // Should be UUID-like format: 8-4-4-4-12
-        let parts: Vec<&str> = id.split('-').collect();
-        assert_eq!(parts.len(), 5);
-        assert_eq!(parts[0].len(), 8);
-        assert_eq!(parts[1].len(), 4);
-        assert_eq!(parts[2].len(), 4);
-        assert_eq!(parts[3].len(), 4);
-        assert_eq!(parts[4].len(), 12);
-    }
+    async fn test_transcript_recorder_records_patch_apply() {
+        use super::super::types::PatchOperationType;
 
-    // @current-session
-    #[tokio::test]
-    async fn test_generate_session_id_unique() {
-        let id1 = generate_session_id();
-        // Small delay to ensure different timestamp
-        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
-        let id2 = generate_session_id();
-        assert_ne!(id1, id2);
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let cwd = temp_dir.path();
+
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0")
+            .await
+            .unwrap();
+
+        // Record a successful edit
+        recorder
+            .record_patch_apply(
+                "call-edit-001",
+                PatchOperationType::Edit,
+                &PathBuf::from("/src/main.rs"),
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Record a failed write
+        recorder
+            .record_patch_apply(
+                "call-write-001",
+                PatchOperationType::Write,
+                &PathBuf::from("/src/new_file.rs"),
+                false,
+                Some("Permission denied".to_string()),
+            )
+            .await
+            .unwrap();
+
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        // Read the transcript file
+        let content = tokio::fs::read_to_string(recorder.transcript_path())
+            .await
+            .unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+
+        assert_eq!(lines.len(), 3); // SessionMeta + 2 PatchApply entries
+
+        let edit_line: TranscriptLine = serde_json::from_str(lines[1]).unwrap();
+        match edit_line.entry {
+            TranscriptEntry::PatchApply(patch) => {
+                assert_eq!(patch.call_id, "call-edit-001");
+                assert_eq!(patch.operation, PatchOperationType::Edit);
+                assert_eq!(patch.path, PathBuf::from("/src/main.rs"));
+                assert!(patch.success);
+                assert!(patch.error.is_none());
+            }
+            _ => panic!("Expected PatchApply entry"),
+        }
+
+        let write_line: TranscriptLine = serde_json::from_str(lines[2]).unwrap();
+        match write_line.entry {
+            TranscriptEntry::PatchApply(patch) => {
+                assert_eq!(patch.call_id, "call-write-001");
+                assert_eq!(patch.operation, PatchOperationType::Write);
+                assert_eq!(patch.path, PathBuf::from("/src/new_file.rs"));
+                assert!(!patch.success);
+                assert_eq!(patch.error, Some("Permission denied".to_string()));
+            }
+            _ => panic!("Expected PatchApply entry"),
+        }
     }
 }

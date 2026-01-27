@@ -12,7 +12,6 @@ mod types_tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    // @current-session
     #[test]
     fn test_transcript_line_serialization() {
         let line = TranscriptLine {
@@ -31,7 +30,6 @@ mod types_tests {
         assert_eq!(line, parsed);
     }
 
-    // @current-session
     #[test]
     fn test_user_entry_serialization() {
         let entry = TranscriptEntry::User(UserEntry {
@@ -56,7 +54,6 @@ mod types_tests {
         assert!(parsed.get("attachments").is_none());
     }
 
-    // @current-session
     #[test]
     fn test_user_entry_with_attachments() {
         let entry = TranscriptEntry::User(UserEntry {
@@ -80,7 +77,6 @@ mod types_tests {
         assert_eq!(parsed["attachments"][0]["type"], "file_path");
     }
 
-    // @current-session
     #[test]
     fn test_assistant_entry_serialization() {
         let entry = TranscriptEntry::Assistant(AssistantEntry {
@@ -110,7 +106,6 @@ mod types_tests {
         assert_eq!(parsed["model"], "claude-sonnet-4-20250514");
     }
 
-    // @current-session
     #[test]
     fn test_tool_call_entry_serialization() {
         let entry = TranscriptEntry::ToolCall(ToolCallEntry {
@@ -134,7 +129,6 @@ mod types_tests {
         assert_eq!(parsed["input"]["command"], "ls -la src/");
     }
 
-    // @current-session
     #[test]
     fn test_tool_result_entry_serialization() {
         let entry = TranscriptEntry::ToolResult(ToolResultEntry {
@@ -161,7 +155,6 @@ mod types_tests {
         assert_eq!(parsed["exit_code"], 0);
     }
 
-    // @current-session
     #[test]
     fn test_tool_result_truncated() {
         let entry = TranscriptEntry::ToolResult(ToolResultEntry {
@@ -185,7 +178,59 @@ mod types_tests {
         assert!(parsed.get("exit_code").is_none());
     }
 
-    // @current-session
+    #[test]
+    fn test_patch_apply_entry_serialization() {
+        let entry = TranscriptEntry::PatchApply(PatchApplyEntry {
+            call_id: "call-003".to_string(),
+            operation: PatchOperationType::Edit,
+            path: PathBuf::from("/src/main.rs"),
+            success: true,
+            error: None,
+        });
+
+        let line = TranscriptLine {
+            ts: "2025-01-26T10:30:07.789Z".to_string(),
+            v: 1,
+            entry,
+        };
+
+        let json = serde_json::to_string(&line).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["type"], "patch_apply");
+        assert_eq!(parsed["call_id"], "call-003");
+        assert_eq!(parsed["operation"], "edit");
+        assert_eq!(parsed["path"], "/src/main.rs");
+        assert_eq!(parsed["success"], true);
+        // error=None should not be serialized
+        assert!(parsed.get("error").is_none());
+    }
+
+    #[test]
+    fn test_patch_apply_with_error() {
+        let entry = TranscriptEntry::PatchApply(PatchApplyEntry {
+            call_id: "call-004".to_string(),
+            operation: PatchOperationType::Write,
+            path: PathBuf::from("/src/new_file.rs"),
+            success: false,
+            error: Some("Permission denied".to_string()),
+        });
+
+        let line = TranscriptLine {
+            ts: "2025-01-26T10:30:07.789Z".to_string(),
+            v: 1,
+            entry,
+        };
+
+        let json = serde_json::to_string(&line).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["type"], "patch_apply");
+        assert_eq!(parsed["operation"], "write");
+        assert_eq!(parsed["success"], false);
+        assert_eq!(parsed["error"], "Permission denied");
+    }
+
     #[test]
     fn test_session_meta_entry_serialization() {
         let entry = TranscriptEntry::SessionMeta(SessionMetaEntry {
@@ -218,7 +263,6 @@ mod types_tests {
         assert_eq!(parsed["git"]["commit_hash"], "abc123def456");
     }
 
-    // @current-session
     #[test]
     fn test_session_meta_without_git() {
         let entry = TranscriptEntry::SessionMeta(SessionMetaEntry {
@@ -245,7 +289,6 @@ mod types_tests {
         assert!(parsed.get("model").is_none());
     }
 
-    // @current-session
     #[test]
     fn test_transcript_line_deserialization_from_jsonl() {
         // Test deserializing from the example JSONL format in the spec
@@ -264,7 +307,6 @@ mod types_tests {
         }
     }
 
-    // @current-session
     #[test]
     fn test_transcript_line_new_creates_timestamp() {
         let entry = TranscriptEntry::User(UserEntry {
@@ -342,7 +384,6 @@ mod project_tests {
         repo_path
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_non_git_directory() {
         let temp_dir = TempDir::new().unwrap();
@@ -358,7 +399,6 @@ mod project_tests {
         assert!(project_id.git_root.is_none());
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_git_repo_without_remote() {
         let temp_dir = TempDir::new().unwrap();
@@ -377,7 +417,6 @@ mod project_tests {
         assert_eq!(project_id.name, "repo");
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_git_repo_with_remote() {
         let temp_dir = TempDir::new().unwrap();
@@ -412,7 +451,6 @@ mod project_tests {
         assert_eq!(project_id.name, "my-project");
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_same_repo_different_subdirectory() {
         let temp_dir = TempDir::new().unwrap();
@@ -430,7 +468,6 @@ mod project_tests {
         assert_eq!(id_root.name, id_subdir.name);
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_different_repos_different_ids() {
         let temp_dir1 = TempDir::new().unwrap();
@@ -446,7 +483,6 @@ mod project_tests {
         assert_ne!(id1.id, id2.id);
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_same_remote_same_id() {
         let temp_dir1 = TempDir::new().unwrap();
@@ -477,7 +513,6 @@ mod project_tests {
         assert_eq!(id1.id, id2.id);
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_compute_project_id_ssh_and_https_same_id() {
         let temp_dir1 = TempDir::new().unwrap();
@@ -514,7 +549,6 @@ mod project_tests {
         assert_eq!(id1.id, id2.id);
     }
 
-    // @current-session
     #[test]
     fn test_project_id_deterministic() {
         use crate::transcript::project::compute_hash;

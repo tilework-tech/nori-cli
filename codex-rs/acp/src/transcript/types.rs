@@ -44,6 +44,8 @@ pub enum TranscriptEntry {
     ToolCall(ToolCallEntry),
     /// Tool result
     ToolResult(ToolResultEntry),
+    /// Patch operation (file edit/write/delete)
+    PatchApply(PatchApplyEntry),
 }
 
 /// Git repository information captured at session start.
@@ -144,6 +146,34 @@ pub struct ToolResultEntry {
     /// Exit code for shell commands
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+}
+
+/// Type of patch operation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PatchOperationType {
+    /// Edit an existing file
+    Edit,
+    /// Write/create a file
+    Write,
+    /// Delete a file
+    Delete,
+}
+
+/// Patch operation entry (file edit/write/delete).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PatchApplyEntry {
+    /// Unique call ID (for correlating with approval)
+    pub call_id: String,
+    /// Type of operation (edit, write, delete)
+    pub operation: PatchOperationType,
+    /// File path being modified
+    pub path: PathBuf,
+    /// Whether the operation succeeded
+    pub success: bool,
+    /// Error message if operation failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 impl TranscriptLine {

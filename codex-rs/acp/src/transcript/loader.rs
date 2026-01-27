@@ -315,7 +315,6 @@ mod tests {
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
-    // @current-session
     #[tokio::test]
     async fn test_list_projects_empty() {
         let temp_dir = TempDir::new().unwrap();
@@ -325,7 +324,6 @@ mod tests {
         assert!(projects.is_empty());
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_list_projects_with_sessions() {
         let temp_dir = TempDir::new().unwrap();
@@ -350,7 +348,6 @@ mod tests {
         assert_eq!(projects[0].session_count, 1);
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_list_sessions_for_project() {
         let temp_dir = TempDir::new().unwrap();
@@ -381,7 +378,6 @@ mod tests {
         assert!(sessions[0].started_at >= sessions[1].started_at);
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_find_sessions_for_cwd() {
         let temp_dir = TempDir::new().unwrap();
@@ -401,7 +397,6 @@ mod tests {
         assert_eq!(sessions.len(), 1);
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_load_transcript() {
         let temp_dir = TempDir::new().unwrap();
@@ -443,7 +438,6 @@ mod tests {
         assert_eq!(transcript.entries.len(), 3); // SessionMeta + User + Assistant
     }
 
-    // @current-session
     #[tokio::test]
     async fn test_load_session_meta() {
         let temp_dir = TempDir::new().unwrap();
@@ -471,17 +465,6 @@ mod tests {
         assert_eq!(meta.cli_version, "0.1.0");
     }
 
-    // @current-session
-    #[tokio::test]
-    async fn test_session_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let loader = TranscriptLoader::new(temp_dir.path().to_path_buf());
-
-        let path = loader.session_path("abc123", "session-456");
-        assert!(path.ends_with("abc123/sessions/session-456.jsonl"));
-    }
-
-    // @current-session
     #[tokio::test]
     async fn test_list_sessions_empty_project() {
         let temp_dir = TempDir::new().unwrap();

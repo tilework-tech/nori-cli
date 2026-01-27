@@ -166,12 +166,19 @@ fn extract_repo_name(url: &str) -> String {
 }
 
 /// Compute a deterministic hash and return first 16 hex characters.
+///
+/// Note: This uses `DefaultHasher` which is deterministic within a single
+/// Rust version but not guaranteed stable across Rust versions. If the hash
+/// algorithm changes, existing transcript directories will become "orphaned"
+/// (still on disk but not found by project lookup). This is acceptable for
+/// transcript persistence since it's a non-critical feature - old transcripts
+/// remain accessible via direct file access, and new sessions simply create
+/// new directories.
 pub(crate) fn compute_hash(input: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hash;
     use std::hash::Hasher;
 
-    // Use DefaultHasher for a deterministic hash
     let mut hasher = DefaultHasher::new();
     input.hash(&mut hasher);
     let hash = hasher.finish();

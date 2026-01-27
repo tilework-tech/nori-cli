@@ -39,6 +39,8 @@ pub use types::AssistantEntry;
 pub use types::Attachment;
 pub use types::ContentBlock;
 pub use types::GitInfo;
+pub use types::PatchApplyEntry;
+pub use types::PatchOperationType;
 pub use types::SessionMetaEntry;
 pub use types::ToolCallEntry;
 pub use types::ToolResultEntry;

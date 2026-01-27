@@ -120,6 +120,7 @@ Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
 | `assistant` | Complete assistant turn | id, content (blocks), model |
 | `tool_call` | Tool execution start | call_id, name, input |
 | `tool_result` | Tool execution result | call_id, output, truncated, exit_code |
+| `patch_apply` | File modification result | call_id, operation (edit/write/delete), path, success, error |
 
 **TranscriptRecorder:**
 
@@ -140,6 +141,7 @@ Key methods:
 - `record_user_message()`: Records user input with optional attachments
 - `record_assistant_message()`: Records complete assistant turn with content blocks
 - `record_tool_call()` / `record_tool_result()`: Records tool execution
+- `record_patch_apply()`: Records file modification operations (edit/write/delete)
 - `flush()`: Ensures pending writes are persisted
 - `shutdown()`: Flushes and terminates writer task
 
@@ -160,7 +162,27 @@ The `AcpBackend` automatically:
 1. Creates a `TranscriptRecorder` on spawn (with graceful fallback if creation fails)
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
-4. Shuts down recorder on `Op::Shutdown`
+4. Records tool events via `record_tool_events_to_transcript()` in the update handler
+5. Shuts down recorder on `Op::Shutdown`
+
+**Tool Event Recording Flow:**
+
+Tool calls and patch operations are recorded by `record_tool_events_to_transcript()` in `backend.rs`:
+
+```
+ACP SessionUpdate          Transcript Entry
+─────────────────────      ──────────────────
+ToolCall (non-patch)   →   tool_call entry
+ToolCallUpdate         →   tool_result entry (on completion)
+  (Completed, non-patch)
+ToolCallUpdate         →   patch_apply entry (on completion)
+  (Completed, patch)
+```
+
+Patch operations (Edit/Write/Delete via `ToolKind`) are recorded separately from generic tool calls because they represent file modifications. The operation type is determined by `ToolKind`:
+- `ToolKind::Edit` → `PatchOperationType::Edit`
+- `ToolKind::Delete` → `PatchOperationType::Delete`
+- Other (including Write) → `PatchOperationType::Write`
 
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
@@ -170,7 +192,8 @@ Configuration:
 Public exports from `@/codex-rs/acp/src/transcript/mod.rs`:
 - `TranscriptRecorder`, `TranscriptLoader`
 - `ProjectId`, `ProjectInfo`, `SessionInfo`, `Transcript`
-- Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, etc.
+- Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, `ToolCallEntry`, `ToolResultEntry`, `PatchApplyEntry`
+- `PatchOperationType`: Enum for patch operations (Edit, Write, Delete)
 - `ContentBlock` (Text variant only), `Attachment`, `GitInfo`
 - `now_iso8601()`: Utility function returning current time as ISO 8601 string
 

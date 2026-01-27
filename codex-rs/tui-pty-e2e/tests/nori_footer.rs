@@ -17,6 +17,7 @@ fn test_footer_displays_git_branch() {
 
     // Wait for the TUI to start
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -49,6 +50,7 @@ fn test_footer_without_git_repo() {
 
     // Wait for the TUI to start
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -100,6 +102,7 @@ fn test_footer_full_startup_with_all_info() {
 
     // Wait for footer to render
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -169,6 +172,7 @@ vertical_footer = true
             .expect("Failed to spawn");
 
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
