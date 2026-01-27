@@ -5,8 +5,15 @@
 
 use std::path::PathBuf;
 
+use chrono::SecondsFormat;
+use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Get current time as ISO 8601 string (e.g., "2025-01-27T12:30:45.123Z").
+pub fn now_iso8601() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
 
 /// Current schema version for forward compatibility.
 pub const SCHEMA_VERSION: u8 = 1;
@@ -99,8 +106,6 @@ pub struct UserEntry {
 pub enum ContentBlock {
     /// Text content
     Text { text: String },
-    /// Thinking content (extended thinking)
-    Thinking { thinking: String },
 }
 
 /// Complete assistant message entry.
@@ -145,65 +150,9 @@ impl TranscriptLine {
     /// Create a new transcript line with the current timestamp.
     pub fn new(entry: TranscriptEntry) -> Self {
         Self {
-            ts: Self::now_iso8601(),
+            ts: now_iso8601(),
             v: SCHEMA_VERSION,
             entry,
         }
     }
-
-    /// Get current time as ISO 8601 string.
-    fn now_iso8601() -> String {
-        use std::time::SystemTime;
-        use std::time::UNIX_EPOCH;
-
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
-        let secs = duration.as_secs();
-        let millis = duration.subsec_millis();
-
-        // Format as ISO 8601: YYYY-MM-DDTHH:MM:SS.mmmZ
-        // Using a simple calculation (not accounting for leap seconds, etc.)
-        let days = secs / 86400;
-        let time_secs = secs % 86400;
-        let hours = time_secs / 3600;
-        let mins = (time_secs % 3600) / 60;
-        let secs_in_min = time_secs % 60;
-
-        // Calculate year, month, day from days since epoch
-        // This is a simplified calculation
-        let mut year = 1970;
-        let mut remaining_days = days as i64;
-
-        loop {
-            let days_in_year = if is_leap_year(year) { 366 } else { 365 };
-            if remaining_days < days_in_year {
-                break;
-            }
-            remaining_days -= days_in_year;
-            year += 1;
-        }
-
-        let days_in_months: &[i64] = if is_leap_year(year) {
-            &[31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-        } else {
-            &[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-        };
-
-        let mut month = 1;
-        for &days_in_month in days_in_months {
-            if remaining_days < days_in_month {
-                break;
-            }
-            remaining_days -= days_in_month;
-            month += 1;
-        }
-        let day = remaining_days + 1;
-
-        format!("{year:04}-{month:02}-{day:02}T{hours:02}:{mins:02}:{secs_in_min:02}.{millis:03}Z")
-    }
-}
-
-fn is_leap_year(year: i64) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }

@@ -112,37 +112,6 @@ mod types_tests {
 
     // @current-session
     #[test]
-    fn test_assistant_entry_with_thinking() {
-        let entry = TranscriptEntry::Assistant(AssistantEntry {
-            id: "msg-003".to_string(),
-            content: vec![
-                ContentBlock::Thinking {
-                    thinking: "Let me analyze the request...".to_string(),
-                },
-                ContentBlock::Text {
-                    text: "Here is my response.".to_string(),
-                },
-            ],
-            model: None,
-        });
-
-        let line = TranscriptLine {
-            ts: "2025-01-26T10:30:08.012Z".to_string(),
-            v: 1,
-            entry,
-        };
-
-        let json = serde_json::to_string(&line).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(parsed["content"][0]["type"], "thinking");
-        assert_eq!(parsed["content"][1]["type"], "text");
-        // Model should not be serialized when None
-        assert!(parsed.get("model").is_none());
-    }
-
-    // @current-session
-    #[test]
     fn test_tool_call_entry_serialization() {
         let entry = TranscriptEntry::ToolCall(ToolCallEntry {
             call_id: "call-001".to_string(),

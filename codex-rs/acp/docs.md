@@ -171,7 +171,8 @@ Public exports from `@/codex-rs/acp/src/transcript/mod.rs`:
 - `TranscriptRecorder`, `TranscriptLoader`
 - `ProjectId`, `ProjectInfo`, `SessionInfo`, `Transcript`
 - Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, etc.
-- `ContentBlock`, `Attachment`, `GitInfo`
+- `ContentBlock` (Text variant only), `Attachment`, `GitInfo`
+- `now_iso8601()`: Utility function returning current time as ISO 8601 string
 
 ### Stderr Capture Implementation
 

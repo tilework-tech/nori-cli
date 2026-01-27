@@ -8,19 +8,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::io::AsyncBufReadExt;
 
+use super::BY_PROJECT_DIR;
+use super::PROJECT_METADATA_FILE;
+use super::SESSIONS_DIR;
+use super::TRANSCRIPTS_DIR;
 use super::project::compute_project_id;
 use super::types::SessionMetaEntry;
 use super::types::TranscriptEntry;
 use super::types::TranscriptLine;
-
-/// Subdirectory for transcripts within NORI_HOME
-const TRANSCRIPTS_DIR: &str = "transcripts";
-/// Subdirectory for project-organized transcripts
-const BY_PROJECT_DIR: &str = "by-project";
-/// Subdirectory for session files within a project
-const SESSIONS_DIR: &str = "sessions";
-/// Project metadata filename
-const PROJECT_METADATA_FILE: &str = "project.json";
 
 /// Information about a project with transcripts.
 #[derive(Debug, Clone, Serialize, Deserialize)]

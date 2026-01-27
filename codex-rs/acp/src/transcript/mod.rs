@@ -19,6 +19,15 @@ mod project;
 mod recorder;
 mod types;
 
+/// Subdirectory for transcripts within NORI_HOME
+pub(crate) const TRANSCRIPTS_DIR: &str = "transcripts";
+/// Subdirectory for project-organized transcripts
+pub(crate) const BY_PROJECT_DIR: &str = "by-project";
+/// Subdirectory for session files within a project
+pub(crate) const SESSIONS_DIR: &str = "sessions";
+/// Project metadata filename
+pub(crate) const PROJECT_METADATA_FILE: &str = "project.json";
+
 pub use loader::ProjectInfo;
 pub use loader::SessionInfo;
 pub use loader::Transcript;
@@ -36,6 +45,7 @@ pub use types::ToolResultEntry;
 pub use types::TranscriptEntry;
 pub use types::TranscriptLine;
 pub use types::UserEntry;
+pub use types::now_iso8601;
 
 #[cfg(test)]
 mod tests;

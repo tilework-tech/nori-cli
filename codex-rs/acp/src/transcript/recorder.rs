@@ -14,6 +14,10 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 
+use super::BY_PROJECT_DIR;
+use super::PROJECT_METADATA_FILE;
+use super::SESSIONS_DIR;
+use super::TRANSCRIPTS_DIR;
 use super::project::ProjectId;
 use super::project::compute_project_id;
 use super::types::AssistantEntry;
@@ -26,15 +30,7 @@ use super::types::ToolResultEntry;
 use super::types::TranscriptEntry;
 use super::types::TranscriptLine;
 use super::types::UserEntry;
-
-/// Subdirectory for transcripts within NORI_HOME
-const TRANSCRIPTS_DIR: &str = "transcripts";
-/// Subdirectory for project-organized transcripts
-const BY_PROJECT_DIR: &str = "by-project";
-/// Subdirectory for session files within a project
-const SESSIONS_DIR: &str = "sessions";
-/// Project metadata filename
-const PROJECT_METADATA_FILE: &str = "project.json";
+use super::types::now_iso8601;
 
 /// Commands sent to the background writer task.
 enum TranscriptCmd {
@@ -111,12 +107,7 @@ impl TranscriptRecorder {
         let session_meta = SessionMetaEntry {
             session_id: session_id.clone(),
             project_id: project_id_info.id.clone(),
-            started_at: TranscriptLine::new(TranscriptEntry::User(UserEntry {
-                id: String::new(),
-                content: String::new(),
-                attachments: vec![],
-            }))
-            .ts,
+            started_at: now_iso8601(),
             cwd: cwd.to_path_buf(),
             model,
             cli_version: cli_version.to_string(),
@@ -289,45 +280,14 @@ async fn write_line(file: &mut File, line: &TranscriptLine) -> io::Result<()> {
 
 /// Generate a UUID for the session ID.
 fn generate_session_id() -> String {
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
-
-    // Generate a pseudo-UUID using timestamp and random bits
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let time_part = now.as_nanos() as u64;
-
-    // Use std hash for randomness
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::Hash;
-    use std::hash::Hasher;
-
-    let mut hasher = DefaultHasher::new();
-    time_part.hash(&mut hasher);
-    std::process::id().hash(&mut hasher);
-    let random_part = hasher.finish();
-
-    format!(
-        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-        (time_part >> 32) as u32,
-        ((time_part >> 16) as u16),
-        (time_part & 0xFFFF) as u16,
-        (random_part >> 48) as u16,
-        random_part & 0xFFFFFFFFFFFF
-    )
+    uuid::Uuid::new_v4().to_string()
 }
 
 /// Write project metadata to project.json.
 async fn write_project_metadata(path: &Path, project_id: &ProjectId) -> io::Result<()> {
     use serde_json::json;
 
-    let now = TranscriptLine::new(TranscriptEntry::User(UserEntry {
-        id: String::new(),
-        content: String::new(),
-        attachments: vec![],
-    }))
-    .ts;
+    let now = now_iso8601();
 
     let metadata = json!({
         "id": project_id.id,
