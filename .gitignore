@@ -36,7 +36,7 @@ out/
 storybook-static/
 
 # ignore README for publishing
-codex-cli/README.md
+nori-cli/README.md
 
 # ignore Nix derivation results
 result

@@ -218,7 +218,7 @@ jobs:
       # - name: cargo build
       #   working-directory: codex-rs
       #   run: |
-      #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p codex-cli
+      #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p nori-cli
       #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
 
       # - name: cargo test
@@ -226,8 +226,8 @@ jobs:
       #   run: |
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-acp
-      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-tui
-      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-cli
+      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-tui
+      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-cli
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-protocol
 
   # ============================================================================
@@ -336,7 +336,7 @@ jobs:
       - name: Build release binaries
         working-directory: codex-rs
         run: |
-          cargo build --release --target ${{ matrix.target }} -p codex-cli
+          cargo build --release --target ${{ matrix.target }} -p nori-cli
 
           # List built artifacts
           ls -la target/${{ matrix.target }}/release/
@@ -440,8 +440,8 @@ jobs:
           mkdir -p "$STAGING_DIR/vendor"
 
           # Copy the CLI launcher and platform module
-          cp codex-cli/bin/nori.js "$STAGING_DIR/bin/"
-          cp codex-cli/bin/platform.js "$STAGING_DIR/bin/"
+          cp nori-cli/bin/nori.js "$STAGING_DIR/bin/"
+          cp nori-cli/bin/platform.js "$STAGING_DIR/bin/"
 
           # Copy vendor binaries
           cp -r vendor/* "$STAGING_DIR/vendor/"
@@ -450,7 +450,7 @@ jobs:
           cp README.md "$STAGING_DIR/" 2>/dev/null || echo "No README.md found"
 
           # Copy package.json and update version for release
-          cp codex-cli/package.json "$STAGING_DIR/package.json"
+          cp nori-cli/package.json "$STAGING_DIR/package.json"
           cd "$STAGING_DIR"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           cd -

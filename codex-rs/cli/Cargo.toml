@@ -1,5 +1,5 @@
 [package]
-name = "codex-cli"
+name = "nori-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ name = "nori"
 path = "src/main.rs"
 
 [lib]
-name = "codex_cli"
+name = "nori_cli"
 path = "src/lib.rs"
 
 [lints]
@@ -19,7 +19,7 @@ workspace = true
 default = []
 
 # Login/logout commands - propagate to TUI
-login = ["dep:codex-login", "codex-tui/login"]
+login = ["dep:codex-login", "nori-tui/login"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -35,7 +35,7 @@ codex-login = { workspace = true, optional = true }
 codex-process-hardening = { workspace = true }
 codex-protocol = { workspace = true }
 codex-stdio-to-uds = { workspace = true }
-codex-tui = { workspace = true }
+nori-tui = { workspace = true }
 ctor = { workspace = true }
 libc = { workspace = true }
 owo-colors = { workspace = true }

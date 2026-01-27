@@ -1,15 +1,15 @@
 [package]
-name = "codex-tui"
+name = "nori-tui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "codex-tui"
+name = "nori-tui"
 path = "src/main.rs"
 
 [lib]
-name = "codex_tui"
+name = "nori_tui"
 path = "src/lib.rs"
 
 [features]

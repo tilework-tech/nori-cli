@@ -4,82 +4,39 @@ Path: @/codex-rs
 
 ### Overview
 
-This is the root of the Rust Cargo workspace containing the Nori CLI implementation. Nori is a local coding agent that provides AI-assisted coding capabilities through terminal-based and programmatic interfaces. The workspace is focused exclusively on the ACP (Agent Context Protocol) backend for Claude integration, with the core business logic, TUI interface, and supporting utilities for authentication, sandboxing, and patch application.
+This is the Rust implementation of Nori, a terminal-based AI coding assistant. The codebase provides both a TUI (Terminal User Interface) application and supporting libraries for AI agent communication, command sandboxing, and configuration management. The primary production binary is `nori`, which uses the ACP (Agent Client Protocol) backend to communicate with AI agents like Claude Code.
 
 ### How it fits into the larger codebase
 
-The `codex-rs` directory is the primary source code location for all Rust components. It provides:
+The `codex-rs` directory is the root of a Cargo workspace containing all Rust code for the project. The workspace is organized into focused crates that handle specific concerns:
 
-- **CLI entry point**: The `cli` crate serves as the main multitool binary (`nori`), primarily dispatching to the interactive TUI
-- **Core library**: The `core` crate contains shared business logic used by the TUI
-- **Protocol definitions**: The `protocol` crate defines message types shared across the codebase
-- **ACP backend**: The `acp` crate provides Claude integration via Agent Context Protocol
+- **Entry points**: `tui/` provides the main TUI application, `cli/` provides sandbox testing utilities
+- **ACP integration**: `acp/` handles communication with ACP-compliant agent subprocesses
+- **Core business logic**: `core/` contains configuration, authentication, and conversation management
+- **Protocol definitions**: `protocol/`, `app-server-protocol/`, `mcp-types/` define wire formats
+- **Sandboxing**: `linux-sandbox/`, `execpolicy/` provide command execution security
+- **Utilities**: Various crates in `utils/` provide shared functionality
+
+The crate names follow a `codex-` prefix convention (e.g., `codex-core`, `codex-acp`) except for the TUI which is `nori-tui`.
 
 ### Core Implementation
 
-The workspace is organized into crate categories:
+The TUI drives user interaction through a Ratatui-based interface. When using ACP mode (the primary mode for Nori), user prompts flow through `codex-acp` which spawns and communicates with agent subprocesses over stdin/stdout using JSON-RPC 2.0. Configuration is loaded from `~/.nori/cli/config.toml` when the `nori-config` feature is enabled.
 
-| Category | Crates | Purpose |
-|----------|--------|---------|
-| Entry Points | `cli`, `tui` | User-facing interfaces |
-| Core Logic | `core`, `protocol`, `common` | Business logic and shared types |
-| Authentication | `login` | OAuth and API key management |
-| Sandbox | `linux-sandbox`, `execpolicy`, `process-hardening` | Security enforcement |
-| Patch System | `apply-patch` | Structured file modification |
-| MCP | `mcp-types`, `rmcp-client` | Model Context Protocol tool connections |
-| ACP | `acp`, `mock-acp-agent` | Agent Context Protocol support |
-| Analytics | `installed` | Install tracking and usage analytics |
-| Testing | `tui-pty-e2e` | PTY-based black-box TUI testing |
-| Utilities | `utils/*`, `async-utils`, `ansi-escape` | Helper libraries |
-
-Key architectural patterns:
-- **Event-driven communication**: Core uses `Event`/`Op` message passing between components
-- **Configuration layering**: CLI args -> environment -> config.toml -> defaults
-- **Sandbox enforcement**: Platform-specific sandboxing (Seatbelt on macOS, Landlock on Linux, restricted tokens on Windows)
-
-### Build Optimization
-
-The workspace is configured with build optimizations in `.cargo/config.toml`:
-
-- **sccache (optional)**: Compilation cache that shares artifacts across builds and worktrees. Enable with `export RUSTC_WRAPPER=sccache`. Reduces build times and disk usage significantly when using multiple worktrees.
-- **mold linker**: Uses the faster mold linker on Linux for faster linking.
-- **Test parallelism**: `RUST_TEST_THREADS=4` limits test parallelism to prevent CPU exhaustion.
-- **Path remapping**: `--remap-path-prefix` ensures build artifact cache hits work across worktrees with different absolute paths.
-
-To enable sccache for local development:
-```bash
-# Install sccache (if not already installed)
-cargo install sccache
-
-# Enable sccache for all builds
-export RUSTC_WRAPPER=sccache
-
-# Add to your shell profile for persistence
-echo 'export RUSTC_WRAPPER=sccache' >> ~/.bashrc  # or ~/.zshrc
-```
-
-To clean old build artifacts and reclaim disk space:
-```bash
-# Clean a specific worktree's target directory
-rm -rf .worktrees/old-branch/codex-rs/target
-
-# View sccache statistics (if using sccache)
-sccache --show-stats
-
-# Clear sccache if needed (rarely necessary)
-sccache --stop-server && rm -rf ~/.cache/sccache && sccache --start-server
-```
+Architecture:
+- nori-tui (TUI) -> Terminal User Interface
+  - codex-acp -> ACP Agent Connection -> External ACP Agents (claude, etc)
+  - codex-core -> Config/Auth Management
+  - codex-protocol -> Wire Types
 
 ### Things to Know
 
-The workspace uses Rust 2024 edition with strict Clippy lints (`clippy::unwrap_used = "deny"`, `clippy::expect_used = "deny"`).
-
-Library crates (`core`, `tui` lib portion) deny direct stdout/stderr writes to ensure output goes through proper abstractions.
-
-The `codex-linux-sandbox` binary can be embedded into the main CLI via arg0 dispatch (`codex-arg0` crate) for single-binary distribution.
-
-External dependencies are patched: `crossterm` and `ratatui` use custom forks for color query support.
-
-Configuration is stored in `~/.nori/cli/config.toml` with profile support for different model providers and settings.
+- The workspace uses Rust 2024 edition with strict clippy lints (no `unwrap`, `expect`, or stdout/stderr prints in library code)
+- Many crates support both the legacy Codex HTTP backend and the newer ACP backend; Nori uses ACP exclusively
+- Cross-platform sandboxing uses Landlock on Linux, Seatbelt on macOS, and restricted tokens on Windows
+- The `unstable` feature flag guards experimental ACP features like model switching
+- Snapshot testing via `insta` is used extensively in the TUI for regression testing
+- External dependencies are patched: `crossterm` and `ratatui` use custom forks for color query support
+- Configuration is stored in `~/.nori/cli/config.toml` with profile support for different model providers and settings
 
 Created and maintained by Nori.

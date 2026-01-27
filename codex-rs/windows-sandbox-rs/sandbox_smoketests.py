@@ -1,5 +1,5 @@
 # sandbox_smoketests.py
-# Run a suite of smoke tests against the Windows sandbox via the Codex CLI
+# Run a suite of smoke tests against the Windows sandbox via the Nori CLI
 # Requires: Python 3.8+ on Windows. No pip requirements.
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 def _resolve_codex_cmd() -> List[str]:
-    """Resolve the Codex CLI to invoke `codex sandbox windows`.
+    """Resolve the Nori CLI to invoke `codex sandbox windows`.
 
     Prefer local builds (debug first), then fall back to PATH.
     Returns the argv prefix to run Codex.
@@ -20,28 +20,28 @@ def _resolve_codex_cmd() -> List[str]:
     cargo_target = os.environ.get("CARGO_TARGET_DIR")
 
     candidates = [
-        ws_root / "target" / "debug" / "codex.exe",
-        ws_root / "target" / "release" / "codex.exe",
+        ws_root / "target" / "debug" / "nori.exe",
+        ws_root / "target" / "release" / "nori.exe",
     ]
     if cargo_target:
         cargo_base = Path(cargo_target)
         candidates.extend([
-            cargo_base / "debug" / "codex.exe",
-            cargo_base / "release" / "codex.exe",
+            cargo_base / "debug" / "nori.exe",
+            cargo_base / "release" / "nori.exe",
         ])
 
     for candidate in candidates:
         if candidate.exists():
             return [str(candidate)]
 
-    if shutil.which("codex"):
+    if shutil.which("nori"):
         return ["codex"]
 
     raise FileNotFoundError(
-        "Codex CLI not found. Build it first, e.g.\n"
-        "  cargo build -p codex-cli --release\n"
+        "Nori CLI not found. Build it first, e.g.\n"
+        "  cargo build -p nori-cli --release\n"
         "or for debug:\n"
-        "  cargo build -p codex-cli\n"
+        "  cargo build -p nori-cli\n"
     )
 
 CODEX_CMD = _resolve_codex_cmd()

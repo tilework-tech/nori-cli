@@ -21,7 +21,7 @@ In the codex-rs folder where the rust code lives:
 
 Run `just fmt` (in `codex-rs` directory) automatically after making Rust code changes; do not ask for approval to run it. Before finalizing a change to `codex-rs`, run `just fix -p <project>` (in `codex-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Additionally, run the tests:
 
-1. Run the test for the specific project that was changed. For example, if changes were made in `codex-rs/tui`, run `cargo test -p codex-tui`.
+1. Run the test for the specific project that was changed. For example, if changes were made in `codex-rs/tui`, run `cargo test -p nori-tui`.
 2. Once those pass, if any changes were made in common, core, or protocol, run the complete test suite with `cargo test --all-features`.
    When running interactively, ask the user before running `just fix` to finalize. `just fmt` does not require approval. project-specific or individual tests can be run without asking the user, but do ask the user before running the complete test suite.
 3. If any changes were made in tui, cli, or acp, run the E2E test suite with `cargo test -p tui-pty-e2e`.
@@ -65,13 +65,13 @@ See `codex-rs/tui/styles.md`.
 This repo uses snapshot tests (via `insta`), especially in `codex-rs/tui`, to validate rendered output. When UI or text output changes intentionally, update the snapshots as follows:
 
 - Run tests to generate any updated snapshots:
-  - `cargo test -p codex-tui`
+  - `cargo test -p nori-tui`
 - Check what’s pending:
-  - `cargo insta pending-snapshots -p codex-tui`
+  - `cargo insta pending-snapshots -p nori-tui`
 - Review changes by reading the generated `*.snap.new` files directly in the repo, or preview a specific file:
-  - `cargo insta show -p codex-tui path/to/file.snap.new`
+  - `cargo insta show -p nori-tui path/to/file.snap.new`
 - Only if you intend to accept all new snapshots in this crate, run:
-  - `cargo insta accept -p codex-tui`
+  - `cargo insta accept -p nori-tui`
 
 If you don’t have the tool:
 

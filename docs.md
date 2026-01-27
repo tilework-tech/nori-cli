@@ -1,19 +1,22 @@
-# Noridoc: nori-cli
+# Noridoc: Nori CLI
 
 Path: @/
 
 ### Overview
 
-This repository contains the Nori AI CLI, a local coding agent that runs on your computer. It provides AI-assisted coding capabilities through a terminal-based interface, with support for multiple model providers including ACP (Agent Context Protocol), sandboxed command execution, and IDE integration. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`codex-cli`).
+Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
 
 ### How it fits into the larger codebase
 
-This is a monorepo containing:
+This is the root repository containing the Nori CLI project:
 
 - **`codex-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
-- **`codex-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
+- **`nori-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
+- **`.github/`**: Build and CI configuration
+- **`.claude/`**: Skills and configuration for Claude-based development
+- **`scripts/`**: Development scripts
 
-The Rust codebase in `codex-rs` contains the entire implementation. The `codex-cli` package provides the `nori` command via npm.
+The project was originally forked from OpenAI Codex CLI and has been adapted to support multiple AI providers through ACP integration. The `nori-cli` package provides the `nori` command via npm.
 
 ### Core Implementation
 
@@ -22,17 +25,24 @@ The Rust codebase in `codex-rs` contains the entire implementation. The `codex-c
 ```
 ┌─────────────────────────────────────────────────┐
 │                   nori CLI                      │
-│  (codex-rs/cli - main binary dispatcher)        │
-├─────────┬─────────┬────────────┬────────────────┤
-│   TUI   │  Exec   │ App Server │   MCP Server   │
-│ (tui/)  │ (exec/) │(app-server)│ (mcp-server/)  │
-├─────────┴─────────┴────────────┴────────────────┤
-│              codex-core (core/)                 │
-│   Config, Auth, Tools, Sandbox, Conversation    │
+│         (codex-rs/tui - main binary)            │
 ├─────────────────────────────────────────────────┤
+│                  nori-tui                       │
+│        Interactive Terminal Interface           │
+├────────────────────────┬────────────────────────┤
+│     codex-acp (acp/)   │   codex-core (core/)   │
+│  ACP Agent Connection  │  Config, Auth, Tools   │
+│  Subprocess Spawning   │  Sandbox, Utilities    │
+├────────────────────────┴────────────────────────┤
 │           codex-protocol (protocol/)            │
 │         Events, Operations, Types               │
 └─────────────────────────────────────────────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │   ACP Agent Process   │
+        │  (claude-code, etc.)  │
+        └───────────────────────┘
 ```
 
 **Entry Points:**
@@ -41,24 +51,20 @@ The Rust codebase in `codex-rs` contains the entire implementation. The `codex-c
 | ----------------- | ------------------ | --------------------- |
 | `nori`            | Interactive TUI    | `codex-rs/tui`        |
 | `nori exec`       | Headless execution | `codex-rs/exec`       |
-| `nori app-server` | IDE integration    | `codex-rs/app-server` |
 | `nori mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
 | `nori login`      | Authentication     | `codex-rs/login`      |
 | `nori apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
 
-**Model Providers:**
+**Model Providers (via ACP):**
 
-- OpenAI (default)
-- Gemini ACP (via Agent Context Protocol)
-- Ollama (local, --oss, requires `oss-providers` feature)
-- LM Studio (local, --oss, requires `oss-providers` feature)
-
-### Things to Know
+- Claude Code (primary)
+- Codex
+- Gemini
 
 **Installation:**
 
 ```bash
-npm i -g nori-ai-cli   # npm
+npm i -g nori-ai-cli
 ```
 
 **Configuration:**
@@ -67,16 +73,7 @@ Stored in `~/.nori/cli/`:
 
 - `config.toml`: Main configuration
 - `sessions/`: Saved conversations
-
-**Sandbox Enforcement:**
-
-Commands run in a security sandbox:
-
-- macOS: Seatbelt (`/usr/bin/sandbox-exec`)
-- Linux: Landlock + seccomp
-- Windows: Restricted process tokens
-
-Modes: `ReadOnly`, `WorkspaceWrite`, `DangerFullAccess`
+- `history.jsonl`: Message history
 
 **Session Management:**
 
@@ -95,14 +92,13 @@ Nori acts as both MCP client and server:
 - **Client**: Connects to MCP servers defined in config
 - **Server**: Exposes Nori tools via `nori mcp-server`
 
-**Development:**
+### Things to Know
 
-The project uses:
-
-- Rust 2024 edition with strict Clippy lints
-- pnpm for Node.js workspace management
-- `just` for build automation in `codex-rs`
-
-See `AGENTS.md` for detailed development guidelines.
+- The crate naming uses a `codex-` prefix (legacy from the OpenAI Codex fork), except for `nori-tui` and `nori-installed`
+- The `nori-config` feature flag enables Nori-specific configuration paths (`~/.nori/cli/`) instead of the legacy Codex paths (`~/.codex/`)
+- The `unstable` feature flag gates experimental ACP features like model switching
+- Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
+- Snapshot testing with `insta` is used extensively for TUI regression testing
+- The project uses `just` for build automation in `codex-rs` and `pnpm` for Node.js workspace management
 
 Created and maintained by Nori.
