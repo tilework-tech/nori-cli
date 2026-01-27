@@ -29,6 +29,8 @@ pub(crate) struct FooterProps {
     /// Whether the current directory is a git worktree (not the main repo).
     /// When true, the git branch indicator is shown in orange instead of yellow.
     pub(crate) is_worktree: bool,
+    /// Transcript session ID if running within an agent environment.
+    pub(crate) transcript_session_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -323,6 +325,20 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
+    // Add transcript session ID if running within an agent environment
+    if let Some(session_id) = &props.transcript_session_id {
+        // Truncate long session IDs
+        let display_id = if session_id.len() > 12 {
+            format!("{}...", &session_id[..12])
+        } else {
+            session_id.clone()
+        };
+        segments.push(Line::from(vec![
+            Span::from("📜 ").dim(),
+            Span::from(display_id).dim(),
+        ]));
+    }
+
     segments
 }
 
@@ -529,6 +545,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
 
@@ -548,6 +565,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
 
@@ -567,6 +585,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
 
@@ -586,6 +605,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
 
@@ -605,6 +625,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
 
@@ -624,6 +645,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
 
@@ -643,6 +665,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -665,6 +688,7 @@ mod tests {
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -687,6 +711,7 @@ mod tests {
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -709,6 +734,7 @@ mod tests {
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -731,6 +757,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -754,6 +781,7 @@ mod tests {
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: true,
+                transcript_session_id: None,
             },
         );
     }
@@ -777,6 +805,7 @@ mod tests {
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -800,6 +829,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
@@ -823,6 +853,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
+                transcript_session_id: None,
             },
         );
     }
