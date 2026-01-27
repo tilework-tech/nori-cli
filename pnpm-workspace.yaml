@@ -1,5 +1,5 @@
 packages:
-  - codex-cli
+  - nori-cli
 
 ignoredBuiltDependencies:
   - esbuild

@@ -1,55 +1,34 @@
-# Noridoc: app-server-protocol
+# Noridoc: codex-app-server-protocol
 
 Path: @/codex-rs/app-server-protocol
 
 ### Overview
 
-The `codex-app-server-protocol` crate defines the JSON-RPC message types for communication between the app server and IDE clients. It includes both v1 (legacy) and v2 (thread-based) protocol definitions, plus code generation utilities for TypeScript bindings.
+This crate defines the JSON-RPC protocol for external app server communication. It provides type definitions for server-to-client messaging and includes code generation utilities for TypeScript bindings.
 
 ### How it fits into the larger codebase
 
-App server protocol is used by:
+Used by:
+- `@/codex-rs/core/` - for auth mode definitions
+- `@/codex-rs/tui/` - for auth mode handling
+- `@/codex-rs/acp/` - for auth types
 
-- **App server** for message parsing/serialization
-- **IDE extensions** (VS Code, Cursor, Windsurf) via generated TypeScript types
-- **Export utilities** for TypeScript and JSON Schema generation
+The crate supports both v1 and v2 protocol versions and exports a JSON-RPC lite implementation.
 
 ### Core Implementation
 
-**Key Files:**
+**Common Types** (`protocol/common.rs`): Shared types across protocol versions including `AuthMode` (ApiKey, ChatGPT, None).
 
-- `protocol/v1.rs`: Legacy protocol messages
-- `protocol/v2.rs`: Thread-based protocol messages
-- `protocol/common.rs`: Shared types
-- `jsonrpc_lite.rs`: JSON-RPC base structures
-- `export.rs`: TypeScript/JSON Schema generation
+**Protocol V1/V2** (`protocol/v1.rs`, `protocol/v2.rs`): Version-specific message types for server communication.
 
-**Protocol Methods (v2):**
+**JSON-RPC** (`jsonrpc_lite.rs`): Lightweight JSON-RPC 2.0 implementation for request/response handling.
 
-```
-thread/start, thread/resume, thread/list, thread/archive
-turn/start, turn/interrupt
-model/list
-account/status
-```
+**Code Generation** (`export.rs`): Functions to generate JSON schemas and TypeScript type definitions from Rust types.
 
 ### Things to Know
 
-**Code Generation:**
-
-`export.rs` and `bin/export.rs` provide:
-- TypeScript type generation using `ts-rs`
-- JSON Schema generation using `schemars`
-- Prettier formatting for generated code
-
-**Auth Modes:**
-
-`AuthMode` enum distinguishes:
-- `ChatGPT`: OAuth-based
-- `ApiKey`: Direct API key
-
-**TypeScript Output:**
-
-Generated types go to IDE extension codebases for type-safe client implementation.
+- The `AuthMode` enum is used throughout the codebase to determine authentication behavior
+- TypeScript bindings can be generated for web client integration
+- Protocol versioning allows for backward-compatible evolution
 
 Created and maintained by Nori.

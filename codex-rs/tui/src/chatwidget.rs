@@ -1756,6 +1756,25 @@ impl ChatWidget {
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
             }
+            #[cfg(feature = "nori-config")]
+            SlashCommand::Config => {
+                // Load NoriConfig from the default path and open the config popup
+                match codex_acp::config::NoriConfig::load() {
+                    Ok(nori_config) => {
+                        self.open_config_popup(&nori_config);
+                    }
+                    Err(err) => {
+                        self.add_error_message(format!("Failed to load config: {err}"));
+                    }
+                }
+            }
+            #[cfg(not(feature = "nori-config"))]
+            SlashCommand::Config => {
+                self.add_info_message(
+                    "Config command requires the nori-config feature".to_string(),
+                    None,
+                );
+            }
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_exit();
             }
@@ -2455,6 +2474,16 @@ impl ChatWidget {
         let current_model = self.config.model.clone();
         let params = crate::nori::agent_picker::agent_picker_params(
             &current_model,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the config popup for TUI settings.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_config_popup(&mut self, nori_config: &codex_acp::config::NoriConfig) {
+        let params = crate::nori::config_picker::config_picker_params(
+            nori_config,
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
@@ -3270,6 +3299,11 @@ impl ChatWidget {
         self.bottom_pane.set_model_display_name(display_name);
     }
 
+    /// Set the vertical footer layout flag for the TUI.
+    pub(crate) fn set_vertical_footer(&mut self, enabled: bool) {
+        self.bottom_pane.set_vertical_footer(enabled);
+    }
+
     /// Update the model display name shown in approval dialogs.
     /// Used when ACP model switch completes successfully.
     #[cfg(feature = "unstable")]
@@ -3691,6 +3725,10 @@ impl ChatWidget {
         }
 
         self.submit_op(Op::Shutdown);
+    }
+
+    pub(crate) fn composer_text(&self) -> String {
+        self.bottom_pane.composer_text()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {

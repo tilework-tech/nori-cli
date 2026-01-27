@@ -15,6 +15,7 @@ pub enum SlashCommand {
     Agent,
     Model,
     Approvals,
+    Config,
     Review,
     New,
     Init,
@@ -48,6 +49,7 @@ impl SlashCommand {
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
+            SlashCommand::Config => "toggle TUI settings (vertical footer)",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
@@ -72,6 +74,7 @@ impl SlashCommand {
             | SlashCommand::Undo
             | SlashCommand::Model
             | SlashCommand::Approvals
+            | SlashCommand::Config
             | SlashCommand::Review
             | SlashCommand::Login
             | SlashCommand::Logout => false,
@@ -148,6 +151,27 @@ mod tests {
         assert!(
             !SlashCommand::Login.available_during_task(),
             "/login should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn config_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_config = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Config);
+        assert!(has_config, "/config should be visible in commands list");
+    }
+
+    #[test]
+    fn config_has_description() {
+        let desc = SlashCommand::Config.description();
+        assert!(!desc.is_empty(), "/config should have a description");
+    }
+
+    #[test]
+    fn config_not_available_during_task() {
+        assert!(
+            !SlashCommand::Config.available_during_task(),
+            "/config should not be available while task is running"
         );
     }
 }

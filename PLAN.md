@@ -18,10 +18,10 @@
 
 Since we are removing dead code (code that never compiles), existing tests serve as verification. The key tests are:
 
-1. `cargo check -p codex-tui` - Verify TUI compiles
-2. `cargo check -p codex-cli` - Verify CLI compiles  
-3. `cargo test -p codex-tui` - Verify all TUI tests pass
-4. `cargo test -p codex-cli` - Verify CLI tests pass
+1. `cargo check -p nori-tui` - Verify TUI compiles
+2. `cargo check -p nori-cli` - Verify CLI compiles  
+3. `cargo test -p nori-tui` - Verify all TUI tests pass
+4. `cargo test -p nori-cli` - Verify CLI tests pass
 5. `cargo test -p tui-pty-e2e` - Verify E2E tests pass
 
 NOTE: I will run tests after each phase to catch regressions early. No new tests are needed because we're removing code, not adding behavior.
@@ -89,8 +89,8 @@ The `feedback` feature gates Sentry-based log upload. Nori uses GitHub Discussio
 
 ### Step 1.12: Verification
 ```bash
-cd codex-rs && cargo check -p codex-tui
-cd codex-rs && cargo test -p codex-tui
+cd codex-rs && cargo check -p nori-tui
+cd codex-rs && cargo test -p nori-tui
 ```
 
 ---
@@ -127,7 +127,7 @@ The `codex-features` flag gates Codex-specific CLI functionality not needed for 
 
 ### Step 2.6: Verification
 ```bash
-cd codex-rs && cargo check -p codex-tui
+cd codex-rs && cargo check -p nori-tui
 ```
 
 ---
@@ -154,7 +154,7 @@ The `upstream-updates` flag gates OpenAI update checking. Nori uses GitHub relea
 
 ### Step 3.4: Verification
 ```bash
-cd codex-rs && cargo check -p codex-tui
+cd codex-rs && cargo check -p nori-tui
 ```
 
 ---
@@ -172,7 +172,7 @@ The `backend-client` flag gates HTTP backend client for rate limit prefetching.
 
 ### Step 4.2: Verification
 ```bash
-cd codex-rs && cargo check -p codex-tui
+cd codex-rs && cargo check -p nori-tui
 ```
 
 ---
@@ -201,7 +201,7 @@ cd codex-rs && cargo check -p codex-common
 
 ### Step 6.2: Verification
 ```bash
-cd codex-rs && cargo check -p codex-tui 2>&1 | grep -i "unexpected_cfgs"
+cd codex-rs && cargo check -p nori-tui 2>&1 | grep -i "unexpected_cfgs"
 ```
 Should return nothing (no warnings about unknown features).
 
@@ -232,17 +232,17 @@ cd codex-rs && just fmt
 
 ### Step 8.2: Run linter
 ```bash
-cd codex-rs && just fix -p codex-cli && just fix -p codex-tui && just fix -p codex-common
+cd codex-rs && just fix -p nori-cli && just fix -p nori-tui && just fix -p codex-common
 ```
 
 ### Step 8.3: Run TUI tests
 ```bash
-cd codex-rs && cargo test -p codex-tui
+cd codex-rs && cargo test -p nori-tui
 ```
 
 ### Step 8.4: Run CLI tests
 ```bash
-cd codex-rs && cargo test -p codex-cli
+cd codex-rs && cargo test -p nori-cli
 ```
 
 ### Step 8.5: Run E2E tests
@@ -252,7 +252,7 @@ cd codex-rs && cargo test -p tui-pty-e2e
 
 ### Step 8.6: Verify clean release build
 ```bash
-cd codex-rs && cargo build --release -p codex-cli
+cd codex-rs && cargo build --release -p nori-cli
 ```
 
 ---

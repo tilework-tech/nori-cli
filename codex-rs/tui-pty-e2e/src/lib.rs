@@ -366,7 +366,7 @@ name = "Mock ACP provider for tests"
         // Enable debug logging for codex_acp to capture timing information
         cmd.env(
             "RUST_LOG",
-            "codex_core=info,codex_tui=info,codex_rmcp_client=info,codex_acp=debug",
+            "codex_core=info,nori_tui=info,codex_rmcp_client=info,codex_acp=debug",
         );
 
         let _child = pair.slave.spawn_command(cmd)?;

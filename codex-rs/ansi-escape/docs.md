@@ -1,27 +1,28 @@
-# Noridoc: ansi-escape
+# Noridoc: codex-ansi-escape
 
 Path: @/codex-rs/ansi-escape
 
 ### Overview
 
-The `codex-ansi-escape` crate provides utilities for parsing and handling ANSI escape sequences. It's used for processing terminal output that may contain color codes, cursor movement, and other control sequences.
+The ansi-escape crate provides utilities for converting ANSI escape sequences to Ratatui `Text` and `Line` types. This enables proper rendering of colorized terminal output in the TUI.
 
 ### How it fits into the larger codebase
 
-ANSI escape is used by the TUI for terminal output processing:
-
-- **Output processing** strips or preserves ANSI codes as needed
-- **Terminal rendering** handles escape sequences properly
+Used by `@/codex-rs/tui/` to render command output that contains ANSI color codes (e.g., from `ls --color` or test runners).
 
 ### Core Implementation
 
-`lib.rs` provides:
-- ANSI escape sequence detection
-- Code stripping utilities
-- Sequence parsing
+**ansi_escape()**: Converts a string with ANSI sequences to Ratatui `Text<'static>`. Uses the `ansi_to_tui` crate for parsing.
+
+**ansi_escape_line()**: Same as `ansi_escape()` but expects single-line input. Logs a warning if multiple lines are found and returns only the first.
+
+**expand_tabs()**: Replaces tabs with 4 spaces to avoid visual artifacts with TUI gutter prefixes.
 
 ### Things to Know
 
-Used when processing output from commands to ensure proper display or storage without escape codes when not appropriate.
+- Tab expansion is applied automatically to avoid alignment issues
+- Parse errors cause a panic (should not happen with valid ANSI)
+- Returns owned `Text<'static>` to avoid lifetime complexity
+- The `ansi_to_tui` crate's `to_text()` was avoided due to lifetime issues
 
 Created and maintained by Nori.

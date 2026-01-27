@@ -122,7 +122,7 @@ pub fn paste_image_to_temp_png() -> Result<(PathBuf, PastedImageInfo), PasteImag
     let (png, info) = paste_image_as_png()?;
     // Create a unique temporary file with a .png suffix to avoid collisions.
     let tmp = Builder::new()
-        .prefix("codex-clipboard-")
+        .prefix("nori-clipboard-")
         .suffix(".png")
         .tempfile()
         .map_err(|e| PasteImageError::IoError(e.to_string()))?;
