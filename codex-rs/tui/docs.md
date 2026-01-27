@@ -92,6 +92,19 @@ The footer displays:
 
 The approval mode is determined by `approval_mode_label()` from `@/codex-rs/common/src/approval_presets.rs`, which maps current approval and sandbox policies to a preset name.
 
+**External Editor Integration (`editor.rs`):**
+
+Ctrl-G opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:
+
+1. Reads current composer text via `ChatWidget::composer_text()`
+2. Writes content to a temp file (`nori-editor-*.md`)
+3. Suspends the TUI via `tui::restore()`
+4. Spawns the editor synchronously (blocking) via shell delegation (`sh -c` on Unix, `cmd /C` on Windows)
+5. Re-enables the TUI via `tui::set_modes()`
+6. On success, reads the temp file content back into the composer; on failure or non-zero exit, discards changes
+
+This uses the same terminal suspend/resume pattern as job control in `lib.rs` (SIGTSTP handling).
+
 ### Things to Know
 
 **Cargo Feature Flags:**
@@ -122,7 +135,7 @@ The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in
 
 **Terminal Restoration:**
 
-The TUI uses `color-eyre` for panic handling and ensures terminal state is restored on exit or crash via the `tui.rs` module.
+The TUI uses `color-eyre` for panic handling and ensures terminal state is restored on exit or crash via the `tui.rs` module. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning) where the TUI must yield the terminal and reclaim it afterward.
 
 **Markdown Rendering:**
 

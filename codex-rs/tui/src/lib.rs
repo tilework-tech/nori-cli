@@ -43,6 +43,7 @@ mod clipboard_paste;
 mod color;
 pub mod custom_terminal;
 mod diff_render;
+mod editor;
 mod effective_cwd_tracker;
 mod exec_cell;
 mod exec_command;
