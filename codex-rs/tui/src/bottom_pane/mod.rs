@@ -28,20 +28,12 @@ mod footer;
 mod list_selection_view;
 mod prompt_args;
 pub(crate) use list_selection_view::SelectionViewParams;
-#[cfg(feature = "feedback")]
-mod feedback_view;
-#[cfg(feature = "feedback")]
-pub(crate) use feedback_view::feedback_selection_params;
-#[cfg(feature = "feedback")]
-pub(crate) use feedback_view::feedback_upload_consent_params;
 mod paste_burst;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
 mod selection_popup_common;
 mod textarea;
-#[cfg(feature = "feedback")]
-pub(crate) use feedback_view::FeedbackNoteView;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CancellationEvent {
@@ -384,6 +376,11 @@ impl BottomPane {
     /// Update the model display name used in approval dialogs.
     pub(crate) fn set_model_display_name(&mut self, name: String) {
         self.model_display_name = name;
+    }
+
+    /// Set the vertical footer layout flag.
+    pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
+        self.composer.set_vertical_footer(vertical_footer);
     }
 
     /// Show a generic list selection view with the provided items.

@@ -1,387 +1,42 @@
-# Noridoc: TUI Integration Tests
+# Noridoc: tui-pty-e2e
 
 Path: @/codex-rs/tui-pty-e2e
 
 ### Overview
 
-- Black-box integration testing framework for the Codex TUI using PTY (pseudo-terminal) emulation
-- Spawns the real `codex` binary in a simulated terminal and exercises full application stack
-- Uses VT100 parser to capture and validate terminal screen output via snapshot testing
-- Provides programmatic keyboard input simulation and screen state polling
+The tui-pty-e2e crate provides end-to-end testing infrastructure for the Nori TUI. It spawns the TUI in a pseudo-terminal and drives it with simulated keyboard input while capturing and validating screen output.
 
 ### How it fits into the larger codebase
 
-- Tests the complete integration between `@/codex-rs/cli`, `@/codex-rs/tui`, `@/codex-rs/core`, and `@/codex-rs/acp`
-- Complements unit tests in `@/codex-rs/tui/src/chatwidget.rs` by testing full application behavior
-- Uses `@/codex-rs/mock-acp-agent` as the ACP backend for deterministic test scenarios
-- Validates CLI argument parsing, TUI event loop, ACP protocol communication, and terminal rendering
-- Part of the workspace at `@/codex-rs/Cargo.toml:46`
+This is a test-only crate that exercises:
+- `@/codex-rs/tui/` - The TUI binary being tested
+- `@/codex-rs/mock-acp-agent/` - Mock agent for predictable responses
 
 ### Core Implementation
 
-**Test Harness:** `TuiSession` in `@/codex-rs/tui-pty-e2e/src/lib.rs`
+**PTY Management**: Uses `portable_pty` to create a pseudo-terminal with:
+- Configurable terminal size
+- Input writing capability
+- Output capture
 
-The main API provides:
-- `spawn(rows, cols)` - Launch codex binary with mock-acp-agent in PTY with automatic temp directory
-- `spawn_with_config(rows, cols, config)` - Launch with custom configuration and automatic temp directory
-- `send_str(text)` - Simulate typing text
-- `send_key(key)` - Send keyboard events (Enter, Escape, Ctrl-C, etc.)
-- `wait_for_text(needle, timeout)` - Poll screen until text appears
-- `wait_for(predicate, timeout)` - Poll screen until condition matches
-- `screen_contents()` - Get current terminal screen as string
-- `nori_home_path()` - Get NORI_HOME temp directory path for config verification
-- `acp_log_path()` - Get path to ACP log file for subprocess behavior verification
+**Terminal Parsing**: Uses `vt100::Parser` to interpret ANSI escape sequences and maintain a virtual screen buffer.
 
-**Debugging Aids:**
+**Test Utilities**:
+- `wait_for_text()` - Block until expected text appears on screen
+- `send_keys()` - Simulate keyboard input
+- `get_screen_content()` - Capture current display state
 
-`TuiSession` implements `Drop` to print screen state when tests panic, making it easier to diagnose PTY timing issues:
-```rust
-impl Drop for TuiSession {
-    fn drop(&mut self) {
-        if std::thread::panicking() {
-            eprintln!("\n=== TUI Screen State at Panic ===");
-            eprintln!("{}", self.screen_contents());
-            eprintln!("=================================\n");
-        }
-    }
-}
-```
-
-The crate exports helper functions for consistent test patterns:
-- `TIMEOUT: Duration` - Standard 5-second timeout constant for use across all tests
-- `TIMEOUT_INPUT: Duration` - 300ms timeout for input stabilization before snapshots
-- `normalize_for_snapshot(contents: String) -> String` - Normalizes dynamic content for snapshot testing (see below)
-- `normalize_for_input_snapshot(contents: String) -> String` - Extends normalization by stripping ACP error messages, startup header block, and preserving trailing newlines (see below)
-
-**Automatic Test Isolation:**
-
-All tests run in isolated temporary directories created in `/tmp/`:
-- Each `spawn()` or `spawn_with_config()` call creates a new temp directory
-- Directory contains a `hello.py` file with `print('Hello, World!')`
-- A `config.toml` is automatically generated in the temp directory (used as CODEX_HOME)
-- Git repo initialized with `git init -b master` for deterministic branch name (when `git_init: true`)
-- Temp directory is automatically cleaned up when `TuiSession` is dropped
-- Tests no longer run in user's home directory for better isolation
-
-**Generated config.toml:**
-
-By default, each session creates a `config.toml` in the temp directory with:
-- `model` - Set to the configured model (defaults to `"mock-model"`)
-- `model_provider = "mock_provider"` - Uses a custom provider that doesn't require OpenAI auth
-- `trust_level = "trusted"` for the working directory - Skips trust approval screen
-- `wire_api = "acp"` - Routes through ACP registry for model resolution
-
-Custom config.toml content can be provided via `SessionConfig::with_config_toml(content)`.
-
-**Important:** To test the first-launch welcome screen (which requires NO config file to exist), pass an empty string: `.with_config_toml("")`. The harness only writes the config file if the content is non-empty
-
-**Architecture:**
-
-```
-Test Code
-    ↓
-TuiSession (portable_pty)
-    ↓
-PTY Master ←→ PTY Slave
-    ↓           ↓
-VT100 Parser   codex binary (--model mock-model)
-    ↓           ↓
-Screen State   ACP registry lookup → mock-acp provider
-                ↓
-            ACP JSON-RPC over stdin/stdout
-                ↓
-            mock_acp_agent (env var configured)
-```
-
-**Key Input Handling:** `Key` enum in `@/codex-rs/tui-pty-e2e/src/keys.rs`
-
-Converts high-level key events to ANSI escape sequences:
-- `Key::Enter` → `\r`
-- `Key::Escape` → `\x1b`
-- `Key::Up/Down/Left/Right` → `\x1b[A/B/D/C`
-- `Key::Backspace` → `\x7f`
-- `Key::Ctrl('c')` → Control character encoding
-
-**Session Configuration:** `SessionConfig` in `@/codex-rs/tui-pty-e2e/src/lib.rs`
-
-Builder pattern for test environment setup:
-- `model` field - Model name to use (defaults to `"mock-model"` which resolves to mock-acp-agent via ACP registry)
-- `with_mock_response(text)` - Set `MOCK_AGENT_RESPONSE` env var
-- `with_stream_until_cancel()` - Set `MOCK_AGENT_STREAM_UNTIL_CANCEL=1`
-- `with_agent_env(key, value)` - Pass custom env vars to mock agent
-- `with_approval_policy(policy)` - Set approval policy (defaults to `OnFailure`)
-- `without_approval_policy()` - Remove approval policy to test trust screen
-- `with_config_toml(content)` - Provide custom config.toml content (overrides default generation). Pass `""` (empty string) to prevent config file creation entirely (enables first-launch welcome screen testing)
-- `with_excluded_binary(binary_name)` - Add additional binaries to exclude from PATH (note: `nori-ai` is excluded by default to match CI environment)
-- `cwd` field - Optional working directory (auto-created temp directory if None)
-- `config_toml` field - Optional custom config.toml content (None generates default, `Some("")` prevents file creation)
-
-**Approval Policy:** `ApprovalPolicy` enum controls when codex asks for command approval:
-- `Untrusted` - Only run trusted commands without approval
-- `OnFailure` - Ask for approval only when commands fail (default for tests)
-- `OnRequest` - Model decides when to ask for approval
-- `Never` - Never ask for approval
-
-By default, all spawned sessions use `ApprovalPolicy::OnFailure` which:
-- Skips the trust directory approval screen at startup
-- Allows tests to run without manual intervention
-- Sets both `--ask-for-approval on-failure` and `--sandbox workspace-write` flags
-
-**Binary Exclusion for Test Isolation:**
-
-By default, `SessionConfig` excludes `nori-ai` from PATH to simulate CI runner environments where it is not installed. Tests that need `nori-ai` must explicitly add it via `with_extra_path()`.
-
-For additional exclusions, use `with_excluded_binary()`:
-```rust
-SessionConfig::default().with_excluded_binary("some-other-binary")
-```
-
-This filters PATH to remove directories containing the specified binary, ensuring tests behave consistently regardless of what's installed on the developer's machine
+**Debug Output**: Colorized output (via `owo-colors`) for test debugging:
+- Sent input highlighted
+- Expected vs actual screen content
+- Timing information
 
 ### Things to Know
 
-**PTY Input Timing Pattern:**
-
-To avoid race conditions between sending input and the TUI processing it, tests add a 100ms delay after `send_str()` and `send_key()` operations when submitting prompts or navigating UI:
-
-```rust
-session.send_str("testing!!!").unwrap();
-std::thread::sleep(Duration::from_millis(100));
-session.send_key(Key::Enter).unwrap();
-std::thread::sleep(Duration::from_millis(100));
-```
-
-This delay allows the PTY subprocess time to process input and update the display before assertions check for results. The delay is added in test code (not in `TuiSession` methods) for flexibility—not all operations need delays.
-
-**Test Files Structure:**
-
-| File | Coverage |
-|------|----------|
-| `@/codex-rs/tui-pty-e2e/tests/startup.rs` | TUI initialization, prompt display, trust screen skipping, snapshot testing for startup scenarios, non-blocking PTY verification, trust directory config persistence verification |
-| `@/codex-rs/tui-pty-e2e/tests/prompt_flow.rs` | Prompt submission and agent responses |
-| `@/codex-rs/tui-pty-e2e/tests/input_handling.rs` | Text editing, backspace, Ctrl-C clearing, arrow key navigation with snapshot testing, input history navigation (Up/Down arrows), input history persistence across multiple messages |
-| `@/codex-rs/tui-pty-e2e/tests/streaming.rs` | Prompt submission with timing delays, agent response streaming |
-| `@/codex-rs/tui-pty-e2e/tests/acp_mode.rs` | ACP mode startup, response flow, and approval bridging - validates TUI works with ACP wire API and mock agent; includes test for permission request display |
-| `@/codex-rs/tui-pty-e2e/tests/agent_switching.rs` | ACP agent subprocess lifecycle and event isolation - verifies subprocess spawning, cleanup on session switch, different agents use different processes, and event filtering prevents cross-agent contamination (Linux only) |
-| `@/codex-rs/tui-pty-e2e/tests/acp_file_operations.rs` | ACP file write/create/edit operations - comprehensive tests verifying agent can create new files, edit existing files, auto-create nested directories, and enforce security boundaries (workspace and `/tmp/claude/` allowed, system paths blocked); uses `MOCK_AGENT_WRITE_FILE` and `MOCK_AGENT_WRITE_CONTENT` env vars (Linux only) |
-| `@/codex-rs/tui-pty-e2e/tests/acp_tool_calls.rs` | ACP tool call rendering and multi-call exploring cells - verifies tool calls appear correctly in TUI, tests grouping of Read/Search operations, validates cells don't disappear during streaming with out-of-order completion events; uses `MOCK_AGENT_MULTI_CALL_EXPLORING` and `MOCK_AGENT_NO_FINAL_TEXT` env vars (Linux only) |
-| `@/codex-rs/tui-pty-e2e/tests/acp_prompt_errors.rs` | ACP prompt failure error propagation - verifies that when `prompt()` fails, the error is displayed to the user (not silently swallowed) and the TUI remains responsive; uses `MOCK_AGENT_PROMPT_FAIL` env var (Linux only) |
-| `@/codex-rs/tui-pty-e2e/tests/acp_exit_cleanup.rs` | ACP agent subprocess cleanup on TUI exit - verifies agent processes are terminated immediately (not orphaned) when TUI exits via `/exit`, `/quit`, or Ctrl+C; tests synchronous cleanup behavior of `AcpConnection::Drop` (Linux only) |
-| `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` | Live authenticated ACP tests for Gemini and Claude with real API connections (opt-in, marked `#[ignore]`) |
-
-**Snapshot Files:**
-
-| File | Test Coverage |
-|------|---------------|
-| `@/codex-rs/tui-pty-e2e/tests/snapshots/startup__*.snap` | Various startup screen scenarios (welcome, dimensions, temp directory, trust screen) |
-| `@/codex-rs/tui-pty-e2e/tests/snapshots/input_handling__*.snap` | Input handling scenarios (ctrl-c clear, typing/backspace, model changed, history navigation) |
-| `@/codex-rs/tui-pty-e2e/tests/snapshots/streaming__submit_input.snap` | Prompt submission and streaming response |
-| `@/codex-rs/tui-pty-e2e/tests/snapshots/acp_mode__*.snap` | ACP mode startup screen |
-
-**Snapshot Testing with Insta:**
-
-Tests use `insta::assert_snapshot!()` to capture terminal output for visual regression testing:
-```rust
-assert_snapshot!("startup_screen", normalize_for_snapshot(session.screen_contents()));
-```
-
-Snapshots stored in `@/codex-rs/tui-pty-e2e/tests/snapshots/*.snap` for regression detection. Each snapshot captures the exact terminal output state at a specific test point.
-
-**Snapshot Normalization:**
-
-Two normalization helpers in `@/codex-rs/tui-pty-e2e/src/lib.rs` ensure stable snapshots:
-
-| Function | Use Case |
-|----------|----------|
-| `normalize_for_snapshot()` | General snapshots that should include the startup header |
-| `normalize_for_input_snapshot()` | Input-focused tests where header visibility varies with scroll timing and ACP error messages appear with variable timing |
-
-**`normalize_for_snapshot()`** - Base normalization rules (in order of application):
-
-1. Temp directory paths (`/tmp/.tmpXXXXXX`) → `[TMP_DIR]` placeholder
-2. "Worked for Xs" timing separator lines → solid horizontal bar
-   - Lines starting with `─ Worked` and ending with `─` are replaced with solid `─` characters
-   - Prevents flaky tests when timing varies
-3. Version normalization: `"Nori CLI vX.Y.Z..."` → `"Nori CLI v0.0.0"`
-   - Only replaces if a digit follows `"Nori CLI v"`
-4. Profile normalization: `"profile: value"` → `"profile: [PROF]"`
-5. Instruction Files section stripping (multi-line):
-   - Detects `"Instruction Files"` header line within the banner box
-   - Removes the header, all subsequent file path lines (containing `~/` or `/.`), and the preceding blank line
-   - Exits when reaching bottom border (`╰──`) or non-file-path content
-   - Prevents cross-machine snapshot failures from user-specific paths like `~/.claude/CLAUDE.md`
-6. Random default prompts on lines starting with `› ` → `[DEFAULT_PROMPT]` placeholder
-   - Detects specific default prompt patterns: "Find and fix a bug", "Explain this codebase", "Write tests for", etc.
-   - Preserves user-entered prompts and UI text like "? for shortcuts"
-
-**`normalize_for_input_snapshot()`** - Extends base normalization with three additional phases:
-
-1. **ACP Error Message Filtering** (Phase 1):
-   - Strips lines matching pattern: `"■ Operation 'X' is not supported in ACP mode"`
-   - Also removes the subsequent empty line if present
-   - Example: `"■ Operation 'ListCustomPrompts' is not supported in ACP mode\n\n"` → removed entirely
-   - Prevents snapshot flakiness caused by timing-dependent debug-mode error messages
-   - These error messages only appear in debug builds when certain operations aren't supported in ACP mode
-   - Test coverage: `test_normalize_acp_error_messages()` in `@/codex-rs/tui-pty-e2e/src/lib.rs`
-
-2. **Startup Header Stripping** (Phase 2):
-   - Detects the header block (lines containing `╭──`, `Nori CLI`, or `'npx nori-ai install'`)
-   - Removes the entire header section including trailing empty lines
-   - Used by input handling tests in `@/codex-rs/tui-pty-e2e/tests/input_handling.rs`
-   - Prevents flaky snapshots when header scrolls partially in/out of viewport
-
-3. **Trailing Newline Preservation** (Phase 3):
-   - Captures whether the original input had a trailing newline before any normalization
-   - Restores the trailing newline at the very end after all normalization passes
-   - Ensures original input's newline status is preserved regardless of intermediate string operations
-   - Example: Input `"foo\n"` → after all normalizations → output still ends with `"\n"`
-
-**Why Two Functions:** Terminal render timing can cause the startup header block to scroll partially in or out of the viewport before a snapshot is taken. Additionally, ACP error messages (like `"■ Operation 'ListCustomPrompts' is not supported in ACP mode"`) are only emitted in debug builds and have variable timing - they may or may not appear before the snapshot is captured. For tests focused on input handling, neither the header presence nor these debug error messages are relevant - only the input area matters. By stripping both, `normalize_for_input_snapshot()` produces deterministic snapshots regardless of scroll state or debug message timing.
-
-This normalization allows snapshot assertions to focus on UI structure and static content rather than ephemeral runtime values.
-
-**PTY Implementation Details:**
-
-- Uses `portable-pty` crate for cross-platform PTY support
-- PTY master is set to **non-blocking mode** using `fcntl(O_NONBLOCK)` on Unix systems
-- This prevents `read()` from blocking indefinitely when no data is available
-- Sets `TERM=xterm-256color` for terminal feature detection
-- NO_COLOR=1 by default for deterministic output parsing
-- Terminal size configurable (default 24x80, some tests use 40x120)
-- NORI_SYNC_SYSTEM_INFO=1 for synchronous footer system info collection (ensures git branch/version appear immediately)
-
-**Polling Pattern:**
-
-`poll()` method performs non-blocking read from PTY master:
-- PTY file descriptor is set to non-blocking mode during session initialization
-- Reads up to 8KB buffer per poll
-- Intercepts and responds to terminal control sequences before parsing
-- Feeds processed data to VT100 parser incrementally
-- Returns immediately with `WouldBlock` error when no data is available
-- `wait_for()` loops with 50ms sleep between polls, checking timeout after each iteration
-- Timeout mechanism works correctly because `read()` never blocks indefinitely
-
-**Control Sequence Interception:**
-
-The `intercept_control_sequences()` method handles terminal queries that require responses:
-- Detects cursor position query (`ESC[6n`) in output stream from codex binary
-- Writes cursor position response (`ESC[1;1R`) back to PTY input
-- Removes control sequences from parser stream to avoid rendering artifacts
-- Enables crossterm terminal initialization without real terminal support
-
-**Mock Agent Integration:**
-
-Tests use the model name `"mock-model"` which the ACP registry (`@/codex-rs/acp/src/registry.rs`) resolves to the mock-acp-agent subprocess. The registry returns configuration with:
-- `provider: "mock-acp"`
-- `command: <path-to-mock_acp_agent-binary>`
-- `args: []`
-
-An alternate model `"mock-model-alt"` is also registered with `provider_slug: "mock-acp-alt"` for testing agent switching scenarios where different models must spawn different subprocesses.
-
-Tests control mock agent behavior via environment variables:
-- `MOCK_AGENT_RESPONSE` - Custom response text instead of defaults
-- `MOCK_AGENT_DELAY_MS` - Simulate streaming delays
-- `MOCK_AGENT_STREAM_UNTIL_CANCEL` - Stream until Escape pressed
-- `MOCK_AGENT_REQUEST_PERMISSION` - Trigger permission request to test approval bridging
-- `MOCK_AGENT_MULTI_CALL_EXPLORING` - Send 3 Read tool calls with interleaved text and out-of-order completion
-- `MOCK_AGENT_NO_FINAL_TEXT` - Suppress final agent text (combine with MULTI_CALL_EXPLORING to test immediate flush)
-- `MOCK_AGENT_PROMPT_FAIL` - Return error from prompt() to test error propagation to TUI
-
-See `@/codex-rs/mock-acp-agent/docs.md` for full list of env vars.
-
-**Agent Subprocess Lifecycle Testing (`agent_switching.rs`, `acp_exit_cleanup.rs`):**
-
-Linux-only tests that verify ACP subprocess lifecycle management and event isolation:
-
-*Subprocess Management Tests:*
-- `acp_log_path()` method on `TuiSession` finds and returns the path to the ACP tracing log file in `$NORI_HOME/log/` (searches for `nori-acp.*` files, returns most recently modified)
-- Tests extract PIDs from log lines matching `"ACP agent spawned (pid: Some(...))"`
-- Uses `/proc/{pid}` filesystem to verify process existence and zombie state
-- Key verified behaviors:
-  - Agent subprocess spawns with unique PID
-  - `/new` command spawns new subprocess with different PID
-  - Old subprocess is terminated (not zombie) after session switch
-  - Cleanup happens when session switches, not when individual prompt turns end
-  - Different models (`mock-model` vs `mock-model-alt`) spawn different subprocesses
-
-*Exit Cleanup Tests (`acp_exit_cleanup.rs`):*
-- Verifies agent subprocess cleanup when TUI exits (not just session switch)
-- Tests three exit paths: `/exit` command, `/quit` command, and Ctrl+C
-- Validates that cleanup is **synchronous** - agent should be terminated immediately when TUI exits, not eventually via async cleanup
-- Uses `process_exists_and_not_zombie()` helper to check `/proc/{pid}/status` for zombie state
-- Critical test pattern: checks immediately after TUI exit (within 100ms) to catch async cleanup races
-
-*Event Isolation Tests:*
-- `extract_agent_messages_from_log()` helper parses `Mock agent:` log entries from ACP log file
-- `test_agent_switch_message_flow_mock_to_mock_alt` verifies that after switching agents, the NEW agent receives and responds to prompts (catches race conditions where OLD agent events could leak)
-- `test_agent_switch_logs_correct_sequence` verifies the expected log sequence during agent switch: agent receives prompt, logs receipt, sends response
-
-*Connecting Status Tests:*
-- `test_connecting_status_during_slow_agent_startup` verifies the "Connecting to [Agent]" status indicator appears during slow agent startup
-- Uses `MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT=6000` to configure a 6-second delay for `mock-model-alt`
-- Starts with `mock-model` (no delay) for fast TUI initialization
-- Switches to `mock-model-alt` via `/agent` picker, submits a prompt
-- Verifies "Connecting" text appears within 3 seconds (during the 6-second startup delay)
-- Confirms the prompt eventually appears after the agent finishes connecting
-
-**Binary Discovery:**
-
-`codex_binary_path()` locates the compiled binary:
-```
-test_exe: target/debug/deps/startup-abc123
-          ↓
-target/debug/deps (parent)
-          ↓
-target/debug (parent.parent)
-          ↓
-target/debug/codex (join "codex")
-```
-
-**Live ACP Testing:**
-
-Two opt-in E2E tests in `@/codex-rs/tui-pty-e2e/tests/live_acp.rs` validate integration with real ACP providers:
-- `test_gemini_acp_live_response` - Tests gemini-acp with real Gemini API (requires GEMINI_API_KEY environment variable)
-- `test_claude_acp_live_response` - Tests claude-acp with real Claude API (requires ANTHROPIC_API_KEY environment variable)
-- Both tests are marked `#[ignore]` to be opt-in and run separately: `cargo test --package tui-pty-e2e -- --ignored`
-- Use 30-second timeout vs 5-second standard timeout to account for network latency and model processing time
-- Generate dynamic config.toml with `wire_api = "acp"` to route through ACP registry
-- Verify basic response reception without requiring specific output text
-
-**Sandbox Write Restrictions:**
-
-When testing file write operations, the sandbox only allows writes to specific locations:
-- Workspace directory (the temp directory created by the test harness)
-- `/tmp/claude/` subdirectory (NOT arbitrary `/tmp/` paths)
-
-Tests that write to `/tmp` must use `/tmp/claude/` as the base path. This mirrors the production sandbox behavior.
-
-**Known Limitations:**
-
-- VT100 parser may not perfectly emulate all terminal behaviors
-- Terminal size changes after spawn not currently supported
-- Color codes disabled (NO_COLOR=1) for test determinism
-
-**Dependencies:**
-
-- `portable-pty = "0.8"` - PTY creation and management
-- `vt100 = "0.15"` - Terminal emulator/parser
-- `insta = "1"` - Snapshot testing framework
-- `anyhow = "1"` - Error handling
-- `tempfile = "3"` - Temporary directory creation for test isolation
-- `nix = "0.27"` (Unix only) - fcntl for non-blocking I/O setup
-- `libc = "0.2"` (Unix only) - Low-level fcntl operations
-
-**Debugging:**
-
-Set `DEBUG_TUI_PTY=1` environment variable to enable detailed logging of PTY operations:
-```bash
-DEBUG_TUI_PTY=1 cargo test test_name -- --nocapture
-```
-
-This shows:
-- Each `poll()` call and its duration
-- Read results (bytes read, WouldBlock, EOF)
-- `wait_for()` loop iterations and elapsed time
-- Screen contents preview at each iteration
+- Tests require the `vt100-tests` feature enabled in nori-tui
+- The mock agent is spawned as the ACP backend
+- Screen capture includes full ANSI state (colors, attributes)
+- Timing-sensitive tests use configurable timeouts
+- Debug styles respect color terminal detection
 
 Created and maintained by Nori.

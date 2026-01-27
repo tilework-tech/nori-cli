@@ -1,5 +1,5 @@
 // Forbid accidental stdout/stderr writes in the *library* portion of the TUI.
-// The standalone `codex-tui` binary prints a short help message before the
+// The standalone `nori-tui` binary prints a short help message before the
 // alternate‑screen mode starts; that file opts‑out locally via `allow`.
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 #![deny(clippy::disallowed_methods)]
@@ -7,10 +7,6 @@ use additional_dirs::add_dir_warning_message;
 use app::App;
 pub use app::AppExitInfo;
 use codex_app_server_protocol::AuthMode;
-#[cfg(feature = "codex-features")]
-use codex_common::oss::ensure_oss_provider_ready;
-#[cfg(feature = "codex-features")]
-use codex_common::oss::get_default_model_for_oss_provider;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
 use codex_core::INTERACTIVE_SESSION_SOURCES;
@@ -19,10 +15,6 @@ use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
-#[cfg(feature = "codex-features")]
-use codex_core::config::load_config_as_toml_with_cli_overrides;
-#[cfg(feature = "codex-features")]
-use codex_core::config::resolve_oss_provider;
 use codex_core::find_conversation_path_by_id_str;
 use codex_core::get_platform_sandbox;
 use codex_core::protocol::AskForApproval;
@@ -51,12 +43,10 @@ mod clipboard_paste;
 mod color;
 pub mod custom_terminal;
 mod diff_render;
+mod editor;
 mod effective_cwd_tracker;
 mod exec_cell;
 mod exec_command;
-// Feedback compatibility layer - provides stubs when feedback feature is disabled
-// See feedback_compat.rs for future Nori feedback integration notes
-mod feedback_compat;
 mod file_search;
 mod frames;
 mod get_git_diff;
@@ -71,8 +61,6 @@ mod markdown_stream;
 mod model_migration;
 mod nori;
 pub mod onboarding;
-#[cfg(feature = "codex-features")]
-mod oss_selection;
 mod pager_overlay;
 pub mod public_widgets;
 mod render;
@@ -97,37 +85,21 @@ mod ui_consts;
 /// This constant MUST match codex_acp::config::DEFAULT_MODEL to ensure consistency.
 const DEFAULT_ACP_MODEL: &str = "claude-code";
 
-// Upstream OpenAI/Codex update modules (only included with upstream-updates feature)
-// The update_action module is available in all builds for the UpdateAction type
-// The update_prompt and updates modules are only for release builds
-#[cfg(feature = "upstream-updates")]
-pub mod update_action;
-#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
-mod update_prompt;
-#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
-mod updates;
-
-// Nori-specific update modules (only when NOT using upstream-updates)
+// Nori-specific update modules
 // Re-export as pub mod for external access to UpdateAction type
-#[cfg(not(feature = "upstream-updates"))]
 pub mod update_action {
     pub use super::nori::update_action::*;
 }
 // Re-export Nori updates module (release builds only)
-#[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
+#[cfg(not(debug_assertions))]
 mod updates {
     pub use super::nori::updates::*;
 }
 
-// Re-export the appropriate update prompt functions based on feature (release builds only)
-#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
-pub(crate) use update_prompt::UpdatePromptOutcome;
-#[cfg(all(not(debug_assertions), feature = "upstream-updates"))]
-pub(crate) use update_prompt::run_update_prompt_if_needed;
-
-#[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
+// Re-export update prompt functions (release builds only)
+#[cfg(not(debug_assertions))]
 pub(crate) use nori::update_prompt::UpdatePromptOutcome;
-#[cfg(all(not(debug_assertions), not(feature = "upstream-updates")))]
+#[cfg(not(debug_assertions))]
 pub(crate) use nori::update_prompt::run_update_prompt_if_needed;
 
 mod version;
@@ -150,8 +122,7 @@ use std::io::Write as _;
 // (tests access modules directly within the crate)
 
 pub async fn run_main(
-    #[cfg(feature = "codex-features")] mut cli: Cli,
-    #[cfg(not(feature = "codex-features"))] cli: Cli,
+    cli: Cli,
     codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
     // Pre-warm the ACP agent installation cache in a background thread.
@@ -178,28 +149,9 @@ pub async fn run_main(
         nori_installed::track_launch(&nori_home);
     }
 
-    // Note: Rolling file tracing is initialized in codex-cli main.rs before run_main() is called.
+    // Note: Rolling file tracing is initialized in nori-cli main.rs before run_main() is called.
     // This ensures a single point of file-based tracing initialization.
 
-    #[cfg(feature = "codex-features")]
-    let (sandbox_mode, approval_policy) = if cli.full_auto {
-        (
-            Some(SandboxMode::WorkspaceWrite),
-            Some(AskForApproval::OnRequest),
-        )
-    } else if cli.dangerously_bypass_approvals_and_sandbox {
-        (
-            Some(SandboxMode::DangerFullAccess),
-            Some(AskForApproval::Never),
-        )
-    } else {
-        (
-            cli.sandbox_mode.map(Into::<SandboxMode>::into),
-            cli.approval_policy.map(Into::into),
-        )
-    };
-
-    #[cfg(not(feature = "codex-features"))]
     let (sandbox_mode, approval_policy): (Option<SandboxMode>, Option<AskForApproval>) =
         if cli.dangerously_bypass_approvals_and_sandbox {
             (
@@ -209,14 +161,6 @@ pub async fn run_main(
         } else {
             (None, None)
         };
-
-    // Map the legacy --search flag to the new feature toggle.
-    #[cfg(feature = "codex-features")]
-    if cli.web_search {
-        cli.config_overrides
-            .raw_overrides
-            .push("features.web_search_request=true".to_string());
-    }
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
     // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
@@ -244,68 +188,10 @@ pub async fn run_main(
         }
     };
 
-    #[cfg(feature = "codex-features")]
-    #[allow(clippy::print_stderr)]
-    let config_toml =
-        match load_config_as_toml_with_cli_overrides(&codex_home, cli_kv_overrides.clone()).await {
-            Ok(config_toml) => config_toml,
-            Err(err) => {
-                eprintln!("Error loading config.toml: {err}");
-                std::process::exit(1);
-            }
-        };
-
-    #[cfg(feature = "codex-features")]
-    let model_provider_override = if cli.oss {
-        let resolved = resolve_oss_provider(
-            cli.oss_provider.as_deref(),
-            &config_toml,
-            cli.config_profile.clone(),
-        );
-
-        if let Some(provider) = resolved {
-            Some(provider)
-        } else {
-            // No provider configured, prompt the user
-            let provider = oss_selection::select_oss_provider(&codex_home).await?;
-            if provider == "__CANCELLED__" {
-                return Err(std::io::Error::other(
-                    "OSS provider selection was cancelled by user",
-                ));
-            }
-            Some(provider)
-        }
-    } else {
-        None
-    };
-
-    #[cfg(not(feature = "codex-features"))]
     let model_provider_override: Option<String> = None;
 
-    // When using `--oss`, let the bootstrapper pick the model based on selected provider.
-    // Otherwise, use the persisted agent preference from NoriConfig (defaults to claude-code).
-    #[cfg(feature = "codex-features")]
-    let model = if let Some(model) = &cli.model {
-        Some(model.clone())
-    } else if cli.oss {
-        // Use the provider from model_provider_override
-        model_provider_override
-            .as_ref()
-            .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
-            .map(std::borrow::ToOwned::to_owned)
-    } else {
-        // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
-        #[cfg(feature = "nori-config")]
-        let default_model = nori::config_adapter::get_persisted_agent_model()
-            .unwrap_or_else(|| DEFAULT_ACP_MODEL.to_string());
-        #[cfg(not(feature = "nori-config"))]
-        let default_model = DEFAULT_ACP_MODEL.to_string();
-        Some(default_model)
-    };
-
-    #[cfg(not(feature = "codex-features"))]
+    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
     let model = cli.model.clone().or_else(|| {
-        // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
         #[cfg(feature = "nori-config")]
         {
             nori::config_adapter::get_persisted_agent_model()
@@ -334,9 +220,6 @@ pub async fn run_main(
         developer_instructions: None,
         compact_prompt: None,
         include_apply_patch_tool: None,
-        #[cfg(feature = "codex-features")]
-        show_raw_agent_reasoning: cli.oss.then_some(true),
-        #[cfg(not(feature = "codex-features"))]
         show_raw_agent_reasoning: None,
         tools_web_search_request: None,
         experimental_sandbox_command_assessment: None,
@@ -376,7 +259,7 @@ pub async fn run_main(
         log_file_opts.mode(0o600);
     }
 
-    let log_file = log_file_opts.open(log_dir.join("codex-tui.log"))?;
+    let log_file = log_file_opts.open(log_dir.join("nori-tui.log"))?;
 
     // Wrap file in non‑blocking writer.
     let (non_blocking, _guard) = non_blocking(log_file);
@@ -384,7 +267,7 @@ pub async fn run_main(
     // use RUST_LOG env var, default to info for codex crates.
     let env_filter = || {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("codex_core=info,codex_tui=info,codex_rmcp_client=info")
+            EnvFilter::new("codex_core=info,nori_tui=info,codex_rmcp_client=info")
         })
     };
 
@@ -393,34 +276,6 @@ pub async fn run_main(
         .with_target(false)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_filter(env_filter());
-
-    #[cfg(feature = "feedback")]
-    let feedback = crate::feedback_compat::CodexFeedback::new();
-    #[cfg(feature = "feedback")]
-    let targets = Targets::new().with_default(tracing::Level::TRACE);
-
-    #[cfg(feature = "feedback")]
-    let feedback_layer = tracing_subscriber::fmt::layer()
-        .with_writer(feedback.make_writer())
-        .with_ansi(false)
-        .with_target(false)
-        .with_filter(targets);
-
-    #[cfg(feature = "codex-features")]
-    if cli.oss && model_provider_override.is_some() {
-        // We're in the oss section, so provider_id should be Some
-        // Let's handle None case gracefully though just in case
-        let provider_id = match model_provider_override.as_ref() {
-            Some(id) => id,
-            None => {
-                error!("OSS provider unexpectedly not set when oss flag is used");
-                return Err(std::io::Error::other(
-                    "OSS provider not set but oss flag was used",
-                ));
-            }
-        };
-        ensure_oss_provider_ready(provider_id, &config).await?;
-    }
 
     // Initialize tracing subscriber with optional OTEL support
     #[cfg(feature = "otel")]
@@ -441,55 +296,23 @@ pub async fn run_main(
                 tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
             );
 
-            #[cfg(feature = "feedback")]
-            let _ = tracing_subscriber::registry()
-                .with(file_layer)
-                .with(feedback_layer)
-                .with(otel_layer)
-                .try_init();
-            #[cfg(not(feature = "feedback"))]
             let _ = tracing_subscriber::registry()
                 .with(file_layer)
                 .with(otel_layer)
                 .try_init();
         } else {
-            #[cfg(feature = "feedback")]
-            let _ = tracing_subscriber::registry()
-                .with(file_layer)
-                .with(feedback_layer)
-                .try_init();
-            #[cfg(not(feature = "feedback"))]
             let _ = tracing_subscriber::registry().with(file_layer).try_init();
         }
     }
 
     #[cfg(not(feature = "otel"))]
     {
-        #[cfg(feature = "feedback")]
-        let _ = tracing_subscriber::registry()
-            .with(file_layer)
-            .with(feedback_layer)
-            .try_init();
-        #[cfg(not(feature = "feedback"))]
         let _ = tracing_subscriber::registry().with(file_layer).try_init();
     }
 
-    #[cfg(feature = "feedback")]
-    return run_ratatui_app(
-        cli,
-        config,
-        overrides,
-        cli_kv_overrides,
-        active_profile,
-        feedback,
-    )
-    .await
-    .map_err(|err| std::io::Error::other(err.to_string()));
-
-    #[cfg(not(feature = "feedback"))]
-    return run_ratatui_app(cli, config, overrides, cli_kv_overrides, active_profile)
+    run_ratatui_app(cli, config, overrides, cli_kv_overrides, active_profile)
         .await
-        .map_err(|err| std::io::Error::other(err.to_string()));
+        .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
 async fn run_ratatui_app(
@@ -498,7 +321,6 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
-    #[cfg(feature = "feedback")] feedback: crate::feedback_compat::CodexFeedback,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -662,20 +484,6 @@ async fn run_ratatui_app(
     #[cfg(not(feature = "nori-config"))]
     let vertical_footer = false;
 
-    #[cfg(feature = "feedback")]
-    let app_result = App::run(
-        &mut tui,
-        auth_manager,
-        config,
-        active_profile,
-        prompt,
-        images,
-        resume_selection,
-        vertical_footer,
-        feedback,
-    )
-    .await;
-    #[cfg(not(feature = "feedback"))]
     let app_result = App::run(
         &mut tui,
         auth_manager,

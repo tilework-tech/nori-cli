@@ -200,19 +200,6 @@ pub(crate) enum AppEvent {
     /// Open the approval popup.
     FullScreenApprovalRequest(ApprovalRequest),
 
-    /// Open the feedback note entry overlay after the user selects a category.
-    #[cfg(feature = "feedback")]
-    OpenFeedbackNote {
-        category: FeedbackCategory,
-        include_logs: bool,
-    },
-
-    /// Open the upload consent popup for feedback after selecting a category.
-    #[cfg(feature = "feedback")]
-    OpenFeedbackConsent {
-        category: FeedbackCategory,
-    },
-
     /// Set a pending agent selection. The agent switch will happen on the next
     /// prompt submission to avoid disrupting active prompt turns.
     SetPendingAgent {
@@ -303,13 +290,7 @@ pub(crate) enum AppEvent {
         /// The agent name for display purposes
         agent_name: String,
     },
-}
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FeedbackCategory {
-    BadResult,
-    GoodResult,
-    Bug,
-    Other,
+    /// Set the TUI vertical footer config setting.
+    SetConfigVerticalFooter(bool),
 }

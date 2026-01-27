@@ -7,11 +7,11 @@ license.workspace = true
 [features]
 default = []
 # Enable transcript view-only feature in CLI for E2E testing
-transcript-viewonly = ["codex-cli/transcript-viewonly"]
+transcript-viewonly = ["nori-cli/transcript-viewonly"]
 
 [dependencies]
-# Needed to forward features to codex-cli
-codex-cli = { path = "../cli" }
+# Needed to forward features to nori-cli
+nori-cli = { path = "../cli" }
 portable-pty = "0.8"
 vt100 = "0.15"
 insta = "1"
