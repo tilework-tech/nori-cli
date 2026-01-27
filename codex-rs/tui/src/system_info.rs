@@ -1,3 +1,4 @@
+use codex_acp::TranscriptLocation;
 use std::env;
 use std::fs;
 use std::process::Command;
@@ -11,6 +12,8 @@ pub(crate) struct SystemInfo {
     pub(crate) git_lines_removed: Option<i32>,
     /// Whether the current directory is a git worktree (not the main repo)
     pub(crate) is_worktree: bool,
+    /// Current transcript location if running within an agent environment
+    pub(crate) transcript_location: Option<TranscriptLocation>,
 }
 
 impl SystemInfo {
@@ -25,6 +28,9 @@ impl SystemInfo {
     /// a background thread to avoid blocking TUI startup.
     pub(crate) fn collect_fresh() -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(None);
+        let transcript_location = env::current_dir()
+            .ok()
+            .and_then(|cwd| codex_acp::discover_current_transcript(&cwd).ok());
         Self {
             git_branch: get_git_branch(None),
             nori_profile: get_nori_profile(),
@@ -32,6 +38,7 @@ impl SystemInfo {
             git_lines_added,
             git_lines_removed,
             is_worktree: is_git_worktree(None),
+            transcript_location,
         }
     }
 
@@ -42,6 +49,7 @@ impl SystemInfo {
     /// TUI was launched from (e.g., a git worktree).
     pub(crate) fn collect_for_directory(dir: &std::path::Path) -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(Some(dir));
+        let transcript_location = codex_acp::discover_current_transcript(dir).ok();
         Self {
             git_branch: get_git_branch(Some(dir)),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
@@ -49,6 +57,7 @@ impl SystemInfo {
             git_lines_added,
             git_lines_removed,
             is_worktree: is_git_worktree(Some(dir)),
+            transcript_location,
         }
     }
 }

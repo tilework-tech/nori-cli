@@ -13,6 +13,7 @@ pub mod message_history;
 pub mod registry;
 pub mod session_parser;
 pub mod tracing_setup;
+pub mod transcript_discovery;
 pub mod translator;
 
 // Re-export config types for convenience
@@ -48,6 +49,10 @@ pub use registry::list_available_agents;
 pub use registry::prewarm_installation_cache;
 pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
+pub use transcript_discovery::DiscoveryError;
+pub use transcript_discovery::TranscriptLocation;
+pub use transcript_discovery::detect_agent_kind;
+pub use transcript_discovery::discover_current_transcript;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
 

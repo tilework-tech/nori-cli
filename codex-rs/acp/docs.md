@@ -27,6 +27,7 @@ Key files:
 - `connection.rs` - Subprocess spawning and JSON-RPC communication
 - `translator.rs` - Protocol translation between ACP and Codex types
 - `backend.rs` - Implements `ConversationClient` trait from codex-core
+- `transcript_discovery.rs` - Discovers transcript files for external agents
 
 ### Core Implementation
 
@@ -83,6 +84,28 @@ The `AcpBackendConfig` struct carries `os_notifications` so the backend can pass
 - Entry schema: `{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}`
 - Uses advisory file locking for concurrent write safety
 - `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
+
+**Transcript Discovery** (`transcript_discovery.rs`):
+
+Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to enable session statistics display.
+
+Agent detection via environment variables:
+
+| Env Var | Agent |
+|---------|-------|
+| `CLAUDECODE=1` | Claude Code |
+| `CODEX_CLI=1` | Codex |
+| `GEMINI_CLI=1` | Gemini |
+
+Transcript file locations and matching strategy:
+
+| Agent | Path Pattern | Matching Strategy |
+|-------|--------------|-------------------|
+| Claude Code | `~/.claude/projects/<transformed-path>/<uuid>.jsonl` | Path transformation: replace non-alphanumeric chars with `-`, add leading `-` |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | Parse first JSON line for `payload.cwd` field, match against CWD |
+| Gemini | `~/.gemini/tmp/<sha256-hash>/chats/<session>.json` | Hash is SHA256 of canonical working directory path |
+
+All discovery functions return the most recently modified matching file.
 
 **Connection Management** (`connection.rs`):
 
@@ -194,6 +217,7 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - A `DRAIN_YIELD_COUNT` of 10 yields allows pending notifications to drain before session cleanup
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
+- Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
 
 **Event Flow Tracing:**
 

@@ -42,6 +42,20 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`,
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
+**System Info Collection** (`system_info.rs`):
+
+The `SystemInfo` struct collects environment data in a background thread to avoid blocking TUI startup:
+
+| Field | Source |
+|-------|--------|
+| `git_branch` | Git repository branch name |
+| `nori_profile` | Active Nori profile |
+| `git_lines_added` / `git_lines_removed` | Git diff statistics |
+| `is_worktree` | Whether CWD is a git worktree |
+| `transcript_location` | Discovered transcript path when running within an agent environment (via `codex_acp::discover_current_transcript()`) |
+
+The `transcript_location` field enables future session statistics display (e.g., token usage) in the TUI footer when Nori is invoked from within an external agent like Claude Code, Codex, or Gemini.
+
 **Slash Commands:**
 
 | Command | Description |
