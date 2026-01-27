@@ -378,6 +378,11 @@ impl BottomPane {
         self.model_display_name = name;
     }
 
+    /// Set the vertical footer layout flag.
+    pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
+        self.composer.set_vertical_footer(vertical_footer);
+    }
+
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());

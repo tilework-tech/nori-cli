@@ -1,71 +1,43 @@
-# Noridoc: common
+# Noridoc: codex-common
 
 Path: @/codex-rs/common
 
 ### Overview
 
-The `codex-common` crate provides shared utilities used across multiple Codex crates. It includes CLI argument types, configuration summary generation, sandbox policy display, fuzzy matching, model presets, and approval presets.
+The common crate provides shared utilities used across multiple Nori components. It includes CLI argument types, fuzzy matching, model presets, and configuration summary generation.
 
 ### How it fits into the larger codebase
 
-Common is a utility dependency for TUI and CLI:
-
-- **CLI parsing**: `CliConfigOverrides`, `ApprovalModeCliArg`, `SandboxModeCliArg`
-- **Config display**: `create_config_summary_entries()` for status displays
-- **Model selection**: `model_presets` for available models
-- **Approval mode display**: `approval_mode_label()` for TUI status line
+Used by:
+- `@/codex-rs/tui/` - for CLI argument parsing, model presets, fuzzy matching
+- `@/codex-rs/core/` - (indirectly via config types)
+- `@/codex-rs/acp/` - for model presets
 
 ### Core Implementation
 
-**Modules:**
+**CLI Argument Types** (feature-gated by `cli`):
+- `ApprovalModeCliArg` - CLI arg for approval mode selection
+- `SandboxModeCliArg` - CLI arg for sandbox mode selection
+- `CliConfigOverrides` - Command-line overrides for config values
 
-| Module | Feature | Purpose |
-|--------|---------|---------|
-| `approval_mode_cli_arg` | `cli` | Clap-compatible approval mode enum |
-| `sandbox_mode_cli_arg` | `cli` | Clap-compatible sandbox mode enum |
-| `config_override` | `cli` | `-c key=value` override parsing |
-| `config_summary` | always | Format config for display |
-| `sandbox_summary` | `sandbox_summary` | Format sandbox policy |
-| `fuzzy_match` | always | Nucleo-based fuzzy matching |
-| `model_presets` | always | Available model definitions |
-| `approval_presets` | always | Approval + sandbox combinations |
-| `elapsed` | `elapsed` | Duration formatting |
+**Fuzzy Matching** (`fuzzy_match.rs`): Provides fuzzy string matching utilities for TUI selection popups.
+
+**Model Presets** (`model_presets.rs`): Defines available model configurations with metadata like:
+- Model family (OpenAI, Anthropic, etc.)
+- Reasoning effort support
+- Upgrade paths between model versions
+
+**Approval Presets** (`approval_presets.rs`): Combines approval mode and sandbox policy into coherent presets.
+
+**Sandbox Summary** (`sandbox_summary.rs`, feature-gated by `sandbox_summary`): Generates human-readable summaries of sandbox policies.
+
+**Elapsed Time** (`elapsed.rs`, feature-gated by `elapsed`): Utilities for formatting elapsed time displays.
 
 ### Things to Know
 
-**Config Overrides:**
-
-`CliConfigOverrides` parses `-c key=value` flags:
-```rust
-pub struct CliConfigOverrides {
-    pub raw_overrides: Vec<String>,
-}
-// Parses to Vec<(String, toml::Value)>
-```
-
-**Fuzzy Matching:**
-
-`fuzzy_match` wraps the `nucleo-matcher` crate for fast fuzzy string matching used in TUI selection popups.
-
-**Model Presets:**
-
-`model_presets` in `@/codex-rs/common/src/model_presets.rs` defines available models by provider with capabilities:
-- Default reasoning effort levels (set to Medium for all models)
-- Summary generation support
-- Tool capabilities
-- Claude ACP preset with display_name "Claude" and description "Anthropic's Claude via Agent Context Protocol"
-
-**Approval Presets:**
-
-`approval_presets` provides named combinations like "full-auto" that set both approval policy and sandbox mode together. The module includes:
-
-- `builtin_approval_presets()`: Returns the list of preset combinations (Read Only, Agent, Full Access)
-- `approval_mode_label()`: Maps current approval policy and sandbox policy back to a display label for status line display
-
-The `approval_mode_label()` function matches current config against builtin presets using fuzzy sandbox matching (ignores `writable_roots` differences for `WorkspaceWrite` policies). Returns `None` if no preset matches.
-
-**Format Env Display:**
-
-`format_env_display` provides utilities for formatting environment variables in status displays.
+- Most functionality is feature-gated to allow selective inclusion
+- The `cli` feature pulls in `clap` derive macros
+- Model presets define upgrade paths used by the TUI migration prompts
+- The fuzzy matcher is used for file picker and agent picker interfaces
 
 Created and maintained by Nori.

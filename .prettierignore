@@ -1,5 +1,5 @@
-/codex-cli/dist
-/codex-cli/node_modules
+/nori-cli/dist
+/nori-cli/node_modules
 pnpm-lock.yaml
 
 prompt.md

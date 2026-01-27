@@ -1,52 +1,44 @@
-# Noridoc: linux-sandbox
+# Noridoc: codex-linux-sandbox
 
 Path: @/codex-rs/linux-sandbox
 
 ### Overview
 
-The `codex-linux-sandbox` crate provides Linux-specific process sandboxing using Landlock LSM and seccomp. It restricts filesystem access and system calls for commands executed by Codex, enforcing security policies during shell tool execution.
+The linux-sandbox crate provides a Landlock-based sandboxing binary for Linux. It wraps command execution with filesystem and network restrictions using the Linux Security Module (LSM) framework.
 
 ### How it fits into the larger codebase
 
-Linux sandbox is invoked by core for sandboxed command execution:
-
-- **Core** spawns `codex-linux-sandbox` with command arguments
-- **CLI** provides `codex sandbox linux` for manual testing
-- **Embedded** via arg0 dispatch for single-binary distribution
-
-The binary can be standalone or embedded in the main `codex` executable.
+Used by `@/codex-rs/core/` (`exec.rs`) as the sandbox executor on Linux. The crate produces a `codex-linux-sandbox` binary that is exec'd to run commands in a restricted environment.
 
 ### Core Implementation
 
-**Entry Point:**
+**Landlock Setup** (`landlock.rs`): Configures Landlock rules for:
+- Read-only paths (system directories, project files)
+- Read-write paths (working directory, temp files)
+- Network access restrictions (optional)
 
-`linux_run_main.rs` is the main entry when invoked as sandbox:
-1. Parses sandbox configuration from environment/args
-2. Sets up Landlock rules for filesystem access
-3. Applies seccomp filters
-4. Executes the target command
+**Main Entry** (`linux_run_main.rs`): The `run_main()` function:
+1. Parses sandbox configuration from environment or arguments
+2. Sets up Landlock ruleset
+3. Exec's the target command with restrictions applied
 
-**Landlock Implementation:**
-
-`landlock.rs` configures filesystem access:
-- Read-only paths for system directories
-- Write access to workspace root
-- Configurable writable paths via settings
+**Platform Check**: On non-Linux platforms, `run_main()` panics with a clear message.
 
 ### Things to Know
 
-**Environment Variables:**
-
-- `CODEX_SANDBOX=landlock`: Set on sandboxed child processes
-- Configuration passed via serialized settings
-
 **Kernel Requirements:**
 
-Landlock requires Linux kernel 5.13+ with LSM enabled. Falls back gracefully on older kernels.
+Landlock requires Linux kernel 5.13+ with LSM enabled. Falls back gracefully on older kernels with reduced security.
+
+**Environment Variables:**
+
+- `CODEX_SANDBOX`: Set on sandboxed child processes (`seatbelt` on macOS, indicates active sandboxing)
+- Configuration is passed via serialized environment variables to avoid complex arg parsing
+- Landlock applies restrictions directly to the current thread via LSM
 
 **Seccomp Filters:**
 
-Beyond Landlock filesystem restrictions, seccomp filters block dangerous syscalls.
+Beyond Landlock filesystem restrictions, seccomp filters block dangerous syscalls for defense in depth.
 
 **Testing:**
 
@@ -54,5 +46,7 @@ Tests in `tests/suite/landlock.rs` verify sandbox behavior:
 - File access restrictions
 - Write blocking
 - Network access control
+
+The binary is typically invoked by the core crate (`@/codex-rs/core/src/exec.rs`), not directly by users. It can also be embedded in the main `nori` executable via arg0 dispatch (`codex-arg0` crate) for single-binary distribution.
 
 Created and maintained by Nori.

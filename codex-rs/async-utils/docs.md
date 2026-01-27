@@ -1,24 +1,31 @@
-# Noridoc: async-utils
+# Noridoc: codex-async-utils
 
 Path: @/codex-rs/async-utils
 
 ### Overview
 
-The `codex-async-utils` crate provides async utility functions and types used across the Codex workspace. It contains helpers for common async patterns in tokio-based code.
+The async-utils crate provides async utilities for Tokio. Currently it contains the `OrCancelExt` trait for cancellable futures.
 
 ### How it fits into the larger codebase
 
-Async utils is a shared dependency for async code patterns used throughout the workspace.
+Used throughout the workspace where async operations need cancellation support, particularly in `@/codex-rs/core/` and `@/codex-rs/acp/`.
 
 ### Core Implementation
 
-`lib.rs` exports async utility functions and types for:
-- Task coordination
-- Async patterns
-- Error handling in async contexts
+**OrCancelExt Trait**: Extension trait for futures that adds cancellation support:
+
+```rust
+async fn long_operation().or_cancel(&token).await
+```
+
+Returns `Ok(result)` if the future completes, or `Err(CancelErr::Cancelled)` if the cancellation token is triggered first.
+
+Uses `tokio::select!` internally to race between the future and the cancellation signal.
 
 ### Things to Know
 
-Designed with minimal dependencies as a lightweight utility crate.
+- Works with any `Future + Send` where `Output: Send`
+- Returns immediately if token is already cancelled
+- Does not abort the underlying future - it simply stops waiting
 
 Created and maintained by Nori.

@@ -1,7 +1,7 @@
 //! Utility to compute the current Git diff for the working directory.
 //!
 //! The implementation mirrors the behaviour of the TypeScript version in
-//! `codex-cli`: it returns the diff for tracked changes as well as any
+//! `nori-cli`: it returns the diff for tracked changes as well as any
 //! untracked files. When the current directory is not inside a Git
 //! repository, the function returns `Ok((false, String::new()))`.
 

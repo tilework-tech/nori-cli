@@ -267,4 +267,7 @@ pub(crate) enum AppEvent {
         /// The agent name for display purposes
         agent_name: String,
     },
+
+    /// Set the TUI vertical footer config setting.
+    SetConfigVerticalFooter(bool),
 }

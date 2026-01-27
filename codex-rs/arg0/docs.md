@@ -1,39 +1,34 @@
-# Noridoc: arg0
+# Noridoc: codex-arg0
 
 Path: @/codex-rs/arg0
 
 ### Overview
 
-The `codex-arg0` crate provides argv[0]-based dispatch for embedding multiple binaries in a single executable. This enables the Linux sandbox binary to be included within the main Codex binary, invoked by renaming or symlink.
+The arg0 crate implements the "argv[0] trick" for multi-binary dispatch. It allows a single executable to behave as different tools depending on how it was invoked, enabling deployment of multiple CLIs as one binary.
 
 ### How it fits into the larger codebase
 
-Arg0 is used by CLI for single-binary distribution:
-
-- **CLI** `main.rs` calls `arg0_dispatch_or_else()`
-- **Enables** `codex-linux-sandbox` to be embedded
-- **Simplifies** distribution (one binary instead of two)
+Used as the entry point wrapper for `@/codex-rs/tui/` (the `nori` binary). Before the TUI starts, this crate checks if the binary was invoked as `codex-linux-sandbox` or `apply_patch` and dispatches accordingly.
 
 ### Core Implementation
 
-`arg0_dispatch_or_else()` checks argv[0]:
-- If matches a known embedded binary name, dispatch to it
-- Otherwise, run the main CLI logic
-- Returns the path to sandbox executable for core to use
+**arg0_dispatch()**: Checks argv[0] and dispatches to:
+- `codex-linux-sandbox` -> Calls `codex_linux_sandbox::run_main()` (never returns)
+- `apply_patch` / `applypatch` -> Calls `codex_apply_patch::main()` (never returns)
+- Otherwise -> Loads `.env`, updates PATH, returns to caller
+
+**arg0_dispatch_or_else()**: Wraps the dispatch with Tokio runtime setup and executes the provided async main function if not dispatched.
+
+**PATH Setup** (`prepend_path_entry_for_codex_aliases()`): Creates a temp directory with symlinks (Unix) or batch scripts (Windows) for `apply_patch` and adds it to PATH, making the tool available to child processes.
+
+**Dotenv Loading** (`load_dotenv()`): Loads environment variables from `~/.codex/.env`, filtering out any `CODEX_` prefixed variables for security.
 
 ### Things to Know
 
-**How It Works:**
-
-When installed, a symlink like `codex-linux-sandbox -> codex` can be created. When invoked as `codex-linux-sandbox`, the argv[0] check triggers sandbox mode.
-
-**Dispatch Logic:**
-
-```rust
-arg0_dispatch_or_else(|sandbox_exe| async move {
-    // Main CLI logic
-    // sandbox_exe is the path to use for spawning sandbox
-})
-```
+- PATH modification happens before Tokio runtime creation (single-threaded requirement)
+- The temp directory with aliases persists for the process lifetime
+- `CODEX_` prefixed env vars in `.env` are silently ignored for security
+- On Windows, batch scripts invoke the exe with a special `--codex-run-as-apply-patch` flag
+- Symlinks on Unix point back to the current executable
 
 Created and maintained by Nori.

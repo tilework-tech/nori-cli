@@ -1,72 +1,55 @@
-# Noridoc: tui
+# Noridoc: nori-tui
 
 Path: @/codex-rs/tui
 
 ### Overview
 
-The `codex-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of model responses with markdown rendering.
+The `nori-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of model responses with markdown rendering.
 
 ### How it fits into the larger codebase
 
-TUI is the primary entry point, invoked when running `nori` without a subcommand:
+```
+User Input --> nori-tui --> codex-acp (ACP backend)
+                       \--> codex-core (config, auth)
+                       \--> codex-protocol (types)
+```
 
-- **Depends on** `codex-core` for conversation management, configuration, and authentication
-- **Depends on** `codex-acp` for ACP agent backend (Claude integration via Agent Context Protocol)
-- **Depends on** `codex-common` for CLI argument parsing and shared utilities
-- **Uses** `codex-protocol` types for events and messages
-- **Optionally integrates** `codex-login` via feature flags
+The TUI acts as the frontend layer. It:
+- Uses `codex-acp` for ACP agent communication (see `@/codex-rs/acp/`)
+- Uses `codex-core` for configuration loading and authentication (see `@/codex-rs/core/`)
+- Displays approval requests from the ACP layer and forwards user decisions back
+- Renders streaming AI responses with markdown and syntax highlighting
 
-The `cli/` crate's `main.rs` dispatches to `codex_tui::run_main()` for interactive mode. Feature flags propagate from CLI to TUI for coordinated modular builds.
+The `cli/` crate's `main.rs` dispatches to `nori_tui::run_main()` for interactive mode. Feature flags propagate from CLI to TUI for coordinated modular builds.
+
+Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pulldown-cmark` for markdown parsing, `tree-sitter-highlight` for syntax highlighting.
 
 ### Core Implementation
 
-**Entry Point:**
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The main event loop in `app.rs` processes:
 
-`run_main()` in `lib.rs`:
-1. Parses CLI arguments and loads configuration
-2. Initializes tracing (file + OpenTelemetry)
-3. Runs onboarding if needed (login, trust screen)
-4. Launches the main `App::run()` loop
+1. **Terminal events** (keyboard input, resize) via `tui.rs`
+2. **ACP events** from the backend (streaming content, approval requests, completion)
+3. **App events** for state changes (model selection, config updates)
 
-**Application Core:**
-
-- `app.rs`: Main `App` struct managing application state and event loop
-- `app_event.rs`: Application-level events (key input, model responses, etc.)
-- `tui.rs`: Terminal initialization and restoration
-
-**Agent Spawning (`chatwidget/agent.rs`):**
-
-The TUI uses ACP (Agent Context Protocol) for Claude integration:
-
-- `spawn_agent()`: Entry point that spawns the ACP agent via `codex_acp::spawn_acp_agent()`
-- Returns `AgentHandle` and `impl Stream<Item = Event>` for async event consumption
-
-The TUI shows "Starting agent..." feedback during slow agent startup (e.g., when npx/bunx needs to resolve and download dependencies for the first time).
-
-**Chat Widget (`chatwidget/`):**
-
-The `ChatWidget` is the main component containing:
+The chat interface is managed by `chatwidget.rs`, which handles:
+- User input composition with multi-line editing
 - Message history display with markdown rendering
-- Input composition area
-- Tool call visualization
-- Approval prompts
+- File search integration (`file_search.rs`)
+- Pager overlay for reviewing long content (`pager_overlay.rs`)
 
-**Configuration Flow:**
+Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
 
-1. CLI flags (`--model` and `--yolo` always available)
-2. Environment variables (`NORI_MODEL`, `ANTHROPIC_API_KEY`, etc.)
-3. Config file (`~/.nori/cli/config.toml`)
-4. Defaults
+The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
 **Slash Commands:**
-
-Available commands via `/` prefix:
 
 | Command | Description |
 |---------|-------------|
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
+| `/config` | Toggle TUI settings (vertical footer) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -79,8 +62,11 @@ Available commands via `/` prefix:
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
 | `/quit` | Exit Nori |
+| `/exit` | Exit Nori (alias for /quit) |
 
-The `/login` and `/logout` commands require the `login` feature to be enabled.
+Debug-only commands (not shown in help): `/rollout`, `/test-approval`
+
+The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
 
 **Status Line Footer:**
 
@@ -89,8 +75,6 @@ The footer displays:
 - Approval mode label (e.g., "Agent", "Full Access", "Read Only")
 - Model name
 - Key bindings (Ctrl+C, Esc, Enter)
-
-The approval mode is determined by `approval_mode_label()` from `@/codex-rs/common/src/approval_presets.rs`, which maps current approval and sandbox policies to a preset name.
 
 **External Editor Integration (`editor.rs`):**
 
@@ -104,7 +88,6 @@ Ctrl-G opens the user's preferred text editor for composing prompts. The editor 
 6. On success, reads the temp file content back into the composer; on failure or non-zero exit, discards changes
 
 This uses the same terminal suspend/resume pattern as job control in `lib.rs` (SIGTSTP handling).
-
 ### Things to Know
 
 **Cargo Feature Flags:**
@@ -118,6 +101,10 @@ This uses the same terminal suspend/resume pattern as job control in `lib.rs` (S
 | `vt100-tests` | - | No | vt100-based emulator tests |
 | `debug-logs` | - | No | Verbose debug logging |
 
+**--yolo Flag:**
+
+The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in all builds. When enabled, it overrides any configured sandbox or approval policies to auto-approve all tool operations without prompting.
+
 **Update Checking:**
 
 The TUI uses Nori-specific update checking via files in `@/codex-rs/tui/src/nori/`:
@@ -129,20 +116,10 @@ The TUI uses Nori-specific update checking via files in `@/codex-rs/tui/src/nori
 
 When errors occur, users are directed to report bugs at `https://github.com/tilework-tech/nori-cli/issues`.
 
-**--yolo Flag:**
-
-The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in all builds. When enabled, it overrides any configured sandbox or approval policies to auto-approve all tool operations without prompting the user.
-
-**Terminal Restoration:**
-
-The TUI uses `color-eyre` for panic handling and ensures terminal state is restored on exit or crash via the `tui.rs` module. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning) where the TUI must yield the terminal and reclaim it afterward.
-
-**Markdown Rendering:**
-
-The `markdown/` module provides streaming markdown rendering using `pulldown-cmark` with syntax highlighting via `tree-sitter-highlight`.
-
-**Clipboard Integration:**
-
-Clipboard support is provided via `arboard` crate, except on Android/Termux where it's disabled.
+- Snapshot testing via `insta` is used extensively - see `snapshots/` directory
+- Markdown rendering uses `pulldown-cmark` for parsing with `tree-sitter-highlight` for syntax highlighting
+- Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
+- Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning).
+- The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
 
 Created and maintained by Nori.
