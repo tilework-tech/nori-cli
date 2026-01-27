@@ -86,8 +86,10 @@ The `user_notification.rs` module provides OS-level notification support:
 | `Idle` | "Nori: Session Idle" | Idle duration in seconds |
 
 Notification modes:
-1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. On X11 Linux, supports click-to-focus via `wmctrl` or `xdotool`.
+1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. On X11 Linux, supports click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/codex-rs/acp/src/config/types.rs`).
 2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload.
+
+Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading.
 
 ### Things to Know
 

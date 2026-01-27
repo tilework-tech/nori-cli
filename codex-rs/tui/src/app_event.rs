@@ -270,4 +270,10 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI vertical footer config setting.
     SetConfigVerticalFooter(bool),
+
+    /// Set the TUI terminal notifications config setting.
+    SetConfigTerminalNotifications(bool),
+
+    /// Set the TUI OS notifications config setting.
+    SetConfigOsNotifications(bool),
 }

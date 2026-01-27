@@ -150,6 +150,8 @@ pub struct AcpBackendConfig {
     pub sandbox_policy: SandboxPolicy,
     /// Optional external notifier command for OS-level notifications
     pub notify: Option<Vec<String>>,
+    /// Whether OS-level desktop notifications are enabled
+    pub os_notifications: crate::config::OsNotifications,
     /// Nori home directory for history storage
     pub nori_home: PathBuf,
     /// History persistence policy
@@ -264,7 +266,12 @@ impl AcpBackend {
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
-        let user_notifier = Arc::new(codex_core::UserNotifier::new(config.notify.clone(), true));
+        let use_native_notifications =
+            config.os_notifications == crate::config::OsNotifications::Enabled;
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(
+            config.notify.clone(),
+            use_native_notifications,
+        ));
 
         let idle_timer_abort = Arc::new(Mutex::new(None));
 
@@ -2491,6 +2498,7 @@ mod tests {
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             notify: None,
+            os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
         };
@@ -2668,6 +2676,7 @@ mod tests {
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             notify: None,
+            os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
         };
@@ -2779,6 +2788,7 @@ mod tests {
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             notify: None,
+            os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
         };
@@ -2912,6 +2922,7 @@ mod tests {
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
             notify: None,
+            os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
         };

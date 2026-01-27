@@ -66,6 +66,17 @@ The config module provides the **canonical source of truth** for Nori home path 
 | `agent` | User's persistent agent preference | Saved to config.toml |
 | `model` | Active model for current session | Can be overridden by CLI flags |
 
+**Notification Configuration** (`config/types.rs`):
+
+Two enums control independent notification pathways. Both default to `Enabled` and are serialized as kebab-case strings in TOML:
+
+| Enum | TOML Key | Controls |
+|------|----------|----------|
+| `TerminalNotifications` | `[tui] terminal_notifications` | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`) |
+| `OsNotifications` | `[tui] os_notifications` | Native desktop notifications via `notify-rust` (wired in `backend.rs` to `UserNotifier::new()`) |
+
+The `AcpBackendConfig` struct carries `os_notifications` so the backend can pass the `use_native` flag when constructing a `UserNotifier`. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`

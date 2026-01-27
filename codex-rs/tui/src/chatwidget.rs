@@ -9,7 +9,6 @@ use std::time::Duration;
 #[allow(unused_imports)]
 use codex_app_server_protocol::AuthMode;
 use codex_core::config::Config;
-use codex_core::config::types::Notifications;
 use codex_core::git_info::current_branch_name;
 use codex_core::git_info::local_git_branches;
 use codex_core::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
@@ -2294,7 +2293,7 @@ impl ChatWidget {
     }
 
     fn notify(&mut self, notification: Notification) {
-        if !notification.allowed_for(&self.config.tui_notifications) {
+        if !self.config.tui_notifications {
             return;
         }
         self.pending_notification = Some(notification);
@@ -4042,22 +4041,6 @@ impl Notification {
             Notification::ElicitationRequested { server_name } => {
                 format!("Approval requested by {server_name}")
             }
-        }
-    }
-
-    fn type_name(&self) -> &str {
-        match self {
-            Notification::AgentTurnComplete { .. } => "agent-turn-complete",
-            Notification::ExecApprovalRequested { .. }
-            | Notification::EditApprovalRequested { .. }
-            | Notification::ElicitationRequested { .. } => "approval-requested",
-        }
-    }
-
-    fn allowed_for(&self, settings: &Notifications) -> bool {
-        match settings {
-            Notifications::Enabled(enabled) => *enabled,
-            Notifications::Custom(allowed) => allowed.iter().any(|a| a == self.type_name()),
         }
     }
 

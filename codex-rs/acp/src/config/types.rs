@@ -50,6 +50,22 @@ pub struct NoriConfigToml {
     pub mcp_servers: HashMap<String, McpServerConfigToml>,
 }
 
+/// Whether terminal notifications (OSC 9) are enabled or disabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TerminalNotifications {
+    Enabled,
+    Disabled,
+}
+
+/// Whether OS-level desktop notifications are enabled or disabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OsNotifications {
+    Enabled,
+    Disabled,
+}
+
 /// TUI-specific settings (TOML)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,8 +73,11 @@ pub struct TuiConfigToml {
     /// Enable animations (shimmer effects, spinners)
     pub animations: Option<bool>,
 
-    /// Enable desktop notifications
-    pub notifications: Option<bool>,
+    /// Terminal notification preference (OSC 9 escape sequences)
+    pub terminal_notifications: Option<TerminalNotifications>,
+
+    /// OS-level desktop notification preference (notify-rust)
+    pub os_notifications: Option<OsNotifications>,
 
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: Option<bool>,
@@ -70,8 +89,11 @@ pub struct TuiConfig {
     /// Enable animations (shimmer effects, spinners)
     pub animations: bool,
 
-    /// Enable desktop notifications
-    pub notifications: bool,
+    /// Terminal notification preference (OSC 9 escape sequences)
+    pub terminal_notifications: TerminalNotifications,
+
+    /// OS-level desktop notification preference (notify-rust)
+    pub os_notifications: OsNotifications,
 
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: bool,
@@ -81,7 +103,8 @@ impl Default for TuiConfig {
     fn default() -> Self {
         Self {
             animations: true,
-            notifications: true,
+            terminal_notifications: TerminalNotifications::Enabled,
+            os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
         }
     }
@@ -143,8 +166,11 @@ pub struct NoriConfig {
     /// Enable TUI animations
     pub animations: bool,
 
-    /// Enable TUI notifications
-    pub notifications: bool,
+    /// Terminal notification preference (OSC 9 escape sequences)
+    pub terminal_notifications: TerminalNotifications,
+
+    /// OS-level desktop notification preference (notify-rust)
+    pub os_notifications: OsNotifications,
 
     /// Stack footer segments vertically in the status footer.
     pub vertical_footer: bool,
@@ -168,7 +194,8 @@ impl Default for NoriConfig {
             approval_policy: ApprovalPolicy::OnRequest,
             history_persistence: HistoryPersistence::default(),
             animations: true,
-            notifications: true,
+            terminal_notifications: TerminalNotifications::Enabled,
+            os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),

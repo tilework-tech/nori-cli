@@ -343,26 +343,13 @@ impl Default for OtelConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(untagged)]
-pub enum Notifications {
-    Enabled(bool),
-    Custom(Vec<String>),
-}
-
-impl Default for Notifications {
-    fn default() -> Self {
-        Self::Enabled(true)
-    }
-}
-
 /// Collection of settings that are specific to the TUI.
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct Tui {
-    /// Enable desktop notifications from the TUI when the terminal is unfocused.
+    /// Enable terminal notifications (OSC 9) from the TUI when the terminal is unfocused.
     /// Defaults to `true`.
-    #[serde(default)]
-    pub notifications: Notifications,
+    #[serde(default = "default_true")]
+    pub terminal_notifications: bool,
 
     /// Enable animations (welcome screen, shimmer effects, spinners).
     /// Defaults to `true`.

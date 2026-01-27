@@ -18,6 +18,8 @@ pub use types::McpServerTransportConfig;
 pub use types::NoriConfig;
 pub use types::NoriConfigOverrides;
 pub use types::NoriConfigToml;
+pub use types::OsNotifications;
+pub use types::TerminalNotifications;
 pub use types::TuiConfig;
 
 #[cfg(test)]
@@ -66,7 +68,11 @@ mod tests {
 
         assert_eq!(config.model, "claude-code");
         assert!(config.animations);
-        assert!(config.notifications);
+        assert_eq!(
+            config.terminal_notifications,
+            TerminalNotifications::Enabled
+        );
+        assert_eq!(config.os_notifications, OsNotifications::Enabled);
         assert!(!config.vertical_footer);
         assert_eq!(
             config.sandbox_mode,
@@ -95,7 +101,8 @@ approval_policy = "always"
 
 [tui]
 animations = false
-notifications = false
+terminal_notifications = "disabled"
+os_notifications = "disabled"
 vertical_footer = true
 "#;
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
@@ -107,7 +114,11 @@ vertical_footer = true
         );
         assert_eq!(config.approval_policy, Some(ApprovalPolicy::Always));
         assert_eq!(config.tui.animations, Some(false));
-        assert_eq!(config.tui.notifications, Some(false));
+        assert_eq!(
+            config.tui.terminal_notifications,
+            Some(TerminalNotifications::Disabled)
+        );
+        assert_eq!(config.tui.os_notifications, Some(OsNotifications::Disabled));
         assert_eq!(config.tui.vertical_footer, Some(true));
     }
 
@@ -132,7 +143,11 @@ vertical_footer = true
 
         assert_eq!(config.model, "gemini");
         assert!(!config.animations);
-        assert!(config.notifications); // default
+        assert_eq!(
+            config.terminal_notifications,
+            TerminalNotifications::Enabled
+        ); // default
+        assert_eq!(config.os_notifications, OsNotifications::Enabled); // default
         assert!(config.vertical_footer);
     }
 
@@ -180,10 +195,63 @@ model = "gemini"
 
         assert_eq!(config.model, "claude-code");
         assert!(config.animations);
-        assert!(config.notifications);
+        assert_eq!(
+            config.terminal_notifications,
+            TerminalNotifications::Enabled
+        );
+        assert_eq!(config.os_notifications, OsNotifications::Enabled);
 
         // SAFETY: Test runs serially
         unsafe { env::remove_var(NORI_HOME_ENV) };
+    }
+
+    #[test]
+    fn test_notification_enums_deserialize() {
+        let toml_str = r#"
+[tui]
+terminal_notifications = "enabled"
+os_notifications = "disabled"
+"#;
+        let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(
+            config.tui.terminal_notifications,
+            Some(TerminalNotifications::Enabled)
+        );
+        assert_eq!(config.tui.os_notifications, Some(OsNotifications::Disabled));
+    }
+
+    #[test]
+    fn test_notification_enums_default_when_absent() {
+        let toml_str = r#"
+[tui]
+animations = true
+"#;
+        let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.tui.terminal_notifications, None);
+        assert_eq!(config.tui.os_notifications, None);
+    }
+
+    #[test]
+    fn test_notification_config_loaded_with_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+terminal_notifications = "disabled"
+os_notifications = "disabled"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.terminal_notifications,
+            TerminalNotifications::Disabled
+        );
+        assert_eq!(config.os_notifications, OsNotifications::Disabled);
     }
 
     #[test]

@@ -176,12 +176,15 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
 
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
+        // Load NoriConfig for ACP-specific settings (os_notifications)
+        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         let acp_config = AcpBackendConfig {
             model: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
             notify: config.notify.clone(),
+            os_notifications: nori_config.os_notifications,
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
         };

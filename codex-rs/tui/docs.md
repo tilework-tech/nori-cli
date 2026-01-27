@@ -49,7 +49,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -67,6 +67,15 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
+
+**Notification Configuration:**
+
+Two independent notification pathways are toggled via `/config` and persisted to `config.toml` as `"enabled"`/`"disabled"` strings:
+
+- **Terminal Notifications** (`TerminalNotifications` enum from `@/codex-rs/acp/src/config/types.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget.rs::notify()` gates on that bool.
+- **OS Notifications** (`OsNotifications` enum from `@/codex-rs/acp/src/config/types.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend.rs` to set the `use_native` flag on `UserNotifier`.
+
+Config changes emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`, which writes the enum string value to the `[tui]` section of `config.toml`.
 
 **Status Line Footer:**
 

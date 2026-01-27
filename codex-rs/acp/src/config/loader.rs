@@ -113,7 +113,14 @@ impl NoriConfig {
                 .history_persistence
                 .unwrap_or(super::types::HistoryPersistence::SaveAll),
             animations: toml.tui.animations.unwrap_or(true),
-            notifications: toml.tui.notifications.unwrap_or(true),
+            terminal_notifications: toml
+                .tui
+                .terminal_notifications
+                .unwrap_or(super::types::TerminalNotifications::Enabled),
+            os_notifications: toml
+                .tui
+                .os_notifications
+                .unwrap_or(super::types::OsNotifications::Enabled),
             vertical_footer: toml.tui.vertical_footer.unwrap_or(false),
             nori_home,
             cwd,

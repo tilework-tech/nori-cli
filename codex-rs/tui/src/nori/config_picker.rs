@@ -4,6 +4,8 @@
 //! that are persisted to ~/.nori/cli/config.toml.
 
 use codex_acp::config::NoriConfig;
+use codex_acp::config::OsNotifications;
+use codex_acp::config::TerminalNotifications;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -22,19 +24,48 @@ pub fn config_picker_params(
     app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
     let vertical_footer_enabled = config.vertical_footer;
+    let terminal_notifications_enabled =
+        config.terminal_notifications == TerminalNotifications::Enabled;
+    let os_notifications_enabled = config.os_notifications == OsNotifications::Enabled;
 
-    let items: Vec<SelectionItem> = vec![build_toggle_item(
-        "Vertical Footer",
-        "Stack footer segments vertically instead of horizontally",
-        vertical_footer_enabled,
-        {
-            let tx = app_event_tx;
-            let new_value = !vertical_footer_enabled;
-            move || {
-                tx.send(AppEvent::SetConfigVerticalFooter(new_value));
-            }
-        },
-    )];
+    let items: Vec<SelectionItem> = vec![
+        build_toggle_item(
+            "Vertical Footer",
+            "Stack footer segments vertically instead of horizontally",
+            vertical_footer_enabled,
+            {
+                let tx = app_event_tx.clone();
+                let new_value = !vertical_footer_enabled;
+                move || {
+                    tx.send(AppEvent::SetConfigVerticalFooter(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "Terminal Notifications",
+            "Send OSC 9 escape sequences to notify the terminal on events",
+            terminal_notifications_enabled,
+            {
+                let tx = app_event_tx.clone();
+                let new_value = !terminal_notifications_enabled;
+                move || {
+                    tx.send(AppEvent::SetConfigTerminalNotifications(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "OS Notifications",
+            "Send native desktop notifications on events",
+            os_notifications_enabled,
+            {
+                let tx = app_event_tx;
+                let new_value = !os_notifications_enabled;
+                move || {
+                    tx.send(AppEvent::SetConfigOsNotifications(new_value));
+                }
+            },
+        ),
+    ];
 
     SelectionViewParams {
         title: Some("Configuration".to_string()),
@@ -76,6 +107,8 @@ where
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
+    use codex_acp::config::OsNotifications;
+    use codex_acp::config::TerminalNotifications;
     use std::path::PathBuf;
     use tokio::sync::mpsc::unbounded_channel;
 
@@ -87,7 +120,8 @@ mod tests {
             approval_policy: codex_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: codex_acp::config::HistoryPersistence::SaveAll,
             animations: true,
-            notifications: true,
+            terminal_notifications: TerminalNotifications::Enabled,
+            os_notifications: OsNotifications::Enabled,
             vertical_footer,
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
@@ -96,14 +130,14 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_one_item() {
+    fn config_picker_returns_three_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 1);
+        assert_eq!(params.items.len(), 3);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }

@@ -1098,6 +1098,14 @@ impl App {
                 self.persist_config_setting("vertical_footer", enabled)
                     .await;
             }
+            AppEvent::SetConfigTerminalNotifications(enabled) => {
+                self.persist_notification_setting("terminal_notifications", enabled)
+                    .await;
+            }
+            AppEvent::SetConfigOsNotifications(enabled) => {
+                self.persist_notification_setting("os_notifications", enabled)
+                    .await;
+            }
         }
         Ok(true)
     }
@@ -1195,6 +1203,30 @@ impl App {
                 error = %err,
                 setting = %setting_name,
                 "failed to persist TUI config setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save {setting_name} setting: {err}"));
+            return;
+        }
+
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("{setting_name} {status}"), None);
+    }
+
+    async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
+        let enum_value = if enabled { "enabled" } else { "disabled" };
+
+        // Persist to config.toml as a string enum value
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", setting_name], toml_value(enum_value))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                setting = %setting_name,
+                "failed to persist TUI notification setting"
             );
             self.chat_widget
                 .add_error_message(format!("Failed to save {setting_name} setting: {err}"));
