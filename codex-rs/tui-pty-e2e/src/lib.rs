@@ -788,7 +788,7 @@ fn codex_binary_path() -> String {
         .parent() // deps
         .and_then(|p| p.parent()) // debug or release
         .expect("Failed to get target directory")
-        .join("nori-tui")
+        .join("nori")
         .to_string_lossy()
         .into_owned()
 }
