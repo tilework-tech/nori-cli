@@ -6,7 +6,6 @@
 //! - Building a picker UI for skillset selection
 //! - Installing selected skillsets
 
-
 use crate::app_event::AppEvent;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
