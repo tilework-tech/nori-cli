@@ -31,6 +31,9 @@ pub struct SessionPickerInfo {
 }
 
 /// Load sessions for the current working directory with preview text.
+///
+/// Sessions with only the session_meta entry (entry_count <= 1) are filtered out
+/// since they have no actual conversation content to display.
 pub async fn load_sessions_with_preview(
     nori_home: &Path,
     cwd: &Path,
@@ -40,6 +43,11 @@ pub async fn load_sessions_with_preview(
 
     let mut result = Vec::new();
     for session in sessions {
+        // Skip sessions with no conversation content (only session_meta)
+        if session.entry_count <= 1 {
+            continue;
+        }
+
         let preview =
             load_first_message_preview(&loader, &session.project_id, &session.session_id).await;
         result.push(SessionPickerInfo {

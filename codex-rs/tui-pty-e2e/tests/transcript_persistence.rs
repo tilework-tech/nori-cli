@@ -527,8 +527,8 @@ fn test_resume_viewonly_shows_transcript() {
         .wait_for_text("RESPONSE_BETA", Duration::from_secs(10))
         .expect("Should receive second response");
 
-    // Allow transcript to flush
-    std::thread::sleep(Duration::from_millis(500));
+    // Allow transcript to flush - needs enough time for async channel writes
+    std::thread::sleep(Duration::from_millis(1000));
 
     // Start new session with /new command
     session.send_str("/new").unwrap();
@@ -557,11 +557,8 @@ fn test_resume_viewonly_shows_transcript() {
 
     std::thread::sleep(Duration::from_millis(200));
 
-    // The picker lists sessions with newest first. The new empty session (0 messages)
-    // is first, and the session with our messages (4 messages) is second.
-    // Navigate down to select the session with content.
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
+    // The picker lists sessions with newest first. Empty sessions (0 messages) are
+    // filtered out, so the session with our content should be at the top.
     session.send_key(Key::Enter).unwrap();
 
     // Wait for async transcript loading to complete
