@@ -1165,6 +1165,8 @@ impl App {
         &mut self,
         entries: Vec<crate::viewonly_transcript::ViewonlyEntry>,
     ) {
+        use crate::history_cell::AgentMessageCell;
+        use crate::markdown::append_markdown;
         use crate::viewonly_transcript::ViewonlyEntry;
 
         // Add a header
@@ -1173,7 +1175,15 @@ impl App {
             None,
         );
 
+        let mut is_first_entry = true;
         for entry in entries {
+            // Add a blank line separator between entries (except before the first)
+            if !is_first_entry {
+                self.chat_widget
+                    .add_plain_history_lines(vec![Line::from("")]);
+            }
+            is_first_entry = false;
+
             match entry {
                 ViewonlyEntry::User { content } => {
                     // Add user messages with a user prefix to distinguish them
@@ -1182,8 +1192,11 @@ impl App {
                     ));
                 }
                 ViewonlyEntry::Assistant { content } => {
-                    // Add assistant response
-                    self.chat_widget.add_info_message(content, None);
+                    // Add assistant response with markdown rendering
+                    let mut lines = Vec::new();
+                    append_markdown(&content, None, &mut lines);
+                    let cell = AgentMessageCell::new(lines, true);
+                    self.chat_widget.add_boxed_history(Box::new(cell));
                 }
                 ViewonlyEntry::Info { content } => {
                     // Add as an info message

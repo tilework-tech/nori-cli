@@ -53,6 +53,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
+| `/resume-viewonly` | View a previous session transcript (read-only) |
 | `/compact` | Summarize conversation to prevent context limit |
 | `/undo` | Ask Nori to undo a turn |
 | `/diff` | Show git diff (including untracked files) |
@@ -88,6 +89,22 @@ Ctrl-G opens the user's preferred text editor for composing prompts. The editor 
 6. On success, reads the temp file content back into the composer; on failure or non-zero exit, discards changes
 
 This uses the same terminal suspend/resume pattern as job control in `lib.rs` (SIGTSTP handling).
+
+**View-Only Transcript Viewing:**
+
+The `/resume-viewonly` command allows viewing previous session transcripts without replaying the conversation. Implementation in `@/codex-rs/tui/src/`:
+
+- `viewonly_transcript.rs`: Converts `codex_acp::transcript::Transcript` entries to `ViewonlyEntry` enum (User, Assistant, Info variants)
+- `nori/viewonly_session_picker.rs`: Session picker UI for selecting past sessions
+- `app.rs::display_viewonly_transcript()`: Renders entries in the chat history
+
+Rendering behavior:
+- User messages display via `UserHistoryCell` with standard user styling
+- Assistant messages render via `AgentMessageCell` with `append_markdown()` for syntax highlighting
+- Tool calls and patch operations appear as Info entries with summary text
+- Blank line separators between entries improve readability
+
+The async flow uses three AppEvents: `ShowViewonlySessionPicker` -> `LoadViewonlyTranscript` -> `DisplayViewonlyTranscript`.
 ### Things to Know
 
 **Cargo Feature Flags:**

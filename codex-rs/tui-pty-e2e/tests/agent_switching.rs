@@ -1053,7 +1053,6 @@ fn test_agent_switch_logs_correct_sequence() {
 // Test: Connecting Status During Slow Agent Startup
 // ============================================================================
 
-// @current-session
 /// Test that "Connecting to [Agent]" status appears during slow agent startup.
 ///
 /// When an ACP agent takes time to start (e.g., npx/bunx resolving dependencies),

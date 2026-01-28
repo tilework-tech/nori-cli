@@ -511,7 +511,6 @@ mod tests {
         assert!(!contents.contains("\"user_id\""));
     }
 
-    // @current-session
     #[test]
     fn test_user_resurrection_emits_multiple_events() {
         let temp_home = setup_temp_home();
@@ -549,7 +548,6 @@ mod tests {
         );
     }
 
-    // @current-session
     #[test]
     fn test_upgrade_with_resurrection_emits_three_events() {
         let temp_home = setup_temp_home();

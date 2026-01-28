@@ -113,15 +113,18 @@ Each line in the transcript file is a JSON object with:
 
 Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
 
-| Type | Description | Key Fields |
-|------|-------------|------------|
-| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, model, cli_version, git |
+| Type | Description | Key Fields (JSON) |
+|------|-------------|-------------------|
+| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git |
 | `user` | User message | id, content, attachments |
-| `assistant` | Complete assistant turn | id, content (blocks), model |
+| `assistant` | Complete assistant turn | id, content (blocks), agent |
 | `tool_call` | Tool execution start | call_id, name, input |
 | `tool_result` | Tool execution result | call_id, output, truncated, exit_code |
 | `patch_apply` | File modification result | call_id, operation (edit/write/delete), path, success, error |
 
+**Schema Field Naming:**
+
+The Rust struct fields `SessionMetaEntry.model` and `AssistantEntry.model` serialize to `"agent"` in JSON via `#[serde(rename = "agent")]`. This naming reflects that the field identifies which agent processed the session/message rather than a specific model variant.
 **TranscriptRecorder:**
 
 The `TranscriptRecorder` (in `@/codex-rs/acp/src/transcript/recorder.rs`) handles async, non-blocking writes:

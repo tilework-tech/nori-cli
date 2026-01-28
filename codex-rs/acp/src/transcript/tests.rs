@@ -103,7 +103,8 @@ mod types_tests {
             parsed["content"][0]["text"],
             "The src directory contains main.rs and lib.rs."
         );
-        assert_eq!(parsed["model"], "claude-sonnet-4-20250514");
+        // Field is serialized as "agent" (not "model") per schema design
+        assert_eq!(parsed["agent"], "claude-sonnet-4-20250514");
     }
 
     #[test]

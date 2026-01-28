@@ -70,8 +70,8 @@ pub struct SessionMetaEntry {
     pub started_at: String,
     /// Working directory for the session
     pub cwd: PathBuf,
-    /// Model used for the session
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Agent used for the session (serialized as "agent" in JSON)
+    #[serde(rename = "agent", skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// CLI version
     pub cli_version: String,
@@ -117,8 +117,8 @@ pub struct AssistantEntry {
     pub id: String,
     /// Content blocks (mirrors Anthropic API structure)
     pub content: Vec<ContentBlock>,
-    /// Model that generated this response
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Agent that generated this response (serialized as "agent" in JSON)
+    #[serde(rename = "agent", skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
 }
 
@@ -184,5 +184,86 @@ impl TranscriptLine {
             v: SCHEMA_VERSION,
             entry,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn session_meta_entry_serializes_agent_field_not_model() {
+        let entry = SessionMetaEntry {
+            session_id: "test-session".to_string(),
+            project_id: "test-project".to_string(),
+            started_at: "2025-01-27T12:00:00.000Z".to_string(),
+            cwd: PathBuf::from("/tmp/test"),
+            model: Some("claude-sonnet".to_string()),
+            cli_version: "0.1.0".to_string(),
+            git: None,
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+
+        // Should serialize as "agent", not "model"
+        assert!(
+            json.contains(r#""agent":"claude-sonnet""#),
+            "Expected 'agent' field in JSON, got: {json}"
+        );
+        assert!(
+            !json.contains(r#""model""#),
+            "Should not contain 'model' field, got: {json}"
+        );
+    }
+
+    #[test]
+    fn assistant_entry_serializes_agent_field_not_model() {
+        let entry = AssistantEntry {
+            id: "msg-001".to_string(),
+            content: vec![ContentBlock::Text {
+                text: "Hello".to_string(),
+            }],
+            model: Some("claude-sonnet".to_string()),
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+
+        // Should serialize as "agent", not "model"
+        assert!(
+            json.contains(r#""agent":"claude-sonnet""#),
+            "Expected 'agent' field in JSON, got: {json}"
+        );
+        assert!(
+            !json.contains(r#""model""#),
+            "Should not contain 'model' field, got: {json}"
+        );
+    }
+
+    #[test]
+    fn session_meta_entry_deserializes_from_agent_field() {
+        let json = r#"{
+            "session_id": "test-session",
+            "project_id": "test-project",
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "agent": "claude-sonnet",
+            "cli_version": "0.1.0"
+        }"#;
+
+        let entry: SessionMetaEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.model, Some("claude-sonnet".to_string()));
+    }
+
+    #[test]
+    fn assistant_entry_deserializes_from_agent_field() {
+        let json = r#"{
+            "id": "msg-001",
+            "content": [{"type": "text", "text": "Hello"}],
+            "agent": "claude-sonnet"
+        }"#;
+
+        let entry: AssistantEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.model, Some("claude-sonnet".to_string()));
     }
 }
