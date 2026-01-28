@@ -85,6 +85,21 @@ pub fn config_picker_params(
                 ..Default::default()
             }
         },
+        {
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenHotkeyPicker);
+                }
+            })];
+            SelectionItem {
+                name: "Hotkeys".to_string(),
+                description: Some("Configure keyboard shortcuts for actions".to_string()),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
     ];
 
     SelectionViewParams {
@@ -182,6 +197,7 @@ mod tests {
             os_notifications: OsNotifications::Enabled,
             vertical_footer,
             notify_after_idle: codex_acp::config::NotifyAfterIdle::FiveSeconds,
+            hotkeys: codex_acp::config::HotkeyConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -196,7 +212,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 4);
+        assert_eq!(params.items.len(), 5);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -224,16 +240,18 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_four_items() {
+    fn config_picker_returns_five_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 4);
+        assert_eq!(params.items.len(), 5);
         // The 4th item should be Notify After Idle
         assert!(params.items[3].name.contains("Notify After Idle"));
+        // The 5th item should be Hotkeys
+        assert!(params.items[4].name.contains("Hotkeys"));
     }
 
     #[test]
@@ -298,6 +316,28 @@ mod tests {
             }
             _ => panic!("expected SetConfigVerticalFooter event"),
         }
+    }
+
+    #[test]
+    fn config_picker_hotkeys_action_sends_open_picker_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        // Trigger the hotkeys action (5th item)
+        let hotkeys_item = &params.items[4];
+        assert!(hotkeys_item.name.contains("Hotkeys"));
+        for action in &hotkeys_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenHotkeyPicker),
+            "expected OpenHotkeyPicker event, got: {event:?}"
+        );
     }
 
     #[test]

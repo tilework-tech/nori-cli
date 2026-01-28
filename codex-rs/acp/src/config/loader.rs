@@ -126,6 +126,7 @@ impl NoriConfig {
                 .tui
                 .notify_after_idle
                 .unwrap_or(super::types::NotifyAfterIdle::FiveSeconds),
+            hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             nori_home,
             cwd,
             mcp_servers,

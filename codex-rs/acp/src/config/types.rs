@@ -4,6 +4,7 @@ use codex_protocol::config_types::SandboxMode;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -128,6 +129,205 @@ impl NotifyAfterIdle {
     }
 }
 
+// ============================================================================
+// Hotkey Configuration
+// ============================================================================
+
+/// A configurable hotkey action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HotkeyAction {
+    /// Open the transcript pager overlay.
+    OpenTranscript,
+    /// Open an external editor for composing.
+    OpenEditor,
+}
+
+impl HotkeyAction {
+    /// Human-readable name for display in the TUI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::OpenTranscript => "Open Transcript",
+            Self::OpenEditor => "Open Editor",
+        }
+    }
+
+    /// Description for the hotkey picker.
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::OpenTranscript => "Open the transcript pager (alternate screen)",
+            Self::OpenEditor => "Open an external editor to compose a message",
+        }
+    }
+
+    /// The TOML key name for this action under `[tui.hotkeys]`.
+    pub fn toml_key(&self) -> &'static str {
+        match self {
+            Self::OpenTranscript => "open_transcript",
+            Self::OpenEditor => "open_editor",
+        }
+    }
+
+    /// The default binding string for this action.
+    pub fn default_binding(&self) -> &'static str {
+        match self {
+            Self::OpenTranscript => "ctrl+t",
+            Self::OpenEditor => "ctrl+g",
+        }
+    }
+
+    /// All hotkey actions, in display order.
+    pub fn all_actions() -> &'static [HotkeyAction] {
+        &[Self::OpenTranscript, Self::OpenEditor]
+    }
+}
+
+impl fmt::Display for HotkeyAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.display_name())
+    }
+}
+
+/// A hotkey binding represented as a string (e.g. "ctrl+t", "alt+g", "none").
+///
+/// The string format is: `[modifier+]key` where modifier is `ctrl`, `alt`, or `shift`,
+/// and key is a single character, `enter`, `esc`, `f1`-`f12`, etc.
+/// The special value `"none"` means the action is unbound.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HotkeyBinding(Option<String>);
+
+impl HotkeyBinding {
+    /// Create a binding from a key string like "ctrl+t".
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &str) -> Self {
+        if s == "none" {
+            Self(None)
+        } else {
+            Self(Some(s.to_lowercase()))
+        }
+    }
+
+    /// Create an unbound (none) binding.
+    pub fn none() -> Self {
+        Self(None)
+    }
+
+    /// Returns true if this binding is unbound.
+    pub fn is_none(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Returns the binding string, or "none" if unbound.
+    pub fn as_str(&self) -> &str {
+        match &self.0 {
+            Some(s) => s,
+            None => "none",
+        }
+    }
+
+    /// Human-readable display string (e.g. "ctrl + t" or "unbound").
+    pub fn display_name(&self) -> String {
+        match &self.0 {
+            Some(s) => s.replace('+', " + "),
+            None => "unbound".to_string(),
+        }
+    }
+
+    /// TOML string for persistence.
+    pub fn toml_value(&self) -> String {
+        match &self.0 {
+            Some(s) => s.clone(),
+            None => "none".to_string(),
+        }
+    }
+}
+
+impl Serialize for HotkeyBinding {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.toml_value().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for HotkeyBinding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(HotkeyBinding::from_str(&s))
+    }
+}
+
+/// TOML-deserializable hotkey configuration.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct HotkeyConfigToml {
+    /// Hotkey for opening the transcript pager.
+    pub open_transcript: Option<HotkeyBinding>,
+    /// Hotkey for opening an external editor.
+    pub open_editor: Option<HotkeyBinding>,
+}
+
+/// Resolved hotkey configuration with defaults applied.
+#[derive(Debug, Clone)]
+pub struct HotkeyConfig {
+    /// Hotkey for opening the transcript pager.
+    pub open_transcript: HotkeyBinding,
+    /// Hotkey for opening an external editor.
+    pub open_editor: HotkeyBinding,
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        Self {
+            open_transcript: HotkeyBinding::from_str(
+                HotkeyAction::OpenTranscript.default_binding(),
+            ),
+            open_editor: HotkeyBinding::from_str(HotkeyAction::OpenEditor.default_binding()),
+        }
+    }
+}
+
+impl HotkeyConfig {
+    /// Resolve from TOML config, applying defaults for missing values.
+    pub fn from_toml(toml: &HotkeyConfigToml) -> Self {
+        let defaults = Self::default();
+        Self {
+            open_transcript: toml
+                .open_transcript
+                .clone()
+                .unwrap_or(defaults.open_transcript),
+            open_editor: toml.open_editor.clone().unwrap_or(defaults.open_editor),
+        }
+    }
+
+    /// Get the binding for a given action.
+    pub fn binding_for(&self, action: HotkeyAction) -> &HotkeyBinding {
+        match action {
+            HotkeyAction::OpenTranscript => &self.open_transcript,
+            HotkeyAction::OpenEditor => &self.open_editor,
+        }
+    }
+
+    /// Set the binding for a given action.
+    pub fn set_binding(&mut self, action: HotkeyAction, binding: HotkeyBinding) {
+        match action {
+            HotkeyAction::OpenTranscript => self.open_transcript = binding,
+            HotkeyAction::OpenEditor => self.open_editor = binding,
+        }
+    }
+
+    /// Return all (action, binding) pairs.
+    pub fn all_bindings(&self) -> Vec<(HotkeyAction, &HotkeyBinding)> {
+        vec![
+            (HotkeyAction::OpenTranscript, &self.open_transcript),
+            (HotkeyAction::OpenEditor, &self.open_editor),
+        ]
+    }
+}
+
 /// TUI-specific settings (TOML)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -146,6 +346,10 @@ pub struct TuiConfigToml {
 
     /// How long after idle before sending a notification.
     pub notify_after_idle: Option<NotifyAfterIdle>,
+
+    /// Configurable hotkey bindings.
+    #[serde(default)]
+    pub hotkeys: HotkeyConfigToml,
 }
 
 /// Resolved TUI configuration
@@ -243,6 +447,9 @@ pub struct NoriConfig {
     /// How long after idle before sending a notification.
     pub notify_after_idle: NotifyAfterIdle,
 
+    /// Configurable hotkey bindings.
+    pub hotkeys: HotkeyConfig,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -266,6 +473,7 @@ impl Default for NoriConfig {
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
             notify_after_idle: NotifyAfterIdle::default(),
+            hotkeys: HotkeyConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
@@ -587,5 +795,246 @@ notify_after_idle = "30s"
     fn test_tui_config_toml_without_notify_after_idle() {
         let config: TuiConfigToml = toml::from_str("").unwrap();
         assert_eq!(config.notify_after_idle, None);
+    }
+
+    // ========================================================================
+    // Hotkey Configuration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_hotkey_binding_from_str_ctrl_t() {
+        let binding = HotkeyBinding::from_str("ctrl+t");
+        assert_eq!(binding.as_str(), "ctrl+t");
+        assert!(!binding.is_none());
+    }
+
+    #[test]
+    fn test_hotkey_binding_from_str_none() {
+        let binding = HotkeyBinding::from_str("none");
+        assert!(binding.is_none());
+        assert_eq!(binding.as_str(), "none");
+    }
+
+    #[test]
+    fn test_hotkey_binding_from_str_normalizes_case() {
+        let binding = HotkeyBinding::from_str("Ctrl+T");
+        assert_eq!(binding.as_str(), "ctrl+t");
+    }
+
+    #[test]
+    fn test_hotkey_binding_display_name() {
+        let binding = HotkeyBinding::from_str("ctrl+t");
+        assert_eq!(binding.display_name(), "ctrl + t");
+
+        let unbound = HotkeyBinding::none();
+        assert_eq!(unbound.display_name(), "unbound");
+    }
+
+    #[test]
+    fn test_hotkey_binding_toml_value() {
+        let binding = HotkeyBinding::from_str("ctrl+g");
+        assert_eq!(binding.toml_value(), "ctrl+g");
+
+        let unbound = HotkeyBinding::none();
+        assert_eq!(unbound.toml_value(), "none");
+    }
+
+    #[test]
+    fn test_hotkey_binding_serde_roundtrip() {
+        #[derive(Serialize, Deserialize)]
+        struct Wrapper {
+            key: HotkeyBinding,
+        }
+
+        let w = Wrapper {
+            key: HotkeyBinding::from_str("ctrl+t"),
+        };
+        let toml_str = toml::to_string(&w).unwrap();
+        let parsed: Wrapper = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.key, HotkeyBinding::from_str("ctrl+t"));
+    }
+
+    #[test]
+    fn test_hotkey_binding_serde_none_roundtrip() {
+        #[derive(Serialize, Deserialize)]
+        struct Wrapper {
+            key: HotkeyBinding,
+        }
+
+        let w = Wrapper {
+            key: HotkeyBinding::none(),
+        };
+        let toml_str = toml::to_string(&w).unwrap();
+        let parsed: Wrapper = toml::from_str(&toml_str).unwrap();
+        assert!(parsed.key.is_none());
+    }
+
+    #[test]
+    fn test_hotkey_binding_deserialize_from_toml_string() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            key: HotkeyBinding,
+        }
+
+        let w: Wrapper = toml::from_str(r#"key = "alt+x""#).unwrap();
+        assert_eq!(w.key.as_str(), "alt+x");
+
+        let w: Wrapper = toml::from_str(r#"key = "none""#).unwrap();
+        assert!(w.key.is_none());
+    }
+
+    #[test]
+    fn test_hotkey_action_display_names() {
+        assert_eq!(
+            HotkeyAction::OpenTranscript.display_name(),
+            "Open Transcript"
+        );
+        assert_eq!(HotkeyAction::OpenEditor.display_name(), "Open Editor");
+    }
+
+    #[test]
+    fn test_hotkey_action_toml_keys() {
+        assert_eq!(HotkeyAction::OpenTranscript.toml_key(), "open_transcript");
+        assert_eq!(HotkeyAction::OpenEditor.toml_key(), "open_editor");
+    }
+
+    #[test]
+    fn test_hotkey_action_default_bindings() {
+        assert_eq!(HotkeyAction::OpenTranscript.default_binding(), "ctrl+t");
+        assert_eq!(HotkeyAction::OpenEditor.default_binding(), "ctrl+g");
+    }
+
+    #[test]
+    fn test_hotkey_action_all_actions() {
+        let actions = HotkeyAction::all_actions();
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0], HotkeyAction::OpenTranscript);
+        assert_eq!(actions[1], HotkeyAction::OpenEditor);
+    }
+
+    #[test]
+    fn test_hotkey_config_default_uses_standard_bindings() {
+        let config = HotkeyConfig::default();
+        assert_eq!(config.open_transcript, HotkeyBinding::from_str("ctrl+t"));
+        assert_eq!(config.open_editor, HotkeyBinding::from_str("ctrl+g"));
+    }
+
+    #[test]
+    fn test_hotkey_config_from_toml_uses_defaults_when_empty() {
+        let toml = HotkeyConfigToml::default();
+        let config = HotkeyConfig::from_toml(&toml);
+        assert_eq!(config.open_transcript, HotkeyBinding::from_str("ctrl+t"));
+        assert_eq!(config.open_editor, HotkeyBinding::from_str("ctrl+g"));
+    }
+
+    #[test]
+    fn test_hotkey_config_from_toml_uses_custom_bindings() {
+        let toml = HotkeyConfigToml {
+            open_transcript: Some(HotkeyBinding::from_str("alt+t")),
+            open_editor: Some(HotkeyBinding::from_str("ctrl+e")),
+        };
+        let config = HotkeyConfig::from_toml(&toml);
+        assert_eq!(config.open_transcript, HotkeyBinding::from_str("alt+t"));
+        assert_eq!(config.open_editor, HotkeyBinding::from_str("ctrl+e"));
+    }
+
+    #[test]
+    fn test_hotkey_config_from_toml_partial_override() {
+        let toml = HotkeyConfigToml {
+            open_transcript: Some(HotkeyBinding::from_str("alt+t")),
+            open_editor: None,
+        };
+        let config = HotkeyConfig::from_toml(&toml);
+        assert_eq!(config.open_transcript, HotkeyBinding::from_str("alt+t"));
+        assert_eq!(config.open_editor, HotkeyBinding::from_str("ctrl+g")); // default
+    }
+
+    #[test]
+    fn test_hotkey_config_from_toml_unbind_action() {
+        let toml = HotkeyConfigToml {
+            open_transcript: Some(HotkeyBinding::none()),
+            open_editor: None,
+        };
+        let config = HotkeyConfig::from_toml(&toml);
+        assert!(config.open_transcript.is_none());
+        assert_eq!(config.open_editor, HotkeyBinding::from_str("ctrl+g"));
+    }
+
+    #[test]
+    fn test_hotkey_config_binding_for_action() {
+        let config = HotkeyConfig::default();
+        assert_eq!(
+            config.binding_for(HotkeyAction::OpenTranscript),
+            &HotkeyBinding::from_str("ctrl+t")
+        );
+        assert_eq!(
+            config.binding_for(HotkeyAction::OpenEditor),
+            &HotkeyBinding::from_str("ctrl+g")
+        );
+    }
+
+    #[test]
+    fn test_hotkey_config_set_binding() {
+        let mut config = HotkeyConfig::default();
+        config.set_binding(HotkeyAction::OpenTranscript, HotkeyBinding::from_str("f1"));
+        assert_eq!(config.open_transcript, HotkeyBinding::from_str("f1"));
+    }
+
+    #[test]
+    fn test_hotkey_config_all_bindings() {
+        let config = HotkeyConfig::default();
+        let bindings = config.all_bindings();
+        assert_eq!(bindings.len(), 2);
+        assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
+        assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
+    }
+
+    #[test]
+    fn test_tui_config_toml_with_hotkeys() {
+        let config: TuiConfigToml = toml::from_str(
+            r#"
+[hotkeys]
+open_transcript = "alt+t"
+open_editor = "ctrl+e"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.hotkeys.open_transcript,
+            Some(HotkeyBinding::from_str("alt+t"))
+        );
+        assert_eq!(
+            config.hotkeys.open_editor,
+            Some(HotkeyBinding::from_str("ctrl+e"))
+        );
+    }
+
+    #[test]
+    fn test_tui_config_toml_without_hotkeys() {
+        let config: TuiConfigToml = toml::from_str("").unwrap();
+        assert!(config.hotkeys.open_transcript.is_none());
+        assert!(config.hotkeys.open_editor.is_none());
+    }
+
+    #[test]
+    fn test_full_config_toml_with_hotkeys() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+model = "claude-code"
+
+[tui]
+vertical_footer = true
+
+[tui.hotkeys]
+open_transcript = "ctrl+y"
+open_editor = "none"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.tui.hotkeys.open_transcript,
+            Some(HotkeyBinding::from_str("ctrl+y"))
+        );
+        assert_eq!(config.tui.hotkeys.open_editor, Some(HotkeyBinding::none()));
     }
 }
