@@ -1116,6 +1116,20 @@ impl App {
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
             }
+            AppEvent::SkillsetListResult { names, error } => {
+                self.chat_widget.on_skillset_list_result(names, error);
+            }
+            AppEvent::InstallSkillset { name } => {
+                self.chat_widget.on_install_skillset_request(&name);
+            }
+            AppEvent::SkillsetInstallResult {
+                name,
+                success,
+                message,
+            } => {
+                self.chat_widget
+                    .on_skillset_install_result(&name, success, &message);
+            }
         }
         Ok(true)
     }

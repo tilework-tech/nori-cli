@@ -1877,6 +1877,9 @@ impl ChatWidget {
                     }),
                 }));
             }
+            SlashCommand::SwitchSkillset => {
+                self.handle_switch_skillset_command();
+            }
         }
     }
 
@@ -2516,6 +2519,99 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Handle the /switch-skillset command.
+    /// Checks if nori-skillsets is available and lists available skillsets.
+    fn handle_switch_skillset_command(&mut self) {
+        use crate::nori::skillset_picker;
+
+        // Check if nori-skillsets is available in PATH
+        if !skillset_picker::is_nori_skillsets_available() {
+            self.add_info_message(skillset_picker::not_installed_message(), None);
+            return;
+        }
+
+        // Spawn async task to list skillsets
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            match skillset_picker::list_skillsets().await {
+                Ok(names) if names.is_empty() => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: Some(vec![]),
+                        error: Some("No skillsets available.".to_string()),
+                    });
+                }
+                Ok(names) => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: Some(names),
+                        error: None,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: None,
+                        error: Some(message),
+                    });
+                }
+            }
+        });
+    }
+
+    /// Handle the result of listing skillsets.
+    pub(crate) fn on_skillset_list_result(
+        &mut self,
+        names: Option<Vec<String>>,
+        error: Option<String>,
+    ) {
+        match (names, error) {
+            (Some(names), None) if !names.is_empty() => {
+                // Open the skillset picker
+                let params = crate::nori::skillset_picker::skillset_picker_params(names);
+                self.bottom_pane.show_selection_view(params);
+            }
+            (_, Some(error)) => {
+                self.add_error_message(error);
+            }
+            _ => {
+                self.add_info_message("No skillsets available.".to_string(), None);
+            }
+        }
+    }
+
+    /// Handle a request to install a skillset.
+    pub(crate) fn on_install_skillset_request(&mut self, name: &str) {
+        use crate::nori::skillset_picker;
+
+        let name = name.to_string();
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            match skillset_picker::install_skillset(&name).await {
+                Ok(message) => {
+                    tx.send(AppEvent::SkillsetInstallResult {
+                        name,
+                        success: true,
+                        message,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetInstallResult {
+                        name,
+                        success: false,
+                        message,
+                    });
+                }
+            }
+        });
+    }
+
+    /// Handle the result of installing a skillset.
+    pub(crate) fn on_skillset_install_result(&mut self, name: &str, success: bool, message: &str) {
+        if success {
+            self.add_info_message(message.to_string(), None);
+        } else {
+            self.add_error_message(format!("Failed to install skillset '{name}': {message}"));
+        }
     }
 
     /// Open a popup to choose the model (stage 1). After selecting a model,

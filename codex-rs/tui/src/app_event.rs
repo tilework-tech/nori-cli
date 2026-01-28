@@ -284,4 +284,28 @@ pub(crate) enum AppEvent {
     /// Set the TUI notify-after-idle config setting.
     #[cfg(feature = "nori-config")]
     SetConfigNotifyAfterIdle(codex_acp::config::NotifyAfterIdle),
+
+    /// Result of listing available skillsets via nori-skillsets CLI.
+    SkillsetListResult {
+        /// List of skillset names on success (exit code 0), None if command not found.
+        names: Option<Vec<String>>,
+        /// Error message if command failed (non-zero exit) or not found.
+        error: Option<String>,
+    },
+
+    /// Request to install a skillset by name.
+    InstallSkillset {
+        /// The name of the skillset to install.
+        name: String,
+    },
+
+    /// Result of installing a skillset.
+    SkillsetInstallResult {
+        /// The name of the skillset that was installed.
+        name: String,
+        /// Whether the installation succeeded (exit code 0).
+        success: bool,
+        /// First line of stdout on success, or error message on failure.
+        message: String,
+    },
 }

@@ -32,6 +32,7 @@ pub enum SlashCommand {
     Exit,
     Rollout,
     TestApproval,
+    SwitchSkillset,
 }
 
 impl SlashCommand {
@@ -57,6 +58,7 @@ impl SlashCommand {
             SlashCommand::Logout => "show logout instructions",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
+            SlashCommand::SwitchSkillset => "switch between available skillsets",
         }
     }
 
@@ -79,7 +81,8 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Review
             | SlashCommand::Login
-            | SlashCommand::Logout => false,
+            | SlashCommand::Logout
+            | SlashCommand::SwitchSkillset => false,
             SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
@@ -201,6 +204,35 @@ mod tests {
         assert!(
             SlashCommand::FirstPrompt.available_during_task(),
             "/first-prompt should be available while task is running"
+        );
+    }
+
+    #[test]
+    fn switch_skillset_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_switch_skillset = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::SwitchSkillset);
+        assert!(
+            has_switch_skillset,
+            "/switch-skillset should be visible in commands list"
+        );
+    }
+
+    #[test]
+    fn switch_skillset_has_description() {
+        let desc = SlashCommand::SwitchSkillset.description();
+        assert!(
+            !desc.is_empty(),
+            "/switch-skillset should have a description"
+        );
+    }
+
+    #[test]
+    fn switch_skillset_not_available_during_task() {
+        assert!(
+            !SlashCommand::SwitchSkillset.available_during_task(),
+            "/switch-skillset should not be available while task is running"
         );
     }
 }
