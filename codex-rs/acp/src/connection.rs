@@ -133,6 +133,19 @@ enum AcpCommand {
         session_id: acp::SessionId,
         response_tx: oneshot::Sender<Result<()>>,
     },
+    /// Register a persistent session sender for inter-turn notifications.
+    ///
+    /// This sender remains active between prompts to receive background task
+    /// updates. It's separate from the per-prompt sender to handle notifications
+    /// that arrive after a prompt completes but before the next one starts.
+    RegisterPersistentSession {
+        session_id: acp::SessionId,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+    },
+    /// Unregister a persistent session sender.
+    ///
+    /// Called when switching to a new session (compact) or on backend shutdown.
+    UnregisterPersistentSession { session_id: acp::SessionId },
     #[cfg(feature = "unstable")]
     SetModel {
         session_id: acp::SessionId,
@@ -302,6 +315,48 @@ impl AcpConnection {
             .await
             .context("ACP worker thread died")?;
         response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Register a persistent session sender for inter-turn notifications.
+    ///
+    /// This sender remains active between prompts to receive background task
+    /// updates that arrive after a prompt completes but before the next one starts.
+    /// Should be called once after creating a session, before the first prompt.
+    ///
+    /// The persistent sender has lower priority than the per-prompt sender:
+    /// - During a prompt: notifications go to the per-prompt sender
+    /// - Between prompts: notifications go to the persistent sender
+    ///
+    /// This is fire-and-forget - no response is expected or waited for.
+    pub async fn register_persistent_session(
+        &self,
+        session_id: acp::SessionId,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+    ) -> Result<()> {
+        self.command_tx
+            .send(AcpCommand::RegisterPersistentSession {
+                session_id,
+                update_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        Ok(())
+    }
+
+    /// Unregister a persistent session sender.
+    ///
+    /// Called when switching to a new session (compact) or on backend shutdown.
+    /// After this, inter-turn notifications for this session will be dropped.
+    ///
+    /// This is fire-and-forget - no response is expected or waited for.
+    pub async fn unregister_persistent_session(&self, session_id: &acp::SessionId) -> Result<()> {
+        self.command_tx
+            .send(AcpCommand::UnregisterPersistentSession {
+                session_id: session_id.clone(),
+            })
+            .await
+            .context("ACP worker thread died")?;
+        Ok(())
     }
 
     /// Get the agent's capabilities.
@@ -739,6 +794,21 @@ async fn run_command_loop(
                     .context("Failed to cancel ACP session");
                 let _ = response_tx.send(result);
             }
+            AcpCommand::RegisterPersistentSession {
+                session_id,
+                update_tx,
+            } => {
+                // Register the persistent sender for inter-turn notifications
+                inner
+                    .client_delegate
+                    .register_persistent_session(session_id, update_tx);
+            }
+            AcpCommand::UnregisterPersistentSession { session_id } => {
+                // Unregister the persistent sender (compact or shutdown)
+                inner
+                    .client_delegate
+                    .unregister_persistent_session(&session_id);
+            }
             #[cfg(feature = "unstable")]
             AcpCommand::SetModel {
                 session_id,
@@ -867,7 +937,13 @@ fn kill_child_process_group(child: &mut Child) -> std::io::Result<()> {
 /// - File system operations
 /// - Terminal operations (stubbed)
 pub struct ClientDelegate {
+    /// Per-prompt session senders - active only during a prompt request.
+    /// These take priority over persistent senders when both are registered.
     sessions: RefCell<HashMap<acp::SessionId, mpsc::Sender<acp::SessionUpdate>>>,
+    /// Persistent session senders - remain active between prompts.
+    /// Used to receive inter-turn notifications (e.g., background task updates).
+    /// These are registered once when the backend starts and unregistered on shutdown.
+    persistent_sessions: RefCell<HashMap<acp::SessionId, mpsc::Sender<acp::SessionUpdate>>>,
     /// Working directory for approval events
     cwd: PathBuf,
     /// Channel to send approval requests to the UI layer
@@ -878,17 +954,46 @@ impl ClientDelegate {
     fn new(cwd: PathBuf, approval_tx: mpsc::Sender<ApprovalRequest>) -> Self {
         Self {
             sessions: RefCell::new(HashMap::new()),
+            persistent_sessions: RefCell::new(HashMap::new()),
             cwd,
             approval_tx,
         }
     }
 
+    /// Register a per-prompt session sender.
+    ///
+    /// This sender is active during the prompt and takes priority over the
+    /// persistent sender for the same session. Called at the start of each prompt.
     fn register_session(&self, session_id: acp::SessionId, tx: mpsc::Sender<acp::SessionUpdate>) {
         self.sessions.borrow_mut().insert(session_id, tx);
     }
 
+    /// Unregister a per-prompt session sender.
+    ///
+    /// Called after prompt completes (after drain yields). After this, notifications
+    /// fall back to the persistent sender if one is registered.
     fn unregister_session(&self, session_id: &acp::SessionId) {
         self.sessions.borrow_mut().remove(session_id);
+    }
+
+    /// Register a persistent session sender for inter-turn notifications.
+    ///
+    /// This sender remains active between prompts to receive background task
+    /// updates and other inter-turn notifications. Should be called once when
+    /// the ACP backend starts.
+    fn register_persistent_session(
+        &self,
+        session_id: acp::SessionId,
+        tx: mpsc::Sender<acp::SessionUpdate>,
+    ) {
+        self.persistent_sessions.borrow_mut().insert(session_id, tx);
+    }
+
+    /// Unregister a persistent session sender.
+    ///
+    /// Called on backend shutdown or when switching to a new session (compact).
+    fn unregister_persistent_session(&self, session_id: &acp::SessionId) {
+        self.persistent_sessions.borrow_mut().remove(session_id);
     }
 }
 
@@ -1092,27 +1197,46 @@ impl acp::Client for ClientDelegate {
         &self,
         notification: acp::SessionNotification,
     ) -> acp::Result<()> {
+        // Priority order:
+        // 1. Per-prompt session sender (if active during a prompt)
+        // 2. Persistent session sender (for inter-turn notifications)
+        // 3. Drop with debug log (no listeners registered)
+
         let sessions = self.sessions.borrow();
         if let Some(tx) = sessions.get(&notification.session_id) {
-            // Non-blocking send - if channel is full or closed, we log and drop the update
+            // Per-prompt sender is active - use it (normal during-prompt path)
             if let Err(e) = tx.try_send(notification.update) {
                 debug!(
                     target: "acp_message_draining",
                     session_id = %notification.session_id,
                     error = %e,
-                    "Session notification dropped (channel full or closed)"
+                    "Session notification dropped (prompt channel full or closed)"
                 );
             }
-        } else {
-            // This can happen if a notification arrives after prompt_future resolves
-            // but before we've yielded enough times for io_task to drain the buffer.
-            // With DRAIN_YIELD_COUNT yields, this should be rare in practice.
-            debug!(
-                target: "acp_message_draining",
-                session_id = %notification.session_id,
-                "Notification for unregistered session (late arrival)"
-            );
+            return Ok(());
         }
+        drop(sessions); // Release borrow before checking persistent
+
+        // No per-prompt sender - try persistent sender (inter-turn path)
+        let persistent_sessions = self.persistent_sessions.borrow();
+        if let Some(tx) = persistent_sessions.get(&notification.session_id) {
+            if let Err(e) = tx.try_send(notification.update) {
+                debug!(
+                    target: "acp_message_draining",
+                    session_id = %notification.session_id,
+                    error = %e,
+                    "Session notification dropped (persistent channel full or closed)"
+                );
+            }
+            return Ok(());
+        }
+
+        // No listeners at all - this can happen during startup or after shutdown
+        debug!(
+            target: "acp_message_draining",
+            session_id = %notification.session_id,
+            "Notification for unregistered session (no listeners)"
+        );
         Ok(())
     }
 
@@ -1341,5 +1465,192 @@ mod tests {
         }
 
         delegate.unregister_session(&session_id);
+    }
+
+    // ============================================================================
+    // Tests for dual-sender ClientDelegate dispatch (background task desync fix)
+    // ============================================================================
+
+    /// Test that notifications for an unregistered session are forwarded to the
+    /// persistent sender when one is registered.
+    ///
+    /// This is the core of the background task desync fix: inter-turn notifications
+    /// should go to a persistent listener rather than being dropped.
+    #[tokio::test]
+    async fn test_inter_turn_notifications_forwarded_to_persistent_sender() {
+        use acp::Client;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let (approval_tx, _approval_rx) = mpsc::channel(16);
+        let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+
+        // Register a persistent sender for the session
+        let session_id = acp::SessionId::from("test-session-persistent".to_string());
+        let (persistent_tx, mut persistent_rx) = mpsc::channel(32);
+        delegate.register_persistent_session(session_id.clone(), persistent_tx);
+
+        // Send a notification when NO prompt-specific session is registered
+        // (simulating inter-turn notification)
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Background task completed")),
+        ));
+        let notification = acp::SessionNotification::new(session_id.clone(), update.clone());
+
+        delegate
+            .session_notification(notification)
+            .await
+            .expect("session_notification should succeed");
+
+        // The notification should arrive on the persistent channel
+        let received = persistent_rx
+            .try_recv()
+            .expect("Should have received notification on persistent channel");
+
+        match received {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                if let acp::ContentBlock::Text(text) = chunk.content {
+                    assert_eq!(text.text, "Background task completed");
+                } else {
+                    panic!("Expected Text content block");
+                }
+            }
+            other => panic!("Expected AgentMessageChunk, got: {other:?}"),
+        }
+
+        delegate.unregister_persistent_session(&session_id);
+    }
+
+    /// Test that per-prompt sender takes priority over persistent sender during active prompts.
+    ///
+    /// When both persistent and per-prompt senders are registered, notifications should
+    /// be sent to the per-prompt sender (which feeds the main event translation loop).
+    #[tokio::test]
+    async fn test_prompt_sender_takes_priority_over_persistent() {
+        use acp::Client;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let (approval_tx, _approval_rx) = mpsc::channel(16);
+        let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+
+        let session_id = acp::SessionId::from("test-session-priority".to_string());
+
+        // Register both persistent and per-prompt senders
+        let (persistent_tx, mut persistent_rx) = mpsc::channel(32);
+        let (prompt_tx, mut prompt_rx) = mpsc::channel(32);
+
+        delegate.register_persistent_session(session_id.clone(), persistent_tx);
+        delegate.register_session(session_id.clone(), prompt_tx);
+
+        // Send a notification while both are registered (simulating during-prompt)
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Hello from agent")),
+        ));
+        let notification = acp::SessionNotification::new(session_id.clone(), update);
+
+        delegate
+            .session_notification(notification)
+            .await
+            .expect("session_notification should succeed");
+
+        // The notification should arrive on the per-prompt channel, NOT the persistent channel
+        let received = prompt_rx
+            .try_recv()
+            .expect("Should have received notification on prompt channel");
+
+        match received {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                if let acp::ContentBlock::Text(text) = chunk.content {
+                    assert_eq!(text.text, "Hello from agent");
+                } else {
+                    panic!("Expected Text content block");
+                }
+            }
+            other => panic!("Expected AgentMessageChunk, got: {other:?}"),
+        }
+
+        // Persistent channel should be empty
+        assert!(
+            persistent_rx.try_recv().is_err(),
+            "Persistent channel should not receive notifications when prompt sender is active"
+        );
+
+        delegate.unregister_session(&session_id);
+        delegate.unregister_persistent_session(&session_id);
+    }
+
+    /// Test that notifications fall back to persistent sender after prompt ends.
+    ///
+    /// When unregister_session is called (prompt ends), subsequent notifications
+    /// should route to the persistent sender.
+    #[tokio::test]
+    async fn test_notifications_fallback_to_persistent_after_prompt_ends() {
+        use acp::Client;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let (approval_tx, _approval_rx) = mpsc::channel(16);
+        let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+
+        let session_id = acp::SessionId::from("test-session-fallback".to_string());
+
+        // Register both senders
+        let (persistent_tx, mut persistent_rx) = mpsc::channel(32);
+        let (prompt_tx, mut prompt_rx) = mpsc::channel(32);
+
+        delegate.register_persistent_session(session_id.clone(), persistent_tx);
+        delegate.register_session(session_id.clone(), prompt_tx);
+
+        // First notification during prompt - should go to prompt sender
+        let update1 = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("During prompt")),
+        ));
+        delegate
+            .session_notification(acp::SessionNotification::new(session_id.clone(), update1))
+            .await
+            .expect("should succeed");
+
+        assert!(
+            prompt_rx.try_recv().is_ok(),
+            "Should receive on prompt channel during prompt"
+        );
+        assert!(
+            persistent_rx.try_recv().is_err(),
+            "Persistent should be empty during prompt"
+        );
+
+        // End the prompt (unregister per-prompt sender)
+        delegate.unregister_session(&session_id);
+
+        // Second notification after prompt ends - should go to persistent sender
+        let update2 = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("After prompt ends")),
+        ));
+        delegate
+            .session_notification(acp::SessionNotification::new(session_id.clone(), update2))
+            .await
+            .expect("should succeed");
+
+        // Now persistent should receive it
+        let received = persistent_rx
+            .try_recv()
+            .expect("Should have received notification on persistent channel after prompt ends");
+
+        match received {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                if let acp::ContentBlock::Text(text) = chunk.content {
+                    assert_eq!(text.text, "After prompt ends");
+                } else {
+                    panic!("Expected Text content block");
+                }
+            }
+            other => panic!("Expected AgentMessageChunk, got: {other:?}"),
+        }
+
+        // Prompt channel should be empty (it was unregistered)
+        assert!(
+            prompt_rx.try_recv().is_err(),
+            "Prompt channel should not receive after unregister"
+        );
+
+        delegate.unregister_persistent_session(&session_id);
     }
 }

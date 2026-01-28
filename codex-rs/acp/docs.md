@@ -118,6 +118,47 @@ Thread-safe wrapper pattern for `!Send` ACP futures:
 └─────────────────────────┘                     └─────────────────────────┘
 ```
 
+**Dual-Sender Session Notification Architecture:**
+
+The `ClientDelegate` uses a dual-sender pattern to ensure notifications are never lost between prompts:
+
+```
+                                  ┌────────────────────────────────┐
+                                  │       ClientDelegate           │
+                                  │                                │
+    Agent Notification ──────────►│  session_notification()        │
+                                  │         │                      │
+                                  │         ▼                      │
+                                  │  ┌──────────────────┐          │
+                                  │  │ Per-prompt sender │◄── Priority 1 (during prompt)
+                                  │  │ (sessions map)   │          │
+                                  │  └──────────────────┘          │
+                                  │         │                      │
+                                  │         ▼ (if not found)       │
+                                  │  ┌──────────────────┐          │
+                                  │  │ Persistent sender│◄── Priority 2 (inter-turn)
+                                  │  │ (persistent_     │          │
+                                  │  │  sessions map)   │          │
+                                  │  └──────────────────┘          │
+                                  └────────────────────────────────┘
+```
+
+| Sender Type | Lifetime | Purpose |
+|-------------|----------|---------|
+| Per-prompt | Created/destroyed per `prompt()` call | Feeds the main update translation loop for turn-specific events |
+| Persistent | Lives for entire backend lifetime | Catches inter-turn notifications (background task updates) that arrive after a prompt completes |
+
+The persistent sender's receiver is held by `run_persistent_listener()` in `backend.rs`, which wraps inter-turn notifications in `TaskStarted`/`TaskComplete` events so the TUI can track background work.
+
+**Session Registration Commands:**
+
+| Command | Purpose |
+|---------|---------|
+| `RegisterPersistentSession` | Register a persistent sender for a session (called once at backend startup) |
+| `UnregisterPersistentSession` | Remove a persistent sender (called during compact or shutdown) |
+
+When `/compact` creates a new session, the backend unregisters the old session's persistent sender and re-registers the same sender for the new session ID.
+
 **Subprocess Lifecycle Management:**
 
 Multi-layer cleanup strategy for robust process termination:
@@ -192,7 +233,9 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 1. `/compact` sends summarization prompt to agent
 2. Agent's summary response is captured
 3. Summary is prepended to next user message
-4. Emits `ContextCompacted` event to TUI
+4. A new session is created with `create_session()`
+5. The persistent sender is re-registered for the new session ID
+6. Emits `ContextCompacted` event to TUI
 
 **ACP Error Categorization:**
 
@@ -223,5 +266,16 @@ The `acp_event_flow` target logs streaming deltas, tool calls, and dispatch loop
 **LocalSet Cooperative Scheduling:**
 
 The `io_task` and `run_command_loop` tasks run cooperatively in a LocalSet. A race condition exists when the agent sends notifications followed immediately by a PromptResponse. The fix adds a yield loop (`yield_now()` × 10) before `unregister_session()` to allow pending notifications to drain.
+
+**Inter-Turn Notification Handling:**
+
+Background task updates (e.g., a background task completing while the user is composing their next prompt) are handled by the persistent listener task (`run_persistent_listener()` in `backend.rs`). The listener:
+
+1. Batches updates that arrive close together using an `in_background_update` flag
+2. Wraps the first update in a `TaskStarted` event to signal background activity
+3. Translates each `SessionUpdate` to TUI events via `translate_session_update_to_events()`
+4. Emits `TaskComplete` when the channel drains (checked via `is_empty()`)
+
+All events from the persistent listener use `"background"` as the event ID to distinguish them from normal turn events.
 
 Created and maintained by Nori.

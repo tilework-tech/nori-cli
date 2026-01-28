@@ -190,6 +190,11 @@ pub struct AcpBackend {
     pending_compact_summary: Arc<Mutex<Option<String>>>,
     /// How long after idle before sending a notification
     notify_after_idle: crate::config::NotifyAfterIdle,
+    /// Persistent sender for inter-turn notifications.
+    /// Stored here so it can be re-registered when compact creates a new session.
+    /// The same sender is used for the lifetime of the backend - the receiver
+    /// is held by the persistent listener task.
+    persistent_tx: mpsc::Sender<acp::SessionUpdate>,
 }
 
 impl AcpBackend {
@@ -268,6 +273,19 @@ impl AcpBackend {
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
 
+        // Create persistent listener channel for inter-turn notifications.
+        // This channel receives background task updates that arrive after a prompt
+        // completes but before the next one starts. Without this, these notifications
+        // would be dropped, causing the conversation to desync.
+        let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(32);
+
+        // Register the persistent listener with the connection.
+        // We clone the sender so we can re-register it when compact creates a new session.
+        // Note: This must happen before wrapping in Arc.
+        connection
+            .register_persistent_session(session_id.clone(), persistent_tx.clone())
+            .await?;
+
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let use_native_notifications =
@@ -303,6 +321,7 @@ impl AcpBackend {
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
             notify_after_idle: config.notify_after_idle,
+            persistent_tx,
         };
 
         // Send synthetic SessionConfigured event
@@ -338,7 +357,99 @@ impl AcpBackend {
             approval_policy_rx,
         ));
 
+        // Spawn persistent listener task for inter-turn notifications.
+        // This handles notifications that arrive between prompts (e.g., background task
+        // completion updates). These notifications are translated to TUI events so the
+        // user sees them even when no prompt is active.
+        tokio::spawn(Self::run_persistent_listener(persistent_rx, event_tx));
+
         Ok(backend)
+    }
+
+    /// Background task to handle inter-turn notifications from the ACP connection.
+    ///
+    /// This listens on the persistent channel and translates incoming notifications
+    /// to TUI events. Unlike the per-prompt update handler, this runs continuously
+    /// between prompts to catch background task updates.
+    ///
+    /// Inter-turn notifications are wrapped in TaskStarted/TaskComplete events
+    /// with a "Background task update" status message.
+    async fn run_persistent_listener(
+        mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
+        event_tx: mpsc::Sender<Event>,
+    ) {
+        // Track state for batching updates that arrive close together
+        let mut in_background_update = false;
+        let mut pending_patch_changes: std::collections::HashMap<
+            String,
+            std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
+        > = std::collections::HashMap::new();
+
+        while let Some(update) = persistent_rx.recv().await {
+            debug!(
+                target: "acp_event_flow",
+                "Persistent listener received inter-turn notification"
+            );
+
+            // If this is the first update in a sequence, emit TaskStarted
+            if !in_background_update {
+                in_background_update = true;
+
+                // Send TaskStarted to indicate background activity
+                let _ = event_tx
+                    .send(Event {
+                        id: "background".to_string(),
+                        msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
+                            model_context_window: None,
+                        }),
+                    })
+                    .await;
+
+                // Send a status message to show "Background task update" in the TUI
+                let _ = event_tx
+                    .send(Event {
+                        id: "background".to_string(),
+                        msg: EventMsg::AgentMessageDelta(
+                            codex_protocol::protocol::AgentMessageDeltaEvent {
+                                delta: String::new(), // Empty delta - status shown elsewhere
+                            },
+                        ),
+                    })
+                    .await;
+            }
+
+            // Translate the notification to TUI events
+            let events = translate_session_update_to_events(&update, &mut pending_patch_changes);
+            for event_msg in events {
+                let _ = event_tx
+                    .send(Event {
+                        id: "background".to_string(),
+                        msg: event_msg,
+                    })
+                    .await;
+            }
+
+            // Check if channel is empty (no more pending updates).
+            // If so, send TaskComplete to end the background update sequence.
+            // We use try_recv to check without blocking.
+            if persistent_rx.is_empty() {
+                in_background_update = false;
+
+                let _ = event_tx
+                    .send(Event {
+                        id: "background".to_string(),
+                        msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+                            last_agent_message: None,
+                        }),
+                    })
+                    .await;
+            }
+        }
+
+        debug!(
+            target: "acp_event_flow",
+            "Persistent listener task ended (channel closed)"
+        );
     }
 
     /// Submit an operation to the ACP backend.
@@ -738,7 +849,7 @@ impl AcpBackend {
 
         // Clone what we need for capturing the response
         let event_tx = self.event_tx.clone();
-        let session_id = self.session_id.read().await.clone();
+        let old_session_id = self.session_id.read().await.clone();
         let session_id_lock = Arc::clone(&self.session_id);
         let connection = Arc::clone(&self.connection);
         let cwd = self.cwd.clone();
@@ -747,6 +858,7 @@ impl AcpBackend {
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
         let notify_after_idle = self.notify_after_idle;
+        let persistent_tx = self.persistent_tx.clone();
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -805,8 +917,10 @@ impl AcpBackend {
             });
 
             // Send the summarization prompt
-            let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt, update_tx).await;
+            let session_id_for_timer = old_session_id.to_string();
+            let result = connection
+                .prompt(old_session_id.clone(), prompt, update_tx)
+                .await;
 
             // Wait for all updates to be processed
             let _ = update_handler.await;
@@ -832,6 +946,24 @@ impl AcpBackend {
                 match connection.create_session(&cwd).await {
                     Ok(new_session_id) => {
                         debug!("Created new session after compact: {:?}", new_session_id);
+
+                        // Update persistent session registration to the new session.
+                        // This ensures inter-turn notifications after compact go to the
+                        // same persistent listener. We unregister the old session and
+                        // register the new one with the same sender.
+                        if let Err(e) = connection
+                            .unregister_persistent_session(&old_session_id)
+                            .await
+                        {
+                            warn!("Failed to unregister old persistent session: {e}");
+                        }
+                        if let Err(e) = connection
+                            .register_persistent_session(new_session_id.clone(), persistent_tx)
+                            .await
+                        {
+                            warn!("Failed to register new persistent session: {e}");
+                        }
+
                         *session_id_lock.write().await = new_session_id;
                     }
                     Err(e) => {
@@ -3061,6 +3193,84 @@ mod tests {
         assert!(
             message.contains("Rate limit") || message.contains("quota"),
             "QuotaExceeded message should mention rate limit/quota. Got: {message}"
+        );
+    }
+
+    /// Test that the persistent listener correctly translates inter-turn notifications to TUI events.
+    ///
+    /// This tests the core fix for the background task desync bug: notifications sent through the
+    /// persistent channel should be wrapped in TaskStarted/TaskComplete events and translated
+    /// to proper TUI events.
+    #[tokio::test]
+    async fn test_persistent_listener_translates_inter_turn_notifications() {
+        use std::time::Duration;
+
+        // Create channels to simulate the persistent listener
+        let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(32);
+        let (event_tx, mut event_rx) = mpsc::channel::<Event>(64);
+
+        // Spawn the persistent listener
+        let listener_handle =
+            tokio::spawn(AcpBackend::run_persistent_listener(persistent_rx, event_tx));
+
+        // Send an inter-turn notification (simulating a background task update)
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Background task completed")),
+        ));
+        persistent_tx
+            .send(update)
+            .await
+            .expect("Failed to send update");
+
+        // Drop the sender to close the channel and let the listener finish
+        drop(persistent_tx);
+
+        // Wait for the listener to finish
+        let _ = tokio::time::timeout(Duration::from_secs(2), listener_handle).await;
+
+        // Collect all events
+        let mut events = Vec::new();
+        while let Ok(Some(event)) =
+            tokio::time::timeout(Duration::from_millis(100), event_rx.recv()).await
+        {
+            events.push(event);
+        }
+
+        // Verify the expected event sequence:
+        // 1. TaskStarted (to indicate background activity)
+        // 2. AgentMessageDelta (empty, for status)
+        // 3. AgentMessageDelta (with the actual content)
+        // 4. TaskComplete (to end the background update)
+        assert!(
+            events.len() >= 4,
+            "Expected at least 4 events, got {}. Events: {:?}",
+            events.len(),
+            events
+                .iter()
+                .map(|e| get_event_msg_type(&e.msg))
+                .collect::<Vec<_>>()
+        );
+
+        // Check event types
+        assert!(
+            matches!(events[0].msg, EventMsg::TaskStarted(_)),
+            "First event should be TaskStarted, got {:?}",
+            get_event_msg_type(&events[0].msg)
+        );
+
+        // All events from the persistent listener should have "background" as the id
+        for event in &events {
+            assert_eq!(
+                event.id, "background",
+                "Persistent listener events should have 'background' as id"
+            );
+        }
+
+        // Last event should be TaskComplete
+        assert!(
+            matches!(events.last().unwrap().msg, EventMsg::TaskComplete(_)),
+            "Last event should be TaskComplete, got {:?}",
+            get_event_msg_type(&events.last().unwrap().msg)
         );
     }
 }
