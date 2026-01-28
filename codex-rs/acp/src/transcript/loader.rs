@@ -45,8 +45,8 @@ pub struct SessionInfo {
     pub started_at: String,
     /// Working directory for the session
     pub cwd: PathBuf,
-    /// Model used for the session
-    pub model: Option<String>,
+    /// ACP agent used for the session (e.g., "claude-code", "codex", "gemini")
+    pub agent: Option<String>,
     /// Number of entries in the transcript (approximate)
     pub entry_count: usize,
 }
@@ -248,7 +248,7 @@ async fn load_session_info(path: &Path, project_id: &str) -> io::Result<SessionI
         project_id: project_id.to_string(),
         started_at: meta.started_at,
         cwd: meta.cwd,
-        model: meta.model,
+        agent: meta.agent,
         entry_count,
     })
 }
@@ -461,7 +461,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(meta.session_id, session_id);
-        assert_eq!(meta.model, Some("claude".to_string()));
+        assert_eq!(meta.agent, Some("claude".to_string()));
         assert_eq!(meta.cli_version, "0.1.0");
     }
 

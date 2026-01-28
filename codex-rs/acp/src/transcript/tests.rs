@@ -84,7 +84,7 @@ mod types_tests {
             content: vec![ContentBlock::Text {
                 text: "The src directory contains main.rs and lib.rs.".to_string(),
             }],
-            model: Some("claude-sonnet-4-20250514".to_string()),
+            agent: Some("claude-code".to_string()),
         });
 
         let line = TranscriptLine {
@@ -103,8 +103,7 @@ mod types_tests {
             parsed["content"][0]["text"],
             "The src directory contains main.rs and lib.rs."
         );
-        // Field is serialized as "agent" (not "model") per schema design
-        assert_eq!(parsed["agent"], "claude-sonnet-4-20250514");
+        assert_eq!(parsed["agent"], "claude-code");
     }
 
     #[test]
@@ -239,7 +238,7 @@ mod types_tests {
             project_id: "a1b2c3d4e5f67890".to_string(),
             started_at: "2025-01-26T10:30:00.000Z".to_string(),
             cwd: PathBuf::from("/home/user/projects/nori-cli"),
-            model: Some("claude-sonnet-4-20250514".to_string()),
+            agent: Some("claude-code".to_string()),
             cli_version: "0.1.0".to_string(),
             git: Some(GitInfo {
                 branch: Some("main".to_string()),
@@ -271,7 +270,7 @@ mod types_tests {
             project_id: "test-project".to_string(),
             started_at: "2025-01-26T10:30:00.000Z".to_string(),
             cwd: PathBuf::from("/tmp/no-git"),
-            model: None,
+            agent: None,
             cli_version: "0.1.0".to_string(),
             git: None,
         });
@@ -285,9 +284,9 @@ mod types_tests {
         let json = serde_json::to_string(&line).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        // git and model should not be serialized when None
+        // git and agent should not be serialized when None
         assert!(parsed.get("git").is_none());
-        assert!(parsed.get("model").is_none());
+        assert!(parsed.get("agent").is_none());
     }
 
     #[test]

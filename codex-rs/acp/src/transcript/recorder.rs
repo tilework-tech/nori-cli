@@ -61,7 +61,7 @@ impl TranscriptRecorder {
     pub async fn new(
         nori_home: &Path,
         cwd: &Path,
-        model: Option<String>,
+        agent: Option<String>,
         cli_version: &str,
     ) -> io::Result<Self> {
         // Compute project ID from cwd
@@ -111,7 +111,7 @@ impl TranscriptRecorder {
             project_id: project_id_info.id.clone(),
             started_at: now_iso8601(),
             cwd: cwd.to_path_buf(),
-            model,
+            agent,
             cli_version: cli_version.to_string(),
             git: git_info,
         };
@@ -179,12 +179,12 @@ impl TranscriptRecorder {
         &self,
         id: &str,
         content: Vec<ContentBlock>,
-        model: Option<String>,
+        agent: Option<String>,
     ) -> io::Result<()> {
         let entry = TranscriptEntry::Assistant(AssistantEntry {
             id: id.to_string(),
             content,
-            model,
+            agent,
         });
         self.send_entry(entry).await
     }
@@ -400,7 +400,7 @@ mod tests {
         let cwd = temp_dir.path();
 
         let recorder =
-            TranscriptRecorder::new(nori_home, cwd, Some("test-model".to_string()), "0.1.0")
+            TranscriptRecorder::new(nori_home, cwd, Some("claude-code".to_string()), "0.1.0")
                 .await
                 .unwrap();
 
@@ -426,7 +426,7 @@ mod tests {
         let cwd = temp_dir.path();
 
         let recorder =
-            TranscriptRecorder::new(nori_home, cwd, Some("test-model".to_string()), "0.1.0")
+            TranscriptRecorder::new(nori_home, cwd, Some("claude-code".to_string()), "0.1.0")
                 .await
                 .unwrap();
 
@@ -449,7 +449,7 @@ mod tests {
                 assert_eq!(meta.session_id, recorder.session_id());
                 assert_eq!(meta.project_id, recorder.project_id());
                 assert_eq!(meta.cli_version, "0.1.0");
-                assert_eq!(meta.model, Some("test-model".to_string()));
+                assert_eq!(meta.agent, Some("claude-code".to_string()));
             }
             _ => panic!("Expected SessionMeta entry"),
         }
@@ -555,7 +555,7 @@ mod tests {
                 vec![ContentBlock::Text {
                     text: "Here is my response.".to_string(),
                 }],
-                Some("claude-sonnet".to_string()),
+                Some("claude-code".to_string()),
             )
             .await
             .unwrap();
@@ -575,7 +575,7 @@ mod tests {
             TranscriptEntry::Assistant(assistant) => {
                 assert_eq!(assistant.id, "msg-002");
                 assert_eq!(assistant.content.len(), 1);
-                assert_eq!(assistant.model, Some("claude-sonnet".to_string()));
+                assert_eq!(assistant.agent, Some("claude-code".to_string()));
             }
             _ => panic!("Expected Assistant entry"),
         }
@@ -588,7 +588,7 @@ mod tests {
         let cwd = temp_dir.path();
 
         let recorder =
-            TranscriptRecorder::new(nori_home, cwd, Some("claude-sonnet".to_string()), "0.1.0")
+            TranscriptRecorder::new(nori_home, cwd, Some("claude-code".to_string()), "0.1.0")
                 .await
                 .unwrap();
 
@@ -615,7 +615,7 @@ mod tests {
                 vec![ContentBlock::Text {
                     text: "The src directory contains main.rs and lib.rs.".to_string(),
                 }],
-                Some("claude-sonnet".to_string()),
+                Some("claude-code".to_string()),
             )
             .await
             .unwrap();
