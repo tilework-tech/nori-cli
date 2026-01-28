@@ -54,7 +54,7 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `is_worktree` | Whether CWD is a git worktree |
 | `transcript_location` | Discovered transcript path and token usage when running within an agent environment (via `codex_acp::discover_transcript_for_agent()`) |
 
-The `transcript_location` field includes token usage data (`TranscriptLocation.token_usage`) which is displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
+The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
 
 **Slash Commands:**
 
@@ -118,15 +118,19 @@ The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. 
 
 The hotkey picker (`@/codex-rs/tui/src/nori/hotkey_picker.rs`) implements `BottomPaneView` directly (not `ListSelectionView`) because rebinding requires raw key capture. It uses a videogame-style rebind flow: select an action, press Enter, press the desired key. Conflicts are resolved by swapping bindings. The `r` key resets the selected action to its default.
 
+
 **Status Line Footer:**
 
 The footer displays:
 - Current git branch (refreshes on transcript activity)
+- Git diff statistics (lines added/removed)
+- Context window usage (e.g., "Context: 34K (27%)") when running within an agent environment
 - Approval mode label (e.g., "Agent", "Full Access", "Read Only")
 - Model name
-- Git diff statistics (lines added/removed)
-- Token usage when running within an agent environment (formatted with SI suffix, e.g., "123K tokens")
+- Token usage breakdown (e.g., "Tokens: 45K in / 78K out (32K cached)") when running within an agent environment
 - Key bindings (Ctrl+C, Esc, Enter)
+
+Token data flows from `TranscriptLocation.token_breakdown` (provided by `codex_acp::discover_transcript_for_agent()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
 
 **External Editor Integration (`editor.rs`):**
 

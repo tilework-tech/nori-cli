@@ -438,8 +438,20 @@ pub fn parse_transcript_total_tokens(path: &Path, agent: AgentKind) -> Option<i6
 
 /// Parse tokens from a Claude Code transcript file.
 ///
-/// Claude sessions are JSONL files with per-message usage objects.
-/// We sum input_tokens, output_tokens, and cache_read_input_tokens from all messages.
+/// Claude sessions are JSONL files with per-message usage objects. Claude Code logs
+/// multiple JSONL entries per API request (one per streaming delta), each containing
+/// the same usage data. We deduplicate by `requestId` to avoid overcounting.
+///
+/// The usage object contains:
+/// - `input_tokens`: Non-cached input tokens (typically small, 1-10)
+/// - `cache_creation_input_tokens`: Tokens that were sent and cached for future use
+/// - `cache_read_input_tokens`: Tokens read from cache (discounted/free)
+/// - `output_tokens`: Output tokens generated
+///
+/// We calculate:
+/// - `input_tokens` = `input_tokens` + `cache_creation_input_tokens` (total tokens sent)
+/// - `cached_tokens` = `cache_read_input_tokens` (tokens read from cache)
+///
 /// Malformed lines are skipped to handle partially written transcripts.
 fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let text = fs::read_to_string(path).ok()?;
@@ -447,6 +459,7 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let mut total_input = 0i64;
     let mut total_output = 0i64;
     let mut total_cached = 0i64;
+    let mut seen_request_ids = std::collections::HashSet::new();
 
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -458,13 +471,30 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
             continue;
         };
 
+        // Deduplicate by requestId - Claude Code logs multiple entries per request (streaming)
+        // If an entry has a requestId we've seen before, skip it to avoid double-counting
+        if let Some(request_id) = v.get("requestId").and_then(serde_json::Value::as_str)
+            && !seen_request_ids.insert(request_id.to_string())
+        {
+            continue; // Already processed this request
+        }
+
         // Look for messages with usage field
         if let Some(message) = v.get("message")
             && let Some(usage) = message.get("usage")
         {
+            // input_tokens is only the non-cached portion
             total_input = total_input.saturating_add(
                 usage
                     .get("input_tokens")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0),
+            );
+            // cache_creation_input_tokens are tokens that were sent and cached for future use
+            // These count as input tokens (they were processed by the model)
+            total_input = total_input.saturating_add(
+                usage
+                    .get("cache_creation_input_tokens")
                     .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0),
             );
@@ -474,6 +504,7 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
                     .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0),
             );
+            // cache_read_input_tokens are tokens read from cache (discounted/free)
             total_cached = total_cached.saturating_add(
                 usage
                     .get("cache_read_input_tokens")
@@ -774,5 +805,95 @@ mod tests {
         }
         let tokens = parse_transcript_total_tokens(&gemini_file, AgentKind::Gemini);
         assert_eq!(tokens, Some(300));
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_deduplicates_by_request_id() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Simulate streaming: same requestId appears multiple times (this is how Claude Code works)
+            // First request: 3 entries with same usage (streaming deltas)
+            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            // Second request: 2 entries with same usage (streaming deltas)
+            writeln!(f, r#"{{"requestId": "req_002", "message": {{"usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"requestId": "req_002", "message": {{"usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // Should deduplicate: only count each requestId once
+        // input = (3 + 1000) + (5 + 500) = 1508 (input_tokens + cache_creation per unique request)
+        // output = 50 + 25 = 75
+        // cached = 0 + 1000 = 1000
+        assert_eq!(usage.input_tokens, 1508);
+        assert_eq!(usage.output_tokens, 75);
+        assert_eq!(usage.cached_tokens, 1000);
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_includes_cache_creation_in_input() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Single request with cache_creation_input_tokens
+            // This tests that cache_creation is added to input total
+            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 10, "cache_creation_input_tokens": 5000, "cache_read_input_tokens": 2000, "output_tokens": 100}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // input = 10 + 5000 = 5010 (input_tokens + cache_creation_input_tokens)
+        // output = 100
+        // cached = 2000 (cache_read_input_tokens)
+        assert_eq!(usage.input_tokens, 5010);
+        assert_eq!(usage.output_tokens, 100);
+        assert_eq!(usage.cached_tokens, 2000);
+        // Total context = input + output = 5110
+        assert_eq!(usage.total(), 5110);
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_handles_entries_without_request_id() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Mix of entries with and without requestId
+            // Entries without requestId should all be counted (backwards compatibility)
+            writeln!(
+                f,
+                r#"{{"message": {{"usage": {{"input_tokens": 100, "output_tokens": 50}}}}}}"#
+            )
+            .unwrap();
+            writeln!(
+                f,
+                r#"{{"message": {{"usage": {{"input_tokens": 200, "output_tokens": 75}}}}}}"#
+            )
+            .unwrap();
+            // Entry with requestId
+            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 10, "cache_creation_input_tokens": 500, "output_tokens": 25}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // Entries without requestId: 100 + 200 = 300 input, 50 + 75 = 125 output
+        // Entry with requestId: 10 + 500 = 510 input, 25 output
+        // Total: 810 input, 150 output
+        assert_eq!(usage.input_tokens, 810);
+        assert_eq!(usage.output_tokens, 150);
     }
 }

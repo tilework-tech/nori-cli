@@ -126,15 +126,42 @@ All discovery functions return the most recently modified matching file.
 
 **Token Usage Parsing** (`transcript_discovery.rs`):
 
-The `parse_transcript_total_tokens()` function extracts total token counts from transcript files. Each agent uses a different format:
+The `parse_transcript_tokens()` function extracts token usage breakdown from transcript files. Returns a `TranscriptTokenUsage` struct:
 
-| Agent | Extraction Method |
-|-------|-------------------|
-| Claude Code | Sum `input_tokens + output_tokens` from `message.usage` in each JSONL line |
-| Codex | Take `total_tokens` from the last `token_count` event's `total_token_usage` object |
-| Gemini | Sum `input + output + thoughts` from each message's `tokenCount` in the JSON |
+```rust
+pub struct TranscriptTokenUsage {
+    pub input_tokens: i64,    // Total input tokens
+    pub output_tokens: i64,   // Total output tokens
+    pub cached_tokens: i64,   // Cached input tokens (subset of input_tokens)
+}
+```
 
-The `TranscriptLocation` struct returned by discovery functions includes a `token_usage: Option<i64>` field populated by this parsing. Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
+Each agent format requires different parsing:
+
+| Agent | Format | Token Fields |
+|-------|--------|--------------|
+| Claude Code | JSONL | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` in `message.usage` |
+| Codex | JSONL | `input_tokens`, `output_tokens`, `cached_input_tokens` from last `token_count` event |
+| Gemini | JSON | `input`, `output`, `thoughts`, `cached` from each message's `tokens` object |
+
+**Claude Code Streaming Deduplication:**
+
+Claude Code logs multiple JSONL entries per API request due to streaming (each streaming delta contains the same usage data). The parser deduplicates by tracking seen `requestId` values in a `HashSet<String>`. Entries without a `requestId` are still counted for backward compatibility with older transcript formats.
+
+**Claude Token Field Semantics:**
+
+| Field | Meaning | Counted As |
+|-------|---------|------------|
+| `input_tokens` | Non-cached input tokens sent | Added to `input_tokens` |
+| `cache_creation_input_tokens` | Tokens sent and cached for future use | Added to `input_tokens` |
+| `cache_read_input_tokens` | Tokens read from cache (discounted) | Reported as `cached_tokens` |
+| `output_tokens` | Output tokens generated | Added to `output_tokens` |
+
+The `TranscriptLocation` struct returned by discovery functions includes both:
+- `token_usage: Option<i64>` - Total tokens (input + output) for backward compatibility
+- `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for new features
+
+Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
 
 The data flow is:
 ```
@@ -144,18 +171,17 @@ SystemInfo::collect_fresh() (background thread)
 discover_transcript_for_agent(cwd, agent_kind)
     |
     v
-parse_transcript_total_tokens(path, agent_kind)
+parse_transcript_tokens(path, agent_kind)
     |
     v
-TranscriptLocation { ..., token_usage: Some(N) }
+TranscriptLocation { ..., token_usage, token_breakdown }
     |
     v
-FooterProps { token_usage: Some(N) }
+FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
     |
     v
-Footer renders "123K tokens" using format_si_suffix()
+Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
-
 **Connection Management** (`connection.rs`):
 
 Thread-safe wrapper pattern for `!Send` ACP futures:
