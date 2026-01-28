@@ -1423,11 +1423,11 @@ impl ChatComposer {
                 .as_ref()
                 .map(|s| s.is_worktree)
                 .unwrap_or(false),
-            transcript_session_id: self
+            token_usage: self
                 .system_info
                 .as_ref()
                 .and_then(|s| s.transcript_location.as_ref())
-                .map(|loc| loc.session_id.clone()),
+                .and_then(|loc| loc.token_usage),
         }
     }
 

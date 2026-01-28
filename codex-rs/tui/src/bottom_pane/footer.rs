@@ -2,6 +2,7 @@ use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
 use crate::ui_consts::FOOTER_INDENT_COLS;
+use codex_protocol::num_format::format_si_suffix;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -29,8 +30,8 @@ pub(crate) struct FooterProps {
     /// Whether the current directory is a git worktree (not the main repo).
     /// When true, the git branch indicator is shown in orange instead of yellow.
     pub(crate) is_worktree: bool,
-    /// Transcript session ID if running within an agent environment.
-    pub(crate) transcript_session_id: Option<String>,
+    /// Total token usage from the external agent transcript, if available.
+    pub(crate) token_usage: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -325,18 +326,12 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add transcript session ID if running within an agent environment
-    if let Some(session_id) = &props.transcript_session_id {
-        // Truncate long session IDs
-        let display_id = if session_id.len() > 12 {
-            format!("{}...", &session_id[..12])
-        } else {
-            session_id.clone()
-        };
-        segments.push(Line::from(vec![
-            Span::from("📜 ").dim(),
-            Span::from(display_id).dim(),
-        ]));
+    // Add token usage if available and non-zero
+    if let Some(tokens) = props.token_usage
+        && tokens > 0
+    {
+        let formatted = format_si_suffix(tokens);
+        segments.push(Line::from(Span::from(format!("{formatted} tokens"))));
     }
 
     segments
@@ -545,7 +540,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
 
@@ -565,7 +560,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
 
@@ -585,7 +580,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
 
@@ -605,7 +600,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
 
@@ -625,7 +620,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
 
@@ -645,7 +640,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
 
@@ -665,7 +660,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -688,7 +683,7 @@ mod tests {
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -711,7 +706,7 @@ mod tests {
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -734,7 +729,7 @@ mod tests {
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -757,7 +752,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -781,7 +776,7 @@ mod tests {
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: true,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -805,7 +800,7 @@ mod tests {
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -829,7 +824,7 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
             },
         );
     }
@@ -853,7 +848,79 @@ mod tests {
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
-                transcript_session_id: None,
+                token_usage: None,
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_token_usage() {
+        // Test token usage display in footer (replaces transcript session ID)
+        snapshot_footer(
+            "footer_with_token_usage",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                vertical_footer: false,
+                _context_window_percent: Some(72),
+                git_branch: Some("feature/test".to_string()),
+                approval_mode_label: None,
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+                is_worktree: false,
+                token_usage: Some(123456),
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_large_token_usage() {
+        // Test large token usage formats with SI suffix (e.g., 1.23M)
+        snapshot_footer(
+            "footer_with_large_token_usage",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                vertical_footer: false,
+                _context_window_percent: None,
+                git_branch: None,
+                approval_mode_label: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
+                is_worktree: false,
+                token_usage: Some(1_234_567),
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_zero_token_usage() {
+        // Test that zero tokens does not show the segment
+        snapshot_footer(
+            "footer_with_zero_token_usage",
+            FooterProps {
+                mode: FooterMode::ShortcutSummary,
+                esc_backtrack_hint: false,
+                use_shift_enter_hint: false,
+                is_task_running: false,
+                vertical_footer: false,
+                _context_window_percent: None,
+                git_branch: None,
+                approval_mode_label: None,
+                nori_profile: None,
+                nori_version: None,
+                git_lines_added: None,
+                git_lines_removed: None,
+                is_worktree: false,
+                token_usage: Some(0),
             },
         );
     }

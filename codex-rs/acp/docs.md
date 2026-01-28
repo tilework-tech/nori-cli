@@ -87,7 +87,7 @@ The `AcpBackendConfig` struct carries `os_notifications` so the backend can pass
 
 **Transcript Discovery** (`transcript_discovery.rs`):
 
-Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to enable session statistics display.
+Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to display token usage in the footer.
 
 Agent detection via environment variables:
 
@@ -106,6 +106,38 @@ Transcript file locations and matching strategy:
 | Gemini | `~/.gemini/tmp/<sha256-hash>/chats/<session>.json` | Hash is SHA256 of canonical working directory path |
 
 All discovery functions return the most recently modified matching file.
+
+**Token Usage Parsing** (`transcript_discovery.rs`):
+
+The `parse_transcript_total_tokens()` function extracts total token counts from transcript files. Each agent uses a different format:
+
+| Agent | Extraction Method |
+|-------|-------------------|
+| Claude Code | Sum `input_tokens + output_tokens` from `message.usage` in each JSONL line |
+| Codex | Take `total_tokens` from the last `token_count` event's `total_token_usage` object |
+| Gemini | Sum `input + output + thoughts` from each message's `tokenCount` in the JSON |
+
+The `TranscriptLocation` struct returned by discovery functions includes a `token_usage: Option<i64>` field populated by this parsing. Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
+
+The data flow is:
+```
+SystemInfo::collect_fresh() (background thread)
+    |
+    v
+discover_transcript_for_agent(cwd, agent_kind)
+    |
+    v
+parse_transcript_total_tokens(path, agent_kind)
+    |
+    v
+TranscriptLocation { ..., token_usage: Some(N) }
+    |
+    v
+FooterProps { token_usage: Some(N) }
+    |
+    v
+Footer renders "123K tokens" using format_si_suffix()
+```
 
 **Connection Management** (`connection.rs`):
 

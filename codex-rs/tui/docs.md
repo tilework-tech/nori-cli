@@ -52,9 +52,9 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `nori_profile` | Active Nori profile |
 | `git_lines_added` / `git_lines_removed` | Git diff statistics |
 | `is_worktree` | Whether CWD is a git worktree |
-| `transcript_location` | Discovered transcript path when running within an agent environment (via `codex_acp::discover_current_transcript()`) |
+| `transcript_location` | Discovered transcript path and token usage when running within an agent environment (via `codex_acp::discover_transcript_for_agent()`) |
 
-The `transcript_location` field enables future session statistics display (e.g., token usage) in the TUI footer when Nori is invoked from within an external agent like Claude Code, Codex, or Gemini.
+The `transcript_location` field includes token usage data (`TranscriptLocation.token_usage`) which is displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
 
 **Slash Commands:**
 
@@ -97,6 +97,8 @@ The footer displays:
 - Current git branch (refreshes on transcript activity)
 - Approval mode label (e.g., "Agent", "Full Access", "Read Only")
 - Model name
+- Git diff statistics (lines added/removed)
+- Token usage when running within an agent environment (formatted with SI suffix, e.g., "123K tokens")
 - Key bindings (Ctrl+C, Esc, Enter)
 
 **External Editor Integration (`editor.rs`):**

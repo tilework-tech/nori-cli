@@ -79,15 +79,12 @@ impl SystemInfo {
     }
 }
 
-/// Helper to discover transcript location with optional agent kind.
+/// Helper to discover transcript location for a specific agent kind.
 fn discover_transcript(
     dir: &std::path::Path,
     agent_kind: Option<AgentKind>,
 ) -> Option<TranscriptLocation> {
-    match agent_kind {
-        Some(agent) => codex_acp::discover_transcript_for_agent(dir, agent).ok(),
-        None => codex_acp::discover_current_transcript(dir).ok(),
-    }
+    agent_kind.and_then(|agent| codex_acp::discover_transcript_for_agent(dir, agent).ok())
 }
 
 fn get_nori_version() -> Option<String> {

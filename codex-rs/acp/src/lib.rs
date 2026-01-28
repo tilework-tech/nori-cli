@@ -51,9 +51,8 @@ pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
 pub use transcript_discovery::DiscoveryError;
 pub use transcript_discovery::TranscriptLocation;
-pub use transcript_discovery::detect_agent_kind;
-pub use transcript_discovery::discover_current_transcript;
 pub use transcript_discovery::discover_transcript_for_agent;
+pub use transcript_discovery::parse_transcript_total_tokens;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
 
