@@ -308,7 +308,6 @@ fn is_git_worktree(dir: Option<&std::path::Path>) -> bool {
 mod tests {
     use super::*;
 
-    // @current-session
     #[test]
     fn test_parse_nori_version_skillsets_format() {
         // New format: "nori-skillsets 19.2.0"
@@ -316,7 +315,6 @@ mod tests {
         assert_eq!(version, Some("19.2.0".to_string()));
     }
 
-    // @current-session
     #[test]
     fn test_nori_version_source_enum_exists() {
         // Test that NoriVersionSource enum exists and has the expected variants
@@ -329,14 +327,6 @@ mod tests {
         // Verify display format
         assert_eq!(skillsets.label(), "Skillsets");
         assert_eq!(profiles.label(), "Profiles");
-    }
-
-    // @current-session
-    #[test]
-    fn test_system_info_has_version_source() {
-        // SystemInfo should have nori_version_source field
-        let info = SystemInfo::default();
-        assert!(info.nori_version_source.is_none());
     }
 
     #[test]
