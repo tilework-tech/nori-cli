@@ -2,11 +2,34 @@ use std::env;
 use std::fs;
 use std::process::Command;
 
+/// Indicates which command was used to detect the Nori version.
+/// This affects the UI display text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum NoriVersionSource {
+    /// Version from `nori-skillsets` command (new installer) - displays as "Skillsets"
+    #[default]
+    Skillsets,
+    /// Version from `nori-ai` command (legacy installer) - displays as "Profiles"
+    Profiles,
+}
+
+impl NoriVersionSource {
+    /// Returns the display label for this version source.
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            NoriVersionSource::Skillsets => "Skillsets",
+            NoriVersionSource::Profiles => "Profiles",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SystemInfo {
     pub(crate) git_branch: Option<String>,
     pub(crate) nori_profile: Option<String>,
     pub(crate) nori_version: Option<String>,
+    /// Indicates which command was used to detect the version (affects UI display).
+    pub(crate) nori_version_source: Option<NoriVersionSource>,
     pub(crate) git_lines_added: Option<i32>,
     pub(crate) git_lines_removed: Option<i32>,
     /// Whether the current directory is a git worktree (not the main repo)
@@ -25,10 +48,12 @@ impl SystemInfo {
     /// a background thread to avoid blocking TUI startup.
     pub(crate) fn collect_fresh() -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(None);
+        let (nori_version, nori_version_source) = get_nori_version();
         Self {
             git_branch: get_git_branch(None),
             nori_profile: get_nori_profile(),
-            nori_version: get_nori_version(),
+            nori_version,
+            nori_version_source,
             git_lines_added,
             git_lines_removed,
             is_worktree: is_git_worktree(None),
@@ -42,10 +67,12 @@ impl SystemInfo {
     /// TUI was launched from (e.g., a git worktree).
     pub(crate) fn collect_for_directory(dir: &std::path::Path) -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(Some(dir));
+        let (nori_version, nori_version_source) = get_nori_version();
         Self {
             git_branch: get_git_branch(Some(dir)),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
-            nori_version: get_nori_version(), // Version is global
+            nori_version,
+            nori_version_source,
             git_lines_added,
             git_lines_removed,
             is_worktree: is_git_worktree(Some(dir)),
@@ -53,15 +80,28 @@ impl SystemInfo {
     }
 }
 
-fn get_nori_version() -> Option<String> {
-    let output = Command::new("nori-ai").arg("--version").output().ok()?;
-
-    if !output.status.success() {
-        return None;
+fn get_nori_version() -> (Option<String>, Option<NoriVersionSource>) {
+    // Try nori-skillsets first (new installer)
+    if let Ok(output) = Command::new("nori-skillsets").arg("--version").output()
+        && output.status.success()
+        && let Some(version) = String::from_utf8(output.stdout)
+            .ok()
+            .and_then(|s| parse_nori_version(&s))
+    {
+        return (Some(version), Some(NoriVersionSource::Skillsets));
     }
 
-    let version_output = String::from_utf8(output.stdout).ok()?;
-    parse_nori_version(&version_output)
+    // Fallback to nori-ai (legacy installer)
+    if let Ok(output) = Command::new("nori-ai").arg("--version").output()
+        && output.status.success()
+        && let Some(version) = String::from_utf8(output.stdout)
+            .ok()
+            .and_then(|s| parse_nori_version(&s))
+    {
+        return (Some(version), Some(NoriVersionSource::Profiles));
+    }
+
+    (None, None)
 }
 
 fn parse_nori_version(output: &str) -> Option<String> {
@@ -267,6 +307,27 @@ fn is_git_worktree(dir: Option<&std::path::Path>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_nori_version_skillsets_format() {
+        // New format: "nori-skillsets 19.2.0"
+        let version = parse_nori_version("nori-skillsets 19.2.0");
+        assert_eq!(version, Some("19.2.0".to_string()));
+    }
+
+    #[test]
+    fn test_nori_version_source_enum_exists() {
+        // Test that NoriVersionSource enum exists and has the expected variants
+        let skillsets = NoriVersionSource::Skillsets;
+        let profiles = NoriVersionSource::Profiles;
+
+        // Verify they are different
+        assert_ne!(skillsets, profiles);
+
+        // Verify display format
+        assert_eq!(skillsets.label(), "Skillsets");
+        assert_eq!(profiles.label(), "Profiles");
+    }
 
     #[test]
     fn test_get_git_branch_in_git_repo() {
