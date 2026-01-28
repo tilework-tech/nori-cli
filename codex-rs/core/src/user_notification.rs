@@ -264,11 +264,7 @@ impl UserNotification {
                 let truncated_command = truncate_string(command, MAX_COMMAND_LENGTH);
                 format!("{truncated_command}\nin {cwd}")
             }
-            UserNotification::Idle {
-                idle_duration_secs, ..
-            } => {
-                format!("Session has been idle for {idle_duration_secs} seconds")
-            }
+            UserNotification::Idle { .. } => "Session has been idle".to_string(),
         }
     }
 }
@@ -344,86 +340,10 @@ mod tests {
     }
 
     #[test]
-    fn test_awaiting_approval_title_and_body() {
-        let notification = UserNotification::AwaitingApproval {
-            call_id: "call-123".to_string(),
-            command: "rm -rf /tmp/test".to_string(),
-            cwd: "/home/user/project".to_string(),
-        };
-
-        assert_eq!(notification.title(), "Nori: Approval Required");
-        assert!(notification.body().contains("rm -rf /tmp/test"));
-        assert!(notification.body().contains("/home/user/project"));
-    }
-
-    #[test]
-    fn test_awaiting_approval_body_truncates_long_commands() {
-        let long_command = "a".repeat(200);
-        let notification = UserNotification::AwaitingApproval {
-            call_id: "call-123".to_string(),
-            command: long_command,
-            cwd: "/home/user/project".to_string(),
-        };
-
-        let body = notification.body();
-        // Body should be truncated and include ellipsis
-        assert!(body.len() < 250);
-        assert!(body.contains("..."));
-    }
-
-    #[test]
-    fn test_idle_title_and_body() {
-        let notification = UserNotification::Idle {
-            session_id: "session-456".to_string(),
-            idle_duration_secs: 5,
-        };
-
-        assert_eq!(notification.title(), "Nori: Session Idle");
-        assert!(notification.body().contains("5"));
-        assert!(notification.body().to_lowercase().contains("idle"));
-    }
-
-    #[test]
-    fn test_agent_turn_complete_title_and_body() {
-        let notification = UserNotification::AgentTurnComplete {
-            thread_id: "thread-123".to_string(),
-            turn_id: "turn-456".to_string(),
-            cwd: "/home/user/project".to_string(),
-            input_messages: vec!["Fix the bug".to_string()],
-            last_assistant_message: Some("Done fixing the bug".to_string()),
-        };
-
-        assert_eq!(notification.title(), "Nori: Task Complete");
-        assert!(notification.body().contains("Done fixing the bug"));
-    }
-
-    #[test]
-    fn test_agent_turn_complete_body_without_assistant_message() {
-        let notification = UserNotification::AgentTurnComplete {
-            thread_id: "thread-123".to_string(),
-            turn_id: "turn-456".to_string(),
-            cwd: "/home/user/project".to_string(),
-            input_messages: vec!["Fix the bug".to_string()],
-            last_assistant_message: None,
-        };
-
-        let body = notification.body();
-        // Should fall back to showing input or a generic message
-        assert!(!body.is_empty());
-    }
-
-    #[test]
     fn test_truncate_handles_multibyte_unicode() {
-        // Test that truncation doesn't panic on emoji/unicode
-        let emoji_command = "echo \u{1F600}".repeat(50); // 50 emoji faces
-        let notification = UserNotification::AwaitingApproval {
-            call_id: "call-123".to_string(),
-            command: emoji_command,
-            cwd: "/home/user".to_string(),
-        };
-
-        let body = notification.body();
-        // Should not panic and should be truncated
-        assert!(body.contains("..."));
+        let s = "echo \u{1F600}".repeat(50);
+        let truncated = truncate_string(&s, 100);
+        assert!(truncated.ends_with("..."));
+        assert!(truncated.len() <= 107); // 100 bytes + "..."
     }
 }

@@ -7,12 +7,16 @@ pub(crate) mod agent_picker;
 pub(crate) mod exit_message;
 pub(crate) mod onboarding;
 pub(crate) mod session_header;
+pub(crate) mod skillset_picker;
 
 #[cfg(feature = "nori-config")]
 pub(crate) mod config_adapter;
 
 #[cfg(feature = "nori-config")]
 pub(crate) mod config_picker;
+
+pub(crate) mod hotkey_match;
+pub(crate) mod hotkey_picker;
 
 // update_action is available in all builds for the UpdateAction type
 // update_prompt and updates are only for release builds

@@ -404,6 +404,8 @@ pub(crate) struct ChatWidget {
     session_stats: SessionStats,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    // The first user prompt text, preserved for /first-prompt command
+    first_prompt_text: Option<String>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -1461,6 +1463,7 @@ impl ChatWidget {
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
         let spawn_result = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
 
+        let first_prompt_text = initial_prompt.clone();
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -1521,6 +1524,7 @@ impl ChatWidget {
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
+            first_prompt_text,
         };
 
         widget.prefetch_rate_limits();
@@ -1551,6 +1555,7 @@ impl ChatWidget {
         let codex_op_tx =
             spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
 
+        let first_prompt_text = initial_prompt.clone();
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -1613,6 +1618,7 @@ impl ChatWidget {
             acp_handle: None,
             session_stats: SessionStats::new(),
             login_handler: None,
+            first_prompt_text,
         };
 
         widget.prefetch_rate_limits();
@@ -1820,6 +1826,13 @@ impl ChatWidget {
             SlashCommand::Status => {
                 self.add_status_output();
             }
+            SlashCommand::FirstPrompt => {
+                if let Some(text) = &self.first_prompt_text {
+                    self.add_info_message(text.clone(), None);
+                } else {
+                    self.add_info_message("No prompt has been submitted yet.".to_string(), None);
+                }
+            }
             SlashCommand::Mcp => {
                 self.add_mcp_output();
             }
@@ -1870,6 +1883,9 @@ impl ChatWidget {
                         grant_root: Some(PathBuf::from("/tmp")),
                     }),
                 }));
+            }
+            SlashCommand::SwitchSkillset => {
+                self.handle_switch_skillset_command();
             }
         }
     }
@@ -1968,6 +1984,10 @@ impl ChatWidget {
         {
             self.handle_login_command_with_agent(agent_name);
             return;
+        }
+
+        if self.first_prompt_text.is_none() {
+            self.first_prompt_text = Some(text.clone());
         }
 
         // Track user message for session statistics
@@ -2494,6 +2514,121 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the notify-after-idle sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_notify_after_idle_picker(
+        &mut self,
+        current: codex_acp::config::NotifyAfterIdle,
+    ) {
+        let params = crate::nori::config_picker::notify_after_idle_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the hotkey picker sub-view.
+    pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: codex_acp::config::HotkeyConfig) {
+        let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
+            &hotkey_config,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_view(Box::new(view));
+    }
+
+    /// Handle the /switch-skillset command.
+    /// Checks if nori-skillsets is available and lists available skillsets.
+    fn handle_switch_skillset_command(&mut self) {
+        use crate::nori::skillset_picker;
+
+        // Check if nori-skillsets is available in PATH
+        if !skillset_picker::is_nori_skillsets_available() {
+            self.add_info_message(skillset_picker::not_installed_message(), None);
+            return;
+        }
+
+        // Spawn async task to list skillsets
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            match skillset_picker::list_skillsets().await {
+                Ok(names) if names.is_empty() => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: Some(vec![]),
+                        error: Some("No skillsets available.".to_string()),
+                    });
+                }
+                Ok(names) => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: Some(names),
+                        error: None,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: None,
+                        error: Some(message),
+                    });
+                }
+            }
+        });
+    }
+
+    /// Handle the result of listing skillsets.
+    pub(crate) fn on_skillset_list_result(
+        &mut self,
+        names: Option<Vec<String>>,
+        error: Option<String>,
+    ) {
+        match (names, error) {
+            (Some(names), None) if !names.is_empty() => {
+                // Open the skillset picker
+                let params = crate::nori::skillset_picker::skillset_picker_params(names);
+                self.bottom_pane.show_selection_view(params);
+            }
+            (_, Some(error)) => {
+                self.add_error_message(error);
+            }
+            _ => {
+                self.add_info_message("No skillsets available.".to_string(), None);
+            }
+        }
+    }
+
+    /// Handle a request to install a skillset.
+    pub(crate) fn on_install_skillset_request(&mut self, name: &str) {
+        use crate::nori::skillset_picker;
+
+        let name = name.to_string();
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            match skillset_picker::install_skillset(&name).await {
+                Ok(message) => {
+                    tx.send(AppEvent::SkillsetInstallResult {
+                        name,
+                        success: true,
+                        message,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetInstallResult {
+                        name,
+                        success: false,
+                        message,
+                    });
+                }
+            }
+        });
+    }
+
+    /// Handle the result of installing a skillset.
+    pub(crate) fn on_skillset_install_result(&mut self, name: &str, success: bool, message: &str) {
+        if success {
+            self.add_info_message(message.to_string(), None);
+        } else {
+            self.add_error_message(format!("Failed to install skillset '{name}': {message}"));
+        }
     }
 
     /// Open a popup to choose the model (stage 1). After selecting a model,
@@ -3736,6 +3871,11 @@ impl ChatWidget {
 
     pub(crate) fn composer_text(&self) -> String {
         self.bottom_pane.composer_text()
+    }
+
+    /// Returns true if a popup or custom view is currently active in the bottom pane.
+    pub(crate) fn has_active_popup(&self) -> bool {
+        self.bottom_pane.has_active_view()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {

@@ -7,7 +7,7 @@ use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
 use crate::tui::FrameRequester;
-use bottom_pane_view::BottomPaneView;
+pub(crate) use bottom_pane_view::BottomPaneView;
 use codex_file_search::FileMatch;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -151,6 +151,11 @@ impl BottomPane {
 
     fn active_view(&self) -> Option<&dyn BottomPaneView> {
         self.view_stack.last().map(std::convert::AsRef::as_ref)
+    }
+
+    /// Returns true if a popup or custom view is currently active.
+    pub(crate) fn has_active_view(&self) -> bool {
+        !self.view_stack.is_empty()
     }
 
     fn push_view(&mut self, view: Box<dyn BottomPaneView>) {

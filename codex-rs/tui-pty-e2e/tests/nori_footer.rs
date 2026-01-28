@@ -76,15 +76,15 @@ fn test_footer_full_startup_with_all_info() {
 
     use std::os::unix::fs::PermissionsExt;
 
-    // Create a temp directory for our mock nori-ai binary
+    // Create a temp directory for our mock nori-skillsets binary
     let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
 
-    // Create a mock nori-ai executable that returns a version
-    let mock_nori = mock_bin_dir.path().join("nori-ai");
-    std::fs::write(&mock_nori, "#!/bin/sh\necho 'nori-ai 19.1.1'\n")
-        .expect("Failed to write mock nori-ai");
+    // Create a mock nori-skillsets executable that returns a version
+    let mock_nori = mock_bin_dir.path().join("nori-skillsets");
+    std::fs::write(&mock_nori, "#!/bin/sh\necho 'nori-skillsets 0.9.99'\n")
+        .expect("Failed to write mock nori-skillsets");
     std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))
-        .expect("Failed to set permissions on mock nori-ai");
+        .expect("Failed to set permissions on mock nori-skillsets");
 
     let mut session = TuiSession::spawn_with_config(
         24,
@@ -116,7 +116,7 @@ fn test_footer_full_startup_with_all_info() {
         contents
     );
 
-    // Verify nori version is displayed (from our mock nori-ai)
+    // Verify nori version is displayed (from our mock nori-skillsets)
     assert!(
         contents.contains("Skillsets v19.1.1") || contents.contains("Skillsets v0"), // v0 if mock didn't work
         "Footer should contain Nori version. Contents: {}",

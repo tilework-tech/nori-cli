@@ -63,7 +63,7 @@ The `transcript_location` field includes token usage data (`TranscriptLocation.t
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, notify after idle, hotkeys) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -72,9 +72,11 @@ The `transcript_location` field includes token usage data (`TranscriptLocation.t
 | `/diff` | Show git diff (including untracked files) |
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and token usage |
+| `/first-prompt` | Show the first prompt from this session |
 | `/mcp` | List configured MCP tools |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
+| `/switch-skillset` | Switch between available skillsets |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
@@ -82,14 +84,39 @@ Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
 
+**Skillset Switching (`nori/skillset_picker.rs`):**
+
+The `/switch-skillset` command integrates with the external `nori-skillsets` CLI tool to manage skillsets:
+
+1. Checks if `nori-skillsets` is available in PATH
+2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
+3. If available, runs `nori-skillsets list-skillsets` to get available skillsets
+4. On success (exit code 0), displays a searchable picker with skillset names
+5. On selection, runs `nori-skillsets install <NAME>` to install the selected skillset
+6. Shows the first line of the install output as a confirmation message
+
+Events: `AppEvent::SkillsetListResult`, `AppEvent::InstallSkillset`, `AppEvent::SkillsetInstallResult`
+
 **Notification Configuration:**
 
-Two independent notification pathways are toggled via `/config` and persisted to `config.toml` as `"enabled"`/`"disabled"` strings:
+Three notification settings are toggled via `/config` and persisted to the `[tui]` section of `config.toml`:
 
 - **Terminal Notifications** (`TerminalNotifications` enum from `@/codex-rs/acp/src/config/types.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget.rs::notify()` gates on that bool.
 - **OS Notifications** (`OsNotifications` enum from `@/codex-rs/acp/src/config/types.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend.rs` to set the `use_native` flag on `UserNotifier`.
+- **Notify After Idle** (`NotifyAfterIdle` enum from `@/codex-rs/acp/src/config/types.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
-Config changes emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`, which writes the enum string value to the `[tui]` section of `config.toml`.
+Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
+
+**Configurable Hotkeys:**
+
+Keyboard shortcuts are configurable through the `/config` panel ("Hotkeys" item) and persisted under `[tui.hotkeys]` in `config.toml`. The implementation is split across two layers:
+
+- **Config layer** (`@/codex-rs/acp/src/config/types.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
+- **TUI layer** (`@/codex-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
+
+The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()`, configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
+
+The hotkey picker (`@/codex-rs/tui/src/nori/hotkey_picker.rs`) implements `BottomPaneView` directly (not `ListSelectionView`) because rebinding requires raw key capture. It uses a videogame-style rebind flow: select an action, press Enter, press the desired key. Conflicts are resolved by swapping bindings. The `r` key resets the selected action to its default.
 
 **Status Line Footer:**
 
@@ -103,7 +130,7 @@ The footer displays:
 
 **External Editor Integration (`editor.rs`):**
 
-Ctrl-G opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:
+The external editor hotkey (default Ctrl-G, configurable via hotkeys) opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:
 
 1. Reads current composer text via `ChatWidget::composer_text()`
 2. Writes content to a temp file (`nori-editor-*.md`)

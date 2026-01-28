@@ -152,6 +152,8 @@ pub struct AcpBackendConfig {
     pub notify: Option<Vec<String>>,
     /// Whether OS-level desktop notifications are enabled
     pub os_notifications: crate::config::OsNotifications,
+    /// How long after idle before sending a notification
+    pub notify_after_idle: crate::config::NotifyAfterIdle,
     /// Nori home directory for history storage
     pub nori_home: PathBuf,
     /// History persistence policy
@@ -186,6 +188,8 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// How long after idle before sending a notification
+    notify_after_idle: crate::config::NotifyAfterIdle,
 }
 
 impl AcpBackend {
@@ -298,6 +302,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
+            notify_after_idle: config.notify_after_idle,
         };
 
         // Send synthetic SessionConfigured event
@@ -540,6 +545,7 @@ impl AcpBackend {
         let id_clone = id.to_string();
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
+        let notify_after_idle = self.notify_after_idle;
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -683,17 +689,20 @@ impl AcpBackend {
                 })
                 .await;
 
-            // Start idle timer - will send notification after 5 seconds of inactivity
-            let user_notifier_for_timer = Arc::clone(&user_notifier);
-            let idle_task = tokio::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                    session_id: session_id_for_timer,
-                    idle_duration_secs: 5,
+            // Start idle timer if configured
+            if let Some(duration) = notify_after_idle.as_duration() {
+                let idle_secs = duration.as_secs();
+                let user_notifier_for_timer = Arc::clone(&user_notifier);
+                let idle_task = tokio::spawn(async move {
+                    tokio::time::sleep(duration).await;
+                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                        session_id: session_id_for_timer,
+                        idle_duration_secs: idle_secs,
+                    });
                 });
-            });
-            // Store the abort handle so the timer can be cancelled on new activity
-            *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                // Store the abort handle so the timer can be cancelled on new activity
+                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+            }
         });
 
         Ok(())
@@ -737,6 +746,7 @@ impl AcpBackend {
         let pending_compact_summary = Arc::clone(&self.pending_compact_summary);
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
+        let notify_after_idle = self.notify_after_idle;
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -860,17 +870,20 @@ impl AcpBackend {
                 })
                 .await;
 
-            // Start idle timer - will send notification after 5 seconds of inactivity
-            let user_notifier_for_timer = Arc::clone(&user_notifier);
-            let idle_task = tokio::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                    session_id: session_id_for_timer,
-                    idle_duration_secs: 5,
+            // Start idle timer if configured
+            if let Some(duration) = notify_after_idle.as_duration() {
+                let idle_secs = duration.as_secs();
+                let user_notifier_for_timer = Arc::clone(&user_notifier);
+                let idle_task = tokio::spawn(async move {
+                    tokio::time::sleep(duration).await;
+                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                        session_id: session_id_for_timer,
+                        idle_duration_secs: idle_secs,
+                    });
                 });
-            });
-            // Store the abort handle so the timer can be cancelled on new activity
-            *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                // Store the abort handle so the timer can be cancelled on new activity
+                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+            }
         });
 
         Ok(())
@@ -2501,6 +2514,7 @@ mod tests {
             os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;
@@ -2679,6 +2693,7 @@ mod tests {
             os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -2791,6 +2806,7 @@ mod tests {
             os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -2925,6 +2941,7 @@ mod tests {
             os_notifications: crate::config::OsNotifications::Disabled,
             nori_home: temp_dir.path().to_path_buf(),
             history_persistence: crate::config::HistoryPersistence::SaveAll,
+            notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)

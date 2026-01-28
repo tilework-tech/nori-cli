@@ -2,7 +2,7 @@
 source: tui-pty-e2e/tests/exit_statistics.rs
 expression: normalize_for_snapshot(session.screen_contents())
 ---
-  Run 'npx nori-ai install' to set up Nori AI enhancements
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
 
 ■ Operation 'ListCustomPrompts' is not supported in ACP mode
 

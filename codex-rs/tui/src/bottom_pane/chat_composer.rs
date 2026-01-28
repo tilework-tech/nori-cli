@@ -1392,18 +1392,25 @@ impl ChatComposer {
     }
 
     fn footer_props(&self) -> FooterProps {
-        let (git_branch, nori_profile, nori_version, git_lines_added, git_lines_removed) =
-            if let Some(ref info) = self.system_info {
-                (
-                    info.git_branch.clone(),
-                    info.nori_profile.clone(),
-                    info.nori_version.clone(),
-                    info.git_lines_added,
-                    info.git_lines_removed,
-                )
-            } else {
-                (None, None, None, None, None)
-            };
+        let (
+            git_branch,
+            nori_profile,
+            nori_version,
+            nori_version_source,
+            git_lines_added,
+            git_lines_removed,
+        ) = if let Some(ref info) = self.system_info {
+            (
+                info.git_branch.clone(),
+                info.nori_profile.clone(),
+                info.nori_version.clone(),
+                info.nori_version_source,
+                info.git_lines_added,
+                info.git_lines_removed,
+            )
+        } else {
+            (None, None, None, None, None, None)
+        };
 
         FooterProps {
             mode: self.footer_mode(),
@@ -1416,6 +1423,7 @@ impl ChatComposer {
             approval_mode_label: self.approval_mode_label.clone(),
             nori_profile,
             nori_version,
+            nori_version_source,
             git_lines_added,
             git_lines_removed,
             is_worktree: self

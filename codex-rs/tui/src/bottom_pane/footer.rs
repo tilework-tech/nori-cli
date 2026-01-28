@@ -1,6 +1,7 @@
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
+use crate::system_info::NoriVersionSource;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use codex_protocol::num_format::format_si_suffix;
 use crossterm::event::KeyCode;
@@ -25,6 +26,8 @@ pub(crate) struct FooterProps {
     pub(crate) approval_mode_label: Option<String>,
     pub(crate) nori_profile: Option<String>,
     pub(crate) nori_version: Option<String>,
+    /// The source of the version detection (affects display label).
+    pub(crate) nori_version_source: Option<NoriVersionSource>,
     pub(crate) git_lines_added: Option<i32>,
     pub(crate) git_lines_removed: Option<i32>,
     /// Whether the current directory is a git worktree (not the main repo).
@@ -307,10 +310,14 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add nori version if available: "Skillsets v19.1.1" (green)
+    // Add nori version if available: "Skillsets v19.1.1" or "Profiles v19.1.1" (green)
     if let Some(version) = &props.nori_version {
+        let label = props
+            .nori_version_source
+            .map(NoriVersionSource::label)
+            .unwrap_or("Skillsets");
         segments.push(Line::from(vec![
-            Span::from("Skillsets v").green(),
+            Span::from(format!("{label} v")).green(),
             Span::from(version.clone()).green(),
         ]));
     }
@@ -537,6 +544,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -557,6 +565,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -577,6 +586,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -597,6 +607,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -617,6 +628,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -637,6 +649,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -657,6 +670,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -680,6 +694,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
+                nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
@@ -703,6 +718,7 @@ mod tests {
                 approval_mode_label: Some("Agent".to_string()),
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
+                nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
@@ -726,6 +742,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: false,
@@ -749,6 +766,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -773,6 +791,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
+                nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: true,
@@ -797,6 +816,7 @@ mod tests {
                 approval_mode_label: Some("Agent".to_string()),
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
+                nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
@@ -821,6 +841,7 @@ mod tests {
                 approval_mode_label: Some("Read Only".to_string()),
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -845,6 +866,7 @@ mod tests {
                 approval_mode_label: Some("Full Access".to_string()),
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: None,
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -869,6 +891,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
+                nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
                 is_worktree: false,
@@ -893,6 +916,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: Some(NoriVersionSource::Profiles),
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,
@@ -917,6 +941,7 @@ mod tests {
                 approval_mode_label: None,
                 nori_profile: None,
                 nori_version: None,
+                nori_version_source: Some(NoriVersionSource::Profiles),
                 git_lines_added: None,
                 git_lines_removed: None,
                 is_worktree: false,

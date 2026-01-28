@@ -705,9 +705,9 @@ impl SessionConfig {
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
             extra_path: Vec::new(),
-            // Exclude nori-ai by default since it won't be in PATH on CI runners.
-            // Tests that need nori-ai should explicitly add it via with_extra_path().
-            exclude_binaries: vec!["nori-ai".to_string()],
+            // Exclude installers by default since it won't be in PATH on CI runners.
+            // Tests that need installers should explicitly add it via with_extra_path().
+            exclude_binaries: vec!["nori-ai".to_string(), "nori-skillsets".to_string()],
         }
     }
 
@@ -977,21 +977,21 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // 1. Boxed header with "╭──" border
     // 2. Plain text "Nori CLI"
     // The header ends with either:
-    // - nori-ai install command (when nori-ai is not installed)
-    // - bottom border "╰──" (when nori-ai is already installed)
+    // - nori-skillsets init command (when nori-skillsets is not installed)
+    // - bottom border "╰──" (when nori-skillsets is already installed)
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
     let has_header = lines.iter().any(|l| {
-        l.contains("╭──") || l.contains("Nori CLI") || l.contains("'npx nori-ai install'")
+        l.contains("╭──") || l.contains("Nori CLI") || l.contains("'npx nori-skillsets init'")
     });
 
     let mut result = if has_header {
         // Find where the header ends
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
-            // The nori-ai install line marks the end of the command list (if present)
-            if line.contains("'npx nori-ai install'") {
+            // The nori-skillsets init line marks the end of the command list (if present)
+            if line.contains("'npx nori-skillsets init'") {
                 skip_until = i + 1;
                 break;
             }
