@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn picker_starts_with_default_bindings() {
         let (picker, _rx) = make_picker();
-        assert_eq!(picker.entries().len(), 2);
+        assert_eq!(picker.entries().len(), 14);
         assert_eq!(picker.entries()[0].0, HotkeyAction::OpenTranscript);
         assert_eq!(picker.entries()[0].1, HotkeyBinding::from_str("ctrl+t"));
         assert_eq!(picker.entries()[1].0, HotkeyAction::OpenEditor);
@@ -374,16 +374,20 @@ mod tests {
     #[test]
     fn picker_navigation_up_down() {
         let (mut picker, _rx) = make_picker();
+        let entry_count = picker.entries().len();
         assert_eq!(picker.selected_idx(), 0);
 
         picker.handle_key_event(key(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(picker.selected_idx(), 1);
 
-        picker.handle_key_event(key(KeyCode::Down, KeyModifiers::NONE));
+        // Navigate to the last entry and wrap around
+        for _ in 1..entry_count {
+            picker.handle_key_event(key(KeyCode::Down, KeyModifiers::NONE));
+        }
         assert_eq!(picker.selected_idx(), 0); // wraps
 
         picker.handle_key_event(key(KeyCode::Up, KeyModifiers::NONE));
-        assert_eq!(picker.selected_idx(), 1); // wraps backward
+        assert_eq!(picker.selected_idx(), entry_count - 1); // wraps backward
     }
 
     #[test]
@@ -430,17 +434,17 @@ mod tests {
         picker.handle_key_event(key(KeyCode::Enter, KeyModifiers::NONE));
         assert!(picker.is_rebinding());
 
-        // Press Ctrl+Y as the new binding
-        picker.handle_key_event(key(KeyCode::Char('y'), KeyModifiers::CONTROL));
+        // Press F5 as the new binding (avoids conflicts with existing bindings)
+        picker.handle_key_event(key(KeyCode::F(5), KeyModifiers::NONE));
         assert!(!picker.is_rebinding());
-        assert_eq!(picker.entries()[0].1, HotkeyBinding::from_str("ctrl+y"));
+        assert_eq!(picker.entries()[0].1, HotkeyBinding::from_str("f5"));
 
         // Should have sent a SetConfigHotkey event
         let event = rx.try_recv().expect("should receive event");
         match event {
             AppEvent::SetConfigHotkey { action, binding } => {
                 assert_eq!(action, HotkeyAction::OpenTranscript);
-                assert_eq!(binding, HotkeyBinding::from_str("ctrl+y"));
+                assert_eq!(binding, HotkeyBinding::from_str("f5"));
             }
             _ => panic!("expected SetConfigHotkey event, got: {event:?}"),
         }
@@ -488,9 +492,9 @@ mod tests {
     fn picker_reset_to_default() {
         let (mut picker, mut rx) = make_picker();
 
-        // First rebind Open Transcript to something else
+        // First rebind Open Transcript to something else (F5 avoids conflicts)
         picker.handle_key_event(key(KeyCode::Enter, KeyModifiers::NONE));
-        picker.handle_key_event(key(KeyCode::Char('y'), KeyModifiers::CONTROL));
+        picker.handle_key_event(key(KeyCode::F(5), KeyModifiers::NONE));
         let _ = rx.try_recv(); // consume the rebind event
 
         // Now press 'r' to reset

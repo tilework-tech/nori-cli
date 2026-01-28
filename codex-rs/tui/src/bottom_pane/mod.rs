@@ -388,6 +388,11 @@ impl BottomPane {
         self.composer.set_vertical_footer(vertical_footer);
     }
 
+    /// Update the hotkey configuration used by the textarea for editing bindings.
+    pub(crate) fn set_hotkey_config(&mut self, config: codex_acp::config::HotkeyConfig) {
+        self.composer.set_hotkey_config(config);
+    }
+
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());

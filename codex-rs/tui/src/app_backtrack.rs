@@ -351,6 +351,8 @@ impl App {
         };
         self.chat_widget =
             crate::chatwidget::ChatWidget::new_from_existing(init, conv, session_configured);
+        self.chat_widget
+            .set_hotkey_config(self.hotkey_config.clone());
         // Trim transcript up to the selected user message and re-render it.
         self.trim_transcript_for_backtrack(nth_user_message);
         self.render_transcript_once(tui);

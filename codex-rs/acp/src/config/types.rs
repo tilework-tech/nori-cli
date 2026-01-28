@@ -140,6 +140,30 @@ pub enum HotkeyAction {
     OpenTranscript,
     /// Open an external editor for composing.
     OpenEditor,
+    /// Move cursor one character backward.
+    MoveBackwardChar,
+    /// Move cursor one character forward.
+    MoveForwardChar,
+    /// Move cursor to beginning of line.
+    MoveBeginningOfLine,
+    /// Move cursor to end of line.
+    MoveEndOfLine,
+    /// Move cursor one word backward.
+    MoveBackwardWord,
+    /// Move cursor one word forward.
+    MoveForwardWord,
+    /// Delete one character backward.
+    DeleteBackwardChar,
+    /// Delete one character forward.
+    DeleteForwardChar,
+    /// Delete one word backward.
+    DeleteBackwardWord,
+    /// Kill text to end of line.
+    KillToEndOfLine,
+    /// Kill text to beginning of line.
+    KillToBeginningOfLine,
+    /// Yank (paste) killed text.
+    Yank,
 }
 
 impl HotkeyAction {
@@ -148,6 +172,18 @@ impl HotkeyAction {
         match self {
             Self::OpenTranscript => "Open Transcript",
             Self::OpenEditor => "Open Editor",
+            Self::MoveBackwardChar => "Move Backward Char",
+            Self::MoveForwardChar => "Move Forward Char",
+            Self::MoveBeginningOfLine => "Move to Line Start",
+            Self::MoveEndOfLine => "Move to Line End",
+            Self::MoveBackwardWord => "Move Backward Word",
+            Self::MoveForwardWord => "Move Forward Word",
+            Self::DeleteBackwardChar => "Delete Backward Char",
+            Self::DeleteForwardChar => "Delete Forward Char",
+            Self::DeleteBackwardWord => "Delete Backward Word",
+            Self::KillToEndOfLine => "Kill to Line End",
+            Self::KillToBeginningOfLine => "Kill to Line Start",
+            Self::Yank => "Yank",
         }
     }
 
@@ -156,6 +192,18 @@ impl HotkeyAction {
         match self {
             Self::OpenTranscript => "Open the transcript pager (alternate screen)",
             Self::OpenEditor => "Open an external editor to compose a message",
+            Self::MoveBackwardChar => "Move cursor one character backward",
+            Self::MoveForwardChar => "Move cursor one character forward",
+            Self::MoveBeginningOfLine => "Move cursor to beginning of line",
+            Self::MoveEndOfLine => "Move cursor to end of line",
+            Self::MoveBackwardWord => "Move cursor one word backward",
+            Self::MoveForwardWord => "Move cursor one word forward",
+            Self::DeleteBackwardChar => "Delete one character backward",
+            Self::DeleteForwardChar => "Delete one character forward",
+            Self::DeleteBackwardWord => "Delete one word backward",
+            Self::KillToEndOfLine => "Kill text to end of line",
+            Self::KillToBeginningOfLine => "Kill text to beginning of line",
+            Self::Yank => "Yank (paste) killed text",
         }
     }
 
@@ -164,6 +212,18 @@ impl HotkeyAction {
         match self {
             Self::OpenTranscript => "open_transcript",
             Self::OpenEditor => "open_editor",
+            Self::MoveBackwardChar => "move_backward_char",
+            Self::MoveForwardChar => "move_forward_char",
+            Self::MoveBeginningOfLine => "move_beginning_of_line",
+            Self::MoveEndOfLine => "move_end_of_line",
+            Self::MoveBackwardWord => "move_backward_word",
+            Self::MoveForwardWord => "move_forward_word",
+            Self::DeleteBackwardChar => "delete_backward_char",
+            Self::DeleteForwardChar => "delete_forward_char",
+            Self::DeleteBackwardWord => "delete_backward_word",
+            Self::KillToEndOfLine => "kill_to_end_of_line",
+            Self::KillToBeginningOfLine => "kill_to_beginning_of_line",
+            Self::Yank => "yank",
         }
     }
 
@@ -172,12 +232,39 @@ impl HotkeyAction {
         match self {
             Self::OpenTranscript => "ctrl+t",
             Self::OpenEditor => "ctrl+g",
+            Self::MoveBackwardChar => "ctrl+b",
+            Self::MoveForwardChar => "ctrl+f",
+            Self::MoveBeginningOfLine => "ctrl+a",
+            Self::MoveEndOfLine => "ctrl+e",
+            Self::MoveBackwardWord => "alt+b",
+            Self::MoveForwardWord => "alt+f",
+            Self::DeleteBackwardChar => "ctrl+h",
+            Self::DeleteForwardChar => "ctrl+d",
+            Self::DeleteBackwardWord => "ctrl+w",
+            Self::KillToEndOfLine => "ctrl+k",
+            Self::KillToBeginningOfLine => "ctrl+u",
+            Self::Yank => "ctrl+y",
         }
     }
 
     /// All hotkey actions, in display order.
     pub fn all_actions() -> &'static [HotkeyAction] {
-        &[Self::OpenTranscript, Self::OpenEditor]
+        &[
+            Self::OpenTranscript,
+            Self::OpenEditor,
+            Self::MoveBackwardChar,
+            Self::MoveForwardChar,
+            Self::MoveBeginningOfLine,
+            Self::MoveEndOfLine,
+            Self::MoveBackwardWord,
+            Self::MoveForwardWord,
+            Self::DeleteBackwardChar,
+            Self::DeleteForwardChar,
+            Self::DeleteBackwardWord,
+            Self::KillToEndOfLine,
+            Self::KillToBeginningOfLine,
+            Self::Yank,
+        ]
     }
 }
 
@@ -268,6 +355,30 @@ pub struct HotkeyConfigToml {
     pub open_transcript: Option<HotkeyBinding>,
     /// Hotkey for opening an external editor.
     pub open_editor: Option<HotkeyBinding>,
+    /// Hotkey for moving cursor one character backward.
+    pub move_backward_char: Option<HotkeyBinding>,
+    /// Hotkey for moving cursor one character forward.
+    pub move_forward_char: Option<HotkeyBinding>,
+    /// Hotkey for moving cursor to beginning of line.
+    pub move_beginning_of_line: Option<HotkeyBinding>,
+    /// Hotkey for moving cursor to end of line.
+    pub move_end_of_line: Option<HotkeyBinding>,
+    /// Hotkey for moving cursor one word backward.
+    pub move_backward_word: Option<HotkeyBinding>,
+    /// Hotkey for moving cursor one word forward.
+    pub move_forward_word: Option<HotkeyBinding>,
+    /// Hotkey for deleting one character backward.
+    pub delete_backward_char: Option<HotkeyBinding>,
+    /// Hotkey for deleting one character forward.
+    pub delete_forward_char: Option<HotkeyBinding>,
+    /// Hotkey for deleting one word backward.
+    pub delete_backward_word: Option<HotkeyBinding>,
+    /// Hotkey for killing text to end of line.
+    pub kill_to_end_of_line: Option<HotkeyBinding>,
+    /// Hotkey for killing text to beginning of line.
+    pub kill_to_beginning_of_line: Option<HotkeyBinding>,
+    /// Hotkey for yanking (pasting) killed text.
+    pub yank: Option<HotkeyBinding>,
 }
 
 /// Resolved hotkey configuration with defaults applied.
@@ -277,6 +388,30 @@ pub struct HotkeyConfig {
     pub open_transcript: HotkeyBinding,
     /// Hotkey for opening an external editor.
     pub open_editor: HotkeyBinding,
+    /// Hotkey for moving cursor one character backward.
+    pub move_backward_char: HotkeyBinding,
+    /// Hotkey for moving cursor one character forward.
+    pub move_forward_char: HotkeyBinding,
+    /// Hotkey for moving cursor to beginning of line.
+    pub move_beginning_of_line: HotkeyBinding,
+    /// Hotkey for moving cursor to end of line.
+    pub move_end_of_line: HotkeyBinding,
+    /// Hotkey for moving cursor one word backward.
+    pub move_backward_word: HotkeyBinding,
+    /// Hotkey for moving cursor one word forward.
+    pub move_forward_word: HotkeyBinding,
+    /// Hotkey for deleting one character backward.
+    pub delete_backward_char: HotkeyBinding,
+    /// Hotkey for deleting one character forward.
+    pub delete_forward_char: HotkeyBinding,
+    /// Hotkey for deleting one word backward.
+    pub delete_backward_word: HotkeyBinding,
+    /// Hotkey for killing text to end of line.
+    pub kill_to_end_of_line: HotkeyBinding,
+    /// Hotkey for killing text to beginning of line.
+    pub kill_to_beginning_of_line: HotkeyBinding,
+    /// Hotkey for yanking (pasting) killed text.
+    pub yank: HotkeyBinding,
 }
 
 impl Default for HotkeyConfig {
@@ -286,6 +421,40 @@ impl Default for HotkeyConfig {
                 HotkeyAction::OpenTranscript.default_binding(),
             ),
             open_editor: HotkeyBinding::from_str(HotkeyAction::OpenEditor.default_binding()),
+            move_backward_char: HotkeyBinding::from_str(
+                HotkeyAction::MoveBackwardChar.default_binding(),
+            ),
+            move_forward_char: HotkeyBinding::from_str(
+                HotkeyAction::MoveForwardChar.default_binding(),
+            ),
+            move_beginning_of_line: HotkeyBinding::from_str(
+                HotkeyAction::MoveBeginningOfLine.default_binding(),
+            ),
+            move_end_of_line: HotkeyBinding::from_str(
+                HotkeyAction::MoveEndOfLine.default_binding(),
+            ),
+            move_backward_word: HotkeyBinding::from_str(
+                HotkeyAction::MoveBackwardWord.default_binding(),
+            ),
+            move_forward_word: HotkeyBinding::from_str(
+                HotkeyAction::MoveForwardWord.default_binding(),
+            ),
+            delete_backward_char: HotkeyBinding::from_str(
+                HotkeyAction::DeleteBackwardChar.default_binding(),
+            ),
+            delete_forward_char: HotkeyBinding::from_str(
+                HotkeyAction::DeleteForwardChar.default_binding(),
+            ),
+            delete_backward_word: HotkeyBinding::from_str(
+                HotkeyAction::DeleteBackwardWord.default_binding(),
+            ),
+            kill_to_end_of_line: HotkeyBinding::from_str(
+                HotkeyAction::KillToEndOfLine.default_binding(),
+            ),
+            kill_to_beginning_of_line: HotkeyBinding::from_str(
+                HotkeyAction::KillToBeginningOfLine.default_binding(),
+            ),
+            yank: HotkeyBinding::from_str(HotkeyAction::Yank.default_binding()),
         }
     }
 }
@@ -300,6 +469,51 @@ impl HotkeyConfig {
                 .clone()
                 .unwrap_or(defaults.open_transcript),
             open_editor: toml.open_editor.clone().unwrap_or(defaults.open_editor),
+            move_backward_char: toml
+                .move_backward_char
+                .clone()
+                .unwrap_or(defaults.move_backward_char),
+            move_forward_char: toml
+                .move_forward_char
+                .clone()
+                .unwrap_or(defaults.move_forward_char),
+            move_beginning_of_line: toml
+                .move_beginning_of_line
+                .clone()
+                .unwrap_or(defaults.move_beginning_of_line),
+            move_end_of_line: toml
+                .move_end_of_line
+                .clone()
+                .unwrap_or(defaults.move_end_of_line),
+            move_backward_word: toml
+                .move_backward_word
+                .clone()
+                .unwrap_or(defaults.move_backward_word),
+            move_forward_word: toml
+                .move_forward_word
+                .clone()
+                .unwrap_or(defaults.move_forward_word),
+            delete_backward_char: toml
+                .delete_backward_char
+                .clone()
+                .unwrap_or(defaults.delete_backward_char),
+            delete_forward_char: toml
+                .delete_forward_char
+                .clone()
+                .unwrap_or(defaults.delete_forward_char),
+            delete_backward_word: toml
+                .delete_backward_word
+                .clone()
+                .unwrap_or(defaults.delete_backward_word),
+            kill_to_end_of_line: toml
+                .kill_to_end_of_line
+                .clone()
+                .unwrap_or(defaults.kill_to_end_of_line),
+            kill_to_beginning_of_line: toml
+                .kill_to_beginning_of_line
+                .clone()
+                .unwrap_or(defaults.kill_to_beginning_of_line),
+            yank: toml.yank.clone().unwrap_or(defaults.yank),
         }
     }
 
@@ -308,6 +522,18 @@ impl HotkeyConfig {
         match action {
             HotkeyAction::OpenTranscript => &self.open_transcript,
             HotkeyAction::OpenEditor => &self.open_editor,
+            HotkeyAction::MoveBackwardChar => &self.move_backward_char,
+            HotkeyAction::MoveForwardChar => &self.move_forward_char,
+            HotkeyAction::MoveBeginningOfLine => &self.move_beginning_of_line,
+            HotkeyAction::MoveEndOfLine => &self.move_end_of_line,
+            HotkeyAction::MoveBackwardWord => &self.move_backward_word,
+            HotkeyAction::MoveForwardWord => &self.move_forward_word,
+            HotkeyAction::DeleteBackwardChar => &self.delete_backward_char,
+            HotkeyAction::DeleteForwardChar => &self.delete_forward_char,
+            HotkeyAction::DeleteBackwardWord => &self.delete_backward_word,
+            HotkeyAction::KillToEndOfLine => &self.kill_to_end_of_line,
+            HotkeyAction::KillToBeginningOfLine => &self.kill_to_beginning_of_line,
+            HotkeyAction::Yank => &self.yank,
         }
     }
 
@@ -316,6 +542,18 @@ impl HotkeyConfig {
         match action {
             HotkeyAction::OpenTranscript => self.open_transcript = binding,
             HotkeyAction::OpenEditor => self.open_editor = binding,
+            HotkeyAction::MoveBackwardChar => self.move_backward_char = binding,
+            HotkeyAction::MoveForwardChar => self.move_forward_char = binding,
+            HotkeyAction::MoveBeginningOfLine => self.move_beginning_of_line = binding,
+            HotkeyAction::MoveEndOfLine => self.move_end_of_line = binding,
+            HotkeyAction::MoveBackwardWord => self.move_backward_word = binding,
+            HotkeyAction::MoveForwardWord => self.move_forward_word = binding,
+            HotkeyAction::DeleteBackwardChar => self.delete_backward_char = binding,
+            HotkeyAction::DeleteForwardChar => self.delete_forward_char = binding,
+            HotkeyAction::DeleteBackwardWord => self.delete_backward_word = binding,
+            HotkeyAction::KillToEndOfLine => self.kill_to_end_of_line = binding,
+            HotkeyAction::KillToBeginningOfLine => self.kill_to_beginning_of_line = binding,
+            HotkeyAction::Yank => self.yank = binding,
         }
     }
 
@@ -324,6 +562,24 @@ impl HotkeyConfig {
         vec![
             (HotkeyAction::OpenTranscript, &self.open_transcript),
             (HotkeyAction::OpenEditor, &self.open_editor),
+            (HotkeyAction::MoveBackwardChar, &self.move_backward_char),
+            (HotkeyAction::MoveForwardChar, &self.move_forward_char),
+            (
+                HotkeyAction::MoveBeginningOfLine,
+                &self.move_beginning_of_line,
+            ),
+            (HotkeyAction::MoveEndOfLine, &self.move_end_of_line),
+            (HotkeyAction::MoveBackwardWord, &self.move_backward_word),
+            (HotkeyAction::MoveForwardWord, &self.move_forward_word),
+            (HotkeyAction::DeleteBackwardChar, &self.delete_backward_char),
+            (HotkeyAction::DeleteForwardChar, &self.delete_forward_char),
+            (HotkeyAction::DeleteBackwardWord, &self.delete_backward_word),
+            (HotkeyAction::KillToEndOfLine, &self.kill_to_end_of_line),
+            (
+                HotkeyAction::KillToBeginningOfLine,
+                &self.kill_to_beginning_of_line,
+            ),
+            (HotkeyAction::Yank, &self.yank),
         ]
     }
 }
@@ -907,9 +1163,21 @@ notify_after_idle = "30s"
     #[test]
     fn test_hotkey_action_all_actions() {
         let actions = HotkeyAction::all_actions();
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 14);
         assert_eq!(actions[0], HotkeyAction::OpenTranscript);
         assert_eq!(actions[1], HotkeyAction::OpenEditor);
+        assert_eq!(actions[2], HotkeyAction::MoveBackwardChar);
+        assert_eq!(actions[3], HotkeyAction::MoveForwardChar);
+        assert_eq!(actions[4], HotkeyAction::MoveBeginningOfLine);
+        assert_eq!(actions[5], HotkeyAction::MoveEndOfLine);
+        assert_eq!(actions[6], HotkeyAction::MoveBackwardWord);
+        assert_eq!(actions[7], HotkeyAction::MoveForwardWord);
+        assert_eq!(actions[8], HotkeyAction::DeleteBackwardChar);
+        assert_eq!(actions[9], HotkeyAction::DeleteForwardChar);
+        assert_eq!(actions[10], HotkeyAction::DeleteBackwardWord);
+        assert_eq!(actions[11], HotkeyAction::KillToEndOfLine);
+        assert_eq!(actions[12], HotkeyAction::KillToBeginningOfLine);
+        assert_eq!(actions[13], HotkeyAction::Yank);
     }
 
     #[test]
@@ -932,6 +1200,7 @@ notify_after_idle = "30s"
         let toml = HotkeyConfigToml {
             open_transcript: Some(HotkeyBinding::from_str("alt+t")),
             open_editor: Some(HotkeyBinding::from_str("ctrl+e")),
+            ..Default::default()
         };
         let config = HotkeyConfig::from_toml(&toml);
         assert_eq!(config.open_transcript, HotkeyBinding::from_str("alt+t"));
@@ -943,6 +1212,7 @@ notify_after_idle = "30s"
         let toml = HotkeyConfigToml {
             open_transcript: Some(HotkeyBinding::from_str("alt+t")),
             open_editor: None,
+            ..Default::default()
         };
         let config = HotkeyConfig::from_toml(&toml);
         assert_eq!(config.open_transcript, HotkeyBinding::from_str("alt+t"));
@@ -954,6 +1224,7 @@ notify_after_idle = "30s"
         let toml = HotkeyConfigToml {
             open_transcript: Some(HotkeyBinding::none()),
             open_editor: None,
+            ..Default::default()
         };
         let config = HotkeyConfig::from_toml(&toml);
         assert!(config.open_transcript.is_none());
@@ -984,7 +1255,7 @@ notify_after_idle = "30s"
     fn test_hotkey_config_all_bindings() {
         let config = HotkeyConfig::default();
         let bindings = config.all_bindings();
-        assert_eq!(bindings.len(), 2);
+        assert_eq!(bindings.len(), 14);
         assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
         assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
     }
@@ -1036,5 +1307,282 @@ open_editor = "none"
             Some(HotkeyBinding::from_str("ctrl+y"))
         );
         assert_eq!(config.tui.hotkeys.open_editor, Some(HotkeyBinding::none()));
+    }
+
+    // ========================================================================
+    // Editing Hotkey Tests
+    // ========================================================================
+
+    #[test]
+    fn test_editing_hotkey_action_display_names() {
+        use pretty_assertions::assert_eq;
+        assert_eq!(
+            HotkeyAction::MoveBackwardChar.display_name(),
+            "Move Backward Char"
+        );
+        assert_eq!(
+            HotkeyAction::MoveForwardChar.display_name(),
+            "Move Forward Char"
+        );
+        assert_eq!(
+            HotkeyAction::MoveBeginningOfLine.display_name(),
+            "Move to Line Start"
+        );
+        assert_eq!(
+            HotkeyAction::MoveEndOfLine.display_name(),
+            "Move to Line End"
+        );
+        assert_eq!(
+            HotkeyAction::MoveBackwardWord.display_name(),
+            "Move Backward Word"
+        );
+        assert_eq!(
+            HotkeyAction::MoveForwardWord.display_name(),
+            "Move Forward Word"
+        );
+        assert_eq!(
+            HotkeyAction::DeleteBackwardChar.display_name(),
+            "Delete Backward Char"
+        );
+        assert_eq!(
+            HotkeyAction::DeleteForwardChar.display_name(),
+            "Delete Forward Char"
+        );
+        assert_eq!(
+            HotkeyAction::DeleteBackwardWord.display_name(),
+            "Delete Backward Word"
+        );
+        assert_eq!(
+            HotkeyAction::KillToEndOfLine.display_name(),
+            "Kill to Line End"
+        );
+        assert_eq!(
+            HotkeyAction::KillToBeginningOfLine.display_name(),
+            "Kill to Line Start"
+        );
+        assert_eq!(HotkeyAction::Yank.display_name(), "Yank");
+    }
+
+    #[test]
+    fn test_editing_hotkey_action_toml_keys() {
+        use pretty_assertions::assert_eq;
+        assert_eq!(
+            HotkeyAction::MoveBackwardChar.toml_key(),
+            "move_backward_char"
+        );
+        assert_eq!(
+            HotkeyAction::MoveForwardChar.toml_key(),
+            "move_forward_char"
+        );
+        assert_eq!(
+            HotkeyAction::MoveBeginningOfLine.toml_key(),
+            "move_beginning_of_line"
+        );
+        assert_eq!(HotkeyAction::MoveEndOfLine.toml_key(), "move_end_of_line");
+        assert_eq!(
+            HotkeyAction::MoveBackwardWord.toml_key(),
+            "move_backward_word"
+        );
+        assert_eq!(
+            HotkeyAction::MoveForwardWord.toml_key(),
+            "move_forward_word"
+        );
+        assert_eq!(
+            HotkeyAction::DeleteBackwardChar.toml_key(),
+            "delete_backward_char"
+        );
+        assert_eq!(
+            HotkeyAction::DeleteForwardChar.toml_key(),
+            "delete_forward_char"
+        );
+        assert_eq!(
+            HotkeyAction::DeleteBackwardWord.toml_key(),
+            "delete_backward_word"
+        );
+        assert_eq!(
+            HotkeyAction::KillToEndOfLine.toml_key(),
+            "kill_to_end_of_line"
+        );
+        assert_eq!(
+            HotkeyAction::KillToBeginningOfLine.toml_key(),
+            "kill_to_beginning_of_line"
+        );
+        assert_eq!(HotkeyAction::Yank.toml_key(), "yank");
+    }
+
+    #[test]
+    fn test_editing_hotkey_action_default_bindings() {
+        use pretty_assertions::assert_eq;
+        assert_eq!(HotkeyAction::MoveBackwardChar.default_binding(), "ctrl+b");
+        assert_eq!(HotkeyAction::MoveForwardChar.default_binding(), "ctrl+f");
+        assert_eq!(
+            HotkeyAction::MoveBeginningOfLine.default_binding(),
+            "ctrl+a"
+        );
+        assert_eq!(HotkeyAction::MoveEndOfLine.default_binding(), "ctrl+e");
+        assert_eq!(HotkeyAction::MoveBackwardWord.default_binding(), "alt+b");
+        assert_eq!(HotkeyAction::MoveForwardWord.default_binding(), "alt+f");
+        assert_eq!(HotkeyAction::DeleteBackwardChar.default_binding(), "ctrl+h");
+        assert_eq!(HotkeyAction::DeleteForwardChar.default_binding(), "ctrl+d");
+        assert_eq!(HotkeyAction::DeleteBackwardWord.default_binding(), "ctrl+w");
+        assert_eq!(HotkeyAction::KillToEndOfLine.default_binding(), "ctrl+k");
+        assert_eq!(
+            HotkeyAction::KillToBeginningOfLine.default_binding(),
+            "ctrl+u"
+        );
+        assert_eq!(HotkeyAction::Yank.default_binding(), "ctrl+y");
+    }
+
+    #[test]
+    fn test_hotkey_config_default_includes_editing_bindings() {
+        use pretty_assertions::assert_eq;
+        let config = HotkeyConfig::default();
+        assert_eq!(config.move_backward_char, HotkeyBinding::from_str("ctrl+b"));
+        assert_eq!(config.move_forward_char, HotkeyBinding::from_str("ctrl+f"));
+        assert_eq!(
+            config.move_beginning_of_line,
+            HotkeyBinding::from_str("ctrl+a")
+        );
+        assert_eq!(config.move_end_of_line, HotkeyBinding::from_str("ctrl+e"));
+        assert_eq!(config.move_backward_word, HotkeyBinding::from_str("alt+b"));
+        assert_eq!(config.move_forward_word, HotkeyBinding::from_str("alt+f"));
+        assert_eq!(
+            config.delete_backward_char,
+            HotkeyBinding::from_str("ctrl+h")
+        );
+        assert_eq!(
+            config.delete_forward_char,
+            HotkeyBinding::from_str("ctrl+d")
+        );
+        assert_eq!(
+            config.delete_backward_word,
+            HotkeyBinding::from_str("ctrl+w")
+        );
+        assert_eq!(
+            config.kill_to_end_of_line,
+            HotkeyBinding::from_str("ctrl+k")
+        );
+        assert_eq!(
+            config.kill_to_beginning_of_line,
+            HotkeyBinding::from_str("ctrl+u")
+        );
+        assert_eq!(config.yank, HotkeyBinding::from_str("ctrl+y"));
+    }
+
+    #[test]
+    fn test_hotkey_config_from_toml_editing_overrides() {
+        use pretty_assertions::assert_eq;
+        let toml = HotkeyConfigToml {
+            open_transcript: None,
+            open_editor: None,
+            move_backward_char: Some(HotkeyBinding::from_str("alt+left")),
+            move_forward_char: Some(HotkeyBinding::from_str("alt+right")),
+            move_beginning_of_line: None,
+            move_end_of_line: None,
+            move_backward_word: None,
+            move_forward_word: None,
+            delete_backward_char: None,
+            delete_forward_char: None,
+            delete_backward_word: None,
+            kill_to_end_of_line: None,
+            kill_to_beginning_of_line: None,
+            yank: None,
+        };
+        let config = HotkeyConfig::from_toml(&toml);
+        assert_eq!(
+            config.move_backward_char,
+            HotkeyBinding::from_str("alt+left")
+        );
+        assert_eq!(
+            config.move_forward_char,
+            HotkeyBinding::from_str("alt+right")
+        );
+        // Others should keep defaults
+        assert_eq!(
+            config.move_beginning_of_line,
+            HotkeyBinding::from_str("ctrl+a")
+        );
+        assert_eq!(
+            config.kill_to_end_of_line,
+            HotkeyBinding::from_str("ctrl+k")
+        );
+    }
+
+    #[test]
+    fn test_hotkey_config_from_toml_editing_unbind() {
+        use pretty_assertions::assert_eq;
+        let toml = HotkeyConfigToml {
+            open_transcript: None,
+            open_editor: None,
+            move_backward_char: Some(HotkeyBinding::none()),
+            move_forward_char: None,
+            move_beginning_of_line: None,
+            move_end_of_line: None,
+            move_backward_word: None,
+            move_forward_word: None,
+            delete_backward_char: None,
+            delete_forward_char: None,
+            delete_backward_word: None,
+            kill_to_end_of_line: None,
+            kill_to_beginning_of_line: None,
+            yank: None,
+        };
+        let config = HotkeyConfig::from_toml(&toml);
+        assert!(config.move_backward_char.is_none());
+        // Others should keep defaults
+        assert_eq!(config.move_forward_char, HotkeyBinding::from_str("ctrl+f"));
+    }
+
+    #[test]
+    fn test_hotkey_config_all_bindings_includes_editing() {
+        let config = HotkeyConfig::default();
+        let bindings = config.all_bindings();
+        assert_eq!(bindings.len(), 14);
+        // First two are app-level actions
+        assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
+        assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
+        // Then editing actions
+        assert_eq!(bindings[2].0, HotkeyAction::MoveBackwardChar);
+        assert_eq!(bindings[13].0, HotkeyAction::Yank);
+    }
+
+    #[test]
+    fn test_tui_config_toml_with_editing_hotkeys() {
+        let config: TuiConfigToml = toml::from_str(
+            r#"
+[hotkeys]
+move_backward_char = "alt+left"
+kill_to_end_of_line = "none"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.hotkeys.move_backward_char,
+            Some(HotkeyBinding::from_str("alt+left"))
+        );
+        assert_eq!(
+            config.hotkeys.kill_to_end_of_line,
+            Some(HotkeyBinding::none())
+        );
+        // Unset fields should be None
+        assert!(config.hotkeys.move_forward_char.is_none());
+    }
+
+    #[test]
+    fn test_hotkey_config_binding_for_editing_action() {
+        use pretty_assertions::assert_eq;
+        let config = HotkeyConfig::default();
+        assert_eq!(
+            config.binding_for(HotkeyAction::MoveBackwardChar),
+            &HotkeyBinding::from_str("ctrl+b")
+        );
+        assert_eq!(
+            config.binding_for(HotkeyAction::KillToEndOfLine),
+            &HotkeyBinding::from_str("ctrl+k")
+        );
+        assert_eq!(
+            config.binding_for(HotkeyAction::Yank),
+            &HotkeyBinding::from_str("ctrl+y")
+        );
     }
 }

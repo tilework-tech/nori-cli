@@ -212,6 +212,10 @@ impl ChatComposer {
         self.vertical_footer = vertical_footer;
     }
 
+    pub(crate) fn set_hotkey_config(&mut self, config: codex_acp::config::HotkeyConfig) {
+        self.textarea.set_hotkey_config(config);
+    }
+
     /// Integrate an asynchronous response to an on-demand history lookup. If
     /// the entry is present and the offset matches the current cursor we
     /// immediately populate the textarea.
