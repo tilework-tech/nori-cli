@@ -414,6 +414,19 @@ impl App {
             });
         }
 
+        // Spawn a periodic timer to refresh system info every 5 seconds.
+        // This ensures the footer stays up-to-date with transcript token usage
+        // even after the session transcript is created post-startup.
+        {
+            let tx = app.app_event_tx.clone();
+            thread::spawn(move || {
+                loop {
+                    thread::sleep(Duration::from_secs(5));
+                    tx.send(AppEvent::SystemInfoRefreshTick);
+                }
+            });
+        }
+
         tui.frame_requester().schedule_frame();
 
         while select! {
@@ -1110,6 +1123,19 @@ impl App {
             AppEvent::SetConfigOsNotifications(enabled) => {
                 self.persist_notification_setting("os_notifications", enabled)
                     .await;
+            }
+            AppEvent::SystemInfoRefreshTick => {
+                // Spawn a background thread to refresh system info.
+                // This updates transcript token usage and git stats in the footer.
+                let tx = self.app_event_tx.clone();
+                let cwd = self.config.cwd.clone();
+                let model = self.config.model.clone();
+                thread::spawn(move || {
+                    let agent_kind = codex_acp::AgentKind::from_slug(&model);
+                    let info =
+                        crate::system_info::SystemInfo::collect_for_directory(&cwd, agent_kind);
+                    tx.send(AppEvent::SystemInfoRefreshed(info));
+                });
             }
         }
         Ok(true)

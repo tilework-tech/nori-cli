@@ -283,4 +283,8 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI OS notifications config setting.
     SetConfigOsNotifications(bool),
+
+    /// Periodic tick to refresh system info (transcript token usage, git stats).
+    /// Sent every few seconds by a background timer to keep footer data fresh.
+    SystemInfoRefreshTick,
 }
