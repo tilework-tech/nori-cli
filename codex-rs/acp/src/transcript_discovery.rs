@@ -29,6 +29,24 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 use thiserror::Error;
 
+/// Token usage breakdown extracted from a transcript.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TranscriptTokenUsage {
+    /// Total input tokens.
+    pub input_tokens: i64,
+    /// Total output tokens.
+    pub output_tokens: i64,
+    /// Cached input tokens (subset of input_tokens).
+    pub cached_tokens: i64,
+}
+
+impl TranscriptTokenUsage {
+    /// Returns the total tokens (input + output).
+    pub fn total(&self) -> i64 {
+        self.input_tokens.saturating_add(self.output_tokens)
+    }
+}
+
 /// Information about a discovered transcript location.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TranscriptLocation {
@@ -40,6 +58,8 @@ pub struct TranscriptLocation {
     pub session_id: String,
     /// Total token usage from the transcript, if parsed.
     pub token_usage: Option<i64>,
+    /// Detailed token usage breakdown, if available.
+    pub token_breakdown: Option<TranscriptTokenUsage>,
 }
 
 /// Errors that can occur during transcript discovery.
@@ -171,13 +191,15 @@ pub fn find_current_transcript_claude(cwd: &Path) -> Result<TranscriptLocation, 
         .to_string();
 
     // Parse token usage from the transcript
-    let token_usage = parse_transcript_total_tokens(&transcript_path, AgentKind::ClaudeCode);
+    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::ClaudeCode);
+    let token_usage = token_breakdown.as_ref().map(TranscriptTokenUsage::total);
 
     Ok(TranscriptLocation {
         agent_kind: AgentKind::ClaudeCode,
         transcript_path,
         session_id,
         token_usage,
+        token_breakdown,
     })
 }
 
@@ -248,13 +270,15 @@ pub fn find_current_transcript_codex(cwd: &Path) -> Result<TranscriptLocation, D
         most_recent.ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
 
     // Parse token usage from the transcript
-    let token_usage = parse_transcript_total_tokens(&transcript_path, AgentKind::Codex);
+    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Codex);
+    let token_usage = token_breakdown.as_ref().map(TranscriptTokenUsage::total);
 
     Ok(TranscriptLocation {
         agent_kind: AgentKind::Codex,
         transcript_path,
         session_id,
         token_usage,
+        token_breakdown,
     })
 }
 
@@ -348,13 +372,15 @@ pub fn find_current_transcript_gemini(cwd: &Path) -> Result<TranscriptLocation, 
         .to_string();
 
     // Parse token usage from the transcript
-    let token_usage = parse_transcript_total_tokens(&transcript_path, AgentKind::Gemini);
+    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Gemini);
+    let token_usage = token_breakdown.as_ref().map(TranscriptTokenUsage::total);
 
     Ok(TranscriptLocation {
         agent_kind: AgentKind::Gemini,
         transcript_path,
         session_id,
         token_usage,
+        token_breakdown,
     })
 }
 
@@ -386,6 +412,20 @@ fn read_dir_sorted_desc(path: &Path) -> std::io::Result<Vec<fs::DirEntry>> {
     Ok(entries)
 }
 
+/// Parse token usage from a transcript file (synchronous).
+///
+/// This function reads the transcript file and extracts token usage breakdown.
+/// It dispatches to agent-specific parsers based on the agent kind.
+///
+/// Returns `None` if the file cannot be read or contains no token data.
+pub fn parse_transcript_tokens(path: &Path, agent: AgentKind) -> Option<TranscriptTokenUsage> {
+    match agent {
+        AgentKind::ClaudeCode => parse_claude_tokens(path),
+        AgentKind::Codex => parse_codex_tokens(path),
+        AgentKind::Gemini => parse_gemini_tokens(path),
+    }
+}
+
 /// Parse total token usage from a transcript file (synchronous).
 ///
 /// This function reads the transcript file and extracts total token usage.
@@ -393,23 +433,20 @@ fn read_dir_sorted_desc(path: &Path) -> std::io::Result<Vec<fs::DirEntry>> {
 ///
 /// Returns `None` if the file cannot be read or contains no token data.
 pub fn parse_transcript_total_tokens(path: &Path, agent: AgentKind) -> Option<i64> {
-    match agent {
-        AgentKind::ClaudeCode => parse_claude_total_tokens(path),
-        AgentKind::Codex => parse_codex_total_tokens(path),
-        AgentKind::Gemini => parse_gemini_total_tokens(path),
-    }
+    parse_transcript_tokens(path, agent).map(|t| t.total())
 }
 
-/// Parse total tokens from a Claude Code transcript file.
+/// Parse tokens from a Claude Code transcript file.
 ///
 /// Claude sessions are JSONL files with per-message usage objects.
-/// We sum input_tokens + output_tokens from all messages.
+/// We sum input_tokens, output_tokens, and cache_read_input_tokens from all messages.
 /// Malformed lines are skipped to handle partially written transcripts.
-fn parse_claude_total_tokens(path: &Path) -> Option<i64> {
+fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let text = fs::read_to_string(path).ok()?;
 
     let mut total_input = 0i64;
     let mut total_output = 0i64;
+    let mut total_cached = 0i64;
 
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -437,22 +474,36 @@ fn parse_claude_total_tokens(path: &Path) -> Option<i64> {
                     .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0),
             );
+            total_cached = total_cached.saturating_add(
+                usage
+                    .get("cache_read_input_tokens")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0),
+            );
         }
     }
 
     let total = total_input.saturating_add(total_output);
-    if total > 0 { Some(total) } else { None }
+    if total > 0 {
+        Some(TranscriptTokenUsage {
+            input_tokens: total_input,
+            output_tokens: total_output,
+            cached_tokens: total_cached,
+        })
+    } else {
+        None
+    }
 }
 
-/// Parse total tokens from a Codex transcript file.
+/// Parse tokens from a Codex transcript file.
 ///
 /// Codex sessions are JSONL files with token_count events that include
 /// total_token_usage. We take the last one as the final total.
 /// Malformed lines are skipped to handle partially written transcripts.
-fn parse_codex_total_tokens(path: &Path) -> Option<i64> {
+fn parse_codex_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let text = fs::read_to_string(path).ok()?;
 
-    let mut last_total: Option<i64> = None;
+    let mut last_usage: Option<TranscriptTokenUsage> = None;
 
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -470,45 +521,68 @@ fn parse_codex_total_tokens(path: &Path) -> Option<i64> {
             && payload.get("type").and_then(|t| t.as_str()) == Some("token_count")
             && let Some(info) = payload.get("info")
             && let Some(total_usage) = info.get("total_token_usage")
-            && let Some(total) = total_usage
-                .get("total_tokens")
-                .and_then(serde_json::Value::as_i64)
         {
-            last_total = Some(total);
+            let input = total_usage
+                .get("input_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+            let output = total_usage
+                .get("output_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+            let cached = total_usage
+                .get("cached_input_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+
+            last_usage = Some(TranscriptTokenUsage {
+                input_tokens: input,
+                output_tokens: output,
+                cached_tokens: cached,
+            });
         }
     }
 
-    last_total.filter(|&t| t > 0)
+    last_usage.filter(|t| t.total() > 0)
 }
 
-/// Parse total tokens from a Gemini transcript file.
+/// Parse tokens from a Gemini transcript file.
 ///
 /// Gemini sessions are JSON files with a messages array. Each message has
 /// a tokens object with input, output, cached, and thoughts fields.
-fn parse_gemini_total_tokens(path: &Path) -> Option<i64> {
+fn parse_gemini_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let text = fs::read_to_string(path).ok()?;
     let root: serde_json::Value = serde_json::from_str(&text).ok()?;
 
-    let mut total = 0i64;
+    let mut total_input = 0i64;
+    let mut total_output = 0i64;
+    let mut total_cached = 0i64;
 
     if let Some(messages) = root.get("messages").and_then(|m| m.as_array()) {
         for message in messages {
             if let Some(tokens) = message.get("tokens") {
-                total = total.saturating_add(
+                total_input = total_input.saturating_add(
                     tokens
                         .get("input")
                         .and_then(serde_json::Value::as_i64)
                         .unwrap_or(0),
                 );
-                total = total.saturating_add(
+                // Include thoughts in output (reasoning tokens)
+                total_output = total_output.saturating_add(
                     tokens
                         .get("output")
                         .and_then(serde_json::Value::as_i64)
                         .unwrap_or(0),
                 );
-                total = total.saturating_add(
+                total_output = total_output.saturating_add(
                     tokens
                         .get("thoughts")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(0),
+                );
+                total_cached = total_cached.saturating_add(
+                    tokens
+                        .get("cached")
                         .and_then(serde_json::Value::as_i64)
                         .unwrap_or(0),
                 );
@@ -516,7 +590,16 @@ fn parse_gemini_total_tokens(path: &Path) -> Option<i64> {
         }
     }
 
-    if total > 0 { Some(total) } else { None }
+    let total = total_input.saturating_add(total_output);
+    if total > 0 {
+        Some(TranscriptTokenUsage {
+            input_tokens: total_input,
+            output_tokens: total_output,
+            cached_tokens: total_cached,
+        })
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -593,7 +676,7 @@ mod tests {
             .unwrap();
         }
 
-        let tokens = parse_claude_total_tokens(&transcript_file);
+        let tokens = parse_transcript_total_tokens(&transcript_file, AgentKind::ClaudeCode);
         assert_eq!(tokens, Some(425)); // 100 + 50 + 200 + 75
     }
 
@@ -603,7 +686,7 @@ mod tests {
         let transcript_file = temp_dir.path().join("empty.jsonl");
         fs::File::create(&transcript_file).unwrap();
 
-        let tokens = parse_claude_total_tokens(&transcript_file);
+        let tokens = parse_transcript_total_tokens(&transcript_file, AgentKind::ClaudeCode);
         assert_eq!(tokens, None);
     }
 
@@ -617,18 +700,18 @@ mod tests {
             // Token count events - we take the last one
             writeln!(
                 f,
-                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"total_tokens": 100}}}}}}}}"#
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 50, "output_tokens": 50}}}}}}}}"#
             )
             .unwrap();
             writeln!(
                 f,
-                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"total_tokens": 500}}}}}}}}"#
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 300, "output_tokens": 200}}}}}}}}"#
             )
             .unwrap();
         }
 
-        let tokens = parse_codex_total_tokens(&transcript_file);
-        assert_eq!(tokens, Some(500)); // Last value
+        let tokens = parse_transcript_total_tokens(&transcript_file, AgentKind::Codex);
+        assert_eq!(tokens, Some(500)); // Last value: 300 + 200
     }
 
     #[test]
@@ -645,7 +728,7 @@ mod tests {
             .unwrap();
         }
 
-        let tokens = parse_gemini_total_tokens(&transcript_file);
+        let tokens = parse_transcript_total_tokens(&transcript_file, AgentKind::Gemini);
         assert_eq!(tokens, Some(525)); // 100 + 50 + 25 + 200 + 100 + 50
     }
 
@@ -672,12 +755,12 @@ mod tests {
             let mut f = fs::File::create(&codex_file).unwrap();
             writeln!(
                 f,
-                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"total_tokens": 300}}}}}}}}"#
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 200, "output_tokens": 100}}}}}}}}"#
             )
             .unwrap();
         }
         let tokens = parse_transcript_total_tokens(&codex_file, AgentKind::Codex);
-        assert_eq!(tokens, Some(300));
+        assert_eq!(tokens, Some(300)); // 200 + 100
 
         // Test Gemini dispatch
         let gemini_file = temp_dir.path().join("gemini.json");

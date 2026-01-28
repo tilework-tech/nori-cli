@@ -57,6 +57,20 @@ impl AgentKind {
         }
     }
 
+    /// Get the context window size (in tokens) for this agent.
+    ///
+    /// These are approximate values based on typical model configurations:
+    /// - Claude Code: 200K tokens
+    /// - Codex: 258K tokens  
+    /// - Gemini: 1M tokens
+    pub fn context_window_size(&self) -> i64 {
+        match self {
+            AgentKind::ClaudeCode => 200_000,
+            AgentKind::Codex => 258_000,
+            AgentKind::Gemini => 1_000_000,
+        }
+    }
+
     /// Get the provider for this agent
     pub fn provider(&self) -> Provider {
         match self {

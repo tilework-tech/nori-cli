@@ -20,7 +20,10 @@ pub(crate) struct FooterProps {
     pub(crate) use_shift_enter_hint: bool,
     pub(crate) is_task_running: bool,
     pub(crate) vertical_footer: bool,
-    pub(crate) _context_window_percent: Option<i64>,
+    /// Context window percentage remaining (0-100).
+    pub(crate) context_window_percent: Option<i64>,
+    /// Total tokens in context window (for "Context: 34K (27%)" display).
+    pub(crate) context_tokens: Option<i64>,
     pub(crate) git_branch: Option<String>,
     /// The approval mode label to display (e.g., "Read Only", "Agent", "Full Access").
     pub(crate) approval_mode_label: Option<String>,
@@ -33,8 +36,14 @@ pub(crate) struct FooterProps {
     /// Whether the current directory is a git worktree (not the main repo).
     /// When true, the git branch indicator is shown in orange instead of yellow.
     pub(crate) is_worktree: bool,
-    /// Total token usage from the external agent transcript, if available.
-    pub(crate) token_usage: Option<i64>,
+    /// Input tokens from the external agent transcript, if available.
+    pub(crate) input_tokens: Option<i64>,
+    /// Output tokens from the external agent transcript, if available.
+    pub(crate) output_tokens: Option<i64>,
+    /// Cached tokens from the external agent transcript, if available.
+    pub(crate) cached_tokens: Option<i64>,
+    /// Context window size for the agent (used to calculate percent if context_window_percent is not set).
+    pub(crate) context_window_size: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -294,6 +303,40 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         segments.push(line);
     }
 
+    // Add git stats if available: "+10 -3" (green for added, red for removed)
+    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
+        && (added > 0 || removed > 0)
+    {
+        segments.push(Line::from(vec![
+            Span::from(format!("+{added}")).green(),
+            Span::from(" ").dim(),
+            Span::from(format!("-{removed}")).red(),
+        ]));
+    }
+
+    // Add context window info if available: "Context: 34K (27%)" (white/default)
+    if let Some(tokens) = props.context_tokens
+        && tokens > 0
+    {
+        let formatted_tokens = format_si_suffix(tokens);
+        // Use provided percent, or calculate from context_window_size if available
+        let percent = props.context_window_percent.or_else(|| {
+            props.context_window_size.map(|window_size| {
+                if window_size > 0 {
+                    ((tokens as f64 / window_size as f64) * 100.0).round() as i64
+                } else {
+                    0
+                }
+            })
+        });
+        let context_text = if let Some(pct) = percent {
+            format!("Context: {formatted_tokens} ({pct}%)")
+        } else {
+            format!("Context: {formatted_tokens}")
+        };
+        segments.push(Line::from(context_text));
+    }
+
     // Add approval mode if available: "Approval Mode: Agent" (magenta)
     if let Some(label) = &props.approval_mode_label {
         segments.push(Line::from(vec![
@@ -322,23 +365,28 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add git stats if available: "+10 -3" (green for added, red for removed)
-    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
-        && (added > 0 || removed > 0)
+    // Add token usage breakdown if available: "Tokens: 45K in / 78K out (32K cached)" (dim/gray)
+    if let (Some(input), Some(output)) = (props.input_tokens, props.output_tokens)
+        && (input > 0 || output > 0)
     {
-        segments.push(Line::from(vec![
-            Span::from(format!("+{added}")).green(),
-            Span::from(" ").dim(),
-            Span::from(format!("-{removed}")).red(),
-        ]));
-    }
+        let input_fmt = format_si_suffix(input);
+        let output_fmt = format_si_suffix(output);
+        let mut spans = vec![
+            "Tokens: ".dim(),
+            Span::from(format!("{input_fmt} in")).dim(),
+            " / ".dim(),
+            Span::from(format!("{output_fmt} out")).dim(),
+        ];
 
-    // Add token usage if available and non-zero
-    if let Some(tokens) = props.token_usage
-        && tokens > 0
-    {
-        let formatted = format_si_suffix(tokens);
-        segments.push(Line::from(Span::from(format!("{formatted} tokens"))));
+        // Add cached portion if non-zero
+        if let Some(cached) = props.cached_tokens
+            && cached > 0
+        {
+            let cached_fmt = format_si_suffix(cached);
+            spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
+        }
+
+        segments.push(Line::from(spans));
     }
 
     segments
@@ -517,6 +565,30 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
+    fn default_props() -> FooterProps {
+        FooterProps {
+            mode: FooterMode::ShortcutSummary,
+            esc_backtrack_hint: false,
+            use_shift_enter_hint: false,
+            is_task_running: false,
+            vertical_footer: false,
+            context_window_percent: None,
+            context_tokens: None,
+            git_branch: None,
+            approval_mode_label: None,
+            nori_profile: None,
+            nori_version: None,
+            nori_version_source: None,
+            git_lines_added: None,
+            git_lines_removed: None,
+            is_worktree: false,
+            input_tokens: None,
+            output_tokens: None,
+            cached_tokens: None,
+            context_window_size: None,
+        }
+    }
+
     fn snapshot_footer(name: &str, props: FooterProps) {
         let height = footer_height(&props).max(1);
         let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
@@ -531,26 +603,7 @@ mod tests {
 
     #[test]
     fn footer_snapshots() {
-        snapshot_footer(
-            "footer_shortcuts_default",
-            FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
-            },
-        );
+        snapshot_footer("footer_shortcuts_default", default_props());
 
         snapshot_footer(
             "footer_shortcuts_shift_and_esc",
@@ -558,18 +611,7 @@ mod tests {
                 mode: FooterMode::ShortcutOverlay,
                 esc_backtrack_hint: true,
                 use_shift_enter_hint: true,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
 
@@ -577,20 +619,7 @@ mod tests {
             "footer_ctrl_c_quit_idle",
             FooterProps {
                 mode: FooterMode::CtrlCReminder,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
 
@@ -598,20 +627,8 @@ mod tests {
             "footer_ctrl_c_quit_running",
             FooterProps {
                 mode: FooterMode::CtrlCReminder,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
                 is_task_running: true,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
 
@@ -619,20 +636,7 @@ mod tests {
             "footer_esc_hint_idle",
             FooterProps {
                 mode: FooterMode::EscHint,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
 
@@ -641,40 +645,16 @@ mod tests {
             FooterProps {
                 mode: FooterMode::EscHint,
                 esc_backtrack_hint: true,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
 
         snapshot_footer(
             "footer_shortcuts_context_running",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
                 is_task_running: true,
-                vertical_footer: false,
-                _context_window_percent: Some(72),
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                context_window_percent: Some(72),
+                ..default_props()
             },
         );
     }
@@ -684,21 +664,14 @@ mod tests {
         snapshot_footer(
             "footer_with_full_nori_info",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: Some(72),
+                context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
-                approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
@@ -708,12 +681,8 @@ mod tests {
         snapshot_footer(
             "footer_shortcuts_vertical",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
                 vertical_footer: true,
-                _context_window_percent: Some(72),
+                context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
                 approval_mode_label: Some("Agent".to_string()),
                 nori_profile: Some("clifford".to_string()),
@@ -721,8 +690,7 @@ mod tests {
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
@@ -732,21 +700,11 @@ mod tests {
         snapshot_footer(
             "footer_with_only_git",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: Some(100),
+                context_window_percent: Some(100),
                 git_branch: Some("main".to_string()),
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
@@ -756,62 +714,36 @@ mod tests {
         snapshot_footer(
             "footer_with_no_nori",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: Some(85),
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                context_window_percent: Some(85),
+                ..default_props()
             },
         );
     }
 
     #[test]
     fn footer_with_worktree_shows_orange_branch() {
-        // When is_worktree is true, the git branch should be displayed in orange
         snapshot_footer(
             "footer_with_worktree_orange",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: Some(72),
+                context_window_percent: Some(72),
                 git_branch: Some("feature/worktree-branch".to_string()),
-                approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
                 is_worktree: true,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
 
     #[test]
     fn footer_with_approval_mode() {
-        // Test that approval mode label is displayed in the footer
         snapshot_footer(
             "footer_with_approval_mode_agent",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: Some(72),
+                context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
                 approval_mode_label: Some("Agent".to_string()),
                 nori_profile: Some("clifford".to_string()),
@@ -819,83 +751,53 @@ mod tests {
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
 
     #[test]
     fn footer_with_approval_mode_read_only() {
-        // Test Read Only mode display
         snapshot_footer(
             "footer_with_approval_mode_read_only",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
                 git_branch: Some("main".to_string()),
                 approval_mode_label: Some("Read Only".to_string()),
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
 
     #[test]
     fn footer_with_approval_mode_full_access() {
-        // Test Full Access mode display
         snapshot_footer(
             "footer_with_approval_mode_full_access",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
                 git_branch: Some("main".to_string()),
                 approval_mode_label: Some("Full Access".to_string()),
-                nori_profile: None,
-                nori_version: None,
-                nori_version_source: None,
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: None,
+                ..default_props()
             },
         );
     }
 
     #[test]
     fn footer_with_token_usage() {
-        // Test token usage display in footer (replaces transcript session ID)
+        // Test token usage breakdown display: "Tokens: 45K in / 78K out"
         snapshot_footer(
             "footer_with_token_usage",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: Some(72),
+                context_window_percent: Some(72),
+                context_tokens: Some(123456),
                 git_branch: Some("feature/test".to_string()),
-                approval_mode_label: None,
                 nori_profile: Some("clifford".to_string()),
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
                 git_lines_removed: Some(3),
-                is_worktree: false,
-                token_usage: Some(123456),
+                input_tokens: Some(45000),
+                output_tokens: Some(78456),
+                cached_tokens: Some(0),
+                ..default_props()
             },
         );
     }
@@ -906,21 +808,12 @@ mod tests {
         snapshot_footer(
             "footer_with_large_token_usage",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
                 nori_version_source: Some(NoriVersionSource::Profiles),
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: Some(1_234_567),
+                context_tokens: Some(1_234_567),
+                input_tokens: Some(500_000),
+                output_tokens: Some(734_567),
+                cached_tokens: Some(0),
+                ..default_props()
             },
         );
     }
@@ -931,21 +824,42 @@ mod tests {
         snapshot_footer(
             "footer_with_zero_token_usage",
             FooterProps {
-                mode: FooterMode::ShortcutSummary,
-                esc_backtrack_hint: false,
-                use_shift_enter_hint: false,
-                is_task_running: false,
-                vertical_footer: false,
-                _context_window_percent: None,
-                git_branch: None,
-                approval_mode_label: None,
-                nori_profile: None,
-                nori_version: None,
                 nori_version_source: Some(NoriVersionSource::Profiles),
-                git_lines_added: None,
-                git_lines_removed: None,
-                is_worktree: false,
-                token_usage: Some(0),
+                input_tokens: Some(0),
+                output_tokens: Some(0),
+                cached_tokens: Some(0),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_cached_tokens() {
+        // Test display with cached tokens: "Tokens: 45K in / 78K out (32K cached)"
+        snapshot_footer(
+            "footer_with_cached_tokens",
+            FooterProps {
+                context_window_percent: Some(27),
+                context_tokens: Some(34000),
+                input_tokens: Some(45000),
+                output_tokens: Some(78000),
+                cached_tokens: Some(32000),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_context_no_percent() {
+        // Test context display without percentage (when context_window_percent is None)
+        snapshot_footer(
+            "footer_with_context_no_percent",
+            FooterProps {
+                context_tokens: Some(34000),
+                input_tokens: Some(20000),
+                output_tokens: Some(14000),
+                cached_tokens: Some(0),
+                ..default_props()
             },
         );
     }
