@@ -3880,6 +3880,11 @@ impl ChatWidget {
         self.bottom_pane.composer_text()
     }
 
+    /// Returns the first prompt text for this session, used for transcript matching.
+    pub(crate) fn first_prompt_text(&self) -> Option<String> {
+        self.first_prompt_text.clone()
+    }
+
     /// Returns true if a popup or custom view is currently active in the bottom pane.
     pub(crate) fn has_active_popup(&self) -> bool {
         self.bottom_pane.has_active_view()

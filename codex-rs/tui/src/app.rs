@@ -245,6 +245,7 @@ pub(crate) struct App {
 struct SystemInfoRefreshRequest {
     dir: PathBuf,
     model: Option<String>,
+    first_message: Option<String>,
 }
 
 impl App {
@@ -357,6 +358,7 @@ impl App {
             app_event_tx.clone(),
             config.cwd.clone(),
             config.model.clone(),
+            initial_prompt.clone(),
         );
 
         let mut app = Self {
@@ -428,7 +430,11 @@ impl App {
         let tui_events = tui.event_stream();
         tokio::pin!(tui_events);
 
-        app.request_system_info_refresh(app.config.cwd.clone(), Some(app.config.model.clone()));
+        app.request_system_info_refresh(
+            app.config.cwd.clone(),
+            Some(app.config.model.clone()),
+            app.chat_widget.first_prompt_text(),
+        );
 
         tui.frame_requester().schedule_frame();
 
@@ -659,7 +665,7 @@ impl App {
                 self.chat_widget.apply_system_info_refresh(info);
             }
             AppEvent::RefreshSystemInfoForDirectory { dir, model } => {
-                self.request_system_info_refresh(dir, model);
+                self.request_system_info_refresh(dir, model, self.chat_widget.first_prompt_text());
             }
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
@@ -1172,8 +1178,17 @@ impl App {
         self.chat_widget.token_usage()
     }
 
-    fn request_system_info_refresh(&self, dir: PathBuf, model: Option<String>) {
-        let request = SystemInfoRefreshRequest { dir, model };
+    fn request_system_info_refresh(
+        &self,
+        dir: PathBuf,
+        model: Option<String>,
+        first_message: Option<String>,
+    ) {
+        let request = SystemInfoRefreshRequest {
+            dir,
+            model,
+            first_message,
+        };
         if self.system_info_tx.send(request).is_err() {
             tracing::error!("system info refresh channel is closed");
         }
@@ -1184,11 +1199,13 @@ impl App {
         app_event_tx: AppEventSender,
         initial_dir: PathBuf,
         initial_model: String,
+        initial_first_message: Option<String>,
     ) -> thread::JoinHandle<()> {
         thread::spawn(move || {
             let mut last_request = SystemInfoRefreshRequest {
                 dir: initial_dir,
                 model: Some(initial_model),
+                first_message: initial_first_message,
             };
             loop {
                 match system_info_rx.recv_timeout(Duration::from_secs(5)) {
@@ -1201,9 +1218,10 @@ impl App {
                     .model
                     .as_ref()
                     .and_then(|model| codex_acp::AgentKind::from_slug(model));
-                let info = crate::system_info::SystemInfo::collect_for_directory(
+                let info = crate::system_info::SystemInfo::collect_for_directory_with_message(
                     &last_request.dir,
                     agent_kind,
+                    last_request.first_message.as_deref(),
                 );
                 app_event_tx.send(AppEvent::SystemInfoRefreshed(info));
             }

@@ -57,7 +57,7 @@ impl SystemInfo {
     ///   If provided, searches for transcripts from that specific agent.
     ///   If None, attempts to detect the agent from environment variables.
     pub(crate) fn collect_fresh(agent_kind: Option<AgentKind>) -> Self {
-        Self::collect_impl(None, agent_kind)
+        Self::collect_impl(None, agent_kind, None)
     }
 
     /// Collect system info for a specific directory. This is blocking and should
@@ -72,20 +72,43 @@ impl SystemInfo {
     /// * `agent_kind` - Optional agent kind to use for transcript discovery.
     ///   If provided, searches for transcripts from that specific agent.
     ///   If None, attempts to detect the agent from environment variables.
+    #[cfg(test)]
     pub(crate) fn collect_for_directory(
         dir: &std::path::Path,
         agent_kind: Option<AgentKind>,
     ) -> Self {
-        Self::collect_impl(Some(dir), agent_kind)
+        Self::collect_impl(Some(dir), agent_kind, None)
     }
 
-    fn collect_impl(dir: Option<&std::path::Path>, agent_kind: Option<AgentKind>) -> Self {
+    /// Collect system info for a specific directory with first-message matching.
+    ///
+    /// This is the preferred method for Claude Code transcript discovery as it
+    /// uses the first user message to accurately identify the correct transcript.
+    ///
+    /// # Arguments
+    ///
+    /// * `dir` - The directory to collect system info for
+    /// * `agent_kind` - Optional agent kind to use for transcript discovery.
+    /// * `first_message` - The first user message for transcript matching (used by Claude Code)
+    pub(crate) fn collect_for_directory_with_message(
+        dir: &std::path::Path,
+        agent_kind: Option<AgentKind>,
+        first_message: Option<&str>,
+    ) -> Self {
+        Self::collect_impl(Some(dir), agent_kind, first_message)
+    }
+
+    fn collect_impl(
+        dir: Option<&std::path::Path>,
+        agent_kind: Option<AgentKind>,
+        first_message: Option<&str>,
+    ) -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(dir);
         let transcript_location = match dir {
-            Some(dir) => discover_transcript(dir, agent_kind),
+            Some(dir) => discover_transcript(dir, agent_kind, first_message),
             None => env::current_dir()
                 .ok()
-                .and_then(|cwd| discover_transcript(&cwd, agent_kind)),
+                .and_then(|cwd| discover_transcript(&cwd, agent_kind, first_message)),
         };
         let (nori_version, nori_version_source) = get_nori_version();
         Self {
@@ -102,11 +125,18 @@ impl SystemInfo {
 }
 
 /// Helper to discover transcript location for a specific agent kind.
+///
+/// Uses first-message matching for accurate transcript identification.
+/// For Claude Code, the first_message is required to find the correct transcript.
+/// For other agents (Codex, Gemini), the first_message is ignored.
 fn discover_transcript(
     dir: &std::path::Path,
     agent_kind: Option<AgentKind>,
+    first_message: Option<&str>,
 ) -> Option<TranscriptLocation> {
-    agent_kind.and_then(|agent| codex_acp::discover_transcript_for_agent(dir, agent).ok())
+    agent_kind.and_then(|agent| {
+        codex_acp::discover_transcript_for_agent_with_message(dir, agent, first_message).ok()
+    })
 }
 
 fn get_nori_version() -> (Option<String>, Option<NoriVersionSource>) {

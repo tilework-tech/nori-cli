@@ -52,9 +52,15 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `nori_profile` | Active Nori profile |
 | `git_lines_added` / `git_lines_removed` | Git diff statistics |
 | `is_worktree` | Whether CWD is a git worktree |
-| `transcript_location` | Discovered transcript path and token usage when running within an agent environment (via `codex_acp::discover_transcript_for_agent()`) |
+| `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
 
 The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
+
+Two collection methods are provided:
+- `collect_for_directory()` - Basic collection without first-message matching (test-only)
+- `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate Claude Code transcript identification
+
+The first-message is obtained from `ChatWidget::first_prompt_text()`, which stores the text of the first submitted prompt. This flows through `SystemInfoRefreshRequest` to the background worker, enabling accurate transcript matching when multiple sessions exist in the same project directory.
 
 **Slash Commands:**
 
@@ -141,7 +147,7 @@ The footer displays:
 - Token usage breakdown (e.g., "Tokens: 45K in / 78K out (32K cached)") when running within an agent environment
 - Key bindings (Ctrl+C, Esc, Enter)
 
-Token data flows from `TranscriptLocation.token_breakdown` (provided by `codex_acp::discover_transcript_for_agent()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
+Token data flows from `TranscriptLocation.token_breakdown` (provided by `codex_acp::discover_transcript_for_agent_with_message()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
 
 **External Editor Integration (`editor.rs`):**
 
@@ -188,5 +194,6 @@ When errors occur, users are directed to report bugs at `https://github.com/tile
 - Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
 - Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning).
 - The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
+- The `first_prompt_text` field in `ChatWidget` is set when the user submits their first message and is used for transcript matching in Claude Code sessions
 
 Created and maintained by Nori.

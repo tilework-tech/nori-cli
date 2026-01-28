@@ -106,6 +106,10 @@ The binding string format is kept terminal-agnostic (no crossterm dependency in 
 
 Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to display token usage in the footer.
 
+Two discovery entry points are provided:
+- `discover_transcript_for_agent()` - Basic discovery using directory/CWD matching (legacy)
+- `discover_transcript_for_agent_with_message()` - Preferred entry point that uses first-message matching for Claude Code
+
 Agent detection via environment variables:
 
 | Env Var | Agent |
@@ -118,11 +122,23 @@ Transcript file locations and matching strategy:
 
 | Agent | Path Pattern | Matching Strategy |
 |-------|--------------|-------------------|
-| Claude Code | `~/.claude/projects/<transformed-path>/<uuid>.jsonl` | Path transformation: replace non-alphanumeric chars with `-`, add leading `-` |
+| Claude Code | `~/.claude/projects/<transformed-path>/<uuid>.jsonl` | First-message matching (requires `first_message` parameter) |
 | Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | Parse first JSON line for `payload.cwd` field, match against CWD |
 | Gemini | `~/.gemini/tmp/<sha256-hash>/chats/<session>.json` | Hash is SHA256 of canonical working directory path |
 
-All discovery functions return the most recently modified matching file.
+**Claude Code First-Message Matching:**
+
+Claude Code transcript discovery uses the first user message to accurately identify the correct transcript file. This is necessary because multiple sessions may exist in the same project directory, and picking the most-recently-modified file could return the wrong transcript.
+
+The matching process:
+1. Normalize both the search message and file messages by stripping whitespace and truncating to 20 characters
+2. Only consider files modified in the last 2 days (`MAX_TRANSCRIPT_AGE_SECS = 172800`)
+3. Read up to 10 lines (`MAX_LINES_TO_SEARCH`) or until the first user text entry is found
+4. Skip `tool_result` entries (which also have `"type":"user"`)
+5. If multiple files match, pick the most recently modified one
+6. If no first_message is provided or no match is found, return an error (fail closed rather than return wrong transcript)
+
+The `first_message` flows from the TUI's `ChatWidget::first_prompt_text()` through the system info refresh mechanism to the discovery layer.
 
 **Token Usage Parsing** (`transcript_discovery.rs`):
 
@@ -164,10 +180,10 @@ Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a backg
 
 The data flow is:
 ```
-SystemInfo::collect_fresh() (background thread)
+SystemInfo::collect_for_directory_with_message() (background thread)
     |
     v
-discover_transcript_for_agent(cwd, agent_kind)
+discover_transcript_for_agent_with_message(cwd, agent_kind, first_message)
     |
     v
 parse_transcript_tokens(path, agent_kind)
@@ -292,6 +308,7 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 - A `DRAIN_YIELD_COUNT` of 10 yields allows pending notifications to drain before session cleanup
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
+- Claude Code transcript discovery requires the first user message to function correctly; without it, the discovery returns an error
 
 **Event Flow Tracing:**
 

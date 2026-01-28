@@ -35,6 +35,7 @@ sha2 = { workspace = true }
 libc = { workspace = true }
 
 [dev-dependencies]
+filetime = "0.2"
 pretty_assertions = { workspace = true }
 serial_test = { workspace = true }
 tempfile = { workspace = true }
