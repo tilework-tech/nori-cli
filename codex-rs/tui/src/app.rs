@@ -236,7 +236,7 @@ pub(crate) struct App {
     pending_agent: Option<PendingAgentSelection>,
 
     /// Configurable hotkey bindings loaded from NoriConfig.
-    hotkey_config: codex_acp::config::HotkeyConfig,
+    pub(crate) hotkey_config: codex_acp::config::HotkeyConfig,
 }
 
 impl App {
@@ -367,6 +367,10 @@ impl App {
                 .unwrap_or_default()
                 .hotkeys,
         };
+
+        // Propagate initial hotkey config to the textarea so editing bindings
+        // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
+        app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
@@ -502,6 +506,8 @@ impl App {
                     expected_model: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
                     if let Some(command) = summary.resume_command {
@@ -1026,6 +1032,8 @@ impl App {
                     expected_model: Some(model_name.clone()),
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
 
                 self.chat_widget.add_info_message(
                     format!("Started new conversation with agent: {display_name}"),
@@ -1331,6 +1339,8 @@ impl App {
         }
 
         self.hotkey_config.set_binding(action, binding.clone());
+        self.chat_widget
+            .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.add_info_message(
             format!(
                 "{} bound to {}",

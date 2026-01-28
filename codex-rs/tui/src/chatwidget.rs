@@ -2530,6 +2530,11 @@ impl ChatWidget {
         self.bottom_pane.show_view(Box::new(view));
     }
 
+    /// Update the hotkey configuration used by the textarea for editing bindings.
+    pub(crate) fn set_hotkey_config(&mut self, config: codex_acp::config::HotkeyConfig) {
+        self.bottom_pane.set_hotkey_config(config);
+    }
+
     /// Handle the /switch-skillset command.
     /// Checks if nori-skillsets is available and lists available skillsets.
     fn handle_switch_skillset_command(&mut self) {

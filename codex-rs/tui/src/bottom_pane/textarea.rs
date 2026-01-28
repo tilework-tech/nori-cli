@@ -64,7 +64,6 @@ impl TextArea {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_hotkey_config(&mut self, config: HotkeyConfig) {
         self.hotkey_config = config;
     }
