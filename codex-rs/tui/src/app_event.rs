@@ -60,7 +60,14 @@ pub(crate) enum AppEvent {
 
     /// Request to refresh system info for a specific directory.
     /// This is triggered when the effective CWD changes during agent operations.
-    RefreshSystemInfoForDirectory(PathBuf),
+    ///
+    /// The optional model name is used to determine which agent's transcripts to search for.
+    RefreshSystemInfoForDirectory {
+        /// The directory to collect system info for
+        dir: PathBuf,
+        /// Optional model name (e.g., "claude-code", "gemini") to determine agent kind
+        model: Option<String>,
+    },
 
     /// Result of refreshing rate limits
     #[allow(dead_code)]

@@ -101,7 +101,28 @@ pub fn detect_agent_kind() -> Option<AgentKind> {
 /// could be found.
 pub fn discover_current_transcript(cwd: &Path) -> Result<TranscriptLocation, DiscoveryError> {
     let agent = detect_agent_kind().ok_or(DiscoveryError::NoAgentDetected)?;
+    discover_transcript_for_agent(cwd, agent)
+}
 
+/// Discover the transcript location for a specific agent kind.
+///
+/// This function is useful when you already know which agent is running
+/// (e.g., from the ACP backend configuration) and don't need to detect
+/// it from environment variables.
+///
+/// # Arguments
+///
+/// * `cwd` - The current working directory to find transcripts for
+/// * `agent` - The agent kind to search for transcripts
+///
+/// # Returns
+///
+/// Returns the discovered transcript location, or an error if no transcript
+/// could be found.
+pub fn discover_transcript_for_agent(
+    cwd: &Path,
+    agent: AgentKind,
+) -> Result<TranscriptLocation, DiscoveryError> {
     match agent {
         AgentKind::ClaudeCode => find_current_transcript_claude(cwd),
         AgentKind::Codex => find_current_transcript_codex(cwd),

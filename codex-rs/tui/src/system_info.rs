@@ -1,3 +1,4 @@
+use codex_acp::AgentKind;
 use codex_acp::TranscriptLocation;
 use std::env;
 use std::fs;
@@ -21,16 +22,22 @@ impl SystemInfo {
     /// Only available in debug builds for E2E testing via NORI_SYNC_SYSTEM_INFO=1.
     #[cfg(debug_assertions)]
     pub fn collect_sync() -> Self {
-        Self::collect_fresh()
+        Self::collect_fresh(None)
     }
 
     /// Collect fresh system info. This is blocking and should be called from
     /// a background thread to avoid blocking TUI startup.
-    pub(crate) fn collect_fresh() -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// * `agent_kind` - Optional agent kind to use for transcript discovery.
+    ///   If provided, searches for transcripts from that specific agent.
+    ///   If None, attempts to detect the agent from environment variables.
+    pub(crate) fn collect_fresh(agent_kind: Option<AgentKind>) -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(None);
         let transcript_location = env::current_dir()
             .ok()
-            .and_then(|cwd| codex_acp::discover_current_transcript(&cwd).ok());
+            .and_then(|cwd| discover_transcript(&cwd, agent_kind));
         Self {
             git_branch: get_git_branch(None),
             nori_profile: get_nori_profile(),
@@ -47,9 +54,19 @@ impl SystemInfo {
     ///
     /// This is used when the agent is working in a different directory than the
     /// TUI was launched from (e.g., a git worktree).
-    pub(crate) fn collect_for_directory(dir: &std::path::Path) -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// * `dir` - The directory to collect system info for
+    /// * `agent_kind` - Optional agent kind to use for transcript discovery.
+    ///   If provided, searches for transcripts from that specific agent.
+    ///   If None, attempts to detect the agent from environment variables.
+    pub(crate) fn collect_for_directory(
+        dir: &std::path::Path,
+        agent_kind: Option<AgentKind>,
+    ) -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(Some(dir));
-        let transcript_location = codex_acp::discover_current_transcript(dir).ok();
+        let transcript_location = discover_transcript(dir, agent_kind);
         Self {
             git_branch: get_git_branch(Some(dir)),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
@@ -59,6 +76,17 @@ impl SystemInfo {
             is_worktree: is_git_worktree(Some(dir)),
             transcript_location,
         }
+    }
+}
+
+/// Helper to discover transcript location with optional agent kind.
+fn discover_transcript(
+    dir: &std::path::Path,
+    agent_kind: Option<AgentKind>,
+) -> Option<TranscriptLocation> {
+    match agent_kind {
+        Some(agent) => codex_acp::discover_transcript_for_agent(dir, agent).ok(),
+        None => codex_acp::discover_current_transcript(dir).ok(),
     }
 }
 
@@ -312,7 +340,7 @@ mod tests {
         // Test that collect_for_directory runs git commands in the specified directory
         // We use the current repo directory which should be a valid git repo
         let current_dir = std::env::current_dir().expect("should have current dir");
-        let info = SystemInfo::collect_for_directory(&current_dir);
+        let info = SystemInfo::collect_for_directory(&current_dir, None);
 
         // The current directory is a git repo, so we should get branch info
         // (unless in detached HEAD state in CI)
@@ -325,7 +353,7 @@ mod tests {
     fn test_collect_for_directory_non_git_returns_none_branch() {
         // Test that a non-git directory returns None for git_branch
         let temp_dir = std::env::temp_dir();
-        let info = SystemInfo::collect_for_directory(&temp_dir);
+        let info = SystemInfo::collect_for_directory(&temp_dir, None);
 
         // /tmp is not a git repo, so git_branch should be None
         assert!(

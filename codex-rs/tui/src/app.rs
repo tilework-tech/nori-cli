@@ -406,8 +406,10 @@ impl App {
         // once collection completes.
         {
             let tx = app.app_event_tx.clone();
+            let model = app.config.model.clone();
             thread::spawn(move || {
-                let info = crate::system_info::SystemInfo::collect_fresh();
+                let agent_kind = codex_acp::AgentKind::from_slug(&model);
+                let info = crate::system_info::SystemInfo::collect_fresh(agent_kind);
                 tx.send(AppEvent::SystemInfoRefreshed(info));
             });
         }
@@ -638,12 +640,15 @@ impl App {
             AppEvent::SystemInfoRefreshed(info) => {
                 self.chat_widget.apply_system_info_refresh(info);
             }
-            AppEvent::RefreshSystemInfoForDirectory(dir) => {
+            AppEvent::RefreshSystemInfoForDirectory { dir, model } => {
                 // Spawn a background thread to collect system info for the specified directory.
                 // This is triggered when the effective CWD changes during agent operations.
                 let tx = self.app_event_tx.clone();
+                // Convert model name to AgentKind for transcript discovery
+                let agent_kind = model.and_then(|m| codex_acp::AgentKind::from_slug(&m));
                 thread::spawn(move || {
-                    let info = crate::system_info::SystemInfo::collect_for_directory(&dir);
+                    let info =
+                        crate::system_info::SystemInfo::collect_for_directory(&dir, agent_kind);
                     tx.send(AppEvent::SystemInfoRefreshed(info));
                 });
             }

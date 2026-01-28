@@ -3492,7 +3492,7 @@ fn drain_refresh_system_info_events(
 ) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     while let Ok(ev) = rx.try_recv() {
-        if let AppEvent::RefreshSystemInfoForDirectory(dir) = ev {
+        if let AppEvent::RefreshSystemInfoForDirectory { dir, model: _ } = ev {
             dirs.push(dir);
         }
     }
