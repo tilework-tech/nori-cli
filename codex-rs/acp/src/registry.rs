@@ -105,6 +105,17 @@ impl AgentKind {
         &[AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::Gemini]
     }
 
+    /// Get the base directory for transcript files, relative to home directory.
+    ///
+    /// Returns the path where this agent stores session transcript files.
+    pub fn transcript_base_dir(&self) -> &'static str {
+        match self {
+            AgentKind::ClaudeCode => ".claude/projects",
+            AgentKind::Codex => ".codex/sessions",
+            AgentKind::Gemini => ".gemini/tmp",
+        }
+    }
+
     /// Get authentication hint for this agent.
     ///
     /// Returns actionable instructions on how to authenticate with this agent's provider.
@@ -902,6 +913,17 @@ mod tests {
             gemini_hint.contains("/login"),
             "Gemini hint should mention '/login', got: {gemini_hint}"
         );
+    }
+
+    #[test]
+    fn test_agent_transcript_base_dir() {
+        // Each agent should return the correct base directory path relative to home
+        assert_eq!(
+            AgentKind::ClaudeCode.transcript_base_dir(),
+            ".claude/projects"
+        );
+        assert_eq!(AgentKind::Codex.transcript_base_dir(), ".codex/sessions");
+        assert_eq!(AgentKind::Gemini.transcript_base_dir(), ".gemini/tmp");
     }
 
     #[test]

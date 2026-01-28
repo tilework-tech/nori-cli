@@ -58,7 +58,7 @@ The `transcript_location` field includes both `token_usage` (total tokens) and `
 
 Two collection methods are provided:
 - `collect_for_directory()` - Basic collection without first-message matching (test-only)
-- `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate Claude Code transcript identification
+- `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate transcript identification across all agents
 
 The first-message is obtained from `ChatWidget::first_prompt_text()`, which stores the text of the first submitted prompt. This flows through `SystemInfoRefreshRequest` to the background worker, enabling accurate transcript matching when multiple sessions exist in the same project directory.
 
@@ -194,6 +194,6 @@ When errors occur, users are directed to report bugs at `https://github.com/tile
 - Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
 - Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning).
 - The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
-- The `first_prompt_text` field in `ChatWidget` is set when the user submits their first message and is used for transcript matching in Claude Code sessions
+- The `first_prompt_text` field in `ChatWidget` is set when the user submits their first message and is used for transcript matching across all agent sessions
 
 Created and maintained by Nori.
