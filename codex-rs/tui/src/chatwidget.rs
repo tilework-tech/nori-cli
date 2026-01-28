@@ -612,17 +612,19 @@ impl ChatWidget {
     }
 
     fn apply_token_info(&mut self, info: TokenUsageInfo) {
-        let percent = self.context_remaining_percent(&info);
+        let percent = self.context_used_percent(&info);
         self.bottom_pane.set_context_window_percent(percent);
         self.token_info = Some(info);
     }
 
-    fn context_remaining_percent(&self, info: &TokenUsageInfo) -> Option<i64> {
+    fn context_used_percent(&self, info: &TokenUsageInfo) -> Option<i64> {
         info.model_context_window
             .or(self.config.model_context_window)
             .map(|window| {
-                info.last_token_usage
-                    .percent_of_context_window_remaining(window)
+                let remaining = info
+                    .last_token_usage
+                    .percent_of_context_window_remaining(window);
+                (100 - remaining).clamp(0, 100)
             })
     }
 

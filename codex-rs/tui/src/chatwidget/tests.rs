@@ -235,7 +235,7 @@ fn review_restores_context_window_indicator() {
             rate_limits: None,
         }),
     });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(30));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
 
     chat.handle_codex_event(Event {
         id: "review-start".into(),
@@ -252,7 +252,7 @@ fn review_restores_context_window_indicator() {
             rate_limits: None,
         }),
     });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(97));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(3));
 
     chat.handle_codex_event(Event {
         id: "review-end".into(),
@@ -262,7 +262,7 @@ fn review_restores_context_window_indicator() {
     });
     let _ = drain_insert_history(&mut rx);
 
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(30));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
     assert!(!chat.is_review_mode);
 }
 
@@ -281,7 +281,7 @@ fn token_count_none_resets_context_indicator() {
             rate_limits: None,
         }),
     });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(30));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
 
     chat.handle_codex_event(Event {
         id: "token-cleared".into(),

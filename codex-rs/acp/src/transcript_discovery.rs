@@ -56,8 +56,6 @@ pub struct TranscriptLocation {
     pub transcript_path: PathBuf,
     /// Session identifier (UUID or derived from filename).
     pub session_id: String,
-    /// Total token usage from the transcript, if parsed.
-    pub token_usage: Option<i64>,
     /// Detailed token usage breakdown, if available.
     pub token_breakdown: Option<TranscriptTokenUsage>,
 }
@@ -159,29 +157,8 @@ pub fn find_current_transcript_claude(cwd: &Path) -> Result<TranscriptLocation, 
         return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
     }
 
-    // Find all .jsonl files and get the most recently modified one
-    let mut most_recent: Option<(PathBuf, SystemTime)> = None;
-
-    for entry in fs::read_dir(&project_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.extension().and_then(|e| e.to_str()) == Some("jsonl") && path.is_file() {
-            let metadata = entry.metadata()?;
-            let modified = metadata.modified()?;
-
-            match &most_recent {
-                None => most_recent = Some((path, modified)),
-                Some((_, prev_time)) if modified > *prev_time => {
-                    most_recent = Some((path, modified));
-                }
-                _ => {}
-            }
-        }
-    }
-
-    let (transcript_path, _) =
-        most_recent.ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
+    let transcript_path = most_recent_file(&project_dir, "jsonl")?
+        .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
 
     // Extract session ID from filename (UUID before .jsonl)
     let session_id = transcript_path
@@ -192,13 +169,10 @@ pub fn find_current_transcript_claude(cwd: &Path) -> Result<TranscriptLocation, 
 
     // Parse token usage from the transcript
     let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::ClaudeCode);
-    let token_usage = token_breakdown.as_ref().map(TranscriptTokenUsage::total);
-
     Ok(TranscriptLocation {
         agent_kind: AgentKind::ClaudeCode,
         transcript_path,
         session_id,
-        token_usage,
         token_breakdown,
     })
 }
@@ -271,13 +245,10 @@ pub fn find_current_transcript_codex(cwd: &Path) -> Result<TranscriptLocation, D
 
     // Parse token usage from the transcript
     let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Codex);
-    let token_usage = token_breakdown.as_ref().map(TranscriptTokenUsage::total);
-
     Ok(TranscriptLocation {
         agent_kind: AgentKind::Codex,
         transcript_path,
         session_id,
-        token_usage,
         token_breakdown,
     })
 }
@@ -340,29 +311,8 @@ pub fn find_current_transcript_gemini(cwd: &Path) -> Result<TranscriptLocation, 
         return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
     }
 
-    // Find the most recently modified .json file
-    let mut most_recent: Option<(PathBuf, SystemTime)> = None;
-
-    for entry in fs::read_dir(&chats_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.extension().and_then(|e| e.to_str()) == Some("json") && path.is_file() {
-            let metadata = entry.metadata()?;
-            let modified = metadata.modified()?;
-
-            match &most_recent {
-                None => most_recent = Some((path, modified)),
-                Some((_, prev_time)) if modified > *prev_time => {
-                    most_recent = Some((path, modified));
-                }
-                _ => {}
-            }
-        }
-    }
-
-    let (transcript_path, _) =
-        most_recent.ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
+    let transcript_path = most_recent_file(&chats_dir, "json")?
+        .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
 
     // Extract session ID from filename
     let session_id = transcript_path
@@ -373,13 +323,10 @@ pub fn find_current_transcript_gemini(cwd: &Path) -> Result<TranscriptLocation, 
 
     // Parse token usage from the transcript
     let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Gemini);
-    let token_usage = token_breakdown.as_ref().map(TranscriptTokenUsage::total);
-
     Ok(TranscriptLocation {
         agent_kind: AgentKind::Gemini,
         transcript_path,
         session_id,
-        token_usage,
         token_breakdown,
     })
 }
@@ -410,6 +357,33 @@ fn read_dir_sorted_desc(path: &Path) -> std::io::Result<Vec<fs::DirEntry>> {
         .collect();
     entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
     Ok(entries)
+}
+
+/// Find the most recently modified file with the given extension in a directory.
+fn most_recent_file(path: &Path, extension: &str) -> std::io::Result<Option<PathBuf>> {
+    let mut most_recent: Option<(PathBuf, SystemTime)> = None;
+
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+
+        if entry_path.extension().and_then(|e| e.to_str()) == Some(extension)
+            && entry_path.is_file()
+        {
+            let metadata = entry.metadata()?;
+            let modified = metadata.modified()?;
+
+            match &most_recent {
+                None => most_recent = Some((entry_path, modified)),
+                Some((_, prev_time)) if modified > *prev_time => {
+                    most_recent = Some((entry_path, modified));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(most_recent.map(|(path, _)| path))
 }
 
 /// Parse token usage from a transcript file (synchronous).

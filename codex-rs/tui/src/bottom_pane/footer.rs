@@ -20,7 +20,7 @@ pub(crate) struct FooterProps {
     pub(crate) use_shift_enter_hint: bool,
     pub(crate) is_task_running: bool,
     pub(crate) vertical_footer: bool,
-    /// Context window percentage remaining (0-100).
+    /// Context window percentage used (0-100).
     pub(crate) context_window_percent: Option<i64>,
     /// Total tokens in context window (for "Context: 34K (27%)" display).
     pub(crate) context_tokens: Option<i64>,
@@ -42,8 +42,6 @@ pub(crate) struct FooterProps {
     pub(crate) output_tokens: Option<i64>,
     /// Cached tokens from the external agent transcript, if available.
     pub(crate) cached_tokens: Option<i64>,
-    /// Context window size for the agent (used to calculate percent if context_window_percent is not set).
-    pub(crate) context_window_size: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -319,17 +317,7 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         && tokens > 0
     {
         let formatted_tokens = format_si_suffix(tokens);
-        // Use provided percent, or calculate from context_window_size if available
-        let percent = props.context_window_percent.or_else(|| {
-            props.context_window_size.map(|window_size| {
-                if window_size > 0 {
-                    ((tokens as f64 / window_size as f64) * 100.0).round() as i64
-                } else {
-                    0
-                }
-            })
-        });
-        let context_text = if let Some(pct) = percent {
+        let context_text = if let Some(pct) = props.context_window_percent {
             format!("Context: {formatted_tokens} ({pct}%)")
         } else {
             format!("Context: {formatted_tokens}")
@@ -585,7 +573,6 @@ mod tests {
             input_tokens: None,
             output_tokens: None,
             cached_tokens: None,
-            context_window_size: None,
         }
     }
 

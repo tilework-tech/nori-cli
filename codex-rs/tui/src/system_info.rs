@@ -57,21 +57,7 @@ impl SystemInfo {
     ///   If provided, searches for transcripts from that specific agent.
     ///   If None, attempts to detect the agent from environment variables.
     pub(crate) fn collect_fresh(agent_kind: Option<AgentKind>) -> Self {
-        let (git_lines_added, git_lines_removed) = get_git_stats(None);
-        let transcript_location = env::current_dir()
-            .ok()
-            .and_then(|cwd| discover_transcript(&cwd, agent_kind));
-        let (nori_version, nori_version_source) = get_nori_version();
-        Self {
-            git_branch: get_git_branch(None),
-            nori_profile: get_nori_profile(),
-            nori_version,
-            nori_version_source,
-            git_lines_added,
-            git_lines_removed,
-            is_worktree: is_git_worktree(None),
-            transcript_location,
-        }
+        Self::collect_impl(None, agent_kind)
     }
 
     /// Collect system info for a specific directory. This is blocking and should
@@ -90,17 +76,26 @@ impl SystemInfo {
         dir: &std::path::Path,
         agent_kind: Option<AgentKind>,
     ) -> Self {
-        let (git_lines_added, git_lines_removed) = get_git_stats(Some(dir));
-        let transcript_location = discover_transcript(dir, agent_kind);
+        Self::collect_impl(Some(dir), agent_kind)
+    }
+
+    fn collect_impl(dir: Option<&std::path::Path>, agent_kind: Option<AgentKind>) -> Self {
+        let (git_lines_added, git_lines_removed) = get_git_stats(dir);
+        let transcript_location = match dir {
+            Some(dir) => discover_transcript(dir, agent_kind),
+            None => env::current_dir()
+                .ok()
+                .and_then(|cwd| discover_transcript(&cwd, agent_kind)),
+        };
         let (nori_version, nori_version_source) = get_nori_version();
         Self {
-            git_branch: get_git_branch(Some(dir)),
+            git_branch: get_git_branch(dir),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
             nori_version,
             nori_version_source,
             git_lines_added,
             git_lines_removed,
-            is_worktree: is_git_worktree(Some(dir)),
+            is_worktree: is_git_worktree(dir),
             transcript_location,
         }
     }

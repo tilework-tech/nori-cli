@@ -157,9 +157,8 @@ Claude Code logs multiple JSONL entries per API request due to streaming (each s
 | `cache_read_input_tokens` | Tokens read from cache (discounted) | Reported as `cached_tokens` |
 | `output_tokens` | Output tokens generated | Added to `output_tokens` |
 
-The `TranscriptLocation` struct returned by discovery functions includes both:
-- `token_usage: Option<i64>` - Total tokens (input + output) for backward compatibility
-- `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for new features
+The `TranscriptLocation` struct returned by discovery functions includes:
+- `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for input, output, and cached tokens
 
 Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
 
@@ -174,7 +173,7 @@ discover_transcript_for_agent(cwd, agent_kind)
 parse_transcript_tokens(path, agent_kind)
     |
     v
-TranscriptLocation { ..., token_usage, token_breakdown }
+TranscriptLocation { ..., token_breakdown }
     |
     v
 FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
