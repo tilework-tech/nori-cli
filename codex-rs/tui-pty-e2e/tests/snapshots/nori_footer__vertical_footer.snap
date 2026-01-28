@@ -1,8 +1,10 @@
 ---
 source: tui-pty-e2e/tests/nori_footer.rs
-assertion_line: 202
 expression: normalize_for_input_snapshot(contents)
 ---
+enhancements
+
+
 › [DEFAULT_PROMPT]
 
   ⎇ master

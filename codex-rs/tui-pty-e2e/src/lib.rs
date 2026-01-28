@@ -977,21 +977,21 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // 1. Boxed header with "╭──" border
     // 2. Plain text "Nori CLI"
     // The header ends with either:
-    // - nori-skillsets install command (when nori-skillsets is not installed)
+    // - nori-skillsets init command (when nori-skillsets is not installed)
     // - bottom border "╰──" (when nori-skillsets is already installed)
     let lines: Vec<&str> = normalized.lines().collect();
 
     // Detect if header is present (either boxed or plain text form)
     let has_header = lines.iter().any(|l| {
-        l.contains("╭──") || l.contains("Nori CLI") || l.contains("'npx nori-skillsets install'")
+        l.contains("╭──") || l.contains("Nori CLI") || l.contains("'npx nori-skillsets init'")
     });
 
     let mut result = if has_header {
         // Find where the header ends
         let mut skip_until = 0;
         for (i, line) in lines.iter().enumerate() {
-            // The nori-skillsets install line marks the end of the command list (if present)
-            if line.contains("'npx nori-skillsets install'") {
+            // The nori-skillsets init line marks the end of the command list (if present)
+            if line.contains("'npx nori-skillsets init'") {
                 skip_until = i + 1;
                 break;
             }

@@ -156,7 +156,7 @@ fn test_startup_shows_nori_banner() {
     // Wait for the install instructions to appear (this is the key indicator that nori-skillsets is not installed)
     // We wait for this specifically since it ensures the full banner render including the install hint
     session
-        .wait_for_text("npx nori-skillsets install", TIMEOUT)
+        .wait_for_text("npx nori-skillsets init", TIMEOUT)
         .expect("Install instructions did not appear - nori-skillsets might be in PATH");
 
     let contents = session.screen_contents();

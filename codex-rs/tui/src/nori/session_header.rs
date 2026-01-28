@@ -437,7 +437,7 @@ pub(crate) fn new_nori_session_info(
             help_lines.push(Line::from(""));
             help_lines.push(Line::from(vec![
                 "  Run '".dim(),
-                "npx nori-ai install".cyan(),
+                "npx nori-skillsets init".cyan(),
                 "' to set up Nori AI enhancements".dim(),
             ]));
         }
