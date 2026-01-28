@@ -59,10 +59,22 @@ pub fn config_picker_params(
             "Send native desktop notifications on events",
             os_notifications_enabled,
             {
-                let tx = app_event_tx;
+                let tx = app_event_tx.clone();
                 let new_value = !os_notifications_enabled;
                 move || {
                     tx.send(AppEvent::SetConfigOsNotifications(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "Vim Mode",
+            "Enable vim-style navigation in the textarea (Escape enters normal mode)",
+            config.vim_mode,
+            {
+                let tx = app_event_tx;
+                let new_value = !config.vim_mode;
+                move || {
+                    tx.send(AppEvent::SetConfigVimMode(new_value));
                 }
             },
         ),
@@ -197,6 +209,7 @@ mod tests {
             os_notifications: OsNotifications::Enabled,
             vertical_footer,
             notify_after_idle: codex_acp::config::NotifyAfterIdle::FiveSeconds,
+            vim_mode: false,
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
@@ -212,7 +225,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 5);
+        assert_eq!(params.items.len(), 6);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -240,18 +253,20 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_five_items() {
+    fn config_picker_returns_six_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 5);
-        // The 4th item should be Notify After Idle
-        assert!(params.items[3].name.contains("Notify After Idle"));
-        // The 5th item should be Hotkeys
-        assert!(params.items[4].name.contains("Hotkeys"));
+        assert_eq!(params.items.len(), 6);
+        // The 4th item should be Vim Mode
+        assert!(params.items[3].name.contains("Vim Mode"));
+        // The 5th item should be Notify After Idle
+        assert!(params.items[4].name.contains("Notify After Idle"));
+        // The 6th item should be Hotkeys
+        assert!(params.items[5].name.contains("Hotkeys"));
     }
 
     #[test]
@@ -263,7 +278,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[3];
+        let idle_item = &params.items[4];
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -279,8 +294,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the notify after idle action (4th item)
-        let idle_item = &params.items[3];
+        // Trigger the notify after idle action (5th item, index 4)
+        let idle_item = &params.items[4];
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -326,8 +341,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the hotkeys action (5th item)
-        let hotkeys_item = &params.items[4];
+        // Trigger the hotkeys action (6th item, index 5)
+        let hotkeys_item = &params.items[5];
         assert!(hotkeys_item.name.contains("Hotkeys"));
         for action in &hotkeys_item.actions {
             action(&tx);
@@ -397,6 +412,77 @@ mod tests {
                 assert_eq!(value, codex_acp::config::NotifyAfterIdle::SixtySeconds);
             }
             _ => panic!("expected SetConfigNotifyAfterIdle event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_includes_vim_mode_toggle() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        // Should now have 6 items (added vim mode)
+        assert_eq!(params.items.len(), 6);
+        // Find the vim mode item
+        let vim_mode_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vim Mode"));
+        assert!(
+            vim_mode_item.is_some(),
+            "config picker should include Vim Mode toggle"
+        );
+    }
+
+    #[test]
+    fn config_picker_vim_mode_shows_current_state() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.vim_mode = true;
+
+        let params = config_picker_params(&config, tx);
+
+        let vim_mode_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vim Mode"))
+            .expect("should have vim mode item");
+        assert!(
+            vim_mode_item.name.contains("(on)"),
+            "vim mode should show (on) when enabled"
+        );
+    }
+
+    #[test]
+    fn config_picker_vim_mode_action_sends_correct_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.vim_mode = false;
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let vim_mode_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vim Mode"))
+            .expect("should have vim mode item");
+
+        // Trigger the action
+        for action in &vim_mode_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigVimMode(value) => {
+                // Was false, should toggle to true
+                assert!(value, "vim_mode was off, should toggle to on");
+            }
+            _ => panic!("expected SetConfigVimMode event, got: {event:?}"),
         }
     }
 }

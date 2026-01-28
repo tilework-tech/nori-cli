@@ -95,6 +95,16 @@ Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in
 
 The binding string format is kept terminal-agnostic (no crossterm dependency in the config crate). The TUI layer in `@/codex-rs/tui/src/nori/hotkey_match.rs` handles conversion between binding strings and crossterm `KeyEvent` types. `HotkeyConfig` is carried on `NoriConfig` and resolved during config loading in `loader.rs`.
 
+**Vim Mode Configuration** (`config/types.rs`):
+
+The `vim_mode` boolean in `TuiConfigToml` and `NoriConfig` enables vim-style navigation in the textarea. Stored under `[tui]` in `config.toml`:
+
+| Field | TOML Key | Default | Controls |
+|-------|----------|---------|----------|
+| `vim_mode` | `vim_mode` | `false` | When enabled, textarea supports Insert/Normal mode switching and h/j/k/l navigation |
+
+The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys which are string bindings, vim mode is a simple boolean toggle. The TUI layer (`@/codex-rs/tui/`) handles the vim mode state machine and propagation.
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`

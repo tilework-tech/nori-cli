@@ -216,6 +216,10 @@ impl ChatComposer {
         self.textarea.set_hotkey_config(config);
     }
 
+    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        self.textarea.set_vim_mode_enabled(enabled);
+    }
+
     /// Integrate an asynchronous response to an on-demand history lookup. If
     /// the entry is present and the offset matches the current cursor we
     /// immediately populate the textarea.

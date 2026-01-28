@@ -136,6 +136,25 @@ The textarea's `input()` method processes key events in three priority stages: (
 
 The hotkey picker (`@/codex-rs/tui/src/nori/hotkey_picker.rs`) implements `BottomPaneView` directly (not `ListSelectionView`) because rebinding requires raw key capture. It uses a videogame-style rebind flow: select an action, press Enter, press the desired key. Conflicts are resolved by swapping bindings. The `r` key resets the selected action to its default.
 
+**Vim Mode:**
+
+The textarea supports an optional vim-style navigation mode, toggled via `/config` ("Vim Mode" item) and persisted to `config.toml` under `[tui]`:
+
+```toml
+[tui]
+vim_mode = true
+```
+
+When enabled, the textarea operates in two modes:
+
+| Mode | Behavior |
+|------|----------|
+| Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode. |
+| Normal | Navigation mode. h/j/k/l move cursor left/down/up/right. Press `i` to return to Insert mode. Other keys are ignored. |
+
+The state machine is implemented in `textarea.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings.
+
+Config changes emit `AppEvent::SetConfigVimMode`, handled in `app.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
 
 **Status Line Footer:**
 

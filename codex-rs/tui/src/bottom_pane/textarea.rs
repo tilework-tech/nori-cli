@@ -28,6 +28,16 @@ struct TextElement {
     range: Range<usize>,
 }
 
+/// Vim mode state for the textarea.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum VimModeState {
+    /// Insert mode - characters are inserted as typed.
+    #[default]
+    Insert,
+    /// Normal mode - h/j/k/l navigate, 'i' returns to insert mode.
+    Normal,
+}
+
 #[derive(Debug)]
 pub(crate) struct TextArea {
     text: String,
@@ -37,6 +47,10 @@ pub(crate) struct TextArea {
     elements: Vec<TextElement>,
     kill_buffer: String,
     hotkey_config: HotkeyConfig,
+    /// Whether vim mode is enabled (user setting).
+    vim_mode_enabled: bool,
+    /// Current vim mode state (Insert or Normal).
+    vim_mode_state: VimModeState,
 }
 
 #[derive(Debug, Clone)]
@@ -61,11 +75,35 @@ impl TextArea {
             elements: Vec::new(),
             kill_buffer: String::new(),
             hotkey_config: HotkeyConfig::default(),
+            vim_mode_enabled: false,
+            vim_mode_state: VimModeState::default(),
         }
     }
 
     pub fn set_hotkey_config(&mut self, config: HotkeyConfig) {
         self.hotkey_config = config;
+    }
+
+    /// Enable or disable vim mode. When toggled off, resets state to Insert mode.
+    pub fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        self.vim_mode_enabled = enabled;
+        if !enabled {
+            self.vim_mode_state = VimModeState::Insert;
+        }
+    }
+
+    /// Returns the current vim mode state.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn vim_mode_state(&self) -> VimModeState {
+        self.vim_mode_state
+    }
+
+    /// Enter vim normal mode (only effective if vim mode is enabled).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn enter_vim_normal_mode(&mut self) {
+        if self.vim_mode_enabled {
+            self.vim_mode_state = VimModeState::Normal;
+        }
     }
 
     pub fn set_text(&mut self, text: &str) {
@@ -221,6 +259,75 @@ impl TextArea {
     }
 
     pub fn input(&mut self, event: KeyEvent) {
+        // 0. Vim mode handling (when enabled).
+        if self.vim_mode_enabled {
+            match self.vim_mode_state {
+                VimModeState::Insert => {
+                    // Escape enters Normal mode
+                    if matches!(
+                        event,
+                        KeyEvent {
+                            code: KeyCode::Esc,
+                            ..
+                        }
+                    ) {
+                        self.vim_mode_state = VimModeState::Normal;
+                        return;
+                    }
+                    // Otherwise fall through to normal input handling
+                }
+                VimModeState::Normal => {
+                    // In Normal mode, handle vim navigation keys
+                    match event {
+                        KeyEvent {
+                            code: KeyCode::Char('h'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.move_cursor_left();
+                            return;
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('l'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.move_cursor_right();
+                            return;
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('j'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.move_cursor_down();
+                            return;
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('k'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.move_cursor_up();
+                            return;
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('i'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.vim_mode_state = VimModeState::Insert;
+                            return;
+                        }
+                        _ => {
+                            // Ignore other keys in Normal mode
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         // 1. C0 control character fallbacks (hardcoded, terminal compat).
         // Some terminals send Control key chords as C0 control characters
         // without reporting the CONTROL modifier.
@@ -2049,5 +2156,134 @@ mod tests {
         // Alt+B should move backward to start of "foo"
         t.input(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT));
         pretty_assertions::assert_eq!(t.cursor(), 0);
+    }
+
+    // ===== Vim mode tests =====
+
+    #[test]
+    fn vim_mode_disabled_inserts_hjkl_as_characters() {
+        // When vim mode is disabled (default), h/j/k/l should insert characters
+        let mut t = ta_with("");
+        t.set_vim_mode_enabled(false);
+        t.input(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+        t.input(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        t.input(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        t.input(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.text(), "hjkl");
+    }
+
+    #[test]
+    fn vim_mode_enabled_starts_in_insert_mode() {
+        // When vim mode is enabled, it should start in insert mode
+        let mut t = ta_with("");
+        t.set_vim_mode_enabled(true);
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+        // In insert mode, h/j/k/l should still insert characters
+        t.input(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.text(), "h");
+    }
+
+    #[test]
+    fn vim_mode_escape_enters_normal_mode() {
+        let mut t = ta_with("hello");
+        t.set_vim_mode_enabled(true);
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+
+        // Escape should switch to normal mode
+        t.enter_vim_normal_mode();
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+    }
+
+    #[test]
+    fn vim_mode_normal_h_moves_cursor_left() {
+        let mut t = ta_with("hello");
+        t.set_vim_mode_enabled(true);
+        t.set_cursor(3);
+        t.enter_vim_normal_mode();
+
+        // 'h' in normal mode should move cursor left
+        t.input(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.cursor(), 2);
+        // Text should NOT change (no insertion)
+        pretty_assertions::assert_eq!(t.text(), "hello");
+    }
+
+    #[test]
+    fn vim_mode_normal_l_moves_cursor_right() {
+        let mut t = ta_with("hello");
+        t.set_vim_mode_enabled(true);
+        t.set_cursor(2);
+        t.enter_vim_normal_mode();
+
+        // 'l' in normal mode should move cursor right
+        t.input(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.cursor(), 3);
+        pretty_assertions::assert_eq!(t.text(), "hello");
+    }
+
+    #[test]
+    fn vim_mode_normal_j_moves_cursor_down() {
+        let mut t = ta_with("line1\nline2\nline3");
+        t.set_vim_mode_enabled(true);
+        t.set_cursor(2); // on line1
+        t.enter_vim_normal_mode();
+
+        // 'j' in normal mode should move cursor down
+        t.input(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        // Should be on line2 now
+        assert!(t.cursor() > 5, "cursor should be on line2");
+        pretty_assertions::assert_eq!(t.text(), "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn vim_mode_normal_k_moves_cursor_up() {
+        let mut t = ta_with("line1\nline2\nline3");
+        t.set_vim_mode_enabled(true);
+        t.set_cursor(8); // on line2
+        t.enter_vim_normal_mode();
+
+        // 'k' in normal mode should move cursor up
+        t.input(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        // Should be on line1 now
+        assert!(t.cursor() < 6, "cursor should be on line1");
+        pretty_assertions::assert_eq!(t.text(), "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn vim_mode_normal_i_returns_to_insert_mode() {
+        let mut t = ta_with("hello");
+        t.set_vim_mode_enabled(true);
+        t.enter_vim_normal_mode();
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+
+        // 'i' should return to insert mode
+        t.input(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+
+        // Now 'h' should insert a character (cursor is at end, so "h" appends)
+        t.input(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.text(), "helloh");
+    }
+
+    #[test]
+    fn vim_mode_disabled_ignores_enter_normal_mode() {
+        let mut t = ta_with("hello");
+        t.set_vim_mode_enabled(false);
+
+        // enter_vim_normal_mode should be a no-op when vim mode is disabled
+        t.enter_vim_normal_mode();
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+    }
+
+    #[test]
+    fn vim_mode_toggle_resets_to_insert_mode() {
+        let mut t = ta_with("hello");
+        t.set_vim_mode_enabled(true);
+        t.enter_vim_normal_mode();
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+
+        // Disabling vim mode should reset to insert mode
+        t.set_vim_mode_enabled(false);
+        pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
     }
 }

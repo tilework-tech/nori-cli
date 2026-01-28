@@ -393,6 +393,10 @@ impl BottomPane {
         self.composer.set_hotkey_config(config);
     }
 
+    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        self.composer.set_vim_mode_enabled(enabled);
+    }
+
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());

@@ -238,6 +238,10 @@ pub(crate) struct App {
 
     /// Configurable hotkey bindings loaded from NoriConfig.
     pub(crate) hotkey_config: codex_acp::config::HotkeyConfig,
+
+    /// Vim mode enabled setting loaded from NoriConfig.
+    vim_mode_enabled: bool,
+
     system_info_tx: mpsc::Sender<SystemInfoRefreshRequest>,
 }
 
@@ -381,15 +385,21 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
-            hotkey_config: codex_acp::config::NoriConfig::load()
-                .unwrap_or_default()
-                .hotkeys,
+            hotkey_config: codex_acp::config::HotkeyConfig::default(),
+            vim_mode_enabled: false,
             system_info_tx,
         };
+
+        // Load NoriConfig and propagate settings to the textarea.
+        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        app.hotkey_config = nori_config.hotkeys;
+        app.vim_mode_enabled = nori_config.vim_mode;
 
         // Propagate initial hotkey config to the textarea so editing bindings
         // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
         app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
+        // Propagate initial vim mode setting.
+        app.chat_widget.set_vim_mode_enabled(app.vim_mode_enabled);
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
@@ -522,6 +532,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
+                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
                     if let Some(command) = summary.resume_command {
@@ -1042,6 +1053,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
+                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
 
                 self.chat_widget.add_info_message(
                     format!("Started new conversation with agent: {display_name}"),
@@ -1144,6 +1156,9 @@ impl App {
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
+            }
+            AppEvent::SetConfigVimMode(value) => {
+                self.persist_vim_mode_setting(value).await;
             }
             AppEvent::SkillsetListResult { names, error } => {
                 self.chat_widget.on_skillset_list_result(names, error);
@@ -1454,6 +1469,30 @@ impl App {
         );
     }
 
+    async fn persist_vim_mode_setting(&mut self, enabled: bool) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "vim_mode"], toml_value(enabled))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist vim_mode setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save vim_mode setting: {err}"));
+            return;
+        }
+
+        // Update in-memory state and propagate to the chat widget
+        self.vim_mode_enabled = enabled;
+        self.chat_widget.set_vim_mode_enabled(enabled);
+
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("Vim mode {status}."), None);
+    }
+
     async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
         let enum_value = if enabled { "enabled" } else { "disabled" };
 
@@ -1697,6 +1736,7 @@ mod tests {
             skip_world_writable_scan_once: false,
             pending_agent: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
+            vim_mode_enabled: false,
             system_info_tx,
         }
     }
@@ -1738,6 +1778,7 @@ mod tests {
                 skip_world_writable_scan_once: false,
                 pending_agent: None,
                 hotkey_config: codex_acp::config::HotkeyConfig::default(),
+                vim_mode_enabled: false,
                 system_info_tx,
             },
             rx,

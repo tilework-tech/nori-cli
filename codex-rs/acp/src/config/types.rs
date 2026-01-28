@@ -603,6 +603,9 @@ pub struct TuiConfigToml {
     /// How long after idle before sending a notification.
     pub notify_after_idle: Option<NotifyAfterIdle>,
 
+    /// Enable vim-style navigation mode in the textarea.
+    pub vim_mode: Option<bool>,
+
     /// Configurable hotkey bindings.
     #[serde(default)]
     pub hotkeys: HotkeyConfigToml,
@@ -703,6 +706,9 @@ pub struct NoriConfig {
     /// How long after idle before sending a notification.
     pub notify_after_idle: NotifyAfterIdle,
 
+    /// Enable vim-style navigation mode in the textarea.
+    pub vim_mode: bool,
+
     /// Configurable hotkey bindings.
     pub hotkeys: HotkeyConfig,
 
@@ -729,6 +735,7 @@ impl Default for NoriConfig {
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
             notify_after_idle: NotifyAfterIdle::default(),
+            vim_mode: false,
             hotkeys: HotkeyConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),

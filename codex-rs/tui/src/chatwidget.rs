@@ -2597,6 +2597,10 @@ impl ChatWidget {
         self.bottom_pane.set_hotkey_config(config);
     }
 
+    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        self.bottom_pane.set_vim_mode_enabled(enabled);
+    }
+
     /// Handle the /switch-skillset command.
     /// Checks if nori-skillsets is available and lists available skillsets.
     fn handle_switch_skillset_command(&mut self) {
