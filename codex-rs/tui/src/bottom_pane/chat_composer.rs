@@ -220,6 +220,12 @@ impl ChatComposer {
         self.textarea.set_vim_mode_enabled(enabled);
     }
 
+    /// Returns the current vim mode state (for testing).
+    #[cfg(test)]
+    pub(crate) fn vim_mode_state(&self) -> crate::bottom_pane::textarea::VimModeState {
+        self.textarea.vim_mode_state()
+    }
+
     /// Integrate an asynchronous response to an on-demand history lookup. If
     /// the entry is present and the offset matches the current cursor we
     /// immediately populate the textarea.
@@ -1102,6 +1108,13 @@ impl ChatComposer {
 
         if !matches!(input.code, KeyCode::Esc) {
             self.footer_mode = reset_mode_after_activity(self.footer_mode);
+        }
+
+        // In vim Normal mode, bypass paste burst detection and send input directly
+        // to the textarea so vim navigation keys (h/j/k/l) work correctly.
+        if self.textarea.is_in_vim_normal_mode() {
+            self.textarea.input(input);
+            return (InputResult::None, true);
         }
 
         // If we're capturing a burst and receive Enter, accumulate it instead of inserting.
@@ -3622,5 +3635,86 @@ mod tests {
 
         assert_eq!(composer.textarea.text(), "z".repeat(count));
         assert!(composer.pending_pastes.is_empty());
+    }
+
+    #[test]
+    fn vim_mode_escape_enters_normal_mode_with_content() {
+        use crate::bottom_pane::textarea::VimModeState;
+
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(
+            true,
+            sender,
+            false,
+            "Ask Codex to do anything".to_string(),
+            true, // disable_paste_burst to avoid timing issues
+        );
+
+        // Enable vim mode
+        composer.set_vim_mode_enabled(true);
+
+        // Verify we start in Insert mode
+        assert_eq!(composer.vim_mode_state(), VimModeState::Insert);
+
+        // Type some text
+        composer.insert_str("hello");
+        assert_eq!(composer.current_text(), "hello");
+
+        // Press Escape - should enter Normal mode
+        let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        // Verify we're now in Normal mode
+        assert_eq!(
+            composer.vim_mode_state(),
+            VimModeState::Normal,
+            "Escape should transition from Insert to Normal mode when textarea has content"
+        );
+    }
+
+    #[test]
+    fn vim_mode_hjkl_navigation_in_normal_mode() {
+        use crate::bottom_pane::textarea::VimModeState;
+
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(
+            true,
+            sender,
+            false,
+            "Ask Codex to do anything".to_string(),
+            true,
+        );
+
+        composer.set_vim_mode_enabled(true);
+        composer.insert_str("hello");
+
+        // Enter Normal mode
+        let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
+
+        // Get cursor position (should be at end after typing)
+        let cursor_before = composer.textarea.cursor();
+
+        // Press 'h' to move left
+        let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+
+        let cursor_after = composer.textarea.cursor();
+
+        // Cursor should have moved left (only if we weren't already at position 0)
+        if cursor_before > 0 {
+            assert!(
+                cursor_after < cursor_before,
+                "h in Normal mode should move cursor left: before={cursor_before}, after={cursor_after}"
+            );
+        }
+
+        // Press 'i' to return to Insert mode
+        let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        assert_eq!(
+            composer.vim_mode_state(),
+            VimModeState::Insert,
+            "'i' should return to Insert mode"
+        );
     }
 }
