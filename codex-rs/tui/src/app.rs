@@ -234,6 +234,9 @@ pub(crate) struct App {
     /// Pending agent selection. When set, the agent will switch on the next
     /// prompt submission. This avoids disrupting active prompt turns.
     pending_agent: Option<PendingAgentSelection>,
+
+    /// Configurable hotkey bindings loaded from NoriConfig.
+    hotkey_config: codex_acp::config::HotkeyConfig,
 }
 
 impl App {
@@ -360,6 +363,9 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            hotkey_config: codex_acp::config::NoriConfig::load()
+                .unwrap_or_default()
+                .hotkeys,
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -1106,6 +1112,13 @@ impl App {
                 self.persist_notification_setting("os_notifications", enabled)
                     .await;
             }
+            AppEvent::SetConfigHotkey { action, binding } => {
+                self.persist_hotkey_setting(action, binding).await;
+            }
+            AppEvent::OpenHotkeyPicker => {
+                self.chat_widget
+                    .open_hotkey_picker(self.hotkey_config.clone());
+            }
             #[cfg(feature = "nori-config")]
             AppEvent::OpenNotifyAfterIdlePicker => {
                 let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
@@ -1278,19 +1291,66 @@ impl App {
             .add_info_message(format!("{setting_name} {status}"), None);
     }
 
+    async fn persist_hotkey_setting(
+        &mut self,
+        action: codex_acp::config::HotkeyAction,
+        binding: codex_acp::config::HotkeyBinding,
+    ) {
+        let toml_key = action.toml_key();
+        let toml_val = binding.toml_value();
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "hotkeys", toml_key], toml_value(&toml_val))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                action = %action.display_name(),
+                "failed to persist hotkey setting"
+            );
+            self.chat_widget.add_error_message(format!(
+                "Failed to save hotkey for {}: {err}",
+                action.display_name()
+            ));
+            return;
+        }
+
+        self.hotkey_config.set_binding(action, binding.clone());
+        self.chat_widget.add_info_message(
+            format!(
+                "{} bound to {}",
+                action.display_name(),
+                binding.display_name()
+            ),
+            None,
+        );
+    }
+
     async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
-        match key_event {
-            KeyEvent {
-                code: KeyCode::Char('t'),
-                modifiers: crossterm::event::KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            } => {
-                // Enter alternate screen and set viewport to full size.
+        use crate::nori::hotkey_match::matches_binding;
+        use codex_acp::config::HotkeyAction;
+
+        // Check configurable hotkeys first (before the structural match),
+        // but only when no popup/view is active — otherwise the popup should
+        // capture the key (e.g. the hotkey picker in rebinding mode).
+        if key_event.kind == KeyEventKind::Press && !self.chat_widget.has_active_popup() {
+            let transcript_binding = self.hotkey_config.binding_for(HotkeyAction::OpenTranscript);
+            if matches_binding(transcript_binding, &key_event) {
                 let _ = tui.enter_alt_screen();
                 self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
                 tui.frame_requester().schedule_frame();
+                return;
             }
+
+            let editor_binding = self.hotkey_config.binding_for(HotkeyAction::OpenEditor);
+            if matches_binding(editor_binding, &key_event) {
+                self.open_external_editor(tui);
+                return;
+            }
+        }
+
+        match key_event {
             // Esc primes/advances backtracking only in normal (not working) mode
             // with the composer focused and empty. In any other state, forward
             // Esc so the active UI (e.g. status indicator, modals, popups)
@@ -1319,14 +1379,6 @@ impl App {
             {
                 // Delegate to helper for clarity; preserves behavior.
                 self.confirm_backtrack_from_main();
-            }
-            KeyEvent {
-                code: KeyCode::Char('g'),
-                modifiers: crossterm::event::KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            } => {
-                self.open_external_editor(tui);
             }
             KeyEvent {
                 kind: KeyEventKind::Press | KeyEventKind::Repeat,
@@ -1453,6 +1505,7 @@ mod tests {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            hotkey_config: codex_acp::config::HotkeyConfig::default(),
         }
     }
 
@@ -1491,6 +1544,7 @@ mod tests {
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
                 pending_agent: None,
+                hotkey_config: codex_acp::config::HotkeyConfig::default(),
             },
             rx,
             op_rx,

@@ -49,7 +49,7 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, notify after idle) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, notify after idle, hotkeys) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -79,6 +79,17 @@ Three notification settings are toggled via `/config` and persisted to the `[tui
 
 Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
 
+**Configurable Hotkeys:**
+
+Keyboard shortcuts are configurable through the `/config` panel ("Hotkeys" item) and persisted under `[tui.hotkeys]` in `config.toml`. The implementation is split across two layers:
+
+- **Config layer** (`@/codex-rs/acp/src/config/types.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
+- **TUI layer** (`@/codex-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
+
+The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()`, configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
+
+The hotkey picker (`@/codex-rs/tui/src/nori/hotkey_picker.rs`) implements `BottomPaneView` directly (not `ListSelectionView`) because rebinding requires raw key capture. It uses a videogame-style rebind flow: select an action, press Enter, press the desired key. Conflicts are resolved by swapping bindings. The `r` key resets the selected action to its default.
+
 **Status Line Footer:**
 
 The footer displays:
@@ -89,7 +100,7 @@ The footer displays:
 
 **External Editor Integration (`editor.rs`):**
 
-Ctrl-G opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:
+The external editor hotkey (default Ctrl-G, configurable via hotkeys) opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:
 
 1. Reads current composer text via `ChatWidget::composer_text()`
 2. Writes content to a temp file (`nori-editor-*.md`)

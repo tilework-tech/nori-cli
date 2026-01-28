@@ -80,6 +80,20 @@ Three config enums control notification behavior, all stored in the `[tui]` sect
 
 The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
 
+
+**Hotkey Configuration** (`config/types.rs`):
+
+Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in `config.toml`. The config layer defines four types:
+
+| Type | Purpose |
+|------|---------|
+| `HotkeyAction` | Enum of bindable actions (OpenTranscript, OpenEditor) with display names, descriptions, TOML keys, and default bindings |
+| `HotkeyBinding` | String-based key representation (e.g. `"ctrl+t"`, `"alt+g"`, `"none"` for unbound). Serializes/deserializes via serde for TOML roundtripping |
+| `HotkeyConfigToml` | TOML deserialization struct with `Option<HotkeyBinding>` fields for each action |
+| `HotkeyConfig` | Resolved config with defaults applied via `from_toml()`. Provides `binding_for()`, `set_binding()`, and `all_bindings()` accessors |
+
+The binding string format is kept terminal-agnostic (no crossterm dependency in the config crate). The TUI layer in `@/codex-rs/tui/src/nori/hotkey_match.rs` handles conversion between binding strings and crossterm `KeyEvent` types. `HotkeyConfig` is carried on `NoriConfig` and resolved during config loading in `loader.rs`.
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`

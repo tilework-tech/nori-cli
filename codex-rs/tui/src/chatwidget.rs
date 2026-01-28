@@ -2518,6 +2518,15 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the hotkey picker sub-view.
+    pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: codex_acp::config::HotkeyConfig) {
+        let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
+            &hotkey_config,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_view(Box::new(view));
+    }
+
     /// Open a popup to choose the model (stage 1). After selecting a model,
     /// a second popup is shown to choose the reasoning effort.
     ///
@@ -3758,6 +3767,11 @@ impl ChatWidget {
 
     pub(crate) fn composer_text(&self) -> String {
         self.bottom_pane.composer_text()
+    }
+
+    /// Returns true if a popup or custom view is currently active in the bottom pane.
+    pub(crate) fn has_active_popup(&self) -> bool {
+        self.bottom_pane.has_active_view()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {
