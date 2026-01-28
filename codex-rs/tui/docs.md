@@ -62,12 +62,26 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 | `/mcp` | List configured MCP tools |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
+| `/switch-skillset` | Switch between available skillsets |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
+
+**Skillset Switching (`nori/skillset_picker.rs`):**
+
+The `/switch-skillset` command integrates with the external `nori-skillsets` CLI tool to manage skillsets:
+
+1. Checks if `nori-skillsets` is available in PATH
+2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
+3. If available, runs `nori-skillsets list-skillsets` to get available skillsets
+4. On success (exit code 0), displays a searchable picker with skillset names
+5. On selection, runs `nori-skillsets install <NAME>` to install the selected skillset
+6. Shows the first line of the install output as a confirmation message
+
+Events: `AppEvent::SkillsetListResult`, `AppEvent::InstallSkillset`, `AppEvent::SkillsetInstallResult`
 
 **Notification Configuration:**
 
