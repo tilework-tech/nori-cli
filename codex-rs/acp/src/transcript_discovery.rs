@@ -217,9 +217,10 @@ fn find_transcript_by_shell_search(base_dir: &Path, normalized_message: &str) ->
 
         // Skip files older than max age
         if let Ok(age) = now.duration_since(modified)
-            && age > max_age {
-                continue;
-            }
+            && age > max_age
+        {
+            continue;
+        }
 
         match &best_match {
             None => best_match = Some((path, modified)),
