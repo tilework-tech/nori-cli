@@ -1477,6 +1477,7 @@ impl ChatComposer {
             input_tokens: token_breakdown.map(|t| t.input_tokens),
             output_tokens: token_breakdown.map(|t| t.output_tokens),
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
+            vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
         }
     }
 

@@ -103,6 +103,15 @@ impl TextArea {
         self.vim_mode_enabled && self.vim_mode_state == VimModeState::Normal
     }
 
+    /// Returns the vim mode state if vim mode is enabled, None otherwise.
+    pub fn vim_mode_state_if_enabled(&self) -> Option<VimModeState> {
+        if self.vim_mode_enabled {
+            Some(self.vim_mode_state)
+        } else {
+            None
+        }
+    }
+
     /// Enter vim normal mode (only effective if vim mode is enabled).
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn enter_vim_normal_mode(&mut self) {

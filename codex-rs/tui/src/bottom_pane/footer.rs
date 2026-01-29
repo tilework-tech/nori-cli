@@ -1,3 +1,4 @@
+use crate::bottom_pane::textarea::VimModeState;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
@@ -42,6 +43,8 @@ pub(crate) struct FooterProps {
     pub(crate) output_tokens: Option<i64>,
     /// Cached tokens from the external agent transcript, if available.
     pub(crate) cached_tokens: Option<i64>,
+    /// Vim mode state - only shown when vim mode is enabled.
+    pub(crate) vim_mode_state: Option<VimModeState>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -279,6 +282,15 @@ fn shortcuts_hint_line() -> Line<'static> {
 
 fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
     let mut segments = Vec::new();
+
+    // Add vim mode indicator if vim mode is enabled
+    if let Some(vim_state) = props.vim_mode_state {
+        let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
+            VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
+            VimModeState::Insert => ("INSERT", |s| s.green()),
+        };
+        segments.push(Line::from(vec![style_fn(Span::from(label))]));
+    }
 
     // Add git branch if available: "⎇ branch-name"
     // Yellow for main repo, light red (orange-ish) for worktree
@@ -572,6 +584,7 @@ mod tests {
             input_tokens: None,
             output_tokens: None,
             cached_tokens: None,
+            vim_mode_state: None,
         }
     }
 
@@ -849,6 +862,30 @@ mod tests {
                 input_tokens: Some(20000),
                 output_tokens: Some(14000),
                 cached_tokens: Some(0),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_vim_mode_normal() {
+        snapshot_footer(
+            "footer_with_vim_mode_normal",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                vim_mode_state: Some(VimModeState::Normal),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_vim_mode_insert() {
+        snapshot_footer(
+            "footer_with_vim_mode_insert",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                vim_mode_state: Some(VimModeState::Insert),
                 ..default_props()
             },
         );
