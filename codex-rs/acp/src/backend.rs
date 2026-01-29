@@ -613,6 +613,8 @@ impl AcpBackend {
                 let mut event_sequence: u64 = 0;
                 // Accumulate assistant text for transcript recording
                 let mut accumulated_text = String::new();
+                let mut has_agent_text = false;
+                let mut needs_agent_separator = false;
                 // Track call_ids that have already had ExecCommandBegin emitted.
                 // The ACP protocol can emit multiple ToolCall events for the same call_id
                 // as details become available, but the TUI expects exactly one Begin per call_id.
@@ -628,6 +630,19 @@ impl AcpBackend {
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
+                    if has_agent_text
+                        && matches!(
+                            update,
+                            acp::SessionUpdate::ToolCall(_)
+                                | acp::SessionUpdate::ToolCallUpdate(_)
+                                | acp::SessionUpdate::Plan(_)
+                                | acp::SessionUpdate::UserMessageChunk(_)
+                                | acp::SessionUpdate::CurrentModeUpdate(_)
+                                | acp::SessionUpdate::AvailableCommandsUpdate(_)
+                        )
+                    {
+                        needs_agent_separator = true;
+                    }
                     // Record tool calls and results to transcript
                     if let Some(ref recorder) = transcript_recorder_for_updates {
                         record_tool_events_to_transcript(
@@ -640,7 +655,7 @@ impl AcpBackend {
 
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
-                    for event_msg in events {
+                    for mut event_msg in events {
                         // Deduplicate ExecCommandBegin events - only emit the first one per call_id
                         if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
                             if emitted_begin_call_ids.contains(&begin_ev.call_id) {
@@ -654,7 +669,17 @@ impl AcpBackend {
                             emitted_begin_call_ids.insert(begin_ev.call_id.clone());
                         }
                         // Accumulate text for transcript
-                        if let EventMsg::AgentMessageDelta(ref delta) = event_msg {
+                        if let EventMsg::AgentMessageDelta(ref mut delta) = event_msg {
+                            if needs_agent_separator && has_agent_text {
+                                if !delta.delta.starts_with('\n') {
+                                    delta.delta =
+                                        format!("\n{delta_text}", delta_text = delta.delta);
+                                }
+                                needs_agent_separator = false;
+                            }
+                            if !delta.delta.is_empty() {
+                                has_agent_text = true;
+                            }
                             accumulated_text.push_str(&delta.delta);
                         }
                         event_sequence += 1;
