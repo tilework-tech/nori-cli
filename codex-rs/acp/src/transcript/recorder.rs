@@ -582,6 +582,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_transcript_recorder_records_assistant_with_thinking_blocks() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let cwd = temp_dir.path();
+
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0")
+            .await
+            .unwrap();
+
+        // Record an assistant message with thinking blocks before text
+        recorder
+            .record_assistant_message(
+                "msg-003",
+                vec![
+                    ContentBlock::Thinking {
+                        thinking: "Let me analyze this problem...".to_string(),
+                    },
+                    ContentBlock::Thinking {
+                        thinking: "I should check the file structure first.".to_string(),
+                    },
+                    ContentBlock::Text {
+                        text: "Here is my analysis of the problem.".to_string(),
+                    },
+                ],
+                Some("claude-code".to_string()),
+            )
+            .await
+            .unwrap();
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        // Read the transcript file
+        let content = tokio::fs::read_to_string(recorder.transcript_path())
+            .await
+            .unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+
+        assert_eq!(lines.len(), 2); // SessionMeta + Assistant
+
+        let assistant_line: TranscriptLine = serde_json::from_str(lines[1]).unwrap();
+        match assistant_line.entry {
+            TranscriptEntry::Assistant(assistant) => {
+                assert_eq!(assistant.id, "msg-003");
+                assert_eq!(assistant.content.len(), 3);
+                assert_eq!(assistant.agent, Some("claude-code".to_string()));
+
+                // Verify thinking blocks come before text
+                assert!(
+                    matches!(&assistant.content[0], ContentBlock::Thinking { thinking } if thinking == "Let me analyze this problem...")
+                );
+                assert!(
+                    matches!(&assistant.content[1], ContentBlock::Thinking { thinking } if thinking == "I should check the file structure first.")
+                );
+                assert!(
+                    matches!(&assistant.content[2], ContentBlock::Text { text } if text == "Here is my analysis of the problem.")
+                );
+            }
+            _ => panic!("Expected Assistant entry"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_transcript_recorder_full_conversation() {
         let temp_dir = TempDir::new().unwrap();
         let nori_home = temp_dir.path();

@@ -613,6 +613,9 @@ impl AcpBackend {
                 let mut event_sequence: u64 = 0;
                 // Accumulate assistant text for transcript recording
                 let mut accumulated_text = String::new();
+                // Accumulate thinking blocks for transcript recording (separate blocks per section)
+                let mut thinking_blocks: Vec<String> = Vec::new();
+                let mut current_thinking_buffer = String::new();
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
                 // Track call_ids that have already had ExecCommandBegin emitted.
@@ -682,6 +685,16 @@ impl AcpBackend {
                             }
                             accumulated_text.push_str(&delta.delta);
                         }
+                        // Accumulate thinking/reasoning for transcript
+                        if let EventMsg::AgentReasoningDelta(ref delta) = event_msg {
+                            current_thinking_buffer.push_str(&delta.delta);
+                        }
+                        // On section break, finalize current thinking block and start a new one
+                        if matches!(event_msg, EventMsg::AgentReasoningSectionBreak(_))
+                            && !current_thinking_buffer.is_empty()
+                        {
+                            thinking_blocks.push(std::mem::take(&mut current_thinking_buffer));
+                        }
                         event_sequence += 1;
                         debug!(
                             target: "acp_event_flow",
@@ -702,26 +715,42 @@ impl AcpBackend {
                     total_events = event_sequence,
                     "ACP dispatch: update stream completed"
                 );
-                accumulated_text
+                // Finalize any remaining thinking content as a final block
+                if !current_thinking_buffer.is_empty() {
+                    thinking_blocks.push(current_thinking_buffer);
+                }
+                (thinking_blocks, accumulated_text)
             });
 
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
-            // Wait for all updates to be processed and get accumulated text
-            let accumulated_text = update_handler.await.unwrap_or_default();
+            // Wait for all updates to be processed and get accumulated content
+            let (thinking_blocks, accumulated_text) = update_handler
+                .await
+                .unwrap_or_else(|_| (vec![], String::new()));
 
-            // Record assistant message to transcript if there's accumulated text
-            if !accumulated_text.is_empty()
+            // Record assistant message to transcript if there's any content
+            if (!thinking_blocks.is_empty() || !accumulated_text.is_empty())
                 && let Some(ref recorder) = transcript_recorder
             {
-                let content = vec![ContentBlock::Text {
-                    text: accumulated_text,
-                }];
-                if let Err(e) = recorder
-                    .record_assistant_message(&id_clone, content, None)
-                    .await
+                // Build content blocks: thinking blocks first, then text
+                let mut content = Vec::new();
+                for thinking in thinking_blocks {
+                    if !thinking.is_empty() {
+                        content.push(ContentBlock::Thinking { thinking });
+                    }
+                }
+                if !accumulated_text.is_empty() {
+                    content.push(ContentBlock::Text {
+                        text: accumulated_text,
+                    });
+                }
+                if !content.is_empty()
+                    && let Err(e) = recorder
+                        .record_assistant_message(&id_clone, content, None)
+                        .await
                 {
                     warn!("Failed to record assistant message to transcript: {e}");
                 }

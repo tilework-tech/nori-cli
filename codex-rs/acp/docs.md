@@ -288,9 +288,34 @@ Key methods:
 The `AcpBackend` automatically:
 1. Creates a `TranscriptRecorder` on spawn (with graceful fallback if creation fails)
 2. Records user messages when `Op::UserInput` is processed
-3. Accumulates assistant text during the turn and records when turn completes
+3. Accumulates assistant content (thinking blocks and text) during the turn and records when turn completes
 4. Records tool events via `record_tool_events_to_transcript()` in the update handler
 5. Shuts down recorder on `Op::Shutdown`
+
+**Assistant Message Content Blocks:**
+
+Assistant messages contain `ContentBlock` entries that support two variants:
+
+| Variant | JSON Type | Purpose |
+|---------|-----------|---------|
+| `Text` | `"text"` | Regular assistant response text |
+| `Thinking` | `"thinking"` | Internal reasoning from extended thinking feature |
+
+The update handler in `backend.rs` accumulates both thinking and text content during an assistant turn:
+
+```
+ACP Events                          Accumulation
+─────────────                       ─────────────────────────────────────
+AgentMessageDelta         →         Appends to accumulated_text buffer
+AgentReasoningDelta       →         Appends to current_thinking_buffer
+AgentReasoningSectionBreak →        Finalizes current_thinking_buffer into
+                                    thinking_blocks vec, starts new buffer
+Turn completion           →         Any remaining thinking buffer finalized,
+                                    content blocks built in order:
+                                    [Thinking blocks...] then [Text block]
+```
+
+When the turn completes, `record_assistant_message()` receives a `Vec<ContentBlock>` with thinking blocks ordered before text blocks. This preserves the chronological order in which content arrived during the turn.
 
 **Tool Event Recording Flow:**
 
