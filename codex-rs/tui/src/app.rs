@@ -1198,6 +1198,25 @@ impl App {
                     let cell = AgentMessageCell::new(lines, true);
                     self.chat_widget.add_boxed_history(Box::new(cell));
                 }
+                ViewonlyEntry::Thinking { content } => {
+                    // Add thinking block with dimmed style (same pattern as reasoning display)
+                    let mut lines = Vec::new();
+                    append_markdown(&content, None, &mut lines);
+                    // Dim all spans in the lines to indicate this is thinking content
+                    let dimmed_lines: Vec<Line<'static>> = lines
+                        .into_iter()
+                        .map(|line| {
+                            Line::from(
+                                line.spans
+                                    .into_iter()
+                                    .map(ratatui::prelude::Stylize::dim)
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect();
+                    let cell = AgentMessageCell::new(dimmed_lines, true);
+                    self.chat_widget.add_boxed_history(Box::new(cell));
+                }
                 ViewonlyEntry::Info { content } => {
                     // Add as an info message
                     self.chat_widget

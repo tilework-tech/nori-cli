@@ -124,7 +124,7 @@ Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
 
 **Schema Field Naming:**
 
-The Rust struct fields `SessionMetaEntry.model` and `AssistantEntry.model` serialize to `"agent"` in JSON via `#[serde(rename = "agent")]`. This naming reflects that the field identifies which agent processed the session/message rather than a specific model variant.
+The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which ACP agent (e.g., "claude-code", "codex", "gemini") processed the session or message. The field is named `agent` rather than `model` to emphasize that it identifies the agent software, not a specific model variant.
 **TranscriptRecorder:**
 
 The `TranscriptRecorder` (in `@/codex-rs/acp/src/transcript/recorder.rs`) handles async, non-blocking writes:
@@ -197,7 +197,7 @@ Public exports from `@/codex-rs/acp/src/transcript/mod.rs`:
 - `ProjectId`, `ProjectInfo`, `SessionInfo`, `Transcript`
 - Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, `ToolCallEntry`, `ToolResultEntry`, `PatchApplyEntry`
 - `PatchOperationType`: Enum for patch operations (Edit, Write, Delete)
-- `ContentBlock` (Text variant only), `Attachment`, `GitInfo`
+- `ContentBlock` (Text and Thinking variants), `Attachment`, `GitInfo`
 - `now_iso8601()`: Utility function returning current time as ISO 8601 string
 
 ### Stderr Capture Implementation

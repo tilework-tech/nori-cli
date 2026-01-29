@@ -108,6 +108,8 @@ pub struct UserEntry {
 pub enum ContentBlock {
     /// Text content
     Text { text: String },
+    /// Thinking/reasoning content (from extended thinking feature)
+    Thinking { thinking: String },
 }
 
 /// Complete assistant message entry.
