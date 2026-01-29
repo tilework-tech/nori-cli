@@ -31,11 +31,13 @@ dirs = { workspace = true }
 diffy = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
+sha2 = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 
 [dev-dependencies]
+filetime = "0.2"
 pretty_assertions = { workspace = true }
 serial_test = { workspace = true }
 tempfile = { workspace = true }

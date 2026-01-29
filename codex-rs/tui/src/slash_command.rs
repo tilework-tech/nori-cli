@@ -25,6 +25,7 @@ pub enum SlashCommand {
     Diff,
     Mention,
     Status,
+    FirstPrompt,
     Mcp,
     Login,
     Logout,
@@ -32,6 +33,7 @@ pub enum SlashCommand {
     Exit,
     Rollout,
     TestApproval,
+    SwitchSkillset,
 }
 
 impl SlashCommand {
@@ -49,6 +51,7 @@ impl SlashCommand {
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and token usage",
+            SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Config => "toggle TUI settings (vertical footer)",
@@ -57,6 +60,7 @@ impl SlashCommand {
             SlashCommand::Logout => "show logout instructions",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
+            SlashCommand::SwitchSkillset => "switch between available skillsets",
         }
     }
 
@@ -80,10 +84,12 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Review
             | SlashCommand::Login
-            | SlashCommand::Logout => false,
+            | SlashCommand::Logout
+            | SlashCommand::SwitchSkillset => false,
             SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
+            | SlashCommand::FirstPrompt
             | SlashCommand::Mcp
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
@@ -175,6 +181,61 @@ mod tests {
         assert!(
             !SlashCommand::Config.available_during_task(),
             "/config should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn first_prompt_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_first_prompt = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::FirstPrompt);
+        assert!(
+            has_first_prompt,
+            "/first-prompt should be visible in commands list"
+        );
+    }
+
+    #[test]
+    fn first_prompt_has_description() {
+        let desc = SlashCommand::FirstPrompt.description();
+        assert!(!desc.is_empty(), "/first-prompt should have a description");
+    }
+
+    #[test]
+    fn first_prompt_available_during_task() {
+        assert!(
+            SlashCommand::FirstPrompt.available_during_task(),
+            "/first-prompt should be available while task is running"
+        );
+    }
+
+    #[test]
+    fn switch_skillset_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_switch_skillset = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::SwitchSkillset);
+        assert!(
+            has_switch_skillset,
+            "/switch-skillset should be visible in commands list"
+        );
+    }
+
+    #[test]
+    fn switch_skillset_has_description() {
+        let desc = SlashCommand::SwitchSkillset.description();
+        assert!(
+            !desc.is_empty(),
+            "/switch-skillset should have a description"
+        );
+    }
+
+    #[test]
+    fn switch_skillset_not_available_during_task() {
+        assert!(
+            !SlashCommand::SwitchSkillset.available_during_task(),
+            "/switch-skillset should not be available while task is running"
         );
     }
 }

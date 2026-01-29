@@ -3,7 +3,6 @@ use crate::config::types::DEFAULT_OTEL_ENVIRONMENT;
 use crate::config::types::History;
 use crate::config::types::McpServerConfig;
 use crate::config::types::Notice;
-use crate::config::types::Notifications;
 use crate::config::types::OtelConfig;
 use crate::config::types::OtelConfigToml;
 use crate::config::types::OtelExporterKind;
@@ -154,7 +153,7 @@ pub struct Config {
 
     /// TUI notifications preference. When set, the TUI will send OSC 9 notifications on approvals
     /// and turn completions when not focused.
-    pub tui_notifications: Notifications,
+    pub tui_notifications: bool,
 
     /// Enable ASCII animations and shimmer effects in the TUI.
     pub animations: bool,
@@ -1273,8 +1272,8 @@ impl Config {
             tui_notifications: cfg
                 .tui
                 .as_ref()
-                .map(|t| t.notifications.clone())
-                .unwrap_or_default(),
+                .map(|t| t.terminal_notifications)
+                .unwrap_or(true),
             animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
             otel: {
                 let t: OtelConfigToml = cfg.otel.unwrap_or_default();
@@ -1403,7 +1402,6 @@ mod tests {
     use crate::config::edit::apply_blocking;
     use crate::config::types::HistoryPersistence;
     use crate::config::types::McpServerTransportConfig;
-    use crate::config::types::Notifications;
     use crate::features::Feature;
 
     use super::*;
@@ -1445,16 +1443,16 @@ persistence = "none"
     }
 
     #[test]
-    fn tui_config_missing_notifications_field_defaults_to_enabled() {
+    fn tui_config_missing_terminal_notifications_field_defaults_to_true() {
         let cfg = r#"
 [tui]
 "#;
 
         let parsed = toml::from_str::<ConfigToml>(cfg)
-            .expect("TUI config without notifications should succeed");
+            .expect("TUI config without terminal_notifications should succeed");
         let tui = parsed.tui.expect("config should include tui section");
 
-        assert_eq!(tui.notifications, Notifications::Enabled(true));
+        assert!(tui.terminal_notifications);
     }
 
     #[test]
@@ -3026,7 +3024,7 @@ model_verbosity = "high"
                 notices: Default::default(),
                 check_for_update_on_startup: true,
                 disable_paste_burst: false,
-                tui_notifications: Default::default(),
+                tui_notifications: true,
                 animations: true,
                 otel: OtelConfig::default(),
                 acp_allow_http_fallback: false,
@@ -3100,7 +3098,7 @@ model_verbosity = "high"
             notices: Default::default(),
             check_for_update_on_startup: true,
             disable_paste_burst: false,
-            tui_notifications: Default::default(),
+            tui_notifications: true,
             animations: true,
             otel: OtelConfig::default(),
             acp_allow_http_fallback: false,
@@ -3189,7 +3187,7 @@ model_verbosity = "high"
             notices: Default::default(),
             check_for_update_on_startup: true,
             disable_paste_burst: false,
-            tui_notifications: Default::default(),
+            tui_notifications: true,
             animations: true,
             otel: OtelConfig::default(),
             acp_allow_http_fallback: false,
@@ -3264,7 +3262,7 @@ model_verbosity = "high"
             notices: Default::default(),
             check_for_update_on_startup: true,
             disable_paste_burst: false,
-            tui_notifications: Default::default(),
+            tui_notifications: true,
             animations: true,
             otel: OtelConfig::default(),
             acp_allow_http_fallback: false,
@@ -3587,41 +3585,36 @@ trust_level = "untrusted"
 
 #[cfg(test)]
 mod notifications_tests {
-    use crate::config::types::Notifications;
-    use assert_matches::assert_matches;
-    use serde::Deserialize;
+    use crate::config::types::Tui;
 
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct TuiTomlTest {
-        notifications: Notifications,
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct RootTomlTest {
-        tui: TuiTomlTest,
+    #[test]
+    fn test_tui_terminal_notifications_defaults_to_true() {
+        let toml = r#"
+            [tui]
+        "#;
+        let parsed: toml::Value = toml::from_str(toml).expect("parse toml");
+        let tui: Tui = parsed
+            .get("tui")
+            .unwrap()
+            .clone()
+            .try_into()
+            .expect("deserialize tui");
+        assert!(tui.terminal_notifications);
     }
 
     #[test]
-    fn test_tui_notifications_true() {
+    fn test_tui_terminal_notifications_disabled() {
         let toml = r#"
             [tui]
-            notifications = true
+            terminal_notifications = false
         "#;
-        let parsed: RootTomlTest = toml::from_str(toml).expect("deserialize notifications=true");
-        assert_matches!(parsed.tui.notifications, Notifications::Enabled(true));
-    }
-
-    #[test]
-    fn test_tui_notifications_custom_array() {
-        let toml = r#"
-            [tui]
-            notifications = ["foo"]
-        "#;
-        let parsed: RootTomlTest =
-            toml::from_str(toml).expect("deserialize notifications=[\"foo\"]");
-        assert_matches!(
-            parsed.tui.notifications,
-            Notifications::Custom(ref v) if v == &vec!["foo".to_string()]
-        );
+        let parsed: toml::Value = toml::from_str(toml).expect("parse toml");
+        let tui: Tui = parsed
+            .get("tui")
+            .unwrap()
+            .clone()
+            .try_into()
+            .expect("deserialize tui");
+        assert!(!tui.terminal_notifications);
     }
 }

@@ -146,18 +146,18 @@ fn test_trust_screen_is_skipped_with_default_config() {
 #[test]
 fn test_startup_shows_nori_banner() {
     // This test verifies the Nori session header appears on startup
-    // with the expected branding elements when nori-ai is NOT installed
-    // (nori-ai is excluded from PATH by default in SessionConfig)
+    // with the expected branding elements when nori-skillsets is NOT installed
+    // (nori-skillsets is excluded from PATH by default in SessionConfig)
 
     use tui_pty_e2e::normalize_for_snapshot;
     let mut session =
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
-    // Wait for the install instructions to appear (this is the key indicator that nori-ai is not installed)
+    // Wait for the install instructions to appear (this is the key indicator that nori-skillsets is not installed)
     // We wait for this specifically since it ensures the full banner render including the install hint
     session
-        .wait_for_text("npx nori-ai install", TIMEOUT)
-        .expect("Install instructions did not appear - nori-ai might be in PATH");
+        .wait_for_text("npx nori-skillsets init", TIMEOUT)
+        .expect("Install instructions did not appear - nori-skillsets might be in PATH");
 
     let contents = session.screen_contents();
 
@@ -187,18 +187,18 @@ fn test_startup_shows_nori_banner() {
 #[cfg(target_os = "linux")]
 #[test]
 fn test_startup_hides_install_hint_when_nori_installed() {
-    // This test verifies that when nori-ai IS installed (available in PATH),
+    // This test verifies that when nori-skillsets IS installed (available in PATH),
     // the install instructions are NOT shown
     use std::os::unix::fs::PermissionsExt;
 
-    // Create a temp directory for our mock nori-ai binary
+    // Create a temp directory for our mock nori-skillsets binary
     let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
 
-    // Create a mock nori-ai executable (just needs to exist and be executable)
-    let mock_nori = mock_bin_dir.path().join("nori-ai");
-    std::fs::write(&mock_nori, "#!/bin/sh\nexit 0\n").expect("Failed to write mock nori-ai");
+    // Create a mock nori-skillsets executable (just needs to exist and be executable)
+    let mock_nori = mock_bin_dir.path().join("nori-skillsets");
+    std::fs::write(&mock_nori, "#!/bin/sh\nexit 0\n").expect("Failed to write mock nori-skillsets");
     std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))
-        .expect("Failed to set permissions on mock nori-ai");
+        .expect("Failed to set permissions on mock nori-skillsets");
 
     let mut session = TuiSession::spawn_with_config(
         24,
@@ -221,10 +221,10 @@ fn test_startup_hides_install_hint_when_nori_installed() {
         contents
     );
 
-    // When nori-ai IS installed, the install instructions should NOT be shown
+    // When nori-skillsets IS installed, the install instructions should NOT be shown
     assert!(
-        !contents.contains("npx nori-ai install"),
-        "Install instructions should NOT be shown when nori-ai is installed, but got: {}",
+        !contents.contains("npx nori-skillsets install"),
+        "Install instructions should NOT be shown when nori-skillsets is installed, but got: {}",
         contents
     );
 }

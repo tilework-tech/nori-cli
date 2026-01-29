@@ -52,6 +52,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use tokio::select;
@@ -234,6 +235,17 @@ pub(crate) struct App {
     /// Pending agent selection. When set, the agent will switch on the next
     /// prompt submission. This avoids disrupting active prompt turns.
     pending_agent: Option<PendingAgentSelection>,
+
+    /// Configurable hotkey bindings loaded from NoriConfig.
+    pub(crate) hotkey_config: codex_acp::config::HotkeyConfig,
+    system_info_tx: mpsc::Sender<SystemInfoRefreshRequest>,
+}
+
+#[derive(Clone, Debug)]
+struct SystemInfoRefreshRequest {
+    dir: PathBuf,
+    model: Option<String>,
+    first_message: Option<String>,
 }
 
 impl App {
@@ -340,6 +352,15 @@ impl App {
         #[cfg(not(debug_assertions))]
         let upgrade_version = crate::updates::get_upgrade_version(&config);
 
+        let (system_info_tx, system_info_rx) = mpsc::channel();
+        let _system_info_worker = Self::spawn_system_info_worker(
+            system_info_rx,
+            app_event_tx.clone(),
+            config.cwd.clone(),
+            config.model.clone(),
+            initial_prompt.clone(),
+        );
+
         let mut app = Self {
             server: conversation_manager,
             app_event_tx,
@@ -360,7 +381,15 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            hotkey_config: codex_acp::config::NoriConfig::load()
+                .unwrap_or_default()
+                .hotkeys,
+            system_info_tx,
         };
+
+        // Propagate initial hotkey config to the textarea so editing bindings
+        // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
+        app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
@@ -401,16 +430,11 @@ impl App {
         let tui_events = tui.event_stream();
         tokio::pin!(tui_events);
 
-        // Spawn background thread to collect system info without blocking startup.
-        // The footer initially shows default (empty) values, and this updates it
-        // once collection completes.
-        {
-            let tx = app.app_event_tx.clone();
-            thread::spawn(move || {
-                let info = crate::system_info::SystemInfo::collect_fresh();
-                tx.send(AppEvent::SystemInfoRefreshed(info));
-            });
-        }
+        app.request_system_info_refresh(
+            app.config.cwd.clone(),
+            Some(app.config.model.clone()),
+            app.chat_widget.first_prompt_text(),
+        );
 
         tui.frame_requester().schedule_frame();
 
@@ -496,6 +520,8 @@ impl App {
                     expected_model: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
                     if let Some(command) = summary.resume_command {
@@ -638,14 +664,8 @@ impl App {
             AppEvent::SystemInfoRefreshed(info) => {
                 self.chat_widget.apply_system_info_refresh(info);
             }
-            AppEvent::RefreshSystemInfoForDirectory(dir) => {
-                // Spawn a background thread to collect system info for the specified directory.
-                // This is triggered when the effective CWD changes during agent operations.
-                let tx = self.app_event_tx.clone();
-                thread::spawn(move || {
-                    let info = crate::system_info::SystemInfo::collect_for_directory(&dir);
-                    tx.send(AppEvent::SystemInfoRefreshed(info));
-                });
+            AppEvent::RefreshSystemInfoForDirectory { dir, model } => {
+                self.request_system_info_refresh(dir, model, self.chat_widget.first_prompt_text());
             }
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
@@ -1020,6 +1040,8 @@ impl App {
                     expected_model: Some(model_name.clone()),
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
 
                 self.chat_widget.add_info_message(
                     format!("Started new conversation with agent: {display_name}"),
@@ -1098,6 +1120,45 @@ impl App {
                 self.persist_config_setting("vertical_footer", enabled)
                     .await;
             }
+            AppEvent::SetConfigTerminalNotifications(enabled) => {
+                self.persist_notification_setting("terminal_notifications", enabled)
+                    .await;
+            }
+            AppEvent::SetConfigOsNotifications(enabled) => {
+                self.persist_notification_setting("os_notifications", enabled)
+                    .await;
+            }
+            AppEvent::SetConfigHotkey { action, binding } => {
+                self.persist_hotkey_setting(action, binding).await;
+            }
+            AppEvent::OpenHotkeyPicker => {
+                self.chat_widget
+                    .open_hotkey_picker(self.hotkey_config.clone());
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::OpenNotifyAfterIdlePicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_notify_after_idle_picker(nori_config.notify_after_idle);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigNotifyAfterIdle(value) => {
+                self.persist_notify_after_idle_setting(value).await;
+            }
+            AppEvent::SkillsetListResult { names, error } => {
+                self.chat_widget.on_skillset_list_result(names, error);
+            }
+            AppEvent::InstallSkillset { name } => {
+                self.chat_widget.on_install_skillset_request(&name);
+            }
+            AppEvent::SkillsetInstallResult {
+                name,
+                success,
+                message,
+            } => {
+                self.chat_widget
+                    .on_skillset_install_result(&name, success, &message);
+            }
             AppEvent::ShowViewonlySessionPicker {
                 sessions,
                 nori_home,
@@ -1153,6 +1214,56 @@ impl App {
 
     pub(crate) fn token_usage(&self) -> codex_core::protocol::TokenUsage {
         self.chat_widget.token_usage()
+    }
+
+    fn request_system_info_refresh(
+        &self,
+        dir: PathBuf,
+        model: Option<String>,
+        first_message: Option<String>,
+    ) {
+        let request = SystemInfoRefreshRequest {
+            dir,
+            model,
+            first_message,
+        };
+        if self.system_info_tx.send(request).is_err() {
+            tracing::error!("system info refresh channel is closed");
+        }
+    }
+
+    fn spawn_system_info_worker(
+        system_info_rx: mpsc::Receiver<SystemInfoRefreshRequest>,
+        app_event_tx: AppEventSender,
+        initial_dir: PathBuf,
+        initial_model: String,
+        initial_first_message: Option<String>,
+    ) -> thread::JoinHandle<()> {
+        thread::spawn(move || {
+            let mut last_request = SystemInfoRefreshRequest {
+                dir: initial_dir,
+                model: Some(initial_model),
+                first_message: initial_first_message,
+            };
+            loop {
+                match system_info_rx.recv_timeout(Duration::from_secs(5)) {
+                    Ok(request) => last_request = request,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+
+                let agent_kind = last_request
+                    .model
+                    .as_ref()
+                    .and_then(|model| codex_acp::AgentKind::from_slug(model));
+                let info = crate::system_info::SystemInfo::collect_for_directory_with_message(
+                    &last_request.dir,
+                    agent_kind,
+                    last_request.first_message.as_deref(),
+                );
+                app_event_tx.send(AppEvent::SystemInfoRefreshed(info));
+            }
+        })
     }
 
     fn on_update_reasoning_effort(&mut self, effort: Option<ReasoningEffortConfig>) {
@@ -1313,19 +1424,122 @@ impl App {
             .add_info_message(format!("{setting_name} {status}"), None);
     }
 
+    #[cfg(feature = "nori-config")]
+    async fn persist_notify_after_idle_setting(
+        &mut self,
+        value: codex_acp::config::NotifyAfterIdle,
+    ) {
+        let toml_str = value.toml_value();
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "notify_after_idle"], toml_value(toml_str))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist notify_after_idle setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save notify_after_idle setting: {err}"));
+            return;
+        }
+
+        self.chat_widget.add_info_message(
+            format!(
+                "Notify after idle set to {}. Changes will take effect after restart.",
+                value.display_name()
+            ),
+            None,
+        );
+    }
+
+    async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
+        let enum_value = if enabled { "enabled" } else { "disabled" };
+
+        // Persist to config.toml as a string enum value
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", setting_name], toml_value(enum_value))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                setting = %setting_name,
+                "failed to persist TUI notification setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save {setting_name} setting: {err}"));
+            return;
+        }
+
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("{setting_name} {status}"), None);
+    }
+
+    async fn persist_hotkey_setting(
+        &mut self,
+        action: codex_acp::config::HotkeyAction,
+        binding: codex_acp::config::HotkeyBinding,
+    ) {
+        let toml_key = action.toml_key();
+        let toml_val = binding.toml_value();
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "hotkeys", toml_key], toml_value(&toml_val))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                action = %action.display_name(),
+                "failed to persist hotkey setting"
+            );
+            self.chat_widget.add_error_message(format!(
+                "Failed to save hotkey for {}: {err}",
+                action.display_name()
+            ));
+            return;
+        }
+
+        self.hotkey_config.set_binding(action, binding.clone());
+        self.chat_widget
+            .set_hotkey_config(self.hotkey_config.clone());
+        self.chat_widget.add_info_message(
+            format!(
+                "{} bound to {}",
+                action.display_name(),
+                binding.display_name()
+            ),
+            None,
+        );
+    }
+
     async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
-        match key_event {
-            KeyEvent {
-                code: KeyCode::Char('t'),
-                modifiers: crossterm::event::KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            } => {
-                // Enter alternate screen and set viewport to full size.
+        use crate::nori::hotkey_match::matches_binding;
+        use codex_acp::config::HotkeyAction;
+
+        // Check configurable hotkeys first (before the structural match),
+        // but only when no popup/view is active — otherwise the popup should
+        // capture the key (e.g. the hotkey picker in rebinding mode).
+        if key_event.kind == KeyEventKind::Press && !self.chat_widget.has_active_popup() {
+            let transcript_binding = self.hotkey_config.binding_for(HotkeyAction::OpenTranscript);
+            if matches_binding(transcript_binding, &key_event) {
                 let _ = tui.enter_alt_screen();
                 self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
                 tui.frame_requester().schedule_frame();
+                return;
             }
+
+            let editor_binding = self.hotkey_config.binding_for(HotkeyAction::OpenEditor);
+            if matches_binding(editor_binding, &key_event) {
+                self.open_external_editor(tui);
+                return;
+            }
+        }
+
+        match key_event {
             // Esc primes/advances backtracking only in normal (not working) mode
             // with the composer focused and empty. In any other state, forward
             // Esc so the active UI (e.g. status indicator, modals, popups)
@@ -1354,14 +1568,6 @@ impl App {
             {
                 // Delegate to helper for clarity; preserves behavior.
                 self.confirm_backtrack_from_main();
-            }
-            KeyEvent {
-                code: KeyCode::Char('g'),
-                modifiers: crossterm::event::KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            } => {
-                self.open_external_editor(tui);
             }
             KeyEvent {
                 kind: KeyEventKind::Press | KeyEventKind::Repeat,
@@ -1457,6 +1663,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
+    use std::sync::mpsc;
 
     fn make_test_app() -> App {
         let (chat_widget, app_event_tx, _rx, _op_rx) = make_chatwidget_manual_with_sender();
@@ -1468,6 +1675,7 @@ mod tests {
             AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
         let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
 
+        let (system_info_tx, _system_info_rx) = mpsc::channel();
         App {
             server,
             app_event_tx,
@@ -1488,6 +1696,8 @@ mod tests {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            hotkey_config: codex_acp::config::HotkeyConfig::default(),
+            system_info_tx,
         }
     }
 
@@ -1505,6 +1715,7 @@ mod tests {
             AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
         let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
 
+        let (system_info_tx, _system_info_rx) = mpsc::channel();
         (
             App {
                 server,
@@ -1526,6 +1737,8 @@ mod tests {
                 suppress_shutdown_complete: false,
                 skip_world_writable_scan_once: false,
                 pending_agent: None,
+                hotkey_config: codex_acp::config::HotkeyConfig::default(),
+                system_info_tx,
             },
             rx,
             op_rx,

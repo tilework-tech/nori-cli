@@ -60,7 +60,14 @@ pub(crate) enum AppEvent {
 
     /// Request to refresh system info for a specific directory.
     /// This is triggered when the effective CWD changes during agent operations.
-    RefreshSystemInfoForDirectory(PathBuf),
+    ///
+    /// The optional model name is used to determine which agent's transcripts to search for.
+    RefreshSystemInfoForDirectory {
+        /// The directory to collect system info for
+        dir: PathBuf,
+        /// Optional model name (e.g., "claude-code", "gemini") to determine agent kind
+        model: Option<String>,
+    },
 
     /// Result of refreshing rate limits
     #[allow(dead_code)]
@@ -270,6 +277,53 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI vertical footer config setting.
     SetConfigVerticalFooter(bool),
+
+    /// Set the TUI terminal notifications config setting.
+    SetConfigTerminalNotifications(bool),
+
+    /// Set a hotkey binding for a specific action.
+    SetConfigHotkey {
+        action: codex_acp::config::HotkeyAction,
+        binding: codex_acp::config::HotkeyBinding,
+    },
+
+    /// Set the TUI OS notifications config setting.
+    SetConfigOsNotifications(bool),
+
+    /// Open the notify-after-idle sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenNotifyAfterIdlePicker,
+
+    /// Open the hotkey picker sub-view.
+    OpenHotkeyPicker,
+
+    /// Set the TUI notify-after-idle config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigNotifyAfterIdle(codex_acp::config::NotifyAfterIdle),
+
+    /// Result of listing available skillsets via nori-skillsets CLI.
+    SkillsetListResult {
+        /// List of skillset names on success (exit code 0), None if command not found.
+        names: Option<Vec<String>>,
+        /// Error message if command failed (non-zero exit) or not found.
+        error: Option<String>,
+    },
+
+    /// Request to install a skillset by name.
+    InstallSkillset {
+        /// The name of the skillset to install.
+        name: String,
+    },
+
+    /// Result of installing a skillset.
+    SkillsetInstallResult {
+        /// The name of the skillset that was installed.
+        name: String,
+        /// Whether the installation succeeded (exit code 0).
+        success: bool,
+        /// First line of stdout on success, or error message on failure.
+        message: String,
+    },
 
     /// Show the viewonly session picker with loaded sessions.
     ShowViewonlySessionPicker {

@@ -288,9 +288,10 @@ fn read_nori_profile(cwd: &Path) -> Option<String> {
     None
 }
 
-/// Check if the nori-ai command is available in PATH
-fn is_nori_ai_installed() -> bool {
-    which::which("nori-ai").is_ok()
+/// Check if either nori-skillsets or nori-ai command is available in PATH.
+/// Prefers nori-skillsets (new installer) over nori-ai (legacy installer).
+fn is_nori_installed() -> bool {
+    which::which("nori-skillsets").is_ok() || which::which("nori-ai").is_ok()
 }
 
 /// Format a directory path for display, relativizing to home if possible.
@@ -432,11 +433,11 @@ pub(crate) fn new_nori_session_info(
         let mut help_lines: Vec<Line<'static>> = vec![];
 
         // Only show install hint if nori-ai is not already installed
-        if !is_nori_ai_installed() {
+        if !is_nori_installed() {
             help_lines.push(Line::from(""));
             help_lines.push(Line::from(vec![
                 "  Run '".dim(),
-                "npx nori-ai install".cyan(),
+                "npx nori-skillsets init".cyan(),
                 "' to set up Nori AI enhancements".dim(),
             ]));
         }

@@ -235,7 +235,7 @@ fn review_restores_context_window_indicator() {
             rate_limits: None,
         }),
     });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(30));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
 
     chat.handle_codex_event(Event {
         id: "review-start".into(),
@@ -252,7 +252,7 @@ fn review_restores_context_window_indicator() {
             rate_limits: None,
         }),
     });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(97));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(3));
 
     chat.handle_codex_event(Event {
         id: "review-end".into(),
@@ -262,7 +262,7 @@ fn review_restores_context_window_indicator() {
     });
     let _ = drain_insert_history(&mut rx);
 
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(30));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
     assert!(!chat.is_review_mode);
 }
 
@@ -281,7 +281,7 @@ fn token_count_none_resets_context_indicator() {
             rate_limits: None,
         }),
     });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(30));
+    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
 
     chat.handle_codex_event(Event {
         id: "token-cleared".into(),
@@ -389,6 +389,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
+        first_prompt_text: None,
     };
     (widget, rx, op_rx)
 }
@@ -1159,6 +1160,37 @@ fn slash_rollout_handles_missing_path() {
     assert!(
         rendered.contains("not available"),
         "expected missing rollout path message: {rendered}"
+    );
+}
+
+#[test]
+fn slash_first_prompt_shows_initial_prompt() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.first_prompt_text = Some("build me a website".to_string());
+
+    chat.dispatch_command(SlashCommand::FirstPrompt);
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("build me a website"),
+        "expected first prompt text in output, got: {rendered}"
+    );
+}
+
+#[test]
+fn slash_first_prompt_shows_fallback_when_none() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.dispatch_command(SlashCommand::FirstPrompt);
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("No prompt has been submitted yet"),
+        "expected fallback message, got: {rendered}"
     );
 }
 
@@ -3492,7 +3524,7 @@ fn drain_refresh_system_info_events(
 ) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     while let Ok(ev) = rx.try_recv() {
-        if let AppEvent::RefreshSystemInfoForDirectory(dir) = ev {
+        if let AppEvent::RefreshSystemInfoForDirectory { dir, model: _ } = ev {
             dirs.push(dir);
         }
     }

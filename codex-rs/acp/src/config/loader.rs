@@ -113,8 +113,20 @@ impl NoriConfig {
                 .history_persistence
                 .unwrap_or(super::types::HistoryPersistence::SaveAll),
             animations: toml.tui.animations.unwrap_or(true),
-            notifications: toml.tui.notifications.unwrap_or(true),
+            terminal_notifications: toml
+                .tui
+                .terminal_notifications
+                .unwrap_or(super::types::TerminalNotifications::Enabled),
+            os_notifications: toml
+                .tui
+                .os_notifications
+                .unwrap_or(super::types::OsNotifications::Enabled),
             vertical_footer: toml.tui.vertical_footer.unwrap_or(false),
+            notify_after_idle: toml
+                .tui
+                .notify_after_idle
+                .unwrap_or(super::types::NotifyAfterIdle::FiveSeconds),
+            hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             nori_home,
             cwd,
             mcp_servers,
@@ -250,6 +262,41 @@ agent = "gemini"
         assert_eq!(
             config.agent, "claude-code",
             "Agent should default to 'claude-code' when not specified"
+        );
+    }
+
+    #[test]
+    fn test_load_notify_after_idle_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+notify_after_idle = "30s"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.notify_after_idle,
+            super::super::types::NotifyAfterIdle::ThirtySeconds
+        );
+    }
+
+    #[test]
+    fn test_notify_after_idle_defaults_to_five_seconds() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.notify_after_idle,
+            super::super::types::NotifyAfterIdle::FiveSeconds
         );
     }
 

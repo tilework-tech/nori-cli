@@ -1,4 +1,6 @@
 use crate::key_hint::is_altgr;
+use crate::nori::hotkey_match::matches_binding;
+use codex_acp::config::HotkeyConfig;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -34,6 +36,7 @@ pub(crate) struct TextArea {
     preferred_col: Option<usize>,
     elements: Vec<TextElement>,
     kill_buffer: String,
+    hotkey_config: HotkeyConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +60,12 @@ impl TextArea {
             preferred_col: None,
             elements: Vec::new(),
             kill_buffer: String::new(),
+            hotkey_config: HotkeyConfig::default(),
         }
+    }
+
+    pub fn set_hotkey_config(&mut self, config: HotkeyConfig) {
+        self.hotkey_config = config;
     }
 
     pub fn set_text(&mut self, text: &str) {
@@ -213,22 +221,76 @@ impl TextArea {
     }
 
     pub fn input(&mut self, event: KeyEvent) {
+        // 1. C0 control character fallbacks (hardcoded, terminal compat).
+        // Some terminals send Control key chords as C0 control characters
+        // without reporting the CONTROL modifier.
         match event {
-            // Some terminals (or configurations) send Control key chords as
-            // C0 control characters without reporting the CONTROL modifier.
-            // Handle common fallbacks for Ctrl-B/Ctrl-F here so they don't get
-            // inserted as literal control bytes.
             KeyEvent { code: KeyCode::Char('\u{0002}'), modifiers: KeyModifiers::NONE, .. } /* ^B */ => {
                 self.move_cursor_left();
+                return;
             }
             KeyEvent { code: KeyCode::Char('\u{0006}'), modifiers: KeyModifiers::NONE, .. } /* ^F */ => {
                 self.move_cursor_right();
+                return;
             }
+            _ => {}
+        }
+
+        // 2. Configurable bindings (checked before character insertion catch-all).
+        let cfg = &self.hotkey_config;
+        if matches_binding(&cfg.move_backward_char, &event) {
+            self.move_cursor_left();
+            return;
+        }
+        if matches_binding(&cfg.move_forward_char, &event) {
+            self.move_cursor_right();
+            return;
+        }
+        if matches_binding(&cfg.move_beginning_of_line, &event) {
+            self.move_cursor_to_beginning_of_line(true);
+            return;
+        }
+        if matches_binding(&cfg.move_end_of_line, &event) {
+            self.move_cursor_to_end_of_line(true);
+            return;
+        }
+        if matches_binding(&cfg.move_backward_word, &event) {
+            self.set_cursor(self.beginning_of_previous_word());
+            return;
+        }
+        if matches_binding(&cfg.move_forward_word, &event) {
+            self.set_cursor(self.end_of_next_word());
+            return;
+        }
+        if matches_binding(&cfg.delete_backward_char, &event) {
+            self.delete_backward(1);
+            return;
+        }
+        if matches_binding(&cfg.delete_forward_char, &event) {
+            self.delete_forward(1);
+            return;
+        }
+        if matches_binding(&cfg.delete_backward_word, &event) {
+            self.delete_backward_word();
+            return;
+        }
+        if matches_binding(&cfg.kill_to_end_of_line, &event) {
+            self.kill_to_end_of_line();
+            return;
+        }
+        if matches_binding(&cfg.kill_to_beginning_of_line, &event) {
+            self.kill_to_beginning_of_line();
+            return;
+        }
+        if matches_binding(&cfg.yank, &event) {
+            self.yank();
+            return;
+        }
+
+        // 3. Remaining hardcoded bindings (char insertion, Enter, arrows, etc.)
+        match event {
             KeyEvent {
                 code: KeyCode::Char(c),
-                // Insert plain characters (and Shift-modified). Do NOT insert when ALT is held,
-                // because many terminals map Option/Meta combos to ALT+<char> (e.g. ESC f/ESC b)
-                // for word navigation. Those are handled explicitly below.
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 ..
             } => self.insert_str(&c.to_string()),
@@ -247,7 +309,7 @@ impl TextArea {
                 ..
             } if modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
                 self.delete_backward_word()
-            },
+            }
             // Windows AltGr generates ALT|CONTROL; treat as a plain character input unless
             // we match a specific Control+Alt binding above.
             KeyEvent {
@@ -263,73 +325,16 @@ impl TextArea {
             KeyEvent {
                 code: KeyCode::Backspace,
                 ..
-            }
-            | KeyEvent {
-                code: KeyCode::Char('h'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
             } => self.delete_backward(1),
             KeyEvent {
                 code: KeyCode::Delete,
                 modifiers: KeyModifiers::ALT,
                 ..
-            }  => self.delete_forward_word(),
+            } => self.delete_forward_word(),
             KeyEvent {
                 code: KeyCode::Delete,
                 ..
-            }
-            | KeyEvent {
-                code: KeyCode::Char('d'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
             } => self.delete_forward(1),
-
-            KeyEvent {
-                code: KeyCode::Char('w'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.delete_backward_word();
-            }
-            // Meta-b -> move to beginning of previous word
-            // Meta-f -> move to end of next word
-            // Many terminals map Option (macOS) to Alt. Some send Alt|Shift, so match contains(ALT).
-            KeyEvent {
-                code: KeyCode::Char('b'),
-                modifiers: KeyModifiers::ALT,
-                ..
-            } => {
-                self.set_cursor(self.beginning_of_previous_word());
-            }
-            KeyEvent {
-                code: KeyCode::Char('f'),
-                modifiers: KeyModifiers::ALT,
-                ..
-            } => {
-                self.set_cursor(self.end_of_next_word());
-            }
-            KeyEvent {
-                code: KeyCode::Char('u'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.kill_to_beginning_of_line();
-            }
-            KeyEvent {
-                code: KeyCode::Char('k'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.kill_to_end_of_line();
-            }
-            KeyEvent {
-                code: KeyCode::Char('y'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.yank();
-            }
-
             // Cursor movement
             KeyEvent {
                 code: KeyCode::Left,
@@ -345,43 +350,17 @@ impl TextArea {
             } => {
                 self.move_cursor_right();
             }
-            KeyEvent {
-                code: KeyCode::Char('b'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.move_cursor_left();
-            }
-            KeyEvent {
-                code: KeyCode::Char('f'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.move_cursor_right();
-            }
-            // Some terminals send Alt+Arrow for word-wise movement:
-            // Option/Left -> Alt+Left (previous word start)
-            // Option/Right -> Alt+Right (next word end)
+            // Some terminals send Alt+Arrow for word-wise movement
             KeyEvent {
                 code: KeyCode::Left,
-                modifiers: KeyModifiers::ALT,
-                ..
-            }
-            | KeyEvent {
-                code: KeyCode::Left,
-                modifiers: KeyModifiers::CONTROL,
+                modifiers: KeyModifiers::ALT | KeyModifiers::CONTROL,
                 ..
             } => {
                 self.set_cursor(self.beginning_of_previous_word());
             }
             KeyEvent {
                 code: KeyCode::Right,
-                modifiers: KeyModifiers::ALT,
-                ..
-            }
-            | KeyEvent {
-                code: KeyCode::Right,
-                modifiers: KeyModifiers::CONTROL,
+                modifiers: KeyModifiers::ALT | KeyModifiers::CONTROL,
                 ..
             } => {
                 self.set_cursor(self.end_of_next_word());
@@ -404,24 +383,9 @@ impl TextArea {
                 self.move_cursor_to_beginning_of_line(false);
             }
             KeyEvent {
-                code: KeyCode::Char('a'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.move_cursor_to_beginning_of_line(true);
-            }
-
-            KeyEvent {
                 code: KeyCode::End, ..
             } => {
                 self.move_cursor_to_end_of_line(false);
-            }
-            KeyEvent {
-                code: KeyCode::Char('e'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                self.move_cursor_to_end_of_line(true);
             }
             _o => {
                 #[cfg(feature = "debug-logs")]
@@ -1991,5 +1955,99 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ===== Configurable hotkey tests =====
+
+    #[test]
+    fn test_configurable_ctrl_a_moves_to_line_start() {
+        use codex_acp::config::HotkeyConfig;
+        let mut t = ta_with("hello");
+        t.set_hotkey_config(HotkeyConfig::default());
+        // Cursor is at end (5) after insert
+        pretty_assertions::assert_eq!(t.cursor(), 5);
+        // Ctrl+A should move to beginning of line
+        t.input(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+        pretty_assertions::assert_eq!(t.cursor(), 0);
+    }
+
+    #[test]
+    fn test_configurable_ctrl_e_moves_to_line_end() {
+        use codex_acp::config::HotkeyConfig;
+        let mut t = ta_with("hello");
+        t.set_hotkey_config(HotkeyConfig::default());
+        t.set_cursor(0);
+        // Ctrl+E should move to end of line
+        t.input(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+        pretty_assertions::assert_eq!(t.cursor(), 5);
+    }
+
+    #[test]
+    fn test_rebound_move_backward_char() {
+        use codex_acp::config::HotkeyBinding;
+        use codex_acp::config::HotkeyConfig;
+        let config = HotkeyConfig {
+            move_backward_char: HotkeyBinding::from_str("alt+x"),
+            ..HotkeyConfig::default()
+        };
+        let mut t = ta_with("abcd");
+        t.set_hotkey_config(config);
+        // Cursor at end (4)
+        pretty_assertions::assert_eq!(t.cursor(), 4);
+
+        // Alt+X (the rebound key) should move cursor left
+        t.input(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::ALT));
+        pretty_assertions::assert_eq!(t.cursor(), 3);
+
+        // Ctrl+B should no longer move cursor (it's no longer bound to move backward)
+        t.input(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
+        pretty_assertions::assert_eq!(t.cursor(), 3);
+    }
+
+    #[test]
+    fn test_unbound_editing_action_falls_through() {
+        use codex_acp::config::HotkeyBinding;
+        use codex_acp::config::HotkeyConfig;
+        let config = HotkeyConfig {
+            kill_to_end_of_line: HotkeyBinding::none(),
+            ..HotkeyConfig::default()
+        };
+        let mut t = ta_with("hello");
+        t.set_hotkey_config(config);
+        t.set_cursor(2);
+        // Ctrl+K should not kill because the action is unbound
+        t.input(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
+        pretty_assertions::assert_eq!(t.text(), "hello");
+        pretty_assertions::assert_eq!(t.cursor(), 2);
+    }
+
+    #[test]
+    fn test_configurable_kill_and_yank() {
+        use codex_acp::config::HotkeyConfig;
+        let mut t = ta_with("hello world");
+        t.set_hotkey_config(HotkeyConfig::default());
+        t.set_cursor(5);
+        // Ctrl+K should kill to end of line
+        t.input(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
+        pretty_assertions::assert_eq!(t.text(), "hello");
+        pretty_assertions::assert_eq!(t.cursor(), 5);
+        // Ctrl+Y should yank back
+        t.input(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
+        pretty_assertions::assert_eq!(t.text(), "hello world");
+        pretty_assertions::assert_eq!(t.cursor(), 11);
+    }
+
+    #[test]
+    fn test_configurable_word_movement() {
+        use codex_acp::config::HotkeyConfig;
+        let mut t = ta_with("foo bar baz");
+        t.set_hotkey_config(HotkeyConfig::default());
+        t.set_cursor(0);
+        // Alt+F should move forward past "foo"
+        t.input(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::ALT));
+        pretty_assertions::assert_eq!(t.cursor(), 3);
+        // Alt+B should move backward to start of "foo"
+        t.input(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT));
+        pretty_assertions::assert_eq!(t.cursor(), 0);
     }
 }

@@ -1,0 +1,5 @@
+---
+source: tui/src/bottom_pane/footer.rs
+expression: terminal.backend()
+---
+"  Context: 34.0K (27%) · Tokens: 45.0K in / 78.0K out (32.0K cached) · ? for sho"

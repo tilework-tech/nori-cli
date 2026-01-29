@@ -2,4 +2,4 @@
 source: tui/src/bottom_pane/footer.rs
 expression: terminal.backend()
 ---
-"  ⎇ feature/worktree-branch · Skillset: clifford · Skillsets v19.1.1 · +5 -2 · ?"
+"  ⎇ feature/worktree-branch · +5 -2 · Skillset: clifford · Skillsets v19.1.1 · ?"

@@ -1,0 +1,5 @@
+---
+source: tui/src/bottom_pane/footer.rs
+expression: terminal.backend()
+---
+"  Context: 1.23M · Tokens: 500K in / 735K out · ? for shortcuts                 "

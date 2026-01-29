@@ -27,6 +27,7 @@ Key files:
 - `connection.rs` - Subprocess spawning and JSON-RPC communication
 - `translator.rs` - Protocol translation between ACP and Codex types
 - `backend.rs` - Implements `ConversationClient` trait from codex-core
+- `transcript_discovery.rs` - Discovers transcript files for external agents
 
 ### Core Implementation
 
@@ -66,6 +67,34 @@ The config module provides the **canonical source of truth** for Nori home path 
 | `agent` | User's persistent agent preference | Saved to config.toml |
 | `model` | Active model for current session | Can be overridden by CLI flags |
 
+**Notification Configuration** (`config/types.rs`):
+
+Three config enums control notification behavior, all stored in the `[tui]` section of `config.toml`:
+
+| Enum | TOML Key | Default | Controls |
+|------|----------|---------|----------|
+| `TerminalNotifications` | `terminal_notifications` | `Enabled` | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`) |
+| `OsNotifications` | `os_notifications` | `Enabled` | Native desktop notifications via `notify-rust` (wired in `backend.rs` to `UserNotifier::new()`) |
+| `NotifyAfterIdle` | `notify_after_idle` | `FiveSeconds` (`"5s"`) | Duration to wait before firing an idle notification; `Disabled` suppresses the timer entirely |
+
+`NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
+
+The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
+
+
+**Hotkey Configuration** (`config/types.rs`):
+
+Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in `config.toml`. The config layer defines four types:
+
+| Type | Purpose |
+|------|---------|
+| `HotkeyAction` | Enum of bindable actions with display names, descriptions, TOML keys, and default bindings. Covers both app-level actions (OpenTranscript, OpenEditor) and emacs-style editing actions (cursor movement, deletion, kill/yank) used by the textarea |
+| `HotkeyBinding` | String-based key representation (e.g. `"ctrl+t"`, `"alt+g"`, `"none"` for unbound). Serializes/deserializes via serde for TOML roundtripping |
+| `HotkeyConfigToml` | TOML deserialization struct with `Option<HotkeyBinding>` fields for each action |
+| `HotkeyConfig` | Resolved config with defaults applied via `from_toml()`. Provides `binding_for()`, `set_binding()`, and `all_bindings()` accessors |
+
+The binding string format is kept terminal-agnostic (no crossterm dependency in the config crate). The TUI layer in `@/codex-rs/tui/src/nori/hotkey_match.rs` handles conversion between binding strings and crossterm `KeyEvent` types. `HotkeyConfig` is carried on `NoriConfig` and resolved during config loading in `loader.rs`.
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`
@@ -73,6 +102,101 @@ The config module provides the **canonical source of truth** for Nori home path 
 - Uses advisory file locking for concurrent write safety
 - `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
 
+**Transcript Discovery** (`transcript_discovery.rs`):
+
+Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to display token usage in the footer.
+
+Two discovery entry points are provided:
+- `discover_transcript_for_agent()` - Basic discovery using directory/CWD matching (legacy)
+- `discover_transcript_for_agent_with_message()` - Preferred entry point that uses first-message matching for Claude Code
+
+Agent detection via environment variables:
+
+| Env Var | Agent |
+|---------|-------|
+| `CLAUDECODE=1` | Claude Code |
+| `CODEX_CLI=1` | Codex |
+| `GEMINI_CLI=1` | Gemini |
+
+Transcript file locations and matching strategy:
+
+| Agent | Path Pattern | Matching Strategy |
+|-------|--------------|-------------------|
+| Claude Code | `~/.claude/projects/<transformed-path>/<uuid>.jsonl` | First-message matching (requires `first_message` parameter) |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | Parse first JSON line for `payload.cwd` field, match against CWD |
+| Gemini | `~/.gemini/tmp/<sha256-hash>/chats/<session>.json` | Hash is SHA256 of canonical working directory path |
+
+**Claude Code First-Message Matching:**
+
+Claude Code transcript discovery uses the first user message to accurately identify the correct transcript file. This is necessary because multiple sessions may exist in the same project directory, and picking the most-recently-modified file could return the wrong transcript.
+
+The matching process:
+1. Normalize both the search message and file messages by stripping whitespace and truncating to 20 characters
+2. Only consider files modified in the last 2 days (`MAX_TRANSCRIPT_AGE_SECS = 172800`)
+3. Read up to 10 lines (`MAX_LINES_TO_SEARCH`) or until the first user text entry is found
+4. Skip `tool_result` entries (which also have `"type":"user"`)
+5. If multiple files match, pick the most recently modified one
+6. If no first_message is provided or no match is found, return an error (fail closed rather than return wrong transcript)
+
+The `first_message` flows from the TUI's `ChatWidget::first_prompt_text()` through the system info refresh mechanism to the discovery layer.
+
+**Token Usage Parsing** (`transcript_discovery.rs`):
+
+The `parse_transcript_tokens()` function extracts token usage breakdown from transcript files. Returns a `TranscriptTokenUsage` struct:
+
+```rust
+pub struct TranscriptTokenUsage {
+    pub input_tokens: i64,    // Total input tokens
+    pub output_tokens: i64,   // Total output tokens
+    pub cached_tokens: i64,   // Cached input tokens (subset of input_tokens)
+}
+```
+
+Each agent format requires different parsing:
+
+| Agent | Format | Token Fields |
+|-------|--------|--------------|
+| Claude Code | JSONL | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` in `message.usage` |
+| Codex | JSONL | `input_tokens`, `output_tokens`, `cached_input_tokens` from last `token_count` event |
+| Gemini | JSON | `input`, `output`, `thoughts`, `cached` from each message's `tokens` object |
+
+**Claude Code Streaming Deduplication:**
+
+Claude Code logs multiple JSONL entries per API request due to streaming (each streaming delta contains the same usage data). The parser deduplicates by tracking seen `requestId` values in a `HashSet<String>`. Entries without a `requestId` are still counted for backward compatibility with older transcript formats.
+
+**Claude Token Field Semantics:**
+
+| Field | Meaning | Counted As |
+|-------|---------|------------|
+| `input_tokens` | Non-cached input tokens sent | Added to `input_tokens` |
+| `cache_creation_input_tokens` | Tokens sent and cached for future use | Added to `input_tokens` |
+| `cache_read_input_tokens` | Tokens read from cache (discounted) | Reported as `cached_tokens` |
+| `output_tokens` | Output tokens generated | Added to `output_tokens` |
+
+The `TranscriptLocation` struct returned by discovery functions includes:
+- `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for input, output, and cached tokens
+
+Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
+
+The data flow is:
+```
+SystemInfo::collect_for_directory_with_message() (background thread)
+    |
+    v
+discover_transcript_for_agent_with_message(cwd, agent_kind, first_message)
+    |
+    v
+parse_transcript_tokens(path, agent_kind)
+    |
+    v
+TranscriptLocation { ..., token_breakdown }
+    |
+    v
+FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
+    |
+    v
+Footer renders "Tokens: 45K in / 78K out (32K cached)"
+```
 **Connection Management** (`connection.rs`):
 
 ### Transcript Persistence
@@ -334,6 +458,8 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - A `DRAIN_YIELD_COUNT` of 10 yields allows pending notifications to drain before session cleanup
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
+- Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
+- Claude Code transcript discovery requires the first user message to function correctly; without it, the discovery returns an error
 
 **Event Flow Tracing:**
 

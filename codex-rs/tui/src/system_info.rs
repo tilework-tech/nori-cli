@@ -1,16 +1,43 @@
+use codex_acp::AgentKind;
+use codex_acp::TranscriptLocation;
 use std::env;
 use std::fs;
 use std::process::Command;
+
+/// Indicates which command was used to detect the Nori version.
+/// This affects the UI display text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum NoriVersionSource {
+    /// Version from `nori-skillsets` command (new installer) - displays as "Skillsets"
+    #[default]
+    Skillsets,
+    /// Version from `nori-ai` command (legacy installer) - displays as "Profiles"
+    Profiles,
+}
+
+impl NoriVersionSource {
+    /// Returns the display label for this version source.
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            NoriVersionSource::Skillsets => "Skillsets",
+            NoriVersionSource::Profiles => "Profiles",
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SystemInfo {
     pub(crate) git_branch: Option<String>,
     pub(crate) nori_profile: Option<String>,
     pub(crate) nori_version: Option<String>,
+    /// Indicates which command was used to detect the version (affects UI display).
+    pub(crate) nori_version_source: Option<NoriVersionSource>,
     pub(crate) git_lines_added: Option<i32>,
     pub(crate) git_lines_removed: Option<i32>,
     /// Whether the current directory is a git worktree (not the main repo)
     pub(crate) is_worktree: bool,
+    /// Current transcript location if running within an agent environment
+    pub(crate) transcript_location: Option<TranscriptLocation>,
 }
 
 impl SystemInfo {
@@ -18,21 +45,19 @@ impl SystemInfo {
     /// Only available in debug builds for E2E testing via NORI_SYNC_SYSTEM_INFO=1.
     #[cfg(debug_assertions)]
     pub fn collect_sync() -> Self {
-        Self::collect_fresh()
+        Self::collect_fresh(None)
     }
 
     /// Collect fresh system info. This is blocking and should be called from
     /// a background thread to avoid blocking TUI startup.
-    pub(crate) fn collect_fresh() -> Self {
-        let (git_lines_added, git_lines_removed) = get_git_stats(None);
-        Self {
-            git_branch: get_git_branch(None),
-            nori_profile: get_nori_profile(),
-            nori_version: get_nori_version(),
-            git_lines_added,
-            git_lines_removed,
-            is_worktree: is_git_worktree(None),
-        }
+    ///
+    /// # Arguments
+    ///
+    /// * `agent_kind` - Optional agent kind to use for transcript discovery.
+    ///   If provided, searches for transcripts from that specific agent.
+    ///   If None, attempts to detect the agent from environment variables.
+    pub(crate) fn collect_fresh(agent_kind: Option<AgentKind>) -> Self {
+        Self::collect_impl(None, agent_kind, None)
     }
 
     /// Collect system info for a specific directory. This is blocking and should
@@ -40,28 +65,102 @@ impl SystemInfo {
     ///
     /// This is used when the agent is working in a different directory than the
     /// TUI was launched from (e.g., a git worktree).
-    pub(crate) fn collect_for_directory(dir: &std::path::Path) -> Self {
-        let (git_lines_added, git_lines_removed) = get_git_stats(Some(dir));
+    ///
+    /// # Arguments
+    ///
+    /// * `dir` - The directory to collect system info for
+    /// * `agent_kind` - Optional agent kind to use for transcript discovery.
+    ///   If provided, searches for transcripts from that specific agent.
+    ///   If None, attempts to detect the agent from environment variables.
+    #[cfg(test)]
+    pub(crate) fn collect_for_directory(
+        dir: &std::path::Path,
+        agent_kind: Option<AgentKind>,
+    ) -> Self {
+        Self::collect_impl(Some(dir), agent_kind, None)
+    }
+
+    /// Collect system info for a specific directory with first-message matching.
+    ///
+    /// This is the preferred method for Claude Code transcript discovery as it
+    /// uses the first user message to accurately identify the correct transcript.
+    ///
+    /// # Arguments
+    ///
+    /// * `dir` - The directory to collect system info for
+    /// * `agent_kind` - Optional agent kind to use for transcript discovery.
+    /// * `first_message` - The first user message for transcript matching (used by Claude Code)
+    pub(crate) fn collect_for_directory_with_message(
+        dir: &std::path::Path,
+        agent_kind: Option<AgentKind>,
+        first_message: Option<&str>,
+    ) -> Self {
+        Self::collect_impl(Some(dir), agent_kind, first_message)
+    }
+
+    fn collect_impl(
+        dir: Option<&std::path::Path>,
+        agent_kind: Option<AgentKind>,
+        first_message: Option<&str>,
+    ) -> Self {
+        let (git_lines_added, git_lines_removed) = get_git_stats(dir);
+        let transcript_location = match dir {
+            Some(dir) => discover_transcript(dir, agent_kind, first_message),
+            None => env::current_dir()
+                .ok()
+                .and_then(|cwd| discover_transcript(&cwd, agent_kind, first_message)),
+        };
+        let (nori_version, nori_version_source) = get_nori_version();
         Self {
-            git_branch: get_git_branch(Some(dir)),
+            git_branch: get_git_branch(dir),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
-            nori_version: get_nori_version(), // Version is global
+            nori_version,
+            nori_version_source,
             git_lines_added,
             git_lines_removed,
-            is_worktree: is_git_worktree(Some(dir)),
+            is_worktree: is_git_worktree(dir),
+            transcript_location,
         }
     }
 }
 
-fn get_nori_version() -> Option<String> {
-    let output = Command::new("nori-ai").arg("--version").output().ok()?;
+/// Helper to discover transcript location for a specific agent kind.
+///
+/// Uses first-message matching for accurate transcript identification.
+/// For Claude Code, the first_message is required to find the correct transcript.
+/// For other agents (Codex, Gemini), the first_message is ignored.
+fn discover_transcript(
+    dir: &std::path::Path,
+    agent_kind: Option<AgentKind>,
+    first_message: Option<&str>,
+) -> Option<TranscriptLocation> {
+    agent_kind.and_then(|agent| {
+        codex_acp::discover_transcript_for_agent_with_message(dir, agent, first_message).ok()
+    })
+}
 
-    if !output.status.success() {
-        return None;
+fn get_nori_version() -> (Option<String>, Option<NoriVersionSource>) {
+    // Try nori-skillsets first (new installer)
+    if let Ok(output) = Command::new("nori-skillsets").arg("--version").output()
+        && output.status.success()
+        && let Some(version) = String::from_utf8(output.stdout)
+            .ok()
+            .and_then(|s| parse_nori_version(&s))
+    {
+        return (Some(version), Some(NoriVersionSource::Skillsets));
     }
 
-    let version_output = String::from_utf8(output.stdout).ok()?;
-    parse_nori_version(&version_output)
+    // Fallback to nori-ai (legacy installer)
+    if let Ok(output) = Command::new("nori-ai").arg("--version").output()
+        && output.status.success()
+        && let Some(version) = String::from_utf8(output.stdout)
+            .ok()
+            .and_then(|s| parse_nori_version(&s))
+    {
+        return (Some(version), Some(NoriVersionSource::Profiles));
+    }
+
+    (None, None)
 }
 
 fn parse_nori_version(output: &str) -> Option<String> {
@@ -269,6 +368,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parse_nori_version_skillsets_format() {
+        // New format: "nori-skillsets 19.2.0"
+        let version = parse_nori_version("nori-skillsets 19.2.0");
+        assert_eq!(version, Some("19.2.0".to_string()));
+    }
+
+    #[test]
+    fn test_nori_version_source_enum_exists() {
+        // Test that NoriVersionSource enum exists and has the expected variants
+        let skillsets = NoriVersionSource::Skillsets;
+        let profiles = NoriVersionSource::Profiles;
+
+        // Verify they are different
+        assert_ne!(skillsets, profiles);
+
+        // Verify display format
+        assert_eq!(skillsets.label(), "Skillsets");
+        assert_eq!(profiles.label(), "Profiles");
+    }
+
+    #[test]
     fn test_get_git_branch_in_git_repo() {
         // This test runs in the actual git repo, so it should detect a branch
         // However, CI runners may checkout in detached HEAD state, so we only
@@ -303,7 +423,7 @@ mod tests {
         // Test that collect_for_directory runs git commands in the specified directory
         // We use the current repo directory which should be a valid git repo
         let current_dir = std::env::current_dir().expect("should have current dir");
-        let info = SystemInfo::collect_for_directory(&current_dir);
+        let info = SystemInfo::collect_for_directory(&current_dir, None);
 
         // The current directory is a git repo, so we should get branch info
         // (unless in detached HEAD state in CI)
@@ -316,7 +436,7 @@ mod tests {
     fn test_collect_for_directory_non_git_returns_none_branch() {
         // Test that a non-git directory returns None for git_branch
         let temp_dir = std::env::temp_dir();
-        let info = SystemInfo::collect_for_directory(&temp_dir);
+        let info = SystemInfo::collect_for_directory(&temp_dir, None);
 
         // /tmp is not a git repo, so git_branch should be None
         assert!(

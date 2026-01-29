@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/footer.rs
-assertion_line: 457
 expression: terminal.backend()
 ---
-"  ⎇ feature/test · Approval Mode: Agent · Skillset: clifford · Skillsets v19.1.1"
+"  ⎇ feature/test · +10 -3 · Approval Mode: Agent · Skillset: clifford · Skillset"
