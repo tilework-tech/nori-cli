@@ -372,14 +372,13 @@ impl AcpBackend {
     /// to TUI events. Unlike the per-prompt update handler, this runs continuously
     /// between prompts to catch background task updates.
     ///
-    /// Inter-turn notifications are wrapped in TaskStarted/TaskComplete events
-    /// with a "Background task update" status message.
+    /// Translated events are forwarded directly into the chat stream with
+    /// id "background", so they appear as visible content rather than invisible
+    /// state transitions.
     async fn run_persistent_listener(
         mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
         event_tx: mpsc::Sender<Event>,
     ) {
-        // Track state for batching updates that arrive close together
-        let mut in_background_update = false;
         let mut pending_patch_changes: std::collections::HashMap<
             String,
             std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
@@ -391,36 +390,13 @@ impl AcpBackend {
                 "Persistent listener received inter-turn notification"
             );
 
-            // If this is the first update in a sequence, emit TaskStarted
-            if !in_background_update {
-                in_background_update = true;
-
-                // Send TaskStarted to indicate background activity
-                let _ = event_tx
-                    .send(Event {
-                        id: "background".to_string(),
-                        msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
-                            model_context_window: None,
-                        }),
-                    })
-                    .await;
-
-                // Send a status message to show "Background task update" in the TUI
-                let _ = event_tx
-                    .send(Event {
-                        id: "background".to_string(),
-                        msg: EventMsg::AgentMessageDelta(
-                            codex_protocol::protocol::AgentMessageDeltaEvent {
-                                delta: String::new(), // Empty delta - status shown elsewhere
-                            },
-                        ),
-                    })
-                    .await;
-            }
-
-            // Translate the notification to TUI events
+            // Translate the notification to TUI events and forward directly
             let events = translate_session_update_to_events(&update, &mut pending_patch_changes);
+            let mut has_delta = false;
             for event_msg in events {
+                if matches!(event_msg, EventMsg::AgentMessageDelta(_)) {
+                    has_delta = true;
+                }
                 let _ = event_tx
                     .send(Event {
                         id: "background".to_string(),
@@ -429,17 +405,15 @@ impl AcpBackend {
                     .await;
             }
 
-            // Check if channel is empty (no more pending updates).
-            // If so, send TaskComplete to end the background update sequence.
-            // We use try_recv to check without blocking.
-            if persistent_rx.is_empty() {
-                in_background_update = false;
-
+            // If we sent any streaming deltas, finalize the stream by sending
+            // an AgentMessage event. Without this, the TUI's StreamController
+            // would hold the content indefinitely until the next user turn.
+            if has_delta {
                 let _ = event_tx
                     .send(Event {
                         id: "background".to_string(),
-                        msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
-                            last_agent_message: None,
+                        msg: EventMsg::AgentMessage(codex_protocol::protocol::AgentMessageEvent {
+                            message: String::new(),
                         }),
                     })
                     .await;
@@ -3198,9 +3172,13 @@ mod tests {
 
     /// Test that the persistent listener correctly translates inter-turn notifications to TUI events.
     ///
-    /// This tests the core fix for the background task desync bug: notifications sent through the
-    /// persistent channel should be wrapped in TaskStarted/TaskComplete events and translated
-    /// to proper TUI events.
+    /// This tests that inter-turn notifications from the persistent listener are forwarded
+    /// directly as translated events without TaskStarted/TaskComplete wrapping. This ensures
+    /// background updates appear as visible content in the chat stream rather than invisible
+    /// state transitions that flash by before the terminal redraws.
+    ///
+    /// For text deltas, the listener also sends an AgentMessage finalizer to ensure the
+    /// TUI's StreamController flushes the content into history.
     #[tokio::test]
     async fn test_persistent_listener_translates_inter_turn_notifications() {
         use std::time::Duration;
@@ -3213,14 +3191,21 @@ mod tests {
         let listener_handle =
             tokio::spawn(AcpBackend::run_persistent_listener(persistent_rx, event_tx));
 
-        // Send an inter-turn notification (simulating a background task update)
-        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
-            acp::ContentBlock::Text(acp::TextContent::new("Background task completed")),
+        // Send two inter-turn notifications to verify each is handled independently
+        let update1 = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("First background update")),
+        ));
+        let update2 = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Second background update")),
         ));
         persistent_tx
-            .send(update)
+            .send(update1)
             .await
-            .expect("Failed to send update");
+            .expect("Failed to send update1");
+        persistent_tx
+            .send(update2)
+            .await
+            .expect("Failed to send update2");
 
         // Drop the sender to close the channel and let the listener finish
         drop(persistent_tx);
@@ -3236,14 +3221,12 @@ mod tests {
             events.push(event);
         }
 
-        // Verify the expected event sequence:
-        // 1. TaskStarted (to indicate background activity)
-        // 2. AgentMessageDelta (empty, for status)
-        // 3. AgentMessageDelta (with the actual content)
-        // 4. TaskComplete (to end the background update)
-        assert!(
-            events.len() >= 4,
-            "Expected at least 4 events, got {}. Events: {:?}",
+        // Each text update produces: AgentMessageDelta + AgentMessage (finalizer)
+        // Two updates = 4 events total
+        assert_eq!(
+            events.len(),
+            4,
+            "Expected 4 events (2 per text update: delta + finalizer), got {}. Events: {:?}",
             events.len(),
             events
                 .iter()
@@ -3251,11 +3234,40 @@ mod tests {
                 .collect::<Vec<_>>()
         );
 
-        // Check event types
+        // There should be NO TaskStarted or TaskComplete events
+        for event in &events {
+            assert!(
+                !matches!(event.msg, EventMsg::TaskStarted(_)),
+                "Persistent listener should NOT emit TaskStarted events"
+            );
+            assert!(
+                !matches!(event.msg, EventMsg::TaskComplete(_)),
+                "Persistent listener should NOT emit TaskComplete events"
+            );
+        }
+
+        // First update: AgentMessageDelta with content, then AgentMessage finalizer
         assert!(
-            matches!(events[0].msg, EventMsg::TaskStarted(_)),
-            "First event should be TaskStarted, got {:?}",
+            matches!(&events[0].msg, EventMsg::AgentMessageDelta(delta) if delta.delta == "First background update"),
+            "First event should be AgentMessageDelta with first content, got {:?}",
             get_event_msg_type(&events[0].msg)
+        );
+        assert!(
+            matches!(&events[1].msg, EventMsg::AgentMessage(_)),
+            "Second event should be AgentMessage finalizer, got {:?}",
+            get_event_msg_type(&events[1].msg)
+        );
+
+        // Second update: AgentMessageDelta with content, then AgentMessage finalizer
+        assert!(
+            matches!(&events[2].msg, EventMsg::AgentMessageDelta(delta) if delta.delta == "Second background update"),
+            "Third event should be AgentMessageDelta with second content, got {:?}",
+            get_event_msg_type(&events[2].msg)
+        );
+        assert!(
+            matches!(&events[3].msg, EventMsg::AgentMessage(_)),
+            "Fourth event should be AgentMessage finalizer, got {:?}",
+            get_event_msg_type(&events[3].msg)
         );
 
         // All events from the persistent listener should have "background" as the id
@@ -3265,12 +3277,5 @@ mod tests {
                 "Persistent listener events should have 'background' as id"
             );
         }
-
-        // Last event should be TaskComplete
-        assert!(
-            matches!(events.last().unwrap().msg, EventMsg::TaskComplete(_)),
-            "Last event should be TaskComplete, got {:?}",
-            get_event_msg_type(&events.last().unwrap().msg)
-        );
     }
 }

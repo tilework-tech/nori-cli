@@ -148,7 +148,7 @@ The `ClientDelegate` uses a dual-sender pattern to ensure notifications are neve
 | Per-prompt | Created/destroyed per `prompt()` call | Feeds the main update translation loop for turn-specific events |
 | Persistent | Lives for entire backend lifetime | Catches inter-turn notifications (background task updates) that arrive after a prompt completes |
 
-The persistent sender's receiver is held by `run_persistent_listener()` in `backend.rs`, which wraps inter-turn notifications in `TaskStarted`/`TaskComplete` events so the TUI can track background work.
+The persistent sender's receiver is held by `run_persistent_listener()` in `backend.rs`, which translates inter-turn notifications directly into TUI events (using `id: "background"`) so they appear as visible chat content.
 
 **Session Registration Commands:**
 
@@ -269,13 +269,12 @@ The `io_task` and `run_command_loop` tasks run cooperatively in a LocalSet. A ra
 
 **Inter-Turn Notification Handling:**
 
-Background task updates (e.g., a background task completing while the user is composing their next prompt) are handled by the persistent listener task (`run_persistent_listener()` in `backend.rs`). The listener:
+Background task updates (e.g., a background task completing while the user is composing their next prompt) are handled by the persistent listener task (`run_persistent_listener()` in `backend.rs`). The listener is a simple translate-and-forward loop:
 
-1. Batches updates that arrive close together using an `in_background_update` flag
-2. Wraps the first update in a `TaskStarted` event to signal background activity
-3. Translates each `SessionUpdate` to TUI events via `translate_session_update_to_events()`
-4. Emits `TaskComplete` when the channel drains (checked via `is_empty()`)
+1. Receives `SessionUpdate` messages from the persistent channel
+2. Translates each update to TUI events via `translate_session_update_to_events()`
+3. Forwards the translated events directly with `id: "background"`
 
-All events from the persistent listener use `"background"` as the event ID to distinguish them from normal turn events.
+Events are **not** wrapped in `TaskStarted`/`TaskComplete` sequences. The TUI dispatches events by `EventMsg` variant (not by id), so background events render as normal chat content (e.g., `AgentMessageDelta` appears in the chat stream). This avoids invisible state transitions that would flash by before the terminal redraws due to frame coalescing. When streaming deltas are forwarded, the listener also sends an `AgentMessage` finalizer event to flush the TUI's `StreamController`, ensuring content is committed to scroll-back history immediately.
 
 Created and maintained by Nori.
