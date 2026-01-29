@@ -651,8 +651,12 @@ pub fn parse_transcript_total_tokens(path: &Path, agent: AgentKind) -> Option<i6
 /// Parse tokens from a Claude Code transcript file.
 ///
 /// Claude sessions are JSONL files with per-message usage objects. Claude Code logs
-/// multiple JSONL entries per API request (one per streaming delta), each containing
-/// the same usage data. We deduplicate by `requestId` to avoid overcounting.
+/// multiple JSONL entries per API request (one per streaming delta), where token counts
+/// increase as streaming progresses. We deduplicate by `message.id`, keeping the **last**
+/// entry for each message (which has the final/correct token counts).
+///
+/// Note: `requestId` is NOT unique per API request - it can be reused across multiple
+/// requests in a session. The `message.id` field uniquely identifies each API request.
 ///
 /// The usage object contains:
 /// - `input_tokens`: Non-cached input tokens (typically small, 1-10)
@@ -668,10 +672,13 @@ pub fn parse_transcript_total_tokens(path: &Path, agent: AgentKind) -> Option<i6
 fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let text = fs::read_to_string(path).ok()?;
 
-    let mut total_input = 0i64;
-    let mut total_output = 0i64;
-    let mut total_cached = 0i64;
-    let mut seen_request_ids = std::collections::HashSet::new();
+    // Track usage per message.id - we'll keep the LAST entry for each message
+    // (streaming deltas have increasing token counts, final entry has correct total)
+    // Note: requestId is NOT unique per API request, but message.id is
+    let mut message_usage: std::collections::HashMap<String, TranscriptTokenUsage> =
+        std::collections::HashMap::new();
+    // For entries without message.id, accumulate directly (backwards compatibility)
+    let mut no_message_id_usage = TranscriptTokenUsage::default();
 
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -683,47 +690,61 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
             continue;
         };
 
-        // Deduplicate by requestId - Claude Code logs multiple entries per request (streaming)
-        // If an entry has a requestId we've seen before, skip it to avoid double-counting
-        if let Some(request_id) = v.get("requestId").and_then(serde_json::Value::as_str)
-            && !seen_request_ids.insert(request_id.to_string())
-        {
-            continue; // Already processed this request
-        }
-
         // Look for messages with usage field
         if let Some(message) = v.get("message")
             && let Some(usage) = message.get("usage")
         {
-            // input_tokens is only the non-cached portion
-            total_input = total_input.saturating_add(
-                usage
-                    .get("input_tokens")
-                    .and_then(serde_json::Value::as_i64)
-                    .unwrap_or(0),
-            );
-            // cache_creation_input_tokens are tokens that were sent and cached for future use
-            // These count as input tokens (they were processed by the model)
-            total_input = total_input.saturating_add(
-                usage
-                    .get("cache_creation_input_tokens")
-                    .and_then(serde_json::Value::as_i64)
-                    .unwrap_or(0),
-            );
-            total_output = total_output.saturating_add(
-                usage
-                    .get("output_tokens")
-                    .and_then(serde_json::Value::as_i64)
-                    .unwrap_or(0),
-            );
-            // cache_read_input_tokens are tokens read from cache (discounted/free)
-            total_cached = total_cached.saturating_add(
-                usage
-                    .get("cache_read_input_tokens")
-                    .and_then(serde_json::Value::as_i64)
-                    .unwrap_or(0),
-            );
+            // Extract token values from usage object
+            let input_tokens = usage
+                .get("input_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+            let cache_creation = usage
+                .get("cache_creation_input_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+            let output_tokens = usage
+                .get("output_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+            let cache_read = usage
+                .get("cache_read_input_tokens")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(0);
+
+            let entry_usage = TranscriptTokenUsage {
+                input_tokens: input_tokens.saturating_add(cache_creation),
+                output_tokens,
+                cached_tokens: cache_read,
+            };
+
+            if let Some(msg_id) = message.get("id").and_then(serde_json::Value::as_str) {
+                // For entries with message.id, REPLACE (keep last entry for each message)
+                message_usage.insert(msg_id.to_string(), entry_usage);
+            } else {
+                // For entries without message.id, accumulate (backwards compatibility)
+                no_message_id_usage.input_tokens = no_message_id_usage
+                    .input_tokens
+                    .saturating_add(entry_usage.input_tokens);
+                no_message_id_usage.output_tokens = no_message_id_usage
+                    .output_tokens
+                    .saturating_add(entry_usage.output_tokens);
+                no_message_id_usage.cached_tokens = no_message_id_usage
+                    .cached_tokens
+                    .saturating_add(entry_usage.cached_tokens);
+            }
         }
+    }
+
+    // Sum up all the final usage values
+    let mut total_input = no_message_id_usage.input_tokens;
+    let mut total_output = no_message_id_usage.output_tokens;
+    let mut total_cached = no_message_id_usage.cached_tokens;
+
+    for usage in message_usage.values() {
+        total_input = total_input.saturating_add(usage.input_tokens);
+        total_output = total_output.saturating_add(usage.output_tokens);
+        total_cached = total_cached.saturating_add(usage.cached_tokens);
     }
 
     let total = total_input.saturating_add(total_output);
@@ -1020,7 +1041,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_claude_tokens_deduplicates_by_request_id() {
+    fn test_parse_claude_tokens_deduplicates_by_message_id() {
         use pretty_assertions::assert_eq;
 
         let temp_dir = TempDir::new().unwrap();
@@ -1028,20 +1049,20 @@ mod tests {
 
         {
             let mut f = fs::File::create(&transcript_file).unwrap();
-            // Simulate streaming: same requestId appears multiple times (this is how Claude Code works)
-            // First request: 3 entries with same usage (streaming deltas)
-            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
-            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
-            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
-            // Second request: 2 entries with same usage (streaming deltas)
-            writeln!(f, r#"{{"requestId": "req_002", "message": {{"usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
-            writeln!(f, r#"{{"requestId": "req_002", "message": {{"usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
+            // Simulate streaming: same message.id appears multiple times (streaming deltas)
+            // First message: 3 entries with same usage
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            // Second message: 2 entries with same usage
+            writeln!(f, r#"{{"message": {{"id": "msg_002", "usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_002", "usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
         }
 
         let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
 
-        // Should deduplicate: only count each requestId once
-        // input = (3 + 1000) + (5 + 500) = 1508 (input_tokens + cache_creation per unique request)
+        // Should deduplicate: only count each message.id once
+        // input = (3 + 1000) + (5 + 500) = 1508 (input_tokens + cache_creation per unique message)
         // output = 50 + 25 = 75
         // cached = 0 + 1000 = 1000
         assert_eq!(usage.input_tokens, 1508);
@@ -1058,9 +1079,9 @@ mod tests {
 
         {
             let mut f = fs::File::create(&transcript_file).unwrap();
-            // Single request with cache_creation_input_tokens
+            // Single message with cache_creation_input_tokens
             // This tests that cache_creation is added to input total
-            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 10, "cache_creation_input_tokens": 5000, "cache_read_input_tokens": 2000, "output_tokens": 100}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 10, "cache_creation_input_tokens": 5000, "cache_read_input_tokens": 2000, "output_tokens": 100}}}}}}"#).unwrap();
         }
 
         let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
@@ -1076,7 +1097,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_claude_tokens_handles_entries_without_request_id() {
+    fn test_parse_claude_tokens_handles_entries_without_message_id() {
         use pretty_assertions::assert_eq;
 
         let temp_dir = TempDir::new().unwrap();
@@ -1084,8 +1105,8 @@ mod tests {
 
         {
             let mut f = fs::File::create(&transcript_file).unwrap();
-            // Mix of entries with and without requestId
-            // Entries without requestId should all be counted (backwards compatibility)
+            // Mix of entries with and without message.id
+            // Entries without message.id should all be counted (backwards compatibility)
             writeln!(
                 f,
                 r#"{{"message": {{"usage": {{"input_tokens": 100, "output_tokens": 50}}}}}}"#
@@ -1096,14 +1117,14 @@ mod tests {
                 r#"{{"message": {{"usage": {{"input_tokens": 200, "output_tokens": 75}}}}}}"#
             )
             .unwrap();
-            // Entry with requestId
-            writeln!(f, r#"{{"requestId": "req_001", "message": {{"usage": {{"input_tokens": 10, "cache_creation_input_tokens": 500, "output_tokens": 25}}}}}}"#).unwrap();
+            // Entry with message.id
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 10, "cache_creation_input_tokens": 500, "output_tokens": 25}}}}}}"#).unwrap();
         }
 
         let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
 
-        // Entries without requestId: 100 + 200 = 300 input, 50 + 75 = 125 output
-        // Entry with requestId: 10 + 500 = 510 input, 25 output
+        // Entries without message.id: 100 + 200 = 300 input, 50 + 75 = 125 output
+        // Entry with message.id: 10 + 500 = 510 input, 25 output
         // Total: 810 input, 150 output
         assert_eq!(usage.input_tokens, 810);
         assert_eq!(usage.output_tokens, 150);
@@ -1383,5 +1404,38 @@ mod tests {
             result.is_err(),
             "Should return error when no first_message provided"
         );
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_uses_last_entry_per_message_id_for_streaming() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Simulate real Claude streaming behavior: output_tokens increases as streaming progresses
+            // First message: 4 entries where output_tokens increases from 1 to 325
+            // (This matches real Claude behavior where early deltas have low token counts)
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 1}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 1}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 1}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 325}}}}}}"#).unwrap();
+            // Second message: 3 entries where output_tokens increases from 1 to 198
+            writeln!(f, r#"{{"message": {{"id": "msg_002", "usage": {{"input_tokens": 1, "cache_creation_input_tokens": 547, "cache_read_input_tokens": 22285, "output_tokens": 1}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_002", "usage": {{"input_tokens": 1, "cache_creation_input_tokens": 547, "cache_read_input_tokens": 22285, "output_tokens": 1}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"message": {{"id": "msg_002", "usage": {{"input_tokens": 1, "cache_creation_input_tokens": 547, "cache_read_input_tokens": 22285, "output_tokens": 198}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // Should use the LAST entry for each message.id (which has the correct final token counts)
+        // msg_001: input = 3 + 22285 = 22288, output = 325, cached = 0
+        // msg_002: input = 1 + 547 = 548, output = 198, cached = 22285
+        // Total: input = 22836, output = 523, cached = 22285
+        assert_eq!(usage.input_tokens, 22836);
+        assert_eq!(usage.output_tokens, 523); // 325 + 198 (NOT 1 + 1 from first entries!)
+        assert_eq!(usage.cached_tokens, 22285);
     }
 }

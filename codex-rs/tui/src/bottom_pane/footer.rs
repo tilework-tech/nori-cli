@@ -353,23 +353,22 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add token usage breakdown if available: "Tokens: 45K in / 78K out (32K cached)" (dim/gray)
-    if let (Some(input), Some(output)) = (props.input_tokens, props.output_tokens)
-        && (input > 0 || output > 0)
-    {
-        let input_fmt = format_si_suffix(input);
-        let output_fmt = format_si_suffix(output);
+    // Add token usage if available: "Tokens: 77K total (32K cached)" (dim/gray)
+    // Total = input + output + cached (cached tokens are read from cache, so they
+    // count toward total tokens processed but are shown separately as "cached").
+    let input = props.input_tokens.unwrap_or(0);
+    let output = props.output_tokens.unwrap_or(0);
+    let cached = props.cached_tokens.unwrap_or(0);
+    let total = input.saturating_add(output).saturating_add(cached);
+    if total > 0 {
+        let total_fmt = format_si_suffix(total);
         let mut spans = vec![
             "Tokens: ".dim(),
-            Span::from(format!("{input_fmt} in")).dim(),
-            " / ".dim(),
-            Span::from(format!("{output_fmt} out")).dim(),
+            Span::from(format!("{total_fmt} total")).dim(),
         ];
 
         // Add cached portion if non-zero
-        if let Some(cached) = props.cached_tokens
-            && cached > 0
-        {
+        if cached > 0 {
             let cached_fmt = format_si_suffix(cached);
             spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
         }
@@ -769,7 +768,8 @@ mod tests {
 
     #[test]
     fn footer_with_token_usage() {
-        // Test token usage breakdown display: "Tokens: 45K in / 78K out"
+        // Test token usage display: "Tokens: 123K total"
+        // Total = input (45K) + output (78K) + cached (0) = 123K
         snapshot_footer(
             "footer_with_token_usage",
             FooterProps {
@@ -792,6 +792,7 @@ mod tests {
     #[test]
     fn footer_with_large_token_usage() {
         // Test large token usage formats with SI suffix (e.g., 1.23M)
+        // Total = input (500K) + output (735K) + cached (0) = 1.23M
         snapshot_footer(
             "footer_with_large_token_usage",
             FooterProps {
@@ -822,7 +823,8 @@ mod tests {
 
     #[test]
     fn footer_with_cached_tokens() {
-        // Test display with cached tokens: "Tokens: 45K in / 78K out (32K cached)"
+        // Test display with cached tokens: "Tokens: 155K total (32K cached)"
+        // Total = input (45K) + output (78K) + cached (32K) = 155K
         snapshot_footer(
             "footer_with_cached_tokens",
             FooterProps {
@@ -839,6 +841,7 @@ mod tests {
     #[test]
     fn footer_with_context_no_percent() {
         // Test context display without percentage (when context_window_percent is None)
+        // Total = input (20K) + output (14K) + cached (0) = 34K
         snapshot_footer(
             "footer_with_context_no_percent",
             FooterProps {
