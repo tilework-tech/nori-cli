@@ -112,6 +112,12 @@ The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys
 - Uses advisory file locking for concurrent write safety
 - `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
 
+**Custom Prompts** (`backend.rs`):
+
+When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers `.md` files from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. This reuses `codex_core::custom_prompts::discover_prompts_in()` from `@/codex-rs/core/src/custom_prompts.rs` for filesystem discovery and frontmatter parsing. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
+
+Note: The ACP backend uses `{nori_home}/commands/` (e.g., `~/.nori/cli/commands/`) rather than `~/.codex/prompts/` which is used by the HTTP/codex-core backend.
+
 **Transcript Discovery** (`transcript_discovery.rs`):
 
 Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to display token usage in the footer.
@@ -219,6 +225,8 @@ Transcripts are stored at `{nori_home}/transcripts/by-project/{project-id}/sessi
 
 ```
 ~/.nori/cli/
+├── commands/                           # Custom prompt .md files
+├── history.jsonl                       # Message history
 └── transcripts/
     └── by-project/
         └── {project-id}/           # 16-hex-char hash

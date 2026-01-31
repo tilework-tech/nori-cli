@@ -485,12 +485,27 @@ impl AcpBackend {
             Op::Compact => {
                 self.handle_compact(&id).await?;
             }
+            Op::ListCustomPrompts => {
+                let dir = commands_dir(&self.nori_home);
+                let event_tx = self.event_tx.clone();
+                let id_clone = id.clone();
+                tokio::spawn(async move {
+                    let custom_prompts =
+                        codex_core::custom_prompts::discover_prompts_in(&dir).await;
+                    let _ = event_tx
+                        .send(Event {
+                            id: id_clone,
+                            msg: EventMsg::ListCustomPromptsResponse(
+                                codex_protocol::protocol::ListCustomPromptsResponseEvent {
+                                    custom_prompts,
+                                },
+                            ),
+                        })
+                        .await;
+                });
+            }
             // Unsupported operations - only show error in debug builds
-            Op::Undo
-            | Op::ListMcpTools
-            | Op::ListCustomPrompts
-            | Op::Review { .. }
-            | Op::RunUserShellCommand { .. } => {
+            Op::Undo | Op::ListMcpTools | Op::Review { .. } | Op::RunUserShellCommand { .. } => {
                 let op_name = get_op_name(&op);
                 warn!("Unsupported Op in ACP mode: {op_name}");
                 #[cfg(debug_assertions)]
@@ -1108,6 +1123,11 @@ impl AcpBackend {
             pending_approvals.lock().await.push(request);
         }
     }
+}
+
+/// Return the custom commands directory: `{nori_home}/commands`.
+fn commands_dir(nori_home: &std::path::Path) -> PathBuf {
+    nori_home.join("commands")
 }
 
 /// Generate a unique ID for operations
@@ -3289,5 +3309,71 @@ mod tests {
             message.contains("Rate limit") || message.contains("quota"),
             "QuotaExceeded message should mention rate limit/quota. Got: {message}"
         );
+    }
+
+    #[test]
+    fn test_commands_dir_returns_commands_subdir() {
+        use pretty_assertions::assert_eq;
+        let nori_home = PathBuf::from("/home/user/.nori/cli");
+        let result = commands_dir(&nori_home);
+        assert_eq!(result, PathBuf::from("/home/user/.nori/cli/commands"));
+    }
+
+    #[tokio::test]
+    async fn test_list_custom_prompts_sends_response_event() {
+        use pretty_assertions::assert_eq;
+
+        let tmp = tempfile::tempdir().expect("create TempDir");
+        let nori_home = tmp.path();
+        let cmds_dir = commands_dir(nori_home);
+        std::fs::create_dir(&cmds_dir).unwrap();
+
+        std::fs::write(
+            cmds_dir.join("explain.md"),
+            "---\ndescription: \"Explain code\"\nargument-hint: \"[file]\"\n---\nExplain $ARGUMENTS",
+        )
+        .unwrap();
+        std::fs::write(cmds_dir.join("review.md"), "Review the code").unwrap();
+
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(16);
+        let dir = commands_dir(nori_home);
+        let id = "test-id".to_string();
+
+        tokio::spawn(async move {
+            let custom_prompts = codex_core::custom_prompts::discover_prompts_in(&dir).await;
+            let _ = event_tx
+                .send(Event {
+                    id,
+                    msg: EventMsg::ListCustomPromptsResponse(
+                        codex_protocol::protocol::ListCustomPromptsResponseEvent { custom_prompts },
+                    ),
+                })
+                .await;
+        });
+
+        let event = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
+            .await
+            .expect("timeout")
+            .expect("channel closed");
+
+        assert_eq!(event.id, "test-id");
+        match event.msg {
+            EventMsg::ListCustomPromptsResponse(ev) => {
+                assert_eq!(ev.custom_prompts.len(), 2);
+                assert_eq!(ev.custom_prompts[0].name, "explain");
+                assert_eq!(
+                    ev.custom_prompts[0].description.as_deref(),
+                    Some("Explain code")
+                );
+                assert_eq!(
+                    ev.custom_prompts[0].argument_hint.as_deref(),
+                    Some("[file]")
+                );
+                assert_eq!(ev.custom_prompts[0].content, "Explain $ARGUMENTS");
+                assert_eq!(ev.custom_prompts[1].name, "review");
+                assert_eq!(ev.custom_prompts[1].content, "Review the code");
+            }
+            other => panic!("Expected ListCustomPromptsResponse, got {other:?}"),
+        }
     }
 }
