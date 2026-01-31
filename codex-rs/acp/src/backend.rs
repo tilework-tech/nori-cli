@@ -1560,6 +1560,9 @@ fn format_tool_call_command(title: &str, raw_input: Option<&serde_json::Value>) 
 
     if args.is_empty() {
         title.to_string()
+    } else if title.contains(&args) {
+        // Don't append args if they're already contained in the title
+        title.to_string()
     } else {
         format!("{title}({args})")
     }
@@ -2129,6 +2132,37 @@ mod tests {
             Some(&serde_json::json!({"pattern": "*.rs", "path": "src/"})),
         );
         assert_eq!(cmd, "Find Files(*.rs in src/)");
+    }
+
+    /// Test that duplicate args are not appended when title equals the command.
+    #[test]
+    fn test_format_tool_call_command_no_duplicate_when_title_equals_args() {
+        let cmd = format_tool_call_command(
+            "git diff HEAD",
+            Some(&serde_json::json!({"command": "git diff HEAD"})),
+        );
+        assert_eq!(cmd, "git diff HEAD");
+    }
+
+    /// Test that duplicate args are not appended when title contains the command.
+    #[test]
+    fn test_format_tool_call_command_no_duplicate_when_title_contains_args() {
+        let cmd = format_tool_call_command(
+            "Running: git status",
+            Some(&serde_json::json!({"command": "git status"})),
+        );
+        assert_eq!(cmd, "Running: git status");
+    }
+
+    /// Test that similar but different commands are still formatted with suffix.
+    #[test]
+    fn test_format_tool_call_command_partial_overlap_not_duplicate() {
+        // "git diff HEAD" is NOT a substring of "git diff", so we should append
+        let cmd = format_tool_call_command(
+            "git diff",
+            Some(&serde_json::json!({"command": "git diff HEAD"})),
+        );
+        assert_eq!(cmd, "git diff(git diff HEAD)");
     }
 
     /// Test that non-text content blocks produce no events.
