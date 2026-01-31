@@ -254,6 +254,8 @@ pub fn pasted_image_format(path: &Path) -> EncodedImageFormat {
 mod pasted_paths_tests {
     use super::*;
     #[cfg(target_os = "linux")]
+    use serial_test::serial;
+    #[cfg(target_os = "linux")]
     use std::ffi::OsString;
 
     #[cfg(target_os = "linux")]
@@ -297,6 +299,7 @@ mod pasted_paths_tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "linux", serial)]
     fn normalize_file_url_windows() {
         let input = r"C:\Temp\example.png";
         let result = normalize_pasted_path(input).expect("should parse file URL");
@@ -375,6 +378,7 @@ mod pasted_paths_tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "linux", serial)]
     fn normalize_unquoted_windows_path_with_spaces() {
         let input = r"C:\\Users\\Alice\\My Pictures\\example image.png";
         let result = normalize_pasted_path(input).expect("should accept unquoted windows path");
@@ -419,6 +423,7 @@ mod pasted_paths_tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    #[serial]
     fn normalize_windows_path_in_wsl() {
         let _guard = EnvVarGuard::set("WSL_DISTRO_NAME", "Ubuntu-24.04");
         let input = r"C:\\Users\\Alice\\Pictures\\example image.png";
