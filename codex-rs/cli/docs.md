@@ -70,8 +70,9 @@ Feature-gated code uses `#[cfg(feature = "...")]` on imports, enum variants, mat
 **Skillsets Alias:**
 
 The `skillsets` subcommand is an alias that delegates to the `nori-skillsets` package:
-- `nori skillsets <args>` → `npx nori-skillsets <args>` or `bunx nori-skillsets <args>`
-- Uses `detect_preferred_package_manager()` from `codex_acp::registry` to choose npx or bunx
+- First checks if `nori-skillsets` is available in PATH (via `which::which`)
+- If found in PATH, runs it directly
+- If not in PATH, falls back to `npx nori-skillsets` or `bunx nori-skillsets` based on `detect_preferred_package_manager()`
 - Passes through all arguments, stdout, stderr, and exit code
 
 **Sandbox Debugging:**

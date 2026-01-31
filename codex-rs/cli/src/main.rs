@@ -262,16 +262,33 @@ fn run_execpolicycheck(cmd: ExecPolicyCheckCommand) -> anyhow::Result<()> {
 }
 
 fn run_skillsets_command(cmd: SkillsetsCommand) -> anyhow::Result<()> {
-    use codex_acp::registry::detect_preferred_package_manager;
+    const NORI_SKILLSETS_CMD: &str = "nori-skillsets";
 
-    let package_manager = detect_preferred_package_manager();
-    let runner = package_manager.command(); // "npx" or "bunx"
-
-    let status = {
+    // First, check if nori-skillsets is available directly in PATH
+    let status = if let Ok(skillsets_path) = which::which(NORI_SKILLSETS_CMD) {
         #[cfg(windows)]
         {
             // On Windows, run via cmd.exe so .CMD/.BAT are correctly resolved (PATHEXT semantics).
-            let mut cmd_args = vec!["/C", runner, "nori-skillsets"];
+            let mut cmd_args = vec!["/C".to_string(), skillsets_path.display().to_string()];
+            cmd_args.extend(cmd.args.iter().cloned());
+            std::process::Command::new("cmd").args(&cmd_args).status()?
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new(&skillsets_path)
+                .args(&cmd.args)
+                .status()?
+        }
+    } else {
+        // Fall back to npx/bunx if not in PATH
+        use codex_acp::registry::detect_preferred_package_manager;
+
+        let package_manager = detect_preferred_package_manager();
+        let runner = package_manager.command(); // "npx" or "bunx"
+
+        #[cfg(windows)]
+        {
+            let mut cmd_args = vec!["/C", runner, NORI_SKILLSETS_CMD];
             cmd_args.extend(cmd.args.iter().map(String::as_str));
             std::process::Command::new("cmd").args(&cmd_args).status()?
         }
@@ -279,7 +296,7 @@ fn run_skillsets_command(cmd: SkillsetsCommand) -> anyhow::Result<()> {
         {
             let command_path = crate::wsl_paths::normalize_for_wsl(runner);
             std::process::Command::new(&command_path)
-                .arg("nori-skillsets")
+                .arg(NORI_SKILLSETS_CMD)
                 .args(&cmd.args)
                 .status()?
         }
