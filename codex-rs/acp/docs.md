@@ -101,7 +101,7 @@ The `vim_mode` boolean in `TuiConfigToml` and `NoriConfig` enables vim-style nav
 
 | Field | TOML Key | Default | Controls |
 |-------|----------|---------|----------|
-| `vim_mode` | `vim_mode` | `false` | When enabled, textarea supports Insert/Normal mode switching and h/j/k/l navigation |
+| `vim_mode` | `vim_mode` | `false` | When enabled, textarea supports vim-style Insert/Normal mode with navigation, editing, and two-key sequences |
 
 The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys which are string bindings, vim mode is a simple boolean toggle. The TUI layer (`@/codex-rs/tui/`) handles the vim mode state machine and propagation.
 
