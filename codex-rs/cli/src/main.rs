@@ -174,6 +174,7 @@ struct StdioToUdsCommand {
 }
 
 #[derive(Debug, Parser)]
+#[clap(disable_help_flag = true)]
 struct SkillsetsCommand {
     /// Arguments to pass to nori-skillsets.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -617,6 +618,22 @@ mod tests {
                     cmd.args,
                     vec!["list-skillsets".to_string(), "--verbose".to_string()],
                     "should capture trailing args"
+                );
+            }
+            _ => panic!("expected Skillsets subcommand"),
+        }
+    }
+
+    /// "skillsets -h" should pass -h to nori-skillsets, not show clap help
+    #[test]
+    fn skillsets_subcommand_passes_help_flag_through() {
+        let cli = MultitoolCli::try_parse_from(["nori", "skillsets", "-h"]).expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Skillsets(cmd)) => {
+                assert_eq!(
+                    cmd.args,
+                    vec!["-h".to_string()],
+                    "-h should be passed through to nori-skillsets"
                 );
             }
             _ => panic!("expected Skillsets subcommand"),
