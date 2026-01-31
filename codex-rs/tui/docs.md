@@ -69,7 +69,7 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, notify after idle, hotkeys) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -150,15 +150,34 @@ When enabled, the textarea operates in two modes:
 | Mode | Behavior |
 |------|----------|
 | Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode. |
-| Normal | Navigation mode. h/j/k/l move cursor left/down/up/right. Press `i` to return to Insert mode. Other keys are ignored. |
+| Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input. |
 
-The state machine is implemented in `textarea.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings.
+Normal mode supports standard vim keybindings:
+
+| Category | Keys | Behavior |
+|----------|------|----------|
+| Navigation | `h`/`j`/`k`/`l` | Move cursor left/down/up/right |
+| Navigation | `w`/`b` | Forward/backward by word (`w` lands on start of next word via `beginning_of_next_word()`) |
+| Navigation | `0`/`$`/`^` | Beginning of line / end of line / first non-whitespace on line |
+| Navigation | `G`/`gg` | End of text / beginning of text |
+| Insert entry | `i`/`a` | Enter Insert at cursor / after cursor |
+| Insert entry | `I`/`A` | Enter Insert at beginning of line / end of line |
+| Insert entry | `o`/`O` | Open new line below/above and enter Insert |
+| Editing | `x` | Delete character under cursor |
+| Editing | `D`/`C` | Delete to end of line (`C` also enters Insert mode) |
+| Editing | `dd` | Delete current line |
+| Editing | `p` | Paste from kill buffer |
+
+Two-key sequences (`gg`, `dd`) use a `vim_pending_key: Option<char>` field on TextArea. Pressing `g` or `d` sets the pending key; the second keypress either completes the sequence or cancels it (non-matching keys are discarded).
+
+The state machine is implemented in `textarea.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
 
 Config changes emit `AppEvent::SetConfigVimMode`, handled in `app.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
 
 **Status Line Footer:**
 
 The footer displays:
+- Vim mode indicator (NORMAL in blue/bold, INSERT in green) when vim mode is enabled -- rendered as the first segment via `FooterProps.vim_mode_state`
 - Current git branch (refreshes on transcript activity)
 - Git diff statistics (lines added/removed)
 - Context window usage (e.g., "Context: 34K (27%)") when running within an agent environment
