@@ -15,6 +15,7 @@ workspace = true
 agent-client-protocol = { version = "0.9.0", features = ["unstable"] }
 anyhow = { workspace = true }
 codex-core = { workspace = true }
+codex-git = { workspace = true }
 codex-protocol = { path = "../protocol" }
 async-trait = { workspace = true }
 futures = { workspace = true }

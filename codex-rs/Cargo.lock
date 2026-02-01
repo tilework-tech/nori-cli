@@ -863,6 +863,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "codex-core",
+ "codex-git",
  "codex-protocol",
  "diffy",
  "dirs",
