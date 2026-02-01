@@ -31,6 +31,7 @@ match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
+    Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
     // ... other subcommands
 }
 ```
@@ -65,6 +66,14 @@ cargo build -p nori-cli --features login   # With login support
 ```
 
 Feature-gated code uses `#[cfg(feature = "...")]` on imports, enum variants, match arms, and struct definitions in `main.rs`.
+
+**Skillsets Alias:**
+
+The `skillsets` subcommand is an alias that delegates to the `nori-skillsets` package:
+- First checks if `nori-skillsets` is available in PATH (via `which::which`)
+- If found in PATH, runs it directly
+- If not in PATH, falls back to `npx nori-skillsets` or `bunx nori-skillsets` based on `detect_preferred_package_manager()`
+- Passes through all arguments, stdout, stderr, and exit code
 
 **Sandbox Debugging:**
 
