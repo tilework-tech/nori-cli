@@ -390,6 +390,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
         first_prompt_text: None,
+        loop_remaining: None,
+        loop_total: None,
     };
     (widget, rx, op_rx)
 }

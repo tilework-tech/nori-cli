@@ -129,6 +129,7 @@ impl NoriConfig {
             vim_mode: toml.tui.vim_mode.unwrap_or(false),
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
+            loop_count: toml.tui.loop_count,
             nori_home,
             cwd,
             mcp_servers,
