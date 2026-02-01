@@ -368,7 +368,7 @@ mod tests {
         }];
         let req = ChatRequestBuilder::new("gpt-test", "inst", &prompt_input, &[])
             .conversation_id(Some("conv-1".into()))
-            .session_source(Some(SessionSource::SubAgent(SubAgentSource::Review)))
+            .session_source(Some(SessionSource::SubAgent(SubAgentSource::Compact)))
             .build(&provider())
             .expect("request");
 
@@ -382,7 +382,7 @@ mod tests {
         );
         assert_eq!(
             req.headers.get("x-openai-subagent"),
-            Some(&HeaderValue::from_static("review"))
+            Some(&HeaderValue::from_static("compact"))
         );
     }
 }

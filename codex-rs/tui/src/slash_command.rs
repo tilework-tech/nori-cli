@@ -16,7 +16,6 @@ pub enum SlashCommand {
     Model,
     Approvals,
     Config,
-    Review,
     New,
     ResumeViewonly,
     Init,
@@ -45,7 +44,6 @@ impl SlashCommand {
             SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
-            SlashCommand::Review => "review my current changes and find issues",
             SlashCommand::Undo => "ask Nori to undo a turn",
             SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
             SlashCommand::Diff => "show git diff (including untracked files)",
@@ -82,7 +80,6 @@ impl SlashCommand {
             | SlashCommand::Model
             | SlashCommand::Approvals
             | SlashCommand::Config
-            | SlashCommand::Review
             | SlashCommand::Login
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset => false,

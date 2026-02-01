@@ -1553,7 +1553,7 @@ impl ChatComposer {
         };
         // If the cursor is currently positioned within an `@token`, prefer the
         // file-search popup over the slash popup so users can insert a file path
-        // as an argument to the command (e.g., "/review @docs/...").
+        // as an argument to the command (e.g., "/compact @docs/...").
         if Self::current_at_token(&self.textarea).is_some() {
             if matches!(self.active_popup, ActivePopup::Command(_)) {
                 self.active_popup = ActivePopup::None;

@@ -54,8 +54,6 @@ impl ThreadHistoryBuilder {
                 self.handle_agent_reasoning_raw_content(payload)
             }
             EventMsg::TokenCount(_) => {}
-            EventMsg::EnteredReviewMode(_) => {}
-            EventMsg::ExitedReviewMode(_) => {}
             EventMsg::UndoCompleted(_) => {}
             EventMsg::TurnAborted(payload) => self.handle_turn_aborted(payload),
             _ => {}

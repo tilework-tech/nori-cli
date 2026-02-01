@@ -456,13 +456,6 @@ pub fn new_approval_decision_cell(
     ))
 }
 
-/// Cyan history cell line showing the current review status.
-pub(crate) fn new_review_status_line(message: String) -> PlainHistoryCell {
-    PlainHistoryCell {
-        lines: vec![Line::from(message.cyan())],
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct PatchHistoryCell {
     changes: HashMap<PathBuf, FileChange>,
@@ -646,11 +639,6 @@ pub(crate) fn new_session_info_codex(
                 "  ".into(),
                 "/model".into(),
                 " - choose what model and reasoning effort to use".dim(),
-            ]),
-            Line::from(vec![
-                "  ".into(),
-                "/review".into(),
-                " - review any changes and find issues".dim(),
             ]),
         ];
 

@@ -536,7 +536,7 @@ impl AcpBackend {
                 .await;
             }
             // Unsupported operations - only show error in debug builds
-            Op::ListMcpTools | Op::Review { .. } | Op::RunUserShellCommand { .. } => {
+            Op::ListMcpTools | Op::RunUserShellCommand { .. } => {
                 let op_name = get_op_name(&op);
                 warn!("Unsupported Op in ACP mode: {op_name}");
                 #[cfg(debug_assertions)]
@@ -1212,7 +1212,6 @@ fn get_op_name(op: &Op) -> &'static str {
         Op::Undo => "Undo",
         Op::UndoList => "UndoList",
         Op::UndoTo { .. } => "UndoTo",
-        Op::Review { .. } => "Review",
         Op::Shutdown => "Shutdown",
         Op::RunUserShellCommand { .. } => "RunUserShellCommand",
         _ => "Unknown",

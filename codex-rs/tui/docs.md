@@ -83,7 +83,6 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count) |
-| `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
 | `/resume-viewonly` | View a previous session transcript (read-only) |
@@ -102,7 +101,7 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 
 **Undo Snapshot Picker (`/undo`):**
 
-The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backend. When the backend responds with `UndoListResult`, the TUI opens a `ListSelectionView` modal (the same pattern used by the approvals popup, review picker, etc.) displaying all available snapshots. Each item shows `[short_id] truncated_label` where the label is truncated to 60 characters. Selecting a snapshot dispatches `Op::UndoTo { index }` to restore to that point. If no snapshots are available, an info message is displayed instead of the modal.
+The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backend. When the backend responds with `UndoListResult`, the TUI opens a `ListSelectionView` modal (the same pattern used by the approvals popup, etc.) displaying all available snapshots. Each item shows `[short_id] truncated_label` where the label is truncated to 60 characters. Selecting a snapshot dispatches `Op::UndoTo { index }` to restore to that point. If no snapshots are available, an info message is displayed instead of the modal.
 
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
