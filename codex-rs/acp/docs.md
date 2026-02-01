@@ -115,6 +115,16 @@ The `ScriptTimeout` type represents a configurable duration for custom prompt sc
 
 Supported suffixes: `s` (seconds), `m` (minutes). Bare numbers are treated as seconds. `all_common_values()` provides picker options: 10s, 30s, 1m, 2m, 5m. The setting is resolved in `loader.rs` with `unwrap_or_default()` (30 seconds).
 
+**Loop Count Configuration** (`config/types.rs`):
+
+The `loop_count` field on `NoriConfigToml` and `NoriConfig` controls how many times the TUI re-runs the first user prompt in fresh conversation sessions. Stored as a top-level key in `config.toml`:
+
+| Field | TOML Key | Default | Controls |
+|-------|----------|---------|----------|
+| `loop_count` | `loop_count` | `None` (disabled) | Number of fresh-session iterations of the first prompt. Values > 1 enable looping; `None` or `0` disables it |
+
+The setting is resolved in `loader.rs` by passing `toml.loop_count` directly. The TUI layer (`@/codex-rs/tui/`) orchestrates the loop lifecycle -- the config layer only stores the value.
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`

@@ -69,7 +69,7 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -238,6 +238,40 @@ Rendering behavior:
 - Blank line separators between entries improve readability
 
 The async flow uses three AppEvents: `ShowViewonlySessionPicker` -> `LoadViewonlyTranscript` -> `DisplayViewonlyTranscript`.
+
+**Loop Mode (Prompt Repetition):**
+
+Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/config` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/codex-rs/acp/src/config/types.rs`).
+
+The loop is orchestrated entirely within the TUI layer -- `codex-core` has no awareness of loop semantics:
+
+```
+User submits first prompt
+       |
+       v
+ChatWidget::submit_user_message()
+  - Reads NoriConfig::loop_count
+  - If count > 1: sets loop_remaining = count-1, loop_total = count
+       |
+       v
+Agent completes task -> on_task_complete()
+  - If loop_remaining > 0: emits AppEvent::LoopIteration
+       |
+       v
+App::handle_event(LoopIteration)
+  - Shuts down current conversation
+  - Creates a fresh ChatWidget with the same prompt
+  - Calls set_loop_state() on the new widget
+  - Displays "Loop iteration N of M" info message
+       |
+       v
+(repeat until remaining == 0)
+```
+
+State fields on `ChatWidget`: `loop_remaining: Option<i32>` and `loop_total: Option<i32>`. These are initialized on the first `submit_user_message()` call and carried forward across iterations via `App`-level event handling.
+
+The loop is cancelled (both fields set to `None`) when an error occurs (`on_error()`) or the user interrupts (`on_interrupted_turn()`). The `/config` sub-picker is built by `loop_count_picker_params()` in `@/codex-rs/tui/src/nori/config_picker.rs` with preset options: Disabled, 2, 3, 5, 10. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
+
 ### Things to Know
 
 **Cargo Feature Flags:**
@@ -271,6 +305,6 @@ When errors occur, users are directed to report bugs at `https://github.com/tile
 - Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
 - Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning).
 - The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
-- The `first_prompt_text` field in `ChatWidget` is set when the user submits their first message and is used for transcript matching in Claude Code sessions
+- The `first_prompt_text` field in `ChatWidget` is set when the user submits their first message and is used for both transcript matching in Claude Code sessions and as the prompt text replayed during loop mode iterations
 
 Created and maintained by Nori.

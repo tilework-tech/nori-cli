@@ -1167,6 +1167,47 @@ impl App {
             AppEvent::SetConfigScriptTimeout(value) => {
                 self.persist_script_timeout_setting(value).await;
             }
+            #[cfg(feature = "nori-config")]
+            AppEvent::OpenLoopCountPicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_loop_count_picker(nori_config.loop_count);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigLoopCount(value) => {
+                self.persist_loop_count_setting(value).await;
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::LoopIteration {
+                prompt,
+                remaining,
+                total,
+            } => {
+                let iteration = total - remaining;
+                tracing::info!("Loop iteration {iteration}/{total} (remaining: {remaining})");
+
+                self.shutdown_current_conversation().await;
+
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: Some(prompt),
+                    initial_images: Vec::new(),
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    vertical_footer: self.vertical_footer,
+                    expected_model: None,
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
+                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                self.chat_widget.set_loop_state(remaining, total);
+
+                self.chat_widget
+                    .add_info_message(format!("Loop iteration {iteration} of {total}"), None);
+            }
             AppEvent::SetConfigVimMode(value) => {
                 self.persist_vim_mode_setting(value).await;
             }
@@ -1537,6 +1578,34 @@ impl App {
             format!("Script timeout set to {}.", value.display_name()),
             None,
         );
+    }
+
+    #[cfg(feature = "nori-config")]
+    async fn persist_loop_count_setting(&mut self, value: Option<i32>) {
+        // Store 0 for disabled (None), which deserializes as Some(0) and is
+        // treated the same as None by the loop orchestration code.
+        let stored = value.unwrap_or(0) as i64;
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "loop_count"], toml_value(stored))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist loop_count setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save loop_count setting: {err}"));
+            return;
+        }
+
+        let display = match value {
+            Some(n) => format!("{n}"),
+            None => "Disabled".to_string(),
+        };
+        self.chat_widget
+            .add_info_message(format!("Loop count set to {display}."), None);
     }
 
     async fn persist_vim_mode_setting(&mut self, enabled: bool) {

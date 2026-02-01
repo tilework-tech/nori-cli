@@ -406,6 +406,10 @@ pub(crate) struct ChatWidget {
     login_handler: Option<LoginHandler>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
+    // Loop mode state: remaining iterations (None = not looping)
+    loop_remaining: Option<i32>,
+    // Loop mode state: total iterations configured
+    loop_total: Option<i32>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -599,6 +603,20 @@ impl ChatWidget {
         });
 
         self.maybe_show_pending_rate_limit_prompt();
+
+        // Loop mode: if iterations remain, fire the next iteration.
+        #[cfg(feature = "nori-config")]
+        if let Some(remaining) = self.loop_remaining
+            && remaining > 0
+            && let Some(prompt) = self.first_prompt_text.clone()
+        {
+            let total = self.loop_total.unwrap_or(0);
+            self.app_event_tx.send(AppEvent::LoopIteration {
+                prompt,
+                remaining: remaining - 1,
+                total,
+            });
+        }
     }
 
     pub(crate) fn set_token_info(&mut self, info: Option<TokenUsageInfo>) {
@@ -708,6 +726,7 @@ impl ChatWidget {
 
     fn on_error(&mut self, message: String) {
         self.finalize_turn();
+        self.cancel_loop();
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
 
@@ -794,6 +813,7 @@ impl ChatWidget {
     fn on_interrupted_turn(&mut self, reason: TurnAbortReason) {
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
+        self.cancel_loop();
 
         if reason != TurnAbortReason::ReviewEnded {
             self.add_to_history(history_cell::new_error_event(
@@ -1527,6 +1547,8 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1621,6 +1643,8 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1993,6 +2017,19 @@ impl ChatWidget {
 
         if self.first_prompt_text.is_none() {
             self.first_prompt_text = Some(text.clone());
+
+            // Initialize loop mode from NoriConfig on the very first prompt.
+            #[cfg(feature = "nori-config")]
+            {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                if let Some(count) = nori_config.loop_count
+                    && count > 1
+                {
+                    self.loop_remaining = Some(count - 1);
+                    self.loop_total = Some(count);
+                    self.add_info_message(format!("Loop mode: will run {count} iterations."), None);
+                }
+            }
         }
 
         // Track user message for session statistics
@@ -2591,6 +2628,32 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the loop count sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_loop_count_picker(&mut self, current: Option<i32>) {
+        let params = crate::nori::config_picker::loop_count_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Set the loop state for a new iteration.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {
+        self.loop_remaining = Some(remaining);
+        self.loop_total = Some(total);
+    }
+
+    /// Cancel any active loop.
+    fn cancel_loop(&mut self) {
+        if self.loop_remaining.is_some() {
+            self.loop_remaining = None;
+            self.loop_total = None;
+            self.add_info_message("Loop cancelled.".to_string(), None);
+        }
     }
 
     /// Open the hotkey picker sub-view.
