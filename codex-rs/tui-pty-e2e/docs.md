@@ -12,6 +12,8 @@ This is a test-only crate that exercises:
 - `@/codex-rs/tui/` - The TUI binary being tested
 - `@/codex-rs/mock-acp-agent/` - Mock agent for predictable responses
 
+Tests validate rendering behavior end-to-end by checking the actual terminal screen buffer contents, including the ordering and presence/absence of cells (tool output, agent text, approval prompts). This catches integration issues that unit tests on individual components would miss, such as race conditions between streaming text and tool event rendering.
+
 ### Core Implementation
 
 **PTY Management**: Uses `portable_pty` to create a pseudo-terminal with:
@@ -26,6 +28,13 @@ This is a test-only crate that exercises:
 - `send_keys()` - Simulate keyboard input
 - `get_screen_content()` - Capture current display state
 
+**Tool Call Rendering Tests** (`acp_tool_calls.rs`):
+
+Tests in this file verify that tool call events (Explored, Ran, Searched cells) render in the correct positions relative to agent text. Key test patterns include:
+- Verifying tool calls that complete before text streaming appear above the agent message
+- Verifying that tool call completions arriving during the final text stream are NOT rendered after the agent's response (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
+- Checking for absence of trailing tool output by asserting that screen content after the final agent message position contains no tool-related strings
+
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
 - Expected vs actual screen content
@@ -38,5 +47,6 @@ This is a test-only crate that exercises:
 - Screen capture includes full ANSI state (colors, attributes)
 - Timing-sensitive tests use configurable timeouts
 - Debug styles respect color terminal detection
+- Snapshot tests use `insta` for visual verification of screen output; snapshots live in `tests/snapshots/`
 
 Created and maintained by Nori.

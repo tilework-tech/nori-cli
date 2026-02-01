@@ -568,10 +568,14 @@ impl ChatWidget {
     fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
-        // Flush any queued interrupts (e.g., approval requests) that were deferred
-        // during streaming. This is necessary for ACP mode which doesn't send a
-        // separate AgentMessage event to trigger handle_stream_finished().
-        self.flush_interrupt_queue();
+        // Discard any queued interrupts (tool call begin/end events) that were
+        // deferred during the final text stream. Flushing them here would render
+        // stale tool output (e.g., "Explored", "Ran") below the agent's final
+        // message, burying the response the user needs to see.
+        let discarded = self.interrupts.clear();
+        if discarded > 0 {
+            debug!("on_task_complete: discarded {discarded} deferred interrupt events");
+        }
 
         // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
         self.pending_exec_cells.drain_failed();

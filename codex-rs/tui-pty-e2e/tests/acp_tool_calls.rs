@@ -462,46 +462,32 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
     );
 }
 
-/// Test that exploring cells can appear AFTER the final assistant message (bug reproduction).
+/// Test that tool call completions arriving DURING the final text stream are NOT
+/// rendered after the agent's response.
 ///
-/// This test reproduces a bug where exploring cells that complete after intermediate
-/// agent text but before the final message can appear AFTER the final assistant message
-/// instead of in their correct chronological position.
-///
-/// ## Scenario:
-/// 1. Agent sends 2 Read operations (batch 1) - complete correctly
-/// 2. Agent sends Execute operation - completes correctly
-/// 3. Agent sends intermediate text: "Based on my exploration..."
-/// 4. Agent sends 3 more Read/Search operations (batch 2)
-/// 5. Agent completes batch 2
-/// 6. Agent sends final message: "The chatwidget is the heart..."
-/// 7. FinalMessageSeparator is triggered between streaming deltas
-///
-/// ## Bug:
-/// The second batch of exploring cells (3 operations) appears AFTER the final
-/// assistant message instead of appearing before it in chronological order.
+/// ## The race condition:
+/// When tool call completions arrive while the stream_controller is active (text is
+/// streaming), they get deferred into the interrupt queue. Previously, on_task_complete()
+/// would flush_interrupt_queue(), rendering all deferred tool events below the final
+/// agent text. This creates a confusing UX where "Explored" / "Ran" cells appear
+/// after the message the user needs to respond to.
 ///
 /// ## Expected behavior (after fix):
-/// All exploring cells should appear in chronological order:
-/// - Batch 1 explored cells
-/// - Execute cell
-/// - Intermediate agent text
-/// - Batch 2 explored cells (BEFORE final message)
-/// - Final assistant message
+/// Tool events still in the interrupt queue at task completion should be silently
+/// discarded. The agent's final text should be the last thing visible.
 ///
-/// ## Current behavior (bug):
-/// - Batch 1 explored cells
-/// - Execute cell
-/// - Intermediate agent text
-/// - Final assistant message
-/// - Batch 2 explored cells (AFTER final message - WRONG!)
+/// ## Scenario:
+/// 1. Agent sends 2 Read operations that complete before text (renders normally)
+/// 2. Agent starts streaming final text (activates stream_controller)
+/// 3. While text streams, 3 more Read/Search completions arrive (get deferred)
+/// 4. Agent finishes text, turn ends
+/// 5. Deferred tool events should NOT appear after the final text
 #[test]
 #[cfg(target_os = "linux")]
-fn test_explored_cells_appear_after_assistant_message() {
-    // Configure mock agent to send mixed exploring and exec workflow
+fn test_tool_calls_during_final_stream_not_shown_after() {
     let config = SessionConfig::new()
         .with_model("mock-model".to_owned())
-        .with_agent_env("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC", "1");
+        .with_agent_env("MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM", "1");
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
@@ -513,15 +499,15 @@ fn test_explored_cells_appear_after_assistant_message() {
 
     std::thread::sleep(TIMEOUT_INPUT);
 
-    // Send a prompt to trigger the mixed workflow
-    session.send_str("Analyze the TUI codebase").unwrap();
+    // Send a prompt to trigger the race condition scenario
+    session.send_str("Analyze the codebase").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for the final assistant message
+    // Wait for the final text to appear
     session
         .wait_for_text(
-            "The chatwidget is the heart of the TUI experience",
+            "Let me know if you need anything else",
             Duration::from_secs(10),
         )
         .expect("Should receive final assistant message");
@@ -530,78 +516,41 @@ fn test_explored_cells_appear_after_assistant_message() {
 
     let contents = session.screen_contents();
 
-    // Verify all the tool calls are present somewhere in the output
+    // The first batch (file1.rs, file2.rs) should appear ABOVE the agent text
+    // since they completed before streaming started.
     assert!(
-        contents.contains("file1.rs") || contents.contains("Explored"),
-        "Should contain first batch of exploring. Screen contents:\n{}",
-        contents
-    );
-    assert!(
-        contents.contains("Running tests") || contents.contains("Ran"),
-        "Should contain execute operation. Screen contents:\n{}",
-        contents
-    );
-    assert!(
-        contents.contains("Based on my exploration"),
-        "Should contain intermediate agent text. Screen contents:\n{}",
+        contents.contains("Explored"),
+        "Should show the initial batch of explored files. Screen contents:\n{}",
         contents
     );
 
-    // Find positions of key elements
-    let final_msg = "The chatwidget is the heart of the TUI experience";
+    // Find the position of the final agent text
+    let final_msg = "Let me know if you need anything else";
     let final_msg_pos = contents
         .find(final_msg)
         .expect("Should contain final message");
 
-    // Look for evidence of the second batch of exploring operations
-    // These could be individual "Explored" entries or references to the files
-    let has_skill_md = contents.contains("SKILL.md");
-    let has_undefined = contents.contains("undefined") || contents.contains("Searching");
-    let has_config_toml = contents.contains("config.toml");
+    // CRITICAL ASSERTION: No tool output should appear AFTER the final agent message.
+    // Look for any "Explored", "Ran", "Searched", "Read", "SKILL.md", "config.toml",
+    // or "undefined" text after the final message position.
+    let after_final = &contents[final_msg_pos + final_msg.len()..];
+    let has_trailing_tool_output = after_final.contains("Explored")
+        || after_final.contains("Ran")
+        || after_final.contains("Searched")
+        || after_final.contains("SKILL.md")
+        || after_final.contains("config.toml");
 
-    // At least some of the second batch should be visible
     assert!(
-        has_skill_md || has_undefined || has_config_toml,
-        "Should show second batch of exploring operations. Screen contents:\n{}",
-        contents
+        !has_trailing_tool_output,
+        "Tool output should NOT appear after the final agent message.\n\
+         The deferred tool events from the interrupt queue should be discarded at task completion.\n\
+         Text after final message:\n{after_final}\n\
+         Full screen contents:\n{contents}",
     );
 
-    // BUG VERIFICATION: Check if any "Explored" cells for the second batch
-    // appear AFTER the final message.
-    //
-    // We're looking for "Explored" text that appears after final_msg_pos.
-    // This demonstrates the bug where cells are delegated to after the assistant message.
-    //
-    // Note: This test currently captures the BUGGY behavior. When the bug is fixed,
-    // this assertion should be changed to verify that explored cells appear BEFORE
-    // the final message, not after.
-    let lines_after_final: Vec<&str> = contents[final_msg_pos..].lines().collect();
-
-    let explored_after_final = lines_after_final
-        .iter()
-        .any(|line| line.contains("Explored"));
-
-    if explored_after_final {
-        eprintln!("BUG REPRODUCED: Found 'Explored' cells after the final assistant message");
-        eprintln!("Lines after final message:");
-        for line in lines_after_final.iter().take(10) {
-            eprintln!("  {}", line);
-        }
-    } else {
-        eprintln!("Note: 'Explored' cells may be grouped or not visible in this snapshot");
-    }
-
-    // Snapshot for visual verification - this captures the current buggy state
+    // Snapshot for visual verification
     insta::assert_snapshot!(
-        "acp_explored_after_assistant_message",
+        "acp_tool_calls_during_final_stream",
         normalize_for_input_snapshot(contents)
     );
-
-    // TODO: When bug is fixed, change this assertion to:
-    // assert!(
-    //     !explored_after_final,
-    //     "Explored cells should appear BEFORE final message, not after. \
-    //      Found 'Explored' after final message at position {}",
-    //     final_msg_pos
-    // );
 }

@@ -2,15 +2,15 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
+› Analyze the codebase
+
+
 • Explored
   └ Read file1.rs, file2.rs
 
-• Ran 'Running tests(cargo test)'
-  └ Tests passed
-
 ────────────────────────────────────────────────────────────────────────────────
 
-• Based on my exploration, the most significant TUI Rust source file by size is:
+• Here is my analysis of the codebase.
 
 • Explored
   └ Read SKILL.md
@@ -19,7 +19,7 @@ expression: normalize_for_input_snapshot(contents)
 
 ────────────────────────────────────────────────────────────────────────────────
 
-• The chatwidget is the heart of the TUI experience.
+• Let me know if you need anything else.
 
 
 › [DEFAULT_PROMPT]

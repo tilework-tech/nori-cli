@@ -45,6 +45,18 @@ impl InterruptManager {
         self.queue.is_empty()
     }
 
+    /// Discard all queued interrupts, returning the number of events dropped.
+    pub(crate) fn clear(&mut self) -> usize {
+        let count = self.queue.len();
+        for item in &self.queue {
+            if matches!(item, QueuedInterrupt::Elicitation(_)) {
+                tracing::warn!("Discarding queued elicitation request at task completion");
+            }
+        }
+        self.queue.clear();
+        count
+    }
+
     /// Queue an exec approval request. Currently unused since approval requests
     /// are handled immediately to avoid ACP deadlocks.
     #[allow(dead_code)]

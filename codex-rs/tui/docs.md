@@ -40,6 +40,19 @@ The chat interface is managed by `chatwidget.rs`, which handles:
 
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
 
+**Interrupt Queue & Tool Event Deferral** (`chatwidget/interrupts.rs`):
+
+When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. The `InterruptManager` queues these events via `defer_or_handle()` in `chatwidget.rs` so they do not interleave with active text output. The deferral condition is: if a `stream_controller` is active OR the queue is already non-empty, new events are pushed onto the queue to preserve FIFO ordering.
+
+Two operations consume the queue:
+
+| Method | Called From | Behavior |
+|--------|------------|----------|
+| `flush_all()` | `handle_stream_finished()` | Processes and renders all queued events. Used mid-turn when a text block completes and the next block has not started. |
+| `clear()` | `on_task_complete()` | Discards all queued events without rendering. Used at turn completion to prevent stale tool output from appearing below the agent's final message. |
+
+This distinction exists because tool events that arrive during the final text stream are no longer useful to display -- rendering them would bury the agent's response under misleading "Explored" / "Ran" cells.
+
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
 **System Info Collection** (`system_info.rs`):

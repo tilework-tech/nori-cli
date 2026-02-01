@@ -301,11 +301,15 @@ impl acp::Agent for MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
-        // Support mixed exploring and exec workflow to test exploring cells appearing after assistant message
-        if std::env::var("MOCK_AGENT_MIXED_EXPLORING_AND_EXEC").is_ok() {
-            eprintln!("Mock agent: sending mixed exploring and exec workflow");
+        // Reproduce the race condition where tool call completions arrive DURING
+        // the final text stream. These get deferred into the interrupt queue, then
+        // flushed after the agent's final message - causing a trailing dump of tool
+        // output below the response the user needs to see.
+        if std::env::var("MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM").is_ok() {
+            eprintln!("Mock agent: sending tool calls during final text stream");
 
-            // Batch 1: Initial exploring (2 Read calls)
+            // Phase 1: Initial exploring batch that completes BEFORE text starts.
+            // These should render normally above the agent text.
             let read_1 = acp::ToolCallId::new("read-001");
             let read_2 = acp::ToolCallId::new("read-002");
 
@@ -331,7 +335,6 @@ impl acp::Agent for MockAgent {
 
             sleep(Duration::from_millis(30)).await;
 
-            // Complete first batch
             self.send_tool_call_update(
                 session_id.clone(),
                 acp::ToolCallUpdate::new(
@@ -368,45 +371,17 @@ impl acp::Agent for MockAgent {
 
             sleep(Duration::from_millis(30)).await;
 
-            // Execute command (non-exploring)
-            let exec_1 = acp::ToolCallId::new("exec-001");
-            self.send_tool_call(
-                session_id.clone(),
-                acp::ToolCall::new(exec_1.clone(), "Running tests")
-                    .kind(acp::ToolKind::Execute)
-                    .status(acp::ToolCallStatus::Pending)
-                    .raw_input(json!({"command": "cargo test"})),
-            )
-            .await?;
+            // Phase 2: Start streaming the final text response.
+            // This activates the stream_controller, causing subsequent tool events
+            // to be deferred into the interrupt queue.
+            self.send_text_chunk(session_id.clone(), "Here is my analysis of the codebase.")
+                .await?;
 
-            sleep(Duration::from_millis(30)).await;
+            sleep(Duration::from_millis(50)).await;
 
-            self.send_tool_call_update(
-                session_id.clone(),
-                acp::ToolCallUpdate::new(
-                    exec_1.clone(),
-                    acp::ToolCallUpdateFields::new()
-                        .status(acp::ToolCallStatus::Completed)
-                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
-                            acp::ContentBlock::Text(acp::TextContent::new("Tests passed")),
-                        ))])
-                        .raw_output(json!({"exit_code": 0})),
-                ),
-            )
-            .await?;
-
-            sleep(Duration::from_millis(30)).await;
-
-            // Send intermediate agent text
-            self.send_text_chunk(
-                session_id.clone(),
-                "Based on my exploration, the most significant TUI Rust source file by size is:",
-            )
-            .await?;
-
-            sleep(Duration::from_millis(30)).await;
-
-            // Batch 2: More exploring (3 Read/Grep calls) - these will appear AFTER final message (the bug)
+            // Phase 3: Send tool call begins + completions DURING text streaming.
+            // These get deferred because stream_controller is active.
+            // When on_task_complete flushes the queue, they appear AFTER the final text.
             let read_3 = acp::ToolCallId::new("read-003");
             let grep_1 = acp::ToolCallId::new("grep-001");
             let read_4 = acp::ToolCallId::new("read-004");
@@ -420,31 +395,8 @@ impl acp::Agent for MockAgent {
             )
             .await?;
 
-            sleep(Duration::from_millis(30)).await;
+            sleep(Duration::from_millis(20)).await;
 
-            self.send_tool_call(
-                session_id.clone(),
-                acp::ToolCall::new(grep_1.clone(), "Searching for undefined")
-                    .kind(acp::ToolKind::Search)
-                    .status(acp::ToolCallStatus::Pending)
-                    .raw_input(json!({"pattern": "undefined"})),
-            )
-            .await?;
-
-            sleep(Duration::from_millis(30)).await;
-
-            self.send_tool_call(
-                session_id.clone(),
-                acp::ToolCall::new(read_4.clone(), "Reading config.toml")
-                    .kind(acp::ToolKind::Read)
-                    .status(acp::ToolCallStatus::Pending)
-                    .raw_input(json!({"path": "config.toml"})),
-            )
-            .await?;
-
-            sleep(Duration::from_millis(30)).await;
-
-            // Complete second batch
             self.send_tool_call_update(
                 session_id.clone(),
                 acp::ToolCallUpdate::new(
@@ -461,7 +413,18 @@ impl acp::Agent for MockAgent {
             )
             .await?;
 
-            sleep(Duration::from_millis(30)).await;
+            sleep(Duration::from_millis(20)).await;
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(grep_1.clone(), "Searching for undefined")
+                    .kind(acp::ToolKind::Search)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"pattern": "undefined"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(20)).await;
 
             self.send_tool_call_update(
                 session_id.clone(),
@@ -477,7 +440,18 @@ impl acp::Agent for MockAgent {
             )
             .await?;
 
-            sleep(Duration::from_millis(30)).await;
+            sleep(Duration::from_millis(20)).await;
+
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(read_4.clone(), "Reading config.toml")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"path": "config.toml"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(20)).await;
 
             self.send_tool_call_update(
                 session_id.clone(),
@@ -497,10 +471,11 @@ impl acp::Agent for MockAgent {
 
             sleep(Duration::from_millis(30)).await;
 
-            // Final agent message - this triggers FinalMessageSeparator
+            // Phase 4: Send final text chunk. Any tool events still in the
+            // interrupt queue are discarded by on_task_complete() -> clear().
             self.send_text_chunk(
                 session_id.clone(),
-                "The chatwidget is the heart of the TUI experience.",
+                " Let me know if you need anything else.",
             )
             .await?;
 

@@ -19,11 +19,15 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 - Permission request/response flow
 - Cancellation
 
-**Mock Behaviors**: The agent recognizes special prompts to trigger specific behaviors:
-- Text streaming with configurable delays
-- Tool calls that request permissions
-- File read/write operations
-- Error simulation
+**Mock Behaviors**: Controlled via environment variables that the E2E tests set on the mock agent process. Each env var activates a specific behavior scenario. Key scenarios include multi-turn conversations, tool call streaming, permission requests, file operations, and race condition simulations.
+
+**Race Condition Simulation**: The `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` env var triggers a scenario that reproduces the timing where tool call completions arrive while the final text response is streaming. This is structured in phases:
+1. Tool calls that complete before text streaming starts (rendered normally)
+2. Text streaming begins (activates the TUI's stream_controller)
+3. Additional tool calls begin and complete during text streaming (get deferred by the TUI's interrupt queue)
+4. Final text chunk sent and turn ends
+
+This simulates the real-world race condition that the `InterruptManager.clear()` in `@/codex-rs/tui/src/chatwidget.rs` handles at task completion.
 
 **Client Requests**: Outbound requests to the client:
 - `ReadFile` - Request file contents
@@ -37,5 +41,6 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 - Simulates streaming with configurable chunk delays
 - Supports permission options (accept, deny, skip)
 - Session state is tracked per-session ID
+- Sleep durations between mock events are tuned to create reliable timing in E2E tests
 
 Created and maintained by Nori.
