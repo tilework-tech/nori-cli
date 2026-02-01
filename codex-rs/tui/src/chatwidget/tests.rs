@@ -1122,8 +1122,8 @@ fn slash_undo_sends_op() {
     chat.dispatch_command(SlashCommand::Undo);
 
     match rx.try_recv() {
-        Ok(AppEvent::CodexOp(Op::Undo)) => {}
-        other => panic!("expected AppEvent::CodexOp(Op::Undo), got {other:?}"),
+        Ok(AppEvent::CodexOp(Op::UndoList)) => {}
+        other => panic!("expected AppEvent::CodexOp(Op::UndoList), got {other:?}"),
     }
 }
 

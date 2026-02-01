@@ -75,7 +75,7 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 | `/init` | Create an AGENTS.md file with instructions |
 | `/resume-viewonly` | View a previous session transcript (read-only) |
 | `/compact` | Summarize conversation to prevent context limit |
-| `/undo` | Ask Nori to undo a turn |
+| `/undo` | Open undo snapshot picker to select a restore point |
 | `/diff` | Show git diff (including untracked files) |
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and token usage |
@@ -86,6 +86,10 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 | `/switch-skillset` | Switch between available skillsets |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
+
+**Undo Snapshot Picker (`/undo`):**
+
+The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backend. When the backend responds with `UndoListResult`, the TUI opens a `ListSelectionView` modal (the same pattern used by the approvals popup, review picker, etc.) displaying all available snapshots. Each item shows `[short_id] truncated_label` where the label is truncated to 60 characters. Selecting a snapshot dispatches `Op::UndoTo { index }` to restore to that point. If no snapshots are available, an info message is displayed instead of the modal.
 
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 

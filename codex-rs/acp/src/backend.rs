@@ -517,6 +517,24 @@ impl AcpBackend {
                 crate::undo::handle_undo(&self.event_tx, &id, &self.cwd, &self.ghost_snapshots)
                     .await;
             }
+            Op::UndoList => {
+                crate::undo::handle_list_snapshots(&self.event_tx, &id, &self.ghost_snapshots)
+                    .await;
+            }
+            Op::UndoTo { index } => {
+                self.connection
+                    .cancel(&*self.session_id.read().await)
+                    .await
+                    .ok();
+                crate::undo::handle_undo_to(
+                    &self.event_tx,
+                    &id,
+                    &self.cwd,
+                    &self.ghost_snapshots,
+                    index,
+                )
+                .await;
+            }
             // Unsupported operations - only show error in debug builds
             Op::ListMcpTools | Op::Review { .. } | Op::RunUserShellCommand { .. } => {
                 let op_name = get_op_name(&op);
@@ -587,6 +605,7 @@ impl AcpBackend {
         // This captures the working tree state so /undo can restore it.
         let snapshot_cwd = self.cwd.clone();
         let ghost_snapshots = Arc::clone(&self.ghost_snapshots);
+        let label_for_snapshot = prompt_text.clone();
         match tokio::task::spawn_blocking(move || {
             let options = codex_git::CreateGhostCommitOptions::new(&snapshot_cwd);
             codex_git::create_ghost_commit(&options)
@@ -594,7 +613,7 @@ impl AcpBackend {
         .await
         {
             Ok(Ok(snapshot)) => {
-                ghost_snapshots.push(snapshot).await;
+                ghost_snapshots.push(snapshot, label_for_snapshot).await;
             }
             Ok(Err(codex_git::GitToolingError::NotAGitRepository { .. })) => {
                 debug!("Skipping ghost snapshot: not a git repository");
@@ -1191,6 +1210,8 @@ fn get_op_name(op: &Op) -> &'static str {
         Op::ListCustomPrompts => "ListCustomPrompts",
         Op::Compact => "Compact",
         Op::Undo => "Undo",
+        Op::UndoList => "UndoList",
+        Op::UndoTo { .. } => "UndoTo",
         Op::Review { .. } => "Review",
         Op::Shutdown => "Shutdown",
         Op::RunUserShellCommand { .. } => "RunUserShellCommand",

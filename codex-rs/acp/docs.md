@@ -471,20 +471,32 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 
 **Undo / Ghost Snapshots** (`undo.rs`, `backend.rs`):
 
-The ACP backend supports `/undo` via git ghost snapshots, using the `codex-git` crate (`@/codex-rs/utils/git`).
+The ACP backend supports undo via git ghost snapshots, using the `codex-git` crate (`@/codex-rs/utils/git`). The undo system supports both sequential undo (`Op::Undo`) and selective snapshot restoration via a modal picker (`Op::UndoList` / `Op::UndoTo`).
 
-Snapshot lifecycle:
+**Snapshot storage:**
+
+`GhostSnapshotStack` is a thread-safe stack (`Mutex<Vec<SnapshotEntry>>`) stored as `Arc<GhostSnapshotStack>` on `AcpBackend`. Each `SnapshotEntry` pairs a `GhostCommit` with a `label` string (the user's prompt text at that turn). The label is captured in `handle_user_input()` when the snapshot is created.
+
+**Snapshot lifecycle:**
 1. At the **start** of each user turn (in `handle_user_input()`), before sending the prompt to the agent, a ghost commit captures the current working tree state via `codex_git::create_ghost_commit()`
-2. Snapshots are pushed onto `GhostSnapshotStack`, a thread-safe stack (`Mutex<Vec<GhostCommit>>`) stored as `Arc<GhostSnapshotStack>` on `AcpBackend`
-3. On `Op::Undo`, `handle_undo()` pops the most recent snapshot and restores it via `codex_git::restore_ghost_commit()` in a `spawn_blocking` call
-4. Emits `UndoStarted` then `UndoCompleted` events through the standard `event_tx` channel
+2. The snapshot is pushed onto `GhostSnapshotStack` along with the user's prompt text as a label
 
-Key behaviors:
+**Undo operations:**
+
+| Protocol Op | Handler | Behavior |
+|-------------|---------|----------|
+| `Op::Undo` | `handle_undo()` | Pops and restores the most recent snapshot (sequential undo) |
+| `Op::UndoList` | `handle_list_snapshots()` | Returns `UndoListResult` event with all snapshots in reverse chronological order |
+| `Op::UndoTo { index }` | `handle_undo_to()` | Cancels any in-progress agent turn, then restores the snapshot at the given display index and truncates all newer entries |
+
+The display index scheme: index 0 = most recent snapshot (last element in the internal vec), index 1 = second most recent, etc. `restore_to_index()` removes the selected entry and all entries newer than it from the stack. The `list()` method returns `Vec<SnapshotInfo>` with `index`, `short_id` (first 7 chars of commit hash), and `label` fields.
+
+The `handle_undo_to()` completion message includes a warning: "the agent is not aware that files have changed", because undo is purely a filesystem restoration that is not communicated to the ACP agent.
+
+**Key behaviors:**
 - If the cwd is not a git repository, snapshot creation is silently skipped (logged at debug level)
 - If no snapshots exist when undo is requested, `UndoCompleted` reports `success: false`
-- Undo is purely a filesystem restoration -- it is not communicated to the ACP agent
 - Ghost commits are unreferenced git objects (not on any branch) created by the `codex-git` crate
-- No cap on the number of stored snapshots
 - `GhostSnapshotStack` is deliberately a standalone type (not embedded inside `AcpBackend`) so it can be tested independently without requiring an ACP agent connection
 
 **ACP Error Categorization:**

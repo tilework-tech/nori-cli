@@ -47,6 +47,7 @@ use codex_core::protocol::TokenUsageInfo;
 use codex_core::protocol::TurnAbortReason;
 use codex_core::protocol::TurnDiffEvent;
 use codex_core::protocol::UndoCompletedEvent;
+use codex_core::protocol::UndoListResultEvent;
 use codex_core::protocol::UndoStartedEvent;
 use codex_core::protocol::UserMessageEvent;
 use codex_core::protocol::ViewImageToolCallEvent;
@@ -988,6 +989,47 @@ impl ChatWidget {
         }
     }
 
+    fn on_undo_list_result(&mut self, event: UndoListResultEvent) {
+        if event.snapshots.is_empty() {
+            self.add_info_message("No undo snapshots available.".to_string(), None);
+            return;
+        }
+
+        let items: Vec<SelectionItem> = event
+            .snapshots
+            .into_iter()
+            .map(|snap| {
+                let index = snap.index;
+                let label = truncate_text(&snap.label, 60);
+                let name = format!("[{}] {label}", snap.short_id);
+                let tx = self.app_event_tx.clone();
+                SelectionItem {
+                    name,
+                    display_shortcut: None,
+                    description: None,
+                    selected_description: None,
+                    is_current: false,
+                    actions: vec![Box::new(move |_| {
+                        tx.send(AppEvent::CodexOp(Op::UndoTo { index }));
+                    })],
+                    dismiss_on_select: true,
+                    search_value: None,
+                }
+            })
+            .collect();
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Undo to snapshot".to_string()),
+            subtitle: None,
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            header: Box::new(()),
+            is_searchable: false,
+            ..Default::default()
+        });
+        self.request_redraw();
+    }
+
     fn on_stream_error(&mut self, message: String) {
         if self.retry_status_header.is_none() {
             self.retry_status_header = Some(self.current_status_header.clone());
@@ -1806,7 +1848,7 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Undo => {
-                self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
+                self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
@@ -2215,6 +2257,7 @@ impl ChatWidget {
             }
             EventMsg::UndoStarted(ev) => self.on_undo_started(ev),
             EventMsg::UndoCompleted(ev) => self.on_undo_completed(ev),
+            EventMsg::UndoListResult(ev) => self.on_undo_list_result(ev),
             EventMsg::StreamError(StreamErrorEvent { message, .. }) => {
                 self.on_stream_error(message)
             }

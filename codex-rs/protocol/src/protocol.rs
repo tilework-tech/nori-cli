@@ -193,6 +193,12 @@ pub enum Op {
     /// Request Codex to undo a turn (turn are stacked so it is the same effect as CMD + Z).
     Undo,
 
+    /// Request the list of available undo snapshots.
+    UndoList,
+
+    /// Undo to a specific snapshot by index (0 = most recent).
+    UndoTo { index: i64 },
+
     /// Request a code review from the agent.
     Review { review_request: ReviewRequest },
 
@@ -534,6 +540,9 @@ pub enum EventMsg {
     UndoStarted(UndoStartedEvent),
 
     UndoCompleted(UndoCompletedEvent),
+
+    /// Response to `Op::UndoList` containing available snapshots.
+    UndoListResult(UndoListResultEvent),
 
     /// Notification that a model stream experienced an error or disconnect
     /// and the system is handling it (e.g., retrying with backoff).
@@ -1446,6 +1455,23 @@ pub struct UndoCompletedEvent {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+}
+
+/// Information about a single undo snapshot for display in the undo list.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct SnapshotInfo {
+    /// Display index (0 = most recent).
+    pub index: i64,
+    /// Short git commit id (first 7 chars).
+    pub short_id: String,
+    /// User message label from when the snapshot was taken.
+    pub label: String,
+}
+
+/// Response payload for `Op::UndoList`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct UndoListResultEvent {
+    pub snapshots: Vec<SnapshotInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
