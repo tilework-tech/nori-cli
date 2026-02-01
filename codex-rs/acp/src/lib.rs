@@ -16,6 +16,7 @@ pub mod tracing_setup;
 pub mod transcript;
 pub mod transcript_discovery;
 pub mod translator;
+pub mod undo;
 
 // Re-export config types for convenience
 pub use config::ApprovalPolicy;

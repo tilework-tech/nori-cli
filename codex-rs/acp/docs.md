@@ -469,6 +469,24 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 3. Summary is prepended to next user message
 4. Emits `ContextCompacted` event to TUI
 
+**Undo / Ghost Snapshots** (`undo.rs`, `backend.rs`):
+
+The ACP backend supports `/undo` via git ghost snapshots, using the `codex-git` crate (`@/codex-rs/utils/git`).
+
+Snapshot lifecycle:
+1. At the **start** of each user turn (in `handle_user_input()`), before sending the prompt to the agent, a ghost commit captures the current working tree state via `codex_git::create_ghost_commit()`
+2. Snapshots are pushed onto `GhostSnapshotStack`, a thread-safe stack (`Mutex<Vec<GhostCommit>>`) stored as `Arc<GhostSnapshotStack>` on `AcpBackend`
+3. On `Op::Undo`, `handle_undo()` pops the most recent snapshot and restores it via `codex_git::restore_ghost_commit()` in a `spawn_blocking` call
+4. Emits `UndoStarted` then `UndoCompleted` events through the standard `event_tx` channel
+
+Key behaviors:
+- If the cwd is not a git repository, snapshot creation is silently skipped (logged at debug level)
+- If no snapshots exist when undo is requested, `UndoCompleted` reports `success: false`
+- Undo is purely a filesystem restoration -- it is not communicated to the ACP agent
+- Ghost commits are unreferenced git objects (not on any branch) created by the `codex-git` crate
+- No cap on the number of stored snapshots
+- `GhostSnapshotStack` is deliberately a standalone type (not embedded inside `AcpBackend`) so it can be tested independently without requiring an ACP agent connection
+
 **ACP Error Categorization:**
 
 | Category | Detection Patterns | User Message |

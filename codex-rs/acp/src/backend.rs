@@ -43,6 +43,7 @@ use crate::transcript::TranscriptRecorder;
 use crate::translator;
 use crate::translator::is_patch_operation;
 use crate::translator::tool_call_to_file_change;
+use crate::undo::GhostSnapshotStack;
 
 // =============================================================================
 // Error Categorization
@@ -196,6 +197,8 @@ pub struct AcpBackend {
     transcript_recorder: Option<Arc<TranscriptRecorder>>,
     /// How long after idle before sending a notification
     notify_after_idle: crate::config::NotifyAfterIdle,
+    /// Stack of ghost commit snapshots for /undo support
+    ghost_snapshots: Arc<GhostSnapshotStack>,
 }
 
 impl AcpBackend {
@@ -326,6 +329,7 @@ impl AcpBackend {
             pending_compact_summary: Arc::new(Mutex::new(None)),
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,
+            ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
         };
 
         // Send synthetic SessionConfigured event
@@ -504,8 +508,17 @@ impl AcpBackend {
                         .await;
                 });
             }
+            Op::Undo => {
+                // Best-effort cancel any in-progress agent turn before restoring.
+                self.connection
+                    .cancel(&*self.session_id.read().await)
+                    .await
+                    .ok();
+                crate::undo::handle_undo(&self.event_tx, &id, &self.cwd, &self.ghost_snapshots)
+                    .await;
+            }
             // Unsupported operations - only show error in debug builds
-            Op::Undo | Op::ListMcpTools | Op::Review { .. } | Op::RunUserShellCommand { .. } => {
+            Op::ListMcpTools | Op::Review { .. } | Op::RunUserShellCommand { .. } => {
                 let op_name = get_op_name(&op);
                 warn!("Unsupported Op in ACP mode: {op_name}");
                 #[cfg(debug_assertions)]
@@ -568,6 +581,30 @@ impl AcpBackend {
 
         if prompt_text.is_empty() {
             return Ok(());
+        }
+
+        // Create ghost snapshot before sending prompt to agent.
+        // This captures the working tree state so /undo can restore it.
+        let snapshot_cwd = self.cwd.clone();
+        let ghost_snapshots = Arc::clone(&self.ghost_snapshots);
+        match tokio::task::spawn_blocking(move || {
+            let options = codex_git::CreateGhostCommitOptions::new(&snapshot_cwd);
+            codex_git::create_ghost_commit(&options)
+        })
+        .await
+        {
+            Ok(Ok(snapshot)) => {
+                ghost_snapshots.push(snapshot).await;
+            }
+            Ok(Err(codex_git::GitToolingError::NotAGitRepository { .. })) => {
+                debug!("Skipping ghost snapshot: not a git repository");
+            }
+            Ok(Err(err)) => {
+                warn!("Failed to create ghost snapshot: {err}");
+            }
+            Err(err) => {
+                warn!("Ghost snapshot task panicked: {err}");
+            }
         }
 
         // Record user message to transcript
