@@ -74,6 +74,7 @@ pub(crate) fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::TurnDiff(_)
         | EventMsg::GetHistoryEntryResponse(_)
         | EventMsg::UndoStarted(_)
+        | EventMsg::UndoListResult(_)
         | EventMsg::McpListToolsResponse(_)
         | EventMsg::McpStartupUpdate(_)
         | EventMsg::McpStartupComplete(_)

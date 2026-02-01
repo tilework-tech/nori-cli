@@ -277,4 +277,56 @@ args = ["--arg1", "value"]
             Some(vec!["--arg1".to_string(), "value".to_string()])
         );
     }
+
+    #[test]
+    fn test_loop_count_deserializes_from_tui_section() {
+        let toml_str = r#"
+[tui]
+loop_count = 5
+"#;
+        let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.tui.loop_count, Some(5));
+    }
+
+    #[test]
+    fn test_loop_count_defaults_to_none_when_absent() {
+        let toml_str = "";
+        let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.tui.loop_count, None);
+    }
+
+    #[test]
+    fn test_loop_count_resolved_from_config_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+loop_count = 3
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.loop_count, Some(3));
+    }
+
+    #[test]
+    fn test_loop_count_none_when_not_in_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.loop_count, None);
+    }
+
+    #[test]
+    fn test_nori_config_default_has_no_loop() {
+        let config = NoriConfig::default();
+        assert_eq!(config.loop_count, None);
+    }
 }

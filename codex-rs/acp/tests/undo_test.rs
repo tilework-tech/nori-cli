@@ -14,6 +14,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use tokio::sync::mpsc;
+use tokio::time;
 
 fn git(path: &Path, args: &[&str]) -> Result<()> {
     let status = Command::new("git")
@@ -95,7 +96,7 @@ async fn undo_restores_file_after_modification() -> Result<()> {
     // Create snapshot before modification
     let snapshot = create_snapshot(tmp.path())?;
     let snapshots = GhostSnapshotStack::new();
-    snapshots.push(snapshot).await;
+    snapshots.push(snapshot, "modify file".to_string()).await;
 
     // Simulate agent modifying the file
     fs::write(&tracked, "after\n")?;
@@ -140,9 +141,9 @@ async fn sequential_undos_consume_snapshots() -> Result<()> {
     fs::write(&file, "v4\n")?;
 
     let snapshots = GhostSnapshotStack::new();
-    snapshots.push(snap1).await;
-    snapshots.push(snap2).await;
-    snapshots.push(snap3).await;
+    snapshots.push(snap1, "turn 1".to_string()).await;
+    snapshots.push(snap2, "turn 2".to_string()).await;
+    snapshots.push(snap3, "turn 3".to_string()).await;
 
     let (event_tx, mut event_rx) = mpsc::channel(32);
 
@@ -172,6 +173,424 @@ async fn sequential_undos_consume_snapshots() -> Result<()> {
         c4.message.as_deref(),
         Some("No snapshot available to undo.")
     );
+
+    Ok(())
+}
+
+// ============================================================================
+// Tests for list() and restore_to_index()
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn list_returns_snapshots_in_reverse_chronological_order() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    // Small delay so timestamps differ
+    time::sleep(time::Duration::from_millis(10)).await;
+
+    fs::write(&file, "v2\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v2"])?;
+    let snap2 = create_snapshot(tmp.path())?;
+
+    time::sleep(time::Duration::from_millis(10)).await;
+
+    fs::write(&file, "v3\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v3"])?;
+    let snap3 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "fix login bug".to_string()).await;
+    snapshots.push(snap2, "add tests".to_string()).await;
+    snapshots.push(snap3, "refactor auth".to_string()).await;
+
+    let list = snapshots.list().await;
+    assert_eq!(list.len(), 3);
+
+    // Most recent first
+    assert_eq!(list[0].label, "refactor auth");
+    assert_eq!(list[1].label, "add tests");
+    assert_eq!(list[2].label, "fix login bug");
+
+    // Indices should be 0, 1, 2 (display order)
+    assert_eq!(list[0].index, 0);
+    assert_eq!(list[1].index, 1);
+    assert_eq!(list[2].index, 2);
+
+    // Each should have a non-empty short_id
+    for info in &list {
+        assert!(!info.short_id.is_empty());
+        assert!(info.short_id.len() <= 7);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn list_empty_stack_returns_empty_vec() -> Result<()> {
+    let snapshots = GhostSnapshotStack::new();
+    let list = snapshots.list().await;
+    assert!(list.is_empty());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_to_index_restores_correct_snapshot_and_truncates() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+
+    // v1 state
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    // v2 state
+    fs::write(&file, "v2\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v2"])?;
+    let snap2 = create_snapshot(tmp.path())?;
+
+    // v3 state
+    fs::write(&file, "v3\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v3"])?;
+    let snap3 = create_snapshot(tmp.path())?;
+
+    // Current state: v4
+    fs::write(&file, "v4\n")?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+    snapshots.push(snap2, "turn 2".to_string()).await;
+    snapshots.push(snap3, "turn 3".to_string()).await;
+
+    // list() returns [snap3(idx=0), snap2(idx=1), snap1(idx=2)]
+    // Selecting index 1 means "restore to snap2" and discard snap3, snap2
+    let commit = snapshots.restore_to_index(1).await;
+    assert!(commit.is_ok(), "restore_to_index should return a commit");
+
+    // After restoring index 1, only snap1 should remain
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].label, "turn 1");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_to_index_zero_restores_most_recent() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    fs::write(&file, "v2\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v2"])?;
+    let snap2 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+    snapshots.push(snap2, "turn 2".to_string()).await;
+
+    // Index 0 = most recent = snap2; restoring it removes only snap2
+    let commit = snapshots.restore_to_index(0).await;
+    assert!(commit.is_ok());
+
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].label, "turn 1");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_to_last_index_empties_stack() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    fs::write(&file, "v2\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v2"])?;
+    let snap2 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+    snapshots.push(snap2, "turn 2".to_string()).await;
+
+    // Index 1 = oldest = snap1; restoring it removes both
+    let commit = snapshots.restore_to_index(1).await;
+    assert!(commit.is_ok());
+    assert!(snapshots.is_empty().await);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_to_out_of_bounds_index_returns_none() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+
+    // Index 5 is out of bounds (only 1 entry)
+    let commit = snapshots.restore_to_index(5).await;
+    assert!(commit.is_err());
+
+    // Stack should be unchanged
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_to_negative_index_returns_error() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+
+    let commit = snapshots.restore_to_index(-1).await;
+    assert!(commit.is_err());
+
+    // Stack should be unchanged
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+
+    Ok(())
+}
+
+// ============================================================================
+// Tests for handle_undo_to (full flow with filesystem verification)
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handle_undo_to_restores_selected_snapshot() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+
+    // v1 state
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    // v2 state
+    fs::write(&file, "v2\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v2"])?;
+    let snap2 = create_snapshot(tmp.path())?;
+
+    // v3 state
+    fs::write(&file, "v3\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v3"])?;
+    let snap3 = create_snapshot(tmp.path())?;
+
+    // Current state: v4
+    fs::write(&file, "v4\n")?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "write v1".to_string()).await;
+    snapshots.push(snap2, "write v2".to_string()).await;
+    snapshots.push(snap3, "write v3".to_string()).await;
+
+    let (event_tx, mut event_rx) = mpsc::channel(32);
+
+    // Undo to index 1 (snap2) — should restore to v2 state
+    codex_acp::undo::handle_undo_to(&event_tx, "ut1", tmp.path(), &snapshots, 1).await;
+
+    let completed = collect_undo_completed(&mut event_rx).await?;
+    assert!(completed.success, "undo_to failed: {:?}", completed.message);
+
+    // File should be at v2
+    assert_eq!(fs::read_to_string(&file)?, "v2\n");
+
+    // Only snap1 should remain
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].label, "write v1");
+
+    // Completion message should contain agent warning
+    let msg = completed.message.unwrap();
+    assert!(
+        msg.contains("agent"),
+        "completion message should warn about agent unawareness: {msg}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handle_undo_to_out_of_bounds_reports_failure() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+
+    let (event_tx, mut event_rx) = mpsc::channel(32);
+    codex_acp::undo::handle_undo_to(&event_tx, "ut2", tmp.path(), &snapshots, 10).await;
+
+    let completed = collect_undo_completed(&mut event_rx).await?;
+    assert!(!completed.success);
+
+    // Stack should be unchanged
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handle_undo_to_empty_stack_reports_failure() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let snapshots = GhostSnapshotStack::new();
+
+    let (event_tx, mut event_rx) = mpsc::channel(32);
+    codex_acp::undo::handle_undo_to(&event_tx, "ut3", tmp.path(), &snapshots, 0).await;
+
+    let completed = collect_undo_completed(&mut event_rx).await?;
+    assert!(!completed.success);
+    assert_eq!(
+        completed.message.as_deref(),
+        Some("No snapshot available to undo.")
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handle_undo_to_negative_index_reports_failure() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "turn 1".to_string()).await;
+
+    let (event_tx, mut event_rx) = mpsc::channel(32);
+    codex_acp::undo::handle_undo_to(&event_tx, "ut-neg", tmp.path(), &snapshots, -1).await;
+
+    let completed = collect_undo_completed(&mut event_rx).await?;
+    assert!(!completed.success);
+
+    // Stack should be unchanged
+    let remaining = snapshots.list().await;
+    assert_eq!(remaining.len(), 1);
+
+    Ok(())
+}
+
+// ============================================================================
+// Tests for handle_list_snapshots
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handle_list_snapshots_sends_event_with_entries() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    init_git_repo(tmp.path())?;
+
+    let file = tmp.path().join("data.txt");
+
+    fs::write(&file, "v1\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v1"])?;
+    let snap1 = create_snapshot(tmp.path())?;
+
+    fs::write(&file, "v2\n")?;
+    git(tmp.path(), &["add", "data.txt"])?;
+    git(tmp.path(), &["commit", "-m", "v2"])?;
+    let snap2 = create_snapshot(tmp.path())?;
+
+    let snapshots = GhostSnapshotStack::new();
+    snapshots.push(snap1, "fix bug".to_string()).await;
+    snapshots.push(snap2, "add feature".to_string()).await;
+
+    let (event_tx, mut event_rx) = mpsc::channel(32);
+    codex_acp::undo::handle_list_snapshots(&event_tx, "ls1", &snapshots).await;
+
+    let event = event_rx.recv().await.context("no event received")?;
+    match event.msg {
+        EventMsg::UndoListResult(result) => {
+            assert_eq!(result.snapshots.len(), 2);
+            assert_eq!(result.snapshots[0].label, "add feature");
+            assert_eq!(result.snapshots[1].label, "fix bug");
+            assert_eq!(result.snapshots[0].index, 0);
+            assert_eq!(result.snapshots[1].index, 1);
+        }
+        other => bail!("expected UndoListResult, got: {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handle_list_snapshots_empty_sends_empty_list() -> Result<()> {
+    let snapshots = GhostSnapshotStack::new();
+
+    let (event_tx, mut event_rx) = mpsc::channel(32);
+    codex_acp::undo::handle_list_snapshots(&event_tx, "ls2", &snapshots).await;
+
+    let event = event_rx.recv().await.context("no event received")?;
+    match event.msg {
+        EventMsg::UndoListResult(result) => {
+            assert!(result.snapshots.is_empty());
+        }
+        other => bail!("expected UndoListResult, got: {other:?}"),
+    }
 
     Ok(())
 }

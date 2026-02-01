@@ -312,6 +312,26 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigScriptTimeout(codex_acp::config::ScriptTimeout),
 
+    /// Open the loop count sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenLoopCountPicker,
+
+    /// Set the loop count config setting. `None` means disabled.
+    #[cfg(feature = "nori-config")]
+    SetConfigLoopCount(Option<i32>),
+
+    /// Start the next loop iteration with a fresh conversation.
+    /// Sent by ChatWidget::on_task_complete when loop mode is active.
+    #[cfg(feature = "nori-config")]
+    LoopIteration {
+        /// The prompt text to replay.
+        prompt: String,
+        /// Remaining iterations after this one.
+        remaining: i32,
+        /// Total iterations configured.
+        total: i32,
+    },
+
     /// Result of listing available skillsets via nori-skillsets CLI.
     SkillsetListResult {
         /// List of skillset names on success (exit code 0), None if command not found.

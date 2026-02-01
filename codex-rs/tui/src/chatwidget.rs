@@ -47,6 +47,7 @@ use codex_core::protocol::TokenUsageInfo;
 use codex_core::protocol::TurnAbortReason;
 use codex_core::protocol::TurnDiffEvent;
 use codex_core::protocol::UndoCompletedEvent;
+use codex_core::protocol::UndoListResultEvent;
 use codex_core::protocol::UndoStartedEvent;
 use codex_core::protocol::UserMessageEvent;
 use codex_core::protocol::ViewImageToolCallEvent;
@@ -406,6 +407,10 @@ pub(crate) struct ChatWidget {
     login_handler: Option<LoginHandler>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
+    // Loop mode state: remaining iterations (None = not looping)
+    loop_remaining: Option<i32>,
+    // Loop mode state: total iterations configured
+    loop_total: Option<i32>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -603,6 +608,20 @@ impl ChatWidget {
         });
 
         self.maybe_show_pending_rate_limit_prompt();
+
+        // Loop mode: if iterations remain, fire the next iteration.
+        #[cfg(feature = "nori-config")]
+        if let Some(remaining) = self.loop_remaining
+            && remaining > 0
+            && let Some(prompt) = self.first_prompt_text.clone()
+        {
+            let total = self.loop_total.unwrap_or(0);
+            self.app_event_tx.send(AppEvent::LoopIteration {
+                prompt,
+                remaining: remaining - 1,
+                total,
+            });
+        }
     }
 
     pub(crate) fn set_token_info(&mut self, info: Option<TokenUsageInfo>) {
@@ -712,6 +731,7 @@ impl ChatWidget {
 
     fn on_error(&mut self, message: String) {
         self.finalize_turn();
+        self.cancel_loop();
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
 
@@ -798,6 +818,7 @@ impl ChatWidget {
     fn on_interrupted_turn(&mut self, reason: TurnAbortReason) {
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
+        self.cancel_loop();
 
         if reason != TurnAbortReason::ReviewEnded {
             self.add_to_history(history_cell::new_error_event(
@@ -990,6 +1011,47 @@ impl ChatWidget {
         } else {
             self.add_error_message(message);
         }
+    }
+
+    fn on_undo_list_result(&mut self, event: UndoListResultEvent) {
+        if event.snapshots.is_empty() {
+            self.add_info_message("No undo snapshots available.".to_string(), None);
+            return;
+        }
+
+        let items: Vec<SelectionItem> = event
+            .snapshots
+            .into_iter()
+            .map(|snap| {
+                let index = snap.index;
+                let label = truncate_text(&snap.label, 60);
+                let name = format!("[{}] {label}", snap.short_id);
+                let tx = self.app_event_tx.clone();
+                SelectionItem {
+                    name,
+                    display_shortcut: None,
+                    description: None,
+                    selected_description: None,
+                    is_current: false,
+                    actions: vec![Box::new(move |_| {
+                        tx.send(AppEvent::CodexOp(Op::UndoTo { index }));
+                    })],
+                    dismiss_on_select: true,
+                    search_value: None,
+                }
+            })
+            .collect();
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Undo to snapshot".to_string()),
+            subtitle: None,
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            header: Box::new(()),
+            is_searchable: false,
+            ..Default::default()
+        });
+        self.request_redraw();
     }
 
     fn on_stream_error(&mut self, message: String) {
@@ -1531,6 +1593,8 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1625,6 +1689,8 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1810,7 +1876,7 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Undo => {
-                self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
+                self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
@@ -1997,6 +2063,19 @@ impl ChatWidget {
 
         if self.first_prompt_text.is_none() {
             self.first_prompt_text = Some(text.clone());
+
+            // Initialize loop mode from NoriConfig on the very first prompt.
+            #[cfg(feature = "nori-config")]
+            {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                if let Some(count) = nori_config.loop_count
+                    && count > 1
+                {
+                    self.loop_remaining = Some(count - 1);
+                    self.loop_total = Some(count);
+                    self.add_info_message(format!("Loop mode: will run {count} iterations."), None);
+                }
+            }
         }
 
         // Track user message for session statistics
@@ -2219,6 +2298,7 @@ impl ChatWidget {
             }
             EventMsg::UndoStarted(ev) => self.on_undo_started(ev),
             EventMsg::UndoCompleted(ev) => self.on_undo_completed(ev),
+            EventMsg::UndoListResult(ev) => self.on_undo_list_result(ev),
             EventMsg::StreamError(StreamErrorEvent { message, .. }) => {
                 self.on_stream_error(message)
             }
@@ -2595,6 +2675,32 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the loop count sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_loop_count_picker(&mut self, current: Option<i32>) {
+        let params = crate::nori::config_picker::loop_count_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Set the loop state for a new iteration.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {
+        self.loop_remaining = Some(remaining);
+        self.loop_total = Some(total);
+    }
+
+    /// Cancel any active loop.
+    fn cancel_loop(&mut self) {
+        if self.loop_remaining.is_some() {
+            self.loop_remaining = None;
+            self.loop_total = None;
+            self.add_info_message("Loop cancelled.".to_string(), None);
+        }
     }
 
     /// Open the hotkey picker sub-view.

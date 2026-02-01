@@ -390,6 +390,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
         first_prompt_text: None,
+        loop_remaining: None,
+        loop_total: None,
     };
     (widget, rx, op_rx)
 }
@@ -1122,8 +1124,8 @@ fn slash_undo_sends_op() {
     chat.dispatch_command(SlashCommand::Undo);
 
     match rx.try_recv() {
-        Ok(AppEvent::CodexOp(Op::Undo)) => {}
-        other => panic!("expected AppEvent::CodexOp(Op::Undo), got {other:?}"),
+        Ok(AppEvent::CodexOp(Op::UndoList)) => {}
+        other => panic!("expected AppEvent::CodexOp(Op::UndoList), got {other:?}"),
     }
 }
 

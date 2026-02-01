@@ -697,6 +697,10 @@ pub struct TuiConfigToml {
 
     /// Timeout for custom prompt script execution.
     pub script_timeout: Option<ScriptTimeout>,
+
+    /// Number of times to re-run the first prompt in fresh sessions.
+    /// `None` or absent means disabled.
+    pub loop_count: Option<i32>,
 }
 
 /// Resolved TUI configuration
@@ -803,6 +807,10 @@ pub struct NoriConfig {
     /// Timeout for custom prompt script execution.
     pub script_timeout: ScriptTimeout,
 
+    /// Number of times to re-run the first prompt in fresh sessions.
+    /// `None` means disabled (default).
+    pub loop_count: Option<i32>,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -829,6 +837,7 @@ impl Default for NoriConfig {
             vim_mode: false,
             hotkeys: HotkeyConfig::default(),
             script_timeout: ScriptTimeout::default(),
+            loop_count: None,
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),

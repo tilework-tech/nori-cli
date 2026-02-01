@@ -53,6 +53,9 @@ pub enum EventMsg {
 | `UserTurn` | Send user message |
 | `ApproveTool` / `RejectTool` | Handle approval requests |
 | `CancelTurn` | Cancel current generation |
+| `Undo` | Undo the most recent turn (sequential pop from snapshot stack) |
+| `UndoList` | Request the list of available undo snapshots |
+| `UndoTo { index }` | Restore to a specific snapshot by display index (0 = most recent) |
 
 **Events** (`events.rs`): Messages from core to TUI:
 
@@ -63,6 +66,8 @@ pub enum EventMsg {
 | `ToolCall` / `ToolResult` | Tool invocation lifecycle |
 | `ApprovalRequired` | User approval needed |
 | `TaskComplete` | Turn finished |
+| `UndoCompleted` | Result of an undo operation (success/failure with message) |
+| `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -83,6 +88,14 @@ pub enum EventMsg {
 - Types are serde-serializable for persistence and wire transfer
 - `ResponseItem` wraps different response content types (text, tool calls, reasoning)
 - `TokenUsage` tracks input/output/cache token counts
+
+**Undo Types:**
+
+| Type | Purpose |
+|------|---------|
+| `SnapshotInfo` | Display metadata for a single undo snapshot: `index` (display order, 0 = most recent), `short_id` (7-char commit hash), `label` (user message) |
+| `UndoListResultEvent` | Wraps `Vec<SnapshotInfo>` for the `UndoListResult` event |
+| `UndoCompletedEvent` | Contains `success: bool` and optional `message` describing the result |
 
 **Approval Policy:**
 

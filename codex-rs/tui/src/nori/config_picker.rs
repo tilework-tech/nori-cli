@@ -130,6 +130,28 @@ pub fn config_picker_params(
                 ..Default::default()
             }
         },
+        {
+            let current_loop = config.loop_count;
+            let display_name = match current_loop {
+                Some(n) => format!("Loop Count ({n})"),
+                None => "Loop Count (Disabled)".to_string(),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenLoopCountPicker);
+                }
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some(
+                    "Number of times to re-run the first prompt in fresh sessions".to_string(),
+                ),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
     ];
 
     SelectionViewParams {
@@ -245,6 +267,50 @@ pub fn script_timeout_picker_params(
     }
 }
 
+/// Create selection view parameters for the loop count sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently configured loop count (`None` means disabled)
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn loop_count_picker_params(
+    current: Option<i32>,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let options: Vec<Option<i32>> = vec![None, Some(2), Some(3), Some(5), Some(10)];
+
+    let items: Vec<SelectionItem> = options
+        .into_iter()
+        .map(|value| {
+            let is_current = value == current;
+            let name = match value {
+                Some(n) => n.to_string(),
+                None => "Disabled".to_string(),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::SetConfigLoopCount(value));
+                }
+            })];
+            SelectionItem {
+                name,
+                description: None,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Loop Count".to_string()),
+        subtitle: Some("Select number of loop iterations".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,6 +335,7 @@ mod tests {
             vim_mode: false,
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             script_timeout: codex_acp::config::ScriptTimeout::default(),
+            loop_count: None,
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -283,7 +350,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 7);
+        assert_eq!(params.items.len(), 8);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -311,14 +378,14 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_seven_items() {
+    fn config_picker_returns_eight_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 7);
+        assert_eq!(params.items.len(), 8);
         // The 4th item should be Vim Mode
         assert!(params.items[3].name.contains("Vim Mode"));
         // The 5th item should be Notify After Idle
@@ -327,6 +394,8 @@ mod tests {
         assert!(params.items[5].name.contains("Hotkeys"));
         // The 7th item should be Script Timeout
         assert!(params.items[6].name.contains("Script Timeout"));
+        // The 8th item should be Loop Count
+        assert!(params.items[7].name.contains("Loop Count"));
     }
 
     #[test]
@@ -483,8 +552,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Should now have 7 items (includes vim mode and script timeout)
-        assert_eq!(params.items.len(), 7);
+        // Should now have 8 items (includes vim mode, script timeout, and loop count)
+        assert_eq!(params.items.len(), 8);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -638,6 +707,192 @@ mod tests {
                 assert_eq!(value, codex_acp::config::ScriptTimeout::from_str("2m"));
             }
             _ => panic!("expected SetConfigScriptTimeout event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_includes_loop_count_item() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"));
+        assert!(
+            loop_item.is_some(),
+            "config picker should include a Loop Count item"
+        );
+    }
+
+    #[test]
+    fn config_picker_loop_count_shows_disabled_when_none() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"))
+            .expect("should have loop count item");
+        assert!(
+            loop_item.name.contains("Disabled"),
+            "Loop count should show 'Disabled' when None, got: {}",
+            loop_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_loop_count_shows_value_when_set() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.loop_count = Some(5);
+
+        let params = config_picker_params(&config, tx);
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"))
+            .expect("should have loop count item");
+        assert!(
+            loop_item.name.contains("5"),
+            "Loop count should show '5' when set to Some(5), got: {}",
+            loop_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_loop_count_action_sends_open_picker_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"))
+            .expect("should have loop count item");
+
+        for action in &loop_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenLoopCountPicker),
+            "expected OpenLoopCountPicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn loop_count_picker_returns_expected_options() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(None, tx);
+
+        assert_eq!(params.items.len(), 5);
+        assert!(params.title.unwrap().contains("Loop Count"));
+        assert!(params.items[0].name.contains("Disabled"));
+        assert!(params.items[1].name.contains("2"));
+        assert!(params.items[2].name.contains("3"));
+        assert!(params.items[3].name.contains("5"));
+        assert!(params.items[4].name.contains("10"));
+    }
+
+    #[test]
+    fn loop_count_picker_marks_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(Some(5), tx);
+
+        for item in &params.items {
+            if item.name == "5" {
+                assert!(item.is_current, "5 should be marked current");
+            } else {
+                assert!(
+                    !item.is_current,
+                    "{} should not be marked current",
+                    item.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn loop_count_picker_marks_disabled_when_none() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(None, tx);
+
+        assert!(
+            params.items[0].is_current,
+            "Disabled should be marked current when loop_count is None"
+        );
+        for item in &params.items[1..] {
+            assert!(
+                !item.is_current,
+                "{} should not be marked current",
+                item.name
+            );
+        }
+    }
+
+    #[test]
+    fn loop_count_picker_action_sends_set_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(None, tx.clone());
+
+        // Select "5" (index 3)
+        let five_item = &params.items[3];
+        assert_eq!(five_item.name, "5");
+        for action in &five_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigLoopCount(value) => {
+                assert_eq!(value, Some(5));
+            }
+            _ => panic!("expected SetConfigLoopCount event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn loop_count_picker_disabled_sends_none() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(Some(5), tx.clone());
+
+        // Select "Disabled" (index 0)
+        let disabled_item = &params.items[0];
+        assert!(disabled_item.name.contains("Disabled"));
+        for action in &disabled_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigLoopCount(value) => {
+                assert_eq!(value, None);
+            }
+            _ => panic!("expected SetConfigLoopCount event, got: {event:?}"),
         }
     }
 }
