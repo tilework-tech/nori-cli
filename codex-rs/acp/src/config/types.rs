@@ -130,6 +130,91 @@ impl NotifyAfterIdle {
 }
 
 // ============================================================================
+// Script Timeout Configuration
+// ============================================================================
+
+/// A freeform duration string for script execution timeouts (e.g. "30s", "2m").
+///
+/// Supported suffixes: `s` (seconds), `m` (minutes). The raw string is
+/// preserved for display and TOML round-tripping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptTimeout(String, Duration);
+
+impl ScriptTimeout {
+    /// Default timeout: 30 seconds.
+    const DEFAULT_SECS: u64 = 30;
+
+    /// Parse a duration string like "30s" or "2m".
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &str) -> Self {
+        let duration = Self::parse_duration(s).unwrap_or(Duration::from_secs(Self::DEFAULT_SECS));
+        Self(s.to_string(), duration)
+    }
+
+    fn parse_duration(s: &str) -> Option<Duration> {
+        let s = s.trim();
+        if let Some(num) = s.strip_suffix('s') {
+            num.parse::<u64>().ok().map(Duration::from_secs)
+        } else if let Some(num) = s.strip_suffix('m') {
+            num.parse::<u64>().ok().map(|m| Duration::from_secs(m * 60))
+        } else {
+            s.parse::<u64>().ok().map(Duration::from_secs)
+        }
+    }
+
+    /// The resolved duration.
+    pub fn as_duration(&self) -> Duration {
+        self.1
+    }
+
+    /// Human-readable name for display in the TUI.
+    pub fn display_name(&self) -> &str {
+        &self.0
+    }
+
+    /// TOML string representation for persistence.
+    pub fn toml_value(&self) -> &str {
+        &self.0
+    }
+
+    /// Common timeout values for building picker UIs.
+    pub fn all_common_values() -> Vec<ScriptTimeout> {
+        vec![
+            ScriptTimeout::from_str("10s"),
+            ScriptTimeout::from_str("30s"),
+            ScriptTimeout::from_str("1m"),
+            ScriptTimeout::from_str("2m"),
+            ScriptTimeout::from_str("5m"),
+        ]
+    }
+}
+
+impl Default for ScriptTimeout {
+    fn default() -> Self {
+        Self("30s".to_string(), Duration::from_secs(Self::DEFAULT_SECS))
+    }
+}
+
+impl Serialize for ScriptTimeout {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ScriptTimeout {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(ScriptTimeout::from_str(&s))
+    }
+}
+
+// ============================================================================
 // Hotkey Configuration
 // ============================================================================
 
@@ -609,6 +694,9 @@ pub struct TuiConfigToml {
     /// Configurable hotkey bindings.
     #[serde(default)]
     pub hotkeys: HotkeyConfigToml,
+
+    /// Timeout for custom prompt script execution.
+    pub script_timeout: Option<ScriptTimeout>,
 }
 
 /// Resolved TUI configuration
@@ -712,6 +800,9 @@ pub struct NoriConfig {
     /// Configurable hotkey bindings.
     pub hotkeys: HotkeyConfig,
 
+    /// Timeout for custom prompt script execution.
+    pub script_timeout: ScriptTimeout,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -737,6 +828,7 @@ impl Default for NoriConfig {
             notify_after_idle: NotifyAfterIdle::default(),
             vim_mode: false,
             hotkeys: HotkeyConfig::default(),
+            script_timeout: ScriptTimeout::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
@@ -1590,6 +1682,108 @@ kill_to_end_of_line = "none"
         assert_eq!(
             config.binding_for(HotkeyAction::Yank),
             &HotkeyBinding::from_str("ctrl+y")
+        );
+    }
+
+    // ========================================================================
+    // Script Timeout Configuration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_script_timeout_parse_seconds() {
+        let timeout = ScriptTimeout::from_str("30s");
+        assert_eq!(timeout.as_duration(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_script_timeout_parse_minutes() {
+        let timeout = ScriptTimeout::from_str("2m");
+        assert_eq!(timeout.as_duration(), Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_script_timeout_parse_5m() {
+        let timeout = ScriptTimeout::from_str("5m");
+        assert_eq!(timeout.as_duration(), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn test_script_timeout_default_is_30s() {
+        let timeout = ScriptTimeout::default();
+        assert_eq!(timeout.as_duration(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_script_timeout_display_name() {
+        let timeout = ScriptTimeout::from_str("30s");
+        assert_eq!(timeout.display_name(), "30s");
+
+        let timeout = ScriptTimeout::from_str("2m");
+        assert_eq!(timeout.display_name(), "2m");
+    }
+
+    #[test]
+    fn test_script_timeout_toml_value() {
+        let timeout = ScriptTimeout::from_str("30s");
+        assert_eq!(timeout.toml_value(), "30s");
+    }
+
+    #[test]
+    fn test_script_timeout_deserialize_from_toml() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            timeout: ScriptTimeout,
+        }
+
+        let w: Wrapper = toml::from_str(r#"timeout = "30s""#).unwrap();
+        assert_eq!(w.timeout.as_duration(), Duration::from_secs(30));
+
+        let w: Wrapper = toml::from_str(r#"timeout = "2m""#).unwrap();
+        assert_eq!(w.timeout.as_duration(), Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_script_timeout_in_tui_config_toml() {
+        let config: TuiConfigToml = toml::from_str(
+            r#"
+script_timeout = "45s"
+"#,
+        )
+        .unwrap();
+        assert!(config.script_timeout.is_some());
+        assert_eq!(
+            config.script_timeout.unwrap().as_duration(),
+            Duration::from_secs(45)
+        );
+    }
+
+    #[test]
+    fn test_script_timeout_absent_from_tui_config_toml() {
+        let config: TuiConfigToml = toml::from_str("").unwrap();
+        assert!(config.script_timeout.is_none());
+    }
+
+    #[test]
+    fn test_script_timeout_in_nori_config() {
+        let config = NoriConfig::default();
+        assert_eq!(config.script_timeout.as_duration(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_full_config_toml_with_script_timeout() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+model = "claude-code"
+
+[tui]
+script_timeout = "2m"
+"#,
+        )
+        .unwrap();
+        assert!(config.tui.script_timeout.is_some());
+        assert_eq!(
+            config.tui.script_timeout.unwrap().as_duration(),
+            Duration::from_secs(120)
         );
     }
 }

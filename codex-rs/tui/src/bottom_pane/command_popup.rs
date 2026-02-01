@@ -288,6 +288,7 @@ mod tests {
                 content: "hello from foo".to_string(),
                 description: None,
                 argument_hint: None,
+                kind: Default::default(),
             },
             CustomPrompt {
                 name: "bar".to_string(),
@@ -295,6 +296,7 @@ mod tests {
                 content: "hello from bar".to_string(),
                 description: None,
                 argument_hint: None,
+                kind: Default::default(),
             },
         ];
         let popup = CommandPopup::new(prompts);
@@ -319,6 +321,7 @@ mod tests {
             content: "should be ignored".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
         let items = popup.filtered_items();
         let has_collision_prompt = items.into_iter().any(|it| match it {
@@ -339,6 +342,7 @@ mod tests {
             content: "body".to_string(),
             description: Some("Create feature branch, commit and open draft PR.".to_string()),
             argument_hint: None,
+            kind: Default::default(),
         }]);
         let rows = popup.rows_from_matches(vec![(CommandItem::UserPrompt(0), None, 0)]);
         let description = rows.first().and_then(|row| row.description.as_deref());
@@ -356,6 +360,7 @@ mod tests {
             content: "body".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
         let rows = popup.rows_from_matches(vec![(CommandItem::UserPrompt(0), None, 0)]);
         let description = rows.first().and_then(|row| row.description.as_deref());

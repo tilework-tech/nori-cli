@@ -128,6 +128,7 @@ impl NoriConfig {
                 .unwrap_or(super::types::NotifyAfterIdle::FiveSeconds),
             vim_mode: toml.tui.vim_mode.unwrap_or(false),
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
+            script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             nori_home,
             cwd,
             mcp_servers,

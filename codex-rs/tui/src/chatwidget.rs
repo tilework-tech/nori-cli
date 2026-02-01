@@ -2583,6 +2583,16 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the script timeout sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_script_timeout_picker(&mut self, current: codex_acp::config::ScriptTimeout) {
+        let params = crate::nori::config_picker::script_timeout_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the hotkey picker sub-view.
     pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: codex_acp::config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
@@ -3529,6 +3539,13 @@ impl ChatWidget {
     pub(crate) fn add_error_message(&mut self, message: String) {
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
+    }
+
+    /// Queue a plain text message to be submitted as a user turn. If no task
+    /// is currently running the message is submitted immediately; otherwise
+    /// it is appended to the pending queue.
+    pub(crate) fn queue_text_as_user_message(&mut self, text: String) {
+        self.queue_user_message(UserMessage::from(text));
     }
 
     /// Show "Connecting to [Agent]" status indicator during agent startup.

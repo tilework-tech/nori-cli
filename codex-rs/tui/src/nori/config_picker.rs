@@ -6,6 +6,7 @@
 use codex_acp::config::NoriConfig;
 use codex_acp::config::NotifyAfterIdle;
 use codex_acp::config::OsNotifications;
+use codex_acp::config::ScriptTimeout;
 use codex_acp::config::TerminalNotifications;
 
 use crate::app_event::AppEvent;
@@ -112,6 +113,23 @@ pub fn config_picker_params(
                 ..Default::default()
             }
         },
+        {
+            let current_timeout = config.script_timeout.clone();
+            let display_name = format!("Script Timeout ({})", current_timeout.display_name());
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenScriptTimeoutPicker);
+                }
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some("Timeout for custom prompt script execution".to_string()),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
     ];
 
     SelectionViewParams {
@@ -188,6 +206,45 @@ pub fn notify_after_idle_picker_params(
     }
 }
 
+/// Create selection view parameters for the script timeout sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently configured ScriptTimeout
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn script_timeout_picker_params(
+    current: ScriptTimeout,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = ScriptTimeout::all_common_values()
+        .into_iter()
+        .map(|variant| {
+            let is_current = variant == current;
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                let variant = variant.clone();
+                move |tx| {
+                    tx.send(AppEvent::SetConfigScriptTimeout(variant.clone()));
+                }
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description: None,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Script Timeout".to_string()),
+        subtitle: Some("Select script execution timeout".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +268,7 @@ mod tests {
             notify_after_idle: codex_acp::config::NotifyAfterIdle::FiveSeconds,
             vim_mode: false,
             hotkeys: codex_acp::config::HotkeyConfig::default(),
+            script_timeout: codex_acp::config::ScriptTimeout::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -225,7 +283,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 6);
+        assert_eq!(params.items.len(), 7);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -253,20 +311,22 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_six_items() {
+    fn config_picker_returns_seven_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 6);
+        assert_eq!(params.items.len(), 7);
         // The 4th item should be Vim Mode
         assert!(params.items[3].name.contains("Vim Mode"));
         // The 5th item should be Notify After Idle
         assert!(params.items[4].name.contains("Notify After Idle"));
         // The 6th item should be Hotkeys
         assert!(params.items[5].name.contains("Hotkeys"));
+        // The 7th item should be Script Timeout
+        assert!(params.items[6].name.contains("Script Timeout"));
     }
 
     #[test]
@@ -423,8 +483,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Should now have 6 items (added vim mode)
-        assert_eq!(params.items.len(), 6);
+        // Should now have 7 items (includes vim mode and script timeout)
+        assert_eq!(params.items.len(), 7);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -483,6 +543,101 @@ mod tests {
                 assert!(value, "vim_mode was off, should toggle to on");
             }
             _ => panic!("expected SetConfigVimMode event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_script_timeout_shows_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        // Default config has 30s timeout
+        let timeout_item = &params.items[6];
+        assert!(
+            timeout_item.name.contains("30s"),
+            "Expected '30s' in name, got: {}",
+            timeout_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_script_timeout_action_sends_open_picker_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        // Trigger the script timeout action (7th item, index 6)
+        let timeout_item = &params.items[6];
+        assert!(timeout_item.name.contains("Script Timeout"));
+        for action in &timeout_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenScriptTimeoutPicker),
+            "expected OpenScriptTimeoutPicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn script_timeout_picker_returns_five_items() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = script_timeout_picker_params(codex_acp::config::ScriptTimeout::default(), tx);
+
+        assert_eq!(params.items.len(), 5);
+        assert!(params.title.unwrap().contains("Script Timeout"));
+    }
+
+    #[test]
+    fn script_timeout_picker_marks_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params =
+            script_timeout_picker_params(codex_acp::config::ScriptTimeout::from_str("1m"), tx);
+
+        for item in &params.items {
+            if item.name == "1m" {
+                assert!(item.is_current, "1m should be marked current");
+            } else {
+                assert!(
+                    !item.is_current,
+                    "{} should not be marked current",
+                    item.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn script_timeout_picker_action_sends_set_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params =
+            script_timeout_picker_params(codex_acp::config::ScriptTimeout::default(), tx.clone());
+
+        // Select the "2m" option (index 3)
+        let two_min_item = &params.items[3];
+        assert_eq!(two_min_item.name, "2m");
+        for action in &two_min_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigScriptTimeout(value) => {
+                assert_eq!(value, codex_acp::config::ScriptTimeout::from_str("2m"));
+            }
+            _ => panic!("expected SetConfigScriptTimeout event, got: {event:?}"),
         }
     }
 }

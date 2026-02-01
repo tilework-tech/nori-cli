@@ -1157,6 +1157,16 @@ impl App {
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
             }
+            #[cfg(feature = "nori-config")]
+            AppEvent::OpenScriptTimeoutPicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_script_timeout_picker(nori_config.script_timeout);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigScriptTimeout(value) => {
+                self.persist_script_timeout_setting(value).await;
+            }
             AppEvent::SetConfigVimMode(value) => {
                 self.persist_vim_mode_setting(value).await;
             }
@@ -1174,6 +1184,42 @@ impl App {
                 self.chat_widget
                     .on_skillset_install_result(&name, success, &message);
             }
+            AppEvent::ExecuteScript { prompt, args } => {
+                let tx = self.app_event_tx.clone();
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                let timeout = nori_config.script_timeout.as_duration();
+                let name = prompt.name.clone();
+                self.chat_widget
+                    .add_info_message(format!("Running script '{name}'..."), None);
+                tokio::spawn(async move {
+                    let result =
+                        codex_core::custom_prompts::execute_script(&prompt, &args, timeout).await;
+                    tx.send(AppEvent::ScriptExecutionComplete {
+                        name: prompt.name.clone(),
+                        result,
+                    });
+                });
+            }
+            AppEvent::ScriptExecutionComplete { name, result } => match result {
+                Ok(stdout) => {
+                    if stdout.trim().is_empty() {
+                        self.chat_widget.add_info_message(
+                            format!("Script '{name}' completed with no output."),
+                            None,
+                        );
+                    } else {
+                        let message = format!("Output from script '{name}':\n{stdout}");
+                        self.chat_widget.queue_text_as_user_message(message);
+                    }
+                }
+                Err(err) => {
+                    self.chat_widget
+                        .add_error_message(format!("Script '{name}' failed: {err}"));
+                    let error_context =
+                        format!("Script '{name}' failed with the following error:\n{err}");
+                    self.chat_widget.queue_text_as_user_message(error_context);
+                }
+            },
             AppEvent::ShowViewonlySessionPicker {
                 sessions,
                 nori_home,
@@ -1465,6 +1511,30 @@ impl App {
                 "Notify after idle set to {}. Changes will take effect after restart.",
                 value.display_name()
             ),
+            None,
+        );
+    }
+
+    #[cfg(feature = "nori-config")]
+    async fn persist_script_timeout_setting(&mut self, value: codex_acp::config::ScriptTimeout) {
+        let toml_str = value.toml_value();
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "script_timeout"], toml_value(toml_str))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist script_timeout setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save script_timeout setting: {err}"));
+            return;
+        }
+
+        self.chat_widget.add_info_message(
+            format!("Script timeout set to {}.", value.display_name()),
             None,
         );
     }

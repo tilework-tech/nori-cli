@@ -32,6 +32,7 @@ use super::paste_burst::PasteBurst;
 use crate::bottom_pane::paste_burst::FlushResult;
 use crate::bottom_pane::prompt_args::expand_custom_prompt;
 use crate::bottom_pane::prompt_args::expand_if_numeric_with_positional_args;
+use crate::bottom_pane::prompt_args::extract_positional_args_for_prompt_line;
 use crate::bottom_pane::prompt_args::parse_slash_name;
 use crate::bottom_pane::prompt_args::prompt_argument_names;
 use crate::bottom_pane::prompt_args::prompt_command_with_arg_placeholders;
@@ -43,6 +44,7 @@ use crate::slash_command::SlashCommand;
 use crate::slash_command::built_in_slash_commands;
 use crate::style::user_message_style;
 use codex_protocol::custom_prompts::CustomPrompt;
+use codex_protocol::custom_prompts::CustomPromptKind;
 use codex_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
 
 use crate::app_event::AppEvent;
@@ -535,6 +537,18 @@ impl ChatComposer {
                         }
                         CommandItem::UserPrompt(idx) => {
                             if let Some(prompt) = popup.prompt(idx) {
+                                if matches!(prompt.kind, CustomPromptKind::Script { .. }) {
+                                    let args = extract_positional_args_for_prompt_line(
+                                        first_line,
+                                        &prompt.name,
+                                    );
+                                    self.app_event_tx.send(AppEvent::ExecuteScript {
+                                        prompt: prompt.clone(),
+                                        args,
+                                    });
+                                    self.textarea.set_text("");
+                                    return (InputResult::None, true);
+                                }
                                 match prompt_selection_action(
                                     prompt,
                                     first_line,
@@ -1046,6 +1060,23 @@ impl ChatComposer {
                             return (InputResult::None, true);
                         }
                     }
+                }
+
+                // Intercept script-kind prompts before attempting expand_custom_prompt,
+                // since scripts have empty content and would just submit empty text.
+                if let Some((name, _rest)) = parse_slash_name(&text)
+                    && let Some(prompt_name) = name.strip_prefix(&format!("{PROMPTS_CMD_PREFIX}:"))
+                    && let Some(prompt) = self.custom_prompts.iter().find(|p| p.name == prompt_name)
+                    && matches!(prompt.kind, CustomPromptKind::Script { .. })
+                {
+                    let args =
+                        extract_positional_args_for_prompt_line(&original_input, &prompt.name);
+                    self.app_event_tx.send(AppEvent::ExecuteScript {
+                        prompt: prompt.clone(),
+                        args,
+                    });
+                    self.textarea.set_text("");
+                    return (InputResult::None, true);
                 }
 
                 let expanded_prompt = match expand_custom_prompt(&text, &self.custom_prompts) {
@@ -3041,6 +3072,7 @@ mod tests {
             content: prompt_text.to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         type_chars_humanlike(
@@ -3076,6 +3108,7 @@ mod tests {
             content: "Review $USER changes on $BRANCH".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         composer
@@ -3110,6 +3143,7 @@ mod tests {
             content: "Pair $USER with $BRANCH".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         composer
@@ -3149,6 +3183,7 @@ mod tests {
             content: "Please review the following code:\n\n$1".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         // Type the slash command
@@ -3278,6 +3313,7 @@ mod tests {
             content: "Review $USER changes".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         composer
@@ -3328,6 +3364,7 @@ mod tests {
             content: "Review $USER changes on $BRANCH".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         // Provide only one of the required args
@@ -3381,6 +3418,7 @@ mod tests {
             content: prompt_text.to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         // Type the slash command with two args and hit Enter to submit.
@@ -3418,6 +3456,7 @@ mod tests {
             content: "Echo: $ARGUMENTS".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         // Type positional args; should submit with numeric expansion, no errors.
@@ -3449,6 +3488,7 @@ mod tests {
             content: prompt_text.to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         type_chars_humanlike(
@@ -3485,6 +3525,7 @@ mod tests {
             content: prompt_text.to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         type_chars_humanlike(
@@ -3522,6 +3563,7 @@ mod tests {
             content: prompt_text.to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }]);
 
         type_chars_humanlike(

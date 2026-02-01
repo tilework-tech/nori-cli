@@ -297,12 +297,20 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     OpenNotifyAfterIdlePicker,
 
+    /// Open the script timeout sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenScriptTimeoutPicker,
+
     /// Open the hotkey picker sub-view.
     OpenHotkeyPicker,
 
     /// Set the TUI notify-after-idle config setting.
     #[cfg(feature = "nori-config")]
     SetConfigNotifyAfterIdle(codex_acp::config::NotifyAfterIdle),
+
+    /// Set the TUI script timeout config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigScriptTimeout(codex_acp::config::ScriptTimeout),
 
     /// Result of listing available skillsets via nori-skillsets CLI.
     SkillsetListResult {
@@ -326,6 +334,22 @@ pub(crate) enum AppEvent {
         success: bool,
         /// First line of stdout on success, or error message on failure.
         message: String,
+    },
+
+    /// Execute a custom prompt script asynchronously.
+    ExecuteScript {
+        /// The custom prompt to execute.
+        prompt: codex_protocol::custom_prompts::CustomPrompt,
+        /// Positional arguments from the command line.
+        args: Vec<String>,
+    },
+
+    /// Result of executing a custom prompt script.
+    ScriptExecutionComplete {
+        /// Name of the script that was executed.
+        name: String,
+        /// Ok(stdout) on success, Err(message) on failure.
+        result: Result<String, String>,
     },
 
     /// Show the viewonly session picker with loaded sessions.

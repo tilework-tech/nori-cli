@@ -24,6 +24,7 @@ pub use types::NoriConfigOverrides;
 pub use types::NoriConfigToml;
 pub use types::NotifyAfterIdle;
 pub use types::OsNotifications;
+pub use types::ScriptTimeout;
 pub use types::TerminalNotifications;
 pub use types::TuiConfig;
 

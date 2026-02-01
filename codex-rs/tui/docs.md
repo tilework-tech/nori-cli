@@ -69,7 +69,7 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model and reasoning effort |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout) |
 | `/review` | Review current changes and find issues |
 | `/new` | Start a new chat during a conversation |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -113,6 +113,28 @@ Three notification settings are toggled via `/config` and persisted to the `[tui
 - **Notify After Idle** (`NotifyAfterIdle` enum from `@/codex-rs/acp/src/config/types.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
 Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
+
+**Custom Prompt Script Execution:**
+
+When a user invokes a `Script`-kind custom prompt (`.sh`, `.py`, `.js` files discovered from `~/.nori/cli/commands/`), the TUI follows an async execution pattern:
+
+```
+ChatComposer (Enter key)           app.rs                       codex_core::custom_prompts
+       |                              |                                |
+       |-- AppEvent::ExecuteScript -->|                                |
+       |                              |-- execute_script(prompt, args, timeout) -->
+       |                              |                                |
+       |                              |<-- Ok(stdout) / Err(msg) ------|
+       |                              |
+       |<-- ScriptExecutionComplete --|
+       |     (queued as user message) |
+```
+
+The composer intercepts Script-kind prompts in two places: when a command popup selection is confirmed, and when the user types a `/prompts:<name>` command directly and presses Enter. In both cases, positional arguments are extracted via `extract_positional_args_for_prompt_line()` and the `ExecuteScript` event is dispatched. The composer is cleared immediately.
+
+In `app.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the model can see it.
+
+The script timeout is configurable via `/config` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/codex-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
 
 **Configurable Hotkeys:**
 

@@ -68,6 +68,16 @@ pub enum EventMsg {
 
 **Conversation Types**: `ConversationId`, `ConversationStoredState`, `SessionSource` for session management.
 
+**Custom Prompt Types** (`custom_prompts.rs`): Defines types for user-authored custom prompts invoked via `/prompts:<name>` slash commands:
+
+| Type | Purpose |
+|------|--------|
+| `CustomPrompt` | A single custom prompt with name, path, content, description, argument hint, and kind |
+| `CustomPromptKind` | Discriminates between `Markdown` (template text expanded inline) and `Script { interpreter }` (executable whose stdout becomes the prompt) |
+| `PROMPTS_CMD_PREFIX` | The slash command prefix constant (`"prompts"`) |
+
+`CustomPromptKind::Script` carries an `interpreter` string (e.g. `"bash"`, `"python3"`, `"node"`) that determines how the script file is executed. `CustomPromptKind` defaults to `Markdown` and is serde-tagged as `"type"` for JSON serialization.
+
 ### Things to Know
 
 - Types are serde-serializable for persistence and wire transfer

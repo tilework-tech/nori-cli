@@ -105,6 +105,16 @@ The `vim_mode` boolean in `TuiConfigToml` and `NoriConfig` enables vim-style nav
 
 The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys which are string bindings, vim mode is a simple boolean toggle. The TUI layer (`@/codex-rs/tui/`) handles the vim mode state machine and propagation.
 
+**Script Timeout Configuration** (`config/types.rs`):
+
+The `ScriptTimeout` type represents a configurable duration for custom prompt script execution. It stores both the raw string (for TOML round-tripping and display) and the parsed `Duration`. Stored under `[tui]` in `config.toml`:
+
+| Field | TOML Key | Default | Controls |
+|-------|----------|---------|----------|
+| `script_timeout` | `script_timeout` | `"30s"` | Maximum execution time for custom prompt scripts before they are killed |
+
+Supported suffixes: `s` (seconds), `m` (minutes). Bare numbers are treated as seconds. `all_common_values()` provides picker options: 10s, 30s, 1m, 2m, 5m. The setting is resolved in `loader.rs` with `unwrap_or_default()` (30 seconds).
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`
@@ -114,7 +124,7 @@ The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys
 
 **Custom Prompts** (`backend.rs`):
 
-When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers `.md` files from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. This reuses `codex_core::custom_prompts::discover_prompts_in()` from `@/codex-rs/core/src/custom_prompts.rs` for filesystem discovery and frontmatter parsing. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
+When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt files (`.md`, `.sh`, `.py`, `.js`) from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. This reuses `codex_core::custom_prompts::discover_prompts_in()` from `@/codex-rs/core/src/custom_prompts.rs` for filesystem discovery. Markdown files have their frontmatter parsed for metadata; script files are returned with empty content and a `CustomPromptKind::Script` kind. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
 
 Note: The ACP backend uses `{nori_home}/commands/` (e.g., `~/.nori/cli/commands/`) rather than `~/.codex/prompts/` which is used by the HTTP/codex-core backend.
 
