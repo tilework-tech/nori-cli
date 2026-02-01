@@ -279,19 +279,20 @@ args = ["--arg1", "value"]
     }
 
     #[test]
-    fn test_loop_count_deserializes_from_toml() {
+    fn test_loop_count_deserializes_from_tui_section() {
         let toml_str = r#"
+[tui]
 loop_count = 5
 "#;
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.loop_count, Some(5));
+        assert_eq!(config.tui.loop_count, Some(5));
     }
 
     #[test]
     fn test_loop_count_defaults_to_none_when_absent() {
         let toml_str = "";
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.loop_count, None);
+        assert_eq!(config.tui.loop_count, None);
     }
 
     #[test]
@@ -302,6 +303,7 @@ loop_count = 5
         std::fs::write(
             &config_path,
             r#"
+[tui]
 loop_count = 3
 "#,
         )

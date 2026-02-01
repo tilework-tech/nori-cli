@@ -49,10 +49,6 @@ pub struct NoriConfigToml {
     /// MCP server configurations (optional)
     #[serde(default)]
     pub mcp_servers: HashMap<String, McpServerConfigToml>,
-
-    /// Number of times to re-run the first prompt in fresh sessions.
-    /// `None` or absent means disabled.
-    pub loop_count: Option<i32>,
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -701,6 +697,10 @@ pub struct TuiConfigToml {
 
     /// Timeout for custom prompt script execution.
     pub script_timeout: Option<ScriptTimeout>,
+
+    /// Number of times to re-run the first prompt in fresh sessions.
+    /// `None` or absent means disabled.
+    pub loop_count: Option<i32>,
 }
 
 /// Resolved TUI configuration
