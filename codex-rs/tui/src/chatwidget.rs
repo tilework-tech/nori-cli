@@ -573,13 +573,15 @@ impl ChatWidget {
     fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
-        // Discard any queued interrupts (tool call begin/end events) that were
-        // deferred during the final text stream. Flushing them here would render
-        // stale tool output (e.g., "Explored", "Ran") below the agent's final
-        // message, burying the response the user needs to see.
-        let discarded = self.interrupts.clear();
+        // Process any deferred completion events (ExecEnd, McpEnd, PatchEnd) so
+        // in-progress tool cells transition to their finished state ("Running" →
+        // "Ran"). Discard begin events that would create new cells below the
+        // agent's final message.
+        let mut mgr = std::mem::take(&mut self.interrupts);
+        let discarded = mgr.flush_completions_and_clear(self);
+        self.interrupts = mgr;
         if discarded > 0 {
-            debug!("on_task_complete: discarded {discarded} deferred interrupt events");
+            debug!("on_task_complete: discarded {discarded} deferred begin/other interrupt events");
         }
 
         // Drain any pending ExecCells that weren't completed (e.g., due to interruption).

@@ -27,7 +27,7 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 3. Additional tool calls begin and complete during text streaming (get deferred by the TUI's interrupt queue)
 4. Final text chunk sent and turn ends
 
-This simulates the real-world race condition that the `InterruptManager.clear()` in `@/codex-rs/tui/src/chatwidget.rs` handles at task completion.
+This simulates the real-world race condition that the `InterruptManager.flush_completions_and_clear()` in `@/codex-rs/tui/src/chatwidget.rs` handles at task completion.
 
 **Client Requests**: Outbound requests to the client:
 - `ReadFile` - Request file contents

@@ -45,16 +45,32 @@ impl InterruptManager {
         self.queue.is_empty()
     }
 
-    /// Discard all queued interrupts, returning the number of events dropped.
-    pub(crate) fn clear(&mut self) -> usize {
-        let count = self.queue.len();
-        for item in &self.queue {
-            if matches!(item, QueuedInterrupt::Elicitation(_)) {
-                tracing::warn!("Discarding queued elicitation request at task completion");
+    /// Flush completion events (ExecEnd, McpEnd, PatchEnd) so in-progress
+    /// tool cells transition to their finished state, then discard any
+    /// remaining begin events that would create new cells below the agent's
+    /// final message. Returns the number of events that were discarded.
+    pub(crate) fn flush_completions_and_clear(&mut self, chat: &mut ChatWidget) -> usize {
+        let mut discarded = 0usize;
+        while let Some(q) = self.queue.pop_front() {
+            match q {
+                // Completion events: process them so "Running" becomes "Ran".
+                QueuedInterrupt::ExecEnd(ev) => chat.handle_exec_end_now(ev),
+                QueuedInterrupt::McpEnd(ev) => chat.handle_mcp_end_now(ev),
+                QueuedInterrupt::PatchEnd(ev) => chat.handle_patch_apply_end_now(ev),
+                // Elicitation should not normally be queued at task completion,
+                // but warn if it is.
+                QueuedInterrupt::Elicitation(_) => {
+                    tracing::warn!("Discarding queued elicitation request at task completion");
+                    discarded += 1;
+                }
+                // Begin events and approvals: discard them to avoid rendering
+                // new tool cells below the final message.
+                _ => {
+                    discarded += 1;
+                }
             }
         }
-        self.queue.clear();
-        count
+        discarded
     }
 
     /// Queue an exec approval request. Currently unused since approval requests

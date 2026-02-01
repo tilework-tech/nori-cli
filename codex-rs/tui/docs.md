@@ -49,9 +49,9 @@ Two operations consume the queue:
 | Method | Called From | Behavior |
 |--------|------------|----------|
 | `flush_all()` | `handle_stream_finished()` | Processes and renders all queued events. Used mid-turn when a text block completes and the next block has not started. |
-| `clear()` | `on_task_complete()` | Discards all queued events without rendering. Used at turn completion to prevent stale tool output from appearing below the agent's final message. |
+| `flush_completions_and_clear()` | `on_task_complete()` | Processes completion events (ExecEnd, McpEnd, PatchEnd) so in-progress tool cells transition to their finished state, then discards begin events that would create new cells. |
 
-This distinction exists because tool events that arrive during the final text stream are no longer useful to display -- rendering them would bury the agent's response under misleading "Explored" / "Ran" cells.
+The selective flush at task completion ensures tool cells that are already visible transition from "Running" to "Ran", while preventing new "Explored" / "Ran" cells from appearing below the agent's final message.
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
