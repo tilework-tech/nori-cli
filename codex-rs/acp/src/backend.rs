@@ -608,22 +608,28 @@ impl AcpBackend {
             return Ok(());
         }
 
-        // On first prompt, spawn a fire-and-forget summarization task
+        // On first prompt, spawn a fire-and-forget summarization task.
+        // Skip for mock models (debug-only test agents) since they don't
+        // produce meaningful summaries.
         {
             let mut is_first = self.is_first_prompt.lock().await;
             if *is_first {
                 *is_first = false;
-                let event_tx = self.event_tx.clone();
-                let model_name = self.model_name.clone();
-                let cwd = self.cwd.clone();
-                let prompt_for_summary = prompt_text.clone();
-                tokio::spawn(async move {
-                    if let Err(e) =
-                        run_prompt_summary(&event_tx, &model_name, &cwd, &prompt_for_summary).await
-                    {
-                        debug!("Prompt summary failed (non-fatal): {e}");
-                    }
-                });
+                let skip_summary = cfg!(debug_assertions) && self.model_name.starts_with("mock-");
+                if !skip_summary {
+                    let event_tx = self.event_tx.clone();
+                    let model_name = self.model_name.clone();
+                    let cwd = self.cwd.clone();
+                    let prompt_for_summary = prompt_text.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) =
+                            run_prompt_summary(&event_tx, &model_name, &cwd, &prompt_for_summary)
+                                .await
+                        {
+                            debug!("Prompt summary failed (non-fatal): {e}");
+                        }
+                    });
+                }
             }
         }
 
