@@ -1,0 +1,5 @@
+---
+source: tui/src/bottom_pane/footer.rs
+expression: terminal.backend()
+---
+"  Task: Fix auth bug · ⎇ main · ? for shortcuts                                 "

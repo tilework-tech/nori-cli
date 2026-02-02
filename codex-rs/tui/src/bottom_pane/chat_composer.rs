@@ -119,6 +119,7 @@ pub(crate) struct ChatComposer {
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
     vertical_footer: bool,
+    prompt_summary: Option<String>,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -165,6 +166,7 @@ impl ChatComposer {
             system_info: None,
             approval_mode_label: None,
             vertical_footer: false,
+            prompt_summary: None,
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -1509,6 +1511,7 @@ impl ChatComposer {
             output_tokens: token_breakdown.map(|t| t.output_tokens),
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
+            prompt_summary: self.prompt_summary.clone(),
         }
     }
 
@@ -1651,6 +1654,10 @@ impl ChatComposer {
 
     pub(crate) fn set_approval_mode_label(&mut self, label: Option<String>) {
         self.approval_mode_label = label;
+    }
+
+    pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
+        self.prompt_summary = summary;
     }
 
     pub(crate) fn set_esc_backtrack_hint(&mut self, show: bool) {

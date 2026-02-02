@@ -45,6 +45,8 @@ pub(crate) struct FooterProps {
     pub(crate) cached_tokens: Option<i64>,
     /// Vim mode state - only shown when vim mode is enabled.
     pub(crate) vim_mode_state: Option<VimModeState>,
+    /// Short summary of the first user prompt for this session.
+    pub(crate) prompt_summary: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -282,6 +284,14 @@ fn shortcuts_hint_line() -> Line<'static> {
 
 fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
     let mut segments = Vec::new();
+
+    // Add prompt summary if available: "Task: <summary>" (dim)
+    if let Some(summary) = &props.prompt_summary {
+        segments.push(Line::from(vec![
+            "Task: ".dim(),
+            Span::from(summary.clone()).dim(),
+        ]));
+    }
 
     // Add vim mode indicator if vim mode is enabled
     if let Some(vim_state) = props.vim_mode_state {
@@ -585,6 +595,7 @@ mod tests {
             output_tokens: None,
             cached_tokens: None,
             vim_mode_state: None,
+            prompt_summary: None,
         }
     }
 
@@ -886,6 +897,18 @@ mod tests {
             FooterProps {
                 git_branch: Some("main".to_string()),
                 vim_mode_state: Some(VimModeState::Insert),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_prompt_summary() {
+        snapshot_footer(
+            "footer_with_prompt_summary",
+            FooterProps {
+                prompt_summary: Some("Fix auth bug".to_string()),
+                git_branch: Some("main".to_string()),
                 ..default_props()
             },
         );
