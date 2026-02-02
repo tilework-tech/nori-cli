@@ -961,6 +961,10 @@ impl ChatWidget {
         self.set_status_header(message);
     }
 
+    fn on_prompt_summary(&mut self, summary: String) {
+        self.bottom_pane.set_prompt_summary(Some(summary));
+    }
+
     fn on_undo_started(&mut self, event: UndoStartedEvent) {
         self.bottom_pane.ensure_status_indicator();
         self.bottom_pane.set_interrupt_hint_visible(false);
@@ -2278,6 +2282,7 @@ impl ChatWidget {
             | EventMsg::AgentMessageContentDelta(_)
             | EventMsg::ReasoningContentDelta(_)
             | EventMsg::ReasoningRawContentDelta(_) => {}
+            EventMsg::PromptSummary(ev) => self.on_prompt_summary(ev.summary),
         }
     }
 

@@ -68,6 +68,7 @@ pub enum EventMsg {
 | `TaskComplete` | Turn finished |
 | `UndoCompleted` | Result of an undo operation (success/failure with message) |
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
+| `PromptSummary` | Short summary of the first user prompt for display in the footer |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -96,6 +97,12 @@ pub enum EventMsg {
 | `SnapshotInfo` | Display metadata for a single undo snapshot: `index` (display order, 0 = most recent), `short_id` (7-char commit hash), `label` (user message) |
 | `UndoListResultEvent` | Wraps `Vec<SnapshotInfo>` for the `UndoListResult` event |
 | `UndoCompletedEvent` | Contains `success: bool` and optional `message` describing the result |
+
+**Prompt Summary Types:**
+
+| Type | Purpose |
+|------|---------|
+| `PromptSummaryEvent` | Carries a `summary: String` field with a short summary of the first user prompt. Emitted by the ACP backend and rendered in the TUI footer. Not persisted to rollout policy. |
 
 **Approval Policy:**
 

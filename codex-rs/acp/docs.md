@@ -479,6 +479,21 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 3. Summary is prepended to next user message
 4. Emits `ContextCompacted` event to TUI
 
+
+**Prompt Summary** (`backend.rs`):
+
+On the first user prompt of a session, the ACP backend spawns a fire-and-forget task that generates a short summary of the prompt and emits it as a `PromptSummary` event for display in the TUI footer.
+
+The summarization uses a completely separate ACP connection (`AcpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend.rs` handles this:
+1. Spawns a new agent subprocess via `get_agent_config()` with the same model name
+2. Sends a "summarize in 5 words or fewer" prompt to the separate session
+3. Collects the streamed text response via an `mpsc` channel and a collector task
+4. Emits `EventMsg::PromptSummary(PromptSummaryEvent { summary })` through the shared `event_tx`
+
+State tracking: `AcpBackend` holds `is_first_prompt: Arc<Mutex<bool>>` which is set to `false` after the first prompt fires the summarization task. The `model_name: String` field stores the model for spawning the separate connection.
+
+Failures in the summarization task are logged at debug level and do not affect the main conversation flow.
+
 **Undo / Ghost Snapshots** (`undo.rs`, `backend.rs`):
 
 The ACP backend supports undo via git ghost snapshots, using the `codex-git` crate (`@/codex-rs/utils/git`). The undo system supports both sequential undo (`Op::Undo`) and selective snapshot restoration via a modal picker (`Op::UndoList` / `Op::UndoTo`).
