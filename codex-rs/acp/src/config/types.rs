@@ -701,6 +701,9 @@ pub struct TuiConfigToml {
     /// Number of times to re-run the first prompt in fresh sessions.
     /// `None` or absent means disabled.
     pub loop_count: Option<i32>,
+
+    /// Automatically create a git worktree at session start.
+    pub auto_worktree: Option<bool>,
 }
 
 /// Resolved TUI configuration
@@ -811,6 +814,9 @@ pub struct NoriConfig {
     /// `None` means disabled (default).
     pub loop_count: Option<i32>,
 
+    /// Automatically create a git worktree at session start.
+    pub auto_worktree: bool,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -838,6 +844,7 @@ impl Default for NoriConfig {
             hotkeys: HotkeyConfig::default(),
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
+            auto_worktree: false,
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),

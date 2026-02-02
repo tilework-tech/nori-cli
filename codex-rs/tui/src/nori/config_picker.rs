@@ -72,10 +72,22 @@ pub fn config_picker_params(
             "Enable vim-style navigation in the textarea (Escape enters normal mode)",
             config.vim_mode,
             {
-                let tx = app_event_tx;
+                let tx = app_event_tx.clone();
                 let new_value = !config.vim_mode;
                 move || {
                     tx.send(AppEvent::SetConfigVimMode(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "Auto Worktree",
+            "Automatically create a git worktree at session start",
+            config.auto_worktree,
+            {
+                let tx = app_event_tx;
+                let new_value = !config.auto_worktree;
+                move || {
+                    tx.send(AppEvent::SetConfigAutoWorktree(new_value));
                 }
             },
         ),
@@ -336,6 +348,7 @@ mod tests {
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             script_timeout: codex_acp::config::ScriptTimeout::default(),
             loop_count: None,
+            auto_worktree: false,
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -350,7 +363,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 8);
+        assert_eq!(params.items.len(), 9);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -385,17 +398,19 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 8);
+        assert_eq!(params.items.len(), 9);
         // The 4th item should be Vim Mode
         assert!(params.items[3].name.contains("Vim Mode"));
-        // The 5th item should be Notify After Idle
-        assert!(params.items[4].name.contains("Notify After Idle"));
-        // The 6th item should be Hotkeys
-        assert!(params.items[5].name.contains("Hotkeys"));
-        // The 7th item should be Script Timeout
-        assert!(params.items[6].name.contains("Script Timeout"));
-        // The 8th item should be Loop Count
-        assert!(params.items[7].name.contains("Loop Count"));
+        // The 5th item should be Auto Worktree
+        assert!(params.items[4].name.contains("Auto Worktree"));
+        // The 6th item should be Notify After Idle
+        assert!(params.items[5].name.contains("Notify After Idle"));
+        // The 7th item should be Hotkeys
+        assert!(params.items[6].name.contains("Hotkeys"));
+        // The 8th item should be Script Timeout
+        assert!(params.items[7].name.contains("Script Timeout"));
+        // The 9th item should be Loop Count
+        assert!(params.items[8].name.contains("Loop Count"));
     }
 
     #[test]
@@ -407,7 +422,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[4];
+        let idle_item = &params.items[5];
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -423,8 +438,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the notify after idle action (5th item, index 4)
-        let idle_item = &params.items[4];
+        // Trigger the notify after idle action (6th item, index 5)
+        let idle_item = &params.items[5];
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -470,8 +485,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the hotkeys action (6th item, index 5)
-        let hotkeys_item = &params.items[5];
+        // Trigger the hotkeys action (7th item, index 6)
+        let hotkeys_item = &params.items[6];
         assert!(hotkeys_item.name.contains("Hotkeys"));
         for action in &hotkeys_item.actions {
             action(&tx);
@@ -552,8 +567,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Should now have 8 items (includes vim mode, script timeout, and loop count)
-        assert_eq!(params.items.len(), 8);
+        // Should now have 9 items (includes vim mode, auto worktree, script timeout, and loop count)
+        assert_eq!(params.items.len(), 9);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -624,7 +639,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has 30s timeout
-        let timeout_item = &params.items[6];
+        let timeout_item = &params.items[7];
         assert!(
             timeout_item.name.contains("30s"),
             "Expected '30s' in name, got: {}",
@@ -640,8 +655,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the script timeout action (7th item, index 6)
-        let timeout_item = &params.items[6];
+        // Trigger the script timeout action (8th item, index 7)
+        let timeout_item = &params.items[7];
         assert!(timeout_item.name.contains("Script Timeout"));
         for action in &timeout_item.actions {
             action(&tx);

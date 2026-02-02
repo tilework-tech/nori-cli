@@ -205,8 +205,31 @@ pub async fn run_main(
     });
 
     // canonicalize the cwd
-    let cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
+    let mut cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
     let additional_dirs = cli.add_dir.clone();
+
+    // Auto-worktree: if enabled in NoriConfig, create a worktree and override cwd
+    #[cfg(feature = "nori-config")]
+    let nori_config = nori::config_adapter::load_nori_config().ok();
+    #[cfg(not(feature = "nori-config"))]
+    let nori_config: Option<codex_acp::NoriConfig> = None;
+
+    #[cfg(feature = "nori-config")]
+    if nori_config.as_ref().is_some_and(|c| c.auto_worktree) {
+        if let Some(effective_cwd) = cwd.clone().or_else(|| std::env::current_dir().ok()) {
+            match codex_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
+                Ok(worktree_path) => {
+                    tracing::info!("Auto-worktree created at {}", worktree_path.display());
+                    cwd = Some(worktree_path);
+                }
+                Err(e) => {
+                    tracing::warn!("Auto-worktree setup skipped: {e}");
+                }
+            }
+        } else {
+            tracing::warn!("Auto-worktree setup skipped: could not determine working directory");
+        }
+    }
 
     let overrides = ConfigOverrides {
         model,
@@ -310,9 +333,21 @@ pub async fn run_main(
         let _ = tracing_subscriber::registry().with(file_layer).try_init();
     }
 
-    run_ratatui_app(cli, config, overrides, cli_kv_overrides, active_profile)
-        .await
-        .map_err(|err| std::io::Error::other(err.to_string()))
+    let vertical_footer = nori_config
+        .as_ref()
+        .map(|c| c.vertical_footer)
+        .unwrap_or(false);
+
+    run_ratatui_app(
+        cli,
+        config,
+        overrides,
+        cli_kv_overrides,
+        active_profile,
+        vertical_footer,
+    )
+    .await
+    .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
 async fn run_ratatui_app(
@@ -321,6 +356,7 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
+    vertical_footer: bool,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -473,16 +509,6 @@ async fn run_ratatui_app(
     };
 
     let Cli { prompt, images, .. } = cli;
-
-    #[cfg(feature = "nori-config")]
-    let vertical_footer = nori::config_adapter::load_nori_config()
-        .map(|config| config.vertical_footer)
-        .unwrap_or_else(|err| {
-            tracing::warn!("Failed to load Nori config for footer layout: {err}");
-            false
-        });
-    #[cfg(not(feature = "nori-config"))]
-    let vertical_footer = false;
 
     let app_result = App::run(
         &mut tui,

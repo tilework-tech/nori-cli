@@ -311,6 +311,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigLoopCount(Option<i32>),
 
+    /// Set the TUI auto worktree config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigAutoWorktree(bool),
+
     /// Start the next loop iteration with a fresh conversation.
     /// Sent by ChatWidget::on_task_complete when loop mode is active.
     #[cfg(feature = "nori-config")]

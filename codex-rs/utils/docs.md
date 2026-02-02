@@ -15,7 +15,7 @@ These utilities are consumed by various crates throughout the workspace, primari
 | Crate | Description |
 |-------|-------------|
 | `cache` | Thread-safe LRU cache with SHA1 hashing |
-| `git` | Git operations (patches, ghost commits, branch operations) |
+| `git` | Git operations (patches, ghost commits, branch operations, worktree management) |
 | `image` | Image processing (resize, encode, base64) |
 | `json-to-toml` | Converts JSON values to TOML values |
 | `pty` | PTY session management for command execution |
@@ -26,7 +26,7 @@ These utilities are consumed by various crates throughout the workspace, primari
 
 **cache**: `BlockingLruCache<K, V>` provides get-or-insert semantics with Tokio mutex protection. Includes `sha1_digest()` for content hashing.
 
-**git**: Ghost commits allow non-destructive workspace snapshots. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`.
+**git**: Ghost commits allow non-destructive workspace snapshots. Also provides worktree management primitives for creating isolated workspaces. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`, `create_worktree()`, `ensure_gitignore_entry()`, `generate_worktree_branch_name()`.
 
 **image**: Resizes images to `MAX_WIDTH=2048` / `MAX_HEIGHT=768` and encodes as JPEG/PNG with base64. Uses LRU cache to avoid re-encoding.
 
