@@ -28,7 +28,7 @@ Key files:
 - `translator.rs` - Protocol translation between ACP and Codex types
 - `backend.rs` - Implements `ConversationClient` trait from codex-core
 - `transcript_discovery.rs` - Discovers transcript files for external agents
-- `auto_worktree.rs` - Orchestrates automatic git worktree creation at session start
+- `auto_worktree.rs` - Orchestrates automatic git worktree creation and summary-based renaming
 
 ### Core Implementation
 
@@ -135,6 +135,17 @@ The `auto_worktree` boolean controls whether the TUI automatically creates a git
 | `auto_worktree` | `auto_worktree` | `false` | When enabled, the TUI creates a new git worktree in `<repo>/.worktrees/` and sets the session's working directory to it |
 
 The setting is resolved in `loader.rs` with `unwrap_or(false)`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
+
+**Auto-Worktree Renaming** (`auto_worktree.rs`, `backend.rs`):
+
+When `auto_worktree` is enabled, the worktree is initially created with a random name (e.g., `auto/swift-oak-20260202-120000`). After the first user prompt's summary is generated, the worktree is renamed to reflect the summary (e.g., `auto/fix-auth-bug-20260202-120000`). This renaming is orchestrated inside `run_prompt_summary()` in `backend.rs`:
+
+1. The prompt summary is generated via a separate ACP connection (same as before)
+2. If `auto_worktree` is true and `auto_worktree_repo_root` is set, `rename_auto_worktree()` is called in a blocking task
+3. On success, the shared `cwd` (`Arc<RwLock<PathBuf>>`) is updated to the new path
+4. A `CwdChanged` event is emitted so the TUI can update its display and system info
+
+The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
 **Message History** (`message_history.rs`):
 
@@ -499,11 +510,14 @@ The summarization uses a completely separate ACP connection (`AcpConnection::spa
 1. Spawns a new agent subprocess via `get_agent_config()` with the same model name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
-4. Emits `EventMsg::PromptSummary(PromptSummaryEvent { summary })` through the shared `event_tx`
+4. If `auto_worktree` is enabled, renames the worktree based on the summary (see Auto-Worktree Renaming above) and emits a `CwdChanged` event
+5. Emits `EventMsg::PromptSummary(PromptSummaryEvent { summary })` through the shared `event_tx`
 
 State tracking: `AcpBackend` holds `is_first_prompt: Arc<Mutex<bool>>` which is set to `false` after the first prompt fires the summarization task. The `model_name: String` field stores the model for spawning the separate connection.
 
-Failures in the summarization task are logged at debug level and do not affect the main conversation flow.
+The `cwd` field on `AcpBackend` is `Arc<RwLock<PathBuf>>` (not a plain `PathBuf`) to allow updating after the worktree rename. All sites that read `cwd` (undo, ghost snapshots, compact) acquire a read lock. This pattern mirrors how `session_id` uses `Arc<RwLock<>>` for the /compact feature.
+
+Failures in the summarization task (including worktree rename failures) are logged at debug/warn level and do not affect the main conversation flow.
 
 **Undo / Ghost Snapshots** (`undo.rs`, `backend.rs`):
 

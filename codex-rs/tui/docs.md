@@ -231,6 +231,10 @@ Token data flows from `TranscriptLocation.token_breakdown` (provided by `codex_a
 
 The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `footer_segments()` renderer.
 
+When auto-worktree is enabled, the ACP backend may also emit an `EventMsg::CwdChanged` event after renaming the worktree based on the prompt summary. The TUI handles this in `ChatWidget::on_cwd_changed()`, which updates `config.cwd` and emits `AppEvent::RefreshSystemInfoForDirectory` to refresh the footer's git branch and worktree status display.
+
+The TUI detects the repo root for auto-worktree renaming by inspecting the cwd path structure: when `auto_worktree` is enabled and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`).
+
 **External Editor Integration (`editor.rs`):**
 
 The external editor hotkey (default Ctrl-G, configurable via hotkeys) opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app.rs::open_external_editor()`:

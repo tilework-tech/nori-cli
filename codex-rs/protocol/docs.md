@@ -69,6 +69,7 @@ pub enum EventMsg {
 | `UndoCompleted` | Result of an undo operation (success/failure with message) |
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 | `PromptSummary` | Short summary of the first user prompt for display in the footer |
+| `CwdChanged` | Notification that the session working directory changed (e.g., after auto-worktree rename) |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -103,6 +104,7 @@ pub enum EventMsg {
 | Type | Purpose |
 |------|---------|
 | `PromptSummaryEvent` | Carries a `summary: String` field with a short summary of the first user prompt. Emitted by the ACP backend and rendered in the TUI footer. Not persisted to rollout policy. |
+| `CwdChangedEvent` | Carries a `cwd: PathBuf` field with the new working directory path. Emitted when an auto-worktree is renamed after the prompt summary is generated. Not persisted to rollout policy. |
 
 **Approval Policy:**
 

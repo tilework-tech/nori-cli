@@ -33,6 +33,8 @@ use ts_rs::TS;
 pub use worktree::create_worktree;
 pub use worktree::ensure_gitignore_entry;
 pub use worktree::generate_worktree_branch_name;
+pub use worktree::rename_worktree;
+pub use worktree::summary_to_branch_name;
 
 type CommitID = String;
 

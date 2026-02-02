@@ -26,7 +26,9 @@ These utilities are consumed by various crates throughout the workspace, primari
 
 **cache**: `BlockingLruCache<K, V>` provides get-or-insert semantics with Tokio mutex protection. Includes `sha1_digest()` for content hashing.
 
-**git**: Ghost commits allow non-destructive workspace snapshots. Also provides worktree management primitives for creating isolated workspaces. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`, `create_worktree()`, `ensure_gitignore_entry()`, `generate_worktree_branch_name()`.
+**git**: Ghost commits allow non-destructive workspace snapshots. Also provides worktree management primitives for creating, naming, and renaming isolated workspaces. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`, `create_worktree()`, `ensure_gitignore_entry()`, `generate_worktree_branch_name()`, `summary_to_branch_name()`, `rename_worktree()`.
+
+`summary_to_branch_name()` converts a prompt summary string into a git-branch-safe slug with `auto/` prefix and timestamp (e.g., "Fix auth bug" becomes `auto/fix-auth-bug-20260202-120000`). It sanitizes non-alphanumeric characters, collapses consecutive hyphens, truncates at 40 characters on word boundaries, and falls back to `generate_worktree_branch_name()` for empty input. `rename_worktree()` performs a `git branch -m` followed by `git worktree move` to rename both the branch and directory.
 
 **image**: Resizes images to `MAX_WIDTH=2048` / `MAX_HEIGHT=768` and encodes as JPEG/PNG with base64. Uses LRU cache to avoid re-encoding.
 

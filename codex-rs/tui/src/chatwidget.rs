@@ -965,6 +965,15 @@ impl ChatWidget {
         self.bottom_pane.set_prompt_summary(Some(summary));
     }
 
+    fn on_cwd_changed(&mut self, new_cwd: PathBuf) {
+        self.config.cwd = new_cwd.clone();
+        self.app_event_tx
+            .send(AppEvent::RefreshSystemInfoForDirectory {
+                dir: new_cwd,
+                model: Some(self.config.model.clone()),
+            });
+    }
+
     fn on_undo_started(&mut self, event: UndoStartedEvent) {
         self.bottom_pane.ensure_status_indicator();
         self.bottom_pane.set_interrupt_hint_visible(false);
@@ -2283,6 +2292,7 @@ impl ChatWidget {
             | EventMsg::ReasoningContentDelta(_)
             | EventMsg::ReasoningRawContentDelta(_) => {}
             EventMsg::PromptSummary(ev) => self.on_prompt_summary(ev.summary),
+            EventMsg::CwdChanged(ev) => self.on_cwd_changed(ev.cwd),
         }
     }
 

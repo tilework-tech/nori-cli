@@ -5,6 +5,40 @@ use std::process::Command;
 use anyhow::Context;
 use anyhow::Result;
 
+/// Rename an existing auto-worktree using a prompt summary.
+///
+/// This function:
+/// 1. Converts the summary into a branch-name-safe slug
+/// 2. Renames the git branch
+/// 3. Moves the worktree directory
+///
+/// Returns the new worktree path. If renaming fails, the original worktree
+/// is left unchanged and the error is returned.
+pub fn rename_auto_worktree(
+    repo_root: &Path,
+    old_worktree_path: &Path,
+    old_branch: &str,
+    summary: &str,
+) -> Result<PathBuf> {
+    let new_branch = codex_git::summary_to_branch_name(summary);
+    let dir_name = new_branch.strip_prefix("auto/").unwrap_or(&new_branch);
+    let worktrees_dir = old_worktree_path
+        .parent()
+        .context("worktree path has no parent directory")?;
+    let new_path = worktrees_dir.join(dir_name);
+
+    codex_git::rename_worktree(
+        repo_root,
+        old_worktree_path,
+        &new_path,
+        old_branch,
+        &new_branch,
+    )
+    .context("Failed to rename git worktree")?;
+
+    Ok(new_path)
+}
+
 /// Set up an auto-worktree for the given working directory.
 ///
 /// This function:
@@ -113,5 +147,63 @@ mod tests {
 
         let result = setup_auto_worktree(temp.path());
         assert!(result.is_err(), "should fail outside a git repo");
+    }
+
+    #[test]
+    fn test_rename_auto_worktree_renames_to_summary_based_name() {
+        let temp = init_temp_repo();
+
+        // Create the initial auto-worktree (random name)
+        let worktree_path = setup_auto_worktree(temp.path()).unwrap();
+        assert!(worktree_path.exists());
+
+        // Extract the old branch name from the worktree
+        let output = Command::new("git")
+            .args(["branch", "--show-current"])
+            .current_dir(&worktree_path)
+            .output()
+            .unwrap();
+        let old_branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert!(
+            old_branch.starts_with("auto/"),
+            "initial branch should start with auto/"
+        );
+
+        // Rename using a summary
+        let result = rename_auto_worktree(temp.path(), &worktree_path, &old_branch, "Fix auth bug");
+        assert!(
+            result.is_ok(),
+            "rename_auto_worktree should succeed: {:?}",
+            result.err()
+        );
+
+        let new_path = result.unwrap();
+
+        // Old path should be gone
+        assert!(
+            !worktree_path.exists(),
+            "old worktree path should not exist"
+        );
+        // New path should exist
+        assert!(new_path.exists(), "new worktree path should exist");
+
+        // New path should contain the summary slug
+        let dir_name = new_path.file_name().unwrap().to_string_lossy();
+        assert!(
+            dir_name.starts_with("fix-auth-bug-"),
+            "new dir name should start with summary slug, got: {dir_name}"
+        );
+
+        // Branch should be renamed
+        let output = Command::new("git")
+            .args(["branch", "--show-current"])
+            .current_dir(&new_path)
+            .output()
+            .unwrap();
+        let new_branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert!(
+            new_branch.starts_with("auto/fix-auth-bug-"),
+            "branch should be renamed to summary-based name, got: {new_branch}"
+        );
     }
 }
