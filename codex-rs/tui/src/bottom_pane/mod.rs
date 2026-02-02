@@ -426,6 +426,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update the prompt summary displayed in the footer.
+    pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
+        self.composer.set_prompt_summary(summary);
+        self.request_redraw();
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.composer.is_empty()
     }

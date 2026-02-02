@@ -19,6 +19,7 @@ use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::PatchApplyBeginEvent;
+use codex_protocol::protocol::PromptSummaryEvent;
 use codex_protocol::protocol::ReviewDecision;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionConfiguredEvent;
@@ -199,6 +200,10 @@ pub struct AcpBackend {
     notify_after_idle: crate::config::NotifyAfterIdle,
     /// Stack of ghost commit snapshots for /undo support
     ghost_snapshots: Arc<GhostSnapshotStack>,
+    /// Whether the first user prompt has been sent (for prompt summary)
+    is_first_prompt: Arc<Mutex<bool>>,
+    /// Model name stored for spawning summarization connection
+    model_name: String,
 }
 
 impl AcpBackend {
@@ -330,6 +335,8 @@ impl AcpBackend {
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
+            is_first_prompt: Arc::new(Mutex::new(true)),
+            model_name: config.model.clone(),
         };
 
         // Send synthetic SessionConfigured event
@@ -599,6 +606,31 @@ impl AcpBackend {
 
         if prompt_text.is_empty() {
             return Ok(());
+        }
+
+        // On first prompt, spawn a fire-and-forget summarization task.
+        // Skip for mock models (debug-only test agents) since they don't
+        // produce meaningful summaries.
+        {
+            let mut is_first = self.is_first_prompt.lock().await;
+            if *is_first {
+                *is_first = false;
+                let skip_summary = cfg!(debug_assertions) && self.model_name.starts_with("mock-");
+                if !skip_summary {
+                    let event_tx = self.event_tx.clone();
+                    let model_name = self.model_name.clone();
+                    let cwd = self.cwd.clone();
+                    let prompt_for_summary = prompt_text.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) =
+                            run_prompt_summary(&event_tx, &model_name, &cwd, &prompt_for_summary)
+                                .await
+                        {
+                            debug!("Prompt summary failed (non-fatal): {e}");
+                        }
+                    });
+                }
+            }
         }
 
         // Create ghost snapshot before sending prompt to agent.
@@ -1179,6 +1211,81 @@ impl AcpBackend {
             pending_approvals.lock().await.push(request);
         }
     }
+}
+
+/// Spawn a separate ACP connection, send a summarization prompt, and emit a
+/// `PromptSummary` event with the result. Designed to be called as a
+/// fire-and-forget task from `handle_user_input`.
+async fn run_prompt_summary(
+    event_tx: &mpsc::Sender<Event>,
+    model_name: &str,
+    cwd: &std::path::Path,
+    user_prompt: &str,
+) -> Result<()> {
+    use tokio::time::Duration;
+    use tokio::time::timeout;
+
+    let agent_config = get_agent_config(model_name)?;
+    let connection = AcpConnection::spawn(&agent_config, cwd).await?;
+    let session_id = connection.create_session(cwd).await?;
+
+    let summarization_prompt = format!(
+        "Summarize the following user request in 5 words or fewer. \
+         Reply with ONLY the summary, no extra text.\n\n{user_prompt}"
+    );
+    let prompt = vec![translator::text_to_content_block(&summarization_prompt)];
+
+    let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(32);
+
+    // Consume updates in a task to accumulate the agent's text response
+    let collector = tokio::spawn(async move {
+        let mut text = String::new();
+        while let Some(update) = update_rx.recv().await {
+            if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+                && let acp::ContentBlock::Text(t) = &chunk.content
+            {
+                text.push_str(&t.text);
+            }
+        }
+        text
+    });
+
+    // Send the prompt with a timeout to prevent indefinite hangs
+    let prompt_result = timeout(
+        Duration::from_secs(30),
+        connection.prompt(session_id, prompt, update_tx),
+    )
+    .await;
+
+    // Drop the connection on a blocking thread to avoid blocking the async
+    // runtime (AcpConnection::drop does a synchronous recv_timeout).
+    tokio::task::spawn_blocking(move || drop(connection));
+
+    match prompt_result {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => return Err(e),
+        Err(_) => {
+            debug!("Prompt summary timed out");
+            return Ok(());
+        }
+    }
+
+    let mut summary = collector.await.unwrap_or_default().trim().to_string();
+    // Truncate to prevent a runaway response from dominating the footer
+    if summary.chars().count() > 40 {
+        summary = summary.chars().take(37).collect::<String>();
+        summary.push_str("...");
+    }
+    if !summary.is_empty() {
+        let _ = event_tx
+            .send(Event {
+                id: String::new(),
+                msg: EventMsg::PromptSummary(PromptSummaryEvent { summary }),
+            })
+            .await;
+    }
+
+    Ok(())
 }
 
 /// Return the custom commands directory: `{nori_home}/commands`.
