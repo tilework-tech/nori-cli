@@ -330,7 +330,7 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create a session to populate the project
-        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0")
+        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         recorder
@@ -354,7 +354,7 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create two sessions
-        let recorder1 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0")
+        let recorder1 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         let project_id = recorder1.project_id().to_string();
@@ -363,7 +363,7 @@ mod tests {
 
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-        let recorder2 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0")
+        let recorder2 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         recorder2.flush().await.unwrap();
@@ -384,7 +384,7 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create a session
-        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0")
+        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         recorder.flush().await.unwrap();
@@ -403,10 +403,15 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create a session with entries
-        let recorder =
-            TranscriptRecorder::new(nori_home, nori_home, Some("claude".to_string()), "0.1.0")
-                .await
-                .unwrap();
+        let recorder = TranscriptRecorder::new(
+            nori_home,
+            nori_home,
+            Some("claude".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
         let project_id = recorder.project_id().to_string();
         let session_id = recorder.session_id().to_string();
 
@@ -444,10 +449,15 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create a session
-        let recorder =
-            TranscriptRecorder::new(nori_home, nori_home, Some("claude".to_string()), "0.1.0")
-                .await
-                .unwrap();
+        let recorder = TranscriptRecorder::new(
+            nori_home,
+            nori_home,
+            Some("claude".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
         let project_id = recorder.project_id().to_string();
         let session_id = recorder.session_id().to_string();
         recorder.flush().await.unwrap();

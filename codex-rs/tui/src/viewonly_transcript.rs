@@ -106,6 +106,7 @@ mod tests {
             agent: Some("claude".to_string()),
             cli_version: "0.1.0".to_string(),
             git: None,
+            acp_session_id: None,
         }
     }
 

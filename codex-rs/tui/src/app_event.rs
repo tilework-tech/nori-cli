@@ -386,4 +386,22 @@ pub(crate) enum AppEvent {
         /// The transcript entries to display
         entries: Vec<crate::viewonly_transcript::ViewonlyEntry>,
     },
+
+    /// Show the resume session picker with loaded sessions.
+    ShowResumeSessionPicker {
+        /// The loaded session metadata for the picker
+        sessions: Vec<crate::nori::viewonly_session_picker::SessionPickerInfo>,
+        /// The NORI_HOME path
+        nori_home: PathBuf,
+    },
+
+    /// Resume a previous session via ACP session/load.
+    ResumeSession {
+        /// The NORI_HOME path
+        nori_home: PathBuf,
+        /// Project identifier (needed to load transcript metadata)
+        project_id: String,
+        /// Session identifier to resume
+        session_id: String,
+    },
 }

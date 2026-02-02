@@ -304,6 +304,7 @@ impl AcpBackend {
             &cwd,
             Some(config.model.clone()),
             &config.cli_version,
+            Some(session_id.to_string()),
         )
         .await
         {
@@ -356,6 +357,168 @@ impl AcpBackend {
             .ok();
 
         // Spawn approval handler task
+        tokio::spawn(Self::run_approval_handler(
+            approval_rx,
+            event_tx.clone(),
+            Arc::clone(&pending_approvals),
+            Arc::clone(&user_notifier),
+            cwd.clone(),
+            approval_policy_rx,
+        ));
+
+        Ok(backend)
+    }
+
+    /// Resume a previous ACP session by its agent-side session ID.
+    ///
+    /// Similar to `spawn`, but calls `session/load` instead of `session/new`.
+    /// The agent will stream session history via `SessionUpdate` notifications
+    /// before returning. Those updates are forwarded as codex `Event`s.
+    pub async fn resume_session(
+        config: &AcpBackendConfig,
+        acp_session_id: &str,
+        event_tx: mpsc::Sender<Event>,
+    ) -> Result<Self> {
+        let agent_config = get_agent_config(&config.model)?;
+        let cwd = config.cwd.clone();
+
+        debug!(
+            "Resuming ACP session {} for model: {}",
+            acp_session_id, config.model
+        );
+
+        let mut connection = AcpConnection::spawn(&agent_config, &cwd)
+            .await
+            .map_err(|e| {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+                anyhow::anyhow!(enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                ))
+            })?;
+
+        // Create an update channel to receive history replay during load_session.
+        // The connection worker registers this channel with the client_delegate so
+        // that SessionNotification events are forwarded here.
+        let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
+
+        // Spawn a task to forward session updates (history replay) to codex events.
+        let event_tx_for_updates = event_tx.clone();
+        let forward_handle = tokio::spawn(async move {
+            let mut pending_patch_changes = std::collections::HashMap::new();
+            while let Some(update) = update_rx.recv().await {
+                let event_msgs =
+                    translate_session_update_to_events(&update, &mut pending_patch_changes);
+                for msg in event_msgs {
+                    let _ = event_tx_for_updates
+                        .send(Event {
+                            id: String::new(),
+                            msg,
+                        })
+                        .await;
+                }
+            }
+        });
+
+        let session_id = connection
+            .load_session(acp_session_id, &cwd, update_tx)
+            .await
+            .map_err(|e| {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+                anyhow::anyhow!(enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                ))
+            })?;
+
+        // Wait for the forwarding task to complete (update channel closed)
+        let _ = forward_handle.await;
+
+        debug!("ACP session resumed: {acp_session_id:?}");
+
+        let approval_rx = connection.take_approval_receiver();
+        let connection = Arc::new(connection);
+        let pending_approvals = Arc::new(Mutex::new(Vec::new()));
+        let use_native_notifications =
+            config.os_notifications == crate::config::OsNotifications::Enabled;
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(
+            config.notify.clone(),
+            use_native_notifications,
+        ));
+        let idle_timer_abort = Arc::new(Mutex::new(None));
+        let (approval_policy_tx, approval_policy_rx) = watch::channel(config.approval_policy);
+        let conversation_id = ConversationId::new();
+        let (history_log_id, history_entry_count) =
+            crate::message_history::history_metadata(&config.nori_home).await;
+
+        let transcript_recorder = match TranscriptRecorder::new(
+            &config.nori_home,
+            &cwd,
+            Some(config.model.clone()),
+            &config.cli_version,
+            Some(session_id.to_string()),
+        )
+        .await
+        {
+            Ok(recorder) => Some(Arc::new(recorder)),
+            Err(e) => {
+                warn!("Failed to initialize transcript recorder: {e}");
+                None
+            }
+        };
+
+        let backend = Self {
+            connection,
+            session_id: Arc::new(RwLock::new(session_id)),
+            event_tx: event_tx.clone(),
+            cwd: cwd.clone(),
+            pending_approvals: Arc::clone(&pending_approvals),
+            user_notifier: Arc::clone(&user_notifier),
+            idle_timer_abort: Arc::clone(&idle_timer_abort),
+            nori_home: config.nori_home.clone(),
+            history_persistence: config.history_persistence,
+            conversation_id,
+            approval_policy_tx,
+            pending_compact_summary: Arc::new(Mutex::new(None)),
+            transcript_recorder,
+            notify_after_idle: config.notify_after_idle,
+            ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
+        };
+
+        let session_configured = SessionConfiguredEvent {
+            session_id: conversation_id,
+            model: config.model.clone(),
+            model_provider_id: "acp".to_string(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            cwd: cwd.clone(),
+            reasoning_effort: None,
+            history_log_id,
+            history_entry_count,
+            initial_messages: None,
+            rollout_path: cwd.join(".codex-rollout.jsonl"),
+        };
+
+        event_tx
+            .send(Event {
+                id: String::new(),
+                msg: EventMsg::SessionConfigured(session_configured),
+            })
+            .await
+            .ok();
+
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
             event_tx.clone(),

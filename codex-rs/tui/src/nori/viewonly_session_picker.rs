@@ -156,7 +156,7 @@ pub fn viewonly_session_picker_params(
 }
 
 /// Format an ISO 8601 timestamp as a relative time string.
-fn format_relative_time(iso: &str) -> String {
+pub(crate) fn format_relative_time(iso: &str) -> String {
     chrono::DateTime::parse_from_rfc3339(iso)
         .map(|dt| {
             let now = chrono::Utc::now();

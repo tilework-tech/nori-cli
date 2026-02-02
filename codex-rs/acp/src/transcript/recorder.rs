@@ -63,6 +63,7 @@ impl TranscriptRecorder {
         cwd: &Path,
         agent: Option<String>,
         cli_version: &str,
+        acp_session_id: Option<String>,
     ) -> io::Result<Self> {
         // Compute project ID from cwd
         let project_id_info = compute_project_id(cwd).await?;
@@ -114,6 +115,7 @@ impl TranscriptRecorder {
             agent,
             cli_version: cli_version.to_string(),
             git: git_info,
+            acp_session_id,
         };
 
         // Spawn background writer
@@ -399,10 +401,15 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder =
-            TranscriptRecorder::new(nori_home, cwd, Some("claude-code".to_string()), "0.1.0")
-                .await
-                .unwrap();
+        let recorder = TranscriptRecorder::new(
+            nori_home,
+            cwd,
+            Some("claude-code".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
 
         // Verify directory structure was created
         let project_dir = nori_home
@@ -425,10 +432,15 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder =
-            TranscriptRecorder::new(nori_home, cwd, Some("claude-code".to_string()), "0.1.0")
-                .await
-                .unwrap();
+        let recorder = TranscriptRecorder::new(
+            nori_home,
+            cwd,
+            Some("claude-code".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
 
         // Give the writer a moment to write the session meta
         recorder.flush().await.unwrap();
@@ -461,7 +473,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0")
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -496,7 +508,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0")
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -545,7 +557,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0")
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -587,10 +599,15 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder =
-            TranscriptRecorder::new(nori_home, cwd, Some("claude-code".to_string()), "0.1.0")
-                .await
-                .unwrap();
+        let recorder = TranscriptRecorder::new(
+            nori_home,
+            cwd,
+            Some("claude-code".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
 
         // Simulate a full conversation
         recorder
@@ -646,7 +663,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0")
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
