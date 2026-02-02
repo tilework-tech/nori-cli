@@ -36,7 +36,7 @@ use super::types::now_iso8601;
 
 /// Commands sent to the background writer task.
 enum TranscriptCmd {
-    Write(TranscriptEntry),
+    Write(Box<TranscriptEntry>),
     Flush { ack: oneshot::Sender<()> },
     Shutdown { ack: oneshot::Sender<()> },
 }
@@ -250,7 +250,7 @@ impl TranscriptRecorder {
     /// Send an entry to the background writer.
     async fn send_entry(&self, entry: TranscriptEntry) -> io::Result<()> {
         self.tx
-            .send(TranscriptCmd::Write(entry))
+            .send(TranscriptCmd::Write(Box::new(entry)))
             .await
             .map_err(|e| IoError::other(format!("failed to queue transcript entry: {e}")))
     }
@@ -271,7 +271,7 @@ async fn transcript_writer(
     while let Some(cmd) = rx.recv().await {
         match cmd {
             TranscriptCmd::Write(entry) => {
-                let line = TranscriptLine::new(entry);
+                let line = TranscriptLine::new(*entry);
                 write_line(&mut file, &line).await?;
             }
             TranscriptCmd::Flush { ack } => {
