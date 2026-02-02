@@ -1169,6 +1169,10 @@ impl App {
                 self.persist_loop_count_setting(value).await;
             }
             #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigAutoWorktree(enabled) => {
+                self.persist_auto_worktree_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
             AppEvent::LoopIteration {
                 prompt,
                 remaining,
@@ -1621,6 +1625,29 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Vim mode {status}."), None);
+    }
+
+    #[cfg(feature = "nori-config")]
+    async fn persist_auto_worktree_setting(&mut self, enabled: bool) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "auto_worktree"], toml_value(enabled))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist auto_worktree setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save auto_worktree setting: {err}"));
+            return;
+        }
+
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget.add_info_message(
+            format!("Auto worktree {status}. Changes will take effect on next session."),
+            None,
+        );
     }
 
     async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
