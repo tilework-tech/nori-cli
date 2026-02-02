@@ -26,7 +26,9 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 ### Core Implementation
 
-Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The main event loop in `app.rs` processes:
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
+
+The main event loop in `app.rs` processes:
 
 1. **Terminal events** (keyboard input, resize) via `tui.rs`
 2. **ACP events** from the backend (streaming content, approval requests, completion)

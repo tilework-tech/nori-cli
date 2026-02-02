@@ -28,6 +28,7 @@ Key files:
 - `translator.rs` - Protocol translation between ACP and Codex types
 - `backend.rs` - Implements `ConversationClient` trait from codex-core
 - `transcript_discovery.rs` - Discovers transcript files for external agents
+- `auto_worktree.rs` - Orchestrates automatic git worktree creation at session start
 
 ### Core Implementation
 
@@ -124,6 +125,16 @@ The `loop_count` field on `NoriConfigToml` and `NoriConfig` controls how many ti
 | `loop_count` | `loop_count` | `None` (disabled) | Number of fresh-session iterations of the first prompt. Values > 1 enable looping; `None` or `0` disables it |
 
 The setting is resolved in `loader.rs` by passing `toml.loop_count` directly. The TUI layer (`@/codex-rs/tui/`) orchestrates the loop lifecycle -- the config layer only stores the value.
+
+**Auto-Worktree Configuration** (`config/types.rs`):
+
+The `auto_worktree` boolean controls whether the TUI automatically creates a git worktree at session start for process isolation. Stored under `[tui]` in `config.toml`:
+
+| Field | TOML Key | Default | Controls |
+|-------|----------|---------|----------|
+| `auto_worktree` | `auto_worktree` | `false` | When enabled, the TUI creates a new git worktree in `<repo>/.worktrees/` and sets the session's working directory to it |
+
+The setting is resolved in `loader.rs` with `unwrap_or(false)`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
 
 **Message History** (`message_history.rs`):
 

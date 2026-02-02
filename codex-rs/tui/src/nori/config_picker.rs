@@ -336,6 +336,7 @@ mod tests {
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             script_timeout: codex_acp::config::ScriptTimeout::default(),
             loop_count: None,
+            auto_worktree: false,
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),

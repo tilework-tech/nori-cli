@@ -6,6 +6,7 @@
 //! It also provides the Nori configuration system for ACP-only mode,
 //! loading settings from `~/.nori/cli/config.toml`.
 
+pub mod auto_worktree;
 pub mod backend;
 pub mod config;
 pub mod connection;

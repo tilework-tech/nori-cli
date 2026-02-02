@@ -130,6 +130,7 @@ impl NoriConfig {
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
+            auto_worktree: toml.tui.auto_worktree.unwrap_or(false),
             nori_home,
             cwd,
             mcp_servers,
@@ -319,5 +320,34 @@ notify_after_idle = "30s"
             "Model should use persisted agent as fallback when not overridden"
         );
         assert_eq!(config.agent, "gemini");
+    }
+
+    #[test]
+    fn test_auto_worktree_enabled_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+auto_worktree = true
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.auto_worktree);
+    }
+
+    #[test]
+    fn test_auto_worktree_defaults_to_false() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(!config.auto_worktree);
     }
 }
