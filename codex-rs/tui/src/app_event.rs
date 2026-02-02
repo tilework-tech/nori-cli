@@ -395,11 +395,11 @@ pub(crate) enum AppEvent {
         nori_home: PathBuf,
     },
 
-    /// Resume a previous session via ACP session/load.
+    /// Resume a previous session via ACP session/load or client-side replay.
     ResumeSession {
         /// The NORI_HOME path
         nori_home: PathBuf,
-        /// Project identifier (needed to load transcript metadata)
+        /// Project identifier (needed to load transcript)
         project_id: String,
         /// Session identifier to resume
         session_id: String,

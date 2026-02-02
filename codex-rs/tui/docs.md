@@ -261,7 +261,7 @@ The async flow uses three AppEvents: `ShowViewonlySessionPicker` -> `LoadViewonl
 
 **Session Resume (`/resume`):**
 
-The `/resume` command allows reconnecting to a previous ACP session, restoring agent-side conversation context. Unlike `/resume-viewonly` which reads transcripts client-side, `/resume` delegates to the ACP agent's `session/load` RPC method so the agent itself restores its context.
+The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and falls back to client-side replay when the agent does not support it (see `@/codex-rs/acp/docs.md` for the dual-path architecture).
 
 The flow involves three layers:
 
@@ -276,22 +276,24 @@ AppEvent::ShowResumeSessionPicker -> resume_session_picker modal
     |  (user selects session)
     v
 AppEvent::ResumeSession { nori_home, project_id, session_id }
-    |  (loads SessionMetaEntry, extracts acp_session_id)
+    |  (loads full Transcript, extracts acp_session_id as Option<String>)
     v
 App::shutdown_current_conversation()
     |
     v
-ChatWidget::new_resumed_acp() -> spawn_acp_agent_resume()
-    |                                |
-    v                                v
-Fresh ChatWidget created         AcpBackend::resume_session() (see @/codex-rs/acp/docs.md)
+ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
+    |
+    v
+spawn_acp_agent_resume() -> AcpBackend::resume_session()
 ```
 
-Session filtering: `load_resumable_sessions()` in `@/codex-rs/tui/src/nori/resume_session_picker.rs` loads all sessions for the current working directory via the viewonly session picker's `load_sessions_with_preview()`, then filters to only sessions whose `agent` field matches the currently active agent. The `acp_session_id` presence is checked later when the user actually selects a session -- if the selected session's `SessionMetaEntry` lacks an `acp_session_id`, an error message is displayed.
+The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the client-side replay fallback.
+
+Session filtering: `load_resumable_sessions()` in `@/codex-rs/tui/src/nori/resume_session_picker.rs` loads all sessions for the current working directory via the viewonly session picker's `load_sessions_with_preview()`, then filters to only sessions whose `agent` field matches the currently active agent.
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/codex-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`. The spawned task structure (op forwarding, event forwarding, model command handling) is identical.
+`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. The spawned task structure (op forwarding, event forwarding, model command handling) is identical.
 
 **Loop Mode (Prompt Repetition):**
 

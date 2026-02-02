@@ -1307,46 +1307,42 @@ impl App {
                 session_id,
             } => {
                 let loader = codex_acp::transcript::TranscriptLoader::new(nori_home);
-                match loader.load_session_meta(&project_id, &session_id).await {
-                    Ok(meta) => {
-                        if let Some(acp_session_id) = meta.acp_session_id {
-                            let display_name =
-                                crate::nori::agent_picker::get_agent_info(&self.config.model)
-                                    .map(|info| info.display_name)
-                                    .unwrap_or_else(|| self.config.model.clone());
+                match loader.load_transcript(&project_id, &session_id).await {
+                    Ok(transcript) => {
+                        let acp_session_id = transcript.meta.acp_session_id.clone();
+                        let display_name =
+                            crate::nori::agent_picker::get_agent_info(&self.config.model)
+                                .map(|info| info.display_name)
+                                .unwrap_or_else(|| self.config.model.clone());
 
-                            self.shutdown_current_conversation().await;
+                        self.shutdown_current_conversation().await;
 
-                            let init = crate::chatwidget::ChatWidgetInit {
-                                config: self.config.clone(),
-                                frame_requester: tui.frame_requester(),
-                                app_event_tx: self.app_event_tx.clone(),
-                                initial_prompt: None,
-                                initial_images: Vec::new(),
-                                enhanced_keys_supported: self.enhanced_keys_supported,
-                                auth_manager: self.auth_manager.clone(),
-                                vertical_footer: self.vertical_footer,
-                                expected_model: None,
-                            };
-                            self.chat_widget = ChatWidget::new_resumed_acp(init, acp_session_id);
-                            self.chat_widget
-                                .set_hotkey_config(self.hotkey_config.clone());
-                            self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                        let init = crate::chatwidget::ChatWidgetInit {
+                            config: self.config.clone(),
+                            frame_requester: tui.frame_requester(),
+                            app_event_tx: self.app_event_tx.clone(),
+                            initial_prompt: None,
+                            initial_images: Vec::new(),
+                            enhanced_keys_supported: self.enhanced_keys_supported,
+                            auth_manager: self.auth_manager.clone(),
+                            vertical_footer: self.vertical_footer,
+                            expected_model: None,
+                        };
+                        self.chat_widget =
+                            ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
+                        self.chat_widget
+                            .set_hotkey_config(self.hotkey_config.clone());
+                        self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
 
-                            self.chat_widget.add_info_message(
-                                format!("Resuming session with {display_name}..."),
-                                None,
-                            );
-                            tui.frame_requester().schedule_frame();
-                        } else {
-                            self.chat_widget.add_error_message(
-                                "This session does not have an ACP session ID and cannot be resumed.".to_string(),
-                            );
-                        }
+                        self.chat_widget.add_info_message(
+                            format!("Resuming session with {display_name}..."),
+                            None,
+                        );
+                        tui.frame_requester().schedule_frame();
                     }
                     Err(e) => {
                         self.chat_widget
-                            .add_error_message(format!("Failed to load session metadata: {e}"));
+                            .add_error_message(format!("Failed to load session transcript: {e}"));
                     }
                 }
             }

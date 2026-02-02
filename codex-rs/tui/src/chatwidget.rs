@@ -1673,8 +1673,13 @@ impl ChatWidget {
         widget
     }
 
-    /// Create a ChatWidget that resumes an ACP session via `session/load`.
-    pub(crate) fn new_resumed_acp(common: ChatWidgetInit, acp_session_id: String) -> Self {
+    /// Create a ChatWidget that resumes an ACP session via `session/load`
+    /// or client-side replay when the agent doesn't support `session/load`.
+    pub(crate) fn new_resumed_acp(
+        common: ChatWidgetInit,
+        acp_session_id: Option<String>,
+        transcript: codex_acp::transcript::Transcript,
+    ) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -1688,8 +1693,12 @@ impl ChatWidget {
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-        let spawn_result =
-            spawn_acp_agent_resume(config.clone(), acp_session_id, app_event_tx.clone());
+        let spawn_result = spawn_acp_agent_resume(
+            config.clone(),
+            acp_session_id,
+            transcript,
+            app_event_tx.clone(),
+        );
 
         let first_prompt_text = initial_prompt.clone();
         let mut widget = Self {

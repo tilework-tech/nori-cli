@@ -485,28 +485,51 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 
 **Session Resume** (`backend.rs`, `connection.rs`):
 
-`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. The resume flow differs from `spawn()` by calling `session/load` (via `AcpConnection::load_session()`) instead of `session/new`. The agent replays conversation history as `SessionUpdate` notifications before the RPC call returns.
+`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>` and `transcript: Option<&Transcript>` and selects between two resume strategies based on agent capabilities:
 
 ```
-AcpBackend::resume_session()
+AcpBackend::resume_session(config, acp_session_id, transcript, event_tx)
     |
     v
-AcpConnection::spawn() -> AcpConnection::load_session(session_id, cwd, update_tx)
-    |                           |
-    v                           v
-mpsc update channel <------ Agent streams SessionUpdate (history replay)
-    |                           |
-    v                           v
-Forward task translates      LoadSessionResponse returned
-updates to codex Events       (session ID reused from request)
+AcpConnection::spawn() -> check capabilities().load_session
+    |
+    ├── Agent supports session/load AND acp_session_id is Some:
+    │       |
+    │       v
+    │   AcpConnection::load_session(session_id, cwd, update_tx)
+    │       |
+    │       v
+    │   Agent streams SessionUpdate notifications (history replay)
+    │       |
+    │       v
+    │   Forward task translates updates to codex Events
+    │       |
+    │       v
+    │   returns (session_id, no initial_messages, no summary)
+    │
+    └── Otherwise (client-side replay fallback):
+            |
+            v
+        AcpConnection::create_session() (normal session/new)
+            |
+            v
+        transcript_to_replay_events() -> initial_messages (for TUI display)
+        transcript_to_summary()       -> pending_compact_summary (for agent context)
+            |
+            v
+        returns (session_id, initial_messages, summary)
     |
     v
-SessionConfigured event sent to TUI
+SessionConfigured event sent to TUI (with initial_messages if client-side)
 ```
 
-The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The forwarding task completes when the update channel closes (after `load_session()` returns). A new `TranscriptRecorder` is created for the resumed session, persisting the `acp_session_id` so the session can be resumed again in the future.
+**Server-side path:** The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available.
 
-The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()` on the ACP connection, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available.
+**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
+- `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history
+- `transcript_to_summary()` builds a human-readable summary (truncated to 20k chars via `TRANSCRIPT_SUMMARY_MAX_CHARS`), stored in `pending_compact_summary` and prepended to the first user prompt -- the same mechanism used by `/compact`
+
+A new `TranscriptRecorder` is created for the resumed session in both paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
 **Prompt Summary** (`backend.rs`):
 

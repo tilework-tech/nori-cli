@@ -259,11 +259,13 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
 /// Spawn an ACP agent backend that resumes a previous session.
 ///
 /// Similar to `spawn_acp_agent`, but calls `AcpBackend::resume_session`
-/// instead of `AcpBackend::spawn`. The agent replays session history
-/// via streaming events before the session is ready for new prompts.
+/// instead of `AcpBackend::spawn`. If the agent supports `session/load`,
+/// server-side resume is used. Otherwise, falls back to client-side replay
+/// using the provided transcript.
 pub(crate) fn spawn_acp_agent_resume(
     config: Config,
-    acp_session_id: String,
+    acp_session_id: Option<String>,
+    transcript: codex_acp::transcript::Transcript,
     app_event_tx: AppEventSender,
 ) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
@@ -295,7 +297,13 @@ pub(crate) fn spawn_acp_agent_resume(
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
         };
 
-        let backend = match AcpBackend::resume_session(&acp_config, &acp_session_id, event_tx).await
+        let backend = match AcpBackend::resume_session(
+            &acp_config,
+            acp_session_id.as_deref(),
+            Some(&transcript),
+            event_tx,
+        )
+        .await
         {
             Ok(b) => Arc::new(b),
             Err(e) => {
