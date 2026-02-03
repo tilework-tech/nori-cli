@@ -38,6 +38,8 @@ pub(crate) struct SystemInfo {
     pub(crate) is_worktree: bool,
     /// Current transcript location if running within an agent environment
     pub(crate) transcript_location: Option<TranscriptLocation>,
+    /// Warning about low disk space with worktrees present (session-start check)
+    pub(crate) worktree_cleanup_warning: Option<WorktreeCleanupWarning>,
 }
 
 impl SystemInfo {
@@ -111,6 +113,17 @@ impl SystemInfo {
                 .and_then(|cwd| discover_transcript(&cwd, agent_kind, first_message)),
         };
         let (nori_version, nori_version_source) = get_nori_version();
+
+        #[cfg(unix)]
+        let worktree_cleanup_warning = {
+            let effective_dir = dir
+                .map(std::path::PathBuf::from)
+                .or_else(|| env::current_dir().ok());
+            effective_dir.and_then(|d| check_worktree_cleanup(&d))
+        };
+        #[cfg(not(unix))]
+        let worktree_cleanup_warning = None;
+
         Self {
             git_branch: get_git_branch(dir),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
@@ -120,6 +133,7 @@ impl SystemInfo {
             git_lines_removed,
             is_worktree: is_git_worktree(dir),
             transcript_location,
+            worktree_cleanup_warning,
         }
     }
 }
@@ -325,6 +339,114 @@ fn get_git_branch(dir: Option<&std::path::Path>) -> Option<String> {
     Some(truncated)
 }
 
+/// Disk space threshold: warn when free space is below this percentage.
+const DISK_SPACE_LOW_PERCENT: i32 = 10;
+
+/// Disk space information parsed from `df` output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DiskSpaceInfo {
+    pub(crate) used_percent: i32,
+}
+
+/// Warning about low disk space when git worktrees exist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorktreeCleanupWarning {
+    pub(crate) worktree_count: usize,
+    pub(crate) free_percent: i32,
+}
+
+/// Parse the output of `df -Pk <dir>` into structured disk space info.
+///
+/// Expected format (POSIX):
+/// ```text
+/// Filesystem     1024-blocks      Used Available Capacity Mounted on
+/// /dev/sda1       500000000 450000000  50000000      90% /
+/// ```
+fn parse_df_output(output: &str) -> Option<DiskSpaceInfo> {
+    let lines: Vec<&str> = output.trim().lines().collect();
+    if lines.len() < 2 {
+        return None;
+    }
+
+    // Parse the data line (skip header)
+    let parts: Vec<&str> = lines[1].split_whitespace().collect();
+    if parts.len() < 5 {
+        return None;
+    }
+
+    let used_percent: i32 = parts[4].trim_end_matches('%').parse().ok()?;
+
+    Some(DiskSpaceInfo { used_percent })
+}
+
+/// Get disk space info for a directory by running `df -Pk`.
+#[cfg(unix)]
+fn get_disk_space(dir: &std::path::Path) -> Option<DiskSpaceInfo> {
+    let output = Command::new("df").arg("-Pk").arg(dir).output().ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    parse_df_output(&stdout)
+}
+
+/// Evaluate whether a worktree cleanup warning should be shown.
+///
+/// Takes the number of extra worktrees and the disk usage percentage.
+/// Returns `Some(WorktreeCleanupWarning)` if worktrees > 0 and free space < threshold.
+fn evaluate_worktree_cleanup_warning(
+    worktree_count: usize,
+    used_percent: i32,
+) -> Option<WorktreeCleanupWarning> {
+    if worktree_count == 0 {
+        return None;
+    }
+
+    let free_percent = (100 - used_percent).max(0);
+    if free_percent >= DISK_SPACE_LOW_PERCENT {
+        return None;
+    }
+
+    Some(WorktreeCleanupWarning {
+        worktree_count,
+        free_percent,
+    })
+}
+
+/// Check if disk space is low and worktrees exist for the given directory.
+///
+/// This is called during background system info collection. Returns a warning
+/// if worktrees are present and disk space is below the threshold.
+#[cfg(unix)]
+pub(crate) fn check_worktree_cleanup(cwd: &std::path::Path) -> Option<WorktreeCleanupWarning> {
+    // Check if we're in a git repo
+    let output = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let repo_root =
+        std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim().to_string());
+
+    // List worktrees (excluding main)
+    let worktrees = codex_git::list_worktrees(&repo_root).ok()?;
+    if worktrees.is_empty() {
+        return None;
+    }
+
+    // Check disk space
+    let disk_space = get_disk_space(&repo_root)?;
+
+    evaluate_worktree_cleanup_warning(worktrees.len(), disk_space.used_percent)
+}
+
 /// Check if the directory is a git worktree (not the main repository).
 /// Returns true if this is a linked worktree, false if it's the main repo or not a git repo.
 fn is_git_worktree(dir: Option<&std::path::Path>) -> bool {
@@ -510,6 +632,86 @@ mod tests {
         // Real output has trailing newline
         let version = parse_nori_version("19.1.1\n");
         assert_eq!(version, Some("19.1.1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_df_output_typical() {
+        let output = "\
+Filesystem     1024-blocks      Used Available Capacity Mounted on
+/dev/sda1       500000000 450000000  50000000      90% /
+";
+        let info = parse_df_output(output).expect("should parse valid df output");
+        assert_eq!(info.used_percent, 90);
+    }
+
+    #[test]
+    fn test_parse_df_output_empty() {
+        assert!(
+            parse_df_output("").is_none(),
+            "empty output should return None"
+        );
+    }
+
+    #[test]
+    fn test_parse_df_output_header_only() {
+        let output = "Filesystem     1024-blocks      Used Available Capacity Mounted on\n";
+        assert!(
+            parse_df_output(output).is_none(),
+            "header-only should return None"
+        );
+    }
+
+    #[test]
+    fn test_parse_df_output_malformed() {
+        let output = "not a valid df output at all\n";
+        assert!(
+            parse_df_output(output).is_none(),
+            "malformed output should return None"
+        );
+    }
+
+    #[test]
+    fn test_worktree_cleanup_warning_low_disk_with_worktrees() {
+        let warning = evaluate_worktree_cleanup_warning(5, 94);
+        assert!(
+            warning.is_some(),
+            "should warn when disk is 94% used and worktrees exist"
+        );
+        let w = warning.unwrap();
+        assert_eq!(w.worktree_count, 5);
+        assert_eq!(w.free_percent, 6);
+    }
+
+    #[test]
+    fn test_worktree_cleanup_warning_sufficient_disk() {
+        let warning = evaluate_worktree_cleanup_warning(5, 80);
+        assert!(warning.is_none(), "should not warn when 20% free");
+    }
+
+    #[test]
+    fn test_worktree_cleanup_warning_low_disk_no_worktrees() {
+        let warning = evaluate_worktree_cleanup_warning(0, 95);
+        assert!(warning.is_none(), "should not warn when no worktrees exist");
+    }
+
+    #[test]
+    fn test_worktree_cleanup_warning_at_threshold() {
+        let warning = evaluate_worktree_cleanup_warning(3, 90);
+        assert!(
+            warning.is_none(),
+            "should not warn when exactly at 10% free (threshold)"
+        );
+    }
+
+    #[test]
+    fn test_worktree_cleanup_warning_just_below_threshold() {
+        let warning = evaluate_worktree_cleanup_warning(3, 91);
+        assert!(
+            warning.is_some(),
+            "should warn when 9% free (below threshold)"
+        );
+        let w = warning.unwrap();
+        assert_eq!(w.free_percent, 9);
     }
 
     #[test]

@@ -26,7 +26,7 @@ These utilities are consumed by various crates throughout the workspace, primari
 
 **cache**: `BlockingLruCache<K, V>` provides get-or-insert semantics with Tokio mutex protection. Includes `sha1_digest()` for content hashing.
 
-**git**: Ghost commits allow non-destructive workspace snapshots. Also provides worktree management primitives for creating isolated workspaces. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`, `create_worktree()`, `ensure_gitignore_entry()`, `generate_worktree_branch_name()`.
+**git**: Ghost commits allow non-destructive workspace snapshots. Also provides worktree management primitives for creating and listing isolated workspaces. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`, `create_worktree()`, `list_worktrees()`, `ensure_gitignore_entry()`, `generate_worktree_branch_name()`. The `list_worktrees()` function parses `git worktree list --porcelain` output into `WorktreeInfo` structs (path + optional branch), always excluding the main worktree. This is consumed by `@/codex-rs/tui/src/system_info.rs` for the worktree cleanup warning feature.
 
 **image**: Resizes images to `MAX_WIDTH=2048` / `MAX_HEIGHT=768` and encodes as JPEG/PNG with base64. Uses LRU cache to avoid re-encoding.
 

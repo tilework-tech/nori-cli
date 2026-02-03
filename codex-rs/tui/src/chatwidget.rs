@@ -3709,6 +3709,11 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(crate) fn add_warning_message(&mut self, message: String) {
+        self.add_to_history(history_cell::new_warning_event(message));
+        self.request_redraw();
+    }
+
     /// Queue a plain text message to be submitted as a user turn. If no task
     /// is currently running the message is submitted immediately; otherwise
     /// it is appended to the pending queue.
