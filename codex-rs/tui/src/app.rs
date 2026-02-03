@@ -677,17 +677,17 @@ impl App {
                 self.chat_widget.apply_file_search_result(query, matches);
             }
             AppEvent::SystemInfoRefreshed(info) => {
-                if !self.worktree_warning_shown {
-                    if let Some(warning) = &info.worktree_cleanup_warning {
-                        let free = warning.free_percent;
-                        let count = warning.worktree_count;
-                        let message = format!(
-                            "Low disk space: {free}% free. You have {count} git worktree(s) that may be consuming disk space. \
-                             Consider running `git worktree remove <path>` to clean up unused worktrees.",
-                        );
-                        self.chat_widget.add_warning_message(message);
-                        self.worktree_warning_shown = true;
-                    }
+                if !self.worktree_warning_shown
+                    && let Some(warning) = &info.worktree_cleanup_warning
+                {
+                    let free = warning.free_percent;
+                    let count = warning.worktree_count;
+                    let message = format!(
+                        "Low disk space: {free}% free. You have {count} git worktree(s) that may be consuming disk space. \
+                         Consider running `git worktree remove <path>` to clean up unused worktrees.",
+                    );
+                    self.chat_widget.add_warning_message(message);
+                    self.worktree_warning_shown = true;
                 }
                 self.chat_widget.apply_system_info_refresh(info);
             }
