@@ -1294,6 +1294,62 @@ impl App {
             AppEvent::DisplayViewonlyTranscript { entries } => {
                 self.display_viewonly_transcript(entries);
             }
+            AppEvent::ShowResumeSessionPicker {
+                sessions,
+                nori_home,
+            } => {
+                let params = crate::nori::resume_session_picker::resume_session_picker_params(
+                    sessions,
+                    nori_home,
+                    self.app_event_tx.clone(),
+                );
+                self.chat_widget.show_selection_view(params);
+            }
+            AppEvent::ResumeSession {
+                nori_home,
+                project_id,
+                session_id,
+            } => {
+                let loader = codex_acp::transcript::TranscriptLoader::new(nori_home);
+                match loader.load_transcript(&project_id, &session_id).await {
+                    Ok(transcript) => {
+                        let acp_session_id = transcript.meta.acp_session_id.clone();
+                        let display_name =
+                            crate::nori::agent_picker::get_agent_info(&self.config.model)
+                                .map(|info| info.display_name)
+                                .unwrap_or_else(|| self.config.model.clone());
+
+                        self.shutdown_current_conversation().await;
+
+                        let init = crate::chatwidget::ChatWidgetInit {
+                            config: self.config.clone(),
+                            frame_requester: tui.frame_requester(),
+                            app_event_tx: self.app_event_tx.clone(),
+                            initial_prompt: None,
+                            initial_images: Vec::new(),
+                            enhanced_keys_supported: self.enhanced_keys_supported,
+                            auth_manager: self.auth_manager.clone(),
+                            vertical_footer: self.vertical_footer,
+                            expected_model: None,
+                        };
+                        self.chat_widget =
+                            ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
+                        self.chat_widget
+                            .set_hotkey_config(self.hotkey_config.clone());
+                        self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+
+                        self.chat_widget.add_info_message(
+                            format!("Resuming session with {display_name}..."),
+                            None,
+                        );
+                        tui.frame_requester().schedule_frame();
+                    }
+                    Err(e) => {
+                        self.chat_widget
+                            .add_error_message(format!("Failed to load session transcript: {e}"));
+                    }
+                }
+            }
         }
         Ok(true)
     }

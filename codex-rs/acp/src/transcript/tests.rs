@@ -244,6 +244,7 @@ mod types_tests {
                 branch: Some("main".to_string()),
                 commit_hash: Some("abc123def456".to_string()),
             }),
+            acp_session_id: None,
         });
 
         let line = TranscriptLine {
@@ -273,6 +274,7 @@ mod types_tests {
             agent: None,
             cli_version: "0.1.0".to_string(),
             git: None,
+            acp_session_id: None,
         });
 
         let line = TranscriptLine {
