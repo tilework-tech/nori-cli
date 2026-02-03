@@ -2111,7 +2111,6 @@ script_timeout = "2m"
 
     #[test]
     fn test_footer_segment_serialize() {
-        
         // TOML doesn't support bare enums, so we test within a struct
         #[derive(Serialize)]
         struct Wrapper {
