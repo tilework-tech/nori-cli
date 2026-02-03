@@ -2745,6 +2745,30 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the footer segments picker popup.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_footer_segments_picker(
+        &mut self,
+        current: &codex_acp::config::FooterSegmentConfig,
+    ) {
+        let params = crate::nori::config_picker::footer_segments_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Set a footer segment's enabled state.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_footer_segment_enabled(
+        &mut self,
+        segment: codex_acp::config::FooterSegment,
+        enabled: bool,
+    ) {
+        self.bottom_pane
+            .set_footer_segment_enabled(segment, enabled);
+    }
+
     /// Set the loop state for a new iteration.
     #[cfg(feature = "nori-config")]
     pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {

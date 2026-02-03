@@ -4,6 +4,8 @@ use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
 use crate::system_info::NoriVersionSource;
 use crate::ui_consts::FOOTER_INDENT_COLS;
+use codex_acp::config::FooterSegment;
+use codex_acp::config::FooterSegmentConfig;
 use codex_protocol::num_format::format_si_suffix;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
@@ -47,6 +49,8 @@ pub(crate) struct FooterProps {
     pub(crate) vim_mode_state: Option<VimModeState>,
     /// Short summary of the first user prompt for this session.
     pub(crate) prompt_summary: Option<String>,
+    /// Configuration for which footer segments to show.
+    pub(crate) footer_segment_config: FooterSegmentConfig,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -284,118 +288,137 @@ fn shortcuts_hint_line() -> Line<'static> {
 
 fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
     let mut segments = Vec::new();
+    let config = &props.footer_segment_config;
 
-    // Add prompt summary if available: "Task: <summary>" (dim)
-    if let Some(summary) = &props.prompt_summary {
-        segments.push(Line::from(vec![
-            "Task: ".dim(),
-            Span::from(summary.clone()).dim(),
-        ]));
+    // Add prompt summary if available and enabled: "Task: <summary>" (dim)
+    if config.is_enabled(FooterSegment::PromptSummary) {
+        if let Some(summary) = &props.prompt_summary {
+            segments.push(Line::from(vec![
+                "Task: ".dim(),
+                Span::from(summary.clone()).dim(),
+            ]));
+        }
     }
 
-    // Add vim mode indicator if vim mode is enabled
-    if let Some(vim_state) = props.vim_mode_state {
-        let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
-            VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
-            VimModeState::Insert => ("INSERT", |s| s.green()),
-        };
-        segments.push(Line::from(vec![style_fn(Span::from(label))]));
+    // Add vim mode indicator if vim mode is enabled and segment is enabled
+    if config.is_enabled(FooterSegment::VimMode) {
+        if let Some(vim_state) = props.vim_mode_state {
+            let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
+                VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
+                VimModeState::Insert => ("INSERT", |s| s.green()),
+            };
+            segments.push(Line::from(vec![style_fn(Span::from(label))]));
+        }
     }
 
-    // Add git branch if available: "⎇ branch-name"
+    // Add git branch if available and enabled: "⎇ branch-name"
     // Yellow for main repo, light red (orange-ish) for worktree
-    if let Some(branch) = &props.git_branch {
-        let line = if props.is_worktree {
-            // Light red for worktree (distinguishable from yellow, works with ANSI)
-            #[allow(clippy::disallowed_methods)]
-            Line::from(vec![
-                Span::from("⎇ ").light_red(),
-                Span::from(branch.clone()).light_red(),
-            ])
-        } else {
-            // Yellow for main repo
-            #[allow(clippy::disallowed_methods)]
-            Line::from(vec![
-                Span::from("⎇ ").yellow(),
-                Span::from(branch.clone()).yellow(),
-            ])
-        };
-        segments.push(line);
+    if config.is_enabled(FooterSegment::GitBranch) {
+        if let Some(branch) = &props.git_branch {
+            let line = if props.is_worktree {
+                // Light red for worktree (distinguishable from yellow, works with ANSI)
+                #[allow(clippy::disallowed_methods)]
+                Line::from(vec![
+                    Span::from("⎇ ").light_red(),
+                    Span::from(branch.clone()).light_red(),
+                ])
+            } else {
+                // Yellow for main repo
+                #[allow(clippy::disallowed_methods)]
+                Line::from(vec![
+                    Span::from("⎇ ").yellow(),
+                    Span::from(branch.clone()).yellow(),
+                ])
+            };
+            segments.push(line);
+        }
     }
 
-    // Add git stats if available: "+10 -3" (green for added, red for removed)
-    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
-        && (added > 0 || removed > 0)
-    {
-        segments.push(Line::from(vec![
-            Span::from(format!("+{added}")).green(),
-            Span::from(" ").dim(),
-            Span::from(format!("-{removed}")).red(),
-        ]));
+    // Add git stats if available and enabled: "+10 -3" (green for added, red for removed)
+    if config.is_enabled(FooterSegment::GitStats) {
+        if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
+            && (added > 0 || removed > 0)
+        {
+            segments.push(Line::from(vec![
+                Span::from(format!("+{added}")).green(),
+                Span::from(" ").dim(),
+                Span::from(format!("-{removed}")).red(),
+            ]));
+        }
     }
 
-    // Add context window info if available: "Context: 34K (27%)" (white/default)
-    if let Some(tokens) = props.context_tokens
-        && tokens > 0
-    {
-        let formatted_tokens = format_si_suffix(tokens);
-        let context_text = if let Some(pct) = props.context_window_percent {
-            format!("Context: {formatted_tokens} ({pct}%)")
-        } else {
-            format!("Context: {formatted_tokens}")
-        };
-        segments.push(Line::from(context_text));
+    // Add context window info if available and enabled: "Context: 34K (27%)" (white/default)
+    if config.is_enabled(FooterSegment::Context) {
+        if let Some(tokens) = props.context_tokens
+            && tokens > 0
+        {
+            let formatted_tokens = format_si_suffix(tokens);
+            let context_text = if let Some(pct) = props.context_window_percent {
+                format!("Context: {formatted_tokens} ({pct}%)")
+            } else {
+                format!("Context: {formatted_tokens}")
+            };
+            segments.push(Line::from(context_text));
+        }
     }
 
-    // Add approval mode if available: "Approval Mode: Agent" (magenta)
-    if let Some(label) = &props.approval_mode_label {
-        segments.push(Line::from(vec![
-            Span::from("Approval Mode: ").magenta(),
-            Span::from(label.clone()).magenta(),
-        ]));
+    // Add approval mode if available and enabled: "Approval Mode: Agent" (magenta)
+    if config.is_enabled(FooterSegment::ApprovalMode) {
+        if let Some(label) = &props.approval_mode_label {
+            segments.push(Line::from(vec![
+                Span::from("Approval Mode: ").magenta(),
+                Span::from(label.clone()).magenta(),
+            ]));
+        }
     }
 
-    // Add nori profile if available: "Skillset: name" (cyan)
-    if let Some(profile) = &props.nori_profile {
-        segments.push(Line::from(vec![
-            Span::from("Skillset: ").cyan(),
-            Span::from(profile.clone()).cyan(),
-        ]));
+    // Add nori profile if available and enabled: "Skillset: name" (cyan)
+    if config.is_enabled(FooterSegment::NoriProfile) {
+        if let Some(profile) = &props.nori_profile {
+            segments.push(Line::from(vec![
+                Span::from("Skillset: ").cyan(),
+                Span::from(profile.clone()).cyan(),
+            ]));
+        }
     }
 
-    // Add nori version if available: "Skillsets v19.1.1" or "Profiles v19.1.1" (green)
-    if let Some(version) = &props.nori_version {
-        let label = props
-            .nori_version_source
-            .map(NoriVersionSource::label)
-            .unwrap_or("Skillsets");
-        segments.push(Line::from(vec![
-            Span::from(format!("{label} v")).green(),
-            Span::from(version.clone()).green(),
-        ]));
+    // Add nori version if available and enabled: "Skillsets v19.1.1" or "Profiles v19.1.1" (green)
+    if config.is_enabled(FooterSegment::NoriVersion) {
+        if let Some(version) = &props.nori_version {
+            let label = props
+                .nori_version_source
+                .map(NoriVersionSource::label)
+                .unwrap_or("Skillsets");
+            segments.push(Line::from(vec![
+                Span::from(format!("{label} v")).green(),
+                Span::from(version.clone()).green(),
+            ]));
+        }
     }
 
-    // Add token usage if available: "Tokens: 77K total (32K cached)" (dim/gray)
+    // Add token usage if available and enabled: "Tokens: 77K total (32K cached)" (dim/gray)
     // Total = input + output + cached (cached tokens are read from cache, so they
     // count toward total tokens processed but are shown separately as "cached").
-    let input = props.input_tokens.unwrap_or(0);
-    let output = props.output_tokens.unwrap_or(0);
-    let cached = props.cached_tokens.unwrap_or(0);
-    let total = input.saturating_add(output).saturating_add(cached);
-    if total > 0 {
-        let total_fmt = format_si_suffix(total);
-        let mut spans = vec![
-            "Tokens: ".dim(),
-            Span::from(format!("{total_fmt} total")).dim(),
-        ];
+    if config.is_enabled(FooterSegment::TokenUsage) {
+        let input = props.input_tokens.unwrap_or(0);
+        let output = props.output_tokens.unwrap_or(0);
+        let cached = props.cached_tokens.unwrap_or(0);
+        let total = input.saturating_add(output).saturating_add(cached);
+        if total > 0 {
+            let total_fmt = format_si_suffix(total);
+            let mut spans = vec![
+                "Tokens: ".dim(),
+                Span::from(format!("{total_fmt} total")).dim(),
+            ];
 
-        // Add cached portion if non-zero
-        if cached > 0 {
-            let cached_fmt = format_si_suffix(cached);
-            spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
+            // Add cached portion if non-zero
+            if cached > 0 {
+                let cached_fmt = format_si_suffix(cached);
+                spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
+            }
+
+            segments.push(Line::from(spans));
         }
-
-        segments.push(Line::from(spans));
     }
 
     segments
@@ -596,6 +619,7 @@ mod tests {
             cached_tokens: None,
             vim_mode_state: None,
             prompt_summary: None,
+            footer_segment_config: FooterSegmentConfig::default(),
         }
     }
 
@@ -909,6 +933,106 @@ mod tests {
             FooterProps {
                 prompt_summary: Some("Fix auth bug".to_string()),
                 git_branch: Some("main".to_string()),
+                ..default_props()
+            },
+        );
+    }
+
+    // ========================================================================
+    // Footer Segment Config Tests
+    // ========================================================================
+
+    #[test]
+    fn footer_with_git_branch_disabled() {
+        let mut segment_config = FooterSegmentConfig::default();
+        segment_config.git_branch = false;
+
+        snapshot_footer(
+            "footer_with_git_branch_disabled",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+                footer_segment_config: segment_config,
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_multiple_segments_disabled() {
+        let mut segment_config = FooterSegmentConfig::default();
+        segment_config.git_branch = false;
+        segment_config.git_stats = false;
+        segment_config.token_usage = false;
+
+        snapshot_footer(
+            "footer_with_multiple_segments_disabled",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+                context_tokens: Some(34000),
+                context_window_percent: Some(27),
+                input_tokens: Some(20000),
+                output_tokens: Some(14000),
+                cached_tokens: Some(0),
+                approval_mode_label: Some("Agent".to_string()),
+                footer_segment_config: segment_config,
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_all_segments_disabled() {
+        let mut segment_config = FooterSegmentConfig::default();
+        segment_config.prompt_summary = false;
+        segment_config.vim_mode = false;
+        segment_config.git_branch = false;
+        segment_config.git_stats = false;
+        segment_config.context = false;
+        segment_config.approval_mode = false;
+        segment_config.nori_profile = false;
+        segment_config.nori_version = false;
+        segment_config.token_usage = false;
+
+        snapshot_footer(
+            "footer_with_all_segments_disabled",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                git_lines_added: Some(10),
+                git_lines_removed: Some(3),
+                context_tokens: Some(34000),
+                context_window_percent: Some(27),
+                approval_mode_label: Some("Agent".to_string()),
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                input_tokens: Some(20000),
+                output_tokens: Some(14000),
+                footer_segment_config: segment_config,
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_vertical_with_segments_disabled() {
+        let mut segment_config = FooterSegmentConfig::default();
+        segment_config.nori_profile = false;
+        segment_config.nori_version = false;
+
+        snapshot_footer(
+            "footer_vertical_with_segments_disabled",
+            FooterProps {
+                vertical_footer: true,
+                git_branch: Some("feature/test".to_string()),
+                context_tokens: Some(34000),
+                context_window_percent: Some(27),
+                approval_mode_label: Some("Agent".to_string()),
+                nori_profile: Some("clifford".to_string()),
+                nori_version: Some("19.1.1".to_string()),
+                footer_segment_config: segment_config,
                 ..default_props()
             },
         );

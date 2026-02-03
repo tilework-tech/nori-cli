@@ -669,6 +669,211 @@ impl HotkeyConfig {
     }
 }
 
+// ============================================================================
+// Footer Segment Configuration
+// ============================================================================
+
+/// Individual footer segments that can be enabled/disabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FooterSegment {
+    /// Task summary: "Task: <summary>"
+    PromptSummary,
+    /// Vim mode indicator: "NORMAL" or "INSERT"
+    VimMode,
+    /// Git branch: "⎇ branch-name"
+    GitBranch,
+    /// Git stats: "+10 -3"
+    GitStats,
+    /// Context window: "Context: 34K (27%)"
+    Context,
+    /// Approval mode: "Approval Mode: Agent"
+    ApprovalMode,
+    /// Nori profile: "Skillset: name"
+    NoriProfile,
+    /// Nori version: "Skillsets v19.1.1"
+    NoriVersion,
+    /// Token usage: "Tokens: 77K total (32K cached)"
+    TokenUsage,
+}
+
+impl FooterSegment {
+    /// Human-readable name for display in the TUI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::PromptSummary => "Task Summary",
+            Self::VimMode => "Vim Mode",
+            Self::GitBranch => "Git Branch",
+            Self::GitStats => "Git Stats",
+            Self::Context => "Context Window",
+            Self::ApprovalMode => "Approval Mode",
+            Self::NoriProfile => "Skillset",
+            Self::NoriVersion => "Skillset Version",
+            Self::TokenUsage => "Token Usage",
+        }
+    }
+
+    /// The TOML key name for this segment under `[tui.footer_segments]`.
+    pub fn toml_key(&self) -> &'static str {
+        match self {
+            Self::PromptSummary => "prompt_summary",
+            Self::VimMode => "vim_mode",
+            Self::GitBranch => "git_branch",
+            Self::GitStats => "git_stats",
+            Self::Context => "context",
+            Self::ApprovalMode => "approval_mode",
+            Self::NoriProfile => "nori_profile",
+            Self::NoriVersion => "nori_version",
+            Self::TokenUsage => "token_usage",
+        }
+    }
+
+    /// All footer segment variants, in display order.
+    pub fn all_variants() -> &'static [FooterSegment] {
+        &[
+            Self::PromptSummary,
+            Self::VimMode,
+            Self::GitBranch,
+            Self::GitStats,
+            Self::Context,
+            Self::ApprovalMode,
+            Self::NoriProfile,
+            Self::NoriVersion,
+            Self::TokenUsage,
+        ]
+    }
+
+    /// Default order of footer segments (same as all_variants).
+    pub fn default_order() -> &'static [FooterSegment] {
+        Self::all_variants()
+    }
+}
+
+impl fmt::Display for FooterSegment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.display_name())
+    }
+}
+
+/// TOML-deserializable footer segment configuration.
+/// Each field is optional - if not specified, the segment is enabled by default.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FooterSegmentConfigToml {
+    /// Enable/disable task summary segment.
+    pub prompt_summary: Option<bool>,
+    /// Enable/disable vim mode indicator.
+    pub vim_mode: Option<bool>,
+    /// Enable/disable git branch segment.
+    pub git_branch: Option<bool>,
+    /// Enable/disable git stats segment.
+    pub git_stats: Option<bool>,
+    /// Enable/disable context window segment.
+    pub context: Option<bool>,
+    /// Enable/disable approval mode segment.
+    pub approval_mode: Option<bool>,
+    /// Enable/disable nori profile segment.
+    pub nori_profile: Option<bool>,
+    /// Enable/disable nori version segment.
+    pub nori_version: Option<bool>,
+    /// Enable/disable token usage segment.
+    pub token_usage: Option<bool>,
+}
+
+/// Resolved footer segment configuration with defaults applied.
+#[derive(Debug, Clone)]
+pub struct FooterSegmentConfig {
+    /// Enable/disable task summary segment.
+    pub prompt_summary: bool,
+    /// Enable/disable vim mode indicator.
+    pub vim_mode: bool,
+    /// Enable/disable git branch segment.
+    pub git_branch: bool,
+    /// Enable/disable git stats segment.
+    pub git_stats: bool,
+    /// Enable/disable context window segment.
+    pub context: bool,
+    /// Enable/disable approval mode segment.
+    pub approval_mode: bool,
+    /// Enable/disable nori profile segment.
+    pub nori_profile: bool,
+    /// Enable/disable nori version segment.
+    pub nori_version: bool,
+    /// Enable/disable token usage segment.
+    pub token_usage: bool,
+}
+
+impl Default for FooterSegmentConfig {
+    fn default() -> Self {
+        Self {
+            prompt_summary: true,
+            vim_mode: true,
+            git_branch: true,
+            git_stats: true,
+            context: true,
+            approval_mode: true,
+            nori_profile: true,
+            nori_version: true,
+            token_usage: true,
+        }
+    }
+}
+
+impl FooterSegmentConfig {
+    /// Resolve from TOML config, applying defaults for missing values.
+    pub fn from_toml(toml: &FooterSegmentConfigToml) -> Self {
+        Self {
+            prompt_summary: toml.prompt_summary.unwrap_or(true),
+            vim_mode: toml.vim_mode.unwrap_or(true),
+            git_branch: toml.git_branch.unwrap_or(true),
+            git_stats: toml.git_stats.unwrap_or(true),
+            context: toml.context.unwrap_or(true),
+            approval_mode: toml.approval_mode.unwrap_or(true),
+            nori_profile: toml.nori_profile.unwrap_or(true),
+            nori_version: toml.nori_version.unwrap_or(true),
+            token_usage: toml.token_usage.unwrap_or(true),
+        }
+    }
+
+    /// Check if a segment is enabled.
+    pub fn is_enabled(&self, segment: FooterSegment) -> bool {
+        match segment {
+            FooterSegment::PromptSummary => self.prompt_summary,
+            FooterSegment::VimMode => self.vim_mode,
+            FooterSegment::GitBranch => self.git_branch,
+            FooterSegment::GitStats => self.git_stats,
+            FooterSegment::Context => self.context,
+            FooterSegment::ApprovalMode => self.approval_mode,
+            FooterSegment::NoriProfile => self.nori_profile,
+            FooterSegment::NoriVersion => self.nori_version,
+            FooterSegment::TokenUsage => self.token_usage,
+        }
+    }
+
+    /// Set whether a segment is enabled.
+    pub fn set_enabled(&mut self, segment: FooterSegment, enabled: bool) {
+        match segment {
+            FooterSegment::PromptSummary => self.prompt_summary = enabled,
+            FooterSegment::VimMode => self.vim_mode = enabled,
+            FooterSegment::GitBranch => self.git_branch = enabled,
+            FooterSegment::GitStats => self.git_stats = enabled,
+            FooterSegment::Context => self.context = enabled,
+            FooterSegment::ApprovalMode => self.approval_mode = enabled,
+            FooterSegment::NoriProfile => self.nori_profile = enabled,
+            FooterSegment::NoriVersion => self.nori_version = enabled,
+            FooterSegment::TokenUsage => self.token_usage = enabled,
+        }
+    }
+
+    /// Return all (segment, enabled) pairs in default order.
+    pub fn all_settings(&self) -> Vec<(FooterSegment, bool)> {
+        FooterSegment::all_variants()
+            .iter()
+            .map(|s| (*s, self.is_enabled(*s)))
+            .collect()
+    }
+}
+
 /// TUI-specific settings (TOML)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -694,6 +899,10 @@ pub struct TuiConfigToml {
     /// Configurable hotkey bindings.
     #[serde(default)]
     pub hotkeys: HotkeyConfigToml,
+
+    /// Footer segment visibility settings.
+    #[serde(default)]
+    pub footer_segments: FooterSegmentConfigToml,
 
     /// Timeout for custom prompt script execution.
     pub script_timeout: Option<ScriptTimeout>,
@@ -817,6 +1026,9 @@ pub struct NoriConfig {
     /// Automatically create a git worktree at session start.
     pub auto_worktree: bool,
 
+    /// Footer segment visibility configuration.
+    pub footer_segment_config: FooterSegmentConfig,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -845,6 +1057,7 @@ impl Default for NoriConfig {
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
             auto_worktree: false,
+            footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
@@ -1801,5 +2014,186 @@ script_timeout = "2m"
             config.tui.script_timeout.unwrap().as_duration(),
             Duration::from_secs(120)
         );
+    }
+
+    // ========================================================================
+    // Footer Segment Configuration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_footer_segment_deserialize_all_variants() {
+        use pretty_assertions::assert_eq;
+        #[derive(Deserialize)]
+        struct Wrapper {
+            segment: FooterSegment,
+        }
+
+        let w: Wrapper = toml::from_str(r#"segment = "prompt_summary""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::PromptSummary);
+
+        let w: Wrapper = toml::from_str(r#"segment = "vim_mode""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::VimMode);
+
+        let w: Wrapper = toml::from_str(r#"segment = "git_branch""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::GitBranch);
+
+        let w: Wrapper = toml::from_str(r#"segment = "git_stats""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::GitStats);
+
+        let w: Wrapper = toml::from_str(r#"segment = "context""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::Context);
+
+        let w: Wrapper = toml::from_str(r#"segment = "approval_mode""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::ApprovalMode);
+
+        let w: Wrapper = toml::from_str(r#"segment = "nori_profile""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::NoriProfile);
+
+        let w: Wrapper = toml::from_str(r#"segment = "nori_version""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::NoriVersion);
+
+        let w: Wrapper = toml::from_str(r#"segment = "token_usage""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::TokenUsage);
+    }
+
+    #[test]
+    fn test_footer_segment_serialize() {
+        use pretty_assertions::assert_eq;
+        // TOML doesn't support bare enums, so we test within a struct
+        #[derive(Serialize)]
+        struct Wrapper {
+            segment: FooterSegment,
+        }
+        let w = Wrapper {
+            segment: FooterSegment::PromptSummary,
+        };
+        assert!(toml::to_string(&w).unwrap().contains("prompt_summary"));
+
+        let w = Wrapper {
+            segment: FooterSegment::GitBranch,
+        };
+        assert!(toml::to_string(&w).unwrap().contains("git_branch"));
+    }
+
+    #[test]
+    fn test_footer_segment_display_name() {
+        use pretty_assertions::assert_eq;
+        assert_eq!(FooterSegment::PromptSummary.display_name(), "Task Summary");
+        assert_eq!(FooterSegment::VimMode.display_name(), "Vim Mode");
+        assert_eq!(FooterSegment::GitBranch.display_name(), "Git Branch");
+        assert_eq!(FooterSegment::GitStats.display_name(), "Git Stats");
+        assert_eq!(FooterSegment::Context.display_name(), "Context Window");
+        assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approval Mode");
+        assert_eq!(FooterSegment::NoriProfile.display_name(), "Skillset");
+        assert_eq!(
+            FooterSegment::NoriVersion.display_name(),
+            "Skillset Version"
+        );
+        assert_eq!(FooterSegment::TokenUsage.display_name(), "Token Usage");
+    }
+
+    #[test]
+    fn test_footer_segment_all_variants() {
+        let variants = FooterSegment::all_variants();
+        assert_eq!(variants.len(), 9);
+        assert_eq!(variants[0], FooterSegment::PromptSummary);
+        assert_eq!(variants[1], FooterSegment::VimMode);
+        assert_eq!(variants[2], FooterSegment::GitBranch);
+        assert_eq!(variants[3], FooterSegment::GitStats);
+        assert_eq!(variants[4], FooterSegment::Context);
+        assert_eq!(variants[5], FooterSegment::ApprovalMode);
+        assert_eq!(variants[6], FooterSegment::NoriProfile);
+        assert_eq!(variants[7], FooterSegment::NoriVersion);
+        assert_eq!(variants[8], FooterSegment::TokenUsage);
+    }
+
+    #[test]
+    fn test_footer_segment_default_order() {
+        use pretty_assertions::assert_eq;
+        let order = FooterSegment::default_order();
+        assert_eq!(order, FooterSegment::all_variants());
+    }
+
+    #[test]
+    fn test_footer_segment_config_default_all_enabled() {
+        let config = FooterSegmentConfig::default();
+        for segment in FooterSegment::all_variants() {
+            assert!(
+                config.is_enabled(*segment),
+                "Segment {:?} should be enabled by default",
+                segment
+            );
+        }
+    }
+
+    #[test]
+    fn test_footer_segment_config_disable_segment() {
+        let mut config = FooterSegmentConfig::default();
+        config.set_enabled(FooterSegment::GitBranch, false);
+        assert!(!config.is_enabled(FooterSegment::GitBranch));
+        assert!(config.is_enabled(FooterSegment::Context));
+    }
+
+    #[test]
+    fn test_footer_segment_config_from_toml_empty() {
+        let toml = FooterSegmentConfigToml::default();
+        let config = FooterSegmentConfig::from_toml(&toml);
+        // All segments enabled by default
+        for segment in FooterSegment::all_variants() {
+            assert!(config.is_enabled(*segment));
+        }
+    }
+
+    #[test]
+    fn test_footer_segment_config_from_toml_some_disabled() {
+        let toml = FooterSegmentConfigToml {
+            prompt_summary: Some(false),
+            git_branch: Some(false),
+            token_usage: Some(false),
+            ..Default::default()
+        };
+        let config = FooterSegmentConfig::from_toml(&toml);
+        assert!(!config.is_enabled(FooterSegment::PromptSummary));
+        assert!(!config.is_enabled(FooterSegment::GitBranch));
+        assert!(!config.is_enabled(FooterSegment::TokenUsage));
+        assert!(config.is_enabled(FooterSegment::Context));
+        assert!(config.is_enabled(FooterSegment::ApprovalMode));
+    }
+
+    #[test]
+    fn test_tui_config_toml_with_footer_segments() {
+        let config: TuiConfigToml = toml::from_str(
+            r#"
+[footer_segments]
+git_branch = false
+token_usage = false
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.footer_segments.git_branch, Some(false));
+        assert_eq!(config.footer_segments.token_usage, Some(false));
+        assert_eq!(config.footer_segments.context, None);
+    }
+
+    #[test]
+    fn test_full_config_toml_with_footer_segments() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+model = "claude-code"
+
+[tui]
+vertical_footer = true
+
+[tui.footer_segments]
+prompt_summary = false
+vim_mode = false
+nori_profile = true
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.tui.footer_segments.prompt_summary, Some(false));
+        assert_eq!(config.tui.footer_segments.vim_mode, Some(false));
+        assert_eq!(config.tui.footer_segments.nori_profile, Some(true));
+        assert_eq!(config.tui.footer_segments.git_branch, None);
     }
 }

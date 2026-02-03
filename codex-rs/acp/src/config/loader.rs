@@ -131,6 +131,9 @@ impl NoriConfig {
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
             auto_worktree: toml.tui.auto_worktree.unwrap_or(false),
+            footer_segment_config: super::types::FooterSegmentConfig::from_toml(
+                &toml.tui.footer_segments,
+            ),
             nori_home,
             cwd,
             mcp_servers,

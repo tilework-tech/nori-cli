@@ -315,6 +315,14 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigAutoWorktree(bool),
 
+    /// Open the footer segments sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenFooterSegmentsPicker,
+
+    /// Toggle a footer segment's enabled state.
+    #[cfg(feature = "nori-config")]
+    SetConfigFooterSegment(codex_acp::config::FooterSegment, bool),
+
     /// Start the next loop iteration with a fresh conversation.
     /// Sent by ChatWidget::on_task_complete when loop mode is active.
     #[cfg(feature = "nori-config")]

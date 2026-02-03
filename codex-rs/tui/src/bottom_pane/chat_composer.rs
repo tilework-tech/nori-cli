@@ -120,6 +120,7 @@ pub(crate) struct ChatComposer {
     approval_mode_label: Option<String>,
     vertical_footer: bool,
     prompt_summary: Option<String>,
+    footer_segment_config: codex_acp::config::FooterSegmentConfig,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -167,6 +168,7 @@ impl ChatComposer {
             approval_mode_label: None,
             vertical_footer: false,
             prompt_summary: None,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -222,6 +224,16 @@ impl ChatComposer {
 
     pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
         self.textarea.set_vim_mode_enabled(enabled);
+    }
+
+    /// Set a footer segment's enabled state.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_footer_segment_enabled(
+        &mut self,
+        segment: codex_acp::config::FooterSegment,
+        enabled: bool,
+    ) {
+        self.footer_segment_config.set_enabled(segment, enabled);
     }
 
     /// Returns the current vim mode state (for testing).
@@ -1512,6 +1524,7 @@ impl ChatComposer {
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
             prompt_summary: self.prompt_summary.clone(),
+            footer_segment_config: self.footer_segment_config.clone(),
         }
     }
 

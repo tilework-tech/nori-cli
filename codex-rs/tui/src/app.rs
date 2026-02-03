@@ -1173,6 +1173,16 @@ impl App {
                 self.persist_auto_worktree_setting(enabled).await;
             }
             #[cfg(feature = "nori-config")]
+            AppEvent::OpenFooterSegmentsPicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_footer_segments_picker(&nori_config.footer_segment_config);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigFooterSegment(segment, enabled) => {
+                self.persist_footer_segment_setting(segment, enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
             AppEvent::LoopIteration {
                 prompt,
                 remaining,
@@ -1704,6 +1714,43 @@ impl App {
             format!("Auto worktree {status}. Changes will take effect on next session."),
             None,
         );
+    }
+
+    #[cfg(feature = "nori-config")]
+    async fn persist_footer_segment_setting(
+        &mut self,
+        segment: codex_acp::config::FooterSegment,
+        enabled: bool,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(
+                &["tui", "footer_segments", segment.toml_key()],
+                toml_value(enabled),
+            )
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist footer_segment setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save footer segment setting: {err}"));
+            return;
+        }
+
+        // Update the local config and apply to the widget
+        self.chat_widget
+            .set_footer_segment_enabled(segment, enabled);
+
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("{} {status}.", segment.display_name()), None);
+
+        // Refresh the picker to show updated state
+        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        self.chat_widget
+            .open_footer_segments_picker(&nori_config.footer_segment_config);
     }
 
     async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {

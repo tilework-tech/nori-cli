@@ -396,6 +396,16 @@ impl BottomPane {
         self.composer.set_vim_mode_enabled(enabled);
     }
 
+    /// Set a footer segment's enabled state.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_footer_segment_enabled(
+        &mut self,
+        segment: codex_acp::config::FooterSegment,
+        enabled: bool,
+    ) {
+        self.composer.set_footer_segment_enabled(segment, enabled);
+    }
+
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());

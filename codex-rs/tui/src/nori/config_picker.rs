@@ -3,6 +3,8 @@
 //! This module provides the UI for modifying TUI configuration settings
 //! that are persisted to ~/.nori/cli/config.toml.
 
+use codex_acp::config::FooterSegment;
+use codex_acp::config::FooterSegmentConfig;
 use codex_acp::config::NoriConfig;
 use codex_acp::config::NotifyAfterIdle;
 use codex_acp::config::OsNotifications;
@@ -158,6 +160,21 @@ pub fn config_picker_params(
                 description: Some(
                     "Number of times to re-run the first prompt in fresh sessions".to_string(),
                 ),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
+        {
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenFooterSegmentsPicker);
+                }
+            })];
+            SelectionItem {
+                name: "Footer Segments".to_string(),
+                description: Some("Configure which segments are shown in the footer".to_string()),
                 is_current: false,
                 actions,
                 dismiss_on_select: true,
@@ -323,6 +340,52 @@ pub fn loop_count_picker_params(
     }
 }
 
+/// Create selection view parameters for the footer segments sub-picker.
+///
+/// Each segment can be toggled on/off. The order of segments is controlled
+/// via the TOML config file (not via this picker).
+///
+/// # Arguments
+/// * `current` - The current footer segment configuration
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn footer_segments_picker_params(
+    current: &FooterSegmentConfig,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = FooterSegment::all_variants()
+        .iter()
+        .map(|&segment| {
+            let is_enabled = current.is_enabled(segment);
+            let status = if is_enabled { "on" } else { "off" };
+            let name = format!("{} ({})", segment.display_name(), status);
+
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                let new_value = !is_enabled;
+                move |tx| {
+                    tx.send(AppEvent::SetConfigFooterSegment(segment, new_value));
+                }
+            })];
+
+            SelectionItem {
+                name,
+                description: None,
+                is_current: is_enabled,
+                actions,
+                dismiss_on_select: false, // Keep picker open for toggling multiple segments
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Footer Segments".to_string()),
+        subtitle: Some("Toggle which segments appear in the footer".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,6 +412,7 @@ mod tests {
             script_timeout: codex_acp::config::ScriptTimeout::default(),
             loop_count: None,
             auto_worktree: false,
+            footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -363,7 +427,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 9);
+        assert_eq!(params.items.len(), 10);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -398,7 +462,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 9);
+        assert_eq!(params.items.len(), 10);
         // The 4th item should be Vim Mode
         assert!(params.items[3].name.contains("Vim Mode"));
         // The 5th item should be Auto Worktree
@@ -568,7 +632,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Should now have 9 items (includes vim mode, auto worktree, script timeout, and loop count)
-        assert_eq!(params.items.len(), 9);
+        assert_eq!(params.items.len(), 10);
         // Find the vim mode item
         let vim_mode_item = params
             .items
