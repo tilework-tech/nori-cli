@@ -146,18 +146,15 @@ pub fn summary_to_branch_name(summary: &str) -> String {
     format!("auto/{truncated}-{timestamp}")
 }
 
-/// Rename a git worktree's branch and directory.
+/// Rename a git worktree's branch in place.
 ///
-/// Runs `git branch -m` to rename the branch, then `git worktree move` to
-/// relocate the worktree directory. Both commands are run from the repo root.
-pub fn rename_worktree(
+/// Runs `git branch -m` to rename the branch. The worktree directory is left
+/// unchanged so that processes running inside it are not disrupted.
+pub fn rename_worktree_branch(
     repo_root: &Path,
-    old_path: &Path,
-    new_path: &Path,
     old_branch: &str,
     new_branch: &str,
 ) -> Result<(), GitToolingError> {
-    // Rename the branch first (worktree references the branch)
     let output = Command::new("git")
         .args(["branch", "-m", old_branch, new_branch])
         .current_dir(repo_root)
@@ -166,35 +163,6 @@ pub fn rename_worktree(
     if !output.status.success() {
         return Err(GitToolingError::GitCommand {
             command: format!("git branch -m {old_branch} {new_branch}"),
-            status: output.status,
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        });
-    }
-
-    // Move the worktree directory
-    let output = Command::new("git")
-        .args([
-            "worktree",
-            "move",
-            &old_path.to_string_lossy(),
-            &new_path.to_string_lossy(),
-        ])
-        .current_dir(repo_root)
-        .output()?;
-
-    if !output.status.success() {
-        // Best-effort rollback: rename the branch back to the old name
-        let _ = Command::new("git")
-            .args(["branch", "-m", new_branch, old_branch])
-            .current_dir(repo_root)
-            .output();
-
-        return Err(GitToolingError::GitCommand {
-            command: format!(
-                "git worktree move {} {}",
-                old_path.display(),
-                new_path.display()
-            ),
             status: output.status,
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         });
@@ -441,36 +409,31 @@ mod tests {
     }
 
     #[test]
-    fn test_rename_worktree_moves_directory_and_branch() {
+    fn test_rename_worktree_branch_renames_branch_only() {
         let temp = init_temp_repo();
         let worktrees_dir = temp.path().join(".worktrees");
         std::fs::create_dir_all(&worktrees_dir).unwrap();
 
         // Create initial worktree
-        let old_path = worktrees_dir.join("old-name");
-        create_worktree(temp.path(), &old_path, "auto/old-name").unwrap();
-        assert!(old_path.exists());
+        let wt_path = worktrees_dir.join("old-name");
+        create_worktree(temp.path(), &wt_path, "auto/old-name").unwrap();
+        assert!(wt_path.exists());
 
-        // Rename it
-        let new_path = worktrees_dir.join("new-name");
-        let result = rename_worktree(
-            temp.path(),
-            &old_path,
-            &new_path,
-            "auto/old-name",
-            "auto/new-name",
-        );
+        // Rename the branch only
+        let result = rename_worktree_branch(temp.path(), "auto/old-name", "auto/new-name");
         assert!(
             result.is_ok(),
-            "rename_worktree should succeed: {:?}",
+            "rename_worktree_branch should succeed: {:?}",
             result.err()
         );
 
-        // Old path should be gone, new path should exist
-        assert!(!old_path.exists(), "old worktree path should not exist");
-        assert!(new_path.exists(), "new worktree path should exist");
+        // Directory should remain at original path
+        assert!(
+            wt_path.exists(),
+            "worktree directory should still exist at original path"
+        );
 
-        // Branch should be renamed
+        // New branch should exist
         let output = Command::new("git")
             .args(["branch", "--list", "auto/new-name"])
             .current_dir(temp.path())

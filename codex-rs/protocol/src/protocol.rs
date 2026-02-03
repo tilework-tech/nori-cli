@@ -580,10 +580,6 @@ pub enum EventMsg {
     ReasoningRawContentDelta(ReasoningRawContentDeltaEvent),
 
     PromptSummary(PromptSummaryEvent),
-
-    /// Notification that the session's working directory has changed
-    /// (e.g., after an auto-worktree was renamed).
-    CwdChanged(CwdChangedEvent),
 }
 
 /// Codex errors that we expose to clients.
@@ -1630,11 +1626,6 @@ pub struct TurnAbortedEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct PromptSummaryEvent {
     pub summary: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
-pub struct CwdChangedEvent {
-    pub cwd: PathBuf,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]

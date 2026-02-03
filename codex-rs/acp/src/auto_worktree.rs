@@ -5,38 +5,25 @@ use std::process::Command;
 use anyhow::Context;
 use anyhow::Result;
 
-/// Rename an existing auto-worktree using a prompt summary.
+/// Rename an existing auto-worktree's branch using a prompt summary.
 ///
 /// This function:
 /// 1. Converts the summary into a branch-name-safe slug
-/// 2. Renames the git branch
-/// 3. Moves the worktree directory
+/// 2. Renames the git branch via `git branch -m`
 ///
-/// Returns the new worktree path. If renaming fails, the original worktree
-/// is left unchanged and the error is returned.
-pub fn rename_auto_worktree(
+/// The worktree directory is left unchanged so that processes running inside
+/// it are not disrupted. Only the branch name becomes human-readable.
+pub fn rename_auto_worktree_branch(
     repo_root: &Path,
-    old_worktree_path: &Path,
     old_branch: &str,
     summary: &str,
-) -> Result<PathBuf> {
+) -> Result<()> {
     let new_branch = codex_git::summary_to_branch_name(summary);
-    let dir_name = new_branch.strip_prefix("auto/").unwrap_or(&new_branch);
-    let worktrees_dir = old_worktree_path
-        .parent()
-        .context("worktree path has no parent directory")?;
-    let new_path = worktrees_dir.join(dir_name);
 
-    codex_git::rename_worktree(
-        repo_root,
-        old_worktree_path,
-        &new_path,
-        old_branch,
-        &new_branch,
-    )
-    .context("Failed to rename git worktree")?;
+    codex_git::rename_worktree_branch(repo_root, old_branch, &new_branch)
+        .context("Failed to rename git branch")?;
 
-    Ok(new_path)
+    Ok(())
 }
 
 /// Set up an auto-worktree for the given working directory.
@@ -75,7 +62,10 @@ pub fn setup_auto_worktree(cwd: &Path) -> Result<PathBuf> {
     let branch_name = codex_git::generate_worktree_branch_name();
 
     // 5. Create the worktree
-    // Extract the short name from the branch (e.g., "auto/swift-oak-20260201-120000" -> "swift-oak-20260201-120000")
+    // Extract the short name from the branch (e.g., "auto/swift-oak-20260201-120000" -> "swift-oak-20260201-120000").
+    // NOTE: backend.rs reconstructs the branch name as `auto/{dir_name}` to perform
+    // the rename after the prompt summary arrives. If this convention changes, update
+    // the branch derivation in `run_prompt_summary` accordingly.
     let dir_name = branch_name.strip_prefix("auto/").unwrap_or(&branch_name);
     let worktree_path = worktrees_dir.join(dir_name);
 
@@ -150,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rename_auto_worktree_renames_to_summary_based_name() {
+    fn test_rename_auto_worktree_branch_renames_branch_only() {
         let temp = init_temp_repo();
 
         // Create the initial auto-worktree (random name)
@@ -170,40 +160,41 @@ mod tests {
         );
 
         // Rename using a summary
-        let result = rename_auto_worktree(temp.path(), &worktree_path, &old_branch, "Fix auth bug");
+        let result = rename_auto_worktree_branch(temp.path(), &old_branch, "Fix auth bug");
         assert!(
             result.is_ok(),
-            "rename_auto_worktree should succeed: {:?}",
+            "rename_auto_worktree_branch should succeed: {:?}",
             result.err()
         );
 
-        let new_path = result.unwrap();
-
-        // Old path should be gone
+        // Worktree directory should still exist at the same path
         assert!(
-            !worktree_path.exists(),
-            "old worktree path should not exist"
-        );
-        // New path should exist
-        assert!(new_path.exists(), "new worktree path should exist");
-
-        // New path should contain the summary slug
-        let dir_name = new_path.file_name().unwrap().to_string_lossy();
-        assert!(
-            dir_name.starts_with("fix-auth-bug-"),
-            "new dir name should start with summary slug, got: {dir_name}"
+            worktree_path.exists(),
+            "worktree path should still exist after branch rename"
         );
 
         // Branch should be renamed
         let output = Command::new("git")
             .args(["branch", "--show-current"])
-            .current_dir(&new_path)
+            .current_dir(&worktree_path)
             .output()
             .unwrap();
         let new_branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
         assert!(
             new_branch.starts_with("auto/fix-auth-bug-"),
             "branch should be renamed to summary-based name, got: {new_branch}"
+        );
+
+        // Old branch should not exist
+        let output = Command::new("git")
+            .args(["branch", "--list", &old_branch])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        let branches = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !branches.contains(&old_branch),
+            "old branch name should not exist"
         );
     }
 }
