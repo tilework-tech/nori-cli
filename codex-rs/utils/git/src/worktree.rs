@@ -17,6 +17,72 @@ const NOUNS: &[&str] = &[
     "web", "yak", "zen", "arc",
 ];
 
+/// Information about a git worktree (excluding the main worktree).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeInfo {
+    pub path: PathBuf,
+    pub branch: Option<String>,
+}
+
+/// Parse the porcelain output of `git worktree list --porcelain` into structured
+/// worktree info. The first record (main worktree) is always skipped.
+pub fn parse_worktree_list_porcelain(output: &str) -> Vec<WorktreeInfo> {
+    if output.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let records: Vec<&str> = output.trim().split("\n\n").collect();
+
+    // Skip first record (main worktree)
+    records
+        .iter()
+        .skip(1)
+        .filter_map(|record| {
+            let record = record.trim();
+            if record.is_empty() {
+                return None;
+            }
+
+            let mut worktree_path = None;
+            let mut branch = None;
+
+            for line in record.lines() {
+                if let Some(path) = line.strip_prefix("worktree ") {
+                    worktree_path = Some(PathBuf::from(path));
+                } else if let Some(branch_ref) = line.strip_prefix("branch ") {
+                    branch = Some(
+                        branch_ref
+                            .strip_prefix("refs/heads/")
+                            .unwrap_or(branch_ref)
+                            .to_string(),
+                    );
+                }
+            }
+
+            worktree_path.map(|path| WorktreeInfo { path, branch })
+        })
+        .collect()
+}
+
+/// List all git worktrees (excluding the main worktree) for the given repo root.
+pub fn list_worktrees(repo_root: &Path) -> Result<Vec<WorktreeInfo>, GitToolingError> {
+    let output = Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(repo_root)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(GitToolingError::GitCommand {
+            command: "git worktree list --porcelain".to_string(),
+            status: output.status,
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        });
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(parse_worktree_list_porcelain(&stdout))
+}
+
 /// Create a git worktree at the specified path with the given branch name.
 pub fn create_worktree(
     repo_root: &Path,
@@ -313,6 +379,106 @@ mod tests {
 
         let content = std::fs::read_to_string(temp.path().join(".gitignore")).unwrap();
         assert!(content.contains(".worktrees/"));
+    }
+
+    #[test]
+    fn test_parse_worktree_list_porcelain_multiple_worktrees() {
+        let output = "\
+worktree /home/user/project
+HEAD abc123def456
+branch refs/heads/main
+
+worktree /home/user/project/.worktrees/feature-auth
+HEAD def456abc789
+branch refs/heads/feature/auth
+
+worktree /home/user/project/.worktrees/bugfix-login
+HEAD 111222333444
+branch refs/heads/bugfix/login
+";
+        let worktrees = parse_worktree_list_porcelain(output);
+        assert_eq!(worktrees.len(), 2, "should skip main worktree, return 2");
+        assert_eq!(
+            worktrees[0].path,
+            PathBuf::from("/home/user/project/.worktrees/feature-auth")
+        );
+        assert_eq!(worktrees[0].branch, Some("feature/auth".to_string()));
+        assert_eq!(
+            worktrees[1].path,
+            PathBuf::from("/home/user/project/.worktrees/bugfix-login")
+        );
+        assert_eq!(worktrees[1].branch, Some("bugfix/login".to_string()));
+    }
+
+    #[test]
+    fn test_parse_worktree_list_porcelain_only_main() {
+        let output = "\
+worktree /home/user/project
+HEAD abc123def456
+branch refs/heads/main
+";
+        let worktrees = parse_worktree_list_porcelain(output);
+        assert_eq!(
+            worktrees.len(),
+            0,
+            "should return empty when only main worktree exists"
+        );
+    }
+
+    #[test]
+    fn test_parse_worktree_list_porcelain_empty() {
+        let worktrees = parse_worktree_list_porcelain("");
+        assert_eq!(worktrees.len(), 0, "should return empty for empty input");
+    }
+
+    #[test]
+    fn test_parse_worktree_list_porcelain_bare_and_detached() {
+        let output = "\
+worktree /home/user/project
+HEAD abc123def456
+branch refs/heads/main
+
+worktree /home/user/project/.worktrees/detached-work
+HEAD 999888777666
+detached
+";
+        let worktrees = parse_worktree_list_porcelain(output);
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(
+            worktrees[0].path,
+            PathBuf::from("/home/user/project/.worktrees/detached-work")
+        );
+        assert_eq!(
+            worktrees[0].branch, None,
+            "detached worktree should have no branch"
+        );
+    }
+
+    #[test]
+    fn test_list_worktrees_returns_extra_worktrees() {
+        let temp = init_temp_repo();
+        let worktree_path = temp.path().join(".worktrees").join("test-wt");
+        std::fs::create_dir_all(temp.path().join(".worktrees")).unwrap();
+        create_worktree(temp.path(), &worktree_path, "test-wt-branch").unwrap();
+
+        let worktrees = list_worktrees(temp.path()).unwrap();
+        assert_eq!(worktrees.len(), 1, "should find one extra worktree");
+        assert!(
+            worktrees[0].path.to_string_lossy().contains("test-wt"),
+            "worktree path should contain 'test-wt'"
+        );
+        assert_eq!(worktrees[0].branch, Some("test-wt-branch".to_string()));
+    }
+
+    #[test]
+    fn test_list_worktrees_no_extras() {
+        let temp = init_temp_repo();
+        let worktrees = list_worktrees(temp.path()).unwrap();
+        assert_eq!(
+            worktrees.len(),
+            0,
+            "fresh repo should have no extra worktrees"
+        );
     }
 
     #[test]

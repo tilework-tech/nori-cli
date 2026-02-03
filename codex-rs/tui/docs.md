@@ -70,6 +70,7 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `git_lines_added` / `git_lines_removed` | Git diff statistics |
 | `is_worktree` | Whether CWD is a git worktree |
 | `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
+| `worktree_cleanup_warning` | Warning when git worktrees exist and disk space is below 10% free (unix only) |
 
 The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
 
@@ -78,6 +79,10 @@ Two collection methods are provided:
 - `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate Claude Code transcript identification
 
 The first-message is obtained from `ChatWidget::first_prompt_text()`, which stores the text of the first submitted prompt. This flows through `SystemInfoRefreshRequest` to the background worker, enabling accurate transcript matching when multiple sessions exist in the same project directory.
+
+**Worktree Cleanup Warning:**
+
+During background system info collection on unix, `check_worktree_cleanup()` runs three checks in sequence: confirms the directory is a git repo via `git rev-parse --show-toplevel`, lists extra worktrees via `codex_git::list_worktrees()` (see `@/codex-rs/utils/git/`), and checks disk space via `df -Pk`. If worktrees exist and free disk space is below the `DISK_SPACE_LOW_PERCENT` threshold (10%), a `WorktreeCleanupWarning` is attached to the `SystemInfo` result. When the `App` event loop handles `SystemInfoRefreshed`, it checks for this warning and calls `chat_widget.add_warning_message()` to display a yellow warning cell in the chat history suggesting the user clean up unused worktrees. Non-unix platforms skip this check entirely.
 
 **Slash Commands:**
 

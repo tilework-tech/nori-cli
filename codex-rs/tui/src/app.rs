@@ -243,6 +243,9 @@ pub(crate) struct App {
     vim_mode_enabled: bool,
 
     system_info_tx: mpsc::Sender<SystemInfoRefreshRequest>,
+
+    /// Guard to prevent showing the worktree cleanup warning more than once per session.
+    worktree_warning_shown: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -388,6 +391,7 @@ impl App {
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode_enabled: false,
             system_info_tx,
+            worktree_warning_shown: false,
         };
 
         // Load NoriConfig and propagate settings to the textarea.
@@ -673,6 +677,18 @@ impl App {
                 self.chat_widget.apply_file_search_result(query, matches);
             }
             AppEvent::SystemInfoRefreshed(info) => {
+                if !self.worktree_warning_shown
+                    && let Some(warning) = &info.worktree_cleanup_warning
+                {
+                    let free = warning.free_percent;
+                    let count = warning.worktree_count;
+                    let message = format!(
+                        "Low disk space: {free}% free. You have {count} git worktree(s) that may be consuming disk space. \
+                         Consider running `git worktree remove <path>` to clean up unused worktrees.",
+                    );
+                    self.chat_widget.add_warning_message(message);
+                    self.worktree_warning_shown = true;
+                }
                 self.chat_widget.apply_system_info_refresh(info);
             }
             AppEvent::RefreshSystemInfoForDirectory { dir, model } => {
@@ -1951,6 +1967,7 @@ mod tests {
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode_enabled: false,
             system_info_tx,
+            worktree_warning_shown: false,
         }
     }
 
@@ -1993,6 +2010,7 @@ mod tests {
                 hotkey_config: codex_acp::config::HotkeyConfig::default(),
                 vim_mode_enabled: false,
                 system_info_tx,
+                worktree_warning_shown: false,
             },
             rx,
             op_rx,
