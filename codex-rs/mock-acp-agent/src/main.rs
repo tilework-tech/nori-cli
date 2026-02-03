@@ -301,6 +301,113 @@ impl acp::Agent for MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
+        // Reproduce the orphan tool cell bug caused by cascade deferral.
+        //
+        // The bug sequence:
+        // 1. Tool A Begin → handled immediately (no stream active)
+        // 2. Text streaming starts → stream_controller = Some
+        // 3. Tool A End arrives → DEFERRED (stream active), queue now non-empty
+        // 4. Tool B Begin arrives → on_exec_command_begin calls
+        //    flush_answer_stream_with_separator() which clears stream_controller,
+        //    BUT !interrupts.is_empty() is still true → DEFERRED
+        // 5. Tool B End arrives → queue non-empty → DEFERRED
+        // 6. Final text + turn ends
+        // 7. flush_completions_and_clear: End-A processed (OK), Begin-B
+        //    discarded, End-B processed → no running_commands entry →
+        //    orphan ExecCell created with raw call_id as command name
+        //
+        // The orphan cell renders as "• Ran orphan-tool-b / └ No files found"
+        // which is the exact user-reported bug.
+        if std::env::var("MOCK_AGENT_ORPHAN_TOOL_CELLS").is_ok() {
+            eprintln!("Mock agent: sending orphan tool cell reproduction sequence");
+
+            // Step 1: Tool A Begin (handled immediately, no stream active)
+            // IMPORTANT: Tool A must be an Execute kind (not Read/Search) so that
+            // when its End event creates an ExecCell, the cell gets flushed to
+            // history immediately (non-exploring cells don't stay in active_cell).
+            // This leaves active_cell = None when End-B arrives, triggering the
+            // orphan cell creation path.
+            let tool_a = acp::ToolCallId::new("tool-a-001");
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(tool_a.clone(), "Running tests")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"command": "cargo test"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(50)).await;
+
+            // Step 2: Start text streaming (activates stream_controller)
+            self.send_text_chunk(session_id.clone(), "Analyzing the code.")
+                .await?;
+
+            sleep(Duration::from_millis(50)).await;
+
+            // Step 3: Tool A End (deferred because stream_controller is active)
+            // This makes the interrupt queue non-empty.
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    tool_a.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new("Tests passed")),
+                        ))])
+                        .raw_output(json!({"exit_code": 0})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Step 4: Tool B Begin (cascade-deferred due to non-empty queue)
+            // on_exec_command_begin calls flush_answer_stream_with_separator()
+            // which clears stream_controller, but !interrupts.is_empty() is
+            // still true, so this gets deferred.
+            let tool_b = acp::ToolCallId::new("orphan-tool-b");
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(tool_b.clone(), "Running lint")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .raw_input(json!({"command": "cargo clippy"})),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Step 5: Tool B End (deferred, queue still non-empty)
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    tool_b.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new("No files found")),
+                        ))])
+                        .raw_output(json!({"exit_code": 0})),
+                ),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(30)).await;
+
+            // Step 6: Send final text
+            self.send_text_chunk(session_id.clone(), " Here is the final analysis result.")
+                .await?;
+
+            // Step 7: Turn ends → flush_completions_and_clear processes:
+            //   End-A: processed OK (running_commands has tool-a-001)
+            //   Begin-B: discarded
+            //   End-B: processed, but no running_commands entry for orphan-tool-b
+            //          → creates orphan ExecCell with command = ["orphan-tool-b"]
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Reproduce the race condition where tool call completions arrive DURING
         // the final text stream. These get deferred into the interrupt queue, then
         // flushed after the agent's final message - causing a trailing dump of tool

@@ -1,0 +1,20 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› Analyze code
+
+
+• Analyzing the code.
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Here is the final analysis result.
+
+• Ran 'Running tests(cargo test)'
+  └ Tests passed
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approval Mode: Agent · ? for shortcuts
