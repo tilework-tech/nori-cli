@@ -51,6 +51,7 @@ codex-common = { workspace = true, features = [
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
+codex-git = { workspace = true }
 nori-installed = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true, optional = true }
