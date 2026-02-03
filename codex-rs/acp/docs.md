@@ -146,6 +146,34 @@ When `auto_worktree` is enabled, the worktree is initially created with a random
 
 The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
+**Session Hooks Configuration** (`config/types.rs`, `hooks.rs`):
+
+Session hooks allow users to run custom scripts at session lifecycle boundaries. Configured under `[hooks]` in `config.toml`:
+
+```toml
+[hooks]
+session_start = ["~/.nori/cli/hooks/start.sh", "~/scripts/setup.py"]
+session_end = ["~/.nori/cli/hooks/cleanup.sh"]
+```
+
+| Field | TOML Key | Default | Controls |
+|-------|----------|---------|----------|
+| `session_start_hooks` | `session_start` | `[]` (empty) | Scripts executed after backend construction but before `SessionConfigured` event |
+| `session_end_hooks` | `session_end` | `[]` (empty) | Scripts executed on `Op::Shutdown` before transcript recorder shutdown |
+
+**Hook resolution:** `HooksConfigToml` deserializes the TOML section. `resolve_hook_paths()` applies tilde expansion via `expand_tilde()` (using `dirs::home_dir()`) and converts strings to `PathBuf`s. The resolved paths are stored on `NoriConfig` and passed through `AcpBackendConfig` to the backend.
+
+**Hook execution** (`hooks.rs`): `execute_hooks()` runs scripts sequentially with a configurable timeout (reuses the `script_timeout` from `[tui]` config, default 30s). Interpreter is auto-detected by file extension:
+
+| Extension | Interpreter |
+|-----------|-------------|
+| `.sh` | `bash` |
+| `.py` | `python3` |
+| `.js` | `node` |
+| other/none | executed directly |
+
+Hook failures are non-fatal. During `spawn()` and `resume_session()`, failures emit `WarningEvent` to the TUI via the event channel. During `Op::Shutdown`, failures are `warn!`-logged only because the TUI is shutting down and cannot display warnings. A failed hook does not prevent subsequent hooks from executing.
+
 **Message History** (`message_history.rs`):
 
 - File location: `~/.nori/cli/history.jsonl`

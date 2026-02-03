@@ -206,6 +206,9 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             auto_worktree: auto_worktree_enabled,
             auto_worktree_repo_root,
+            session_start_hooks: nori_config.session_start_hooks.clone(),
+            session_end_hooks: nori_config.session_end_hooks.clone(),
+            script_timeout: nori_config.script_timeout.as_duration(),
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
@@ -326,6 +329,9 @@ pub(crate) fn spawn_acp_agent_resume(
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             auto_worktree: auto_worktree_enabled,
             auto_worktree_repo_root,
+            session_start_hooks: nori_config.session_start_hooks.clone(),
+            session_end_hooks: nori_config.session_end_hooks.clone(),
+            script_timeout: nori_config.script_timeout.as_duration(),
         };
 
         let backend = match AcpBackend::resume_session(

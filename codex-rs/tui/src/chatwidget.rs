@@ -1934,7 +1934,7 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Quit | SlashCommand::Exit => {
-                self.request_exit();
+                self.submit_op(Op::Shutdown);
             }
             SlashCommand::Login => {
                 self.handle_login_command();
