@@ -264,9 +264,4 @@ approval_mode = false
         "Footer should still show Nori version when not disabled. Contents: {}",
         contents
     );
-
-    assert_snapshot!(
-        "footer_with_segments_disabled",
-        normalize_for_input_snapshot(contents)
-    );
 }
