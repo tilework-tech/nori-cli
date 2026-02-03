@@ -49,6 +49,10 @@ pub struct NoriConfigToml {
     /// MCP server configurations (optional)
     #[serde(default)]
     pub mcp_servers: HashMap<String, McpServerConfigToml>,
+
+    /// Session lifecycle hooks
+    #[serde(default)]
+    pub hooks: HooksConfigToml,
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -825,6 +829,12 @@ pub struct NoriConfig {
 
     /// MCP server configurations
     pub mcp_servers: HashMap<String, McpServerConfig>,
+
+    /// Scripts to run when a session starts.
+    pub session_start_hooks: Vec<PathBuf>,
+
+    /// Scripts to run when a session ends.
+    pub session_end_hooks: Vec<PathBuf>,
 }
 
 impl Default for NoriConfig {
@@ -848,8 +858,51 @@ impl Default for NoriConfig {
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),
+            session_start_hooks: Vec::new(),
+            session_end_hooks: Vec::new(),
         }
     }
+}
+
+// ============================================================================
+// Session Hooks Configuration
+// ============================================================================
+
+/// TOML-deserializable hooks configuration.
+///
+/// Scripts are executed sequentially at session lifecycle boundaries.
+/// Each entry is a path to a script file. The interpreter is determined
+/// by file extension: `.sh` → bash, `.py` → python3, `.js` → node.
+/// Files with no recognized extension are executed directly.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct HooksConfigToml {
+    /// Scripts to run when a session starts.
+    #[serde(default)]
+    pub session_start: Option<Vec<String>>,
+
+    /// Scripts to run when a session ends.
+    #[serde(default)]
+    pub session_end: Option<Vec<String>>,
+}
+
+/// Expand a leading `~` to the user's home directory.
+fn expand_tilde(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(rest);
+    }
+    PathBuf::from(path)
+}
+
+/// Resolve a list of hook path strings into `PathBuf`s with tilde expansion.
+pub fn resolve_hook_paths(paths: Option<Vec<String>>) -> Vec<PathBuf> {
+    paths
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| expand_tilde(&s))
+        .collect()
 }
 
 // ============================================================================

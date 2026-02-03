@@ -352,6 +352,8 @@ mod tests {
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
         }
     }
 

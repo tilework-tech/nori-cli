@@ -88,6 +88,10 @@ impl NoriConfig {
         // Resolve MCP servers
         let mcp_servers = resolve_mcp_servers(toml.mcp_servers)?;
 
+        // Resolve hooks
+        let session_start_hooks = super::types::resolve_hook_paths(toml.hooks.session_start);
+        let session_end_hooks = super::types::resolve_hook_paths(toml.hooks.session_end);
+
         // Agent is the user's persisted preference, defaults to DEFAULT_MODEL
         let agent = toml.agent.unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
@@ -134,6 +138,8 @@ impl NoriConfig {
             nori_home,
             cwd,
             mcp_servers,
+            session_start_hooks,
+            session_end_hooks,
         })
     }
 }
@@ -349,5 +355,94 @@ auto_worktree = true
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert!(!config.auto_worktree);
+    }
+
+    // ========================================================================
+    // Session Hooks Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_hooks_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[hooks]
+session_start = ["/path/to/start.sh", "/path/to/init.py"]
+session_end = ["/path/to/cleanup.sh"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.session_start_hooks.len(), 2);
+        assert_eq!(
+            config.session_start_hooks[0],
+            PathBuf::from("/path/to/start.sh")
+        );
+        assert_eq!(
+            config.session_start_hooks[1],
+            PathBuf::from("/path/to/init.py")
+        );
+        assert_eq!(config.session_end_hooks.len(), 1);
+        assert_eq!(
+            config.session_end_hooks[0],
+            PathBuf::from("/path/to/cleanup.sh")
+        );
+    }
+
+    #[test]
+    fn test_hooks_default_to_empty_when_absent() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.session_start_hooks.is_empty());
+        assert!(config.session_end_hooks.is_empty());
+    }
+
+    #[test]
+    fn test_hooks_tilde_expansion() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[hooks]
+session_start = ["~/hooks/start.sh"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.session_start_hooks.len(), 1);
+        // Should have expanded ~ to home dir, not kept literal ~
+        let path = &config.session_start_hooks[0];
+        assert!(!path.starts_with("~"));
+        assert!(path.ends_with("hooks/start.sh"));
+    }
+
+    #[test]
+    fn test_hooks_partial_section_only_start() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[hooks]
+session_start = ["/path/to/start.sh"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.session_start_hooks.len(), 1);
+        assert!(config.session_end_hooks.is_empty());
     }
 }

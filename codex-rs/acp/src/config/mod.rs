@@ -13,6 +13,7 @@ pub use loader::find_nori_home;
 pub use types::ApprovalPolicy;
 pub use types::DEFAULT_MODEL;
 pub use types::HistoryPersistence;
+pub use types::HooksConfigToml;
 pub use types::HotkeyAction;
 pub use types::HotkeyBinding;
 pub use types::HotkeyConfig;
@@ -27,6 +28,7 @@ pub use types::OsNotifications;
 pub use types::ScriptTimeout;
 pub use types::TerminalNotifications;
 pub use types::TuiConfig;
+pub use types::resolve_hook_paths;
 
 #[cfg(test)]
 mod tests {

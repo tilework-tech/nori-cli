@@ -10,6 +10,7 @@ pub mod auto_worktree;
 pub mod backend;
 pub mod config;
 pub mod connection;
+pub mod hooks;
 pub mod message_history;
 pub mod registry;
 pub mod session_parser;

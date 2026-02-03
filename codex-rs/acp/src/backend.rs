@@ -168,6 +168,12 @@ pub struct AcpBackendConfig {
     pub auto_worktree: bool,
     /// The git repo root (before worktree creation), used for renaming the worktree
     pub auto_worktree_repo_root: Option<PathBuf>,
+    /// Scripts to run when a session starts
+    pub session_start_hooks: Vec<PathBuf>,
+    /// Scripts to run when a session ends
+    pub session_end_hooks: Vec<PathBuf>,
+    /// Timeout for hook script execution
+    pub script_timeout: std::time::Duration,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -212,6 +218,10 @@ pub struct AcpBackend {
     auto_worktree: bool,
     /// The git repo root (before worktree creation), used for renaming
     auto_worktree_repo_root: Option<PathBuf>,
+    /// Scripts to run when a session ends
+    session_end_hooks: Vec<PathBuf>,
+    /// Timeout for hook script execution
+    script_timeout: std::time::Duration,
 }
 
 impl AcpBackend {
@@ -348,7 +358,17 @@ impl AcpBackend {
             model_name: config.model.clone(),
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
+            session_end_hooks: config.session_end_hooks.clone(),
+            script_timeout: config.script_timeout,
         };
+
+        // Execute session_start hooks
+        run_session_start_hooks(
+            &config.session_start_hooks,
+            config.script_timeout,
+            &event_tx,
+        )
+        .await;
 
         // Send synthetic SessionConfigured event
         let session_configured = SessionConfiguredEvent {
@@ -555,7 +575,17 @@ impl AcpBackend {
             model_name: config.model.clone(),
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
+            session_end_hooks: config.session_end_hooks.clone(),
+            script_timeout: config.script_timeout,
         };
+
+        // Execute session_start hooks
+        run_session_start_hooks(
+            &config.session_start_hooks,
+            config.script_timeout,
+            &event_tx,
+        )
+        .await;
 
         let session_configured = SessionConfiguredEvent {
             session_id: conversation_id,
@@ -642,6 +672,20 @@ impl AcpBackend {
                 // to allow the TUI to exit properly
                 debug!("Processing Op::Shutdown in ACP mode");
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
+
+                // Execute session_end hooks
+                if !self.session_end_hooks.is_empty() {
+                    let results =
+                        crate::hooks::execute_hooks(&self.session_end_hooks, self.script_timeout)
+                            .await;
+                    for result in &results {
+                        if !result.success
+                            && let Some(ref err) = result.error
+                        {
+                            warn!("Session end hook failed: {err}");
+                        }
+                    }
+                }
 
                 // Shutdown transcript recorder
                 if let Some(ref recorder) = self.transcript_recorder
@@ -1548,6 +1592,32 @@ async fn run_prompt_summary(
 /// Return the custom commands directory: `{nori_home}/commands`.
 fn commands_dir(nori_home: &std::path::Path) -> PathBuf {
     nori_home.join("commands")
+}
+
+/// Execute session_start hooks and emit warnings for any failures.
+async fn run_session_start_hooks(
+    hooks: &[PathBuf],
+    timeout: std::time::Duration,
+    event_tx: &mpsc::Sender<Event>,
+) {
+    if hooks.is_empty() {
+        return;
+    }
+    let results = crate::hooks::execute_hooks(hooks, timeout).await;
+    for result in &results {
+        if !result.success
+            && let Some(ref err) = result.error
+        {
+            let _ = event_tx
+                .send(Event {
+                    id: String::new(),
+                    msg: EventMsg::Warning(WarningEvent {
+                        message: err.clone(),
+                    }),
+                })
+                .await;
+        }
+    }
 }
 
 /// Generate a unique ID for operations
@@ -3318,6 +3388,9 @@ mod tests {
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
             auto_worktree: false,
             auto_worktree_repo_root: None,
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
+            script_timeout: std::time::Duration::from_secs(30),
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;
@@ -3500,6 +3573,9 @@ mod tests {
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
             auto_worktree: false,
             auto_worktree_repo_root: None,
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
+            script_timeout: std::time::Duration::from_secs(30),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -3616,6 +3692,9 @@ mod tests {
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
             auto_worktree: false,
             auto_worktree_repo_root: None,
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
+            script_timeout: std::time::Duration::from_secs(30),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -3754,6 +3833,9 @@ mod tests {
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
             auto_worktree: false,
             auto_worktree_repo_root: None,
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
+            script_timeout: std::time::Duration::from_secs(30),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
