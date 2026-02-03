@@ -164,6 +164,10 @@ pub struct AcpBackendConfig {
     pub history_persistence: crate::config::HistoryPersistence,
     /// CLI version for transcript metadata
     pub cli_version: String,
+    /// Whether auto-worktree is enabled (worktree was created at startup)
+    pub auto_worktree: bool,
+    /// The git repo root (before worktree creation), used for renaming the worktree
+    pub auto_worktree_repo_root: Option<PathBuf>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -176,7 +180,7 @@ pub struct AcpBackend {
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
     event_tx: mpsc::Sender<Event>,
-    #[allow(dead_code)]
+    /// Working directory for the session
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
@@ -204,6 +208,10 @@ pub struct AcpBackend {
     is_first_prompt: Arc<Mutex<bool>>,
     /// Model name stored for spawning summarization connection
     model_name: String,
+    /// Whether auto-worktree is enabled (worktree was created at startup)
+    auto_worktree: bool,
+    /// The git repo root (before worktree creation), used for renaming
+    auto_worktree_repo_root: Option<PathBuf>,
 }
 
 impl AcpBackend {
@@ -338,6 +346,8 @@ impl AcpBackend {
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
             model_name: config.model.clone(),
+            auto_worktree: config.auto_worktree,
+            auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
         };
 
         // Send synthetic SessionConfigured event
@@ -543,6 +553,8 @@ impl AcpBackend {
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(is_first_prompt_val)),
             model_name: config.model.clone(),
+            auto_worktree: config.auto_worktree,
+            auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
         };
 
         let session_configured = SessionConfiguredEvent {
@@ -825,10 +837,18 @@ impl AcpBackend {
                     let model_name = self.model_name.clone();
                     let cwd = self.cwd.clone();
                     let prompt_for_summary = prompt_text.clone();
+                    let auto_worktree = self.auto_worktree;
+                    let auto_worktree_repo_root = self.auto_worktree_repo_root.clone();
                     tokio::spawn(async move {
-                        if let Err(e) =
-                            run_prompt_summary(&event_tx, &model_name, &cwd, &prompt_for_summary)
-                                .await
+                        if let Err(e) = run_prompt_summary(
+                            &event_tx,
+                            &model_name,
+                            &cwd,
+                            &prompt_for_summary,
+                            auto_worktree,
+                            auto_worktree_repo_root.as_deref(),
+                        )
+                        .await
                         {
                             debug!("Prompt summary failed (non-fatal): {e}");
                         }
@@ -1425,6 +1445,8 @@ async fn run_prompt_summary(
     model_name: &str,
     cwd: &std::path::Path,
     user_prompt: &str,
+    auto_worktree: bool,
+    auto_worktree_repo_root: Option<&std::path::Path>,
 ) -> Result<()> {
     use tokio::time::Duration;
     use tokio::time::timeout;
@@ -1481,6 +1503,37 @@ async fn run_prompt_summary(
         summary.push_str("...");
     }
     if !summary.is_empty() {
+        // If auto_worktree is enabled, rename the branch based on the summary.
+        // Only the branch is renamed; the directory stays unchanged so that
+        // processes running inside the worktree are not disrupted.
+        if auto_worktree && let Some(repo_root) = auto_worktree_repo_root {
+            let cwd_owned = cwd.to_path_buf();
+            let repo_root = repo_root.to_path_buf();
+            let summary_for_rename = summary.clone();
+            let rename_result = tokio::task::spawn_blocking(move || {
+                let dir_name = cwd_owned.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                let old_branch = format!("auto/{dir_name}");
+                crate::auto_worktree::rename_auto_worktree_branch(
+                    &repo_root,
+                    &old_branch,
+                    &summary_for_rename,
+                )
+            })
+            .await;
+
+            match rename_result {
+                Ok(Ok(())) => {
+                    debug!("Auto-worktree branch renamed based on summary");
+                }
+                Ok(Err(e)) => {
+                    warn!("Failed to rename auto-worktree branch (non-fatal): {e}");
+                }
+                Err(e) => {
+                    warn!("Auto-worktree branch rename task panicked (non-fatal): {e}");
+                }
+            }
+        }
+
         let _ = event_tx
             .send(Event {
                 id: String::new(),
@@ -3263,6 +3316,8 @@ mod tests {
             history_persistence: crate::config::HistoryPersistence::SaveAll,
             cli_version: "test".to_string(),
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
+            auto_worktree: false,
+            auto_worktree_repo_root: None,
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;
@@ -3443,6 +3498,8 @@ mod tests {
             history_persistence: crate::config::HistoryPersistence::SaveAll,
             cli_version: "test".to_string(),
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
+            auto_worktree: false,
+            auto_worktree_repo_root: None,
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -3557,6 +3614,8 @@ mod tests {
             history_persistence: crate::config::HistoryPersistence::SaveAll,
             cli_version: "test".to_string(),
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
+            auto_worktree: false,
+            auto_worktree_repo_root: None,
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -3693,6 +3752,8 @@ mod tests {
             history_persistence: crate::config::HistoryPersistence::SaveAll,
             cli_version: "test".to_string(),
             notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
+            auto_worktree: false,
+            auto_worktree_repo_root: None,
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)

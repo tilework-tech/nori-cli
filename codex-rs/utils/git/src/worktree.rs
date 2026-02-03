@@ -155,19 +155,105 @@ pub fn generate_worktree_branch_name() -> String {
     let adj = ADJECTIVES[hash as usize % ADJECTIVES.len()];
     let noun = NOUNS[(hash >> 16) as usize % NOUNS.len()];
 
-    // Format timestamp as YYYYMMDD-HHMMSS
+    let timestamp = format_timestamp();
+    format!("auto/{adj}-{noun}-{timestamp}")
+}
+
+/// Generate a worktree branch name from a prompt summary string.
+///
+/// Converts the summary to a lowercase slug, appends a timestamp, and prefixes
+/// with `auto/`. If the summary is empty or whitespace-only after sanitization,
+/// falls back to [`generate_worktree_branch_name`].
+///
+/// # Examples
+/// - `"Fix auth bug"` → `"auto/fix-auth-bug-20260202-120000"`
+/// - `""` → falls back to random name like `"auto/swift-oak-20260202-120000"`
+pub fn summary_to_branch_name(summary: &str) -> String {
+    // Sanitize: lowercase, replace non-alphanumeric with hyphens, collapse, trim
+    let slug: String = summary
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+
+    // Collapse consecutive hyphens and trim leading/trailing
+    let mut collapsed = String::with_capacity(slug.len());
+    let mut last_was_hyphen = true; // start true to trim leading hyphens
+    for c in slug.chars() {
+        if c == '-' {
+            if !last_was_hyphen {
+                collapsed.push('-');
+            }
+            last_was_hyphen = true;
+        } else {
+            collapsed.push(c);
+            last_was_hyphen = false;
+        }
+    }
+    // Trim trailing hyphen
+    let collapsed = collapsed.trim_end_matches('-');
+
+    if collapsed.is_empty() {
+        return generate_worktree_branch_name();
+    }
+
+    // Truncate to 40 chars at a word boundary (hyphen)
+    let truncated = if collapsed.len() > 40 {
+        match collapsed[..40].rfind('-') {
+            Some(pos) => &collapsed[..pos],
+            None => &collapsed[..40],
+        }
+    } else {
+        collapsed
+    };
+
+    // Append timestamp
+    let timestamp = format_timestamp();
+    format!("auto/{truncated}-{timestamp}")
+}
+
+/// Rename a git worktree's branch in place.
+///
+/// Runs `git branch -m` to rename the branch. The worktree directory is left
+/// unchanged so that processes running inside it are not disrupted.
+pub fn rename_worktree_branch(
+    repo_root: &Path,
+    old_branch: &str,
+    new_branch: &str,
+) -> Result<(), GitToolingError> {
+    let output = Command::new("git")
+        .args(["branch", "-m", old_branch, new_branch])
+        .current_dir(repo_root)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(GitToolingError::GitCommand {
+            command: format!("git branch -m {old_branch} {new_branch}"),
+            status: output.status,
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Format the current UTC timestamp as YYYYMMDD-HHMMSS.
+fn format_timestamp() -> String {
+    use std::time::SystemTime;
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+
     let secs = now.as_secs();
-    // Simple UTC date/time calculation
     let days = secs / 86400;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
     let minutes = (time_of_day % 3600) / 60;
     let seconds = time_of_day % 60;
-
-    // Days since epoch to year/month/day (simplified)
     let (year, month, day) = days_to_ymd(days);
 
-    format!("auto/{adj}-{noun}-{year:04}{month:02}{day:02}-{hours:02}{minutes:02}{seconds:02}")
+    format!("{year:04}{month:02}{day:02}-{hours:02}{minutes:02}{seconds:02}")
 }
 
 /// Convert days since Unix epoch to (year, month, day).
@@ -407,6 +493,134 @@ detached
         assert!(
             after_prefix.split('-').count() >= 4,
             "branch name should have at least 4 hyphen-separated parts after 'auto/', got: {name}"
+        );
+    }
+
+    #[test]
+    fn test_summary_to_branch_name_normal_summary() {
+        let name = summary_to_branch_name("Fix auth bug");
+        assert!(
+            name.starts_with("auto/fix-auth-bug-"),
+            "branch name should start with 'auto/fix-auth-bug-', got: {name}"
+        );
+        // Should end with a timestamp (YYYYMMDD-HHMMSS)
+        let after_slug = name.strip_prefix("auto/fix-auth-bug-").unwrap();
+        assert_eq!(
+            after_slug.len(),
+            15,
+            "timestamp portion should be 15 chars (YYYYMMDD-HHMMSS), got: {after_slug}"
+        );
+    }
+
+    #[test]
+    fn test_summary_to_branch_name_strips_special_chars() {
+        let name = summary_to_branch_name("Add dark mode!!!");
+        assert!(
+            name.starts_with("auto/add-dark-mode-"),
+            "special chars should be stripped, got: {name}"
+        );
+    }
+
+    #[test]
+    fn test_summary_to_branch_name_empty_falls_back_to_random() {
+        let name = summary_to_branch_name("");
+        assert!(
+            name.starts_with("auto/"),
+            "empty summary should fall back to random name, got: {name}"
+        );
+        // Should look like a random name (adjective-noun-date-time), not just "auto/-date-time"
+        let after_prefix = &name["auto/".len()..];
+        assert!(
+            after_prefix.split('-').count() >= 4,
+            "fallback should have at least 4 parts, got: {name}"
+        );
+        // Should not start with a digit (should start with an adjective)
+        assert!(
+            after_prefix.chars().next().unwrap().is_alphabetic(),
+            "fallback should start with a letter, got: {name}"
+        );
+    }
+
+    #[test]
+    fn test_summary_to_branch_name_truncates_long_summary() {
+        let name = summary_to_branch_name(
+            "Implement comprehensive user authentication with OAuth2 and JWT tokens",
+        );
+        assert!(name.starts_with("auto/"));
+        // The slug portion (before timestamp) should be capped
+        let after_prefix = &name["auto/".len()..];
+        // Total after prefix should be slug + hyphen + timestamp (15 chars)
+        // So slug should be at most ~40 chars
+        let parts: Vec<&str> = after_prefix.rsplitn(3, '-').collect();
+        // parts[0] = HHMMSS, parts[1] = YYYYMMDD, parts[2] = slug
+        assert!(
+            parts.len() == 3,
+            "should have slug-YYYYMMDD-HHMMSS structure, got: {after_prefix}"
+        );
+        let slug = parts[2];
+        assert!(
+            slug.len() <= 40,
+            "slug should be at most 40 chars, got {} chars: {slug}",
+            slug.len()
+        );
+    }
+
+    #[test]
+    fn test_summary_to_branch_name_collapses_consecutive_hyphens() {
+        let name = summary_to_branch_name("fix   multiple   spaces");
+        assert!(
+            name.starts_with("auto/fix-multiple-spaces-"),
+            "consecutive hyphens should be collapsed, got: {name}"
+        );
+    }
+
+    #[test]
+    fn test_rename_worktree_branch_renames_branch_only() {
+        let temp = init_temp_repo();
+        let worktrees_dir = temp.path().join(".worktrees");
+        std::fs::create_dir_all(&worktrees_dir).unwrap();
+
+        // Create initial worktree
+        let wt_path = worktrees_dir.join("old-name");
+        create_worktree(temp.path(), &wt_path, "auto/old-name").unwrap();
+        assert!(wt_path.exists());
+
+        // Rename the branch only
+        let result = rename_worktree_branch(temp.path(), "auto/old-name", "auto/new-name");
+        assert!(
+            result.is_ok(),
+            "rename_worktree_branch should succeed: {:?}",
+            result.err()
+        );
+
+        // Directory should remain at original path
+        assert!(
+            wt_path.exists(),
+            "worktree directory should still exist at original path"
+        );
+
+        // New branch should exist
+        let output = Command::new("git")
+            .args(["branch", "--list", "auto/new-name"])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        let branches = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            branches.contains("auto/new-name"),
+            "new branch name should exist"
+        );
+
+        // Old branch should not exist
+        let output = Command::new("git")
+            .args(["branch", "--list", "auto/old-name"])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        let branches = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !branches.contains("auto/old-name"),
+            "old branch name should not exist"
         );
     }
 }
