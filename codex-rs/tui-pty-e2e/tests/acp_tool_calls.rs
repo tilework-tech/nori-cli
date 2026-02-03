@@ -554,3 +554,82 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
         normalize_for_input_snapshot(contents)
     );
 }
+
+/// Test that orphan tool cells are NOT created when deferred Begin events are
+/// discarded but their End events are still processed.
+///
+/// ## The bug (cascade deferral → orphan cells):
+/// 1. Tool A Begin → handled immediately (no stream active)
+/// 2. Text streaming starts → stream_controller = Some
+/// 3. Tool A End arrives → DEFERRED (stream active), queue becomes non-empty
+/// 4. Tool B Begin arrives → flush_answer_stream_with_separator() clears stream,
+///    BUT !interrupts.is_empty() → DEFERRED (cascade deferral)
+/// 5. Tool B End arrives → DEFERRED
+/// 6. Turn ends → flush_completions_and_clear():
+///    - End-A: processed OK (running_commands has entry)
+///    - Begin-B: DISCARDED
+///    - End-B: processed, but no running_commands entry (Begin-B was discarded)
+///      → creates orphan ExecCell with command = ["orphan-tool-b"]
+///      → renders as "• Ran orphan-tool-b / └ No files found"
+///
+/// ## Expected behavior (after fix):
+/// End events whose Begin was discarded should also be discarded.
+/// No raw call_id should appear in the TUI output.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_no_orphan_tool_cells_from_cascade_deferral() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_ORPHAN_TOOL_CELLS", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the orphan tool cell scenario
+    session.send_str("Analyze code").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the final text to appear
+    session
+        .wait_for_text("final analysis result", Duration::from_secs(10))
+        .expect("Should receive final assistant message");
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // CRITICAL ASSERTION: The raw call_id "orphan-tool-b" must NOT appear
+    // in the rendered output. If it does, an orphan ExecCell was created
+    // because flush_completions_and_clear processed End-B after discarding
+    // Begin-B.
+    assert!(
+        !contents.contains("orphan-tool-b"),
+        "Raw call_id 'orphan-tool-b' should NOT appear in TUI output.\n\
+         This indicates an orphan ExecCell was created from a discarded Begin event.\n\
+         Screen contents:\n{contents}",
+    );
+
+    // Tool A was handled correctly (Begin processed immediately, so End finds
+    // it in running_commands). Its output should appear in completed form.
+    // What we care about is that tool B's raw call_id doesn't appear.
+
+    // The final text should be present
+    assert!(
+        contents.contains("final analysis result"),
+        "Should show the final agent message. Screen contents:\n{contents}",
+    );
+
+    // Snapshot for visual verification
+    insta::assert_snapshot!(
+        "acp_no_orphan_tool_cells",
+        normalize_for_input_snapshot(contents)
+    );
+}

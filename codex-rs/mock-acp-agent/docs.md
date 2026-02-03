@@ -29,6 +29,14 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 
 This simulates the real-world race condition that the `InterruptManager.flush_completions_and_clear()` in `@/codex-rs/tui/src/chatwidget.rs` handles at task completion.
 
+**Cascade Deferral / Orphan Cell Reproduction**: The `MOCK_AGENT_ORPHAN_TOOL_CELLS` env var triggers a scenario where a tool Begin is cascade-deferred (deferred because the queue is non-empty, even though the stream has ended). The sequence:
+1. Tool A Begin handled immediately (no stream active)
+2. Text streaming starts (activates `stream_controller`)
+3. Tool A End deferred (stream active), making the queue non-empty
+4. Tool B Begin deferred (queue non-empty -- cascade deferral)
+5. Tool B End deferred
+6. Turn ends -- `flush_completions_and_clear` must discard both Begin-B and End-B to avoid creating an orphan `ExecCell` with the raw `call_id` as the command name
+
 **Client Requests**: Outbound requests to the client:
 - `ReadFile` - Request file contents
 - `WriteFile` - Request file write

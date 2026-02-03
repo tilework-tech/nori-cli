@@ -34,6 +34,7 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 - Verifying tool calls that complete before text streaming appear above the agent message
 - Verifying that tool call completions arriving during the final text stream are NOT rendered after the agent's response (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
 - Checking for absence of trailing tool output by asserting that screen content after the final agent message position contains no tool-related strings
+- Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
 
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
