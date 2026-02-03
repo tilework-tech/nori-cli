@@ -400,6 +400,13 @@ impl App {
         app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
         // Propagate initial vim mode setting.
         app.chat_widget.set_vim_mode_enabled(app.vim_mode_enabled);
+        // Propagate initial footer segment config.
+        for segment in codex_acp::config::FooterSegment::all_variants() {
+            app.chat_widget.set_footer_segment_enabled(
+                *segment,
+                nori_config.footer_segment_config.is_enabled(*segment),
+            );
+        }
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
