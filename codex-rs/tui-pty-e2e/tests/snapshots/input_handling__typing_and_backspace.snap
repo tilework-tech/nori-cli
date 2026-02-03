@@ -5,4 +5,4 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › Hel
 
-  Approval Mode: Agent
+  Approvals: Agent

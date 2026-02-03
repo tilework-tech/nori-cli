@@ -691,7 +691,7 @@ pub enum FooterSegment {
     GitStats,
     /// Context window: "Context: 34K (27%)"
     Context,
-    /// Approval mode: "Approval Mode: Agent"
+    /// Approval mode: "Approvals: Agent"
     ApprovalMode,
     /// Nori profile: "Skillset: name"
     NoriProfile,
@@ -710,7 +710,7 @@ impl FooterSegment {
             Self::GitBranch => "Git Branch",
             Self::GitStats => "Git Stats",
             Self::Context => "Context Window",
-            Self::ApprovalMode => "Approval Mode",
+            Self::ApprovalMode => "Approvals",
             Self::NoriProfile => "Skillset",
             Self::NoriVersion => "Skillset Version",
             Self::TokenUsage => "Token Usage",
@@ -2111,7 +2111,7 @@ script_timeout = "2m"
 
     #[test]
     fn test_footer_segment_serialize() {
-        use pretty_assertions::assert_eq;
+        
         // TOML doesn't support bare enums, so we test within a struct
         #[derive(Serialize)]
         struct Wrapper {
@@ -2136,7 +2136,7 @@ script_timeout = "2m"
         assert_eq!(FooterSegment::GitBranch.display_name(), "Git Branch");
         assert_eq!(FooterSegment::GitStats.display_name(), "Git Stats");
         assert_eq!(FooterSegment::Context.display_name(), "Context Window");
-        assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approval Mode");
+        assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approvals");
         assert_eq!(FooterSegment::NoriProfile.display_name(), "Skillset");
         assert_eq!(
             FooterSegment::NoriVersion.display_name(),
@@ -2173,8 +2173,7 @@ script_timeout = "2m"
         for segment in FooterSegment::all_variants() {
             assert!(
                 config.is_enabled(*segment),
-                "Segment {:?} should be enabled by default",
-                segment
+                "Segment {segment:?} should be enabled by default"
             );
         }
     }

@@ -17,7 +17,7 @@ fn test_footer_displays_git_branch() {
 
     // Wait for the TUI to start
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -50,7 +50,7 @@ fn test_footer_without_git_repo() {
 
     // Wait for the TUI to start
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -102,7 +102,7 @@ fn test_footer_full_startup_with_all_info() {
 
     // Wait for footer to render
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -172,7 +172,7 @@ vertical_footer = true
             .expect("Failed to spawn");
 
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
-    session.wait_for_text("Approval Mode", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -246,8 +246,8 @@ approval_mode = false
 
     // Approval mode should NOT be displayed (disabled in config)
     assert!(
-        !contents.contains("Approval Mode"),
-        "Footer should NOT contain Approval Mode when disabled. Contents: {}",
+        !contents.contains("Approvals"),
+        "Footer should NOT contain Approvals when disabled. Contents: {}",
         contents
     );
 

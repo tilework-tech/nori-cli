@@ -4,5 +4,5 @@ expression: terminal.backend()
 ---
 "  ⎇ feature/test                                                                "
 "  Context: 34.0K (27%)                                                          "
-"  Approval Mode: Agent                                                          "
+"  Approvals: Agent                                                              "
 "  ? for shortcuts                                                               "

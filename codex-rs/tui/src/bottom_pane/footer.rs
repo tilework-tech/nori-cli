@@ -360,12 +360,12 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         segments.push(Line::from(context_text));
     }
 
-    // Add approval mode if available and enabled: "Approval Mode: Agent" (magenta)
+    // Add approval mode if available and enabled: "Approvals: Agent" (magenta)
     if config.is_enabled(FooterSegment::ApprovalMode)
         && let Some(label) = &props.approval_mode_label
     {
         segments.push(Line::from(vec![
-            Span::from("Approval Mode: ").magenta(),
+            Span::from("Approvals: ").magenta(),
             Span::from(label.clone()).magenta(),
         ]));
     }

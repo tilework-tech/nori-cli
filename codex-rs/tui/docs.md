@@ -233,7 +233,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Git Branch | `git_branch` | Current branch name with ⎇ symbol (yellow for main repo, orange for worktree) |
 | Git Stats | `git_stats` | Lines added/removed in current session |
 | Context Window | `context` | "Context: 34K (27%)" when running within an agent environment |
-| Approval Mode | `approval_mode` | "Approval Mode: Agent/Full Access/Read Only" |
+| Approval Mode | `approval_mode` | "Approvals: Agent/Full Access/Read Only" |
 | Nori Profile | `nori_profile` | "Skillset: <name>" |
 | Nori Version | `nori_version` | "Skillsets v<version>" |
 | Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
