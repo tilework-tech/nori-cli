@@ -288,7 +288,7 @@ Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
 
 | Type | Description | Key Fields (JSON) |
 |------|-------------|-------------------|
-| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git |
+| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git, acp_session_id |
 | `user` | User message | id, content, attachments |
 | `assistant` | Complete assistant turn | id, content (blocks), agent |
 | `tool_call` | Tool execution start | call_id, name, input |
@@ -298,6 +298,9 @@ Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
 **Schema Field Naming:**
 
 The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which ACP agent (e.g., "claude-code", "codex", "gemini") processed the session or message. The field is named `agent` rather than `model` to emphasize that it identifies the agent software, not a specific model variant.
+
+The `SessionMetaEntry.acp_session_id` field stores the ACP agent's session ID (from `session/new` or `session/load`). This enables the `/resume` command to reconnect to the same agent session. The field is `Option<String>` with `skip_serializing_if = "Option::is_none"` and `default` for backward compatibility with transcripts created before this field existed.
+
 **TranscriptRecorder:**
 
 The `TranscriptRecorder` (in `@/codex-rs/acp/src/transcript/recorder.rs`) handles async, non-blocking writes:
@@ -313,7 +316,7 @@ The `TranscriptRecorder` (in `@/codex-rs/acp/src/transcript/recorder.rs`) handle
 ```
 
 Key methods:
-- `new()`: Creates recorder, writes session_meta and project.json
+- `new()`: Creates recorder, writes session_meta (including optional `acp_session_id`) and project.json
 - `record_user_message()`: Records user input with optional attachments
 - `record_assistant_message()`: Records complete assistant turn with content blocks
 - `record_tool_call()` / `record_tool_result()`: Records tool execution
@@ -335,7 +338,7 @@ Key methods:
 **ACP Integration:**
 
 The `AcpBackend` automatically:
-1. Creates a `TranscriptRecorder` on spawn (with graceful fallback if creation fails)
+1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
 4. Records tool events via `record_tool_events_to_transcript()` in the update handler
@@ -408,6 +411,7 @@ The solution is a thread-safe wrapper pattern:
 │   AcpConnection         │                     │                         │
 │   - spawn()             │  ────────────────►  │  AcpConnectionInner     │
 │   - create_session()    │  CreateSession      │  - ClientDelegate       │
+│   - load_session()      │  LoadSession        │                         │
 │   - prompt()            │  Prompt             │  - run_command_loop()   │
 │   - cancel()            │  Cancel             │  - model_state Arc      │
 │   - set_model() [unst]  │  SetModel [unstable]│                         │
@@ -490,6 +494,53 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 3. Summary is prepended to next user message
 4. Emits `ContextCompacted` event to TUI
 
+**Session Resume** (`backend.rs`, `connection.rs`):
+
+`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>` and `transcript: Option<&Transcript>` and selects between two resume strategies based on agent capabilities:
+
+```
+AcpBackend::resume_session(config, acp_session_id, transcript, event_tx)
+    |
+    v
+AcpConnection::spawn() -> check capabilities().load_session
+    |
+    ├── Agent supports session/load AND acp_session_id is Some:
+    │       |
+    │       v
+    │   AcpConnection::load_session(session_id, cwd, update_tx)
+    │       |
+    │       v
+    │   Agent streams SessionUpdate notifications (history replay)
+    │       |
+    │       v
+    │   Forward task translates updates to codex Events
+    │       |
+    │       v
+    │   returns (session_id, no initial_messages, no summary)
+    │
+    └── Otherwise (client-side replay fallback):
+            |
+            v
+        AcpConnection::create_session() (normal session/new)
+            |
+            v
+        transcript_to_replay_events() -> initial_messages (for TUI display)
+        transcript_to_summary()       -> pending_compact_summary (for agent context)
+            |
+            v
+        returns (session_id, initial_messages, summary)
+    |
+    v
+SessionConfigured event sent to TUI (with initial_messages if client-side)
+```
+
+**Server-side path:** The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available.
+
+**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
+- `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history
+- `transcript_to_summary()` builds a human-readable summary (truncated to 20k chars via `TRANSCRIPT_SUMMARY_MAX_CHARS`), stored in `pending_compact_summary` and prepended to the first user prompt -- the same mechanism used by `/compact`
+
+A new `TranscriptRecorder` is created for the resumed session in both paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
 **Prompt Summary** (`backend.rs`):
 

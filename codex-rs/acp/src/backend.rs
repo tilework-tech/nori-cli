@@ -309,6 +309,7 @@ impl AcpBackend {
             &cwd,
             Some(config.model.clone()),
             &config.cli_version,
+            Some(session_id.to_string()),
         )
         .await
         {
@@ -363,6 +364,209 @@ impl AcpBackend {
             .ok();
 
         // Spawn approval handler task
+        tokio::spawn(Self::run_approval_handler(
+            approval_rx,
+            event_tx.clone(),
+            Arc::clone(&pending_approvals),
+            Arc::clone(&user_notifier),
+            cwd.clone(),
+            approval_policy_rx,
+        ));
+
+        Ok(backend)
+    }
+
+    /// Resume a previous ACP session.
+    ///
+    /// If the agent supports `session/load` (via capabilities) and an
+    /// `acp_session_id` is provided, the existing server-side resume path is
+    /// used. Otherwise a client-side replay fallback is used: a fresh session
+    /// is created via `session/new`, the transcript is converted into
+    /// `initial_messages` for TUI display, and a summary is stored in
+    /// `pending_compact_summary` so it gets prepended to the first prompt.
+    pub async fn resume_session(
+        config: &AcpBackendConfig,
+        acp_session_id: Option<&str>,
+        transcript: Option<&crate::transcript::Transcript>,
+        event_tx: mpsc::Sender<Event>,
+    ) -> Result<Self> {
+        let agent_config = get_agent_config(&config.model)?;
+        let cwd = config.cwd.clone();
+
+        debug!(
+            "Resuming ACP session (acp_session_id={:?}) for model: {}",
+            acp_session_id, config.model
+        );
+
+        let mut connection = AcpConnection::spawn(&agent_config, &cwd)
+            .await
+            .map_err(|e| {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+                anyhow::anyhow!(enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                ))
+            })?;
+
+        let supports_load_session = connection.capabilities().load_session;
+
+        // Either load the session server-side or create a fresh session for
+        // client-side replay.
+        let (session_id, initial_messages, pending_summary, is_first_prompt_val) =
+            if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
+                debug!("Agent supports session/load — using server-side resume");
+
+                let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
+                let event_tx_for_updates = event_tx.clone();
+                let forward_handle = tokio::spawn(async move {
+                    let mut pending_patch_changes = std::collections::HashMap::new();
+                    while let Some(update) = update_rx.recv().await {
+                        let event_msgs =
+                            translate_session_update_to_events(&update, &mut pending_patch_changes);
+                        for msg in event_msgs {
+                            let _ = event_tx_for_updates
+                                .send(Event {
+                                    id: String::new(),
+                                    msg,
+                                })
+                                .await;
+                        }
+                    }
+                });
+
+                let session_id = connection
+                    .load_session(sid, &cwd, update_tx)
+                    .await
+                    .map_err(|e| {
+                        let error_string = format!("{e:?}");
+                        let category = categorize_acp_error(&error_string);
+                        let display_error = format!("{e}");
+                        anyhow::anyhow!(enhanced_error_message(
+                            category,
+                            &display_error,
+                            &agent_config.provider_info.name,
+                            &agent_config.auth_hint,
+                            agent_config.agent.display_name(),
+                            agent_config.agent.npm_package(),
+                        ))
+                    })?;
+
+                let _ = forward_handle.await;
+                debug!("ACP session resumed via session/load: {sid}");
+
+                (session_id, None, None, false)
+            } else {
+                debug!("Agent does not support session/load — using client-side replay");
+
+                let session_id = connection.create_session(&cwd).await.map_err(|e| {
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+                    let display_error = format!("{e}");
+                    anyhow::anyhow!(enhanced_error_message(
+                        category,
+                        &display_error,
+                        &agent_config.provider_info.name,
+                        &agent_config.auth_hint,
+                        agent_config.agent.display_name(),
+                        agent_config.agent.npm_package(),
+                    ))
+                })?;
+
+                let (replay_events, summary) = if let Some(t) = transcript {
+                    let events = transcript_to_replay_events(t);
+                    let summary_text = transcript_to_summary(t);
+                    let summary_opt = if summary_text.is_empty() {
+                        None
+                    } else {
+                        Some(summary_text)
+                    };
+                    (Some(events), summary_opt)
+                } else {
+                    (None, None)
+                };
+
+                (session_id, replay_events, summary, true)
+            };
+
+        let approval_rx = connection.take_approval_receiver();
+        let connection = Arc::new(connection);
+        let pending_approvals = Arc::new(Mutex::new(Vec::new()));
+        let use_native_notifications =
+            config.os_notifications == crate::config::OsNotifications::Enabled;
+        let user_notifier = Arc::new(codex_core::UserNotifier::new(
+            config.notify.clone(),
+            use_native_notifications,
+        ));
+        let idle_timer_abort = Arc::new(Mutex::new(None));
+        let (approval_policy_tx, approval_policy_rx) = watch::channel(config.approval_policy);
+        let conversation_id = ConversationId::new();
+        let (history_log_id, history_entry_count) =
+            crate::message_history::history_metadata(&config.nori_home).await;
+
+        let transcript_recorder = match TranscriptRecorder::new(
+            &config.nori_home,
+            &cwd,
+            Some(config.model.clone()),
+            &config.cli_version,
+            Some(session_id.to_string()),
+        )
+        .await
+        {
+            Ok(recorder) => Some(Arc::new(recorder)),
+            Err(e) => {
+                warn!("Failed to initialize transcript recorder: {e}");
+                None
+            }
+        };
+
+        let backend = Self {
+            connection,
+            session_id: Arc::new(RwLock::new(session_id)),
+            event_tx: event_tx.clone(),
+            cwd: cwd.clone(),
+            pending_approvals: Arc::clone(&pending_approvals),
+            user_notifier: Arc::clone(&user_notifier),
+            idle_timer_abort: Arc::clone(&idle_timer_abort),
+            nori_home: config.nori_home.clone(),
+            history_persistence: config.history_persistence,
+            conversation_id,
+            approval_policy_tx,
+            pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
+            transcript_recorder,
+            notify_after_idle: config.notify_after_idle,
+            ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
+            is_first_prompt: Arc::new(Mutex::new(is_first_prompt_val)),
+            model_name: config.model.clone(),
+        };
+
+        let session_configured = SessionConfiguredEvent {
+            session_id: conversation_id,
+            model: config.model.clone(),
+            model_provider_id: "acp".to_string(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            cwd: cwd.clone(),
+            reasoning_effort: None,
+            history_log_id,
+            history_entry_count,
+            initial_messages,
+            rollout_path: cwd.join(".codex-rollout.jsonl"),
+        };
+
+        event_tx
+            .send(Event {
+                id: String::new(),
+                msg: EventMsg::SessionConfigured(session_configured),
+            })
+            .await
+            .ok();
+
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
             event_tx.clone(),
@@ -2151,6 +2355,108 @@ fn classify_tool_by_title(
     }]
 }
 
+// =============================================================================
+// Transcript Replay Helpers
+// =============================================================================
+
+/// Maximum character length for the transcript summary text.
+const TRANSCRIPT_SUMMARY_MAX_CHARS: usize = 20_000;
+
+/// Convert a loaded transcript into a list of `EventMsg` suitable for
+/// `SessionConfiguredEvent.initial_messages` (UI replay).
+///
+/// Only `User` and `Assistant` entries are converted; tool calls, results,
+/// patches, and session metadata are skipped since the UI does not need to
+/// replay the full tool lifecycle for display purposes.
+pub fn transcript_to_replay_events(transcript: &crate::transcript::Transcript) -> Vec<EventMsg> {
+    use codex_protocol::protocol::AgentMessageEvent;
+    use codex_protocol::protocol::UserMessageEvent;
+
+    transcript
+        .entries
+        .iter()
+        .filter_map(|line| match &line.entry {
+            crate::transcript::TranscriptEntry::User(user) => {
+                Some(EventMsg::UserMessage(UserMessageEvent {
+                    message: user.content.clone(),
+                    images: None,
+                }))
+            }
+            crate::transcript::TranscriptEntry::Assistant(assistant) => {
+                let text: String = assistant
+                    .content
+                    .iter()
+                    .filter_map(|block| match block {
+                        ContentBlock::Text { text } => Some(text.as_str()),
+                        ContentBlock::Thinking { .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(EventMsg::AgentMessage(AgentMessageEvent { message: text }))
+                }
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Convert a loaded transcript into a human-readable summary string suitable
+/// for injecting into the first prompt via `pending_compact_summary`.
+///
+/// The summary captures user messages, assistant responses, and tool call
+/// names so the agent has context about the previous conversation without
+/// needing the full tool lifecycle details.
+pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> String {
+    let mut summary = String::new();
+
+    for line in &transcript.entries {
+        if summary.len() >= TRANSCRIPT_SUMMARY_MAX_CHARS {
+            summary.push_str("\n[...transcript truncated...]");
+            break;
+        }
+
+        match &line.entry {
+            crate::transcript::TranscriptEntry::User(user) => {
+                summary.push_str(&format!("User: {}\n", user.content));
+            }
+            crate::transcript::TranscriptEntry::Assistant(assistant) => {
+                let text: String = assistant
+                    .content
+                    .iter()
+                    .filter_map(|block| match block {
+                        ContentBlock::Text { text } => Some(text.as_str()),
+                        ContentBlock::Thinking { .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                if !text.is_empty() {
+                    summary.push_str(&format!("Assistant: {text}\n"));
+                }
+            }
+            crate::transcript::TranscriptEntry::ToolCall(tool) => {
+                summary.push_str(&format!("[Tool: {}]\n", tool.name));
+            }
+            _ => {}
+        }
+    }
+
+    // Final truncation guard: find the nearest char boundary at or before
+    // the limit to avoid panicking on multi-byte UTF-8 (CJK, emoji, etc.).
+    if summary.len() > TRANSCRIPT_SUMMARY_MAX_CHARS {
+        let mut boundary = TRANSCRIPT_SUMMARY_MAX_CHARS;
+        while !summary.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        summary.truncate(boundary);
+        summary.push_str("\n[...truncated...]");
+    }
+
+    summary
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3573,5 +3879,204 @@ mod tests {
             }
             other => panic!("Expected ListCustomPromptsResponse, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn transcript_to_replay_events_converts_user_and_assistant() {
+        use crate::transcript::*;
+        use pretty_assertions::assert_eq;
+
+        let entries = vec![
+            TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
+                session_id: "s1".into(),
+                project_id: "p1".into(),
+                started_at: "2025-01-01T00:00:00.000Z".into(),
+                cwd: PathBuf::from("/tmp"),
+                agent: Some("claude-code".into()),
+                cli_version: "0.1.0".into(),
+                git: None,
+                acp_session_id: None,
+            })),
+            TranscriptLine::new(TranscriptEntry::User(UserEntry {
+                id: "msg-001".into(),
+                content: "Hello, world!".into(),
+                attachments: vec![],
+            })),
+            TranscriptLine::new(TranscriptEntry::Assistant(AssistantEntry {
+                id: "msg-002".into(),
+                content: vec![ContentBlock::Text {
+                    text: "Hi there!".into(),
+                }],
+                agent: Some("claude-code".into()),
+            })),
+            TranscriptLine::new(TranscriptEntry::ToolCall(ToolCallEntry {
+                call_id: "call-001".into(),
+                name: "shell".into(),
+                input: serde_json::json!({"command": "ls"}),
+            })),
+            TranscriptLine::new(TranscriptEntry::ToolResult(ToolResultEntry {
+                call_id: "call-001".into(),
+                output: "file1.txt\nfile2.txt".into(),
+                truncated: false,
+                exit_code: Some(0),
+            })),
+            TranscriptLine::new(TranscriptEntry::User(UserEntry {
+                id: "msg-003".into(),
+                content: "Thanks!".into(),
+                attachments: vec![],
+            })),
+        ];
+
+        let transcript = crate::transcript::Transcript {
+            meta: match &entries[0].entry {
+                TranscriptEntry::SessionMeta(m) => m.clone(),
+                _ => unreachable!(),
+            },
+            entries,
+        };
+
+        let events = transcript_to_replay_events(&transcript);
+
+        // Should only include User and Assistant entries (3 total: 2 user + 1 assistant)
+        assert_eq!(events.len(), 3);
+
+        // First event: UserMessage
+        match &events[0] {
+            EventMsg::UserMessage(ev) => assert_eq!(ev.message, "Hello, world!"),
+            other => panic!("Expected UserMessage, got {other:?}"),
+        }
+
+        // Second event: AgentMessage
+        match &events[1] {
+            EventMsg::AgentMessage(ev) => assert_eq!(ev.message, "Hi there!"),
+            other => panic!("Expected AgentMessage, got {other:?}"),
+        }
+
+        // Third event: UserMessage
+        match &events[2] {
+            EventMsg::UserMessage(ev) => assert_eq!(ev.message, "Thanks!"),
+            other => panic!("Expected UserMessage, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn transcript_to_replay_events_empty_transcript() {
+        use crate::transcript::*;
+        use pretty_assertions::assert_eq;
+
+        let meta = SessionMetaEntry {
+            session_id: "s1".into(),
+            project_id: "p1".into(),
+            started_at: "2025-01-01T00:00:00.000Z".into(),
+            cwd: PathBuf::from("/tmp"),
+            agent: None,
+            cli_version: "0.1.0".into(),
+            git: None,
+            acp_session_id: None,
+        };
+
+        let transcript = crate::transcript::Transcript {
+            meta: meta.clone(),
+            entries: vec![TranscriptLine::new(TranscriptEntry::SessionMeta(meta))],
+        };
+
+        let events = transcript_to_replay_events(&transcript);
+        assert_eq!(events.len(), 0);
+    }
+
+    #[test]
+    fn transcript_to_summary_builds_conversation_text() {
+        use crate::transcript::*;
+
+        let entries = vec![
+            TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
+                session_id: "s1".into(),
+                project_id: "p1".into(),
+                started_at: "2025-01-01T00:00:00.000Z".into(),
+                cwd: PathBuf::from("/tmp"),
+                agent: Some("claude-code".into()),
+                cli_version: "0.1.0".into(),
+                git: None,
+                acp_session_id: None,
+            })),
+            TranscriptLine::new(TranscriptEntry::User(UserEntry {
+                id: "msg-001".into(),
+                content: "Fix the bug in main.rs".into(),
+                attachments: vec![],
+            })),
+            TranscriptLine::new(TranscriptEntry::Assistant(AssistantEntry {
+                id: "msg-002".into(),
+                content: vec![ContentBlock::Text {
+                    text: "I'll look at main.rs and fix the bug.".into(),
+                }],
+                agent: Some("claude-code".into()),
+            })),
+            TranscriptLine::new(TranscriptEntry::ToolCall(ToolCallEntry {
+                call_id: "call-001".into(),
+                name: "shell".into(),
+                input: serde_json::json!({"command": "cat main.rs"}),
+            })),
+            TranscriptLine::new(TranscriptEntry::User(UserEntry {
+                id: "msg-003".into(),
+                content: "Great, thanks!".into(),
+                attachments: vec![],
+            })),
+        ];
+
+        let transcript = crate::transcript::Transcript {
+            meta: match &entries[0].entry {
+                TranscriptEntry::SessionMeta(m) => m.clone(),
+                _ => unreachable!(),
+            },
+            entries,
+        };
+
+        let summary = transcript_to_summary(&transcript);
+
+        assert!(summary.contains("User: Fix the bug in main.rs"));
+        assert!(summary.contains("Assistant: I'll look at main.rs and fix the bug."));
+        assert!(summary.contains("[Tool: shell]"));
+        assert!(summary.contains("User: Great, thanks!"));
+    }
+
+    #[test]
+    fn transcript_to_summary_truncates_long_content() {
+        use crate::transcript::*;
+
+        let long_text = "x".repeat(30_000);
+        let entries = vec![
+            TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
+                session_id: "s1".into(),
+                project_id: "p1".into(),
+                started_at: "2025-01-01T00:00:00.000Z".into(),
+                cwd: PathBuf::from("/tmp"),
+                agent: None,
+                cli_version: "0.1.0".into(),
+                git: None,
+                acp_session_id: None,
+            })),
+            TranscriptLine::new(TranscriptEntry::User(UserEntry {
+                id: "msg-001".into(),
+                content: long_text,
+                attachments: vec![],
+            })),
+        ];
+
+        let transcript = crate::transcript::Transcript {
+            meta: match &entries[0].entry {
+                TranscriptEntry::SessionMeta(m) => m.clone(),
+                _ => unreachable!(),
+            },
+            entries,
+        };
+
+        let summary = transcript_to_summary(&transcript);
+
+        // Summary should be capped at a reasonable size
+        assert!(
+            summary.len() <= 25_000,
+            "Summary should be truncated, got {} chars",
+            summary.len()
+        );
     }
 }

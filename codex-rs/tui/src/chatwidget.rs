@@ -118,6 +118,7 @@ use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
 #[cfg(feature = "unstable")]
 pub(crate) use self::agent::AcpAgentHandle;
+use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
 use self::agent::spawn_agent_from_existing;
 mod session_header;
@@ -1672,6 +1673,102 @@ impl ChatWidget {
         widget
     }
 
+    /// Create a ChatWidget that resumes an ACP session via `session/load`
+    /// or client-side replay when the agent doesn't support `session/load`.
+    pub(crate) fn new_resumed_acp(
+        common: ChatWidgetInit,
+        acp_session_id: Option<String>,
+        transcript: codex_acp::transcript::Transcript,
+    ) -> Self {
+        let ChatWidgetInit {
+            config,
+            frame_requester,
+            app_event_tx,
+            initial_prompt,
+            initial_images,
+            enhanced_keys_supported,
+            auth_manager,
+            vertical_footer,
+            expected_model,
+        } = common;
+        let mut rng = rand::rng();
+        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+        let spawn_result = spawn_acp_agent_resume(
+            config.clone(),
+            acp_session_id,
+            transcript,
+            app_event_tx.clone(),
+        );
+
+        let first_prompt_text = initial_prompt.clone();
+        let mut widget = Self {
+            app_event_tx: app_event_tx.clone(),
+            frame_requester: frame_requester.clone(),
+            codex_op_tx: spawn_result.op_tx,
+            bottom_pane: BottomPane::new(BottomPaneParams {
+                frame_requester,
+                app_event_tx,
+                has_input_focus: true,
+                enhanced_keys_supported,
+                placeholder_text: placeholder,
+                disable_paste_burst: config.disable_paste_burst,
+                animations_enabled: config.animations,
+                vertical_footer,
+                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
+            }),
+            active_cell: None,
+            config: config.clone(),
+            auth_manager,
+            session_header: SessionHeader::new(config.model),
+            initial_user_message: create_initial_user_message(
+                initial_prompt.unwrap_or_default(),
+                initial_images,
+            ),
+            token_info: None,
+            rate_limit_snapshot: None,
+            rate_limit_warnings: RateLimitWarningState::default(),
+            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+            rate_limit_poller: None,
+            stream_controller: None,
+            running_commands: HashMap::new(),
+            suppressed_exec_calls: HashSet::new(),
+            last_unified_wait: None,
+            task_complete_pending: false,
+            mcp_startup_status: None,
+            interrupts: InterruptManager::new(),
+            reasoning_buffer: String::new(),
+            full_reasoning_buffer: String::new(),
+            current_status_header: String::from("Working"),
+            retry_status_header: None,
+            conversation_id: None,
+            queued_user_messages: VecDeque::new(),
+            show_welcome_banner: false,
+            suppress_session_configured_redraw: false,
+            pending_notification: None,
+            needs_final_message_separator: false,
+            last_rendered_width: std::cell::Cell::new(None),
+            current_rollout_path: None,
+            pending_exec_cells: PendingExecCellTracker::new(),
+            effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
+            pending_agent: None,
+            expected_model,
+            session_configured_received: false,
+            #[cfg(feature = "unstable")]
+            acp_handle: spawn_result.acp_handle,
+            session_stats: SessionStats::new(),
+            login_handler: None,
+            first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
+        };
+
+        widget.prefetch_rate_limits();
+
+        widget
+    }
+
     /// Set a pending agent to switch to on the next prompt submission.
     pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
         // Update the bottom pane's model display name for approval dialogs
@@ -1785,6 +1882,9 @@ impl ChatWidget {
         match cmd {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
+            }
+            SlashCommand::Resume => {
+                self.open_resume_session_picker();
             }
             SlashCommand::ResumeViewonly => {
                 self.open_viewonly_session_picker();
@@ -2540,6 +2640,52 @@ impl ChatWidget {
                         )));
                     } else {
                         tx.send(crate::app_event::AppEvent::ShowViewonlySessionPicker {
+                            sessions,
+                            nori_home: nori_home_for_event,
+                        });
+                    }
+                }
+                Err(e) => {
+                    tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                        crate::history_cell::new_error_event(format!(
+                            "Failed to load sessions: {e}"
+                        )),
+                    )));
+                }
+            }
+        });
+    }
+
+    pub(crate) fn open_resume_session_picker(&mut self) {
+        let cwd = self.config.cwd.clone();
+        let tx = self.app_event_tx.clone();
+        let model = self.config.model.clone();
+
+        let nori_home = match crate::nori::config_adapter::get_nori_home() {
+            Ok(home) => home,
+            Err(e) => {
+                self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
+                return;
+            }
+        };
+
+        let nori_home_for_event = nori_home.clone();
+        tokio::spawn(async move {
+            match crate::nori::resume_session_picker::load_resumable_sessions(
+                &nori_home, &cwd, &model,
+            )
+            .await
+            {
+                Ok(sessions) => {
+                    if sessions.is_empty() {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(
+                                "No resumable sessions found for this project and agent."
+                                    .to_string(),
+                            ),
+                        )));
+                    } else {
+                        tx.send(crate::app_event::AppEvent::ShowResumeSessionPicker {
                             sessions,
                             nori_home: nori_home_for_event,
                         });

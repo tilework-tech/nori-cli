@@ -129,6 +129,12 @@ enum AcpCommand {
         update_tx: mpsc::Sender<acp::SessionUpdate>,
         response_tx: oneshot::Sender<Result<acp::StopReason>>,
     },
+    LoadSession {
+        session_id: String,
+        cwd: PathBuf,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+        response_tx: oneshot::Sender<Result<acp::SessionId>>,
+    },
     Cancel {
         session_id: acp::SessionId,
         response_tx: oneshot::Sender<Result<()>>,
@@ -261,6 +267,29 @@ impl AcpConnection {
         self.command_tx
             .send(AcpCommand::CreateSession {
                 cwd: cwd.to_path_buf(),
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Load (resume) a previous session by its ACP session ID.
+    ///
+    /// The agent will stream `SessionUpdate` notifications as it replays
+    /// conversation history, then return the session ID on success.
+    pub async fn load_session(
+        &self,
+        session_id: &str,
+        cwd: &Path,
+        update_tx: mpsc::Sender<acp::SessionUpdate>,
+    ) -> Result<acp::SessionId> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::LoadSession {
+                session_id: session_id.to_string(),
+                cwd: cwd.to_path_buf(),
+                update_tx,
                 response_tx,
             })
             .await
@@ -648,6 +677,51 @@ async fn run_command_loop(
                 let result = result
                     .map(|r| r.session_id)
                     .context("Failed to create ACP session");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::LoadSession {
+                session_id,
+                cwd,
+                update_tx,
+                response_tx,
+            } => {
+                // Register the update channel so session notifications are forwarded
+                // during the load_session call (history replay).
+                let acp_session_id: acp::SessionId = session_id.clone().into();
+                inner
+                    .client_delegate
+                    .register_session(acp_session_id.clone(), update_tx);
+
+                let result = inner
+                    .connection
+                    .load_session(acp::LoadSessionRequest::new(session_id, cwd))
+                    .await;
+
+                // Capture model state from the response if available
+                #[cfg(feature = "unstable")]
+                if let Ok(ref response) = result
+                    && let Some(ref models) = response.models
+                    && let Ok(mut state) = model_state.write()
+                {
+                    *state = AcpModelState::from_session_model_state(models);
+                }
+
+                // Yield to allow io_task to drain any pending notifications
+                // that arrived just before the LoadSessionResponse, mirroring
+                // the drain logic used by the Prompt handler.
+                for _ in 0..DRAIN_YIELD_COUNT {
+                    tokio::task::yield_now().await;
+                }
+
+                // Unregister the session so the update channel is closed,
+                // allowing the caller's forwarding task to complete.
+                inner.client_delegate.unregister_session(&acp_session_id);
+
+                // LoadSessionResponse doesn't contain a session_id; the
+                // session ID from the request is reused.
+                let result = result
+                    .map(|_| acp_session_id)
+                    .context("Failed to load ACP session");
                 let _ = response_tx.send(result);
             }
             AcpCommand::Prompt {

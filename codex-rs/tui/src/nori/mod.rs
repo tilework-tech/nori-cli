@@ -6,6 +6,7 @@
 pub(crate) mod agent_picker;
 pub(crate) mod exit_message;
 pub(crate) mod onboarding;
+pub(crate) mod resume_session_picker;
 pub(crate) mod session_header;
 pub(crate) mod skillset_picker;
 pub(crate) mod viewonly_session_picker;

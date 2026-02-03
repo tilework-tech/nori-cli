@@ -78,6 +78,9 @@ pub struct SessionMetaEntry {
     /// Git repository information
     #[serde(skip_serializing_if = "Option::is_none")]
     pub git: Option<GitInfo>,
+    /// The ACP agent's session ID, used for resuming sessions via `session/load`.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub acp_session_id: Option<String>,
 }
 
 /// Attachment type for user messages (images, files, etc.)
@@ -204,6 +207,7 @@ mod tests {
             agent: Some("claude-code".to_string()),
             cli_version: "0.1.0".to_string(),
             git: None,
+            acp_session_id: None,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -257,5 +261,76 @@ mod tests {
 
         let entry: AssistantEntry = serde_json::from_str(json).unwrap();
         assert_eq!(entry.agent, Some("claude-code".to_string()));
+    }
+
+    #[test]
+    fn session_meta_entry_serializes_acp_session_id() {
+        let entry = SessionMetaEntry {
+            session_id: "test-session".to_string(),
+            project_id: "test-project".to_string(),
+            started_at: "2025-01-27T12:00:00.000Z".to_string(),
+            cwd: PathBuf::from("/tmp/test"),
+            agent: Some("claude-code".to_string()),
+            cli_version: "0.1.0".to_string(),
+            git: None,
+            acp_session_id: Some("acp-sess-abc123".to_string()),
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(
+            json.contains(r#""acp_session_id":"acp-sess-abc123""#),
+            "Expected 'acp_session_id' field in JSON, got: {json}"
+        );
+    }
+
+    #[test]
+    fn session_meta_entry_deserializes_acp_session_id() {
+        let json = r#"{
+            "session_id": "test-session",
+            "project_id": "test-project",
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "agent": "claude-code",
+            "cli_version": "0.1.0",
+            "acp_session_id": "acp-sess-abc123"
+        }"#;
+
+        let entry: SessionMetaEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.acp_session_id, Some("acp-sess-abc123".to_string()));
+    }
+
+    #[test]
+    fn session_meta_entry_deserializes_without_acp_session_id() {
+        // Backward compatibility: old transcripts without the field should still parse
+        let json = r#"{
+            "session_id": "test-session",
+            "project_id": "test-project",
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "cli_version": "0.1.0"
+        }"#;
+
+        let entry: SessionMetaEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.acp_session_id, None);
+    }
+
+    #[test]
+    fn session_meta_entry_omits_acp_session_id_when_none() {
+        let entry = SessionMetaEntry {
+            session_id: "test-session".to_string(),
+            project_id: "test-project".to_string(),
+            started_at: "2025-01-27T12:00:00.000Z".to_string(),
+            cwd: PathBuf::from("/tmp/test"),
+            agent: None,
+            cli_version: "0.1.0".to_string(),
+            git: None,
+            acp_session_id: None,
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(
+            !json.contains("acp_session_id"),
+            "Should not contain 'acp_session_id' when None, got: {json}"
+        );
     }
 }

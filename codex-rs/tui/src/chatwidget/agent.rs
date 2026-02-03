@@ -256,6 +256,112 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
     }
 }
 
+/// Spawn an ACP agent backend that resumes a previous session.
+///
+/// Similar to `spawn_acp_agent`, but calls `AcpBackend::resume_session`
+/// instead of `AcpBackend::spawn`. If the agent supports `session/load`,
+/// server-side resume is used. Otherwise, falls back to client-side replay
+/// using the provided transcript.
+pub(crate) fn spawn_acp_agent_resume(
+    config: Config,
+    acp_session_id: Option<String>,
+    transcript: codex_acp::transcript::Transcript,
+    app_event_tx: AppEventSender,
+) -> SpawnAgentResult {
+    let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
+
+    #[cfg(feature = "unstable")]
+    let (model_cmd_tx, mut model_cmd_rx) = unbounded_channel::<AcpModelCommand>();
+
+    #[cfg(feature = "unstable")]
+    let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
+
+    let display_name = get_agent_display_name(&config.model);
+    app_event_tx.send(AppEvent::AgentConnecting { display_name });
+
+    tokio::spawn(async move {
+        let (event_tx, mut event_rx) = mpsc::channel(32);
+
+        let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
+        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        let acp_config = AcpBackendConfig {
+            model: config.model.clone(),
+            cwd: config.cwd.clone(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            notify: config.notify.clone(),
+            os_notifications: nori_config.os_notifications,
+            notify_after_idle: nori_config.notify_after_idle,
+            nori_home,
+            history_persistence: HistoryPersistence::SaveAll,
+            cli_version: env!("CARGO_PKG_VERSION").to_string(),
+        };
+
+        let backend = match AcpBackend::resume_session(
+            &acp_config,
+            acp_session_id.as_deref(),
+            Some(&transcript),
+            event_tx,
+        )
+        .await
+        {
+            Ok(b) => Arc::new(b),
+            Err(e) => {
+                tracing::error!("failed to resume ACP session: {e}");
+                app_event_tx.send(AppEvent::AgentSpawnFailed {
+                    model_name: config.model.clone(),
+                    error: format!("Failed to resume ACP session: {e}"),
+                });
+                return;
+            }
+        };
+
+        let backend_for_ops = Arc::clone(&backend);
+        tokio::spawn(async move {
+            while let Some(op) = codex_op_rx.recv().await {
+                if let Err(e) = backend_for_ops.submit(op).await {
+                    tracing::error!("failed to submit op: {e}");
+                }
+            }
+        });
+
+        #[cfg(feature = "unstable")]
+        {
+            let backend_for_model = Arc::clone(&backend);
+            tokio::spawn(async move {
+                while let Some(cmd) = model_cmd_rx.recv().await {
+                    match cmd {
+                        AcpModelCommand::GetModelState { response_tx } => {
+                            let state = backend_for_model.model_state();
+                            let _ = response_tx.send(state);
+                        }
+                        AcpModelCommand::SetModel {
+                            model_id,
+                            response_tx,
+                        } => {
+                            let model_id = codex_acp::ModelId::from(model_id);
+                            let result = backend_for_model.set_model(&model_id).await;
+                            let _ = response_tx.send(result);
+                        }
+                    }
+                }
+            });
+        }
+
+        drop(backend);
+
+        while let Some(event) = event_rx.recv().await {
+            app_event_tx.send(AppEvent::CodexEvent(event));
+        }
+    });
+
+    SpawnAgentResult {
+        op_tx: codex_op_tx,
+        #[cfg(feature = "unstable")]
+        acp_handle,
+    }
+}
+
 /// Spawn an HTTP agent (the original implementation).
 ///
 /// This uses `codex_core` to communicate with LLM providers via HTTP APIs.
