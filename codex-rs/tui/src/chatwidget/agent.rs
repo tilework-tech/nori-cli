@@ -301,6 +301,18 @@ pub(crate) fn spawn_acp_agent_resume(
 
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        let auto_worktree_enabled = nori_config.auto_worktree;
+        let auto_worktree_repo_root = if auto_worktree_enabled {
+            config
+                .cwd
+                .parent()
+                .filter(|p| p.file_name().is_some_and(|n| n == ".worktrees"))
+                .and_then(|p| p.parent())
+                .map(std::path::Path::to_path_buf)
+        } else {
+            None
+        };
+
         let acp_config = AcpBackendConfig {
             model: config.model.clone(),
             cwd: config.cwd.clone(),
@@ -312,6 +324,8 @@ pub(crate) fn spawn_acp_agent_resume(
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
+            auto_worktree: auto_worktree_enabled,
+            auto_worktree_repo_root,
         };
 
         let backend = match AcpBackend::resume_session(
