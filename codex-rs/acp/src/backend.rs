@@ -12,6 +12,7 @@ use agent_client_protocol as acp;
 use anyhow::Result;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
+use codex_protocol::protocol::AgentCommandsUpdateEvent;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::ContextCompactedEvent;
 use codex_protocol::protocol::ErrorEvent;
@@ -1879,6 +1880,36 @@ fn translate_session_update_to_events(
             } else {
                 vec![]
             }
+        }
+        acp::SessionUpdate::AvailableCommandsUpdate(update) => {
+            use codex_protocol::custom_prompts::AgentCommand;
+
+            let agent_commands = update
+                .available_commands
+                .iter()
+                .map(|cmd| {
+                    let argument_hint = cmd.input.as_ref().and_then(|input| match input {
+                        acp::AvailableCommandInput::Unstructured(u) => Some(u.hint.clone()),
+                        _ => None,
+                    });
+                    AgentCommand {
+                        name: cmd.name.clone(),
+                        description: cmd.description.clone(),
+                        argument_hint,
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            debug!(
+                target: "acp_event_flow",
+                event_type = "AvailableCommandsUpdate",
+                num_commands = agent_commands.len(),
+                "ACP -> TUI: AgentCommandsUpdate"
+            );
+
+            vec![EventMsg::AgentCommandsUpdate(AgentCommandsUpdateEvent {
+                commands: agent_commands,
+            })]
         }
         // Other update types don't have direct event mappings
         other => {

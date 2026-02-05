@@ -69,6 +69,7 @@ pub enum EventMsg {
 | `UndoCompleted` | Result of an undo operation (success/failure with message) |
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 | `PromptSummary` | Short summary of the first user prompt for display in the footer |
+| `AgentCommandsUpdate` | List of slash commands advertised by the ACP agent |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -83,6 +84,16 @@ pub enum EventMsg {
 | `PROMPTS_CMD_PREFIX` | The slash command prefix constant (`"prompts"`) |
 
 `CustomPromptKind::Script` carries an `interpreter` string (e.g. `"bash"`, `"python3"`, `"node"`) that determines how the script file is executed. `CustomPromptKind` defaults to `Markdown` and is serde-tagged as `"type"` for JSON serialization.
+
+**Agent Command Types** (`custom_prompts.rs`): Defines types for slash commands advertised by ACP agents via `AvailableCommandsUpdate`:
+
+| Type | Purpose |
+|------|--------|
+| `AgentCommand` | A command with name, description, and optional argument hint |
+| `AGENT_CMD_PREFIX` | The slash command prefix constant (`"agent"`) |
+| `AgentCommandsUpdateEvent` | Wrapper containing `Vec<AgentCommand>` for the `AgentCommandsUpdate` event |
+
+Agent commands are displayed in the TUI command popup with the `/agent:name` format, alongside user-defined custom prompts (`/prompts:name`) and builtin slash commands.
 
 ### Things to Know
 

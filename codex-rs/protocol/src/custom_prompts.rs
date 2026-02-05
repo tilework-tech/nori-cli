@@ -10,6 +10,12 @@ use ts_rs::TS;
 /// - Full slash prefix: `"/{PROMPTS_CMD_PREFIX}:"`
 pub const PROMPTS_CMD_PREFIX: &str = "prompts";
 
+/// Base namespace for agent-provided slash commands (without trailing colon).
+/// Example usage forms constructed in code:
+/// - Command token after '/': `"{AGENT_CMD_PREFIX}:name"`
+/// - Full slash prefix: `"/{AGENT_CMD_PREFIX}:"`
+pub const AGENT_CMD_PREFIX: &str = "agent";
+
 /// The kind of a custom prompt: either a static markdown template or an
 /// executable script whose stdout becomes the prompt content.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -37,4 +43,12 @@ pub struct CustomPrompt {
     pub argument_hint: Option<String>,
     #[serde(default)]
     pub kind: CustomPromptKind,
+}
+
+/// A command advertised by an ACP agent via AvailableCommandsUpdate.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+pub struct AgentCommand {
+    pub name: String,
+    pub description: String,
+    pub argument_hint: Option<String>,
 }

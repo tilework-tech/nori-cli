@@ -11,22 +11,27 @@ use crate::render::RectExt;
 use crate::slash_command::SlashCommand;
 use crate::slash_command::built_in_slash_commands;
 use codex_common::fuzzy_match::fuzzy_match;
+use codex_protocol::custom_prompts::AGENT_CMD_PREFIX;
+use codex_protocol::custom_prompts::AgentCommand;
 use codex_protocol::custom_prompts::CustomPrompt;
 use codex_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
 use std::collections::HashSet;
 
-/// A selectable item in the popup: either a built-in command or a user prompt.
+/// A selectable item in the popup: either a built-in command, a user prompt, or an agent command.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CommandItem {
     Builtin(SlashCommand),
-    // Index into `prompts`
+    /// Index into `prompts`
     UserPrompt(usize),
+    /// Index into `agent_commands`
+    AgentCommand(usize),
 }
 
 pub(crate) struct CommandPopup {
     command_filter: String,
     builtins: Vec<(&'static str, SlashCommand)>,
     prompts: Vec<CustomPrompt>,
+    agent_commands: Vec<AgentCommand>,
     state: ScrollState,
 }
 
@@ -41,6 +46,7 @@ impl CommandPopup {
             command_filter: String::new(),
             builtins,
             prompts,
+            agent_commands: Vec::new(),
             state: ScrollState::new(),
         }
     }
@@ -58,6 +64,21 @@ impl CommandPopup {
 
     pub(crate) fn prompt(&self, idx: usize) -> Option<&CustomPrompt> {
         self.prompts.get(idx)
+    }
+
+    pub(crate) fn set_agent_commands(&mut self, mut commands: Vec<AgentCommand>) {
+        let exclude: HashSet<String> = self
+            .builtins
+            .iter()
+            .map(|(n, _)| (*n).to_string())
+            .collect();
+        commands.retain(|c| !exclude.contains(&c.name));
+        commands.sort_by(|a, b| a.name.cmp(&b.name));
+        self.agent_commands = commands;
+    }
+
+    pub(crate) fn agent_command(&self, idx: usize) -> Option<&AgentCommand> {
+        self.agent_commands.get(idx)
     }
 
     /// Update the filter string based on the current composer text. The text
@@ -100,7 +121,7 @@ impl CommandPopup {
         measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, width)
     }
 
-    /// Compute fuzzy-filtered matches over built-in commands and user prompts,
+    /// Compute fuzzy-filtered matches over built-in commands, user prompts, and agent commands,
     /// paired with optional highlight indices and score. Sorted by ascending
     /// score, then by name for stability.
     fn filtered(&self) -> Vec<(CommandItem, Option<Vec<usize>>, i32)> {
@@ -114,6 +135,10 @@ impl CommandPopup {
             // Then prompts, already sorted by name.
             for idx in 0..self.prompts.len() {
                 out.push((CommandItem::UserPrompt(idx), None, 0));
+            }
+            // Then agent commands, already sorted by name.
+            for idx in 0..self.agent_commands.len() {
+                out.push((CommandItem::AgentCommand(idx), None, 0));
             }
             return out;
         }
@@ -132,16 +157,25 @@ impl CommandPopup {
                 out.push((CommandItem::UserPrompt(idx), Some(indices), score));
             }
         }
+        // Agent commands: support both "name" and "agent:name" search styles.
+        for (idx, c) in self.agent_commands.iter().enumerate() {
+            let display = format!("{AGENT_CMD_PREFIX}:{}", c.name);
+            if let Some((indices, score)) = fuzzy_match(&display, filter) {
+                out.push((CommandItem::AgentCommand(idx), Some(indices), score));
+            }
+        }
         // When filtering, sort by ascending score and then by name for stability.
         out.sort_by(|a, b| {
             a.2.cmp(&b.2).then_with(|| {
                 let an = match a.0 {
                     CommandItem::Builtin(c) => c.command(),
                     CommandItem::UserPrompt(i) => &self.prompts[i].name,
+                    CommandItem::AgentCommand(i) => &self.agent_commands[i].name,
                 };
                 let bn = match b.0 {
                     CommandItem::Builtin(c) => c.command(),
                     CommandItem::UserPrompt(i) => &self.prompts[i].name,
+                    CommandItem::AgentCommand(i) => &self.agent_commands[i].name,
                 };
                 an.cmp(bn)
             })
@@ -173,6 +207,13 @@ impl CommandPopup {
                         (
                             format!("/{PROMPTS_CMD_PREFIX}:{}", prompt.name),
                             description,
+                        )
+                    }
+                    CommandItem::AgentCommand(i) => {
+                        let cmd = &self.agent_commands[i];
+                        (
+                            format!("/{AGENT_CMD_PREFIX}:{}", cmd.name),
+                            cmd.description.clone(),
                         )
                     }
                 };
@@ -242,7 +283,7 @@ mod tests {
         let matches = popup.filtered_items();
         let has_init = matches.iter().any(|item| match item {
             CommandItem::Builtin(cmd) => cmd.command() == "init",
-            CommandItem::UserPrompt(_) => false,
+            CommandItem::UserPrompt(_) | CommandItem::AgentCommand(_) => false,
         });
         assert!(
             has_init,
@@ -261,6 +302,9 @@ mod tests {
         match selected {
             Some(CommandItem::Builtin(cmd)) => assert_eq!(cmd.command(), "init"),
             Some(CommandItem::UserPrompt(_)) => panic!("unexpected prompt selected for '/init'"),
+            Some(CommandItem::AgentCommand(_)) => {
+                panic!("unexpected agent command selected for '/init'")
+            }
             None => panic!("expected a selected command for exact match"),
         }
     }
@@ -274,6 +318,9 @@ mod tests {
             Some(CommandItem::Builtin(cmd)) => assert_eq!(cmd.command(), "model"),
             Some(CommandItem::UserPrompt(_)) => {
                 panic!("unexpected prompt ranked before '/model' for '/mo'")
+            }
+            Some(CommandItem::AgentCommand(_)) => {
+                panic!("unexpected agent command ranked before '/model' for '/mo'")
             }
             None => panic!("expected at least one match for '/mo'"),
         }
@@ -365,5 +412,153 @@ mod tests {
         let rows = popup.rows_from_matches(vec![(CommandItem::UserPrompt(0), None, 0)]);
         let description = rows.first().and_then(|row| row.description.as_deref());
         assert_eq!(description, Some("send saved prompt"));
+    }
+
+    // ==================== Agent Commands Tests ====================
+
+    #[test]
+    fn agent_commands_appear_in_filtered_list() {
+        use codex_protocol::custom_prompts::AgentCommand;
+
+        let mut popup = CommandPopup::new(Vec::new());
+
+        // Set agent commands
+        popup.set_agent_commands(vec![
+            AgentCommand {
+                name: "review".to_string(),
+                description: "Review code changes".to_string(),
+                argument_hint: None,
+            },
+            AgentCommand {
+                name: "test".to_string(),
+                description: "Run tests".to_string(),
+                argument_hint: Some("[file]".to_string()),
+            },
+        ]);
+
+        let items = popup.filtered_items();
+
+        // Find agent commands in the list
+        let agent_command_names: Vec<String> = items
+            .into_iter()
+            .filter_map(|it| match it {
+                CommandItem::AgentCommand(i) => popup.agent_command(i).map(|c| c.name.clone()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(agent_command_names.len(), 2);
+        assert!(agent_command_names.contains(&"review".to_string()));
+        assert!(agent_command_names.contains(&"test".to_string()));
+    }
+
+    #[test]
+    fn agent_commands_displayed_with_agent_prefix() {
+        use codex_protocol::custom_prompts::AGENT_CMD_PREFIX;
+        use codex_protocol::custom_prompts::AgentCommand;
+
+        let mut popup = CommandPopup::new(Vec::new());
+        popup.set_agent_commands(vec![AgentCommand {
+            name: "review".to_string(),
+            description: "Review code changes".to_string(),
+            argument_hint: None,
+        }]);
+
+        let rows = popup.rows_from_matches(vec![(CommandItem::AgentCommand(0), None, 0)]);
+        let name = rows.first().map(|row| row.name.as_str());
+
+        // Should be displayed as "/agent:review"
+        assert_eq!(name, Some(format!("/{AGENT_CMD_PREFIX}:review").as_str()));
+    }
+
+    #[test]
+    fn agent_commands_filtered_by_typing() {
+        use codex_protocol::custom_prompts::AgentCommand;
+
+        let mut popup = CommandPopup::new(Vec::new());
+        popup.set_agent_commands(vec![
+            AgentCommand {
+                name: "review".to_string(),
+                description: "Review code changes".to_string(),
+                argument_hint: None,
+            },
+            AgentCommand {
+                name: "test".to_string(),
+                description: "Run tests".to_string(),
+                argument_hint: None,
+            },
+        ]);
+
+        // Filter by typing "agent:rev"
+        popup.on_composer_text_change("/agent:rev".to_string());
+
+        let items = popup.filtered_items();
+        let has_review = items.iter().any(|it| match it {
+            CommandItem::AgentCommand(i) => {
+                popup.agent_command(*i).is_some_and(|c| c.name == "review")
+            }
+            _ => false,
+        });
+
+        assert!(has_review, "expected 'review' command to match 'agent:rev'");
+    }
+
+    #[test]
+    fn agent_command_collision_with_builtin_is_ignored() {
+        use codex_protocol::custom_prompts::AgentCommand;
+
+        let mut popup = CommandPopup::new(Vec::new());
+
+        // Try to add an agent command with same name as a builtin
+        popup.set_agent_commands(vec![AgentCommand {
+            name: "init".to_string(),
+            description: "Should be ignored".to_string(),
+            argument_hint: None,
+        }]);
+
+        let items = popup.filtered_items();
+        let has_agent_init = items.iter().any(|it| match it {
+            CommandItem::AgentCommand(i) => {
+                popup.agent_command(*i).is_some_and(|c| c.name == "init")
+            }
+            _ => false,
+        });
+
+        assert!(
+            !has_agent_init,
+            "agent command with builtin name should be filtered out"
+        );
+    }
+
+    #[test]
+    fn set_agent_commands_clears_previous_commands() {
+        use codex_protocol::custom_prompts::AgentCommand;
+
+        let mut popup = CommandPopup::new(Vec::new());
+
+        // Set initial commands
+        popup.set_agent_commands(vec![AgentCommand {
+            name: "old-command".to_string(),
+            description: "Old".to_string(),
+            argument_hint: None,
+        }]);
+
+        // Replace with new commands
+        popup.set_agent_commands(vec![AgentCommand {
+            name: "new-command".to_string(),
+            description: "New".to_string(),
+            argument_hint: None,
+        }]);
+
+        let items = popup.filtered_items();
+        let command_names: Vec<String> = items
+            .into_iter()
+            .filter_map(|it| match it {
+                CommandItem::AgentCommand(i) => popup.agent_command(i).map(|c| c.name.clone()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(command_names, vec!["new-command".to_string()]);
     }
 }

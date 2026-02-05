@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use agent_client_protocol as acp;
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
+use codex_protocol::custom_prompts::AgentCommand;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::FileChange;
@@ -57,6 +58,8 @@ pub enum TranslatedEvent {
     TextDelta(String),
     /// Agent completed the message with a stop reason
     Completed(acp::StopReason),
+    /// Agent advertised available slash commands
+    AgentCommandsUpdate(Vec<AgentCommand>),
 }
 
 /// Translate an ACP SessionUpdate to a list of TranslatedEvents.
@@ -111,9 +114,24 @@ pub fn translate_session_update(update: acp::SessionUpdate) -> Vec<TranslatedEve
             // Mode changes are internal state
             vec![]
         }
-        acp::SessionUpdate::AvailableCommandsUpdate(_) => {
-            // Command updates are internal state
-            vec![]
+        acp::SessionUpdate::AvailableCommandsUpdate(update) => {
+            // Translate available commands to AgentCommand structs
+            let agent_commands = update
+                .available_commands
+                .into_iter()
+                .map(|cmd| {
+                    let argument_hint = cmd.input.and_then(|input| match input {
+                        acp::AvailableCommandInput::Unstructured(u) => Some(u.hint),
+                        _ => None,
+                    });
+                    AgentCommand {
+                        name: cmd.name,
+                        description: cmd.description,
+                        argument_hint,
+                    }
+                })
+                .collect();
+            vec![TranslatedEvent::AgentCommandsUpdate(agent_commands)]
         }
         _ => {
             // Handle any new update types added in future versions
@@ -1176,6 +1194,63 @@ mod tests {
                 assert_eq!(content, "old content");
             }
             _ => panic!("Expected FileChange::Delete"),
+        }
+    }
+
+    // ==================== Agent Commands Translation Tests ====================
+
+    #[test]
+    fn test_translate_available_commands_update_produces_agent_commands() {
+        // When an agent sends AvailableCommandsUpdate, we should translate it
+        // to an AgentCommandsUpdate event that the TUI can display
+        let commands = vec![
+            acp::AvailableCommand::new("review", "Review code changes"),
+            acp::AvailableCommand::new("test", "Run tests").input(
+                acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
+                    "[file]",
+                )),
+            ),
+        ];
+        let update = acp::SessionUpdate::AvailableCommandsUpdate(
+            acp::AvailableCommandsUpdate::new(commands),
+        );
+
+        let events = translate_session_update(update);
+
+        // Should produce exactly one AgentCommandsUpdate event
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            TranslatedEvent::AgentCommandsUpdate(agent_commands) => {
+                assert_eq!(agent_commands.len(), 2);
+
+                // First command
+                assert_eq!(agent_commands[0].name, "review");
+                assert_eq!(agent_commands[0].description, "Review code changes");
+                assert!(agent_commands[0].argument_hint.is_none());
+
+                // Second command with argument hint
+                assert_eq!(agent_commands[1].name, "test");
+                assert_eq!(agent_commands[1].description, "Run tests");
+                assert_eq!(agent_commands[1].argument_hint.as_deref(), Some("[file]"));
+            }
+            _ => panic!("Expected AgentCommandsUpdate event"),
+        }
+    }
+
+    #[test]
+    fn test_translate_empty_available_commands_update() {
+        // Empty command list should still produce an event (to clear previous commands)
+        let update =
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![]));
+
+        let events = translate_session_update(update);
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            TranslatedEvent::AgentCommandsUpdate(agent_commands) => {
+                assert!(agent_commands.is_empty());
+            }
+            _ => panic!("Expected AgentCommandsUpdate event"),
         }
     }
 }

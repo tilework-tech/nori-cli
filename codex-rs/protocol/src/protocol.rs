@@ -14,6 +14,7 @@ use crate::ConversationId;
 use crate::approvals::ElicitationRequestEvent;
 use crate::config_types::ReasoningEffort as ReasoningEffortConfig;
 use crate::config_types::ReasoningSummary as ReasoningSummaryConfig;
+use crate::custom_prompts::AgentCommand;
 use crate::custom_prompts::CustomPrompt;
 use crate::items::TurnItem;
 use crate::message_history::HistoryEntry;
@@ -562,6 +563,9 @@ pub enum EventMsg {
 
     /// List of custom prompts available to the agent.
     ListCustomPromptsResponse(ListCustomPromptsResponseEvent),
+
+    /// List of agent commands available from the ACP subagent.
+    AgentCommandsUpdate(AgentCommandsUpdateEvent),
 
     PlanUpdate(UpdatePlanArgs),
 
@@ -1530,6 +1534,12 @@ impl fmt::Display for McpAuthStatus {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ListCustomPromptsResponseEvent {
     pub custom_prompts: Vec<CustomPrompt>,
+}
+
+/// Event payload for agent commands received from ACP subagent.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct AgentCommandsUpdateEvent {
+    pub commands: Vec<AgentCommand>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]

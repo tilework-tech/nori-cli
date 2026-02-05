@@ -42,6 +42,7 @@ pub(crate) enum CancellationEvent {
 
 pub(crate) use chat_composer::ChatComposer;
 pub(crate) use chat_composer::InputResult;
+use codex_protocol::custom_prompts::AgentCommand;
 use codex_protocol::custom_prompts::CustomPrompt;
 
 use crate::status_indicator_widget::StatusIndicatorWidget;
@@ -411,6 +412,12 @@ impl BottomPane {
     /// Update custom prompts available for the slash popup.
     pub(crate) fn set_custom_prompts(&mut self, prompts: Vec<CustomPrompt>) {
         self.composer.set_custom_prompts(prompts);
+        self.request_redraw();
+    }
+
+    /// Update agent commands available for the slash popup.
+    pub(crate) fn set_agent_commands(&mut self, commands: Vec<AgentCommand>) {
+        self.composer.set_agent_commands(commands);
         self.request_redraw();
     }
 

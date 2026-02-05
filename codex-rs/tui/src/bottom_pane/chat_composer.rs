@@ -43,6 +43,7 @@ use crate::render::renderable::Renderable;
 use crate::slash_command::SlashCommand;
 use crate::slash_command::built_in_slash_commands;
 use crate::style::user_message_style;
+use codex_protocol::custom_prompts::AgentCommand;
 use codex_protocol::custom_prompts::CustomPrompt;
 use codex_protocol::custom_prompts::CustomPromptKind;
 use codex_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
@@ -112,6 +113,7 @@ pub(crate) struct ChatComposer {
     // When true, disables paste-burst logic and inserts characters immediately.
     disable_paste_burst: bool,
     custom_prompts: Vec<CustomPrompt>,
+    agent_commands: Vec<AgentCommand>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
@@ -160,6 +162,7 @@ impl ChatComposer {
             paste_burst: PasteBurst::default(),
             disable_paste_burst: false,
             custom_prompts: Vec::new(),
+            agent_commands: Vec::new(),
             footer_mode: FooterMode::ShortcutSummary,
             footer_hint_override: None,
             context_window_percent: None,
@@ -505,6 +508,14 @@ impl ChatComposer {
                                 }
                             }
                         }
+                        CommandItem::AgentCommand(idx) => {
+                            if let Some(cmd) = popup.agent_command(idx) {
+                                use codex_protocol::custom_prompts::AGENT_CMD_PREFIX;
+                                let cmd_text = format!("/{AGENT_CMD_PREFIX}:{} ", cmd.name);
+                                self.textarea.set_text(&cmd_text);
+                                cursor_target = Some(cmd_text.len());
+                            }
+                        }
                     }
                     if let Some(pos) = cursor_target {
                         self.textarea.set_cursor(pos);
@@ -567,6 +578,16 @@ impl ChatComposer {
                                         return (InputResult::None, true);
                                     }
                                 }
+                            }
+                            return (InputResult::None, true);
+                        }
+                        CommandItem::AgentCommand(idx) => {
+                            if let Some(cmd) = popup.agent_command(idx) {
+                                use codex_protocol::custom_prompts::AGENT_CMD_PREFIX;
+                                // Submit the agent command as a message to the agent
+                                let text = format!("/{AGENT_CMD_PREFIX}:{}", cmd.name);
+                                self.textarea.set_text("");
+                                return (InputResult::Submitted(text), true);
                             }
                             return (InputResult::None, true);
                         }
@@ -1574,6 +1595,7 @@ impl ChatComposer {
             _ => {
                 if is_editing_slash_command_name {
                     let mut command_popup = CommandPopup::new(self.custom_prompts.clone());
+                    command_popup.set_agent_commands(self.agent_commands.clone());
                     command_popup.on_composer_text_change(first_line.to_string());
                     self.active_popup = ActivePopup::Command(command_popup);
                 }
@@ -1585,6 +1607,13 @@ impl ChatComposer {
         self.custom_prompts = prompts.clone();
         if let ActivePopup::Command(popup) = &mut self.active_popup {
             popup.set_prompts(prompts);
+        }
+    }
+
+    pub(crate) fn set_agent_commands(&mut self, commands: Vec<AgentCommand>) {
+        self.agent_commands = commands.clone();
+        if let ActivePopup::Command(popup) = &mut self.active_popup {
+            popup.set_agent_commands(commands);
         }
     }
 
@@ -2487,6 +2516,9 @@ mod tests {
                 }
                 Some(CommandItem::UserPrompt(_)) => {
                     panic!("unexpected prompt selected for '/mo'")
+                }
+                Some(CommandItem::AgentCommand(_)) => {
+                    panic!("unexpected agent command selected for '/mo'")
                 }
                 None => panic!("no selected command for '/mo'"),
             },

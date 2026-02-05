@@ -117,6 +117,39 @@ Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
 
+**Command Popup** (`bottom_pane/command_popup.rs`):
+
+When the user types `/` in the composer, a fuzzy-searchable popup appears showing available slash commands. The popup aggregates commands from three sources:
+
+| Source | Prefix | Example |
+|--------|--------|---------|
+| Builtin commands | `/` | `/agent`, `/undo`, `/quit` |
+| User custom prompts | `/prompts:` | `/prompts:code-review` |
+| Agent commands | `/agent:` | `/agent:review` |
+
+Agent commands are received via `EventMsg::AgentCommandsUpdate` events from the ACP backend (see `@/codex-rs/acp/docs.md`). The event flows through the TUI:
+
+```
+EventMsg::AgentCommandsUpdate
+    |
+    v
+ChatWidget::on_agent_commands_update()
+    |
+    v
+BottomPane::set_agent_commands()
+    |
+    v
+ChatComposer::set_agent_commands()
+    |
+    v
+CommandPopup::set_agent_commands()
+    -> filters out commands that conflict with builtin names
+    -> stores remaining commands for display
+```
+
+When the popup is active, typing filters all three command sources using fuzzy matching. Agent commands that share names with builtin commands (e.g., an agent `/init` vs builtin `/init`) are filtered out to avoid confusion.
+
+
 **Skillset Switching (`nori/skillset_picker.rs`):**
 
 The `/switch-skillset` command integrates with the external `nori-skillsets` CLI tool to manage skillsets:

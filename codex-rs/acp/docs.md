@@ -187,6 +187,33 @@ When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt fil
 
 Note: The ACP backend uses `{nori_home}/commands/` (e.g., `~/.nori/cli/commands/`) rather than `~/.codex/prompts/` which is used by the HTTP/codex-core backend.
 
+**Agent Commands** (`translator.rs`, `backend.rs`):
+
+ACP agents can advertise slash commands via the `AvailableCommandsUpdate` session notification. The ACP backend translates these to `EventMsg::AgentCommandsUpdate` events for display in the TUI command popup alongside user-defined custom prompts.
+
+Event flow:
+```
+ACP Agent sends AvailableCommandsUpdate notification
+    |
+    v
+translate_session_update() in translator.rs
+    -> TranslatedEvent::AgentCommandsUpdate(Vec<AgentCommand>)
+    |
+    v
+translate_session_update_to_events() in backend.rs
+    -> EventMsg::AgentCommandsUpdate(AgentCommandsUpdateEvent)
+    |
+    v
+ChatWidget::on_agent_commands_update() in TUI
+    -> BottomPane::set_agent_commands()
+    -> CommandPopup displays with /agent:name format
+```
+
+Agent commands use the `/agent:` prefix (defined by `AGENT_CMD_PREFIX` in `@/codex-rs/protocol/src/custom_prompts.rs`) to distinguish them from builtin commands and user prompts (`/prompts:`). Commands whose names conflict with builtin slash commands are filtered out by the command popup.
+
+Agents that do not implement `AvailableCommandsUpdate` simply show no agent commands in the popup (graceful degradation).
+
+
 **Transcript Discovery** (`transcript_discovery.rs`):
 
 Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to display token usage in the footer.

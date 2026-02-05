@@ -10,6 +10,7 @@ use std::time::Duration;
 use codex_app_server_protocol::AuthMode;
 use codex_core::config::Config;
 use codex_core::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
+use codex_core::protocol::AgentCommandsUpdateEvent;
 use codex_core::protocol::AgentMessageDeltaEvent;
 use codex_core::protocol::AgentMessageEvent;
 use codex_core::protocol::AgentReasoningDeltaEvent;
@@ -2358,6 +2359,7 @@ impl ChatWidget {
             EventMsg::GetHistoryEntryResponse(ev) => self.on_get_history_entry_response(ev),
             EventMsg::McpListToolsResponse(ev) => self.on_list_mcp_tools(ev),
             EventMsg::ListCustomPromptsResponse(ev) => self.on_list_custom_prompts(ev),
+            EventMsg::AgentCommandsUpdate(ev) => self.on_agent_commands_update(ev),
             EventMsg::ShutdownComplete => self.on_shutdown_complete(),
             EventMsg::TurnDiff(TurnDiffEvent { unified_diff }) => self.on_turn_diff(unified_diff),
             EventMsg::DeprecationNotice(ev) => self.on_deprecation_notice(ev),
@@ -4187,6 +4189,13 @@ impl ChatWidget {
         debug!("received {len} custom prompts");
         // Forward to bottom pane so the slash popup can show them now.
         self.bottom_pane.set_custom_prompts(ev.custom_prompts);
+    }
+
+    fn on_agent_commands_update(&mut self, ev: AgentCommandsUpdateEvent) {
+        let len = ev.commands.len();
+        debug!("received {len} agent commands");
+        // Forward to bottom pane so the slash popup can show them now.
+        self.bottom_pane.set_agent_commands(ev.commands);
     }
 
     pub(crate) fn token_usage(&self) -> TokenUsage {
