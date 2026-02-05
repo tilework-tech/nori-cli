@@ -502,10 +502,12 @@ impl HistoryCell for NoriSessionHeaderCell {
 
 /// Truncate a summary string to fit on one line.
 fn truncate_summary(summary: &str, max_len: usize) -> String {
-    if summary.len() <= max_len {
+    if summary.chars().count() <= max_len {
         summary.to_string()
     } else {
-        format!("{}...", &summary[..max_len.saturating_sub(3)])
+        let truncated_chars = max_len.saturating_sub(3);
+        let truncated: String = summary.chars().take(truncated_chars).collect();
+        format!("{truncated}...")
     }
 }
 
@@ -1645,6 +1647,25 @@ mod tests {
         assert!(
             !rendered.contains("Tokens"),
             "Status card should NOT show 'Tokens' section when all token values are zero"
+        );
+    }
+
+    #[test]
+    fn truncate_summary_handles_multibyte_utf8() {
+        // Multi-byte chars: each CJK character is 3 bytes in UTF-8.
+        // "修复认证错误" is 6 chars, 18 bytes. With max_len=5 (chars), the
+        // old byte-slicing code would slice at byte offset 2 which is inside
+        // a multi-byte sequence and panic.
+        let summary = "修复认证错误的问题在这里需要更多的文字来触发截断";
+        let result = truncate_summary(summary, 10);
+        assert!(
+            result.ends_with("..."),
+            "Should end with ellipsis, got: {result}"
+        );
+        assert!(
+            result.chars().count() <= 10,
+            "Should be at most 10 chars, got {} chars: {result}",
+            result.chars().count()
         );
     }
 
