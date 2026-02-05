@@ -49,6 +49,8 @@ pub(crate) struct FooterProps {
     pub(crate) vim_mode_state: Option<VimModeState>,
     /// Short summary of the first user prompt for this session.
     pub(crate) prompt_summary: Option<String>,
+    /// The worktree directory name (e.g., "good-ash-20260205-204831") when in a worktree.
+    pub(crate) worktree_name: Option<String>,
     /// Configuration for which footer segments to show.
     pub(crate) footer_segment_config: FooterSegmentConfig,
 }
@@ -334,6 +336,15 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         segments.push(line);
     }
 
+    // Add worktree directory name if available: "Worktree: name" (light red)
+    if let Some(name) = &props.worktree_name {
+        #[allow(clippy::disallowed_methods)]
+        segments.push(Line::from(vec![
+            Span::from("Worktree: ").light_red(),
+            Span::from(name.clone()).light_red(),
+        ]));
+    }
+
     // Add git stats if available and enabled: "+10 -3" (green for added, red for removed)
     if config.is_enabled(FooterSegment::GitStats)
         && let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
@@ -617,6 +628,7 @@ mod tests {
             cached_tokens: None,
             vim_mode_state: None,
             prompt_summary: None,
+            worktree_name: None,
             footer_segment_config: FooterSegmentConfig::default(),
         }
     }
@@ -931,6 +943,20 @@ mod tests {
             FooterProps {
                 prompt_summary: Some("Fix auth bug".to_string()),
                 git_branch: Some("main".to_string()),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_worktree_name() {
+        snapshot_footer(
+            "footer_with_worktree_name",
+            FooterProps {
+                git_branch: Some("auto/fix-auth-bug-20260205".to_string()),
+                is_worktree: true,
+                worktree_name: Some("good-ash-20260205-204831".to_string()),
+                nori_profile: Some("clifford".to_string()),
                 ..default_props()
             },
         );

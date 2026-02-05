@@ -36,6 +36,8 @@ pub(crate) struct SystemInfo {
     pub(crate) git_lines_removed: Option<i32>,
     /// Whether the current directory is a git worktree (not the main repo)
     pub(crate) is_worktree: bool,
+    /// The worktree directory name (last path component when parent is `.worktrees/`)
+    pub(crate) worktree_name: Option<String>,
     /// Current transcript location if running within an agent environment
     pub(crate) transcript_location: Option<TranscriptLocation>,
     /// Warning about low disk space with worktrees present (session-start check)
@@ -124,6 +126,8 @@ impl SystemInfo {
         #[cfg(not(unix))]
         let worktree_cleanup_warning = None;
 
+        let is_worktree = is_git_worktree(dir);
+
         Self {
             git_branch: get_git_branch(dir),
             nori_profile: get_nori_profile(), // Profile search still uses process CWD
@@ -131,7 +135,12 @@ impl SystemInfo {
             nori_version_source,
             git_lines_added,
             git_lines_removed,
-            is_worktree: is_git_worktree(dir),
+            is_worktree,
+            worktree_name: if is_worktree {
+                dir.and_then(extract_worktree_name)
+            } else {
+                None
+            },
             transcript_location,
             worktree_cleanup_warning,
         }
@@ -447,6 +456,17 @@ pub(crate) fn check_worktree_cleanup(cwd: &std::path::Path) -> Option<WorktreeCl
     evaluate_worktree_cleanup_warning(worktrees.len(), disk_space.used_percent)
 }
 
+/// Extract the worktree directory name from a path.
+/// Returns the last path component if the parent directory is named `.worktrees`.
+pub(crate) fn extract_worktree_name(dir: &std::path::Path) -> Option<String> {
+    let parent = dir.parent()?;
+    if parent.file_name()?.to_str()? == ".worktrees" {
+        Some(dir.file_name()?.to_str()?.to_string())
+    } else {
+        None
+    }
+}
+
 /// Check if the directory is a git worktree (not the main repository).
 /// Returns true if this is a linked worktree, false if it's the main repo or not a git repo.
 fn is_git_worktree(dir: Option<&std::path::Path>) -> bool {
@@ -712,6 +732,30 @@ Filesystem     1024-blocks      Used Available Capacity Mounted on
         );
         let w = warning.unwrap();
         assert_eq!(w.free_percent, 9);
+    }
+
+    #[test]
+    fn test_extract_worktree_name_from_worktrees_dir() {
+        use std::path::Path;
+        let path = Path::new("/home/user/repo/.worktrees/good-ash-20260205-204831");
+        assert_eq!(
+            extract_worktree_name(path),
+            Some("good-ash-20260205-204831".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_worktree_name_not_under_worktrees() {
+        use std::path::Path;
+        let path = Path::new("/home/user/repo/src/main");
+        assert_eq!(extract_worktree_name(path), None);
+    }
+
+    #[test]
+    fn test_extract_worktree_name_tmp_dir() {
+        use std::path::Path;
+        let path = Path::new("/tmp");
+        assert_eq!(extract_worktree_name(path), None);
     }
 
     #[test]
