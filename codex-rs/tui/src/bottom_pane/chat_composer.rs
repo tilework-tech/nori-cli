@@ -1524,6 +1524,10 @@ impl ChatComposer {
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
             prompt_summary: self.prompt_summary.clone(),
+            worktree_name: self
+                .system_info
+                .as_ref()
+                .and_then(|s| s.worktree_name.clone()),
             footer_segment_config: self.footer_segment_config.clone(),
         }
     }
