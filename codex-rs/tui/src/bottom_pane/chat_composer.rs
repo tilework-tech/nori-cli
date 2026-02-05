@@ -1698,11 +1698,6 @@ impl ChatComposer {
             .and_then(|s| s.transcript_location.as_ref())
             .and_then(|loc| loc.token_breakdown.clone())
     }
-
-    /// Get the context window percentage (for status card display).
-    pub(crate) fn context_window_percent(&self) -> Option<i64> {
-        self.context_window_percent
-    }
 }
 
 impl Renderable for ChatComposer {
