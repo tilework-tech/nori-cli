@@ -14,6 +14,9 @@ use crate::history_cell::PlainHistoryCell;
 use crate::history_cell::SessionInfoCell;
 use crate::history_cell::card_inner_width;
 use crate::history_cell::with_border;
+use crate::nori::token_count::TokenCount;
+use crate::nori::token_count::count_tokens;
+use crate::nori::token_count::format_token_count;
 use crate::version::CODEX_CLI_VERSION;
 use codex_core::config::Config;
 use codex_core::protocol::SessionConfiguredEvent;
@@ -41,6 +44,8 @@ pub struct InstructionFile {
     pub path: PathBuf,
     /// Whether this file is active for the current agent.
     pub active: bool,
+    /// Token count for the file (only computed for active files).
+    pub token_count: Option<TokenCount>,
 }
 
 /// Detect agent kind from a model/agent string.
@@ -79,6 +84,7 @@ fn discover_all_instruction_files(
         return vec![InstructionFile {
             path: std::path::PathBuf::from("~/.claude/CLAUDE.md"),
             active: true,
+            token_count: None,
         }];
     }
 
@@ -237,9 +243,18 @@ fn discover_all_instruction_files_with_home(
             }
         };
 
+        let token_count = if active {
+            std::fs::read_to_string(&file_path)
+                .ok()
+                .map(|contents| count_tokens(&contents, agent_kind))
+        } else {
+            None
+        };
+
         found.push(InstructionFile {
             path: file_path,
             active,
+            token_count,
         });
     }
 
@@ -389,14 +404,53 @@ impl HistoryCell for NoriSessionHeaderCell {
             lines.push(Line::from(""));
             lines.push(Line::from(Span::from("Instruction Files").bold()));
 
+            let mut total_count: i64 = 0;
+            let mut any_approximate = false;
+
             for file in &self.instruction_files {
-                let path_str = format_directory(&file.path, Some(inner_width.saturating_sub(2)));
-                let span = if file.active {
-                    Span::from(format!("  {path_str}"))
+                if file.active {
+                    if let Some(tc) = &file.token_count {
+                        let tc_str = format_token_count(tc);
+                        // 2 for leading indent + 2 for gap between path and token count
+                        let path_budget = inner_width.saturating_sub(2 + 2 + tc_str.width());
+                        let path_str = format_directory(&file.path, Some(path_budget));
+                        let path_width = path_str.width();
+                        let gap = inner_width.saturating_sub(2 + path_width + tc_str.width());
+                        let padding = " ".repeat(gap);
+                        lines.push(Line::from(vec![
+                            Span::from(format!("  {path_str}{padding}")),
+                            Span::from(tc_str).dim(),
+                        ]));
+                        total_count += tc.count;
+                        if tc.approximate {
+                            any_approximate = true;
+                        }
+                    } else {
+                        let path_str =
+                            format_directory(&file.path, Some(inner_width.saturating_sub(2)));
+                        lines.push(Line::from(format!("  {path_str}")));
+                    }
                 } else {
-                    Span::from(format!("  {path_str}")).dim()
+                    let path_str =
+                        format_directory(&file.path, Some(inner_width.saturating_sub(2)));
+                    lines.push(Line::from(Span::from(format!("  {path_str}")).dim()));
+                }
+            }
+
+            // Total line for active files
+            if total_count > 0 {
+                let total_tc = TokenCount {
+                    count: total_count,
+                    approximate: any_approximate,
                 };
-                lines.push(Line::from(span));
+                let total_str = format_token_count(&total_tc);
+                let label = "  total";
+                let gap = inner_width.saturating_sub(label.width() + total_str.width());
+                let padding = " ".repeat(gap);
+                lines.push(Line::from(vec![
+                    Span::from(format!("{label}{padding}")).dim(),
+                    Span::from(total_str).dim(),
+                ]));
             }
         }
 
@@ -591,10 +645,15 @@ mod tests {
                 InstructionFile {
                     path: PathBuf::from("/home/user/project/AGENTS.md"),
                     active: true,
+                    token_count: Some(TokenCount {
+                        count: 500,
+                        approximate: true,
+                    }),
                 },
                 InstructionFile {
                     path: PathBuf::from("/home/user/project/.claude/rules.md"),
                     active: false,
+                    token_count: None,
                 },
             ],
         };
@@ -689,10 +748,15 @@ mod tests {
                 InstructionFile {
                     path: PathBuf::from("/home/user/project/AGENTS.md"),
                     active: false,
+                    token_count: None,
                 },
                 InstructionFile {
                     path: PathBuf::from("/home/user/project/.claude/settings.md"),
                     active: true,
+                    token_count: Some(TokenCount {
+                        count: 2450,
+                        approximate: true,
+                    }),
                 },
             ],
         };
@@ -1046,14 +1110,23 @@ mod tests {
             InstructionFile {
                 path: PathBuf::from("/home/user/.claude/CLAUDE.md"),
                 active: true,
+                token_count: Some(TokenCount {
+                    count: 1000,
+                    approximate: true,
+                }),
             },
             InstructionFile {
                 path: PathBuf::from("/home/user/project/CLAUDE.md"),
                 active: true,
+                token_count: Some(TokenCount {
+                    count: 500,
+                    approximate: true,
+                }),
             },
             InstructionFile {
                 path: PathBuf::from("/home/user/project/AGENTS.md"),
                 active: false,
+                token_count: None,
             },
         ];
 
@@ -1078,6 +1151,94 @@ mod tests {
         assert!(
             rendered.contains("CLAUDE.md"),
             "Should show CLAUDE.md in output"
+        );
+
+        // Should show token counts for active files
+        assert!(
+            rendered.contains("~1,000 tokens"),
+            "Should show token count for first active file"
+        );
+        assert!(
+            rendered.contains("~500 tokens"),
+            "Should show token count for second active file"
+        );
+
+        // Should show total line
+        assert!(rendered.contains("total"), "Should show total line");
+        assert!(
+            rendered.contains("~1,500 tokens"),
+            "Should show combined total"
+        );
+    }
+
+    #[test]
+    fn header_renders_exact_token_counts_without_tilde() {
+        let files = vec![InstructionFile {
+            path: PathBuf::from("/home/user/project/AGENTS.md"),
+            active: true,
+            token_count: Some(TokenCount {
+                count: 750,
+                approximate: false,
+            }),
+        }];
+
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "codex".to_string(),
+            directory: PathBuf::from("/home/user/project"),
+            nori_profile: None,
+            instruction_files: files,
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Exact counts should NOT have tilde prefix
+        assert!(
+            rendered.contains("750 tokens"),
+            "Should show exact token count: {rendered}"
+        );
+        assert!(
+            !rendered.contains("~750"),
+            "Exact count should not have tilde prefix"
+        );
+    }
+
+    #[test]
+    fn discovery_populates_token_counts_for_active_files() {
+        let tmp = TempDir::new().expect("tempdir");
+        let root = tmp.path();
+
+        fs::write(root.join(".git"), "gitdir").expect("write .git");
+        fs::write(root.join("CLAUDE.md"), "hello world test content").expect("write CLAUDE.md");
+        fs::write(root.join("AGENTS.md"), "agent instructions here").expect("write AGENTS.md");
+
+        // Claude agent: CLAUDE.md is active, AGENTS.md is not
+        let files =
+            discover_all_instruction_files_with_home(root, Some(AgentKindSimple::Claude), None);
+
+        let claude_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "CLAUDE.md")
+            .expect("Should find CLAUDE.md");
+        assert!(claude_file.active);
+        assert!(
+            claude_file.token_count.is_some(),
+            "Active file should have token count"
+        );
+        assert!(
+            claude_file.token_count.as_ref().unwrap().count > 0,
+            "Token count should be positive"
+        );
+
+        let agents_file = files
+            .iter()
+            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md")
+            .expect("Should find AGENTS.md");
+        assert!(!agents_file.active);
+        assert!(
+            agents_file.token_count.is_none(),
+            "Inactive file should not have token count"
         );
     }
 
