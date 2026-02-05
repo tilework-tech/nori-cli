@@ -117,6 +117,36 @@ Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
 
+
+**Status Card (`/status`) (`nori/session_header.rs`):**
+
+The `/status` command renders a bordered card in the chat history showing session state. The card is built by `new_nori_status_output()` which creates a `CompositeHistoryCell` containing the `/status` echo and a `NoriSessionHeaderCell`.
+
+Data flows from `ChatWidget::add_status_output()` which pulls live state from `BottomPane`:
+
+```
+ChatWidget::add_status_output()
+    |-- bottom_pane.prompt_summary()              --> task summary
+    |-- bottom_pane.transcript_token_breakdown()   --> token counts from transcript
+    |-- bottom_pane.context_window_percent()        --> context % from live API
+    |-- approval_mode_label(config)                --> approval mode from config
+    v
+new_nori_status_output() --> NoriSessionHeaderCell::new_with_status_info()
+```
+
+The card always shows: version, directory, agent, skillset (Nori profile). Optionally it shows:
+
+| Section | Condition | Example |
+|---------|-----------|---------|
+| Task summary | `prompt_summary` present | "Task: Fix auth bug" |
+| Approval mode | `approval_mode_label` present | "approvals: Agent" |
+| Context line | `context_window_percent` present, with or without token data | "Context: 77.0K (27%)" or just "42%" |
+| Token totals | `token_breakdown` has non-zero total | "Tokens: 123K total (32.0K cached)" |
+
+The Tokens section renders if either `token_breakdown` has a non-zero total OR `context_window_percent` is present. This means context window percentage from the live API (`TokenUsageInfo`) can appear even before transcript token data is available.
+
+Task summaries are truncated to 50 characters via `truncate_summary()`, which uses char-level operations (`chars().count()` / `chars().take()`) rather than byte slicing for UTF-8 safety with multi-byte characters.
+
 **Skillset Switching (`nori/skillset_picker.rs`):**
 
 The `/switch-skillset` command integrates with the external `nori-skillsets` CLI tool to manage skillsets:

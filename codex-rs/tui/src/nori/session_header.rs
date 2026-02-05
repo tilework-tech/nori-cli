@@ -460,15 +460,17 @@ impl HistoryCell for NoriSessionHeaderCell {
             }
         }
 
-        // Tokens section (if token breakdown is provided and has non-zero values)
-        if let Some(token_breakdown) = &self.token_breakdown {
-            let total = token_breakdown.total();
-            if total > 0 {
-                lines.push(Line::from(""));
-                lines.push(Line::from(Span::from("Tokens").bold()));
+        // Tokens section: show if we have token data or context window percentage
+        let has_tokens = self.token_breakdown.as_ref().is_some_and(|t| t.total() > 0);
+        let has_context = self.context_window_percent.is_some();
 
-                // Context window line
-                if let Some(pct) = self.context_window_percent {
+        if has_tokens || has_context {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::from("Tokens").bold()));
+
+            // Context window line
+            if let Some(pct) = self.context_window_percent {
+                if let Some(token_breakdown) = &self.token_breakdown {
                     let context_tokens = token_breakdown
                         .input_tokens
                         .saturating_add(token_breakdown.cached_tokens);
@@ -477,22 +479,31 @@ impl HistoryCell for NoriSessionHeaderCell {
                         Span::from("  Context: ").dim(),
                         Span::from(format!("{context_fmt} ({pct}%)")),
                     ]));
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::from("  Context: ").dim(),
+                        Span::from(format!("{pct}%")),
+                    ]));
                 }
+            }
 
-                // Total tokens line
-                let total_fmt = format_si_suffix(total);
-                let mut token_spans = vec![
-                    Span::from("  Tokens: ").dim(),
-                    Span::from(format!("{total_fmt} total")).dim(),
-                ];
+            // Total tokens line (only if we have token data)
+            if let Some(token_breakdown) = &self.token_breakdown {
+                let total = token_breakdown.total();
+                if total > 0 {
+                    let total_fmt = format_si_suffix(total);
+                    let mut token_spans = vec![
+                        Span::from("  Tokens: ").dim(),
+                        Span::from(format!("{total_fmt} total")).dim(),
+                    ];
 
-                // Add cached portion if non-zero
-                if token_breakdown.cached_tokens > 0 {
-                    let cached_fmt = format_si_suffix(token_breakdown.cached_tokens);
-                    token_spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
+                    if token_breakdown.cached_tokens > 0 {
+                        let cached_fmt = format_si_suffix(token_breakdown.cached_tokens);
+                        token_spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
+                    }
+
+                    lines.push(Line::from(token_spans));
                 }
-
-                lines.push(Line::from(token_spans));
             }
         }
 
@@ -1670,7 +1681,41 @@ mod tests {
     }
 
     #[test]
+    fn context_window_percent_renders_without_token_breakdown() {
+        // context_window_percent should render under the Tokens header
+        // even when token_breakdown is None
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "test-agent".to_string(),
+            directory: PathBuf::from("/tmp/test"),
+            nori_profile: None,
+            instruction_files: Vec::new(),
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: Some(42),
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        assert!(
+            rendered.contains("Tokens"),
+            "Should show 'Tokens' section header when context_window_percent is set: {rendered}"
+        );
+        assert!(
+            rendered.contains("42%"),
+            "Should show context window percentage: {rendered}"
+        );
+    }
+
+    #[test]
     fn status_card_full_snapshot() {
+        // Mock instruction files for consistent snapshots across machines
+        // SAFETY: test-only; set_var is unsafe in edition 2024 due to thread-safety
+        // concerns, but snapshot tests run serially with insta.
+        unsafe { std::env::set_var("NORI_MOCK_INSTRUCTION_FILES", "1") };
+
         // Snapshot test with all optional fields provided
         use codex_acp::TranscriptTokenUsage;
 
@@ -1692,6 +1737,7 @@ mod tests {
         let lines = status_output.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
 
+        unsafe { std::env::remove_var("NORI_MOCK_INSTRUCTION_FILES") };
         insta::assert_snapshot!(rendered);
     }
 }

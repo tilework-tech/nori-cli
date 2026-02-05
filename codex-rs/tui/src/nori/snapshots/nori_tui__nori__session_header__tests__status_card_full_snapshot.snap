@@ -14,6 +14,9 @@ expression: rendered
 │ skillset:  (none)                   │
 │ approvals: Agent                    │
 │                                     │
+│ Instruction Files                   │
+│   ~/.claude/CLAUDE.md               │
+│                                     │
 │ Tokens                              │
 │   Context: 77.0K (27%)              │
 │   Tokens: 123K total (32.0K cached) │
