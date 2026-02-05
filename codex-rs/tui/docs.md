@@ -100,7 +100,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/undo` | Open undo snapshot picker to select a restore point |
 | `/diff` | Show git diff (including untracked files) |
 | `/mention` | Mention a file |
-| `/status` | Show session configuration and token usage |
+| `/status` | Show session configuration and context window usage |
 | `/first-prompt` | Show the first prompt from this session |
 | `/mcp` | List configured MCP tools |
 | `/login` | Log in to the current agent |

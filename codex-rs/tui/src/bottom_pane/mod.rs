@@ -143,7 +143,6 @@ impl BottomPane {
         self.status.as_ref()
     }
 
-    #[cfg(test)]
     pub(crate) fn context_window_percent(&self) -> Option<i64> {
         self.context_window_percent
     }
@@ -440,6 +439,16 @@ impl BottomPane {
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.composer.set_prompt_summary(summary);
         self.request_redraw();
+    }
+
+    /// Get the prompt summary for status card display.
+    pub(crate) fn prompt_summary(&self) -> Option<String> {
+        self.composer.prompt_summary()
+    }
+
+    /// Get the token breakdown from transcript location (for status card display).
+    pub(crate) fn transcript_token_breakdown(&self) -> Option<codex_acp::TranscriptTokenUsage> {
+        self.composer.transcript_token_breakdown()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {

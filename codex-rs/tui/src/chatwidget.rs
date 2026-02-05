@@ -2479,9 +2479,22 @@ impl ChatWidget {
     }
 
     pub(crate) fn add_status_output(&mut self) {
+        // Get optional status card fields from bottom_pane
+        let prompt_summary = self.bottom_pane.prompt_summary();
+        let token_breakdown = self.bottom_pane.transcript_token_breakdown();
+        let context_window_percent = self.bottom_pane.context_window_percent();
+
+        // Calculate approval mode label from config
+        let approval_mode_label =
+            approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
+
         self.add_to_history(crate::nori::session_header::new_nori_status_output(
             &self.config.model,
             self.config.cwd.clone(),
+            prompt_summary,
+            approval_mode_label,
+            token_breakdown,
+            context_window_percent,
         ));
     }
     fn stop_rate_limit_poller(&mut self) {
