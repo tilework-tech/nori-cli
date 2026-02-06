@@ -1524,6 +1524,10 @@ impl ChatComposer {
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
             prompt_summary: self.prompt_summary.clone(),
+            worktree_name: self
+                .system_info
+                .as_ref()
+                .and_then(|s| s.worktree_name.clone()),
             footer_segment_config: self.footer_segment_config.clone(),
         }
     }
@@ -1680,6 +1684,19 @@ impl ChatComposer {
         } else {
             self.footer_mode = reset_mode_after_activity(self.footer_mode);
         }
+    }
+
+    /// Get the prompt summary for status card display.
+    pub(crate) fn prompt_summary(&self) -> Option<String> {
+        self.prompt_summary.clone()
+    }
+
+    /// Get the token breakdown from transcript location (for status card display).
+    pub(crate) fn transcript_token_breakdown(&self) -> Option<codex_acp::TranscriptTokenUsage> {
+        self.system_info
+            .as_ref()
+            .and_then(|s| s.transcript_location.as_ref())
+            .and_then(|loc| loc.token_breakdown.clone())
     }
 }
 

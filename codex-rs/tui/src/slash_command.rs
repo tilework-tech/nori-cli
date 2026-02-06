@@ -50,7 +50,7 @@ impl SlashCommand {
             SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
-            SlashCommand::Status => "show current session configuration and token usage",
+            SlashCommand::Status => "show current session configuration and context window usage",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",

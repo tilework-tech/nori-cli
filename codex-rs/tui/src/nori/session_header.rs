@@ -18,8 +18,10 @@ use crate::nori::token_count::TokenCount;
 use crate::nori::token_count::count_tokens;
 use crate::nori::token_count::format_token_count;
 use crate::version::CODEX_CLI_VERSION;
+use codex_acp::TranscriptTokenUsage;
 use codex_core::config::Config;
 use codex_core::protocol::SessionConfiguredEvent;
+use codex_protocol::num_format::format_si_suffix;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::path::Path;
@@ -341,7 +343,18 @@ pub(crate) struct NoriSessionHeaderCell {
     directory: PathBuf,
     nori_profile: Option<String>,
     instruction_files: Vec<InstructionFile>,
+    /// Optional task summary (first prompt summary).
+    prompt_summary: Option<String>,
+    /// Optional approval mode label (e.g., "Agent", "Read Only", "Full Access").
+    approval_mode_label: Option<String>,
+    /// Optional token usage breakdown from transcript.
+    token_breakdown: Option<TranscriptTokenUsage>,
+    /// Optional context window percentage (0-100).
+    context_window_percent: Option<i64>,
 }
+
+/// Maximum length for task summary in status card.
+const MAX_TASK_SUMMARY_LENGTH: usize = 50;
 
 impl NoriSessionHeaderCell {
     pub(crate) fn new(agent: String, directory: PathBuf) -> Self {
@@ -354,6 +367,35 @@ impl NoriSessionHeaderCell {
             directory,
             nori_profile,
             instruction_files,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
+        }
+    }
+
+    /// Create a new header cell with optional status card fields.
+    pub(crate) fn new_with_status_info(
+        agent: String,
+        directory: PathBuf,
+        prompt_summary: Option<String>,
+        approval_mode_label: Option<String>,
+        token_breakdown: Option<TranscriptTokenUsage>,
+        context_window_percent: Option<i64>,
+    ) -> Self {
+        let nori_profile = read_nori_profile(&directory);
+        let agent_kind = detect_agent_kind(&agent);
+        let instruction_files = discover_all_instruction_files(&directory, agent_kind);
+        Self {
+            version: CODEX_CLI_VERSION,
+            agent,
+            directory,
+            nori_profile,
+            instruction_files,
+            prompt_summary,
+            approval_mode_label,
+            token_breakdown,
+            context_window_percent,
         }
     }
 }
@@ -374,6 +416,16 @@ impl HistoryCell for NoriSessionHeaderCell {
 
         // Empty line after title
         lines.push(Line::from(""));
+
+        // Task summary line (if provided) - truncated to one line
+        if let Some(summary) = &self.prompt_summary {
+            let truncated = truncate_summary(summary, MAX_TASK_SUMMARY_LENGTH);
+            lines.push(Line::from(vec![
+                Span::from("Task: ").dim(),
+                Span::from(truncated).dim(),
+            ]));
+            lines.push(Line::from(""));
+        }
 
         // Directory line
         let dir_max_width = inner_width.saturating_sub(11); // "directory: " is 11 chars
@@ -398,6 +450,14 @@ impl HistoryCell for NoriSessionHeaderCell {
             Span::from("skillset:  ").dim(),
             Span::from(profile_display),
         ]));
+
+        // Approval mode line (if provided)
+        if let Some(approval_mode) = &self.approval_mode_label {
+            lines.push(Line::from(vec![
+                Span::from("approvals: ").dim(),
+                Span::from(approval_mode.clone()).magenta(),
+            ]));
+        }
 
         // Instruction Files section
         if !self.instruction_files.is_empty() {
@@ -454,7 +514,65 @@ impl HistoryCell for NoriSessionHeaderCell {
             }
         }
 
+        // Tokens section: show if we have token data or context window percentage
+        let has_tokens = self.token_breakdown.as_ref().is_some_and(|t| t.total() > 0);
+        let has_context = self.context_window_percent.is_some();
+
+        if has_tokens || has_context {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::from("Tokens").bold()));
+
+            // Context window line
+            if let Some(pct) = self.context_window_percent {
+                if let Some(token_breakdown) = &self.token_breakdown {
+                    let context_tokens = token_breakdown
+                        .input_tokens
+                        .saturating_add(token_breakdown.cached_tokens);
+                    let context_fmt = format_si_suffix(context_tokens);
+                    lines.push(Line::from(vec![
+                        Span::from("  Context: ").dim(),
+                        Span::from(format!("{context_fmt} ({pct}%)")),
+                    ]));
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::from("  Context: ").dim(),
+                        Span::from(format!("{pct}%")),
+                    ]));
+                }
+            }
+
+            // Total tokens line (only if we have token data)
+            if let Some(token_breakdown) = &self.token_breakdown {
+                let total = token_breakdown.total();
+                if total > 0 {
+                    let total_fmt = format_si_suffix(total);
+                    let mut token_spans = vec![
+                        Span::from("  Tokens: ").dim(),
+                        Span::from(format!("{total_fmt} total")).dim(),
+                    ];
+
+                    if token_breakdown.cached_tokens > 0 {
+                        let cached_fmt = format_si_suffix(token_breakdown.cached_tokens);
+                        token_spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
+                    }
+
+                    lines.push(Line::from(token_spans));
+                }
+            }
+        }
+
         with_border(lines)
+    }
+}
+
+/// Truncate a summary string to fit on one line.
+fn truncate_summary(summary: &str, max_len: usize) -> String {
+    if summary.chars().count() <= max_len {
+        summary.to_string()
+    } else {
+        let truncated_chars = max_len.saturating_sub(3);
+        let truncated: String = summary.chars().take(truncated_chars).collect();
+        format!("{truncated}...")
     }
 }
 
@@ -464,9 +582,24 @@ impl HistoryCell for NoriSessionHeaderCell {
 /// - The /status command echo
 /// - Nori branding with version
 /// - Directory, agent, and profile info
-pub(crate) fn new_nori_status_output(model: &str, directory: PathBuf) -> CompositeHistoryCell {
+/// - Optional: task summary, approval mode, token usage
+pub(crate) fn new_nori_status_output(
+    model: &str,
+    directory: PathBuf,
+    prompt_summary: Option<String>,
+    approval_mode_label: Option<String>,
+    token_breakdown: Option<TranscriptTokenUsage>,
+    context_window_percent: Option<i64>,
+) -> CompositeHistoryCell {
     let command = PlainHistoryCell::new(vec!["/status".magenta().into()]);
-    let header = NoriSessionHeaderCell::new(model.to_string(), directory);
+    let header = NoriSessionHeaderCell::new_with_status_info(
+        model.to_string(),
+        directory,
+        prompt_summary,
+        approval_mode_label,
+        token_breakdown,
+        context_window_percent,
+    );
 
     CompositeHistoryCell::new(vec![Box::new(command), Box::new(header)])
 }
@@ -656,6 +789,10 @@ mod tests {
                     token_count: None,
                 },
             ],
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
         };
 
         let lines = cell.display_lines(80);
@@ -707,6 +844,10 @@ mod tests {
             directory: PathBuf::from("/tmp/test"),
             nori_profile: None,
             instruction_files: Vec::new(),
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
         };
 
         let lines = cell.display_lines(80);
@@ -726,6 +867,10 @@ mod tests {
             directory: PathBuf::from("/tmp/test"),
             nori_profile: Some("senior-swe".to_string()),
             instruction_files: Vec::new(),
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
         };
 
         let lines = cell.display_lines(80);
@@ -759,6 +904,10 @@ mod tests {
                     }),
                 },
             ],
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
         };
 
         let lines = cell.display_lines(80);
@@ -769,7 +918,14 @@ mod tests {
 
     #[test]
     fn nori_status_output_shows_status_command_and_nori_branding() {
-        let status_cell = new_nori_status_output("claude-sonnet", PathBuf::from("/tmp/project"));
+        let status_cell = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let lines = status_cell.display_lines(80);
         let rendered = render_lines(&lines).join("\n");
@@ -1136,6 +1292,10 @@ mod tests {
             directory: PathBuf::from("/home/user/project"),
             nori_profile: Some("test-profile".to_string()),
             instruction_files: files,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
         };
 
         let lines = cell.display_lines(80);
@@ -1464,5 +1624,281 @@ mod tests {
             "First file should be the home config, got: {:?}",
             first_file.path
         );
+    }
+
+    // =========================================================================
+    // ENHANCED STATUS CARD TESTS
+    // =========================================================================
+
+    #[test]
+    fn status_card_with_task_summary_renders_summary_at_top() {
+        // When a task summary is provided, it should appear near the top of the card
+        // (after the title block, before the main info)
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            Some("Fix authentication bug".to_string()),
+            None,
+            None,
+            None,
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should contain the task summary
+        assert!(
+            rendered.contains("Task:"),
+            "Status card should show 'Task:' label when summary is provided"
+        );
+        assert!(
+            rendered.contains("Fix authentication bug"),
+            "Status card should show the task summary text"
+        );
+    }
+
+    #[test]
+    fn status_card_with_tokens_renders_tokens_section() {
+        // When token info is provided, a Tokens section should appear
+        use codex_acp::TranscriptTokenUsage;
+
+        let token_breakdown = TranscriptTokenUsage {
+            input_tokens: 45000,
+            output_tokens: 78000,
+            cached_tokens: 32000,
+        };
+
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            None,
+            None,
+            Some(token_breakdown),
+            Some(27),
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should contain the Tokens section
+        assert!(
+            rendered.contains("Tokens"),
+            "Status card should show 'Tokens' section header when token info is provided"
+        );
+        // Should contain context window info
+        assert!(
+            rendered.contains("Context:"),
+            "Status card should show context window usage"
+        );
+        assert!(
+            rendered.contains("27%"),
+            "Status card should show context window percentage"
+        );
+    }
+
+    #[test]
+    fn status_card_with_approval_mode_renders_approval() {
+        // When approval mode is provided, it should appear in the info block
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            None,
+            Some("Agent".to_string()),
+            None,
+            None,
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should contain the approval mode
+        assert!(
+            rendered.contains("approvals:"),
+            "Status card should show 'approvals:' label when approval mode is provided"
+        );
+        assert!(
+            rendered.contains("Agent"),
+            "Status card should show the approval mode value"
+        );
+    }
+
+    #[test]
+    fn status_card_without_optional_fields_renders_base_only() {
+        // When all optional fields are None, the card should render base info only
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should NOT contain optional sections
+        assert!(
+            !rendered.contains("Task:"),
+            "Status card should NOT show 'Task:' when no summary provided"
+        );
+        assert!(
+            !rendered.contains("Tokens"),
+            "Status card should NOT show 'Tokens' section when no token info"
+        );
+        // Should contain base info
+        assert!(
+            rendered.contains("Nori CLI"),
+            "Status card should show Nori CLI title"
+        );
+        assert!(
+            rendered.contains("directory:"),
+            "Status card should show directory"
+        );
+        assert!(rendered.contains("agent:"), "Status card should show agent");
+    }
+
+    #[test]
+    fn status_card_truncates_long_task_summary() {
+        // Task summary should be truncated to a reasonable length
+        let long_summary = "This is an extremely long task summary that goes on and on describing what the user wants to accomplish in great detail with many words";
+
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            Some(long_summary.to_string()),
+            None,
+            None,
+            None,
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should contain Task: label
+        assert!(
+            rendered.contains("Task:"),
+            "Status card should show 'Task:' label"
+        );
+        // The full long summary should NOT appear (it should be truncated)
+        assert!(
+            !rendered.contains(long_summary),
+            "Status card should truncate long task summaries"
+        );
+        // Should contain some ellipsis or truncation indicator
+        assert!(
+            rendered.contains("...") || rendered.len() < long_summary.len() + 100,
+            "Status card should indicate truncation"
+        );
+    }
+
+    #[test]
+    fn status_card_with_zero_tokens_hides_tokens_section() {
+        // When token breakdown has all zeros, the section should be hidden
+        use codex_acp::TranscriptTokenUsage;
+
+        let token_breakdown = TranscriptTokenUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cached_tokens: 0,
+        };
+
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/tmp/project"),
+            None,
+            None,
+            Some(token_breakdown),
+            None,
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should NOT show Tokens section when all zeros
+        assert!(
+            !rendered.contains("Tokens"),
+            "Status card should NOT show 'Tokens' section when all token values are zero"
+        );
+    }
+
+    #[test]
+    fn truncate_summary_handles_multibyte_utf8() {
+        // Multi-byte chars: each CJK character is 3 bytes in UTF-8.
+        // "修复认证错误" is 6 chars, 18 bytes. With max_len=5 (chars), the
+        // old byte-slicing code would slice at byte offset 2 which is inside
+        // a multi-byte sequence and panic.
+        let summary = "修复认证错误的问题在这里需要更多的文字来触发截断";
+        let result = truncate_summary(summary, 10);
+        assert!(
+            result.ends_with("..."),
+            "Should end with ellipsis, got: {result}"
+        );
+        assert!(
+            result.chars().count() <= 10,
+            "Should be at most 10 chars, got {} chars: {result}",
+            result.chars().count()
+        );
+    }
+
+    #[test]
+    fn context_window_percent_renders_without_token_breakdown() {
+        // context_window_percent should render under the Tokens header
+        // even when token_breakdown is None
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "test-agent".to_string(),
+            directory: PathBuf::from("/tmp/test"),
+            nori_profile: None,
+            instruction_files: Vec::new(),
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: Some(42),
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        assert!(
+            rendered.contains("Tokens"),
+            "Should show 'Tokens' section header when context_window_percent is set: {rendered}"
+        );
+        assert!(
+            rendered.contains("42%"),
+            "Should show context window percentage: {rendered}"
+        );
+    }
+
+    #[test]
+    fn status_card_full_snapshot() {
+        // Mock instruction files for consistent snapshots across machines
+        // SAFETY: test-only; set_var is unsafe in edition 2024 due to thread-safety
+        // concerns, but snapshot tests run serially with insta.
+        unsafe { std::env::set_var("NORI_MOCK_INSTRUCTION_FILES", "1") };
+
+        // Snapshot test with all optional fields provided
+        use codex_acp::TranscriptTokenUsage;
+
+        let token_breakdown = TranscriptTokenUsage {
+            input_tokens: 45000,
+            output_tokens: 78000,
+            cached_tokens: 32000,
+        };
+
+        let status_output = new_nori_status_output(
+            "claude-sonnet",
+            PathBuf::from("/home/user/project"),
+            Some("Fix auth bug".to_string()),
+            Some("Agent".to_string()),
+            Some(token_breakdown),
+            Some(27),
+        );
+
+        let lines = status_output.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        unsafe { std::env::remove_var("NORI_MOCK_INSTRUCTION_FILES") };
+        insta::assert_snapshot!(rendered);
     }
 }
