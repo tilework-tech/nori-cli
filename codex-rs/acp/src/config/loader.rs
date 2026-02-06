@@ -143,6 +143,7 @@ impl NoriConfig {
             mcp_servers,
             session_start_hooks,
             session_end_hooks,
+            agents: toml.agents,
         })
     }
 }
@@ -447,5 +448,32 @@ session_start = ["/path/to/start.sh"]
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(config.session_start_hooks.len(), 1);
         assert!(config.session_end_hooks.is_empty());
+    }
+
+    #[test]
+    fn test_load_custom_agents_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[agents.gemini]
+name = "Gemini CLI"
+context_window_size = 1000000
+
+[agents.gemini.distribution.bunx]
+package = "@google/gemini-cli"
+args = ["--experimental-acp"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        assert_eq!(config.agents.len(), 1);
+        let agent = &config.agents["gemini"];
+        assert_eq!(agent.name, Some("Gemini CLI".to_string()));
+        assert_eq!(agent.context_window_size, Some(1_000_000));
     }
 }

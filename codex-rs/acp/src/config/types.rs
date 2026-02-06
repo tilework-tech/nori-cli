@@ -53,6 +53,10 @@ pub struct NoriConfigToml {
     /// Session lifecycle hooks
     #[serde(default)]
     pub hooks: HooksConfigToml,
+
+    /// Custom ACP agent configurations, keyed by slug
+    #[serde(default)]
+    pub agents: HashMap<String, CustomAgentConfig>,
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -1047,6 +1051,9 @@ pub struct NoriConfig {
 
     /// Scripts to run when a session ends.
     pub session_end_hooks: Vec<PathBuf>,
+
+    /// Custom ACP agent configurations, keyed by slug
+    pub agents: HashMap<String, CustomAgentConfig>,
 }
 
 impl Default for NoriConfig {
@@ -1073,6 +1080,7 @@ impl Default for NoriConfig {
             mcp_servers: HashMap::new(),
             session_start_hooks: Vec::new(),
             session_end_hooks: Vec::new(),
+            agents: HashMap::new(),
         }
     }
 }
@@ -1116,6 +1124,124 @@ pub fn resolve_hook_paths(paths: Option<Vec<String>>) -> Vec<PathBuf> {
         .into_iter()
         .map(|s| expand_tilde(&s))
         .collect()
+}
+
+// ============================================================================
+// Custom Agent Configuration
+// ============================================================================
+
+/// Configuration for a user-defined custom ACP agent.
+///
+/// Custom agents are defined in `~/.nori/cli/config.toml` under `[agents.<slug>]`.
+/// The map key is the agent slug (used as CLI arg and internal identifier).
+///
+/// Example TOML:
+/// ```toml
+/// [agents.gemini]
+/// name = "Gemini CLI"
+/// context_window_size = 1000000
+///
+/// [agents.gemini.distribution.bunx]
+/// package = "@google/gemini-cli"
+/// args = ["--experimental-acp"]
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CustomAgentConfig {
+    /// Display name shown in the agent picker. Defaults to the slug if omitted.
+    pub name: Option<String>,
+
+    /// Context window size in tokens (affects footer display).
+    pub context_window_size: Option<i64>,
+
+    /// How to spawn this agent.
+    pub distribution: AgentDistribution,
+}
+
+/// Distribution method for a custom agent.
+///
+/// Exactly one variant must be specified. Serde's externally-tagged enum
+/// enforces this at parse time.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentDistribution {
+    /// Run a local executable directly
+    Local(LocalDistribution),
+    /// Run via npx (Node package runner)
+    Npx(PackageDistribution),
+    /// Run via bunx (Bun package runner)
+    Bunx(PackageDistribution),
+    /// Run via pipx (Python package runner)
+    Pipx(PackageDistribution),
+    /// Run via uvx (UV Python package runner)
+    Uvx(PackageDistribution),
+    /// Install and run a Rust crate (not yet implemented)
+    Cargo(CargoDistribution),
+    /// Download a pre-built binary (not yet implemented)
+    Binary(BinaryDistribution),
+}
+
+/// Local executable distribution
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct LocalDistribution {
+    /// Path to the executable
+    pub command: String,
+    /// Arguments to pass
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Environment variables to set
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+}
+
+/// Package manager distribution (npx, bunx, pipx, uvx)
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PackageDistribution {
+    /// Package name (e.g., "@google/gemini-cli")
+    pub package: String,
+    /// Extra arguments to pass after the package name
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// Cargo (Rust) distribution
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CargoDistribution {
+    /// Crate name on crates.io
+    #[serde(rename = "crate")]
+    pub crate_name: String,
+    /// Version constraint (e.g., "0.1.0"). Latest if omitted.
+    pub version: Option<String>,
+    /// Binary name if the crate has multiple binaries
+    pub binary: Option<String>,
+    /// Extra arguments
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// Binary download distribution
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct BinaryDistribution {
+    /// Platform-specific binary configs, keyed by platform string
+    /// (e.g., "darwin-aarch64", "linux-x86_64")
+    pub platforms: HashMap<String, BinaryPlatformConfig>,
+}
+
+/// Platform-specific binary download configuration
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct BinaryPlatformConfig {
+    /// URL to the archive containing the binary
+    pub archive: String,
+    /// Command/binary name inside the archive
+    pub cmd: String,
+    /// Extra arguments
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 // ============================================================================
@@ -2246,5 +2372,266 @@ nori_profile = true
         assert_eq!(config.tui.footer_segments.vim_mode, Some(false));
         assert_eq!(config.tui.footer_segments.nori_profile, Some(true));
         assert_eq!(config.tui.footer_segments.git_branch, None);
+    }
+
+    // ========================================================================
+    // Custom Agent Configuration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_custom_agent_config_npx_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.gemini]
+name = "Gemini CLI"
+context_window_size = 1000000
+
+[agents.gemini.distribution.npx]
+package = "@google/gemini-cli"
+args = ["--experimental-acp"]
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.agents.len(), 1);
+        let agent = &config.agents["gemini"];
+        assert_eq!(agent.name, Some("Gemini CLI".to_string()));
+        assert_eq!(agent.context_window_size, Some(1_000_000));
+
+        match &agent.distribution {
+            AgentDistribution::Npx(pkg) => {
+                assert_eq!(pkg.package, "@google/gemini-cli");
+                assert_eq!(pkg.args, vec!["--experimental-acp"]);
+            }
+            other => panic!("Expected Npx distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_config_bunx_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.gemini]
+name = "Gemini CLI"
+
+[agents.gemini.distribution.bunx]
+package = "@google/gemini-cli"
+args = ["--experimental-acp"]
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["gemini"];
+        match &agent.distribution {
+            AgentDistribution::Bunx(pkg) => {
+                assert_eq!(pkg.package, "@google/gemini-cli");
+                assert_eq!(pkg.args, vec!["--experimental-acp"]);
+            }
+            other => panic!("Expected Bunx distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_config_uvx_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.kimi]
+name = "Kimi CLI"
+
+[agents.kimi.distribution.uvx]
+package = "kimi-cli"
+args = ["acp"]
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["kimi"];
+        assert_eq!(agent.name, Some("Kimi CLI".to_string()));
+        match &agent.distribution {
+            AgentDistribution::Uvx(pkg) => {
+                assert_eq!(pkg.package, "kimi-cli");
+                assert_eq!(pkg.args, vec!["acp"]);
+            }
+            other => panic!("Expected Uvx distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_config_pipx_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.my-agent]
+
+[agents.my-agent.distribution.pipx]
+package = "my-agent-pkg"
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["my-agent"];
+        assert_eq!(agent.name, None);
+        match &agent.distribution {
+            AgentDistribution::Pipx(pkg) => {
+                assert_eq!(pkg.package, "my-agent-pkg");
+                assert!(pkg.args.is_empty());
+            }
+            other => panic!("Expected Pipx distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_config_local_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.my-local-agent]
+name = "My Local Agent"
+
+[agents.my-local-agent.distribution.local]
+command = "/usr/local/bin/my-agent"
+args = ["--acp"]
+
+[agents.my-local-agent.distribution.local.env]
+MY_VAR = "value"
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["my-local-agent"];
+        assert_eq!(agent.name, Some("My Local Agent".to_string()));
+        match &agent.distribution {
+            AgentDistribution::Local(local) => {
+                assert_eq!(local.command, "/usr/local/bin/my-agent");
+                assert_eq!(local.args, vec!["--acp"]);
+                assert_eq!(local.env.get("MY_VAR"), Some(&"value".to_string()));
+            }
+            other => panic!("Expected Local distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_config_cargo_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.my-rust-mod]
+
+[agents.my-rust-mod.distribution.cargo]
+crate = "my-acp-mod"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["my-rust-mod"];
+        match &agent.distribution {
+            AgentDistribution::Cargo(cargo) => {
+                assert_eq!(cargo.crate_name, "my-acp-mod");
+                assert_eq!(cargo.version, Some("0.1.0".to_string()));
+                assert_eq!(cargo.binary, None);
+            }
+            other => panic!("Expected Cargo distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_config_binary_distribution() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.my-binary]
+
+[agents.my-binary.distribution.binary.platforms.darwin-aarch64]
+archive = "https://example.com/agent-darwin-arm64.tar.gz"
+cmd = "my-agent"
+args = ["--acp"]
+
+[agents.my-binary.distribution.binary.platforms.linux-x86_64]
+archive = "https://example.com/agent-linux-x64.tar.gz"
+cmd = "my-agent"
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["my-binary"];
+        match &agent.distribution {
+            AgentDistribution::Binary(binary) => {
+                assert_eq!(binary.platforms.len(), 2);
+                let darwin = &binary.platforms["darwin-aarch64"];
+                assert_eq!(darwin.cmd, "my-agent");
+                assert_eq!(darwin.args, vec!["--acp"]);
+                let linux = &binary.platforms["linux-x86_64"];
+                assert_eq!(linux.cmd, "my-agent");
+                assert!(linux.args.is_empty());
+            }
+            other => panic!("Expected Binary distribution, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_custom_agent_name_defaults_to_none() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.minimal]
+
+[agents.minimal.distribution.npx]
+package = "some-agent"
+"#,
+        )
+        .unwrap();
+
+        let agent = &config.agents["minimal"];
+        assert_eq!(agent.name, None);
+    }
+
+    #[test]
+    fn test_multiple_custom_agents() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+[agents.agent-a]
+name = "Agent A"
+
+[agents.agent-a.distribution.npx]
+package = "agent-a-pkg"
+
+[agents.agent-b]
+name = "Agent B"
+
+[agents.agent-b.distribution.uvx]
+package = "agent-b-pkg"
+args = ["serve"]
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.agents.len(), 2);
+        assert!(config.agents.contains_key("agent-a"));
+        assert!(config.agents.contains_key("agent-b"));
+    }
+
+    #[test]
+    fn test_empty_agents_is_default() {
+        let config: NoriConfigToml = toml::from_str("").unwrap();
+        assert!(config.agents.is_empty());
+    }
+
+    #[test]
+    fn test_agents_alongside_other_config() {
+        let config: NoriConfigToml = toml::from_str(
+            r#"
+agent = "claude-code"
+
+[tui]
+animations = false
+
+[agents.my-agent]
+name = "My Agent"
+
+[agents.my-agent.distribution.local]
+command = "/path/to/agent"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.agent, Some("claude-code".to_string()));
+        assert_eq!(config.tui.animations, Some(false));
+        assert_eq!(config.agents.len(), 1);
     }
 }

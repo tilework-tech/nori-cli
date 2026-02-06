@@ -281,13 +281,25 @@ impl App {
         // the model is not registered in the ACP registry, fail immediately.
         // This prevents showing model migration prompts or other UI for HTTP models
         // that will ultimately fail.
-        if !config.acp_allow_http_fallback && codex_acp::get_agent_config(&config.model).is_err() {
-            return Err(color_eyre::eyre::eyre!(
-                "Model '{}' is not registered as an ACP agent. \
-                 Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp",
-                config.model
-            ));
+        {
+            let custom_agents = codex_acp::config::NoriConfig::load()
+                .unwrap_or_default()
+                .agents;
+            if !config.acp_allow_http_fallback
+                && codex_acp::get_agent_config(&config.model, &custom_agents).is_err()
+            {
+                let known_agents: Vec<String> = codex_acp::list_available_agents(&custom_agents)
+                    .into_iter()
+                    .map(|a| a.model_name)
+                    .collect();
+                return Err(color_eyre::eyre::eyre!(
+                    "Model '{}' is not registered as an ACP agent. \
+                     Set acp.allow_http_fallback = true to allow HTTP providers. \
+                     Known ACP models: {}",
+                    config.model,
+                    known_agents.join(", ")
+                ));
+            }
         }
 
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
@@ -1347,10 +1359,15 @@ impl App {
                 match loader.load_transcript(&project_id, &session_id).await {
                     Ok(transcript) => {
                         let acp_session_id = transcript.meta.acp_session_id.clone();
-                        let display_name =
-                            crate::nori::agent_picker::get_agent_info(&self.config.model)
-                                .map(|info| info.display_name)
-                                .unwrap_or_else(|| self.config.model.clone());
+                        let custom_agents = codex_acp::config::NoriConfig::load()
+                            .unwrap_or_default()
+                            .agents;
+                        let display_name = crate::nori::agent_picker::get_agent_info(
+                            &self.config.model,
+                            &custom_agents,
+                        )
+                        .map(|info| info.display_name)
+                        .unwrap_or_else(|| self.config.model.clone());
 
                         self.shutdown_current_conversation().await;
 
@@ -2301,16 +2318,16 @@ mod tests {
 
         // Use ConfigEditsBuilder to persist an agent selection
         ConfigEditsBuilder::new(nori_home)
-            .set_agent(Some("gemini"))
+            .set_agent(Some("codex"))
             .apply_blocking()
             .expect("persist agent");
 
-        // Read back the config file and verify it contains `agent = "gemini"`
+        // Read back the config file and verify it contains `agent = "codex"`
         let config_content =
             std::fs::read_to_string(nori_home.join("config.toml")).expect("read config");
         assert!(
-            config_content.contains("agent = \"gemini\""),
-            "Config should contain 'agent = \"gemini\"', got: {config_content}"
+            config_content.contains("agent = \"codex\""),
+            "Config should contain 'agent = \"codex\"', got: {config_content}"
         );
     }
 

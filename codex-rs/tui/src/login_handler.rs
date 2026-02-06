@@ -2,11 +2,13 @@
 //!
 //! This module handles authentication flows for ACP agents:
 //! - OAuth browser flow (Codex)
-//! - External CLI passthrough (Gemini, Claude Code)
+//! - External CLI passthrough (Claude Code)
 
 use codex_acp::AgentKind;
+use codex_acp::CustomAgentConfig;
 use codex_acp::list_available_agents;
 use codex_login::ShutdownHandle;
+use std::collections::HashMap;
 use tokio::task::JoinHandle;
 
 /// Method used for authentication
@@ -80,11 +82,14 @@ impl LoginHandler {
     }
 
     /// Check if an agent supports in-app login
-    pub fn check_agent_support(model_name: &str) -> AgentLoginSupport {
+    pub fn check_agent_support(
+        model_name: &str,
+        custom_agents: &HashMap<String, CustomAgentConfig>,
+    ) -> AgentLoginSupport {
         let normalized = model_name.to_lowercase();
 
         // Try to find the agent in the registry
-        let agents = list_available_agents();
+        let agents = list_available_agents(custom_agents);
         let agent_info = agents
             .into_iter()
             .find(|a| a.model_name.to_lowercase() == normalized);
@@ -93,23 +98,18 @@ impl LoginHandler {
             Some(info) => {
                 match info.agent {
                     // Codex supports in-app login via OAuth browser flow
-                    AgentKind::Codex => AgentLoginSupport::Supported {
+                    Some(AgentKind::Codex) => AgentLoginSupport::Supported {
                         agent: AgentKind::Codex,
                         is_installed: info.is_installed,
                         login_method: LoginMethod::OAuthBrowser,
                     },
-                    // Gemini supports in-app login via external CLI passthrough
-                    AgentKind::Gemini => AgentLoginSupport::Supported {
-                        agent: AgentKind::Gemini,
-                        is_installed: info.is_installed,
-                        login_method: LoginMethod::ExternalCli {
-                            command: "gemini".to_string(),
-                            args: vec!["login".to_string()],
-                        },
-                    },
-                    // Other agents don't support in-app login yet
-                    other => AgentLoginSupport::NotSupported {
+                    // Other known agents don't support in-app login yet
+                    Some(other) => AgentLoginSupport::NotSupported {
                         agent_name: other.display_name().to_string(),
+                    },
+                    // Custom/mock agents don't support in-app login
+                    None => AgentLoginSupport::NotSupported {
+                        agent_name: info.display_name,
                     },
                 }
             }
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn check_agent_support_returns_supported_for_codex_with_oauth() {
-        let support = LoginHandler::check_agent_support("codex");
+        let support = LoginHandler::check_agent_support("codex", &HashMap::new());
 
         match support {
             AgentLoginSupport::Supported {
@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn check_agent_support_returns_not_supported_for_claude() {
         // Claude Code login support will be added later
-        let support = LoginHandler::check_agent_support("claude-code");
+        let support = LoginHandler::check_agent_support("claude-code", &HashMap::new());
 
         match support {
             AgentLoginSupport::NotSupported { agent_name } => {
@@ -199,38 +199,14 @@ mod tests {
     }
 
     #[test]
-    fn check_agent_support_returns_supported_for_gemini_with_external_cli() {
-        // Gemini supports in-app login via external CLI passthrough
-        let support = LoginHandler::check_agent_support("gemini");
-
-        match support {
-            AgentLoginSupport::Supported {
-                agent,
-                login_method,
-                ..
-            } => {
-                assert_eq!(agent, AgentKind::Gemini);
-                match login_method {
-                    LoginMethod::ExternalCli { command, args } => {
-                        assert_eq!(command, "gemini");
-                        assert_eq!(args, vec!["login".to_string()]);
-                    }
-                    _ => panic!("Expected ExternalCli login method for gemini"),
-                }
-            }
-            _ => panic!("Expected Supported variant for gemini"),
-        }
-    }
-
-    #[test]
     fn start_external_cli_transitions_to_awaiting_external_cli() {
         let mut handler = LoginHandler::new();
 
-        handler.start_external_cli("Gemini".to_string());
+        handler.start_external_cli("Codex".to_string());
 
         match handler.state {
             LoginFlowState::AwaitingExternalCli { agent_name } => {
-                assert_eq!(agent_name, "Gemini");
+                assert_eq!(agent_name, "Codex");
             }
             _ => panic!("Expected AwaitingExternalCli state"),
         }
@@ -238,7 +214,7 @@ mod tests {
 
     #[test]
     fn check_agent_support_returns_unknown_for_invalid_agent() {
-        let support = LoginHandler::check_agent_support("unknown-agent");
+        let support = LoginHandler::check_agent_support("unknown-agent", &HashMap::new());
 
         match support {
             AgentLoginSupport::Unknown { model_name } => {

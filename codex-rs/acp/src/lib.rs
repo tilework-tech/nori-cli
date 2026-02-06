@@ -26,6 +26,8 @@ pub use config::HistoryPersistence;
 pub use config::NoriConfig;
 pub use config::NoriConfigOverrides;
 pub use config::find_nori_home;
+pub use config::types::AgentDistribution;
+pub use config::types::CustomAgentConfig;
 
 // Re-export message history types
 pub use message_history::HistoryEntry;

@@ -1246,8 +1246,9 @@ mod tests {
     #[serial]
     async fn test_spawn_connection_and_receive_response() {
         // Get the mock agent config
-        let config = crate::registry::get_agent_config("mock-model")
-            .expect("mock-model should be registered");
+        let config =
+            crate::registry::get_agent_config("mock-model", &std::collections::HashMap::new())
+                .expect("mock-model should be registered");
 
         // Check if mock agent binary exists
         if !std::path::Path::new(&config.command).exists() {

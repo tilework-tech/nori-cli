@@ -3,16 +3,20 @@
 //! Provides configuration for ACP agents (subprocess command and args)
 //! with embedded provider info to avoid circular dependencies with core.
 //!
-//! ## Agent Names
+//! ## Built-in Agent Names
 //! - `claude-code` - Anthropic's Claude Code CLI agent
 //! - `codex` - OpenAI's Codex CLI agent
-//! - `gemini` - Google's Gemini CLI agent
+//!
+//! ## Custom Agents
+//! Additional agents can be configured in `~/.nori/cli/config.toml` under
+//! `[agents.<slug>]`. See `CustomAgentConfig` for details.
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
 //! - `openai` - OpenAI
-//! - `google` - Google
 
+use crate::config::types::AgentDistribution;
+use crate::config::types::CustomAgentConfig;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
@@ -34,8 +38,6 @@ pub enum AgentKind {
     ClaudeCode,
     /// OpenAI's Codex CLI
     Codex,
-    /// Google's Gemini CLI
-    Gemini,
 }
 
 impl AgentKind {
@@ -44,7 +46,6 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => "claude-code",
             AgentKind::Codex => "codex",
-            AgentKind::Gemini => "gemini",
         }
     }
 
@@ -53,7 +54,6 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => "Claude Code",
             AgentKind::Codex => "Codex",
-            AgentKind::Gemini => "Gemini",
         }
     }
 
@@ -61,13 +61,11 @@ impl AgentKind {
     ///
     /// These are approximate values based on typical model configurations:
     /// - Claude Code: 200K tokens
-    /// - Codex: 258K tokens  
-    /// - Gemini: 1M tokens
+    /// - Codex: 258K tokens
     pub fn context_window_size(&self) -> i64 {
         match self {
             AgentKind::ClaudeCode => 200_000,
             AgentKind::Codex => 258_000,
-            AgentKind::Gemini => 1_000_000,
         }
     }
 
@@ -76,7 +74,6 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => Provider::Anthropic,
             AgentKind::Codex => Provider::OpenAI,
-            AgentKind::Gemini => Provider::Google,
         }
     }
 
@@ -85,24 +82,20 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => "@anthropic-ai/claude-code",
             AgentKind::Codex => "@openai/codex",
-            AgentKind::Gemini => "@google/gemini-cli",
         }
     }
 
     /// Get the ACP adapter package name for launching this agent
     pub fn acp_package(&self) -> &'static str {
         match self {
-            // Claude and Codex use Zed's ACP adapters
             AgentKind::ClaudeCode => "@zed-industries/claude-code-acp",
             AgentKind::Codex => "@zed-industries/codex-acp",
-            // Gemini has native ACP support
-            AgentKind::Gemini => "@google/gemini-cli",
         }
     }
 
     /// Get all agent variants
     pub fn all() -> &'static [AgentKind] {
-        &[AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::Gemini]
+        &[AgentKind::ClaudeCode, AgentKind::Codex]
     }
 
     /// Get authentication hint for this agent.
@@ -112,7 +105,6 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => "Run /login for instructions, or set ANTHROPIC_API_KEY.",
             AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
-            AgentKind::Gemini => "Run /login for instructions, or set GOOGLE_API_KEY.",
         }
     }
 
@@ -122,7 +114,6 @@ impl AgentKind {
         match normalized.as_str() {
             "claude-code" | "claude" | "claude-acp" | "claude-4.5" => Some(AgentKind::ClaudeCode),
             "codex" | "codex-acp" => Some(AgentKind::Codex),
-            "gemini" | "gemini-acp" | "gemini-2.5-flash" => Some(AgentKind::Gemini),
             _ => None,
         }
     }
@@ -141,8 +132,6 @@ pub enum Provider {
     Anthropic,
     /// OpenAI
     OpenAI,
-    /// Google
-    Google,
 }
 
 impl Provider {
@@ -151,7 +140,6 @@ impl Provider {
         match self {
             Provider::Anthropic => "anthropic",
             Provider::OpenAI => "openai",
-            Provider::Google => "google",
         }
     }
 
@@ -160,7 +148,6 @@ impl Provider {
         match self {
             Provider::Anthropic => "Anthropic",
             Provider::OpenAI => "OpenAI",
-            Provider::Google => "Google",
         }
     }
 }
@@ -211,9 +198,9 @@ impl fmt::Display for PackageManager {
 /// Information about an available ACP agent for display in the picker
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentInfo {
-    /// Agent identifier
-    pub agent: AgentKind,
-    /// Model name used to select this agent (e.g., "claude-code", "gemini")
+    /// Agent identifier (None for custom agents)
+    pub agent: Option<AgentKind>,
+    /// Model name used to select this agent (e.g., "claude-code")
     pub model_name: String,
     /// Display name shown in the picker
     pub display_name: String,
@@ -233,7 +220,7 @@ impl AcpAgentInfo {
         let (is_installed, managed_by) = detect_agent_installation(agent);
 
         Self {
-            agent,
+            agent: Some(agent),
             model_name: agent.slug().to_string(),
             display_name: agent.display_name().to_string(),
             description: agent.provider().display_name().to_string(),
@@ -291,7 +278,6 @@ fn detect_agent_installation_uncached(agent: AgentKind) -> (bool, Option<Package
     let binary_name = match agent {
         AgentKind::ClaudeCode => "claude",
         AgentKind::Codex => "codex",
-        AgentKind::Gemini => "gemini",
     };
 
     // Check if the binary exists in PATH (fast check)
@@ -391,8 +377,8 @@ impl Default for AcpProviderInfo {
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
-    /// Agent identifier
-    pub agent: AgentKind,
+    /// Agent identifier (None for custom agents)
+    pub agent: Option<AgentKind>,
     /// Provider identifier (e.g., "claude-code", "gemini")
     /// Used to determine when subprocess can be reused vs needs replacement
     pub provider_slug: String,
@@ -409,14 +395,16 @@ pub struct AcpAgentConfig {
 }
 
 /// Get list of all available ACP agents for the agent picker
-pub fn list_available_agents() -> Vec<AcpAgentInfo> {
+pub fn list_available_agents(
+    custom_agents: &HashMap<String, CustomAgentConfig>,
+) -> Vec<AcpAgentInfo> {
     let mut agents = Vec::new();
 
     // Mock agents are only available in debug builds (for testing)
     #[cfg(debug_assertions)]
     {
         agents.push(AcpAgentInfo {
-            agent: AgentKind::ClaudeCode, // Dummy, not really used
+            agent: None,
             model_name: "mock-model".to_string(),
             display_name: "Mock ACP".to_string(),
             description: "Mock agent for testing".to_string(),
@@ -425,7 +413,7 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
             managed_by: None,
         });
         agents.push(AcpAgentInfo {
-            agent: AgentKind::ClaudeCode, // Dummy, not really used
+            agent: None,
             model_name: "mock-model-alt".to_string(),
             display_name: "Mock ACP Alt".to_string(),
             description: "Alternate mock agent for testing".to_string(),
@@ -440,21 +428,39 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
         agents.push(AcpAgentInfo::from_agent(*agent));
     }
 
+    // Custom agents from config (appear last)
+    for (slug, custom) in custom_agents {
+        let display_name = custom.name.clone().unwrap_or_else(|| slug.clone());
+        agents.push(AcpAgentInfo {
+            agent: None,
+            model_name: slug.clone(),
+            display_name,
+            description: "Custom agent".to_string(),
+            provider_slug: slug.clone(),
+            is_installed: false,
+            managed_by: None,
+        });
+    }
+
     agents
 }
 
 /// Get ACP agent configuration for a given model name
 ///
 /// # Arguments
-/// * `model_name` - The model identifier (e.g., "claude-code", "gemini")
+/// * `model_name` - The model identifier (e.g., "claude-code")
 ///   Names are normalized to lowercase for case-insensitive matching.
+/// * `custom_agents` - Custom agent configurations from the user's config file
 ///
 /// # Returns
 /// Configuration with provider_slug, command and args to spawn the agent subprocess
 ///
 /// # Errors
 /// Returns error if model_name is not recognized
-pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
+pub fn get_agent_config(
+    model_name: &str,
+    custom_agents: &HashMap<String, CustomAgentConfig>,
+) -> Result<AcpAgentConfig> {
     // Normalize model name: lowercase
     let normalized = model_name.to_lowercase();
 
@@ -464,12 +470,11 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
         return Ok(config);
     }
 
-    // Try to parse as an AgentKind
+    // Try to parse as a built-in AgentKind
     if let Some(agent) = AgentKind::from_slug(&normalized) {
         let package_manager = detect_preferred_package_manager();
 
         let (command, args) = match agent {
-            // Claude and Codex use Zed's ACP adapters
             AgentKind::ClaudeCode => (
                 package_manager.command().to_string(),
                 vec!["@zed-industries/claude-code-acp".to_string()],
@@ -478,18 +483,10 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
                 package_manager.command().to_string(),
                 vec!["@zed-industries/codex-acp".to_string()],
             ),
-            // Gemini has native ACP support via --experimental-acp flag
-            AgentKind::Gemini => (
-                package_manager.command().to_string(),
-                vec![
-                    "@google/gemini-cli".to_string(),
-                    "--experimental-acp".to_string(),
-                ],
-            ),
         };
 
         return Ok(AcpAgentConfig {
-            agent,
+            agent: Some(agent),
             provider_slug: agent.slug().to_string(),
             command,
             args,
@@ -502,14 +499,90 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
         });
     }
 
+    // Try custom agents from config
+    if let Some(custom) = custom_agents.get(&normalized) {
+        let display_name = custom.name.clone().unwrap_or_else(|| normalized.clone());
+        let (command, args, env) = resolve_distribution(&custom.distribution)?;
+
+        return Ok(AcpAgentConfig {
+            agent: None,
+            provider_slug: normalized.clone(),
+            command,
+            args,
+            env,
+            provider_info: AcpProviderInfo {
+                name: format!("{display_name} ACP"),
+                ..Default::default()
+            },
+            auth_hint: String::new(),
+        });
+    }
+
+    // Special migration message for "gemini" which was removed as a built-in
+    if normalized == "gemini" || normalized == "gemini-acp" || normalized == "gemini-2.5-flash" {
+        anyhow::bail!(
+            "'{model_name}' is no longer a built-in agent. To use Gemini, add it to your \
+             config.toml:\n\n\
+             [agents.gemini]\n\
+             name = \"Gemini CLI\"\n\n\
+             [agents.gemini.distribution.npx]\n\
+             package = \"@google/gemini-cli\"\n\
+             args = [\"--experimental-acp\"]\n"
+        );
+    }
+
     anyhow::bail!("Unknown ACP model: {model_name}")
+}
+
+/// Resolve an agent distribution config into (command, args, env).
+fn resolve_distribution(
+    dist: &AgentDistribution,
+) -> Result<(String, Vec<String>, HashMap<String, String>)> {
+    match dist {
+        AgentDistribution::Local(local) => {
+            Ok((local.command.clone(), local.args.clone(), local.env.clone()))
+        }
+        AgentDistribution::Npx(pkg) => {
+            let mut args = vec!["-y".to_string(), pkg.package.clone()];
+            args.extend(pkg.args.clone());
+            Ok(("npx".to_string(), args, HashMap::new()))
+        }
+        AgentDistribution::Bunx(pkg) => {
+            let mut args = vec![pkg.package.clone()];
+            args.extend(pkg.args.clone());
+            Ok(("bunx".to_string(), args, HashMap::new()))
+        }
+        AgentDistribution::Pipx(pkg) => {
+            let mut args = vec!["run".to_string(), pkg.package.clone()];
+            args.extend(pkg.args.clone());
+            Ok(("pipx".to_string(), args, HashMap::new()))
+        }
+        AgentDistribution::Uvx(pkg) => {
+            let mut args = vec![pkg.package.clone()];
+            args.extend(pkg.args.clone());
+            Ok(("uvx".to_string(), args, HashMap::new()))
+        }
+        AgentDistribution::Cargo(_) => {
+            anyhow::bail!(
+                "Cargo distribution is not yet supported. Use a local or package manager distribution instead."
+            )
+        }
+        AgentDistribution::Binary(_) => {
+            anyhow::bail!(
+                "Binary distribution is not yet supported. Use a local or package manager distribution instead."
+            )
+        }
+    }
 }
 
 /// Get the display name for an agent by model name.
 ///
 /// Returns the human-readable display name if the agent is registered.
 /// Falls back to the model_name itself if not recognized.
-pub fn get_agent_display_name(model_name: &str) -> String {
+pub fn get_agent_display_name(
+    model_name: &str,
+    custom_agents: &HashMap<String, CustomAgentConfig>,
+) -> String {
     let normalized = model_name.to_lowercase();
 
     // Mock agents (debug builds only)
@@ -526,6 +599,14 @@ pub fn get_agent_display_name(model_name: &str) -> String {
     // Production agents
     if let Some(agent) = AgentKind::from_slug(&normalized) {
         return agent.display_name().to_string();
+    }
+
+    // Custom agents
+    if let Some(custom) = custom_agents.get(&normalized) {
+        return custom
+            .name
+            .clone()
+            .unwrap_or_else(|| model_name.to_string());
     }
 
     // Fallback to model name
@@ -574,7 +655,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
-                agent: AgentKind::ClaudeCode, // Dummy
+                agent: None,
                 provider_slug: "mock-acp".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -620,7 +701,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
-                agent: AgentKind::ClaudeCode, // Dummy
+                agent: None,
                 provider_slug: "mock-acp-alt".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -646,19 +727,22 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::types::AgentDistribution;
+    use crate::config::types::CargoDistribution;
+    use crate::config::types::CustomAgentConfig;
+    use crate::config::types::LocalDistribution;
+    use crate::config::types::PackageDistribution;
 
     #[test]
     fn test_agent_slugs() {
         assert_eq!(AgentKind::ClaudeCode.slug(), "claude-code");
         assert_eq!(AgentKind::Codex.slug(), "codex");
-        assert_eq!(AgentKind::Gemini.slug(), "gemini");
     }
 
     #[test]
     fn test_provider_slugs() {
         assert_eq!(Provider::Anthropic.slug(), "anthropic");
         assert_eq!(Provider::OpenAI.slug(), "openai");
-        assert_eq!(Provider::Google.slug(), "google");
     }
 
     #[test]
@@ -669,7 +753,6 @@ mod tests {
             Some(AgentKind::ClaudeCode)
         );
         assert_eq!(AgentKind::from_slug("codex"), Some(AgentKind::Codex));
-        assert_eq!(AgentKind::from_slug("gemini"), Some(AgentKind::Gemini));
 
         // Legacy aliases
         assert_eq!(
@@ -681,11 +764,10 @@ mod tests {
             Some(AgentKind::ClaudeCode)
         );
         assert_eq!(AgentKind::from_slug("codex-acp"), Some(AgentKind::Codex));
-        assert_eq!(AgentKind::from_slug("gemini-acp"), Some(AgentKind::Gemini));
-        assert_eq!(
-            AgentKind::from_slug("gemini-2.5-flash"),
-            Some(AgentKind::Gemini)
-        );
+
+        // Gemini is no longer a built-in
+        assert_eq!(AgentKind::from_slug("gemini"), None);
+        assert_eq!(AgentKind::from_slug("gemini-acp"), None);
 
         // Case insensitive
         assert_eq!(
@@ -702,7 +784,6 @@ mod tests {
     fn test_agent_provider_relationship() {
         assert_eq!(AgentKind::ClaudeCode.provider(), Provider::Anthropic);
         assert_eq!(AgentKind::Codex.provider(), Provider::OpenAI);
-        assert_eq!(AgentKind::Gemini.provider(), Provider::Google);
     }
 
     #[test]
@@ -714,7 +795,8 @@ mod tests {
     #[test]
     #[cfg(debug_assertions)]
     fn test_get_mock_model_config() {
-        let config = get_agent_config("mock-model").expect("Should return config for mock-model");
+        let config = get_agent_config("mock-model", &HashMap::new())
+            .expect("Should return config for mock-model");
 
         assert_eq!(config.provider_slug, "mock-acp");
         assert!(
@@ -731,8 +813,8 @@ mod tests {
     #[test]
     #[cfg(debug_assertions)]
     fn test_get_mock_model_alt_config() {
-        let config =
-            get_agent_config("mock-model-alt").expect("Should return config for mock-model-alt");
+        let config = get_agent_config("mock-model-alt", &HashMap::new())
+            .expect("Should return config for mock-model-alt");
 
         assert_eq!(config.provider_slug, "mock-acp-alt");
         assert!(
@@ -746,10 +828,11 @@ mod tests {
 
     #[test]
     fn test_get_claude_code_config() {
-        let config = get_agent_config("claude-code").expect("Should return config for claude-code");
+        let config = get_agent_config("claude-code", &HashMap::new())
+            .expect("Should return config for claude-code");
 
         assert_eq!(config.provider_slug, "claude-code");
-        assert_eq!(config.agent, AgentKind::ClaudeCode);
+        assert_eq!(config.agent, Some(AgentKind::ClaudeCode));
         // Command should be npx or bunx
         assert!(
             config.command == "npx" || config.command == "bunx",
@@ -767,10 +850,11 @@ mod tests {
 
     #[test]
     fn test_get_codex_config() {
-        let config = get_agent_config("codex").expect("Should return config for codex");
+        let config =
+            get_agent_config("codex", &HashMap::new()).expect("Should return config for codex");
 
         assert_eq!(config.provider_slug, "codex");
-        assert_eq!(config.agent, AgentKind::Codex);
+        assert_eq!(config.agent, Some(AgentKind::Codex));
         assert!(
             config.command == "npx" || config.command == "bunx",
             "Command should be npx or bunx, got: {}",
@@ -786,38 +870,18 @@ mod tests {
     }
 
     #[test]
-    fn test_get_gemini_config() {
-        let config = get_agent_config("gemini").expect("Should return config for gemini");
-
-        assert_eq!(config.provider_slug, "gemini");
-        assert_eq!(config.agent, AgentKind::Gemini);
-        assert!(
-            config.command == "npx" || config.command == "bunx",
-            "Command should be npx or bunx, got: {}",
-            config.command
-        );
-        assert!(config.args.contains(&"@google/gemini-cli".to_string()));
-        assert!(config.args.contains(&"--experimental-acp".to_string()));
-        assert_eq!(config.provider_info.name, "Gemini ACP");
-    }
-
-    #[test]
     fn test_legacy_model_names() {
         // Claude legacy names
-        assert!(get_agent_config("claude-acp").is_ok());
-        assert!(get_agent_config("claude-4.5").is_ok());
+        assert!(get_agent_config("claude-acp", &HashMap::new()).is_ok());
+        assert!(get_agent_config("claude-4.5", &HashMap::new()).is_ok());
 
         // Codex legacy names
-        assert!(get_agent_config("codex-acp").is_ok());
-
-        // Gemini legacy names
-        assert!(get_agent_config("gemini-acp").is_ok());
-        assert!(get_agent_config("gemini-2.5-flash").is_ok());
+        assert!(get_agent_config("codex-acp", &HashMap::new()).is_ok());
     }
 
     #[test]
     fn test_get_unknown_model_returns_error() {
-        let result = get_agent_config("unknown-model-xyz");
+        let result = get_agent_config("unknown-model-xyz", &HashMap::new());
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -828,12 +892,12 @@ mod tests {
     fn test_get_agent_config_normalizes_model_names() {
         // Should work with lowercase model names
         assert!(
-            get_agent_config("claude-code").is_ok(),
+            get_agent_config("claude-code", &HashMap::new()).is_ok(),
             "Lowercase 'claude-code' should work"
         );
 
         // Should work with mixed case (normalized to lowercase)
-        let claude_result = get_agent_config("Claude-Code");
+        let claude_result = get_agent_config("Claude-Code", &HashMap::new());
         assert!(
             claude_result.is_ok(),
             "Mixed case 'Claude-Code' should work"
@@ -845,7 +909,7 @@ mod tests {
         );
 
         // Should still reject unknown models
-        let unknown_result = get_agent_config("unknown-model-xyz");
+        let unknown_result = get_agent_config("unknown-model-xyz", &HashMap::new());
         assert!(unknown_result.is_err(), "Unknown model should return error");
         let err_msg = unknown_result.unwrap_err().to_string();
         assert!(
@@ -857,27 +921,25 @@ mod tests {
     #[test]
     #[cfg(debug_assertions)]
     fn test_list_available_agents_debug_build() {
-        let agents = list_available_agents();
-        // Debug build should have 5 agents: mock, mock-alt, claude-code, codex, gemini
-        assert_eq!(agents.len(), 5, "Debug build should have 5 agents");
+        let agents = list_available_agents(&HashMap::new());
+        // Debug build should have 4 agents: mock, mock-alt, claude-code, codex
+        assert_eq!(agents.len(), 4, "Debug build should have 4 agents");
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
         assert!(names.contains(&"Mock ACP Alt"), "Should have Mock ACP Alt");
         assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
-        assert!(names.contains(&"Gemini"), "Should have Gemini");
     }
 
     #[test]
     fn test_list_available_agents_contains_production_agents() {
-        let agents = list_available_agents();
+        let agents = list_available_agents(&HashMap::new());
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
 
         // Production agents should always be present
         assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
-        assert!(names.contains(&"Gemini"), "Should have Gemini");
     }
 
     #[test]
@@ -895,19 +957,13 @@ mod tests {
             codex_hint.contains("/login"),
             "Codex hint should mention '/login', got: {codex_hint}"
         );
-
-        // Gemini should mention `/login` for instructions
-        let gemini_hint = AgentKind::Gemini.auth_hint();
-        assert!(
-            gemini_hint.contains("/login"),
-            "Gemini hint should mention '/login', got: {gemini_hint}"
-        );
     }
 
     #[test]
     fn test_agent_config_includes_auth_hint() {
         // Get config for claude-code and verify it has an auth hint with /login
-        let config = get_agent_config("claude-code").expect("Should return config");
+        let config =
+            get_agent_config("claude-code", &HashMap::new()).expect("Should return config");
         assert!(
             !config.auth_hint.is_empty(),
             "Config should have a non-empty auth_hint"
@@ -919,7 +975,7 @@ mod tests {
         );
 
         // Get config for codex and verify it has an auth hint with /login
-        let config = get_agent_config("codex").expect("Should return config");
+        let config = get_agent_config("codex", &HashMap::new()).expect("Should return config");
         assert!(
             !config.auth_hint.is_empty(),
             "Codex config should have a non-empty auth_hint"
@@ -929,17 +985,232 @@ mod tests {
             "Codex config auth_hint should mention '/login', got: {}",
             config.auth_hint
         );
+    }
 
-        // Get config for gemini and verify it has an auth hint with /login
-        let config = get_agent_config("gemini").expect("Should return config");
+    // ========================================================================
+    // Custom Agent Tests
+    // ========================================================================
+
+    #[test]
+    fn test_get_custom_agent_config_npx() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "my-agent".to_string(),
+            CustomAgentConfig {
+                name: Some("My Agent".to_string()),
+                context_window_size: None,
+                distribution: AgentDistribution::Npx(PackageDistribution {
+                    package: "my-agent-pkg".to_string(),
+                    args: vec!["--flag".to_string()],
+                }),
+            },
+        );
+
+        let config = get_agent_config("my-agent", &agents).unwrap();
+        assert_eq!(config.command, "npx");
+        assert_eq!(config.args, vec!["-y", "my-agent-pkg", "--flag"]);
+        assert_eq!(config.provider_slug, "my-agent");
+        assert_eq!(config.provider_info.name, "My Agent ACP");
+        assert!(config.agent.is_none());
+    }
+
+    #[test]
+    fn test_get_custom_agent_config_bunx() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "gemini".to_string(),
+            CustomAgentConfig {
+                name: Some("Gemini CLI".to_string()),
+                context_window_size: Some(1_000_000),
+                distribution: AgentDistribution::Bunx(PackageDistribution {
+                    package: "@google/gemini-cli".to_string(),
+                    args: vec!["--experimental-acp".to_string()],
+                }),
+            },
+        );
+
+        let config = get_agent_config("gemini", &agents).unwrap();
+        assert_eq!(config.command, "bunx");
+        assert_eq!(
+            config.args,
+            vec!["@google/gemini-cli", "--experimental-acp"]
+        );
+        assert_eq!(config.provider_info.name, "Gemini CLI ACP");
+    }
+
+    #[test]
+    fn test_get_custom_agent_config_uvx() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "kimi".to_string(),
+            CustomAgentConfig {
+                name: Some("Kimi CLI".to_string()),
+                context_window_size: None,
+                distribution: AgentDistribution::Uvx(PackageDistribution {
+                    package: "kimi-cli".to_string(),
+                    args: vec!["acp".to_string()],
+                }),
+            },
+        );
+
+        let config = get_agent_config("kimi", &agents).unwrap();
+        assert_eq!(config.command, "uvx");
+        assert_eq!(config.args, vec!["kimi-cli", "acp"]);
+    }
+
+    #[test]
+    fn test_get_custom_agent_config_pipx() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "py-agent".to_string(),
+            CustomAgentConfig {
+                name: None,
+                context_window_size: None,
+                distribution: AgentDistribution::Pipx(PackageDistribution {
+                    package: "python-agent".to_string(),
+                    args: vec![],
+                }),
+            },
+        );
+
+        let config = get_agent_config("py-agent", &agents).unwrap();
+        assert_eq!(config.command, "pipx");
+        assert_eq!(config.args, vec!["run", "python-agent"]);
+        assert_eq!(config.provider_info.name, "py-agent ACP");
+    }
+
+    #[test]
+    fn test_get_custom_agent_config_local() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "local-agent".to_string(),
+            CustomAgentConfig {
+                name: Some("Local Agent".to_string()),
+                context_window_size: None,
+                distribution: AgentDistribution::Local(LocalDistribution {
+                    command: "/usr/local/bin/my-agent".to_string(),
+                    args: vec!["--acp".to_string()],
+                    env: HashMap::from([("KEY".to_string(), "val".to_string())]),
+                }),
+            },
+        );
+
+        let config = get_agent_config("local-agent", &agents).unwrap();
+        assert_eq!(config.command, "/usr/local/bin/my-agent");
+        assert_eq!(config.args, vec!["--acp"]);
+        assert_eq!(config.env.get("KEY"), Some(&"val".to_string()));
+    }
+
+    #[test]
+    fn test_get_custom_agent_cargo_not_yet_supported() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "rust-agent".to_string(),
+            CustomAgentConfig {
+                name: None,
+                context_window_size: None,
+                distribution: AgentDistribution::Cargo(CargoDistribution {
+                    crate_name: "my-crate".to_string(),
+                    version: None,
+                    binary: None,
+                    args: vec![],
+                }),
+            },
+        );
+
+        let result = get_agent_config("rust-agent", &agents);
+        assert!(result.is_err());
         assert!(
-            !config.auth_hint.is_empty(),
-            "Gemini config should have a non-empty auth_hint"
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not yet supported")
+        );
+    }
+
+    #[test]
+    fn test_builtin_agents_take_precedence_over_custom() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "claude-code".to_string(),
+            CustomAgentConfig {
+                name: Some("Should Not Be Used".to_string()),
+                context_window_size: None,
+                distribution: AgentDistribution::Local(LocalDistribution {
+                    command: "/should/not/be/used".to_string(),
+                    args: vec![],
+                    env: HashMap::new(),
+                }),
+            },
+        );
+
+        let config = get_agent_config("claude-code", &agents).unwrap();
+        // Should resolve to built-in, not custom
+        assert!(config.agent.is_some());
+        assert_eq!(config.agent.unwrap(), AgentKind::ClaudeCode);
+    }
+
+    #[test]
+    fn test_gemini_migration_error_message() {
+        let result = get_agent_config("gemini", &HashMap::new());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("no longer a built-in agent"));
+        assert!(err.contains("[agents.gemini]"));
+    }
+
+    #[test]
+    fn test_gemini_migration_error_for_aliases() {
+        assert!(
+            get_agent_config("gemini-acp", &HashMap::new())
+                .unwrap_err()
+                .to_string()
+                .contains("no longer a built-in agent")
         );
         assert!(
-            config.auth_hint.contains("/login"),
-            "Gemini config auth_hint should mention '/login', got: {}",
-            config.auth_hint
+            get_agent_config("gemini-2.5-flash", &HashMap::new())
+                .unwrap_err()
+                .to_string()
+                .contains("no longer a built-in agent")
         );
+    }
+
+    #[test]
+    fn test_list_available_agents_includes_custom() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "my-agent".to_string(),
+            CustomAgentConfig {
+                name: Some("My Agent".to_string()),
+                context_window_size: None,
+                distribution: AgentDistribution::Npx(PackageDistribution {
+                    package: "my-agent-pkg".to_string(),
+                    args: vec![],
+                }),
+            },
+        );
+
+        let available = list_available_agents(&agents);
+        let names: Vec<&str> = available.iter().map(|a| a.display_name.as_str()).collect();
+        assert!(names.contains(&"My Agent"));
+    }
+
+    #[test]
+    fn test_custom_agent_display_name_defaults_to_slug() {
+        let mut agents = HashMap::new();
+        agents.insert(
+            "my-agent".to_string(),
+            CustomAgentConfig {
+                name: None,
+                context_window_size: None,
+                distribution: AgentDistribution::Npx(PackageDistribution {
+                    package: "pkg".to_string(),
+                    args: vec![],
+                }),
+            },
+        );
+
+        let name = get_agent_display_name("my-agent", &agents);
+        assert_eq!(name, "my-agent");
     }
 }

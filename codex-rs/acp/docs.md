@@ -4,7 +4,7 @@ Path: @/codex-rs/acp
 
 ### Overview
 
-The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC, and translating between ACP protocol messages and Codex internal protocol types.
+The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses (like Claude Code and Codex, plus user-configured custom agents), communicating with them over JSON-RPC, and translating between ACP protocol messages and Codex internal protocol types.
 
 ### How it fits into the larger codebase
 
@@ -12,7 +12,7 @@ The ACP crate implements the Agent Client Protocol integration for Nori. It mana
 nori-tui
     |
     v
-codex-acp <---> ACP Agent subprocess (claude-code-acp, codex-acp, gemini-cli)
+codex-acp <---> ACP Agent subprocess (claude-code-acp, codex-acp, or custom agents)
     |
     v
 codex-protocol (internal event types)
@@ -20,7 +20,7 @@ codex-protocol (internal event types)
 
 The ACP crate serves as a bridge between:
 - The TUI layer (`@/codex-rs/tui/`) which displays UI and collects user input
-- External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
+- External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex) or user-configured custom agents
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
@@ -34,9 +34,11 @@ Key files:
 
 **Model Registry** (`registry.rs`):
 
-The registry is **model-centric** rather than provider-centric:
-- `get_agent_config()` accepts model names (e.g., "claude-code", "gemini-2.5-flash") instead of provider names
+The registry supports two types of agents: **built-in agents** (Claude Code and Codex) and **user-configured custom agents**.
+
+- `get_agent_config()` accepts model names (e.g., "claude-code", "codex") or custom agent slugs, plus a `custom_agents` map from config
 - Returns `AcpAgentConfig` containing:
+  - `agent`: `Option<AgentKind>` — `Some` for built-in agents, `None` for custom agents
   - `provider_slug`: Identifies which agent subprocess to spawn
   - `command`: Executable path or command name
   - `args`: Arguments to pass to the subprocess
@@ -44,13 +46,28 @@ The registry is **model-centric** rather than provider-centric:
   - `provider_info`: Retry settings, timeouts
   - `auth_hint`: Agent-specific authentication instructions for error messages
 
-Agent display names and auth hints:
+Built-in agent display names and auth hints:
 
 | Agent | Display Name | Auth Hint |
 |-------|--------------|-----------|
 | Claude Code | "Claude Code" | "Run /login for instructions, or set ANTHROPIC_API_KEY." |
 | Codex | "Codex" | "Run /login to authenticate, or set OPENAI_API_KEY." |
-| Gemini | "Gemini" | "Run /login for instructions, or set GOOGLE_API_KEY." |
+
+**Custom Agent Configuration:**
+
+Users can register custom ACP agents in `~/.nori/cli/config.toml` under `[agents.<slug>]`:
+
+```toml
+[agents.gemini]
+name = "Gemini CLI"
+context_window_size = 1000000
+
+[agents.gemini.distribution.bunx]
+package = "@google/gemini-cli"
+args = ["--experimental-acp"]
+```
+
+Supported distribution methods: `local`, `npx`, `bunx`, `pipx`, `uvx`, `cargo` (not yet implemented), `binary` (not yet implemented). Custom agents appear after built-in agents in the agent picker. Built-in agent slugs cannot be overridden by custom agents.
 
 **Nori Config Path Resolution** (`config/`):
 
@@ -201,7 +218,6 @@ Agent detection via environment variables:
 |---------|-------|
 | `CLAUDECODE=1` | Claude Code |
 | `CODEX_CLI=1` | Codex |
-| `GEMINI_CLI=1` | Gemini |
 
 Transcript file locations and matching strategy:
 
@@ -209,7 +225,6 @@ Transcript file locations and matching strategy:
 |-------|--------------|-------------------|
 | Claude Code | `~/.claude/projects/<transformed-path>/<uuid>.jsonl` | First-message matching (requires `first_message` parameter) |
 | Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | Parse first JSON line for `payload.cwd` field, match against CWD |
-| Gemini | `~/.gemini/tmp/<sha256-hash>/chats/<session>.json` | Hash is SHA256 of canonical working directory path |
 
 **Claude Code First-Message Matching:**
 
@@ -243,7 +258,6 @@ Each agent format requires different parsing:
 |-------|--------|--------------|
 | Claude Code | JSONL | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` in `message.usage` |
 | Codex | JSONL | `input_tokens`, `output_tokens`, `cached_input_tokens` from last `token_count` event |
-| Gemini | JSON | `input`, `output`, `thoughts`, `cached` from each message's `tokens` object |
 
 **Claude Code Streaming Deduplication:**
 
@@ -335,7 +349,7 @@ Entry types (from `@/codex-rs/acp/src/transcript/types.rs`):
 
 **Schema Field Naming:**
 
-The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which ACP agent (e.g., "claude-code", "codex", "gemini") processed the session or message. The field is named `agent` rather than `model` to emphasize that it identifies the agent software, not a specific model variant.
+The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which ACP agent (e.g., "claude-code", "codex") processed the session or message. The field is named `agent` rather than `model` to emphasize that it identifies the agent software, not a specific model variant.
 
 The `SessionMetaEntry.acp_session_id` field stores the ACP agent's session ID (from `session/new` or `session/load`). This enables the `/resume` command to reconnect to the same agent session. The field is `Option<String>` with `skip_serializing_if = "Option::is_none"` and `default` for backward compatibility with transcripts created before this field existed.
 
@@ -484,7 +498,6 @@ Parses token usage from agent session files:
 | Agent | Path Format |
 |-------|-------------|
 | Codex | `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-<ISODATE>T<HH-MM-SS>-<SESSION_GUID>.jsonl` |
-| Gemini | `~/.gemini/tmp/<HASHED_PATHS>/chats/session-<ISODATE>T<HH-MM>-<SESSIONID>.json` |
 | Claude | `~/.claude/projects/<PROJECT_PATH>/<SESSIONID>.jsonl` |
 
 **Approval Bridging:**

@@ -24,5 +24,8 @@ elapsed = []
 sandbox_summary = []
 
 [dev-dependencies]
+clap = { workspace = true, features = ["derive", "wrap_help"] }
+serde = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
+toml = { workspace = true }

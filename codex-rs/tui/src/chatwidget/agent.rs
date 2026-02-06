@@ -96,7 +96,8 @@ pub(crate) fn spawn_agent(
     app_event_tx: AppEventSender,
     server: Arc<ConversationManager>,
 ) -> SpawnAgentResult {
-    let acp_agent_result = get_agent_config(&config.model);
+    let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+    let acp_agent_result = get_agent_config(&config.model, &nori_config.agents);
 
     match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
         // Model is registered in ACP registry -> use ACP
@@ -115,10 +116,15 @@ pub(crate) fn spawn_agent(
         // Model NOT registered and HTTP fallback NOT allowed -> error
         (false, false) => {
             let model_name = config.model;
+            let known_agents: Vec<String> = codex_acp::list_available_agents(&nori_config.agents)
+                .into_iter()
+                .map(|a| a.model_name)
+                .collect();
             let error_msg = format!(
                 "Model '{model_name}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp"
+                 Known ACP models: {}",
+                known_agents.join(", ")
             );
             let op_tx = spawn_error_agent(model_name, error_msg, app_event_tx);
             SpawnAgentResult {
@@ -166,8 +172,11 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
     #[cfg(feature = "unstable")]
     let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
 
+    // Load NoriConfig for ACP-specific settings and custom agents
+    let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+
     // Emit "Connecting" status before spawning the backend
-    let display_name = get_agent_display_name(&config.model);
+    let display_name = get_agent_display_name(&config.model, &nori_config.agents);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
@@ -176,8 +185,6 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
 
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
-        // Load NoriConfig for ACP-specific settings (os_notifications)
-        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         // Detect auto-worktree repo root from the cwd path.
         // When auto_worktree is enabled, cwd is {repo_root}/.worktrees/{name},
         // so we can derive repo_root by going up two directories.
@@ -209,6 +216,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             session_start_hooks: nori_config.session_start_hooks.clone(),
             session_end_hooks: nori_config.session_end_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
+            custom_agents: nori_config.agents.clone(),
         };
 
         let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
@@ -296,14 +304,16 @@ pub(crate) fn spawn_acp_agent_resume(
     #[cfg(feature = "unstable")]
     let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
 
-    let display_name = get_agent_display_name(&config.model);
+    // Load NoriConfig for ACP-specific settings and custom agents
+    let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+
+    let display_name = get_agent_display_name(&config.model, &nori_config.agents);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
         let (event_tx, mut event_rx) = mpsc::channel(32);
 
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
-        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         let auto_worktree_enabled = nori_config.auto_worktree;
         let auto_worktree_repo_root = if auto_worktree_enabled {
             config
@@ -332,6 +342,7 @@ pub(crate) fn spawn_acp_agent_resume(
             session_start_hooks: nori_config.session_start_hooks.clone(),
             session_end_hooks: nori_config.session_end_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
+            custom_agents: nori_config.agents.clone(),
         };
 
         let backend = match AcpBackend::resume_session(

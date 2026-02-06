@@ -19,8 +19,6 @@
 //!   - Hash is SHA256 of the canonical working directory path
 
 use crate::AgentKind;
-use sha2::Digest;
-use sha2::Sha256;
 use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -106,7 +104,6 @@ pub fn discover_transcript_for_agent(
     match agent {
         AgentKind::ClaudeCode => find_current_transcript_claude(cwd),
         AgentKind::Codex => find_current_transcript_codex(cwd),
-        AgentKind::Gemini => find_current_transcript_gemini(cwd),
     }
 }
 
@@ -134,9 +131,8 @@ pub fn discover_transcript_for_agent_with_message(
 ) -> Result<TranscriptLocation, DiscoveryError> {
     match agent {
         AgentKind::ClaudeCode => find_current_transcript_claude_with_message(cwd, first_message),
-        // Codex and Gemini use CWD/hash matching, not first-message matching
+        // Codex uses CWD/hash matching, not first-message matching
         AgentKind::Codex => find_current_transcript_codex(cwd),
-        AgentKind::Gemini => find_current_transcript_gemini(cwd),
     }
 }
 
@@ -327,43 +323,8 @@ fn read_codex_session_meta(path: &Path) -> Result<CodexSessionMeta, DiscoveryErr
     }
 }
 
-/// Find the current transcript for Gemini.
-///
-/// Computes SHA256 hash of the canonical path, then looks in
-/// `~/.gemini/tmp/<hash>/chats/` for the most recently modified `.json` file.
-pub fn find_current_transcript_gemini(cwd: &Path) -> Result<TranscriptLocation, DiscoveryError> {
-    let home = dirs::home_dir().ok_or_else(|| DiscoveryError::HomeNotFound("~".to_string()))?;
-
-    // Compute SHA256 hash of the canonical path
-    let canonical = fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let path_str = canonical.to_string_lossy();
-    let hash = format!("{:x}", Sha256::digest(path_str.as_bytes()));
-
-    let chats_dir = home.join(".gemini").join("tmp").join(&hash).join("chats");
-
-    if !chats_dir.exists() {
-        return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
-    }
-
-    let transcript_path = most_recent_file(&chats_dir, "json")?
-        .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
-
-    // Extract session ID from filename
-    let session_id = transcript_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown")
-        .to_string();
-
-    // Parse token usage from the transcript
-    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Gemini);
-    Ok(TranscriptLocation {
-        agent_kind: AgentKind::Gemini,
-        transcript_path,
-        session_id,
-        token_breakdown,
-    })
-}
+// Gemini transcript discovery was removed when Gemini became a custom agent.
+// The function `find_current_transcript_gemini` previously lived here.
 
 /// Normalize a path for comparison.
 ///
@@ -634,7 +595,6 @@ pub fn parse_transcript_tokens(path: &Path, agent: AgentKind) -> Option<Transcri
     match agent {
         AgentKind::ClaudeCode => parse_claude_tokens(path),
         AgentKind::Codex => parse_codex_tokens(path),
-        AgentKind::Gemini => parse_gemini_tokens(path),
     }
 }
 
@@ -814,6 +774,7 @@ fn parse_codex_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
 ///
 /// Gemini sessions are JSON files with a messages array. Each message has
 /// a tokens object with input, output, cached, and thoughts fields.
+#[allow(dead_code)]
 fn parse_gemini_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     let text = fs::read_to_string(path).ok()?;
     let root: serde_json::Value = serde_json::from_str(&text).ok()?;
@@ -979,24 +940,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_gemini_total_tokens() {
-        let temp_dir = TempDir::new().unwrap();
-        let transcript_file = temp_dir.path().join("session.json");
-
-        {
-            let mut f = fs::File::create(&transcript_file).unwrap();
-            writeln!(
-                f,
-                r#"{{"messages": [{{"tokens": {{"input": 100, "output": 50, "thoughts": 25}}}}, {{"tokens": {{"input": 200, "output": 100, "thoughts": 50}}}}]}}"#
-            )
-            .unwrap();
-        }
-
-        let tokens = parse_transcript_total_tokens(&transcript_file, AgentKind::Gemini);
-        assert_eq!(tokens, Some(525)); // 100 + 50 + 25 + 200 + 100 + 50
-    }
-
-    #[test]
     fn test_parse_transcript_total_tokens_dispatches_correctly() {
         let temp_dir = TempDir::new().unwrap();
 
@@ -1025,19 +968,6 @@ mod tests {
         }
         let tokens = parse_transcript_total_tokens(&codex_file, AgentKind::Codex);
         assert_eq!(tokens, Some(300)); // 200 + 100
-
-        // Test Gemini dispatch
-        let gemini_file = temp_dir.path().join("gemini.json");
-        {
-            let mut f = fs::File::create(&gemini_file).unwrap();
-            writeln!(
-                f,
-                r#"{{"messages": [{{"tokens": {{"input": 200, "output": 100}}}}]}}"#
-            )
-            .unwrap();
-        }
-        let tokens = parse_transcript_total_tokens(&gemini_file, AgentKind::Gemini);
-        assert_eq!(tokens, Some(300));
     }
 
     #[test]

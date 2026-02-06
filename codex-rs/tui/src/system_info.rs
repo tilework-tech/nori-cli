@@ -151,7 +151,7 @@ impl SystemInfo {
 ///
 /// Uses first-message matching for accurate transcript identification.
 /// For Claude Code, the first_message is required to find the correct transcript.
-/// For other agents (Codex, Gemini), the first_message is ignored.
+/// For other agents (Codex), the first_message is ignored.
 fn discover_transcript(
     dir: &std::path::Path,
     agent_kind: Option<AgentKind>,

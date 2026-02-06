@@ -33,7 +33,6 @@ const NORI_HEADER_MAX_INNER_WIDTH: usize = 60;
 pub enum AgentKindSimple {
     Claude,
     Codex,
-    Gemini,
 }
 
 /// Represents an instruction file with its activation status.
@@ -55,8 +54,6 @@ fn detect_agent_kind(agent: &str) -> Option<AgentKindSimple> {
         Some(AgentKindSimple::Claude)
     } else if lower.starts_with("codex") {
         Some(AgentKindSimple::Codex)
-    } else if lower.starts_with("gemini") {
-        Some(AgentKindSimple::Gemini)
     } else {
         None
     }
@@ -151,7 +148,6 @@ fn discover_all_instruction_files_with_home(
             ("CLAUDE.local.md", true),
             ("AGENTS.md", true),
             ("AGENTS.override.md", true),
-            ("GEMINI.md", true),
         ];
 
         for (filename, _) in candidates {
@@ -178,7 +174,6 @@ fn discover_all_instruction_files_with_home(
     // These are user-level configs that apply globally:
     // - ~/.claude/CLAUDE.md for Claude
     // - ~/.codex/AGENTS.md for Codex
-    // - ~/.gemini/GEMINI.md for Gemini
     let mut home_configs: Vec<(PathBuf, PathBuf)> = Vec::new();
     if let Some(home) = home_dir {
         // Check for Claude home config: ~/.claude/CLAUDE.md
@@ -191,12 +186,6 @@ fn discover_all_instruction_files_with_home(
         let codex_home = home.join(".codex").join("AGENTS.md");
         if codex_home.is_file() {
             home_configs.push((codex_home, home.join(".codex")));
-        }
-
-        // Check for Gemini home config: ~/.gemini/GEMINI.md
-        let gemini_home = home.join(".gemini").join("GEMINI.md");
-        if gemini_home.is_file() {
-            home_configs.push((gemini_home, home.join(".gemini")));
         }
     }
 
@@ -228,10 +217,6 @@ fn discover_all_instruction_files_with_home(
                 } else {
                     false
                 }
-            }
-            Some(AgentKindSimple::Gemini) => {
-                // Gemini activates: only GEMINI.md (no hidden, no overrides)
-                filename == "GEMINI.md"
             }
             None => {
                 // Unknown agent: nothing is active
@@ -930,18 +915,7 @@ mod tests {
             Some(AgentKindSimple::Codex)
         );
 
-        // Test Gemini variants
-        assert_eq!(detect_agent_kind("gemini"), Some(AgentKindSimple::Gemini));
-        assert_eq!(
-            detect_agent_kind("gemini-cli"),
-            Some(AgentKindSimple::Gemini)
-        );
-        assert_eq!(
-            detect_agent_kind("gemini-2.0-flash"),
-            Some(AgentKindSimple::Gemini)
-        );
-
-        // Test unknown
+        // Test unknown (gemini is no longer a built-in agent kind)
         assert_eq!(detect_agent_kind("gpt-4"), None);
         assert_eq!(detect_agent_kind("unknown-model"), None);
     }
@@ -956,7 +930,6 @@ mod tests {
         //   .claude/CLAUDE.md
         //   AGENTS.md
         //   AGENTS.override.md
-        //   GEMINI.md
         let tmp = TempDir::new().expect("tempdir");
         let root = tmp.path();
 
@@ -972,11 +945,10 @@ mod tests {
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
         fs::write(root.join("AGENTS.override.md"), "agents override")
             .expect("write AGENTS.override.md");
-        fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
 
         let files = discover_all_instruction_files_with_home(root, None, None);
 
-        // Should find all 7 files
+        // Should find all 6 files
         let paths: Vec<String> = files
             .iter()
             .map(|f| f.path.file_name().unwrap().to_string_lossy().to_string())
@@ -1001,10 +973,6 @@ mod tests {
         assert!(
             paths.contains(&"AGENTS.override.md".to_string()),
             "Should find AGENTS.override.md"
-        );
-        assert!(
-            paths.contains(&"GEMINI.md".to_string()),
-            "Should find GEMINI.md"
         );
 
         // Check we found the hidden variant by checking full path
@@ -1031,7 +999,6 @@ mod tests {
         fs::write(root.join(".claude/CLAUDE.md"), "hidden claude")
             .expect("write .claude/CLAUDE.md");
         fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
-        fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
 
         // Use None home to avoid picking up real home directory configs
         let files =
@@ -1051,7 +1018,7 @@ mod tests {
             assert!(f.active, "Claude file {:?} should be active", f.path);
         }
 
-        // AGENTS.md and GEMINI.md should NOT be active
+        // AGENTS.md should NOT be active
         let agents_file = files
             .iter()
             .find(|f| f.path.file_name().unwrap().to_string_lossy() == "AGENTS.md")
@@ -1059,15 +1026,6 @@ mod tests {
         assert!(
             !agents_file.active,
             "AGENTS.md should NOT be active for Claude agent"
-        );
-
-        let gemini_file = files
-            .iter()
-            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "GEMINI.md")
-            .expect("Should find GEMINI.md");
-        assert!(
-            !gemini_file.active,
-            "GEMINI.md should NOT be active for Claude agent"
         );
     }
 
@@ -1134,35 +1092,6 @@ mod tests {
             agents_file.active,
             "AGENTS.md should be active when no override exists"
         );
-    }
-
-    #[test]
-    fn gemini_activation_only_activates_gemini_files() {
-        // Gemini should only activate GEMINI.md files (no hidden variants, no overrides)
-        let tmp = TempDir::new().expect("tempdir");
-        let root = tmp.path();
-
-        fs::write(root.join(".git"), "gitdir").expect("write .git");
-        fs::write(root.join("GEMINI.md"), "gemini").expect("write GEMINI.md");
-        fs::write(root.join("CLAUDE.md"), "claude").expect("write CLAUDE.md");
-        fs::write(root.join("AGENTS.md"), "agents").expect("write AGENTS.md");
-
-        let files =
-            discover_all_instruction_files_with_home(root, Some(AgentKindSimple::Gemini), None);
-
-        let gemini_file = files
-            .iter()
-            .find(|f| f.path.file_name().unwrap().to_string_lossy() == "GEMINI.md")
-            .expect("Should find GEMINI.md");
-        assert!(gemini_file.active, "GEMINI.md should be active");
-
-        // Other files should NOT be active
-        for f in &files {
-            let name = f.path.file_name().unwrap().to_string_lossy();
-            if name != "GEMINI.md" {
-                assert!(!f.active, "{name} should NOT be active for Gemini agent");
-            }
-        }
     }
 
     #[test]
@@ -1341,46 +1270,6 @@ mod tests {
         assert!(
             home_file.active,
             "Home AGENTS.md should be active for Codex"
-        );
-    }
-
-    #[test]
-    fn discover_finds_gemini_home_config() {
-        // Test that discovery finds ~/.gemini/GEMINI.md for Gemini agents
-        let tmp = TempDir::new().expect("tempdir");
-        let fake_home = tmp.path().join("fake_home");
-        let project = tmp.path().join("project");
-
-        // Create fake home with .gemini/GEMINI.md
-        fs::create_dir_all(fake_home.join(".gemini")).expect("create .gemini");
-        fs::write(fake_home.join(".gemini/GEMINI.md"), "user gemini config")
-            .expect("write user GEMINI.md");
-
-        // Create project with .git
-        fs::create_dir_all(&project).expect("create project");
-        fs::write(project.join(".git"), "gitdir").expect("write .git");
-
-        // Discover files with custom home
-        let files = discover_all_instruction_files_with_home(
-            &project,
-            Some(AgentKindSimple::Gemini),
-            Some(&fake_home),
-        );
-
-        // Should find the home config
-        let has_home_config = files
-            .iter()
-            .any(|f| f.path.to_string_lossy().contains(".gemini/GEMINI.md"));
-        assert!(has_home_config, "Should find ~/.gemini/GEMINI.md");
-
-        // Home config should be active for Gemini
-        let home_file = files
-            .iter()
-            .find(|f| f.path.to_string_lossy().contains(".gemini/GEMINI.md"))
-            .expect("Should find home GEMINI.md");
-        assert!(
-            home_file.active,
-            "Home GEMINI.md should be active for Gemini"
         );
     }
 

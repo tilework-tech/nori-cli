@@ -73,7 +73,7 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
 | `worktree_cleanup_warning` | Warning when git worktrees exist and disk space is below 10% free (unix only) |
 
-The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
+The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code or Codex.
 
 Two collection methods are provided:
 - `collect_for_directory()` - Basic collection without first-message matching (test-only)

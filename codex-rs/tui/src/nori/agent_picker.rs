@@ -5,8 +5,10 @@
 //! on the next prompt submission to avoid disrupting active prompt turns.
 
 use codex_acp::AcpAgentInfo;
+use codex_acp::CustomAgentConfig;
 use codex_acp::list_available_agents;
 use ratatui::text::Line;
+use std::collections::HashMap;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -21,7 +23,7 @@ use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct PendingAgentSelection {
-    /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
+    /// The model name of the selected agent (e.g., "mock-model", "claude-code")
     pub model_name: String,
     /// The display name for the status indicator
     pub display_name: String,
@@ -35,8 +37,9 @@ pub struct PendingAgentSelection {
 pub fn agent_picker_params(
     current_model: &str,
     _app_event_tx: AppEventSender,
+    custom_agents: &HashMap<String, CustomAgentConfig>,
 ) -> SelectionViewParams {
-    let available_agents = list_available_agents();
+    let available_agents = list_available_agents(custom_agents);
     let current_normalized = current_model.to_lowercase();
 
     let items: Vec<SelectionItem> = available_agents
@@ -178,9 +181,12 @@ pub fn acp_model_picker_params_with_models(
 
 /// Get information about an agent by model name
 #[allow(dead_code)]
-pub fn get_agent_info(model_name: &str) -> Option<AcpAgentInfo> {
+pub fn get_agent_info(
+    model_name: &str,
+    custom_agents: &HashMap<String, CustomAgentConfig>,
+) -> Option<AcpAgentInfo> {
     let normalized = model_name.to_lowercase();
-    list_available_agents()
+    list_available_agents(custom_agents)
         .into_iter()
         .find(|agent| agent.model_name.to_lowercase() == normalized)
 }
@@ -196,7 +202,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params = agent_picker_params("mock-model", tx);
+        let params = agent_picker_params("mock-model", tx, &HashMap::new());
 
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Select Agent"));
@@ -219,14 +225,14 @@ mod tests {
 
     #[test]
     fn test_get_agent_info() {
-        let info = get_agent_info("mock-model");
+        let info = get_agent_info("mock-model", &HashMap::new());
         assert!(info.is_some());
         assert_eq!(info.unwrap().display_name, "Mock ACP");
 
-        let info = get_agent_info("Mock-Model"); // Case insensitive
+        let info = get_agent_info("Mock-Model", &HashMap::new()); // Case insensitive
         assert!(info.is_some());
 
-        let info = get_agent_info("unknown-agent");
+        let info = get_agent_info("unknown-agent", &HashMap::new());
         assert!(info.is_none());
     }
 }

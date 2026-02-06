@@ -4,13 +4,15 @@
 //! Configuration is loaded from `~/.nori/cli/config.toml`.
 
 mod loader;
-mod types;
+pub mod types;
 
 pub use loader::CONFIG_FILE;
 pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
+pub use types::AgentDistribution;
 pub use types::ApprovalPolicy;
+pub use types::CustomAgentConfig;
 pub use types::DEFAULT_MODEL;
 pub use types::FooterSegment;
 pub use types::FooterSegmentConfig;

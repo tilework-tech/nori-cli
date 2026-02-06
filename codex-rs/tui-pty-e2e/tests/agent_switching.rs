@@ -862,21 +862,20 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
 // Test: Agent Picker Shows Correct Agents (Debug Build)
 // ============================================================================
 
-/// Test that the agent picker shows all 5 agents in debug build.
+/// Test that the agent picker shows all 4 agents in debug build.
 ///
 /// In debug builds, the agent picker should show:
 /// - Mock ACP (mock agent for testing)
 /// - Mock ACP Alt (alternate mock agent for testing)
 /// - Claude Code (Anthropic)
 /// - Codex (OpenAI)
-/// - Gemini (Google)
 ///
-/// Note: In release builds, only the 3 production agents (Claude, Codex, Gemini)
+/// Note: In release builds, only the 2 production agents (Claude, Codex)
 /// would be shown. This test validates the debug build behavior.
 #[test]
 #[cfg(target_os = "linux")]
 #[cfg(debug_assertions)]
-fn test_agent_picker_shows_five_agents_in_debug_build() {
+fn test_agent_picker_shows_four_agents_in_debug_build() {
     let config = SessionConfig::new().with_model("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
@@ -903,7 +902,7 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
     // Get screen contents to verify all agents are present
     let screen = session.screen_contents();
 
-    // Verify all 5 agents are shown in debug build
+    // Verify all 4 agents are shown in debug build
     // The display names should NOT include model versions (e.g., "Claude" not "Claude 4.5")
     assert!(
         screen.contains("Mock ACP"),
@@ -925,15 +924,10 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
         "Agent picker should show 'Codex', got: {}",
         screen
     );
-    assert!(
-        screen.contains("Gemini") && !screen.contains("Gemini 2.5"),
-        "Agent picker should show 'Gemini' without model version, got: {}",
-        screen
-    );
 
     // Count agents by looking for unique agent entries
     // Each agent line should be distinct in the picker
-    let agent_count = ["Mock ACP Alt", "Claude", "Codex", "Gemini"]
+    let agent_count = ["Mock ACP Alt", "Claude", "Codex"]
         .iter()
         .filter(|name| screen.contains(*name))
         .count()
@@ -943,10 +937,10 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
             0
         };
 
-    // We should see all 5 agents
+    // We should see all 4 agents
     assert!(
-        agent_count >= 4, // At minimum Claude, Codex, Gemini, and one of the Mocks
-        "Expected at least 4 distinct agents in picker, found approximately: {}. Screen: {}",
+        agent_count >= 3, // At minimum Claude, Codex, and one of the Mocks
+        "Expected at least 3 distinct agents in picker, found approximately: {}. Screen: {}",
         agent_count,
         screen
     );

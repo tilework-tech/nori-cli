@@ -1524,9 +1524,14 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
+                model_display_name: {
+                    let custom_agents = codex_acp::config::NoriConfig::load()
+                        .unwrap_or_default()
+                        .agents;
+                    crate::nori::agent_picker::get_agent_info(&config.model, &custom_agents)
+                        .map(|info| info.display_name)
+                        .unwrap_or_else(|| config.model.clone())
+                },
             }),
             active_cell: None,
             config: config.clone(),
@@ -1616,9 +1621,14 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
+                model_display_name: {
+                    let custom_agents = codex_acp::config::NoriConfig::load()
+                        .unwrap_or_default()
+                        .agents;
+                    crate::nori::agent_picker::get_agent_info(&config.model, &custom_agents)
+                        .map(|info| info.display_name)
+                        .unwrap_or_else(|| config.model.clone())
+                },
             }),
             active_cell: None,
             config: config.clone(),
@@ -1714,9 +1724,14 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
+                model_display_name: {
+                    let custom_agents = codex_acp::config::NoriConfig::load()
+                        .unwrap_or_default()
+                        .agents;
+                    crate::nori::agent_picker::get_agent_info(&config.model, &custom_agents)
+                        .map(|info| info.display_name)
+                        .unwrap_or_else(|| config.model.clone())
+                },
             }),
             active_cell: None,
             config: config.clone(),
@@ -2613,9 +2628,13 @@ impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
+        let custom_agents = codex_acp::config::NoriConfig::load()
+            .unwrap_or_default()
+            .agents;
         let params = crate::nori::agent_picker::agent_picker_params(
             &current_model,
             self.app_event_tx.clone(),
+            &custom_agents,
         );
         self.bottom_pane.show_selection_view(params);
     }
@@ -2919,7 +2938,10 @@ impl ChatWidget {
 
         // Check if we're in ACP mode by checking if the current model is registered
         // in the ACP agent registry
-        if codex_acp::get_agent_config(&current_model).is_ok() {
+        let custom_agents = codex_acp::config::NoriConfig::load()
+            .unwrap_or_default()
+            .agents;
+        if codex_acp::get_agent_config(&current_model, &custom_agents).is_ok() {
             #[cfg(feature = "unstable")]
             {
                 // ACP mode with unstable features - try to get model state from the agent
@@ -3713,7 +3735,10 @@ impl ChatWidget {
         self.session_header.set_model(model);
         self.config.model = model.to_string();
         // Update the bottom pane's model display name for approval dialogs
-        let display_name = crate::nori::agent_picker::get_agent_info(model)
+        let custom_agents = codex_acp::config::NoriConfig::load()
+            .unwrap_or_default()
+            .agents;
+        let display_name = crate::nori::agent_picker::get_agent_info(model, &custom_agents)
             .map(|info| info.display_name)
             .unwrap_or_else(|| model.to_string());
         self.bottom_pane.set_model_display_name(display_name);
@@ -3780,7 +3805,10 @@ impl ChatWidget {
             .map(|p| p.model_name.as_str())
             .unwrap_or(&self.config.model);
 
-        match LoginHandler::check_agent_support(model_name) {
+        let custom_agents = codex_acp::config::NoriConfig::load()
+            .unwrap_or_default()
+            .agents;
+        match LoginHandler::check_agent_support(model_name, &custom_agents) {
             AgentLoginSupport::Supported {
                 agent,
                 is_installed,
@@ -3863,7 +3891,10 @@ impl ChatWidget {
 
     /// Handle the /login <agent> command with explicit agent name
     fn handle_login_command_with_agent(&mut self, agent_name: &str) {
-        match LoginHandler::check_agent_support(agent_name) {
+        let custom_agents = codex_acp::config::NoriConfig::load()
+            .unwrap_or_default()
+            .agents;
+        match LoginHandler::check_agent_support(agent_name, &custom_agents) {
             AgentLoginSupport::Supported {
                 agent,
                 is_installed,
@@ -3987,7 +4018,7 @@ impl ChatWidget {
         }
     }
 
-    /// Start the external CLI login flow (e.g., gemini login)
+    /// Start the external CLI login flow (e.g., external agent login)
     #[cfg(feature = "login")]
     fn start_external_cli_login_flow(
         &mut self,

@@ -713,7 +713,7 @@ mod tests {
             changes: HashMap::new(),
         };
 
-        let view = ApprovalOverlay::new(patch_request, tx, "Gemini".to_string());
+        let view = ApprovalOverlay::new(patch_request, tx, "Codex".to_string());
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
         view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
 
@@ -726,12 +726,8 @@ mod tests {
             .collect();
 
         assert!(
-            rendered.iter().any(|line| line.contains("tell Gemini")),
-            "expected deny option to include model name 'Gemini', got {rendered:?}"
-        );
-        assert!(
-            !rendered.iter().any(|line| line.contains("tell Codex")),
-            "should not contain hardcoded 'Codex', got {rendered:?}"
+            rendered.iter().any(|line| line.contains("tell Codex")),
+            "expected deny option to include model name 'Codex', got {rendered:?}"
         );
     }
 

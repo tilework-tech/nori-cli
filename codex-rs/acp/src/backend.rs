@@ -174,6 +174,9 @@ pub struct AcpBackendConfig {
     pub session_end_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     pub script_timeout: std::time::Duration,
+    /// Custom ACP agent configurations from user config
+    #[allow(dead_code)]
+    pub custom_agents: std::collections::HashMap<String, crate::config::types::CustomAgentConfig>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -241,7 +244,7 @@ impl AcpBackend {
     /// # Returns
     /// A connected `AcpBackend` ready to receive operations.
     pub async fn spawn(config: &AcpBackendConfig, event_tx: mpsc::Sender<Event>) -> Result<Self> {
-        let agent_config = get_agent_config(&config.model)?;
+        let agent_config = get_agent_config(&config.model, &config.custom_agents)?;
         let cwd = config.cwd.clone();
 
         debug!("Spawning ACP backend for model: {}", config.model);
@@ -263,8 +266,8 @@ impl AcpBackend {
                     &display_error,
                     &agent_config.provider_info.name,
                     &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
+                    agent_config.agent.map_or("Unknown", |a| a.display_name()),
+                    agent_config.agent.map_or("", |a| a.npm_package()),
                 );
 
                 return Err(anyhow::anyhow!(enhanced_message));
@@ -287,8 +290,8 @@ impl AcpBackend {
                     &display_error,
                     &agent_config.provider_info.name,
                     &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
+                    agent_config.agent.map_or("Unknown", |a| a.display_name()),
+                    agent_config.agent.map_or("", |a| a.npm_package()),
                 );
 
                 return Err(anyhow::anyhow!(enhanced_message));
@@ -420,7 +423,7 @@ impl AcpBackend {
         transcript: Option<&crate::transcript::Transcript>,
         event_tx: mpsc::Sender<Event>,
     ) -> Result<Self> {
-        let agent_config = get_agent_config(&config.model)?;
+        let agent_config = get_agent_config(&config.model, &config.custom_agents)?;
         let cwd = config.cwd.clone();
 
         debug!(
@@ -439,8 +442,8 @@ impl AcpBackend {
                     &display_error,
                     &agent_config.provider_info.name,
                     &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
+                    agent_config.agent.map_or("Unknown", |a| a.display_name()),
+                    agent_config.agent.map_or("", |a| a.npm_package()),
                 ))
             })?;
 
@@ -482,8 +485,8 @@ impl AcpBackend {
                             &display_error,
                             &agent_config.provider_info.name,
                             &agent_config.auth_hint,
-                            agent_config.agent.display_name(),
-                            agent_config.agent.npm_package(),
+                            agent_config.agent.map_or("Unknown", |a| a.display_name()),
+                            agent_config.agent.map_or("", |a| a.npm_package()),
                         ))
                     })?;
 
@@ -503,8 +506,8 @@ impl AcpBackend {
                         &display_error,
                         &agent_config.provider_info.name,
                         &agent_config.auth_hint,
-                        agent_config.agent.display_name(),
-                        agent_config.agent.npm_package(),
+                        agent_config.agent.map_or("Unknown", |a| a.display_name()),
+                        agent_config.agent.map_or("", |a| a.npm_package()),
                     ))
                 })?;
 
@@ -1495,7 +1498,7 @@ async fn run_prompt_summary(
     use tokio::time::Duration;
     use tokio::time::timeout;
 
-    let agent_config = get_agent_config(model_name)?;
+    let agent_config = get_agent_config(model_name, &std::collections::HashMap::new())?;
     let connection = AcpConnection::spawn(&agent_config, cwd).await?;
     let session_id = connection.create_session(cwd).await?;
 
@@ -3312,10 +3315,10 @@ mod tests {
         let enhanced = enhanced_error_message(
             AcpErrorCategory::ExecutableNotFound,
             "npx: command not found",
-            "Gemini ACP",
-            AgentKind::Gemini.auth_hint(),
-            AgentKind::Gemini.display_name(),
-            AgentKind::Gemini.npm_package(),
+            "Claude Code ACP",
+            AgentKind::ClaudeCode.auth_hint(),
+            AgentKind::ClaudeCode.display_name(),
+            AgentKind::ClaudeCode.npm_package(),
         );
 
         assert!(
@@ -3353,8 +3356,9 @@ mod tests {
     #[serial]
     async fn test_mock_agent_auth_failure_produces_actionable_error() {
         // Get the mock agent config to check if the binary exists
-        let mock_config = crate::registry::get_agent_config("mock-model")
-            .expect("mock-model should be registered");
+        let mock_config =
+            crate::registry::get_agent_config("mock-model", &std::collections::HashMap::new())
+                .expect("mock-model should be registered");
 
         // Check if mock agent binary exists
         if !std::path::Path::new(&mock_config.command).exists() {
@@ -3391,6 +3395,7 @@ mod tests {
             session_start_hooks: vec![],
             session_end_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
+            custom_agents: std::collections::HashMap::new(),
         };
 
         let result = AcpBackend::spawn(&config, event_tx).await;
@@ -3545,8 +3550,9 @@ mod tests {
         use std::time::Duration;
 
         // Get the mock agent config to check if the binary exists
-        let mock_config = crate::registry::get_agent_config("mock-model")
-            .expect("mock-model should be registered");
+        let mock_config =
+            crate::registry::get_agent_config("mock-model", &std::collections::HashMap::new())
+                .expect("mock-model should be registered");
 
         // Check if mock agent binary exists
         if !std::path::Path::new(&mock_config.command).exists() {
@@ -3576,6 +3582,7 @@ mod tests {
             session_start_hooks: vec![],
             session_end_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
+            custom_agents: std::collections::HashMap::new(),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -3664,8 +3671,9 @@ mod tests {
         use std::time::Duration;
 
         // Get the mock agent config to check if the binary exists
-        let mock_config = crate::registry::get_agent_config("mock-model")
-            .expect("mock-model should be registered");
+        let mock_config =
+            crate::registry::get_agent_config("mock-model", &std::collections::HashMap::new())
+                .expect("mock-model should be registered");
 
         // Check if mock agent binary exists
         if !std::path::Path::new(&mock_config.command).exists() {
@@ -3695,6 +3703,7 @@ mod tests {
             session_start_hooks: vec![],
             session_end_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
+            custom_agents: std::collections::HashMap::new(),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
@@ -3805,8 +3814,9 @@ mod tests {
         use std::time::Duration;
 
         // Get the mock agent config to check if the binary exists
-        let mock_config = crate::registry::get_agent_config("mock-model")
-            .expect("mock-model should be registered");
+        let mock_config =
+            crate::registry::get_agent_config("mock-model", &std::collections::HashMap::new())
+                .expect("mock-model should be registered");
 
         // Check if mock agent binary exists
         if !std::path::Path::new(&mock_config.command).exists() {
@@ -3836,6 +3846,7 @@ mod tests {
             session_start_hooks: vec![],
             session_end_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
+            custom_agents: std::collections::HashMap::new(),
         };
 
         let backend = AcpBackend::spawn(&config, event_tx)
