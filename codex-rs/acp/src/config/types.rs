@@ -687,6 +687,8 @@ pub enum FooterSegment {
     VimMode,
     /// Git branch: "⎇ branch-name"
     GitBranch,
+    /// Worktree name: "Worktree: name"
+    WorktreeName,
     /// Git stats: "+10 -3"
     GitStats,
     /// Context window: "Context: 34K (27%)"
@@ -708,6 +710,7 @@ impl FooterSegment {
             Self::PromptSummary => "Task Summary",
             Self::VimMode => "Vim Mode",
             Self::GitBranch => "Git Branch",
+            Self::WorktreeName => "Worktree Name",
             Self::GitStats => "Git Stats",
             Self::Context => "Context Window",
             Self::ApprovalMode => "Approvals",
@@ -723,6 +726,7 @@ impl FooterSegment {
             Self::PromptSummary => "prompt_summary",
             Self::VimMode => "vim_mode",
             Self::GitBranch => "git_branch",
+            Self::WorktreeName => "worktree_name",
             Self::GitStats => "git_stats",
             Self::Context => "context",
             Self::ApprovalMode => "approval_mode",
@@ -738,6 +742,7 @@ impl FooterSegment {
             Self::PromptSummary,
             Self::VimMode,
             Self::GitBranch,
+            Self::WorktreeName,
             Self::GitStats,
             Self::Context,
             Self::ApprovalMode,
@@ -770,6 +775,8 @@ pub struct FooterSegmentConfigToml {
     pub vim_mode: Option<bool>,
     /// Enable/disable git branch segment.
     pub git_branch: Option<bool>,
+    /// Enable/disable worktree name segment.
+    pub worktree_name: Option<bool>,
     /// Enable/disable git stats segment.
     pub git_stats: Option<bool>,
     /// Enable/disable context window segment.
@@ -793,6 +800,8 @@ pub struct FooterSegmentConfig {
     pub vim_mode: bool,
     /// Enable/disable git branch segment.
     pub git_branch: bool,
+    /// Enable/disable worktree name segment.
+    pub worktree_name: bool,
     /// Enable/disable git stats segment.
     pub git_stats: bool,
     /// Enable/disable context window segment.
@@ -813,6 +822,7 @@ impl Default for FooterSegmentConfig {
             prompt_summary: true,
             vim_mode: true,
             git_branch: true,
+            worktree_name: true,
             git_stats: true,
             context: true,
             approval_mode: true,
@@ -830,6 +840,7 @@ impl FooterSegmentConfig {
             prompt_summary: toml.prompt_summary.unwrap_or(true),
             vim_mode: toml.vim_mode.unwrap_or(true),
             git_branch: toml.git_branch.unwrap_or(true),
+            worktree_name: toml.worktree_name.unwrap_or(true),
             git_stats: toml.git_stats.unwrap_or(true),
             context: toml.context.unwrap_or(true),
             approval_mode: toml.approval_mode.unwrap_or(true),
@@ -845,6 +856,7 @@ impl FooterSegmentConfig {
             FooterSegment::PromptSummary => self.prompt_summary,
             FooterSegment::VimMode => self.vim_mode,
             FooterSegment::GitBranch => self.git_branch,
+            FooterSegment::WorktreeName => self.worktree_name,
             FooterSegment::GitStats => self.git_stats,
             FooterSegment::Context => self.context,
             FooterSegment::ApprovalMode => self.approval_mode,
@@ -860,6 +872,7 @@ impl FooterSegmentConfig {
             FooterSegment::PromptSummary => self.prompt_summary = enabled,
             FooterSegment::VimMode => self.vim_mode = enabled,
             FooterSegment::GitBranch => self.git_branch = enabled,
+            FooterSegment::WorktreeName => self.worktree_name = enabled,
             FooterSegment::GitStats => self.git_stats = enabled,
             FooterSegment::Context => self.context = enabled,
             FooterSegment::ApprovalMode => self.approval_mode = enabled,
@@ -2090,6 +2103,9 @@ script_timeout = "2m"
         let w: Wrapper = toml::from_str(r#"segment = "git_branch""#).unwrap();
         assert_eq!(w.segment, FooterSegment::GitBranch);
 
+        let w: Wrapper = toml::from_str(r#"segment = "worktree_name""#).unwrap();
+        assert_eq!(w.segment, FooterSegment::WorktreeName);
+
         let w: Wrapper = toml::from_str(r#"segment = "git_stats""#).unwrap();
         assert_eq!(w.segment, FooterSegment::GitStats);
 
@@ -2133,6 +2149,7 @@ script_timeout = "2m"
         assert_eq!(FooterSegment::PromptSummary.display_name(), "Task Summary");
         assert_eq!(FooterSegment::VimMode.display_name(), "Vim Mode");
         assert_eq!(FooterSegment::GitBranch.display_name(), "Git Branch");
+        assert_eq!(FooterSegment::WorktreeName.display_name(), "Worktree Name");
         assert_eq!(FooterSegment::GitStats.display_name(), "Git Stats");
         assert_eq!(FooterSegment::Context.display_name(), "Context Window");
         assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approvals");
@@ -2146,17 +2163,22 @@ script_timeout = "2m"
 
     #[test]
     fn test_footer_segment_all_variants() {
-        let variants = FooterSegment::all_variants();
-        assert_eq!(variants.len(), 9);
-        assert_eq!(variants[0], FooterSegment::PromptSummary);
-        assert_eq!(variants[1], FooterSegment::VimMode);
-        assert_eq!(variants[2], FooterSegment::GitBranch);
-        assert_eq!(variants[3], FooterSegment::GitStats);
-        assert_eq!(variants[4], FooterSegment::Context);
-        assert_eq!(variants[5], FooterSegment::ApprovalMode);
-        assert_eq!(variants[6], FooterSegment::NoriProfile);
-        assert_eq!(variants[7], FooterSegment::NoriVersion);
-        assert_eq!(variants[8], FooterSegment::TokenUsage);
+        use pretty_assertions::assert_eq;
+        assert_eq!(
+            FooterSegment::all_variants(),
+            &[
+                FooterSegment::PromptSummary,
+                FooterSegment::VimMode,
+                FooterSegment::GitBranch,
+                FooterSegment::WorktreeName,
+                FooterSegment::GitStats,
+                FooterSegment::Context,
+                FooterSegment::ApprovalMode,
+                FooterSegment::NoriProfile,
+                FooterSegment::NoriVersion,
+                FooterSegment::TokenUsage,
+            ]
+        );
     }
 
     #[test]

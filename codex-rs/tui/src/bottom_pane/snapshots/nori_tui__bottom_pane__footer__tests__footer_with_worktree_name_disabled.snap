@@ -1,0 +1,5 @@
+---
+source: tui/src/bottom_pane/footer.rs
+expression: terminal.backend()
+---
+"  ⎇ auto/fix-auth-bug-20260205 · Skillset: clifford · ? for shortcuts           "

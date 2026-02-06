@@ -336,8 +336,10 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         segments.push(line);
     }
 
-    // Add worktree directory name if available: "Worktree: name" (light red)
-    if let Some(name) = &props.worktree_name {
+    // Add worktree directory name if available and enabled: "Worktree: name" (light red)
+    if config.is_enabled(FooterSegment::WorktreeName)
+        && let Some(name) = &props.worktree_name
+    {
         #[allow(clippy::disallowed_methods)]
         segments.push(Line::from(vec![
             Span::from("Worktree: ").light_red(),
@@ -962,6 +964,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn footer_with_worktree_name_disabled() {
+        let mut segment_config = FooterSegmentConfig::default();
+        segment_config.worktree_name = false;
+
+        snapshot_footer(
+            "footer_with_worktree_name_disabled",
+            FooterProps {
+                git_branch: Some("auto/fix-auth-bug-20260205".to_string()),
+                is_worktree: true,
+                worktree_name: Some("good-ash-20260205-204831".to_string()),
+                nori_profile: Some("clifford".to_string()),
+                footer_segment_config: segment_config,
+                ..default_props()
+            },
+        );
+    }
+
     // ========================================================================
     // Footer Segment Config Tests
     // ========================================================================
@@ -1014,6 +1034,7 @@ mod tests {
         segment_config.prompt_summary = false;
         segment_config.vim_mode = false;
         segment_config.git_branch = false;
+        segment_config.worktree_name = false;
         segment_config.git_stats = false;
         segment_config.context = false;
         segment_config.approval_mode = false;
@@ -1034,6 +1055,8 @@ mod tests {
                 nori_version: Some("19.1.1".to_string()),
                 input_tokens: Some(20000),
                 output_tokens: Some(14000),
+                is_worktree: true,
+                worktree_name: Some("good-ash-20260205-204831".to_string()),
                 footer_segment_config: segment_config,
                 ..default_props()
             },
