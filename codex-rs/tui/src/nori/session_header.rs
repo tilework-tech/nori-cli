@@ -1348,6 +1348,10 @@ mod tests {
             directory: PathBuf::from("/home/user/project"),
             nori_profile: None,
             instruction_files: files,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
         };
 
         let lines = cell.display_lines(80);
