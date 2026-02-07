@@ -1253,17 +1253,13 @@ pub struct GitInfo {
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ExecCommandSource {
+    #[default]
     Agent,
     UserShell,
     UnifiedExecStartup,
     UnifiedExecInteraction,
-}
-
-impl Default for ExecCommandSource {
-    fn default() -> Self {
-        Self::Agent
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
