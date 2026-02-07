@@ -18,16 +18,12 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// Install source detection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum InstallSource {
     Npm,
     Bun,
+    #[default]
     Unknown,
-}
-
-impl Default for InstallSource {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// The install state stored in `.nori-install.json`

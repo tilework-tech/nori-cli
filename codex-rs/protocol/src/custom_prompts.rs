@@ -14,18 +14,14 @@ pub const PROMPTS_CMD_PREFIX: &str = "prompts";
 /// executable script whose stdout becomes the prompt content.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum CustomPromptKind {
     /// A markdown template prompt.
+    #[default]
     Markdown,
     /// An executable script. `interpreter` is the command used to run it
     /// (e.g. `"bash"`, `"python3"`, `"node"`).
     Script { interpreter: String },
-}
-
-impl Default for CustomPromptKind {
-    fn default() -> Self {
-        Self::Markdown
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema, TS)]
