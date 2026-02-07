@@ -949,19 +949,15 @@ impl Default for TuiConfig {
 /// Approval policy for command execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum ApprovalPolicy {
     /// Always ask for approval
     Always,
     /// Ask on potentially dangerous operations
+    #[default]
     OnRequest,
     /// Never ask (dangerous)
     Never,
-}
-
-impl Default for ApprovalPolicy {
-    fn default() -> Self {
-        Self::OnRequest
-    }
 }
 
 /// CLI overrides for config values
