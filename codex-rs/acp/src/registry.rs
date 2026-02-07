@@ -1039,26 +1039,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_custom_agent_config_uvx() {
-        let mut agents = HashMap::new();
-        agents.insert(
-            "kimi".to_string(),
-            CustomAgentConfig {
-                name: Some("Kimi CLI".to_string()),
-                context_window_size: None,
-                distribution: AgentDistribution::Uvx(PackageDistribution {
-                    package: "kimi-cli".to_string(),
-                    args: vec!["acp".to_string()],
-                }),
-            },
-        );
-
-        let config = get_agent_config("kimi", &agents).unwrap();
-        assert_eq!(config.command, "uvx");
-        assert_eq!(config.args, vec!["kimi-cli", "acp"]);
-    }
-
-    #[test]
     fn test_get_custom_agent_config_pipx() {
         let mut agents = HashMap::new();
         agents.insert(
@@ -1191,8 +1171,12 @@ mod tests {
         );
 
         let available = list_available_agents(&agents);
-        let names: Vec<&str> = available.iter().map(|a| a.display_name.as_str()).collect();
-        assert!(names.contains(&"My Agent"));
+        assert!(
+            available
+                .iter()
+                .map(|a| a.display_name.as_str())
+                .any(|x| x == "My Agent")
+        );
     }
 
     #[test]

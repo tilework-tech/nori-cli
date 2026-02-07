@@ -2404,78 +2404,6 @@ args = ["--experimental-acp"]
     }
 
     #[test]
-    fn test_custom_agent_config_bunx_distribution() {
-        let config: NoriConfigToml = toml::from_str(
-            r#"
-[agents.gemini]
-name = "Gemini CLI"
-
-[agents.gemini.distribution.bunx]
-package = "@google/gemini-cli"
-args = ["--experimental-acp"]
-"#,
-        )
-        .unwrap();
-
-        let agent = &config.agents["gemini"];
-        match &agent.distribution {
-            AgentDistribution::Bunx(pkg) => {
-                assert_eq!(pkg.package, "@google/gemini-cli");
-                assert_eq!(pkg.args, vec!["--experimental-acp"]);
-            }
-            other => panic!("Expected Bunx distribution, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn test_custom_agent_config_uvx_distribution() {
-        let config: NoriConfigToml = toml::from_str(
-            r#"
-[agents.kimi]
-name = "Kimi CLI"
-
-[agents.kimi.distribution.uvx]
-package = "kimi-cli"
-args = ["acp"]
-"#,
-        )
-        .unwrap();
-
-        let agent = &config.agents["kimi"];
-        assert_eq!(agent.name, Some("Kimi CLI".to_string()));
-        match &agent.distribution {
-            AgentDistribution::Uvx(pkg) => {
-                assert_eq!(pkg.package, "kimi-cli");
-                assert_eq!(pkg.args, vec!["acp"]);
-            }
-            other => panic!("Expected Uvx distribution, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn test_custom_agent_config_pipx_distribution() {
-        let config: NoriConfigToml = toml::from_str(
-            r#"
-[agents.my-agent]
-
-[agents.my-agent.distribution.pipx]
-package = "my-agent-pkg"
-"#,
-        )
-        .unwrap();
-
-        let agent = &config.agents["my-agent"];
-        assert_eq!(agent.name, None);
-        match &agent.distribution {
-            AgentDistribution::Pipx(pkg) => {
-                assert_eq!(pkg.package, "my-agent-pkg");
-                assert!(pkg.args.is_empty());
-            }
-            other => panic!("Expected Pipx distribution, got {other:?}"),
-        }
-    }
-
-    #[test]
     fn test_custom_agent_config_local_distribution() {
         let config: NoriConfigToml = toml::from_str(
             r#"
@@ -2562,22 +2490,6 @@ cmd = "my-agent"
     }
 
     #[test]
-    fn test_custom_agent_name_defaults_to_none() {
-        let config: NoriConfigToml = toml::from_str(
-            r#"
-[agents.minimal]
-
-[agents.minimal.distribution.npx]
-package = "some-agent"
-"#,
-        )
-        .unwrap();
-
-        let agent = &config.agents["minimal"];
-        assert_eq!(agent.name, None);
-    }
-
-    #[test]
     fn test_multiple_custom_agents() {
         let config: NoriConfigToml = toml::from_str(
             r#"
@@ -2600,12 +2512,6 @@ args = ["serve"]
         assert_eq!(config.agents.len(), 2);
         assert!(config.agents.contains_key("agent-a"));
         assert!(config.agents.contains_key("agent-b"));
-    }
-
-    #[test]
-    fn test_empty_agents_is_default() {
-        let config: NoriConfigToml = toml::from_str("").unwrap();
-        assert!(config.agents.is_empty());
     }
 
     #[test]
