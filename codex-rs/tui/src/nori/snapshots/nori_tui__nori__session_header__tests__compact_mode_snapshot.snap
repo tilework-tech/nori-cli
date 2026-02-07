@@ -1,5 +1,6 @@
 ---
 source: tui/src/nori/session_header.rs
+assertion_line: 2117
 expression: rendered
 ---
 ╭──────────────────────────────────────────────────────────────╮
@@ -10,7 +11,6 @@ expression: rendered
 │ skillset:  senior-swe                                        │
 │                                                              │
 │ Instruction Files                                            │
-│   /home/user/project/AGENTS.md                               │
-│   /home/user/project/.claude/settings.md       ~2,450 tokens │
+│   /home/user/project/.claude/settings.md                     │
 │   total                                        ~2,450 tokens │
 ╰──────────────────────────────────────────────────────────────╯
