@@ -335,6 +335,17 @@ fn format_directory(directory: &Path, max_width: Option<usize>) -> String {
     formatted
 }
 
+/// Controls how much detail the instruction files section shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DisplayMode {
+    /// Session header at start: only active files listed (no per-file token counts),
+    /// with just the total token count at the bottom.
+    Compact,
+    /// /status command: all files listed (inactive shown dim), per-file token counts
+    /// for active files, and total at the bottom.
+    Full,
+}
+
 /// The Nori-branded session header cell.
 #[derive(Debug)]
 pub(crate) struct NoriSessionHeaderCell {
@@ -343,6 +354,7 @@ pub(crate) struct NoriSessionHeaderCell {
     directory: PathBuf,
     nori_profile: Option<String>,
     instruction_files: Vec<InstructionFile>,
+    display_mode: DisplayMode,
     /// Optional task summary (first prompt summary).
     prompt_summary: Option<String>,
     /// Optional approval mode label (e.g., "Agent", "Read Only", "Full Access").
@@ -367,11 +379,17 @@ impl NoriSessionHeaderCell {
             directory,
             nori_profile,
             instruction_files,
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
             context_window_percent: None,
         }
+    }
+
+    pub(crate) fn with_display_mode(mut self, mode: DisplayMode) -> Self {
+        self.display_mode = mode;
+        self
     }
 
     /// Create a new header cell with optional status card fields.
@@ -392,6 +410,7 @@ impl NoriSessionHeaderCell {
             directory,
             nori_profile,
             instruction_files,
+            display_mode: DisplayMode::Full,
             prompt_summary,
             approval_mode_label,
             token_breakdown,
@@ -470,27 +489,33 @@ impl HistoryCell for NoriSessionHeaderCell {
             for file in &self.instruction_files {
                 if file.active {
                     if let Some(tc) = &file.token_count {
-                        let tc_str = format_token_count(tc);
-                        // 2 for leading indent + 2 for gap between path and token count
-                        let path_budget = inner_width.saturating_sub(2 + 2 + tc_str.width());
-                        let path_str = format_directory(&file.path, Some(path_budget));
-                        let path_width = path_str.width();
-                        let gap = inner_width.saturating_sub(2 + path_width + tc_str.width());
-                        let padding = " ".repeat(gap);
-                        lines.push(Line::from(vec![
-                            Span::from(format!("  {path_str}{padding}")),
-                            Span::from(tc_str).dim(),
-                        ]));
                         total_count += tc.count;
                         if tc.approximate {
                             any_approximate = true;
+                        }
+                        if self.display_mode == DisplayMode::Full {
+                            let tc_str = format_token_count(tc);
+                            // 2 for leading indent + 2 for gap between path and token count
+                            let path_budget = inner_width.saturating_sub(2 + 2 + tc_str.width());
+                            let path_str = format_directory(&file.path, Some(path_budget));
+                            let path_width = path_str.width();
+                            let gap = inner_width.saturating_sub(2 + path_width + tc_str.width());
+                            let padding = " ".repeat(gap);
+                            lines.push(Line::from(vec![
+                                Span::from(format!("  {path_str}{padding}")),
+                                Span::from(tc_str).dim(),
+                            ]));
+                        } else {
+                            let path_str =
+                                format_directory(&file.path, Some(inner_width.saturating_sub(2)));
+                            lines.push(Line::from(format!("  {path_str}")));
                         }
                     } else {
                         let path_str =
                             format_directory(&file.path, Some(inner_width.saturating_sub(2)));
                         lines.push(Line::from(format!("  {path_str}")));
                     }
-                } else {
+                } else if self.display_mode == DisplayMode::Full {
                     let path_str =
                         format_directory(&file.path, Some(inner_width.saturating_sub(2)));
                     lines.push(Line::from(Span::from(format!("  {path_str}")).dim()));
@@ -614,7 +639,8 @@ pub(crate) fn new_nori_session_info(
 
     SessionInfoCell::new(if is_first_event {
         // Header box rendered as history (so it appears at the very top)
-        let header = NoriSessionHeaderCell::new(model, config.cwd.clone());
+        let header = NoriSessionHeaderCell::new(model, config.cwd.clone())
+            .with_display_mode(DisplayMode::Compact);
 
         // Help lines below the header
         let mut help_lines: Vec<Line<'static>> = vec![];
@@ -789,6 +815,7 @@ mod tests {
                     token_count: None,
                 },
             ],
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -844,6 +871,7 @@ mod tests {
             directory: PathBuf::from("/tmp/test"),
             nori_profile: None,
             instruction_files: Vec::new(),
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -867,6 +895,7 @@ mod tests {
             directory: PathBuf::from("/tmp/test"),
             nori_profile: Some("senior-swe".to_string()),
             instruction_files: Vec::new(),
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -904,6 +933,7 @@ mod tests {
                     }),
                 },
             ],
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -1292,6 +1322,7 @@ mod tests {
             directory: PathBuf::from("/home/user/project"),
             nori_profile: Some("test-profile".to_string()),
             instruction_files: files,
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -1348,6 +1379,7 @@ mod tests {
             directory: PathBuf::from("/home/user/project"),
             nori_profile: None,
             instruction_files: files,
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -1855,6 +1887,7 @@ mod tests {
             directory: PathBuf::from("/tmp/test"),
             nori_profile: None,
             instruction_files: Vec::new(),
+            display_mode: DisplayMode::Full,
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
@@ -1903,6 +1936,182 @@ mod tests {
         let rendered = render_lines(&lines).join("\n");
 
         unsafe { std::env::remove_var("NORI_MOCK_INSTRUCTION_FILES") };
+        insta::assert_snapshot!(rendered);
+    }
+
+    // =========================================================================
+    // DisplayMode tests: Compact vs Full
+    // =========================================================================
+
+    fn sample_instruction_files() -> Vec<InstructionFile> {
+        vec![
+            InstructionFile {
+                path: PathBuf::from("/home/user/.claude/CLAUDE.md"),
+                active: true,
+                token_count: Some(TokenCount {
+                    count: 1200,
+                    approximate: true,
+                }),
+            },
+            InstructionFile {
+                path: PathBuf::from("/home/user/project/CLAUDE.md"),
+                active: true,
+                token_count: Some(TokenCount {
+                    count: 800,
+                    approximate: true,
+                }),
+            },
+            InstructionFile {
+                path: PathBuf::from("/home/user/project/AGENTS.md"),
+                active: false,
+                token_count: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn compact_mode_hides_inactive_files() {
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "claude-code".to_string(),
+            directory: PathBuf::from("/home/user/project"),
+            nori_profile: Some("test-profile".to_string()),
+            instruction_files: sample_instruction_files(),
+            display_mode: DisplayMode::Compact,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should show active files
+        assert!(
+            rendered.contains(".claude/CLAUDE.md"),
+            "Compact mode should show active file .claude/CLAUDE.md: {rendered}"
+        );
+        assert!(
+            rendered.contains("project/CLAUDE.md"),
+            "Compact mode should show active file project/CLAUDE.md: {rendered}"
+        );
+
+        // Should NOT show inactive files
+        assert!(
+            !rendered.contains("AGENTS.md"),
+            "Compact mode should hide inactive AGENTS.md: {rendered}"
+        );
+    }
+
+    #[test]
+    fn compact_mode_hides_per_file_token_counts() {
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "claude-code".to_string(),
+            directory: PathBuf::from("/home/user/project"),
+            nori_profile: Some("test-profile".to_string()),
+            instruction_files: sample_instruction_files(),
+            display_mode: DisplayMode::Compact,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should NOT show per-file token counts
+        assert!(
+            !rendered.contains("~1,200 tokens"),
+            "Compact mode should not show per-file token counts: {rendered}"
+        );
+        assert!(
+            !rendered.contains("~800 tokens"),
+            "Compact mode should not show per-file token counts: {rendered}"
+        );
+
+        // Should still show total
+        assert!(
+            rendered.contains("~2,000 tokens"),
+            "Compact mode should still show total token count: {rendered}"
+        );
+    }
+
+    #[test]
+    fn full_mode_shows_inactive_files_and_per_file_counts() {
+        let cell = NoriSessionHeaderCell {
+            version: "test",
+            agent: "claude-code".to_string(),
+            directory: PathBuf::from("/home/user/project"),
+            nori_profile: Some("test-profile".to_string()),
+            instruction_files: sample_instruction_files(),
+            display_mode: DisplayMode::Full,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        // Should show inactive files
+        assert!(
+            rendered.contains("AGENTS.md"),
+            "Full mode should show inactive AGENTS.md: {rendered}"
+        );
+
+        // Should show per-file token counts
+        assert!(
+            rendered.contains("~1,200 tokens"),
+            "Full mode should show per-file token count ~1,200: {rendered}"
+        );
+        assert!(
+            rendered.contains("~800 tokens"),
+            "Full mode should show per-file token count ~800: {rendered}"
+        );
+
+        // Should show total
+        assert!(
+            rendered.contains("~2,000 tokens"),
+            "Full mode should show total token count: {rendered}"
+        );
+    }
+
+    #[test]
+    fn compact_mode_snapshot() {
+        let cell = NoriSessionHeaderCell {
+            version: "0.1.0",
+            agent: "claude-sonnet".to_string(),
+            directory: PathBuf::from("/home/user/project"),
+            nori_profile: Some("senior-swe".to_string()),
+            instruction_files: vec![
+                InstructionFile {
+                    path: PathBuf::from("/home/user/project/AGENTS.md"),
+                    active: false,
+                    token_count: None,
+                },
+                InstructionFile {
+                    path: PathBuf::from("/home/user/project/.claude/settings.md"),
+                    active: true,
+                    token_count: Some(TokenCount {
+                        count: 2450,
+                        approximate: true,
+                    }),
+                },
+            ],
+            display_mode: DisplayMode::Compact,
+            prompt_summary: None,
+            approval_mode_label: None,
+            token_breakdown: None,
+            context_window_percent: None,
+        };
+
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
         insta::assert_snapshot!(rendered);
     }
 }
