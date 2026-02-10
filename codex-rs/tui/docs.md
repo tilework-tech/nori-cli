@@ -350,6 +350,24 @@ The resume session picker reuses the `SessionPickerInfo` type and `format_relati
 
 `spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. The spawned task structure (op forwarding, event forwarding, model command handling) is identical.
 
+**Agent Connection Lifecycle & Failure Recovery:**
+
+When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. The spawn task (`spawn_acp_agent` / `spawn_acp_agent_resume`) runs asynchronously and resolves to one of two outcomes:
+
+| Outcome | Event | Handler |
+|---------|-------|---------|
+| Success | `AppEvent::SessionConfigured` | Normal session setup proceeds |
+| Failure | `AppEvent::AgentSpawnFailed` | `ChatWidget::on_agent_spawn_failed()` |
+
+`on_agent_spawn_failed()` in `chatwidget.rs` performs three recovery steps in order:
+1. Clears the "Connecting" status indicator via `bottom_pane.hide_status_indicator()`
+2. Displays an error message in chat history: "Failed to start agent '{name}': {error}"
+3. Reopens the agent picker so the user can select a different agent
+
+**Exit Path When Backend Is Dead:**
+
+When agent spawn fails, the async task exits and drops the `codex_op_rx` receiver. This means the `codex_op_tx` channel held by `ChatWidget` has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
+
 **Loop Mode (Prompt Repetition):**
 
 Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/config` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/codex-rs/acp/src/config/types.rs`).

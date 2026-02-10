@@ -3514,3 +3514,53 @@ fn task_complete_triggers_system_info_refresh() {
         "expected RefreshSystemInfoForDirectory event after task completion"
     );
 }
+
+/// Bug fix: when an agent spawn fails, the "Connecting to ..." status indicator
+/// should be cleared. Currently `AgentSpawnFailed` calls `add_error_message` and
+/// `open_agent_popup` but never hides the status indicator, leaving the TUI stuck
+/// in a "Connecting" state.
+#[test]
+fn agent_spawn_failed_clears_connecting_status() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Simulate what AgentConnecting does: show the connecting spinner.
+    chat.show_connecting_status("test-agent");
+    assert!(
+        chat.bottom_pane.status_indicator_visible(),
+        "status indicator should be visible after show_connecting_status"
+    );
+
+    // Simulate what the AgentSpawnFailed handler does.
+    chat.on_agent_spawn_failed("test-agent", "connection refused");
+    assert!(
+        !chat.bottom_pane.status_indicator_visible(),
+        "status indicator should be hidden after agent spawn failure"
+    );
+}
+
+/// Bug fix: when the op channel receiver has been dropped (backend died), sending
+/// Op::Shutdown should trigger an exit instead of silently logging an error.
+/// Without this fix, /exit and double-ctrl-c are broken when the backend is dead.
+#[test]
+fn shutdown_on_dead_channel_triggers_exit() {
+    let (chat, mut rx, op_rx) = make_chatwidget_manual();
+
+    // Drop the op receiver to simulate the backend having died.
+    drop(op_rx);
+
+    // Attempt to send Op::Shutdown (what /exit and double-ctrl-c do).
+    chat.submit_op(Op::Shutdown);
+
+    // The widget should have sent an ExitRequest since the backend is gone.
+    let mut found_exit = false;
+    while let Ok(ev) = rx.try_recv() {
+        if matches!(ev, AppEvent::ExitRequest) {
+            found_exit = true;
+            break;
+        }
+    }
+    assert!(
+        found_exit,
+        "expected ExitRequest to be sent when Op::Shutdown fails on a dead channel"
+    );
+}

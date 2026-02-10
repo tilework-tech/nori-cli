@@ -1081,12 +1081,7 @@ impl App {
                     "Agent failed to spawn, opening agent picker"
                 );
 
-                // Show error message to the user
-                self.chat_widget
-                    .add_error_message(format!("Failed to start agent '{model_name}': {error}"));
-
-                // Open agent picker so user can select a different agent
-                self.chat_widget.open_agent_popup();
+                self.chat_widget.on_agent_spawn_failed(&model_name, &error);
             }
             AppEvent::AgentConnecting { display_name } => {
                 tracing::info!(

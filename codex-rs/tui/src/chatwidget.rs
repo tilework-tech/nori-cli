@@ -3770,6 +3770,12 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(crate) fn on_agent_spawn_failed(&mut self, model_name: &str, error: &str) {
+        self.bottom_pane.hide_status_indicator();
+        self.add_error_message(format!("Failed to start agent '{model_name}': {error}"));
+        self.open_agent_popup();
+    }
+
     /// Handle the /login slash command
     fn handle_login_command(&mut self) {
         // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
@@ -4206,6 +4212,12 @@ impl ChatWidget {
         crate::session_log::log_outbound_op(&op);
         if let Err(e) = self.codex_op_tx.send(op) {
             tracing::error!("failed to submit op: {e}");
+            // If we tried to send a Shutdown but the backend channel is dead,
+            // trigger an exit directly since there is no backend to gracefully
+            // shut down.
+            if matches!(e.0, Op::Shutdown) {
+                self.app_event_tx.send(AppEvent::ExitRequest);
+            }
         }
     }
 
