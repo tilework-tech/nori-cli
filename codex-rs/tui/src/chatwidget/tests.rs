@@ -241,7 +241,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         interrupts: InterruptManager::new(),
         reasoning_buffer: String::new(),
         full_reasoning_buffer: String::new(),
-        current_status_header: String::from("Working"),
+        current_status_header: String::from("Thinking really hard"),
         retry_status_header: None,
         conversation_id: None,
         frame_requester: FrameRequester::test_dummy(),
@@ -2726,6 +2726,8 @@ fn chatwidget_tall() {
             model_context_window: None,
         }),
     });
+    chat.bottom_pane
+        .update_status_header("Thinking really hard".to_string());
     for i in 0..30 {
         chat.queue_user_message(format!("Hello, world! {i}").into());
     }

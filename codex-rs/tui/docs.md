@@ -364,6 +364,10 @@ When the user selects an agent (or resumes a session), the TUI shows a "Connecti
 2. Displays an error message in chat history: "Failed to start agent '{name}': {error}"
 3. Reopens the agent picker so the user can select a different agent
 
+**Status Indicator Whimsical Messages (`status_indicator_widget.rs`):**
+
+When the agent begins processing a task, the `StatusIndicatorWidget` displays an animated header with a randomly selected tongue-in-cheek message (e.g., "Thinking really hard", "Hallucinating responsibly") drawn from the `WHIMSICAL_STATUS_MESSAGES` pool via `random_status_message()`. A new random message is selected each time `on_task_started()` fires in `chatwidget.rs`. During streaming, reasoning chunk headers (extracted from bold markdown text) dynamically replace this initial message via `update_status_header()`.
+
 **Exit Path When Backend Is Dead:**
 
 When agent spawn fails, the async task exits and drops the `codex_op_rx` receiver. This means the `codex_op_tx` channel held by `ChatWidget` has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.

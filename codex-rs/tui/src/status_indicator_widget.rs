@@ -12,6 +12,8 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::WidgetRef;
 
+use rand::Rng;
+
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::exec_cell::spinner;
@@ -20,8 +22,33 @@ use crate::render::renderable::Renderable;
 use crate::shimmer::shimmer_spans;
 use crate::tui::FrameRequester;
 
+pub(crate) const WHIMSICAL_STATUS_MESSAGES: &[&str] = &[
+    "Mass-producing artisanal code",
+    "Yelling at the compiler",
+    "Consulting the ancient texts",
+    "Shifting bits left and right",
+    "Rearranging deck chairs on the Titanic",
+    "Pretending to be sentient",
+    "Thinking really hard",
+    "Googling Stack Overflow",
+    "Hallucinating responsibly",
+    "Praying to the demo gods",
+    "Converting caffeine into code",
+    "Submitting to our robot overlords",
+    "Deploying to production on a Friday",
+    "Blaming the intern",
+    "Feeding the hamsters that power the servers",
+    "Composing a strongly-worded email to Clippy",
+    "Updating my LinkedIn to 'AI Engineer'",
+];
+
+pub(crate) fn random_status_message() -> String {
+    let idx = rand::rng().random_range(0..WHIMSICAL_STATUS_MESSAGES.len());
+    WHIMSICAL_STATUS_MESSAGES[idx].to_string()
+}
+
 pub(crate) struct StatusIndicatorWidget {
-    /// Animated header text (defaults to "Working").
+    /// Animated header text (randomly selected whimsical message by default).
     header: String,
     show_interrupt_hint: bool,
 
@@ -57,7 +84,7 @@ impl StatusIndicatorWidget {
         animations_enabled: bool,
     ) -> Self {
         Self {
-            header: String::from("Working"),
+            header: random_status_message(),
             show_interrupt_hint: true,
             elapsed_running: Duration::ZERO,
             last_resume_at: Instant::now(),
@@ -202,10 +229,45 @@ mod tests {
     }
 
     #[test]
-    fn renders_with_working_header() {
+    fn random_status_message_returns_known_message() {
+        let msg = random_status_message();
+        assert!(
+            WHIMSICAL_STATUS_MESSAGES.contains(&msg.as_str()),
+            "random_status_message() returned {msg:?} which is not in WHIMSICAL_STATUS_MESSAGES"
+        );
+    }
+
+    #[test]
+    fn random_status_message_has_variety() {
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..200 {
+            seen.insert(random_status_message());
+        }
+        assert!(
+            seen.len() > 1,
+            "expected multiple distinct messages over 200 calls, got {}",
+            seen.len()
+        );
+    }
+
+    #[test]
+    fn new_widget_gets_whimsical_default_header() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let w = StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true);
+        assert!(
+            WHIMSICAL_STATUS_MESSAGES.contains(&w.header()),
+            "default header {:?} should be a whimsical message",
+            w.header()
+        );
+    }
+
+    #[test]
+    fn renders_with_default_header() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut w = StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true);
+        w.update_header("Thinking really hard".to_string());
 
         // Render into a fixed-size test terminal and snapshot the backend.
         let mut terminal = Terminal::new(TestBackend::new(80, 2)).expect("terminal");
@@ -219,7 +281,8 @@ mod tests {
     fn renders_truncated() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let w = StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true);
+        let mut w = StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true);
+        w.update_header("Thinking really hard".to_string());
 
         // Render into a fixed-size test terminal and snapshot the backend.
         let mut terminal = Terminal::new(TestBackend::new(20, 2)).expect("terminal");
