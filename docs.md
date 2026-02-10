@@ -54,6 +54,7 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 | `nori mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
 | `nori login`      | Authentication     | `codex-rs/login`      |
 | `nori apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
+| `nori completion` | Shell completions  | `codex-rs/cli`        |
 
 **Model Providers (via ACP):**
 

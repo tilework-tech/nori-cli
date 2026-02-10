@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use codex_acp::find_nori_home;
 use codex_acp::init_rolling_file_tracing;
 use codex_arg0::arg0_dispatch_or_else;
@@ -81,6 +81,9 @@ enum Subcommand {
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
     StdioToUds(StdioToUdsCommand),
+
+    /// Generate shell completion scripts.
+    Completion(CompletionCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -179,6 +182,13 @@ struct SkillsetsCommand {
     /// Arguments to pass to nori-skillsets.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     args: Vec<String>,
+}
+
+#[derive(Debug, Parser)]
+struct CompletionCommand {
+    /// The shell to generate completions for.
+    #[arg(value_enum)]
+    shell: clap_complete::Shell,
 }
 
 fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<String> {
@@ -455,6 +465,10 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
         }
+        Some(Subcommand::Completion(cmd)) => {
+            let mut clap_cmd = MultitoolCli::command();
+            clap_complete::generate(cmd.shell, &mut clap_cmd, "nori", &mut std::io::stdout());
+        }
     }
 
     Ok(())
@@ -474,7 +488,6 @@ fn prepend_config_flags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
@@ -569,29 +582,62 @@ mod tests {
         );
     }
 
-    /// The completion subcommand should not appear in help output (legacy Codex feature)
+    /// The completion subcommand should appear in help output
     #[test]
-    fn completion_subcommand_not_in_help() {
+    fn completion_appears_in_help() {
         let help = MultitoolCli::command().render_help().to_string();
         assert!(
-            !help.contains("completion"),
-            "Help should not show 'completion' subcommand, got: {help}"
+            help.contains("completion"),
+            "Help should show 'completion' subcommand, got: {help}"
         );
     }
 
-    /// When "completion" is passed, it should be treated as prompt, not subcommand
+    /// "completion" without a shell argument should fail
     #[test]
-    fn completion_treated_as_prompt_not_subcommand() {
-        let cli = MultitoolCli::try_parse_from(["nori", "completion"]).expect("should parse");
-        // "completion" should be interpreted as the prompt argument, not a subcommand
+    fn completion_requires_shell_argument() {
+        let result = MultitoolCli::try_parse_from(["nori", "completion"]);
         assert!(
-            cli.subcommand.is_none(),
-            "completion should not be parsed as subcommand"
+            result.is_err(),
+            "completion without shell arg should fail to parse"
         );
-        assert_eq!(
-            cli.interactive.prompt.as_deref(),
-            Some("completion"),
-            "completion should be parsed as prompt"
+    }
+
+    /// "completion bash" should produce output containing "nori"
+    #[test]
+    fn completion_bash_produces_output() {
+        let mut cmd = MultitoolCli::command();
+        let mut buf = Vec::new();
+        clap_complete::generate(clap_complete::Shell::Bash, &mut cmd, "nori", &mut buf);
+        let output = String::from_utf8(buf).expect("valid utf8");
+        assert!(
+            output.contains("nori"),
+            "bash completion should contain 'nori', got: {output}"
+        );
+    }
+
+    /// "completion zsh" should produce output containing "#compdef nori"
+    #[test]
+    fn completion_zsh_produces_output() {
+        let mut cmd = MultitoolCli::command();
+        let mut buf = Vec::new();
+        clap_complete::generate(clap_complete::Shell::Zsh, &mut cmd, "nori", &mut buf);
+        let output = String::from_utf8(buf).expect("valid utf8");
+        assert!(
+            output.contains("#compdef nori"),
+            "zsh completion should contain '#compdef nori', got: {output}"
+        );
+    }
+
+    /// "completion fish" should produce output containing "complete -c nori"
+    #[test]
+    fn completion_fish_produces_output() {
+        let mut cmd = MultitoolCli::command();
+        let mut buf = Vec::new();
+        clap_complete::generate(clap_complete::Shell::Fish, &mut cmd, "nori", &mut buf);
+        let output = String::from_utf8(buf).expect("valid utf8");
+        assert!(
+            output.contains("complete -c nori"),
+            "fish completion should contain 'complete -c nori', got: {output}"
         );
     }
 

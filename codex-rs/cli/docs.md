@@ -32,9 +32,22 @@ match subcommand {
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
+    Some(Subcommand::Completion(cmd)) => clap_complete::generate(...),
     // ... other subcommands
 }
 ```
+
+**Shell Completion:**
+
+The `completion` subcommand generates shell completion scripts using `clap_complete`. It accepts a shell name and outputs the completion script to stdout:
+
+```bash
+nori completion bash > ~/.local/share/bash-completion/completions/nori
+nori completion zsh > ~/.zfunc/_nori
+nori completion fish > ~/.config/fish/completions/nori.fish
+```
+
+Uses `clap_complete::Shell` directly, so any shell supported by `clap_complete` is accepted.
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 
