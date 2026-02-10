@@ -1021,12 +1021,15 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
     // Normalize transcript session info lines which contain dynamic timestamps and session IDs
     // Pattern: "• Session from YYYY-MM-DD HH:MM (xxxxxxxx) transcript"
     let lines: Vec<&str> = result.lines().collect();
-    let mut normalized_lines = Vec::new();
+    let mut normalized_lines: Vec<std::borrow::Cow<str>> = Vec::new();
     for line in lines {
         if line.contains("Session from") && line.contains("transcript") {
-            normalized_lines.push("• Session from [TIMESTAMP] ([SESSION_ID]) transcript");
+            normalized_lines.push("• Session from [TIMESTAMP] ([SESSION_ID]) transcript".into());
+        } else if line.contains("esc to interrupt") && line.starts_with('•') {
+            // Normalize whimsical status messages: "• <random message> (0s • esc to interrupt)"
+            normalized_lines.push("• [STATUS] (0s • esc to interrupt)".into());
         } else {
-            normalized_lines.push(line);
+            normalized_lines.push(line.into());
         }
     }
     let mut result = normalized_lines.join("\n");

@@ -84,11 +84,11 @@ fn test_acp_prompt_failure_shows_error_to_user() {
         contents
     );
 
-    // Verify the "Working" indicator is gone (turn has ended)
+    // Verify the status indicator is gone (turn has ended)
     // This confirms TaskComplete was sent
     assert!(
-        !contents.contains("Working"),
-        "Working indicator should be gone after error. Screen contents:\n{}",
+        !contents.contains("esc to interrupt"),
+        "Status indicator should be gone after error. Screen contents:\n{}",
         contents
     );
 }
@@ -136,10 +136,10 @@ fn test_acp_prompt_failure_tui_remains_responsive() {
         contents
     );
 
-    // Working indicator should be gone
+    // Status indicator should be gone
     assert!(
-        !contents.contains("Working"),
-        "Working indicator should be gone after error. Screen:\n{}",
+        !contents.contains("esc to interrupt"),
+        "Status indicator should be gone after error. Screen:\n{}",
         contents
     );
 }

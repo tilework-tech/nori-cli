@@ -56,9 +56,9 @@ fn test_escape_cancels_streaming() {
     session.send_key(Key::Enter).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
-    // Wait for streaming to start
+    // Wait for streaming to start (status indicator appears with interrupt hint)
     session
-        .wait_for_text("Working", TIMEOUT)
+        .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("Conversation did not start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -102,9 +102,9 @@ fn test_ctrl_c_cancels_streaming() {
     session.send_key(Key::Enter).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
-    // Wait for streaming to start
+    // Wait for streaming to start (status indicator appears with interrupt hint)
     session
-        .wait_for_text("Working", TIMEOUT)
+        .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("Conversation did not start");
 
     std::thread::sleep(TIMEOUT_INPUT);
