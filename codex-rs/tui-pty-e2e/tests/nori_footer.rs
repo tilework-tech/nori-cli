@@ -226,8 +226,11 @@ approval_mode = false
         TuiSession::spawn_with_config(24, 120, SessionConfig::new().with_config_toml(config_toml))
             .expect("Failed to spawn");
 
-    // Wait for the TUI to start
+    // Wait for the TUI to fully start (session header contains "Nori CLI")
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session
+        .wait_for_text("Nori CLI", TIMEOUT)
+        .expect("Session header should appear");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -258,10 +261,12 @@ approval_mode = false
         contents
     );
 
-    // Nori version should still be shown (not disabled)
+    // Session header shows "Nori CLI v{version}" which confirms version info is visible.
+    // The footer's NoriVersion segment requires nori-skillsets/nori-ai in PATH, which
+    // this test doesn't provide, so we check for the session header version instead.
     assert!(
-        contents.contains("Nori CLI v") || contents.contains("Skillsets v"),
-        "Footer should still show Nori version when not disabled. Contents: {}",
+        contents.contains("Nori CLI v"),
+        "Session header should show Nori CLI version. Contents: {}",
         contents
     );
 }
