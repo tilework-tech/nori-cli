@@ -19,7 +19,11 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 - Permission request/response flow
 - Cancellation
 
-**Mock Behaviors**: Controlled via environment variables that the E2E tests set on the mock agent process. Each env var activates a specific behavior scenario. Key scenarios include multi-turn conversations, tool call streaming, permission requests, file operations, and race condition simulations.
+**Mock Behaviors**: Controlled via environment variables that the E2E tests set on the mock agent process. Each env var activates a specific behavior scenario. Key scenarios include multi-turn conversations, tool call streaming, permission requests, file operations, race condition simulations, and session lifecycle behaviors.
+
+**Session Lifecycle Testing**: Two env vars control `session/load` behavior for testing the resume fallback path in `@/codex-rs/acp/src/backend.rs`:
+- `MOCK_AGENT_SUPPORT_LOAD_SESSION` -- when set, the agent advertises `load_session: true` in its capabilities during `initialize()`
+- `MOCK_AGENT_LOAD_SESSION_FAIL` -- when set, the `load_session()` handler returns an error instead of succeeding, allowing tests to exercise the runtime-failure fallback path
 
 **Race Condition Simulation**: The `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` env var triggers a scenario that reproduces the timing where tool call completions arrive while the final text response is streaming. This is structured in phases:
 1. Tool calls that complete before text streaming starts (rendered normally)

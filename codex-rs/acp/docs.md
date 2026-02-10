@@ -547,14 +547,15 @@ AcpConnection::spawn() -> check capabilities().load_session
     │       v
     │   AcpConnection::load_session(session_id, cwd, update_tx)
     │       |
-    │       v
-    │   Agent streams SessionUpdate notifications (history replay)
-    │       |
-    │       v
-    │   Forward task translates updates to codex Events
-    │       |
-    │       v
-    │   returns (session_id, no initial_messages, no summary)
+    │       ├── Success:
+    │       │   Agent streams SessionUpdate notifications (history replay)
+    │       │   Forward task translates updates to codex Events
+    │       │   returns (session_id, no initial_messages, no summary)
+    │       │
+    │       └── Failure (runtime error):
+    │           Forward task aborted
+    │           Falls through to client-side replay (see below)
+    │           WarningEvent emitted to TUI about the fallback
     │
     └── Otherwise (client-side replay fallback):
             |
@@ -572,13 +573,13 @@ AcpConnection::spawn() -> check capabilities().load_session
 SessionConfigured event sent to TUI (with initial_messages if client-side)
 ```
 
-**Server-side path:** The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available.
+**Server-side path:** The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the forward task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
 
-**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
+**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
 - `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history
 - `transcript_to_summary()` builds a human-readable summary (truncated to 20k chars via `TRANSCRIPT_SUMMARY_MAX_CHARS`), stored in `pending_compact_summary` and prepended to the first user prompt -- the same mechanism used by `/compact`
 
-A new `TranscriptRecorder` is created for the resumed session in both paths, persisting the `acp_session_id` so the session can be resumed again in the future.
+A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
 **Prompt Summary** (`backend.rs`):
 

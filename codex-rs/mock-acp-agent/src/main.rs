@@ -195,8 +195,16 @@ impl acp::Agent for MockAgent {
         }
 
         eprintln!("Mock agent: initialize");
-        Ok(acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
-            .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))
+        let mut response = acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
+            .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent"));
+
+        if std::env::var("MOCK_AGENT_SUPPORT_LOAD_SESSION").is_ok() {
+            eprintln!("Mock agent: advertising load_session capability");
+            response =
+                response.agent_capabilities(acp::AgentCapabilities::new().load_session(true));
+        }
+
+        Ok(response)
     }
 
     async fn authenticate(
@@ -243,6 +251,13 @@ impl acp::Agent for MockAgent {
         &self,
         _arguments: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
+        if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
+            eprintln!("Mock agent: simulating load_session failure");
+            return Err(acp::Error::new(
+                -32001,
+                "Mock load_session failure for testing",
+            ));
+        }
         Ok(acp::LoadSessionResponse::new())
     }
 
