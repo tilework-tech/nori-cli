@@ -240,6 +240,12 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             auto_worktree_repo_root,
             session_start_hooks: nori_config.session_start_hooks.clone(),
             session_end_hooks: nori_config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
         };
 
@@ -384,6 +390,12 @@ pub(crate) fn spawn_acp_agent_resume(
             auto_worktree_repo_root,
             session_start_hooks: nori_config.session_start_hooks.clone(),
             session_end_hooks: nori_config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
         };
 

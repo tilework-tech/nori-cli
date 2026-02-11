@@ -9,6 +9,7 @@
 //! session_end = ["~/.nori/cli/hooks/end.sh"]
 //! ```
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
@@ -82,6 +83,19 @@ fn interpreter_for(path: &Path) -> Option<&'static str> {
 /// Each script is run with the given timeout. Failures are logged but do not
 /// prevent subsequent hooks from executing. Returns a result for each hook.
 pub async fn execute_hooks(hooks: &[impl AsRef<Path>], timeout: Duration) -> Vec<HookResult> {
+    execute_hooks_with_env(hooks, timeout, &HashMap::new()).await
+}
+
+/// Execute a list of hook scripts sequentially with additional environment variables.
+///
+/// Each script is run with the given timeout and the provided environment variables
+/// injected into its process. Failures are logged but do not prevent subsequent
+/// hooks from executing. Returns a result for each hook.
+pub async fn execute_hooks_with_env(
+    hooks: &[impl AsRef<Path>],
+    timeout: Duration,
+    env_vars: &HashMap<String, String>,
+) -> Vec<HookResult> {
     let mut results = Vec::with_capacity(hooks.len());
 
     for hook_path in hooks {
@@ -112,6 +126,7 @@ pub async fn execute_hooks(hooks: &[impl AsRef<Path>], timeout: Duration) -> Vec
         cmd.stderr(std::process::Stdio::piped());
         cmd.stdin(std::process::Stdio::null());
         cmd.kill_on_drop(true);
+        cmd.envs(env_vars);
 
         let child = match cmd.spawn() {
             Ok(child) => child,
@@ -404,6 +419,61 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].success);
         assert_eq!(results[0].output.as_deref(), Some("python hook\n"));
+    }
+
+    #[tokio::test]
+    async fn execute_hooks_passes_env_vars_to_scripts() {
+        let tmp = tempdir().unwrap();
+        let script = tmp.path().join("env_hook.sh");
+        fs::write(
+            &script,
+            "#!/bin/bash\necho \"event=$NORI_HOOK_EVENT prompt=$NORI_HOOK_PROMPT_TEXT\"",
+        )
+        .unwrap();
+
+        let mut env = std::collections::HashMap::new();
+        env.insert("NORI_HOOK_EVENT".to_string(), "pre_user_prompt".to_string());
+        env.insert(
+            "NORI_HOOK_PROMPT_TEXT".to_string(),
+            "hello world".to_string(),
+        );
+
+        let results = execute_hooks_with_env(&[&script], Duration::from_secs(5), &env).await;
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].success);
+        assert_eq!(
+            results[0].output.as_deref(),
+            Some("event=pre_user_prompt prompt=hello world\n")
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_hooks_env_vars_include_tool_info() {
+        let tmp = tempdir().unwrap();
+        let script = tmp.path().join("tool_hook.sh");
+        fs::write(
+            &script,
+            "#!/bin/bash\necho \"tool=$NORI_HOOK_TOOL_NAME args=$NORI_HOOK_TOOL_ARGS\"",
+        )
+        .unwrap();
+
+        let mut env = std::collections::HashMap::new();
+        env.insert("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string());
+        env.insert("NORI_HOOK_TOOL_NAME".to_string(), "shell".to_string());
+        env.insert(
+            "NORI_HOOK_TOOL_ARGS".to_string(),
+            r#"{"command":"ls"}"#.to_string(),
+        );
+
+        let results = execute_hooks_with_env(&[&script], Duration::from_secs(5), &env).await;
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].success);
+        assert_eq!(
+            results[0].output.as_deref(),
+            Some("tool=shell args={\"command\":\"ls\"}\n")
+        );
     }
 
     #[tokio::test]

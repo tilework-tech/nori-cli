@@ -91,6 +91,14 @@ impl NoriConfig {
         // Resolve hooks
         let session_start_hooks = super::types::resolve_hook_paths(toml.hooks.session_start);
         let session_end_hooks = super::types::resolve_hook_paths(toml.hooks.session_end);
+        let pre_user_prompt_hooks = super::types::resolve_hook_paths(toml.hooks.pre_user_prompt);
+        let post_user_prompt_hooks = super::types::resolve_hook_paths(toml.hooks.post_user_prompt);
+        let pre_tool_call_hooks = super::types::resolve_hook_paths(toml.hooks.pre_tool_call);
+        let post_tool_call_hooks = super::types::resolve_hook_paths(toml.hooks.post_tool_call);
+        let pre_agent_response_hooks =
+            super::types::resolve_hook_paths(toml.hooks.pre_agent_response);
+        let post_agent_response_hooks =
+            super::types::resolve_hook_paths(toml.hooks.post_agent_response);
 
         // Agent is the user's persisted preference, defaults to DEFAULT_MODEL
         let agent = toml.agent.unwrap_or_else(|| DEFAULT_MODEL.to_string());
@@ -143,6 +151,12 @@ impl NoriConfig {
             mcp_servers,
             session_start_hooks,
             session_end_hooks,
+            pre_user_prompt_hooks,
+            post_user_prompt_hooks,
+            pre_tool_call_hooks,
+            post_tool_call_hooks,
+            pre_agent_response_hooks,
+            post_agent_response_hooks,
         })
     }
 }
@@ -428,6 +442,102 @@ session_start = ["~/hooks/start.sh"]
         let path = &config.session_start_hooks[0];
         assert!(!path.starts_with("~"));
         assert!(path.ends_with("hooks/start.sh"));
+    }
+
+    #[test]
+    fn test_lifecycle_hooks_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[hooks]
+pre_user_prompt = ["/path/to/pre-prompt.sh"]
+post_user_prompt = ["/path/to/post-prompt.sh"]
+pre_tool_call = ["/path/to/pre-tool.sh"]
+post_tool_call = ["/path/to/post-tool.sh"]
+pre_agent_response = ["/path/to/pre-response.sh"]
+post_agent_response = ["/path/to/post-response.sh"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.pre_user_prompt_hooks.len(), 1);
+        assert_eq!(
+            config.pre_user_prompt_hooks[0],
+            PathBuf::from("/path/to/pre-prompt.sh")
+        );
+        assert_eq!(config.post_user_prompt_hooks.len(), 1);
+        assert_eq!(
+            config.post_user_prompt_hooks[0],
+            PathBuf::from("/path/to/post-prompt.sh")
+        );
+        assert_eq!(config.pre_tool_call_hooks.len(), 1);
+        assert_eq!(
+            config.pre_tool_call_hooks[0],
+            PathBuf::from("/path/to/pre-tool.sh")
+        );
+        assert_eq!(config.post_tool_call_hooks.len(), 1);
+        assert_eq!(
+            config.post_tool_call_hooks[0],
+            PathBuf::from("/path/to/post-tool.sh")
+        );
+        assert_eq!(config.pre_agent_response_hooks.len(), 1);
+        assert_eq!(
+            config.pre_agent_response_hooks[0],
+            PathBuf::from("/path/to/pre-response.sh")
+        );
+        assert_eq!(config.post_agent_response_hooks.len(), 1);
+        assert_eq!(
+            config.post_agent_response_hooks[0],
+            PathBuf::from("/path/to/post-response.sh")
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_hooks_default_to_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.pre_user_prompt_hooks.is_empty());
+        assert!(config.post_user_prompt_hooks.is_empty());
+        assert!(config.pre_tool_call_hooks.is_empty());
+        assert!(config.post_tool_call_hooks.is_empty());
+        assert!(config.pre_agent_response_hooks.is_empty());
+        assert!(config.post_agent_response_hooks.is_empty());
+    }
+
+    #[test]
+    fn test_lifecycle_hooks_mixed_with_session_hooks() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[hooks]
+session_start = ["/path/to/start.sh"]
+session_end = ["/path/to/end.sh"]
+pre_user_prompt = ["/path/to/pre-prompt.sh"]
+post_tool_call = ["/path/to/post-tool.sh"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.session_start_hooks.len(), 1);
+        assert_eq!(config.session_end_hooks.len(), 1);
+        assert_eq!(config.pre_user_prompt_hooks.len(), 1);
+        assert_eq!(config.post_tool_call_hooks.len(), 1);
+        assert!(config.post_user_prompt_hooks.is_empty());
+        assert!(config.pre_tool_call_hooks.is_empty());
+        assert!(config.pre_agent_response_hooks.is_empty());
+        assert!(config.post_agent_response_hooks.is_empty());
     }
 
     #[test]

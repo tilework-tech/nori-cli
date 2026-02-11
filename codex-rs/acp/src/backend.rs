@@ -5,6 +5,7 @@
 //! between Codex `Op` submissions and ACP protocol calls, and converts ACP
 //! session updates into `codex_protocol::Event` for the TUI.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -174,6 +175,18 @@ pub struct AcpBackendConfig {
     pub session_start_hooks: Vec<PathBuf>,
     /// Scripts to run when a session ends
     pub session_end_hooks: Vec<PathBuf>,
+    /// Scripts to run before a user prompt is sent to the agent
+    pub pre_user_prompt_hooks: Vec<PathBuf>,
+    /// Scripts to run after a user prompt is sent to the agent
+    pub post_user_prompt_hooks: Vec<PathBuf>,
+    /// Scripts to run before a tool call is executed
+    pub pre_tool_call_hooks: Vec<PathBuf>,
+    /// Scripts to run after a tool call completes
+    pub post_tool_call_hooks: Vec<PathBuf>,
+    /// Scripts to run before the agent produces a response
+    pub pre_agent_response_hooks: Vec<PathBuf>,
+    /// Scripts to run after the agent finishes its response
+    pub post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     pub script_timeout: std::time::Duration,
 }
@@ -224,6 +237,18 @@ pub struct AcpBackend {
     auto_worktree_repo_root: Option<PathBuf>,
     /// Scripts to run when a session ends
     session_end_hooks: Vec<PathBuf>,
+    /// Scripts to run before a user prompt is sent to the agent
+    pre_user_prompt_hooks: Vec<PathBuf>,
+    /// Scripts to run after a user prompt is sent to the agent
+    post_user_prompt_hooks: Vec<PathBuf>,
+    /// Scripts to run before a tool call is executed
+    pre_tool_call_hooks: Vec<PathBuf>,
+    /// Scripts to run after a tool call completes
+    post_tool_call_hooks: Vec<PathBuf>,
+    /// Scripts to run before the agent produces a response
+    pre_agent_response_hooks: Vec<PathBuf>,
+    /// Scripts to run after the agent finishes its response
+    post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
 }
@@ -364,6 +389,12 @@ impl AcpBackend {
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
             session_end_hooks: config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
         };
 
@@ -641,6 +672,12 @@ impl AcpBackend {
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
             session_end_hooks: config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
         };
 
@@ -958,6 +995,27 @@ impl AcpBackend {
             return Ok(());
         }
 
+        // Execute pre_user_prompt hooks before sending the prompt
+        if !self.pre_user_prompt_hooks.is_empty() {
+            let env_vars = HashMap::from([
+                ("NORI_HOOK_EVENT".to_string(), "pre_user_prompt".to_string()),
+                ("NORI_HOOK_PROMPT_TEXT".to_string(), prompt_text.clone()),
+            ]);
+            let results = crate::hooks::execute_hooks_with_env(
+                &self.pre_user_prompt_hooks,
+                self.script_timeout,
+                &env_vars,
+            )
+            .await;
+            route_hook_results(
+                &results,
+                &self.event_tx,
+                id,
+                Some(&self.pending_hook_context),
+            )
+            .await;
+        }
+
         // On first prompt, spawn a fire-and-forget summarization task.
         // Skip for mock models (debug-only test agents) since they don't
         // produce meaningful summaries.
@@ -1023,6 +1081,9 @@ impl AcpBackend {
             warn!("Failed to record user message to transcript: {e}");
         }
 
+        // Save prompt text for post_user_prompt hooks (before it gets moved)
+        let prompt_text_for_hooks = prompt_text.clone();
+
         // Prepend any accumulated hook context (from ::context:: lines)
         // This must happen before the compact summary prefix so that the
         // SUMMARY_PREFIX framing instruction always comes first.
@@ -1055,6 +1116,13 @@ impl AcpBackend {
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
         let transcript_recorder = self.transcript_recorder.clone();
         let notify_after_idle = self.notify_after_idle;
+        let post_user_prompt_hooks = self.post_user_prompt_hooks.clone();
+        let pre_tool_call_hooks = self.pre_tool_call_hooks.clone();
+        let post_tool_call_hooks = self.post_tool_call_hooks.clone();
+        let pre_agent_response_hooks = self.pre_agent_response_hooks.clone();
+        let post_agent_response_hooks = self.post_agent_response_hooks.clone();
+        let hook_timeout = self.script_timeout;
+        let pending_hook_context = Arc::clone(&self.pending_hook_context);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -1079,10 +1147,15 @@ impl AcpBackend {
             let event_tx_clone = event_tx.clone();
             let id_for_updates = id_clone.clone();
             let transcript_recorder_for_updates = transcript_recorder.clone();
+            let pre_tool_call_hooks_for_updates = pre_tool_call_hooks.clone();
+            let post_tool_call_hooks_for_updates = post_tool_call_hooks.clone();
+            let pre_agent_response_hooks_for_updates = pre_agent_response_hooks.clone();
             let update_handler = tokio::spawn(async move {
                 let mut event_sequence: u64 = 0;
                 // Accumulate assistant text for transcript recording
                 let mut accumulated_text = String::new();
+                // Track whether pre_agent_response hook has fired
+                let mut has_fired_pre_agent_response = false;
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
                 // Track call_ids that have already had ExecCommandBegin emitted.
@@ -1121,6 +1194,76 @@ impl AcpBackend {
                             &mut recorded_tool_call_ids,
                         )
                         .await;
+                    }
+
+                    // Execute pre_agent_response hooks on first agent message chunk
+                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+                        && !has_fired_pre_agent_response
+                        && let acp::ContentBlock::Text(text) = &chunk.content
+                        && !text.text.is_empty()
+                    {
+                        has_fired_pre_agent_response = true;
+                        if !pre_agent_response_hooks_for_updates.is_empty() {
+                            let env_vars = HashMap::from([(
+                                "NORI_HOOK_EVENT".to_string(),
+                                "pre_agent_response".to_string(),
+                            )]);
+                            let results = crate::hooks::execute_hooks_with_env(
+                                &pre_agent_response_hooks_for_updates,
+                                hook_timeout,
+                                &env_vars,
+                            )
+                            .await;
+                            route_hook_results(&results, &event_tx_clone, &id_for_updates, None)
+                                .await;
+                        }
+                    }
+
+                    // Execute pre_tool_call hooks when a tool call begins
+                    if let acp::SessionUpdate::ToolCall(tool_call) = &update
+                        && !pre_tool_call_hooks_for_updates.is_empty()
+                    {
+                        let env_vars = HashMap::from([
+                            ("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string()),
+                            ("NORI_HOOK_TOOL_NAME".to_string(), tool_call.title.clone()),
+                            (
+                                "NORI_HOOK_TOOL_ARGS".to_string(),
+                                tool_call
+                                    .raw_input
+                                    .as_ref()
+                                    .map_or_else(String::new, std::string::ToString::to_string),
+                            ),
+                        ]);
+                        let results = crate::hooks::execute_hooks_with_env(
+                            &pre_tool_call_hooks_for_updates,
+                            hook_timeout,
+                            &env_vars,
+                        )
+                        .await;
+                        route_hook_results(&results, &event_tx_clone, &id_for_updates, None).await;
+                    }
+
+                    // Execute post_tool_call hooks when a tool call completes
+                    if let acp::SessionUpdate::ToolCallUpdate(tcu) = &update
+                        && tcu.fields.status == Some(acp::ToolCallStatus::Completed)
+                        && !post_tool_call_hooks_for_updates.is_empty()
+                    {
+                        let tool_output = extract_tool_output(&tcu.fields);
+                        let env_vars = HashMap::from([
+                            ("NORI_HOOK_EVENT".to_string(), "post_tool_call".to_string()),
+                            (
+                                "NORI_HOOK_TOOL_NAME".to_string(),
+                                tcu.fields.title.clone().unwrap_or_default(),
+                            ),
+                            ("NORI_HOOK_TOOL_OUTPUT".to_string(), tool_output),
+                        ]);
+                        let results = crate::hooks::execute_hooks_with_env(
+                            &post_tool_call_hooks_for_updates,
+                            hook_timeout,
+                            &env_vars,
+                        )
+                        .await;
+                        route_hook_results(&results, &event_tx_clone, &id_for_updates, None).await;
                     }
 
                     let events =
@@ -1187,7 +1330,7 @@ impl AcpBackend {
                 && let Some(ref recorder) = transcript_recorder
             {
                 let content = vec![ContentBlock::Text {
-                    text: accumulated_text,
+                    text: accumulated_text.clone(),
                 }];
                 if let Err(e) = recorder
                     .record_assistant_message(&id_clone, content, None)
@@ -1195,6 +1338,43 @@ impl AcpBackend {
                 {
                     warn!("Failed to record assistant message to transcript: {e}");
                 }
+            }
+
+            // Execute post_agent_response hooks after the agent has finished responding
+            if !accumulated_text.is_empty() && !post_agent_response_hooks.is_empty() {
+                let env_vars = HashMap::from([
+                    (
+                        "NORI_HOOK_EVENT".to_string(),
+                        "post_agent_response".to_string(),
+                    ),
+                    ("NORI_HOOK_RESPONSE_TEXT".to_string(), accumulated_text),
+                ]);
+                let results = crate::hooks::execute_hooks_with_env(
+                    &post_agent_response_hooks,
+                    hook_timeout,
+                    &env_vars,
+                )
+                .await;
+                route_hook_results(&results, &event_tx, &id_clone, None).await;
+            }
+
+            // Execute post_user_prompt hooks after the turn completes
+            if !post_user_prompt_hooks.is_empty() {
+                let env_vars = HashMap::from([
+                    (
+                        "NORI_HOOK_EVENT".to_string(),
+                        "post_user_prompt".to_string(),
+                    ),
+                    ("NORI_HOOK_PROMPT_TEXT".to_string(), prompt_text_for_hooks),
+                ]);
+                let results = crate::hooks::execute_hooks_with_env(
+                    &post_user_prompt_hooks,
+                    hook_timeout,
+                    &env_vars,
+                )
+                .await;
+                route_hook_results(&results, &event_tx, &id_clone, Some(&pending_hook_context))
+                    .await;
             }
 
             // If prompt failed, send an error event to the TUI BEFORE TaskComplete
@@ -1774,6 +1954,10 @@ async fn route_hook_results(
                                     *guard = Some(ctx);
                                 }
                             }
+                        } else {
+                            warn!(
+                                "Hook emitted ::context:: line but this hook type does not support context injection; line discarded: {ctx}"
+                            );
                         }
                     }
                 }
@@ -3565,6 +3749,12 @@ mod tests {
             auto_worktree_repo_root: None,
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
         };
 
@@ -3750,6 +3940,12 @@ mod tests {
             auto_worktree_repo_root: None,
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
         };
 
@@ -3869,6 +4065,12 @@ mod tests {
             auto_worktree_repo_root: None,
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
         };
 
@@ -4010,6 +4212,12 @@ mod tests {
             auto_worktree_repo_root: None,
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
         };
 
@@ -4453,6 +4661,12 @@ mod tests {
             auto_worktree_repo_root: None,
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
             script_timeout: std::time::Duration::from_secs(30),
         }
     }

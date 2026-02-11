@@ -1056,6 +1056,24 @@ pub struct NoriConfig {
 
     /// Scripts to run when a session ends.
     pub session_end_hooks: Vec<PathBuf>,
+
+    /// Scripts to run before a user prompt is sent to the agent.
+    pub pre_user_prompt_hooks: Vec<PathBuf>,
+
+    /// Scripts to run after a user prompt is sent to the agent.
+    pub post_user_prompt_hooks: Vec<PathBuf>,
+
+    /// Scripts to run before a tool call is executed.
+    pub pre_tool_call_hooks: Vec<PathBuf>,
+
+    /// Scripts to run after a tool call completes.
+    pub post_tool_call_hooks: Vec<PathBuf>,
+
+    /// Scripts to run before the agent produces a response.
+    pub pre_agent_response_hooks: Vec<PathBuf>,
+
+    /// Scripts to run after the agent finishes its response.
+    pub post_agent_response_hooks: Vec<PathBuf>,
 }
 
 impl Default for NoriConfig {
@@ -1082,6 +1100,12 @@ impl Default for NoriConfig {
             mcp_servers: HashMap::new(),
             session_start_hooks: Vec::new(),
             session_end_hooks: Vec::new(),
+            pre_user_prompt_hooks: Vec::new(),
+            post_user_prompt_hooks: Vec::new(),
+            pre_tool_call_hooks: Vec::new(),
+            post_tool_call_hooks: Vec::new(),
+            pre_agent_response_hooks: Vec::new(),
+            post_agent_response_hooks: Vec::new(),
         }
     }
 }
@@ -1106,6 +1130,30 @@ pub struct HooksConfigToml {
     /// Scripts to run when a session ends.
     #[serde(default)]
     pub session_end: Option<Vec<String>>,
+
+    /// Scripts to run before a user prompt is sent to the agent.
+    #[serde(default)]
+    pub pre_user_prompt: Option<Vec<String>>,
+
+    /// Scripts to run after a user prompt is sent to the agent.
+    #[serde(default)]
+    pub post_user_prompt: Option<Vec<String>>,
+
+    /// Scripts to run before a tool call is executed.
+    #[serde(default)]
+    pub pre_tool_call: Option<Vec<String>>,
+
+    /// Scripts to run after a tool call completes.
+    #[serde(default)]
+    pub post_tool_call: Option<Vec<String>>,
+
+    /// Scripts to run before the agent produces a response.
+    #[serde(default)]
+    pub pre_agent_response: Option<Vec<String>>,
+
+    /// Scripts to run after the agent finishes its response.
+    #[serde(default)]
+    pub post_agent_response: Option<Vec<String>>,
 }
 
 /// Expand a leading `~` to the user's home directory.

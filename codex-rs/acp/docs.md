@@ -146,24 +146,74 @@ When `auto_worktree` is enabled, the worktree is initially created with a random
 
 The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
-**Session Hooks Configuration** (`config/types.rs`, `hooks.rs`):
+**Hooks System** (`config/types.rs`, `hooks.rs`, `backend.rs`):
 
-Session hooks allow users to run custom scripts at session lifecycle boundaries. Configured under `[hooks]` in `config.toml`:
+Hooks allow users to run custom scripts at lifecycle boundaries. All hooks are configured under `[hooks]` in `config.toml`, are **blocking** (executed sequentially), and **fail-open** (failures produce warnings but do not halt operations). They all share the same execution engine (`execute_hooks_with_env()` in `hooks.rs`), output routing, and interpreter detection.
 
 ```toml
 [hooks]
-session_start = ["~/.nori/cli/hooks/start.sh", "~/scripts/setup.py"]
+session_start = ["~/.nori/cli/hooks/start.sh"]
 session_end = ["~/.nori/cli/hooks/cleanup.sh"]
+pre_user_prompt = ["~/.nori/cli/hooks/pre-prompt.sh"]
+post_user_prompt = ["~/.nori/cli/hooks/post-prompt.sh"]
+pre_tool_call = ["~/.nori/cli/hooks/pre-tool.sh"]
+post_tool_call = ["~/.nori/cli/hooks/post-tool.sh"]
+pre_agent_response = ["~/.nori/cli/hooks/pre-response.sh"]
+post_agent_response = ["~/.nori/cli/hooks/post-response.sh"]
 ```
 
-| Field | TOML Key | Default | Controls |
-|-------|----------|---------|----------|
-| `session_start_hooks` | `session_start` | `[]` (empty) | Scripts executed after backend construction but before `SessionConfigured` event |
-| `session_end_hooks` | `session_end` | `[]` (empty) | Scripts executed on `Op::Shutdown` before transcript recorder shutdown |
+| Field | TOML Key | Default | Execution Point |
+|-------|----------|---------|-----------------|
+| `session_start_hooks` | `session_start` | `[]` | After backend construction, before `SessionConfigured` event |
+| `session_end_hooks` | `session_end` | `[]` | On `Op::Shutdown`, before transcript recorder shutdown |
+| `pre_user_prompt_hooks` | `pre_user_prompt` | `[]` | In `handle_user_input()`, before the prompt is sent to the agent |
+| `post_user_prompt_hooks` | `post_user_prompt` | `[]` | After the entire turn completes (agent response + all tool calls finished) |
+| `pre_tool_call_hooks` | `pre_tool_call` | `[]` | Inside the update handler task, when a `ToolCall` update arrives |
+| `post_tool_call_hooks` | `post_tool_call` | `[]` | Inside the update handler task, when a `ToolCallUpdate` has `Completed` status |
+| `pre_agent_response_hooks` | `pre_agent_response` | `[]` | Inside the update handler task, on the first non-empty `AgentMessageChunk` |
+| `post_agent_response_hooks` | `post_agent_response` | `[]` | After the update handler completes, with the full accumulated response text |
 
-**Hook resolution:** `HooksConfigToml` deserializes the TOML section. `resolve_hook_paths()` applies tilde expansion via `expand_tilde()` (using `dirs::home_dir()`) and converts strings to `PathBuf`s. The resolved paths are stored on `NoriConfig` and passed through `AcpBackendConfig` to the backend.
+**Hook execution timing within a turn:**
 
-**Hook execution** (`hooks.rs`): `execute_hooks()` runs scripts sequentially with a configurable timeout (reuses the `script_timeout` from `[tui]` config, default 30s). Interpreter is auto-detected by file extension:
+```
+handle_user_input()
+  |
+  +--> pre_user_prompt hooks (main async context)
+  |
+  +--> [prompt sent to agent]
+  |
+  +--> spawned update handler task:
+  |      |
+  |      +--> pre_agent_response (on first text chunk)
+  |      |
+  |      +--> pre_tool_call (on each ToolCall)
+  |      +--> post_tool_call (on each ToolCallUpdate with Completed status)
+  |      |    (pre/post tool call may repeat for multiple tool calls)
+  |      |
+  |      +--> [stream ends]
+  |
+  +--> post_agent_response (after update handler joins, if text was accumulated)
+  +--> post_user_prompt (after the turn completes)
+```
+
+**Environment variables passed to hook scripts:**
+
+Each lifecycle hook receives `NORI_HOOK_EVENT` set to its hook name. Additional variables depend on the hook type:
+
+| Hook | `NORI_HOOK_EVENT` | Additional Environment Variables |
+|------|-------------------|----------------------------------|
+| `pre_user_prompt` | `"pre_user_prompt"` | `NORI_HOOK_PROMPT_TEXT` |
+| `post_user_prompt` | `"post_user_prompt"` | `NORI_HOOK_PROMPT_TEXT` |
+| `pre_tool_call` | `"pre_tool_call"` | `NORI_HOOK_TOOL_NAME`, `NORI_HOOK_TOOL_ARGS` |
+| `post_tool_call` | `"post_tool_call"` | `NORI_HOOK_TOOL_NAME`, `NORI_HOOK_TOOL_OUTPUT` |
+| `pre_agent_response` | `"pre_agent_response"` | (none) |
+| `post_agent_response` | `"post_agent_response"` | `NORI_HOOK_RESPONSE_TEXT` |
+| `session_start` | (none) | (none) |
+| `session_end` | (none) | (none) |
+
+**Hook resolution:** `HooksConfigToml` deserializes the TOML `[hooks]` section. `resolve_hook_paths()` applies tilde expansion via `expand_tilde()` (using `dirs::home_dir()`) and converts strings to `PathBuf`s. The resolved paths are stored on `NoriConfig` and passed through `AcpBackendConfig` to the backend.
+
+**Hook execution** (`hooks.rs`): `execute_hooks_with_env()` is the core execution function -- it runs scripts sequentially with a configurable timeout and injects environment variables into each child process. `execute_hooks()` is a thin wrapper that calls it with an empty env map. Interpreter is auto-detected by file extension:
 
 | Extension | Interpreter |
 |-----------|-------------|
@@ -172,7 +222,7 @@ session_end = ["~/.nori/cli/hooks/cleanup.sh"]
 | `.js` | `node` |
 | other/none | executed directly |
 
-Hook failures are non-fatal. Failed hooks emit `WarningEvent` to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
+Hook failures are non-fatal. Failed hooks emit warning events to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
 
 **Hook output routing** (`hooks.rs`, `backend.rs`):
 
@@ -186,9 +236,9 @@ Hook scripts can route their stdout lines to different destinations by using lin
 | `::output-error::` | Red error text in TUI | `OutputError` |
 | `::context::` | Accumulated and prepended to next user prompt | `Context` |
 
-The routing is handled by `route_hook_results()` in `backend.rs`, which is shared between session start and session end hook handling. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
+The routing is handled by `route_hook_results()` in `backend.rs`, which is shared across all hook types. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
 
-**Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt.
+**Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt. Only `pre_user_prompt` and `post_user_prompt` hooks pass the context accumulator to `route_hook_results()`; other hooks pass `None`.
 
 **Session end hook timing:** During `Op::Shutdown`, end hooks execute and their output is routed via `route_hook_results()` before `ShutdownComplete` is sent, so the TUI can still display hook output. Context lines are irrelevant during shutdown, so `None` is passed for the context accumulator.
 

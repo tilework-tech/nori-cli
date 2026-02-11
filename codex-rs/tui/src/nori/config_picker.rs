@@ -418,6 +418,12 @@ mod tests {
             mcp_servers: std::collections::HashMap::new(),
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
         }
     }
 
