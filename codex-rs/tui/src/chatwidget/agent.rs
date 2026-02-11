@@ -215,6 +215,10 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             Ok(b) => Arc::new(b),
             Err(e) => {
                 tracing::error!("failed to spawn ACP backend: {e}");
+                // Drop the receiver so the sender knows the channel is dead.
+                // Without this, submit_op(Op::Shutdown) would succeed but hang forever
+                // waiting for a ShutdownComplete that will never arrive.
+                drop(codex_op_rx);
                 // Send AgentSpawnFailed so the user can select a different agent
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
                     model_name: config.model.clone(),
@@ -345,6 +349,10 @@ pub(crate) fn spawn_acp_agent_resume(
             Ok(b) => Arc::new(b),
             Err(e) => {
                 tracing::error!("failed to resume ACP session: {e}");
+                // Drop the receiver so the sender knows the channel is dead.
+                // Without this, submit_op(Op::Shutdown) would succeed but hang forever
+                // waiting for a ShutdownComplete that will never arrive.
+                drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
                     model_name: config.model.clone(),
                     error: format!("Failed to resume ACP session: {e}"),
@@ -423,6 +431,10 @@ fn spawn_http_agent(
             Err(err) => {
                 let message = err.to_string();
                 eprintln!("{message}");
+                // Drop the receiver so the sender knows the channel is dead.
+                // Without this, submit_op(Op::Shutdown) would succeed but hang forever
+                // waiting for a ShutdownComplete that will never arrive.
+                drop(codex_op_rx);
                 // Send AgentSpawnFailed so the user can select a different agent
                 app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
                     model_name,
