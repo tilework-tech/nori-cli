@@ -249,7 +249,7 @@ impl acp::Agent for MockAgent {
 
     async fn load_session(
         &self,
-        _arguments: acp::LoadSessionRequest,
+        arguments: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
         if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
             eprintln!("Mock agent: simulating load_session failure");
@@ -258,6 +258,21 @@ impl acp::Agent for MockAgent {
                 "Mock load_session failure for testing",
             ));
         }
+
+        // Send configurable number of notifications during load_session
+        // to simulate history replay. Uses the session_id from the request
+        // so notifications are routed to the correct update channel.
+        if let Ok(count_str) = std::env::var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT")
+            && let Ok(count) = count_str.parse::<usize>()
+        {
+            let session_id = arguments.session_id.clone();
+            eprintln!("Mock agent: sending {count} notifications during load_session");
+            for i in 0..count {
+                self.send_text_chunk(session_id.clone(), &format!("replay chunk {i}"))
+                    .await?;
+            }
+        }
+
         Ok(acp::LoadSessionResponse::new())
     }
 

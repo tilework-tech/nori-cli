@@ -549,11 +549,11 @@ AcpConnection::spawn() -> check capabilities().load_session
     │       |
     │       ├── Success:
     │       │   Agent streams SessionUpdate notifications (history replay)
-    │       │   Forward task translates updates to codex Events
-    │       │   returns (session_id, no initial_messages, no summary)
+    │       │   Collect task buffers updates into Vec (no backpressure)
+    │       │   returns (session_id, no initial_messages, deferred_replay_events)
     │       │
     │       └── Failure (runtime error):
-    │           Forward task aborted
+    │           Collect task aborted
     │           Falls through to client-side replay (see below)
     │           WarningEvent emitted to TUI about the fallback
     │
@@ -571,9 +571,12 @@ AcpConnection::spawn() -> check capabilities().load_session
     |
     v
 SessionConfigured event sent to TUI (with initial_messages if client-side)
+    |
+    v
+Deferred replay relay spawned (sends buffered events to event_tx)
 ```
 
-**Server-side path:** The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the forward task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
+**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the translated codex `Event`s into a `Vec` (using `translate_session_update_to_events()`). The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to `event_tx`. This deferred-relay pattern prevents a deadlock: the `event_tx` channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
 - `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history

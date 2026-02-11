@@ -452,108 +452,135 @@ impl AcpBackend {
         // If server-side load_session fails at runtime, we fall back to
         // client-side replay rather than propagating the error. This ensures
         // /resume works even when the agent's load_session is broken.
-        let (session_id, initial_messages, pending_summary, is_first_prompt_val, used_fallback) =
-            if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
-                debug!("Agent supports session/load — using server-side resume");
+        // The sixth tuple element carries buffered replay events from
+        // server-side session/load.  We must NOT spawn a relay task for
+        // these events until *after* resume_session has finished sending
+        // its own events (SessionConfigured, Warning, etc.) to event_tx,
+        // because the relay can fill the bounded channel and block
+        // resume_session from sending.
+        let (
+            session_id,
+            initial_messages,
+            pending_summary,
+            is_first_prompt_val,
+            used_fallback,
+            deferred_replay_events,
+        ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
+            debug!("Agent supports session/load — using server-side resume");
 
-                let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
-                let event_tx_for_updates = event_tx.clone();
-                let forward_handle = tokio::spawn(async move {
-                    let mut pending_patch_changes = std::collections::HashMap::new();
-                    while let Some(update) = update_rx.recv().await {
-                        let event_msgs =
-                            translate_session_update_to_events(&update, &mut pending_patch_changes);
-                        for msg in event_msgs {
-                            let _ = event_tx_for_updates
-                                .send(Event {
-                                    id: String::new(),
-                                    msg,
-                                })
-                                .await;
-                        }
-                    }
-                });
+            let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
 
-                match connection.load_session(sid, &cwd, update_tx).await {
-                    Ok(session_id) => {
-                        let _ = forward_handle.await;
-                        debug!("ACP session resumed via session/load: {sid}");
-                        (session_id, None, None, false, None)
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Server-side session/load failed, falling back to client-side replay: {e}"
-                        );
-                        forward_handle.abort();
-
-                        let session_id = connection.create_session(&cwd).await.map_err(|e| {
-                            let error_string = format!("{e:?}");
-                            let category = categorize_acp_error(&error_string);
-                            let display_error = format!("{e}");
-                            anyhow::anyhow!(enhanced_error_message(
-                                category,
-                                &display_error,
-                                &agent_config.provider_info.name,
-                                &agent_config.auth_hint,
-                                agent_config.agent.display_name(),
-                                agent_config.agent.npm_package(),
-                            ))
-                        })?;
-
-                        let (replay_events, summary) = if let Some(t) = transcript {
-                            let events = transcript_to_replay_events(t);
-                            let summary_text = transcript_to_summary(t);
-                            let summary_opt = if summary_text.is_empty() {
-                                None
-                            } else {
-                                Some(summary_text)
-                            };
-                            (Some(events), summary_opt)
-                        } else {
-                            (None, None)
-                        };
-
-                        (
-                            session_id,
-                            replay_events,
-                            summary,
-                            true,
-                            Some(e.to_string()),
-                        )
+            // Collect replay events into a buffer instead of sending them
+            // directly to event_tx. The event_tx consumer only starts after
+            // resume_session returns, so sending directly would deadlock
+            // when the number of events exceeds the channel capacity.
+            let collect_handle = tokio::spawn(async move {
+                let mut pending_patch_changes = std::collections::HashMap::new();
+                let mut buffered_events = Vec::new();
+                while let Some(update) = update_rx.recv().await {
+                    let event_msgs =
+                        translate_session_update_to_events(&update, &mut pending_patch_changes);
+                    for msg in event_msgs {
+                        buffered_events.push(Event {
+                            id: String::new(),
+                            msg,
+                        });
                     }
                 }
-            } else {
-                debug!("Agent does not support session/load — using client-side replay");
+                buffered_events
+            });
 
-                let session_id = connection.create_session(&cwd).await.map_err(|e| {
-                    let error_string = format!("{e:?}");
-                    let category = categorize_acp_error(&error_string);
-                    let display_error = format!("{e}");
-                    anyhow::anyhow!(enhanced_error_message(
-                        category,
-                        &display_error,
-                        &agent_config.provider_info.name,
-                        &agent_config.auth_hint,
-                        agent_config.agent.display_name(),
-                        agent_config.agent.npm_package(),
-                    ))
-                })?;
+            match connection.load_session(sid, &cwd, update_tx).await {
+                Ok(session_id) => {
+                    // Wait for all updates to be collected. This is safe
+                    // because the collect task buffers into a Vec (no
+                    // backpressure) and update_rx closes when load_session
+                    // completes (the worker thread drops update_tx).
+                    let buffered_events = collect_handle.await.unwrap_or_default();
+                    if !buffered_events.is_empty() {
+                        debug!(
+                            "ACP session/load produced {} replay events (deferred until after setup)",
+                            buffered_events.len()
+                        );
+                    }
+                    debug!("ACP session resumed via session/load: {sid}");
+                    (session_id, None, None, false, None, buffered_events)
+                }
+                Err(e) => {
+                    warn!(
+                        "Server-side session/load failed, falling back to client-side replay: {e}"
+                    );
+                    collect_handle.abort();
 
-                let (replay_events, summary) = if let Some(t) = transcript {
-                    let events = transcript_to_replay_events(t);
-                    let summary_text = transcript_to_summary(t);
-                    let summary_opt = if summary_text.is_empty() {
-                        None
+                    let session_id = connection.create_session(&cwd).await.map_err(|e| {
+                        let error_string = format!("{e:?}");
+                        let category = categorize_acp_error(&error_string);
+                        let display_error = format!("{e}");
+                        anyhow::anyhow!(enhanced_error_message(
+                            category,
+                            &display_error,
+                            &agent_config.provider_info.name,
+                            &agent_config.auth_hint,
+                            agent_config.agent.display_name(),
+                            agent_config.agent.npm_package(),
+                        ))
+                    })?;
+
+                    let (replay_events, summary) = if let Some(t) = transcript {
+                        let events = transcript_to_replay_events(t);
+                        let summary_text = transcript_to_summary(t);
+                        let summary_opt = if summary_text.is_empty() {
+                            None
+                        } else {
+                            Some(summary_text)
+                        };
+                        (Some(events), summary_opt)
                     } else {
-                        Some(summary_text)
+                        (None, None)
                     };
-                    (Some(events), summary_opt)
-                } else {
-                    (None, None)
-                };
 
-                (session_id, replay_events, summary, true, None)
+                    (
+                        session_id,
+                        replay_events,
+                        summary,
+                        true,
+                        Some(e.to_string()),
+                        Vec::new(),
+                    )
+                }
+            }
+        } else {
+            debug!("Agent does not support session/load — using client-side replay");
+
+            let session_id = connection.create_session(&cwd).await.map_err(|e| {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+                anyhow::anyhow!(enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                ))
+            })?;
+
+            let (replay_events, summary) = if let Some(t) = transcript {
+                let events = transcript_to_replay_events(t);
+                let summary_text = transcript_to_summary(t);
+                let summary_opt = if summary_text.is_empty() {
+                    None
+                } else {
+                    Some(summary_text)
+                };
+                (Some(events), summary_opt)
+            } else {
+                (None, None)
             };
+
+            (session_id, replay_events, summary, true, None, Vec::new())
+        };
 
         let approval_rx = connection.take_approval_receiver();
         let connection = Arc::new(connection);
@@ -664,6 +691,19 @@ impl AcpBackend {
             cwd.clone(),
             approval_policy_rx,
         ));
+
+        // Spawn the replay relay *after* all setup events (SessionConfigured,
+        // Warning, etc.) have been sent.  Spawning it earlier causes a
+        // deadlock: the relay fills the bounded event_tx channel, blocking
+        // resume_session from sending its own events while nobody is
+        // consuming from event_rx yet.
+        if !deferred_replay_events.is_empty() {
+            tokio::spawn(async move {
+                for event in deferred_replay_events {
+                    let _ = event_tx.send(event).await;
+                }
+            });
+        }
 
         Ok(backend)
     }
@@ -4428,6 +4468,91 @@ mod tests {
                 std::mem::discriminant(&other)
             ),
         }
+    }
+
+    /// When load_session sends many notifications during session replay,
+    /// resume_session must not deadlock. This reproduces a bug where the
+    /// forwarding task blocked on `event_tx.send().await` (bounded channel)
+    /// while `resume_session` awaited the forwarding task, and the consumer
+    /// of `event_rx` hadn't started yet — causing a circular wait.
+    #[tokio::test]
+    #[serial]
+    async fn test_resume_session_does_not_deadlock_with_many_notifications() {
+        use std::time::Duration;
+
+        let mock_config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+        if !std::path::Path::new(&mock_config.command).exists() {
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                mock_config.command
+            );
+            return;
+        }
+
+        // Agent advertises load_session, load_session succeeds, and sends
+        // 100 notifications during the load — more than the event channel
+        // capacity (64 in test, 32 in production), triggering the deadlock.
+        // SAFETY: This is a test that manipulates environment variables.
+        // It's safe because this test runs in isolation and we clean up after.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+            std::env::set_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT", "100");
+        }
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let (event_tx, mut event_rx) = mpsc::channel(64);
+        let config = build_test_config(temp_dir.path());
+        let transcript = build_test_transcript();
+
+        // No consumer is spawned — this mirrors real usage where the TUI
+        // consumer starts only AFTER resume_session returns. A timeout
+        // detects the deadlock: if resume_session hangs, it times out.
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            AcpBackend::resume_session(
+                &config,
+                Some("acp-session-42"),
+                Some(&transcript),
+                event_tx,
+            ),
+        )
+        .await;
+
+        // SAFETY: Cleaning up the environment variables we set above.
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+            std::env::remove_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT");
+        }
+
+        // If we got a timeout, the deadlock is present
+        let backend_result = result.expect(
+            "resume_session deadlocked: timed out after 10s. \
+             The forwarding task is blocked on event_tx.send().await \
+             while resume_session awaits forward_handle",
+        );
+
+        // The resume should succeed
+        assert!(
+            backend_result.is_ok(),
+            "resume_session should succeed, but got: {:?}",
+            backend_result.err()
+        );
+
+        // Drain events and verify we received the replayed notifications
+        let mut notification_count = 0;
+        while let Ok(Some(event)) =
+            tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await
+        {
+            if matches!(event.msg, EventMsg::AgentMessageDelta(_)) {
+                notification_count += 1;
+            }
+        }
+
+        assert!(
+            notification_count >= 100,
+            "Expected at least 100 replayed notification events, got {notification_count}"
+        );
     }
 
     /// When load_session succeeds, resume_session should use the server-side
