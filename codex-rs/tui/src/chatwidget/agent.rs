@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
@@ -10,16 +11,47 @@ use codex_acp::get_agent_config;
 use codex_acp::get_agent_display_name;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
-use codex_core::NewConversation;
 use codex_core::config::Config;
 use codex_core::protocol::Op;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
+
+/// Duration before showing a warning that connection is taking too long.
+const CONNECT_WARNING_SECS: u64 = 8;
+/// Duration after the warning before forcibly aborting the connection attempt.
+const CONNECT_ABORT_SECS: u64 = 30;
+
+/// Drain ops from the channel, discarding everything except `Op::Shutdown`.
+/// Returns when `Op::Shutdown` is received or the channel is closed.
+pub(crate) async fn drain_until_shutdown(rx: &mut UnboundedReceiver<Op>) {
+    while let Some(op) = rx.recv().await {
+        if matches!(op, Op::Shutdown) {
+            return;
+        }
+    }
+}
+
+/// Two-phase timeout: warn after `CONNECT_WARNING_SECS`, abort after an
+/// additional `CONNECT_ABORT_SECS`.
+async fn spawn_timeout_sequence(app_event_tx: &AppEventSender) {
+    tokio::time::sleep(Duration::from_secs(CONNECT_WARNING_SECS)).await;
+    app_event_tx.send(AppEvent::CodexEvent(codex_core::protocol::Event {
+        id: String::new(),
+        msg: codex_core::protocol::EventMsg::Warning(codex_core::protocol::WarningEvent {
+            message: format!(
+                "Connection is taking longer than expected. \
+                 Will abort in {CONNECT_ABORT_SECS}s if still unresponsive."
+            ),
+        }),
+    }));
+    tokio::time::sleep(Duration::from_secs(CONNECT_ABORT_SECS)).await;
+}
 
 /// Command for controlling the ACP agent.
 #[cfg(feature = "unstable")]
@@ -211,18 +243,35 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             script_timeout: nori_config.script_timeout.as_duration(),
         };
 
-        let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
-            Ok(b) => Arc::new(b),
-            Err(e) => {
-                tracing::error!("failed to spawn ACP backend: {e}");
-                // Drop the receiver so the sender knows the channel is dead.
-                // Without this, submit_op(Op::Shutdown) would succeed but hang forever
-                // waiting for a ShutdownComplete that will never arrive.
+        // Race backend init against shutdown requests and a timeout.
+        // This ensures the user can always exit even if the backend hangs.
+        let backend = tokio::select! {
+            result = AcpBackend::spawn(&acp_config, event_tx) => {
+                match result {
+                    Ok(b) => Arc::new(b),
+                    Err(e) => {
+                        tracing::error!("failed to spawn ACP backend: {e}");
+                        drop(codex_op_rx);
+                        app_event_tx.send(AppEvent::AgentSpawnFailed {
+                            model_name: config.model.clone(),
+                            error: format!("Failed to spawn ACP agent: {e}"),
+                        });
+                        return;
+                    }
+                }
+            }
+            () = drain_until_shutdown(&mut codex_op_rx) => {
+                tracing::info!("shutdown requested while ACP backend was connecting");
                 drop(codex_op_rx);
-                // Send AgentSpawnFailed so the user can select a different agent
+                app_event_tx.send(AppEvent::ExitRequest);
+                return;
+            }
+            () = spawn_timeout_sequence(&app_event_tx) => {
+                tracing::warn!("ACP backend connection timed out");
+                drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
                     model_name: config.model.clone(),
-                    error: format!("Failed to spawn ACP agent: {e}"),
+                    error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
             }
@@ -338,24 +387,39 @@ pub(crate) fn spawn_acp_agent_resume(
             script_timeout: nori_config.script_timeout.as_duration(),
         };
 
-        let backend = match AcpBackend::resume_session(
-            &acp_config,
-            acp_session_id.as_deref(),
-            Some(&transcript),
-            event_tx,
-        )
-        .await
-        {
-            Ok(b) => Arc::new(b),
-            Err(e) => {
-                tracing::error!("failed to resume ACP session: {e}");
-                // Drop the receiver so the sender knows the channel is dead.
-                // Without this, submit_op(Op::Shutdown) would succeed but hang forever
-                // waiting for a ShutdownComplete that will never arrive.
+        // Race backend resume against shutdown requests and a timeout.
+        let backend = tokio::select! {
+            result = AcpBackend::resume_session(
+                &acp_config,
+                acp_session_id.as_deref(),
+                Some(&transcript),
+                event_tx,
+            ) => {
+                match result {
+                    Ok(b) => Arc::new(b),
+                    Err(e) => {
+                        tracing::error!("failed to resume ACP session: {e}");
+                        drop(codex_op_rx);
+                        app_event_tx.send(AppEvent::AgentSpawnFailed {
+                            model_name: config.model.clone(),
+                            error: format!("Failed to resume ACP session: {e}"),
+                        });
+                        return;
+                    }
+                }
+            }
+            () = drain_until_shutdown(&mut codex_op_rx) => {
+                tracing::info!("shutdown requested while resuming ACP session");
+                drop(codex_op_rx);
+                app_event_tx.send(AppEvent::ExitRequest);
+                return;
+            }
+            () = spawn_timeout_sequence(&app_event_tx) => {
+                tracing::warn!("ACP session resume timed out");
                 drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
                     model_name: config.model.clone(),
-                    error: format!("Failed to resume ACP session: {e}"),
+                    error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
             }
@@ -421,26 +485,38 @@ fn spawn_http_agent(
     let model_name = config.model.clone();
     let app_event_tx_clone = app_event_tx;
     tokio::spawn(async move {
-        let NewConversation {
-            conversation_id: _,
-            conversation,
-            session_configured,
-        } = match server.new_conversation(config).await {
-            Ok(v) => v,
-            #[allow(clippy::print_stderr)]
-            Err(err) => {
-                let message = err.to_string();
-                eprintln!("{message}");
-                // Drop the receiver so the sender knows the channel is dead.
-                // Without this, submit_op(Op::Shutdown) would succeed but hang forever
-                // waiting for a ShutdownComplete that will never arrive.
+        // Race backend init against shutdown requests and a timeout.
+        let (conversation, session_configured) = tokio::select! {
+            result = server.new_conversation(config) => {
+                match result {
+                    Ok(v) => (v.conversation, v.session_configured),
+                    #[allow(clippy::print_stderr)]
+                    Err(err) => {
+                        let message = err.to_string();
+                        eprintln!("{message}");
+                        drop(codex_op_rx);
+                        app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
+                            model_name,
+                            error: format!("Failed to initialize HTTP agent: {err}"),
+                        });
+                        tracing::error!("failed to initialize codex: {err}");
+                        return;
+                    }
+                }
+            }
+            () = drain_until_shutdown(&mut codex_op_rx) => {
+                tracing::info!("shutdown requested while HTTP backend was connecting");
                 drop(codex_op_rx);
-                // Send AgentSpawnFailed so the user can select a different agent
+                app_event_tx_clone.send(AppEvent::ExitRequest);
+                return;
+            }
+            () = spawn_timeout_sequence(&app_event_tx_clone) => {
+                tracing::warn!("HTTP backend connection timed out");
+                drop(codex_op_rx);
                 app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
                     model_name,
-                    error: format!("Failed to initialize HTTP agent: {err}"),
+                    error: "Connection timed out. The agent did not respond.".to_string(),
                 });
-                tracing::error!("failed to initialize codex: {err}");
                 return;
             }
         };
