@@ -352,12 +352,16 @@ The resume session picker reuses the `SessionPickerInfo` type and `format_relati
 
 **Agent Connection Lifecycle & Failure Recovery:**
 
-When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. The spawn task (`spawn_acp_agent` / `spawn_acp_agent_resume`) runs asynchronously and resolves to one of two outcomes:
+When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. Each spawn function (`spawn_acp_agent`, `spawn_acp_agent_resume`, `spawn_http_agent`) uses a `tokio::select!` to race three concurrent futures during backend initialization:
 
-| Outcome | Event | Handler |
-|---------|-------|---------|
-| Success | `AppEvent::SessionConfigured` | Normal session setup proceeds |
-| Failure | `AppEvent::AgentSpawnFailed` | `ChatWidget::on_agent_spawn_failed()` |
+| Arm | Trigger | Action |
+|-----|---------|--------|
+| Backend init completes (success) | `AcpBackend::spawn()` / `resume_session()` returns `Ok` | Proceeds to op forwarding and event forwarding |
+| Backend init completes (failure) | Returns `Err` | Sends `AppEvent::AgentSpawnFailed`, drops `codex_op_rx` |
+| `drain_until_shutdown()` | User sends `Op::Shutdown` during connection | Sends `AppEvent::ExitRequest`, drops `codex_op_rx` |
+| `spawn_timeout_sequence()` | 8s warning + 30s abort elapse | Sends warning at 8s, then `AgentSpawnFailed` at 38s, drops `codex_op_rx` |
+
+`drain_until_shutdown()` reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds it sends a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
 
 `on_agent_spawn_failed()` in `chatwidget.rs` performs three recovery steps in order:
 1. Clears the "Connecting" status indicator via `bottom_pane.hide_status_indicator()`
@@ -370,7 +374,7 @@ When the agent begins processing a task, the `StatusIndicatorWidget` displays an
 
 **Exit Path When Backend Is Dead:**
 
-When agent spawn fails, the async task exits and drops the `codex_op_rx` receiver. This means the `codex_op_tx` channel held by `ChatWidget` has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
+Every error/timeout/shutdown arm in the `tokio::select!` explicitly calls `drop(codex_op_rx)` before returning. This closes the receiver end of the channel so that `codex_op_tx` (held by `ChatWidget`) has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
 
 **Loop Mode (Prompt Repetition):**
 

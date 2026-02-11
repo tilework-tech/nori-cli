@@ -49,5 +49,6 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 - Timing-sensitive tests use configurable timeouts
 - Debug styles respect color terminal detection
 - Snapshot tests use `insta` for visual verification of screen output; snapshots live in `tests/snapshots/`
+- `normalize_for_input_snapshot()` normalizes dynamic content before snapshot comparison: session timestamps/IDs become `[TIMESTAMP]`/`[SESSION_ID]`, and the randomly selected whimsical status indicator header becomes `[STATUS]`. Tests that check for the status indicator being active use `"esc to interrupt"` as the stable anchor text rather than any specific status message.
 
 Created and maintained by Nori.
