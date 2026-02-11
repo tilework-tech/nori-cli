@@ -172,7 +172,25 @@ session_end = ["~/.nori/cli/hooks/cleanup.sh"]
 | `.js` | `node` |
 | other/none | executed directly |
 
-Hook failures are non-fatal. During `spawn()` and `resume_session()`, failures emit `WarningEvent` to the TUI via the event channel. During `Op::Shutdown`, failures are `warn!`-logged only because the TUI is shutting down and cannot display warnings. A failed hook does not prevent subsequent hooks from executing.
+Hook failures are non-fatal. Failed hooks emit `WarningEvent` to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
+
+**Hook output routing** (`hooks.rs`, `backend.rs`):
+
+Hook scripts can route their stdout lines to different destinations by using line prefixes. `parse_hook_output()` parses each non-empty line of stdout:
+
+| Prefix | Destination | `HookOutputLine` variant |
+|--------|-------------|--------------------------|
+| (none) | `tracing::info!` | `Log` |
+| `::output::` | Plain white text in TUI (`PlainHistoryCell`) | `Output` |
+| `::output-warn::` | Yellow warning text in TUI | `OutputWarn` |
+| `::output-error::` | Red error text in TUI | `OutputError` |
+| `::context::` | Accumulated and prepended to next user prompt | `Context` |
+
+The routing is handled by `route_hook_results()` in `backend.rs`, which is shared between session start and session end hook handling. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
+
+**Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt.
+
+**Session end hook timing:** During `Op::Shutdown`, end hooks execute and their output is routed via `route_hook_results()` before `ShutdownComplete` is sent, so the TUI can still display hook output. Context lines are irrelevant during shutdown, so `None` is passed for the context accumulator.
 
 **Message History** (`message_history.rs`):
 
@@ -547,14 +565,15 @@ AcpConnection::spawn() -> check capabilities().load_session
     │       v
     │   AcpConnection::load_session(session_id, cwd, update_tx)
     │       |
-    │       v
-    │   Agent streams SessionUpdate notifications (history replay)
-    │       |
-    │       v
-    │   Forward task translates updates to codex Events
-    │       |
-    │       v
-    │   returns (session_id, no initial_messages, no summary)
+    │       ├── Success:
+    │       │   Agent streams SessionUpdate notifications (history replay)
+    │       │   Collect task buffers updates into Vec (no backpressure)
+    │       │   returns (session_id, no initial_messages, deferred_replay_events)
+    │       │
+    │       └── Failure (runtime error):
+    │           Collect task aborted
+    │           Falls through to client-side replay (see below)
+    │           WarningEvent emitted to TUI about the fallback
     │
     └── Otherwise (client-side replay fallback):
             |
@@ -570,15 +589,18 @@ AcpConnection::spawn() -> check capabilities().load_session
     |
     v
 SessionConfigured event sent to TUI (with initial_messages if client-side)
+    |
+    v
+Deferred replay relay spawned (sends buffered events to event_tx)
 ```
 
-**Server-side path:** The forwarding task runs concurrently during `load_session()` and translates `SessionUpdate` notifications into codex `Event`s using `translate_session_update_to_events()`. The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available.
+**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the translated codex `Event`s into a `Vec` (using `translate_session_update_to_events()`). The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to `event_tx`. This deferred-relay pattern prevents a deadlock: the `event_tx` channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
 
-**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
+**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
 - `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history
 - `transcript_to_summary()` builds a human-readable summary (truncated to 20k chars via `TRANSCRIPT_SUMMARY_MAX_CHARS`), stored in `pending_compact_summary` and prepended to the first user prompt -- the same mechanism used by `/compact`
 
-A new `TranscriptRecorder` is created for the resumed session in both paths, persisting the `acp_session_id` so the session can be resumed again in the future.
+A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
 **Prompt Summary** (`backend.rs`):
 

@@ -580,6 +580,9 @@ pub enum EventMsg {
     ReasoningRawContentDelta(ReasoningRawContentDeltaEvent),
 
     PromptSummary(PromptSummaryEvent),
+
+    /// Output from a hook script, routed by level for TUI display.
+    HookOutput(HookOutputEvent),
 }
 
 /// Codex errors that we expose to clients.
@@ -1622,6 +1625,21 @@ pub struct TurnAbortedEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct PromptSummaryEvent {
     pub summary: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HookOutputLevel {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct HookOutputEvent {
+    pub message: String,
+    pub level: HookOutputLevel,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]

@@ -17,6 +17,8 @@ use codex_protocol::protocol::ContextCompactedEvent;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::HookOutputEvent;
+use codex_protocol::protocol::HookOutputLevel;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::PatchApplyBeginEvent;
 use codex_protocol::protocol::PromptSummaryEvent;
@@ -204,6 +206,8 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Accumulated context from hook `::context::` lines, prepended to next prompt
+    pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
     transcript_recorder: Option<Arc<TranscriptRecorder>>,
     /// How long after idle before sending a notification
@@ -351,6 +355,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
+            pending_hook_context: Arc::new(Mutex::new(None)),
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
@@ -367,6 +372,7 @@ impl AcpBackend {
             &config.session_start_hooks,
             config.script_timeout,
             &event_tx,
+            Some(&backend.pending_hook_context),
         )
         .await;
 
@@ -448,32 +454,71 @@ impl AcpBackend {
 
         // Either load the session server-side or create a fresh session for
         // client-side replay.
-        let (session_id, initial_messages, pending_summary, is_first_prompt_val) =
-            if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
-                debug!("Agent supports session/load — using server-side resume");
+        //
+        // If server-side load_session fails at runtime, we fall back to
+        // client-side replay rather than propagating the error. This ensures
+        // /resume works even when the agent's load_session is broken.
+        // The sixth tuple element carries buffered replay events from
+        // server-side session/load.  We must NOT spawn a relay task for
+        // these events until *after* resume_session has finished sending
+        // its own events (SessionConfigured, Warning, etc.) to event_tx,
+        // because the relay can fill the bounded channel and block
+        // resume_session from sending.
+        let (
+            session_id,
+            initial_messages,
+            pending_summary,
+            is_first_prompt_val,
+            used_fallback,
+            deferred_replay_events,
+        ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
+            debug!("Agent supports session/load — using server-side resume");
 
-                let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
-                let event_tx_for_updates = event_tx.clone();
-                let forward_handle = tokio::spawn(async move {
-                    let mut pending_patch_changes = std::collections::HashMap::new();
-                    while let Some(update) = update_rx.recv().await {
-                        let event_msgs =
-                            translate_session_update_to_events(&update, &mut pending_patch_changes);
-                        for msg in event_msgs {
-                            let _ = event_tx_for_updates
-                                .send(Event {
-                                    id: String::new(),
-                                    msg,
-                                })
-                                .await;
-                        }
+            let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
+
+            // Collect replay events into a buffer instead of sending them
+            // directly to event_tx. The event_tx consumer only starts after
+            // resume_session returns, so sending directly would deadlock
+            // when the number of events exceeds the channel capacity.
+            let collect_handle = tokio::spawn(async move {
+                let mut pending_patch_changes = std::collections::HashMap::new();
+                let mut buffered_events = Vec::new();
+                while let Some(update) = update_rx.recv().await {
+                    let event_msgs =
+                        translate_session_update_to_events(&update, &mut pending_patch_changes);
+                    for msg in event_msgs {
+                        buffered_events.push(Event {
+                            id: String::new(),
+                            msg,
+                        });
                     }
-                });
+                }
+                buffered_events
+            });
 
-                let session_id = connection
-                    .load_session(sid, &cwd, update_tx)
-                    .await
-                    .map_err(|e| {
+            match connection.load_session(sid, &cwd, update_tx).await {
+                Ok(session_id) => {
+                    // Wait for all updates to be collected. This is safe
+                    // because the collect task buffers into a Vec (no
+                    // backpressure) and update_rx closes when load_session
+                    // completes (the worker thread drops update_tx).
+                    let buffered_events = collect_handle.await.unwrap_or_default();
+                    if !buffered_events.is_empty() {
+                        debug!(
+                            "ACP session/load produced {} replay events (deferred until after setup)",
+                            buffered_events.len()
+                        );
+                    }
+                    debug!("ACP session resumed via session/load: {sid}");
+                    (session_id, None, None, false, None, buffered_events)
+                }
+                Err(e) => {
+                    warn!(
+                        "Server-side session/load failed, falling back to client-side replay: {e}"
+                    );
+                    collect_handle.abort();
+
+                    let session_id = connection.create_session(&cwd).await.map_err(|e| {
                         let error_string = format!("{e:?}");
                         let category = categorize_acp_error(&error_string);
                         let display_error = format!("{e}");
@@ -487,42 +532,61 @@ impl AcpBackend {
                         ))
                     })?;
 
-                let _ = forward_handle.await;
-                debug!("ACP session resumed via session/load: {sid}");
-
-                (session_id, None, None, false)
-            } else {
-                debug!("Agent does not support session/load — using client-side replay");
-
-                let session_id = connection.create_session(&cwd).await.map_err(|e| {
-                    let error_string = format!("{e:?}");
-                    let category = categorize_acp_error(&error_string);
-                    let display_error = format!("{e}");
-                    anyhow::anyhow!(enhanced_error_message(
-                        category,
-                        &display_error,
-                        &agent_config.provider_info.name,
-                        &agent_config.auth_hint,
-                        agent_config.agent.display_name(),
-                        agent_config.agent.npm_package(),
-                    ))
-                })?;
-
-                let (replay_events, summary) = if let Some(t) = transcript {
-                    let events = transcript_to_replay_events(t);
-                    let summary_text = transcript_to_summary(t);
-                    let summary_opt = if summary_text.is_empty() {
-                        None
+                    let (replay_events, summary) = if let Some(t) = transcript {
+                        let events = transcript_to_replay_events(t);
+                        let summary_text = transcript_to_summary(t);
+                        let summary_opt = if summary_text.is_empty() {
+                            None
+                        } else {
+                            Some(summary_text)
+                        };
+                        (Some(events), summary_opt)
                     } else {
-                        Some(summary_text)
+                        (None, None)
                     };
-                    (Some(events), summary_opt)
-                } else {
-                    (None, None)
-                };
 
-                (session_id, replay_events, summary, true)
+                    (
+                        session_id,
+                        replay_events,
+                        summary,
+                        true,
+                        Some(e.to_string()),
+                        Vec::new(),
+                    )
+                }
+            }
+        } else {
+            debug!("Agent does not support session/load — using client-side replay");
+
+            let session_id = connection.create_session(&cwd).await.map_err(|e| {
+                let error_string = format!("{e:?}");
+                let category = categorize_acp_error(&error_string);
+                let display_error = format!("{e}");
+                anyhow::anyhow!(enhanced_error_message(
+                    category,
+                    &display_error,
+                    &agent_config.provider_info.name,
+                    &agent_config.auth_hint,
+                    agent_config.agent.display_name(),
+                    agent_config.agent.npm_package(),
+                ))
+            })?;
+
+            let (replay_events, summary) = if let Some(t) = transcript {
+                let events = transcript_to_replay_events(t);
+                let summary_text = transcript_to_summary(t);
+                let summary_opt = if summary_text.is_empty() {
+                    None
+                } else {
+                    Some(summary_text)
+                };
+                (Some(events), summary_opt)
+            } else {
+                (None, None)
             };
+
+            (session_id, replay_events, summary, true, None, Vec::new())
+        };
 
         let approval_rx = connection.take_approval_receiver();
         let connection = Arc::new(connection);
@@ -568,6 +632,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
+            pending_hook_context: Arc::new(Mutex::new(None)),
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
@@ -584,6 +649,7 @@ impl AcpBackend {
             &config.session_start_hooks,
             config.script_timeout,
             &event_tx,
+            Some(&backend.pending_hook_context),
         )
         .await;
 
@@ -609,6 +675,22 @@ impl AcpBackend {
             .await
             .ok();
 
+        if let Some(ref fallback_error) = used_fallback {
+            event_tx
+                .send(Event {
+                    id: String::new(),
+                    msg: EventMsg::Warning(WarningEvent {
+                        message: format!(
+                            "Server-side session restore failed ({fallback_error}). \
+                             Falling back to transcript replay. The restored session \
+                             will not have tool call information in the context."
+                        ),
+                    }),
+                })
+                .await
+                .ok();
+        }
+
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
             event_tx.clone(),
@@ -617,6 +699,19 @@ impl AcpBackend {
             cwd.clone(),
             approval_policy_rx,
         ));
+
+        // Spawn the replay relay *after* all setup events (SessionConfigured,
+        // Warning, etc.) have been sent.  Spawning it earlier causes a
+        // deadlock: the relay fills the bounded event_tx channel, blocking
+        // resume_session from sending its own events while nobody is
+        // consuming from event_rx yet.
+        if !deferred_replay_events.is_empty() {
+            tokio::spawn(async move {
+                for event in deferred_replay_events {
+                    let _ = event_tx.send(event).await;
+                }
+            });
+        }
 
         Ok(backend)
     }
@@ -673,18 +768,13 @@ impl AcpBackend {
                 debug!("Processing Op::Shutdown in ACP mode");
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
 
-                // Execute session_end hooks
+                // Execute session_end hooks and route output before teardown
                 if !self.session_end_hooks.is_empty() {
                     let results =
                         crate::hooks::execute_hooks(&self.session_end_hooks, self.script_timeout)
                             .await;
-                    for result in &results {
-                        if !result.success
-                            && let Some(ref err) = result.error
-                        {
-                            warn!("Session end hook failed: {err}");
-                        }
-                    }
+                    // Context lines are irrelevant during shutdown, so pass None.
+                    route_hook_results(&results, &self.event_tx, &id, None).await;
                 }
 
                 // Shutdown transcript recorder
@@ -933,13 +1023,22 @@ impl AcpBackend {
             warn!("Failed to record user message to transcript: {e}");
         }
 
+        // Prepend any accumulated hook context (from ::context:: lines)
+        // This must happen before the compact summary prefix so that the
+        // SUMMARY_PREFIX framing instruction always comes first.
+        let prompt_with_context = if let Some(ctx) = self.pending_hook_context.lock().await.take() {
+            format!("{ctx}\n{prompt_text}")
+        } else {
+            prompt_text
+        };
+
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
         let final_prompt_text = if let Some(summary) = pending_summary {
             use codex_core::compact::SUMMARY_PREFIX;
-            format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_text}")
+            format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_context}")
         } else {
-            prompt_text
+            prompt_with_context
         };
 
         let prompt = vec![translator::text_to_content_block(&final_prompt_text)];
@@ -1595,29 +1694,105 @@ fn commands_dir(nori_home: &std::path::Path) -> PathBuf {
 }
 
 /// Execute session_start hooks and emit warnings for any failures.
+/// Route parsed hook results to the appropriate event channels.
+///
+/// For each successful hook result with output:
+/// - `Log` lines go to `tracing::info!`
+/// - `Output`/`OutputWarn`/`OutputError` lines become `HookOutput` events
+/// - `Context` lines accumulate into `pending_hook_context` (if provided)
+///
+/// Failed hooks emit `Warning` events.
+async fn route_hook_results(
+    results: &[crate::hooks::HookResult],
+    event_tx: &mpsc::Sender<Event>,
+    event_id: &str,
+    pending_hook_context: Option<&Mutex<Option<String>>>,
+) {
+    for result in results {
+        if !result.success {
+            if let Some(ref err) = result.error {
+                let _ = event_tx
+                    .send(Event {
+                        id: event_id.to_string(),
+                        msg: EventMsg::Warning(WarningEvent {
+                            message: err.clone(),
+                        }),
+                    })
+                    .await;
+            }
+            continue;
+        }
+        if let Some(ref output) = result.output {
+            let parsed = crate::hooks::parse_hook_output(output);
+            for line in parsed {
+                match line {
+                    crate::hooks::HookOutputLine::Log(msg) => {
+                        tracing::info!("hook [{}]: {msg}", result.path);
+                    }
+                    crate::hooks::HookOutputLine::Output(msg) => {
+                        let _ = event_tx
+                            .send(Event {
+                                id: event_id.to_string(),
+                                msg: EventMsg::HookOutput(HookOutputEvent {
+                                    message: msg,
+                                    level: HookOutputLevel::Info,
+                                }),
+                            })
+                            .await;
+                    }
+                    crate::hooks::HookOutputLine::OutputWarn(msg) => {
+                        let _ = event_tx
+                            .send(Event {
+                                id: event_id.to_string(),
+                                msg: EventMsg::HookOutput(HookOutputEvent {
+                                    message: msg,
+                                    level: HookOutputLevel::Warn,
+                                }),
+                            })
+                            .await;
+                    }
+                    crate::hooks::HookOutputLine::OutputError(msg) => {
+                        let _ = event_tx
+                            .send(Event {
+                                id: event_id.to_string(),
+                                msg: EventMsg::HookOutput(HookOutputEvent {
+                                    message: msg,
+                                    level: HookOutputLevel::Error,
+                                }),
+                            })
+                            .await;
+                    }
+                    crate::hooks::HookOutputLine::Context(ctx) => {
+                        if let Some(lock) = pending_hook_context {
+                            let mut guard = lock.lock().await;
+                            match guard.as_mut() {
+                                Some(existing) => {
+                                    existing.push('\n');
+                                    existing.push_str(&ctx);
+                                }
+                                None => {
+                                    *guard = Some(ctx);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn run_session_start_hooks(
     hooks: &[PathBuf],
     timeout: std::time::Duration,
     event_tx: &mpsc::Sender<Event>,
+    pending_hook_context: Option<&Mutex<Option<String>>>,
 ) {
     if hooks.is_empty() {
         return;
     }
     let results = crate::hooks::execute_hooks(hooks, timeout).await;
-    for result in &results {
-        if !result.success
-            && let Some(ref err) = result.error
-        {
-            let _ = event_tx
-                .send(Event {
-                    id: String::new(),
-                    msg: EventMsg::Warning(WarningEvent {
-                        message: err.clone(),
-                    }),
-                })
-                .await;
-        }
-    }
+    route_hook_results(&results, event_tx, "", pending_hook_context).await;
 }
 
 /// Generate a unique ID for operations
@@ -4221,5 +4396,319 @@ mod tests {
             "Summary should be truncated, got {} chars",
             summary.len()
         );
+    }
+
+    /// Helper to build a minimal transcript for resume tests.
+    fn build_test_transcript() -> crate::transcript::Transcript {
+        use crate::transcript::*;
+
+        let entries = vec![
+            TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
+                session_id: "test-session-1".into(),
+                project_id: "test-project".into(),
+                started_at: "2025-01-01T00:00:00.000Z".into(),
+                cwd: PathBuf::from("/tmp"),
+                agent: Some("mock-agent".into()),
+                cli_version: "0.1.0".into(),
+                git: None,
+                acp_session_id: Some("acp-session-42".into()),
+            })),
+            TranscriptLine::new(TranscriptEntry::User(UserEntry {
+                id: "msg-001".into(),
+                content: "Hello, world!".into(),
+                attachments: vec![],
+            })),
+            TranscriptLine::new(TranscriptEntry::Assistant(AssistantEntry {
+                id: "msg-002".into(),
+                content: vec![ContentBlock::Text {
+                    text: "Hi there! I can help.".into(),
+                }],
+                agent: Some("mock-agent".into()),
+            })),
+        ];
+
+        crate::transcript::Transcript {
+            meta: match &entries[0].entry {
+                TranscriptEntry::SessionMeta(m) => m.clone(),
+                _ => unreachable!(),
+            },
+            entries,
+        }
+    }
+
+    /// Helper to build a standard AcpBackendConfig for testing.
+    fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
+        AcpBackendConfig {
+            model: "mock-model".to_string(),
+            cwd: temp_dir.to_path_buf(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::new_read_only_policy(),
+            notify: None,
+            os_notifications: crate::config::OsNotifications::Disabled,
+            nori_home: temp_dir.to_path_buf(),
+            history_persistence: crate::config::HistoryPersistence::SaveAll,
+            cli_version: "test".to_string(),
+            notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
+            auto_worktree: false,
+            auto_worktree_repo_root: None,
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
+            script_timeout: std::time::Duration::from_secs(30),
+        }
+    }
+
+    /// When load_session fails at runtime, resume_session should fall back to
+    /// client-side replay instead of propagating the error.
+    #[tokio::test]
+    #[serial]
+    async fn test_resume_session_falls_back_on_load_session_failure() {
+        use std::time::Duration;
+
+        let mock_config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+        if !std::path::Path::new(&mock_config.command).exists() {
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                mock_config.command
+            );
+            return;
+        }
+
+        // Agent advertises load_session, but load_session call itself fails
+        // SAFETY: This is a test that manipulates environment variables.
+        // It's safe because this test runs in isolation and we clean up after.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+            std::env::set_var("MOCK_AGENT_LOAD_SESSION_FAIL", "1");
+        }
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let (event_tx, mut event_rx) = mpsc::channel(64);
+        let config = build_test_config(temp_dir.path());
+        let transcript = build_test_transcript();
+
+        let result = AcpBackend::resume_session(
+            &config,
+            Some("acp-session-42"),
+            Some(&transcript),
+            event_tx,
+        )
+        .await;
+
+        // SAFETY: Cleaning up the environment variables we set above.
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+            std::env::remove_var("MOCK_AGENT_LOAD_SESSION_FAIL");
+        }
+
+        // The resume should succeed (fallback to client-side replay)
+        assert!(
+            result.is_ok(),
+            "resume_session should succeed via fallback, but got: {:?}",
+            result.err()
+        );
+
+        // Collect the SessionConfigured event
+        let event = tokio::time::timeout(Duration::from_secs(5), event_rx.recv())
+            .await
+            .expect("Should receive an event within timeout")
+            .expect("Channel should not be closed");
+
+        // Verify that initial_messages is Some (client-side replay was used)
+        match event.msg {
+            EventMsg::SessionConfigured(configured) => {
+                assert!(
+                    configured.initial_messages.is_some(),
+                    "Expected initial_messages to be Some (client-side replay), but got None"
+                );
+                let messages = configured.initial_messages.unwrap();
+                assert!(!messages.is_empty(), "Expected at least one replay message");
+            }
+            other => panic!(
+                "Expected SessionConfigured event, got: {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
+
+        // Verify that a WarningEvent was sent about the fallback
+        let warning_event = tokio::time::timeout(Duration::from_secs(5), event_rx.recv())
+            .await
+            .expect("Should receive warning event within timeout")
+            .expect("Channel should not be closed");
+
+        match warning_event.msg {
+            EventMsg::Warning(warning) => {
+                assert!(
+                    warning
+                        .message
+                        .contains("Server-side session restore failed"),
+                    "Warning should mention server-side failure, got: {}",
+                    warning.message
+                );
+                assert!(
+                    warning.message.contains("tool call information"),
+                    "Warning should mention missing tool call info, got: {}",
+                    warning.message
+                );
+            }
+            other => panic!(
+                "Expected Warning event, got: {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
+    }
+
+    /// When load_session sends many notifications during session replay,
+    /// resume_session must not deadlock. This reproduces a bug where the
+    /// forwarding task blocked on `event_tx.send().await` (bounded channel)
+    /// while `resume_session` awaited the forwarding task, and the consumer
+    /// of `event_rx` hadn't started yet — causing a circular wait.
+    #[tokio::test]
+    #[serial]
+    async fn test_resume_session_does_not_deadlock_with_many_notifications() {
+        use std::time::Duration;
+
+        let mock_config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+        if !std::path::Path::new(&mock_config.command).exists() {
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                mock_config.command
+            );
+            return;
+        }
+
+        // Agent advertises load_session, load_session succeeds, and sends
+        // 100 notifications during the load — more than the event channel
+        // capacity (64 in test, 32 in production), triggering the deadlock.
+        // SAFETY: This is a test that manipulates environment variables.
+        // It's safe because this test runs in isolation and we clean up after.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+            std::env::set_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT", "100");
+        }
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let (event_tx, mut event_rx) = mpsc::channel(64);
+        let config = build_test_config(temp_dir.path());
+        let transcript = build_test_transcript();
+
+        // No consumer is spawned — this mirrors real usage where the TUI
+        // consumer starts only AFTER resume_session returns. A timeout
+        // detects the deadlock: if resume_session hangs, it times out.
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            AcpBackend::resume_session(
+                &config,
+                Some("acp-session-42"),
+                Some(&transcript),
+                event_tx,
+            ),
+        )
+        .await;
+
+        // SAFETY: Cleaning up the environment variables we set above.
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+            std::env::remove_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT");
+        }
+
+        // If we got a timeout, the deadlock is present
+        let backend_result = result.expect(
+            "resume_session deadlocked: timed out after 10s. \
+             The forwarding task is blocked on event_tx.send().await \
+             while resume_session awaits forward_handle",
+        );
+
+        // The resume should succeed
+        assert!(
+            backend_result.is_ok(),
+            "resume_session should succeed, but got: {:?}",
+            backend_result.err()
+        );
+
+        // Drain events and verify we received the replayed notifications
+        let mut notification_count = 0;
+        while let Ok(Some(event)) =
+            tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await
+        {
+            if matches!(event.msg, EventMsg::AgentMessageDelta(_)) {
+                notification_count += 1;
+            }
+        }
+
+        assert!(
+            notification_count >= 100,
+            "Expected at least 100 replayed notification events, got {notification_count}"
+        );
+    }
+
+    /// When load_session succeeds, resume_session should use the server-side
+    /// path and NOT produce initial_messages.
+    #[tokio::test]
+    #[serial]
+    async fn test_resume_session_uses_server_side_when_load_session_succeeds() {
+        use std::time::Duration;
+
+        let mock_config = crate::registry::get_agent_config("mock-model")
+            .expect("mock-model should be registered");
+        if !std::path::Path::new(&mock_config.command).exists() {
+            eprintln!(
+                "Skipping test: mock_acp_agent not found at {}",
+                mock_config.command
+            );
+            return;
+        }
+
+        // Agent advertises load_session, and load_session succeeds
+        // SAFETY: This is a test that manipulates environment variables.
+        // It's safe because this test runs in isolation and we clean up after.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        }
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let (event_tx, mut event_rx) = mpsc::channel(64);
+        let config = build_test_config(temp_dir.path());
+        let transcript = build_test_transcript();
+
+        let result = AcpBackend::resume_session(
+            &config,
+            Some("acp-session-42"),
+            Some(&transcript),
+            event_tx,
+        )
+        .await;
+
+        // SAFETY: Cleaning up the environment variable we set above.
+        unsafe {
+            std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+        }
+
+        assert!(
+            result.is_ok(),
+            "resume_session should succeed, but got: {:?}",
+            result.err()
+        );
+
+        // Collect the SessionConfigured event
+        let event = tokio::time::timeout(Duration::from_secs(5), event_rx.recv())
+            .await
+            .expect("Should receive an event within timeout")
+            .expect("Channel should not be closed");
+
+        // Server-side path should NOT produce initial_messages
+        match event.msg {
+            EventMsg::SessionConfigured(configured) => {
+                assert!(
+                    configured.initial_messages.is_none(),
+                    "Expected initial_messages to be None (server-side resume), but got Some"
+                );
+            }
+            other => panic!(
+                "Expected SessionConfigured event, got: {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
     }
 }

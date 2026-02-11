@@ -265,8 +265,7 @@ impl BottomPane {
     }
 
     /// Update the animated header shown to the left of the brackets in the
-    /// status indicator (defaults to "Working"). No-ops if the status
-    /// indicator is not active.
+    /// status indicator. No-ops if the status indicator is not active.
     pub(crate) fn update_status_header(&mut self, header: String) {
         if let Some(status) = self.status.as_mut() {
             status.update_header(header);
@@ -690,10 +689,7 @@ mod tests {
         for x in 0..area.width {
             r0.push(buf[(x, 0)].symbol().chars().next().unwrap_or(' '));
         }
-        assert!(
-            !r0.contains("Working"),
-            "overlay should not render above modal"
-        );
+        assert!(!r0.contains("•"), "overlay should not render above modal");
     }
 
     #[test]
@@ -731,7 +727,7 @@ mod tests {
             "no active modal view after denial"
         );
 
-        // Render and ensure the top row includes the Working header and a composer line below.
+        // Render and ensure the top row includes the status indicator and a composer line below.
         // Give the animation thread a moment to tick.
         std::thread::sleep(Duration::from_millis(120));
         let area = Rect::new(0, 0, 40, 6);
@@ -742,8 +738,12 @@ mod tests {
             row0.push(buf[(x, 0)].symbol().chars().next().unwrap_or(' '));
         }
         assert!(
-            row0.contains("Working"),
-            "expected Working header after denial on row 0: {row0:?}"
+            pane.status_indicator_visible(),
+            "expected status indicator visible after denial"
+        );
+        assert!(
+            row0.contains("•"),
+            "expected status indicator spinner on row 0: {row0:?}"
         );
 
         // Composer placeholder should be visible somewhere below.
@@ -788,8 +788,10 @@ mod tests {
         let mut buf = Buffer::empty(area);
         pane.render(area, &mut buf);
 
-        let bufs = snapshot_buffer(&buf);
-        assert!(bufs.contains("• Working"), "expected Working header");
+        assert!(
+            pane.status_indicator_visible(),
+            "expected status indicator to be visible"
+        );
     }
 
     #[test]
@@ -810,6 +812,7 @@ mod tests {
 
         // Activate spinner (status view replaces composer) with no live ring.
         pane.set_task_running(true);
+        pane.update_status_header("Thinking really hard".to_string());
 
         // Use height == desired_height; expect spacer + status + composer rows without trailing padding.
         let height = pane.desired_height(30);
@@ -870,6 +873,7 @@ mod tests {
         });
 
         pane.set_task_running(true);
+        pane.update_status_header("Thinking really hard".to_string());
         pane.set_queued_user_messages(vec!["Queued follow-up question".to_string()]);
 
         let width = 48;

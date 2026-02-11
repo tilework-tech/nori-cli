@@ -27,6 +27,45 @@ pub struct HookResult {
     pub error: Option<String>,
 }
 
+/// A parsed line from hook script stdout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookOutputLine {
+    /// Plain log line (no prefix) — goes to tracing.
+    Log(String),
+    /// `::output::` prefix — bare text displayed in the TUI.
+    Output(String),
+    /// `::output-warn::` prefix — yellow warning text in the TUI.
+    OutputWarn(String),
+    /// `::output-error::` prefix — red error text in the TUI.
+    OutputError(String),
+    /// `::context::` prefix — prepended to the next agent prompt.
+    Context(String),
+}
+
+/// Parse hook stdout into typed output lines based on prefix routing.
+///
+/// Each line is examined for a known prefix. Lines without a recognized
+/// prefix are treated as plain log output. Empty lines are skipped.
+pub fn parse_hook_output(output: &str) -> Vec<HookOutputLine> {
+    output
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            if let Some(rest) = line.strip_prefix("::output-warn::") {
+                HookOutputLine::OutputWarn(rest.to_string())
+            } else if let Some(rest) = line.strip_prefix("::output-error::") {
+                HookOutputLine::OutputError(rest.to_string())
+            } else if let Some(rest) = line.strip_prefix("::output::") {
+                HookOutputLine::Output(rest.to_string())
+            } else if let Some(rest) = line.strip_prefix("::context::") {
+                HookOutputLine::Context(rest.to_string())
+            } else {
+                HookOutputLine::Log(line.to_string())
+            }
+        })
+        .collect()
+}
+
 /// Determine the interpreter for a script based on its file extension.
 /// Returns `None` if the script should be executed directly (no recognized extension).
 fn interpreter_for(path: &Path) -> Option<&'static str> {
@@ -158,6 +197,97 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+    // ---- parse_hook_output tests ----
+
+    #[test]
+    fn parse_hook_output_plain_lines_become_log() {
+        let output = "hello world\ngoodbye\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![
+                HookOutputLine::Log("hello world".to_string()),
+                HookOutputLine::Log("goodbye".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_hook_output_output_prefix() {
+        let output = "::output::some bare text\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![HookOutputLine::Output("some bare text".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_hook_output_warn_prefix() {
+        let output = "::output-warn::watch out\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![HookOutputLine::OutputWarn("watch out".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_hook_output_error_prefix() {
+        let output = "::output-error::something broke\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![HookOutputLine::OutputError("something broke".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_hook_output_context_prefix() {
+        let output = "::context::remember this\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![HookOutputLine::Context("remember this".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_hook_output_mixed_lines() {
+        let output = "plain log line\n::output::visible text\n::context::ctx data\n::output-warn::warning msg\n::output-error::error msg\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![
+                HookOutputLine::Log("plain log line".to_string()),
+                HookOutputLine::Output("visible text".to_string()),
+                HookOutputLine::Context("ctx data".to_string()),
+                HookOutputLine::OutputWarn("warning msg".to_string()),
+                HookOutputLine::OutputError("error msg".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_hook_output_empty_after_prefix() {
+        let output = "::output::\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(lines, vec![HookOutputLine::Output(String::new())]);
+    }
+
+    #[test]
+    fn parse_hook_output_skips_blank_lines() {
+        let output = "line1\n\nline2\n";
+        let lines = parse_hook_output(output);
+        assert_eq!(
+            lines,
+            vec![
+                HookOutputLine::Log("line1".to_string()),
+                HookOutputLine::Log("line2".to_string()),
+            ]
+        );
+    }
+
     #[tokio::test]
     async fn execute_hooks_runs_successful_script() {
         let tmp = tempdir().unwrap();
@@ -274,5 +404,33 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].success);
         assert_eq!(results[0].output.as_deref(), Some("python hook\n"));
+    }
+
+    #[tokio::test]
+    async fn execute_hooks_with_prefixed_output_parses_correctly() {
+        let tmp = tempdir().unwrap();
+        let script = tmp.path().join("prefixed.sh");
+        fs::write(
+            &script,
+            "#!/bin/bash\necho 'plain log'\necho '::output::hello user'\necho '::context::ctx data'\necho '::output-warn::be careful'\necho '::output-error::bad thing'",
+        )
+        .unwrap();
+
+        let results = execute_hooks(&[&script], Duration::from_secs(5)).await;
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].success);
+        let output = results[0].output.as_deref().unwrap();
+        let parsed = parse_hook_output(output);
+        assert_eq!(
+            parsed,
+            vec![
+                HookOutputLine::Log("plain log".to_string()),
+                HookOutputLine::Output("hello user".to_string()),
+                HookOutputLine::Context("ctx data".to_string()),
+                HookOutputLine::OutputWarn("be careful".to_string()),
+                HookOutputLine::OutputError("bad thing".to_string()),
+            ]
+        );
     }
 }

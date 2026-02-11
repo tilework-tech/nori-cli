@@ -232,10 +232,10 @@ fn test_acp_cleanup_outside_prompt_turn() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for streaming to start (shows "Working" status)
+    // Wait for streaming to start (status indicator appears with interrupt hint)
     session
-        .wait_for_text("Working", Duration::from_secs(5))
-        .expect("Streaming should start (Working status)");
+        .wait_for_text("esc to interrupt", Duration::from_secs(5))
+        .expect("Streaming should start (status indicator visible)");
 
     // While streaming, the process should still exist and not be zombie
     assert!(
@@ -527,7 +527,7 @@ fn test_agent_switch_on_prompt_submission() {
 
     // Wait for the response to start and subprocess to be spawned
     session
-        .wait_for_text("Working", Duration::from_secs(5))
+        .wait_for_text("esc to interrupt", Duration::from_secs(5))
         .ok(); // May or may not see this depending on response speed
     std::thread::sleep(Duration::from_millis(2000));
 
@@ -576,10 +576,10 @@ fn test_agent_picker_no_switch_during_streaming() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for streaming to start
+    // Wait for streaming to start (status indicator appears with interrupt hint)
     session
-        .wait_for_text("Working", Duration::from_secs(5))
-        .expect("Streaming should start");
+        .wait_for_text("esc to interrupt", Duration::from_secs(5))
+        .expect("Streaming should start (status indicator visible)");
 
     // While streaming, the agent should still be running
     assert!(

@@ -241,7 +241,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         interrupts: InterruptManager::new(),
         reasoning_buffer: String::new(),
         full_reasoning_buffer: String::new(),
-        current_status_header: String::from("Working"),
+        current_status_header: String::from("Thinking really hard"),
         retry_status_header: None,
         conversation_id: None,
         frame_requester: FrameRequester::test_dummy(),
@@ -2726,6 +2726,8 @@ fn chatwidget_tall() {
             model_context_window: None,
         }),
     });
+    chat.bottom_pane
+        .update_status_header("Thinking really hard".to_string());
     for i in 0..30 {
         chat.queue_user_message(format!("Hello, world! {i}").into());
     }
@@ -3562,5 +3564,52 @@ fn shutdown_on_dead_channel_triggers_exit() {
     assert!(
         found_exit,
         "expected ExitRequest to be sent when Op::Shutdown fails on a dead channel"
+    );
+}
+
+/// Bug fix: when the backend is still connecting (simulated by an async task
+/// that never completes), sending Op::Shutdown via the op channel must cause
+/// the spawn task to detect it via `drain_until_shutdown` and emit ExitRequest.
+#[tokio::test]
+async fn shutdown_while_backend_connecting_triggers_exit() {
+    use tokio::sync::mpsc::unbounded_channel;
+
+    let (app_tx_raw, mut app_rx) = unbounded_channel::<AppEvent>();
+    let app_event_tx = AppEventSender::new(app_tx_raw);
+    let (op_tx, mut op_rx) = unbounded_channel::<Op>();
+
+    // Simulate a spawn task that races a "never-completing backend" against
+    // drain_until_shutdown — the same pattern used in spawn_acp_agent.
+    let tx = app_event_tx.clone();
+    let handle = tokio::spawn(async move {
+        tokio::select! {
+            // Simulates AcpBackend::spawn() that hangs forever.
+            () = std::future::pending::<()>() => {
+                unreachable!("backend should not complete");
+            }
+            () = super::agent::drain_until_shutdown(&mut op_rx) => {
+                drop(op_rx);
+                tx.send(AppEvent::ExitRequest);
+            }
+        }
+    });
+
+    // Send Op::Shutdown (what /exit and double-ctrl-c do).
+    op_tx.send(Op::Shutdown).unwrap();
+
+    // Wait for the spawn task to finish.
+    handle.await.unwrap();
+
+    // The task should have produced an ExitRequest.
+    let mut found_exit = false;
+    while let Ok(ev) = app_rx.try_recv() {
+        if matches!(ev, AppEvent::ExitRequest) {
+            found_exit = true;
+            break;
+        }
+    }
+    assert!(
+        found_exit,
+        "expected ExitRequest when Op::Shutdown is sent to a live but unconsumed channel"
     );
 }
