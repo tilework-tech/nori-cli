@@ -17,6 +17,8 @@ use codex_protocol::protocol::ContextCompactedEvent;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::HookOutputEvent;
+use codex_protocol::protocol::HookOutputLevel;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::PatchApplyBeginEvent;
 use codex_protocol::protocol::PromptSummaryEvent;
@@ -204,6 +206,8 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Accumulated context from hook `::context::` lines, prepended to next prompt
+    pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
     transcript_recorder: Option<Arc<TranscriptRecorder>>,
     /// How long after idle before sending a notification
@@ -351,6 +355,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(None)),
+            pending_hook_context: Arc::new(Mutex::new(None)),
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
@@ -367,6 +372,7 @@ impl AcpBackend {
             &config.session_start_hooks,
             config.script_timeout,
             &event_tx,
+            Some(&backend.pending_hook_context),
         )
         .await;
 
@@ -626,6 +632,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
+            pending_hook_context: Arc::new(Mutex::new(None)),
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
@@ -642,6 +649,7 @@ impl AcpBackend {
             &config.session_start_hooks,
             config.script_timeout,
             &event_tx,
+            Some(&backend.pending_hook_context),
         )
         .await;
 
@@ -760,18 +768,13 @@ impl AcpBackend {
                 debug!("Processing Op::Shutdown in ACP mode");
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
 
-                // Execute session_end hooks
+                // Execute session_end hooks and route output before teardown
                 if !self.session_end_hooks.is_empty() {
                     let results =
                         crate::hooks::execute_hooks(&self.session_end_hooks, self.script_timeout)
                             .await;
-                    for result in &results {
-                        if !result.success
-                            && let Some(ref err) = result.error
-                        {
-                            warn!("Session end hook failed: {err}");
-                        }
-                    }
+                    // Context lines are irrelevant during shutdown, so pass None.
+                    route_hook_results(&results, &self.event_tx, &id, None).await;
                 }
 
                 // Shutdown transcript recorder
@@ -1020,13 +1023,22 @@ impl AcpBackend {
             warn!("Failed to record user message to transcript: {e}");
         }
 
+        // Prepend any accumulated hook context (from ::context:: lines)
+        // This must happen before the compact summary prefix so that the
+        // SUMMARY_PREFIX framing instruction always comes first.
+        let prompt_with_context = if let Some(ctx) = self.pending_hook_context.lock().await.take() {
+            format!("{ctx}\n{prompt_text}")
+        } else {
+            prompt_text
+        };
+
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
         let final_prompt_text = if let Some(summary) = pending_summary {
             use codex_core::compact::SUMMARY_PREFIX;
-            format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_text}")
+            format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_context}")
         } else {
-            prompt_text
+            prompt_with_context
         };
 
         let prompt = vec![translator::text_to_content_block(&final_prompt_text)];
@@ -1682,29 +1694,105 @@ fn commands_dir(nori_home: &std::path::Path) -> PathBuf {
 }
 
 /// Execute session_start hooks and emit warnings for any failures.
+/// Route parsed hook results to the appropriate event channels.
+///
+/// For each successful hook result with output:
+/// - `Log` lines go to `tracing::info!`
+/// - `Output`/`OutputWarn`/`OutputError` lines become `HookOutput` events
+/// - `Context` lines accumulate into `pending_hook_context` (if provided)
+///
+/// Failed hooks emit `Warning` events.
+async fn route_hook_results(
+    results: &[crate::hooks::HookResult],
+    event_tx: &mpsc::Sender<Event>,
+    event_id: &str,
+    pending_hook_context: Option<&Mutex<Option<String>>>,
+) {
+    for result in results {
+        if !result.success {
+            if let Some(ref err) = result.error {
+                let _ = event_tx
+                    .send(Event {
+                        id: event_id.to_string(),
+                        msg: EventMsg::Warning(WarningEvent {
+                            message: err.clone(),
+                        }),
+                    })
+                    .await;
+            }
+            continue;
+        }
+        if let Some(ref output) = result.output {
+            let parsed = crate::hooks::parse_hook_output(output);
+            for line in parsed {
+                match line {
+                    crate::hooks::HookOutputLine::Log(msg) => {
+                        tracing::info!("hook [{}]: {msg}", result.path);
+                    }
+                    crate::hooks::HookOutputLine::Output(msg) => {
+                        let _ = event_tx
+                            .send(Event {
+                                id: event_id.to_string(),
+                                msg: EventMsg::HookOutput(HookOutputEvent {
+                                    message: msg,
+                                    level: HookOutputLevel::Info,
+                                }),
+                            })
+                            .await;
+                    }
+                    crate::hooks::HookOutputLine::OutputWarn(msg) => {
+                        let _ = event_tx
+                            .send(Event {
+                                id: event_id.to_string(),
+                                msg: EventMsg::HookOutput(HookOutputEvent {
+                                    message: msg,
+                                    level: HookOutputLevel::Warn,
+                                }),
+                            })
+                            .await;
+                    }
+                    crate::hooks::HookOutputLine::OutputError(msg) => {
+                        let _ = event_tx
+                            .send(Event {
+                                id: event_id.to_string(),
+                                msg: EventMsg::HookOutput(HookOutputEvent {
+                                    message: msg,
+                                    level: HookOutputLevel::Error,
+                                }),
+                            })
+                            .await;
+                    }
+                    crate::hooks::HookOutputLine::Context(ctx) => {
+                        if let Some(lock) = pending_hook_context {
+                            let mut guard = lock.lock().await;
+                            match guard.as_mut() {
+                                Some(existing) => {
+                                    existing.push('\n');
+                                    existing.push_str(&ctx);
+                                }
+                                None => {
+                                    *guard = Some(ctx);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn run_session_start_hooks(
     hooks: &[PathBuf],
     timeout: std::time::Duration,
     event_tx: &mpsc::Sender<Event>,
+    pending_hook_context: Option<&Mutex<Option<String>>>,
 ) {
     if hooks.is_empty() {
         return;
     }
     let results = crate::hooks::execute_hooks(hooks, timeout).await;
-    for result in &results {
-        if !result.success
-            && let Some(ref err) = result.error
-        {
-            let _ = event_tx
-                .send(Event {
-                    id: String::new(),
-                    msg: EventMsg::Warning(WarningEvent {
-                        message: err.clone(),
-                    }),
-                })
-                .await;
-        }
-    }
+    route_hook_results(&results, event_tx, "", pending_hook_context).await;
 }
 
 /// Generate a unique ID for operations

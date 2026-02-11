@@ -172,7 +172,25 @@ session_end = ["~/.nori/cli/hooks/cleanup.sh"]
 | `.js` | `node` |
 | other/none | executed directly |
 
-Hook failures are non-fatal. During `spawn()` and `resume_session()`, failures emit `WarningEvent` to the TUI via the event channel. During `Op::Shutdown`, failures are `warn!`-logged only because the TUI is shutting down and cannot display warnings. A failed hook does not prevent subsequent hooks from executing.
+Hook failures are non-fatal. Failed hooks emit `WarningEvent` to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
+
+**Hook output routing** (`hooks.rs`, `backend.rs`):
+
+Hook scripts can route their stdout lines to different destinations by using line prefixes. `parse_hook_output()` parses each non-empty line of stdout:
+
+| Prefix | Destination | `HookOutputLine` variant |
+|--------|-------------|--------------------------|
+| (none) | `tracing::info!` | `Log` |
+| `::output::` | Plain white text in TUI (`PlainHistoryCell`) | `Output` |
+| `::output-warn::` | Yellow warning text in TUI | `OutputWarn` |
+| `::output-error::` | Red error text in TUI | `OutputError` |
+| `::context::` | Accumulated and prepended to next user prompt | `Context` |
+
+The routing is handled by `route_hook_results()` in `backend.rs`, which is shared between session start and session end hook handling. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
+
+**Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt.
+
+**Session end hook timing:** During `Op::Shutdown`, end hooks execute and their output is routed via `route_hook_results()` before `ShutdownComplete` is sent, so the TUI can still display hook output. Context lines are irrelevant during shutdown, so `None` is passed for the context accumulator.
 
 **Message History** (`message_history.rs`):
 

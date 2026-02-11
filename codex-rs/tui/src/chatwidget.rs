@@ -26,6 +26,8 @@ use codex_core::protocol::ExecApprovalRequestEvent;
 use codex_core::protocol::ExecCommandBeginEvent;
 use codex_core::protocol::ExecCommandEndEvent;
 use codex_core::protocol::ExecCommandSource;
+use codex_core::protocol::HookOutputEvent;
+use codex_core::protocol::HookOutputLevel;
 use codex_core::protocol::ListCustomPromptsResponseEvent;
 use codex_core::protocol::McpListToolsResponseEvent;
 use codex_core::protocol::McpStartupCompleteEvent;
@@ -2383,6 +2385,17 @@ impl ChatWidget {
             | EventMsg::ReasoningContentDelta(_)
             | EventMsg::ReasoningRawContentDelta(_) => {}
             EventMsg::PromptSummary(ev) => self.on_prompt_summary(ev.summary),
+            EventMsg::HookOutput(HookOutputEvent { message, level }) => match level {
+                HookOutputLevel::Info => {
+                    self.add_plain_history_lines(vec![Line::from(message)]);
+                }
+                HookOutputLevel::Warn => {
+                    self.on_warning(message);
+                }
+                HookOutputLevel::Error => {
+                    self.add_error_message(message);
+                }
+            },
         }
     }
 
