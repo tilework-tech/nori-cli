@@ -949,6 +949,36 @@ impl AcpBackend {
                     let _ = event_tx.send(event).await;
                 });
             }
+            Op::SearchHistoryRequest { max_results } => {
+                let nori_home = self.nori_home.clone();
+                let event_tx = self.event_tx.clone();
+                let id_clone = id.clone();
+                tokio::spawn(async move {
+                    let entries = tokio::task::spawn_blocking(move || {
+                        crate::message_history::search_entries(&nori_home, max_results)
+                    })
+                    .await
+                    .unwrap_or_default();
+
+                    let event = Event {
+                        id: id_clone,
+                        msg: EventMsg::SearchHistoryResponse(
+                            codex_protocol::protocol::SearchHistoryResponseEvent {
+                                entries: entries
+                                    .into_iter()
+                                    .map(|e| codex_protocol::message_history::HistoryEntry {
+                                        conversation_id: e.session_id,
+                                        ts: e.ts,
+                                        text: e.text,
+                                    })
+                                    .collect(),
+                            },
+                        ),
+                    };
+
+                    let _ = event_tx.send(event).await;
+                });
+            }
             Op::Compact => {
                 self.handle_compact(&id).await?;
             }
@@ -2159,6 +2189,7 @@ fn get_op_name(op: &Op) -> &'static str {
         Op::ResolveElicitation { .. } => "ResolveElicitation",
         Op::AddToHistory { .. } => "AddToHistory",
         Op::GetHistoryEntryRequest { .. } => "GetHistoryEntryRequest",
+        Op::SearchHistoryRequest { .. } => "SearchHistoryRequest",
         Op::ListMcpTools => "ListMcpTools",
         Op::ListCustomPrompts => "ListCustomPrompts",
         Op::Compact => "Compact",

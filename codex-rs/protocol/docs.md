@@ -56,6 +56,7 @@ pub enum EventMsg {
 | `Undo` | Undo the most recent turn (sequential pop from snapshot stack) |
 | `UndoList` | Request the list of available undo snapshots |
 | `UndoTo { index }` | Restore to a specific snapshot by display index (0 = most recent) |
+| `SearchHistoryRequest { max_results }` | Request all history entries for client-side search; response via `SearchHistoryResponse` |
 
 **Events** (`events.rs`): Messages from core to TUI:
 
@@ -70,6 +71,7 @@ pub enum EventMsg {
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 | `PromptSummary` | Short summary of the first user prompt for display in the footer |
 | `HookOutput` | Output from a hook script, routed by level (Info/Warn/Error) for TUI display |
+| `SearchHistoryResponse` | Response to `SearchHistoryRequest` with deduplicated history entries (newest first). Not persisted to rollout policy. |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -111,6 +113,12 @@ pub enum EventMsg {
 |------|---------|
 | `HookOutputLevel` | Enum with `Info`, `Warn`, `Error` variants controlling TUI display style |
 | `HookOutputEvent` | Carries a `message: String` and `level: HookOutputLevel`. Emitted by the ACP backend's hook routing. Not persisted to rollout policy. |
+
+**Search History Types:**
+
+| Type | Purpose |
+|------|--------|
+| `SearchHistoryResponseEvent` | Wraps `Vec<HistoryEntry>` (from `codex_protocol::message_history`). Each entry has `conversation_id`, `ts`, and `text`. Not persisted to rollout policy. |
 
 **Approval Policy:**
 

@@ -27,6 +27,7 @@ use super::footer::footer_height;
 use super::footer::render_footer;
 use super::footer::reset_mode_after_activity;
 use super::footer::toggle_shortcut_mode;
+use super::history_search_popup::HistorySearchPopup;
 use super::paste_burst::CharDecision;
 use super::paste_burst::PasteBurst;
 use crate::bottom_pane::paste_burst::FlushResult;
@@ -128,6 +129,7 @@ enum ActivePopup {
     None,
     Command(CommandPopup),
     File(FileSearchPopup),
+    HistorySearch(HistorySearchPopup),
 }
 
 const FOOTER_SPACING_HEIGHT: u16 = 0;
@@ -187,6 +189,7 @@ impl ChatComposer {
                 Constraint::Max(popup.calculate_required_height(area.width))
             }
             ActivePopup::File(popup) => Constraint::Max(popup.calculate_required_height()),
+            ActivePopup::HistorySearch(popup) => Constraint::Max(popup.calculate_required_height()),
             ActivePopup::None => Constraint::Max(footer_total_height),
         };
         let [composer_rect, popup_rect] =
@@ -256,6 +259,16 @@ impl ChatComposer {
         };
         self.set_text_content(text);
         true
+    }
+
+    /// Deliver search history results to the popup (if still open).
+    pub(crate) fn on_search_history_response(
+        &mut self,
+        entries: Vec<codex_protocol::message_history::HistoryEntry>,
+    ) {
+        if let ActivePopup::HistorySearch(popup) = &mut self.active_popup {
+            popup.set_entries(entries);
+        }
     }
 
     pub fn handle_paste(&mut self, pasted: String) -> bool {
@@ -412,15 +425,19 @@ impl ChatComposer {
         let result = match &mut self.active_popup {
             ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
             ActivePopup::File(_) => self.handle_key_event_with_file_popup(key_event),
+            ActivePopup::HistorySearch(_) => self.handle_key_event_with_history_popup(key_event),
             ActivePopup::None => self.handle_key_event_without_popup(key_event),
         };
 
-        // Update (or hide/show) popup after processing the key.
-        self.sync_command_popup();
-        if matches!(self.active_popup, ActivePopup::Command(_)) {
-            self.dismissed_file_popup_token = None;
-        } else {
-            self.sync_file_search_popup();
+        // The history search popup manages its own lifecycle; skip the
+        // slash/file popup sync that would otherwise clobber it.
+        if !matches!(self.active_popup, ActivePopup::HistorySearch(_)) {
+            self.sync_command_popup();
+            if matches!(self.active_popup, ActivePopup::Command(_)) {
+                self.dismissed_file_popup_token = None;
+            } else {
+                self.sync_file_search_popup();
+            }
         }
 
         result
@@ -752,6 +769,107 @@ impl ChatComposer {
         }
     }
 
+    /// Handle key events when the history search popup is visible.
+    fn handle_key_event_with_history_popup(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        let ActivePopup::HistorySearch(popup) = &mut self.active_popup else {
+            unreachable!();
+        };
+
+        let in_vim_normal = popup.is_vim_normal_mode();
+
+        match key_event {
+            // Esc: in vim mode, first press enters normal mode; second press closes
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } => {
+                if popup.vim_mode && !in_vim_normal {
+                    popup.set_vim_normal_mode(true);
+                } else {
+                    self.active_popup = ActivePopup::None;
+                }
+                (InputResult::None, true)
+            }
+            // Enter: select the highlighted entry and close
+            KeyEvent {
+                code: KeyCode::Enter,
+                ..
+            } => {
+                let selected = popup.selected_text().map(String::from);
+                self.active_popup = ActivePopup::None;
+                if let Some(text) = selected {
+                    self.set_text_content(text);
+                }
+                (InputResult::None, true)
+            }
+            // Up / Ctrl+P / k (in vim normal): move selection up
+            KeyEvent {
+                code: KeyCode::Up, ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('p'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } => {
+                popup.move_up();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Char('k'),
+                ..
+            } if in_vim_normal => {
+                popup.move_up();
+                (InputResult::None, true)
+            }
+            // Down / Ctrl+N / j (in vim normal): move selection down
+            KeyEvent {
+                code: KeyCode::Down,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('n'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } => {
+                popup.move_down();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Char('j'),
+                ..
+            } if in_vim_normal => {
+                popup.move_down();
+                (InputResult::None, true)
+            }
+            // i in vim normal: enter insert mode
+            KeyEvent {
+                code: KeyCode::Char('i'),
+                ..
+            } if in_vim_normal => {
+                popup.set_vim_normal_mode(false);
+                (InputResult::None, true)
+            }
+            // Backspace: remove last char from search query
+            KeyEvent {
+                code: KeyCode::Backspace,
+                ..
+            } if !in_vim_normal => {
+                popup.pop_char();
+                (InputResult::None, true)
+            }
+            // Printable character input (insert mode): append to search query
+            KeyEvent {
+                code: KeyCode::Char(ch),
+                modifiers,
+                ..
+            } if !in_vim_normal && !has_ctrl_or_alt(modifiers) => {
+                popup.push_char(ch);
+                (InputResult::None, true)
+            }
+            // All other keys: consume without action
+            _ => (InputResult::None, true),
+        }
+    }
+
     fn is_image_path(path: &str) -> bool {
         let lower = path.to_ascii_lowercase();
         lower.ends_with(".png") || lower.ends_with(".jpg") || lower.ends_with(".jpeg")
@@ -967,6 +1085,19 @@ impl ChatComposer {
                     }
                 }
                 self.handle_input_basic(key_event)
+            }
+            KeyEvent {
+                code: KeyCode::Char('r'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            } => {
+                let vim_mode = self.textarea.vim_mode_state_if_enabled().is_some();
+                self.active_popup = ActivePopup::HistorySearch(HistorySearchPopup::new(vim_mode));
+                self.app_event_tx.send(AppEvent::CodexOp(
+                    codex_protocol::protocol::Op::SearchHistoryRequest { max_results: 500 },
+                ));
+                (InputResult::None, true)
             }
             KeyEvent {
                 code: KeyCode::Enter,
@@ -1722,6 +1853,7 @@ impl Renderable for ChatComposer {
                 ActivePopup::None => footer_total_height,
                 ActivePopup::Command(c) => c.calculate_required_height(width),
                 ActivePopup::File(c) => c.calculate_required_height(),
+                ActivePopup::HistorySearch(c) => c.calculate_required_height(),
             }
     }
 
@@ -1732,6 +1864,9 @@ impl Renderable for ChatComposer {
                 popup.render_ref(popup_rect, buf);
             }
             ActivePopup::File(popup) => {
+                popup.render_ref(popup_rect, buf);
+            }
+            ActivePopup::HistorySearch(popup) => {
                 popup.render_ref(popup_rect, buf);
             }
             ActivePopup::None => {
@@ -3795,6 +3930,88 @@ mod tests {
             composer.vim_mode_state(),
             VimModeState::Insert,
             "'i' should return to Insert mode"
+        );
+    }
+
+    #[test]
+    fn test_ctrl_r_opens_history_search_popup() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer =
+            ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+
+        assert!(
+            matches!(composer.active_popup, ActivePopup::HistorySearch(_)),
+            "Ctrl+R should open the history search popup"
+        );
+    }
+
+    #[test]
+    fn test_ctrl_r_history_search_escape_closes_popup() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer =
+            ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+
+        // Open history search popup with Ctrl+R
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+        assert!(
+            matches!(composer.active_popup, ActivePopup::HistorySearch(_)),
+            "Ctrl+R should open the history search popup"
+        );
+
+        // Press Escape to close
+        composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(
+            matches!(composer.active_popup, ActivePopup::None),
+            "Escape should close the history search popup"
+        );
+    }
+
+    #[test]
+    fn test_ctrl_r_history_search_enter_selects_and_closes() {
+        use codex_protocol::message_history::HistoryEntry;
+
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer =
+            ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+
+        // Open history search popup with Ctrl+R
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+
+        // Populate the popup with entries
+        if let ActivePopup::HistorySearch(popup) = &mut composer.active_popup {
+            popup.set_entries(vec![
+                HistoryEntry {
+                    conversation_id: "sess-1".to_string(),
+                    ts: 1,
+                    text: "first entry".to_string(),
+                },
+                HistoryEntry {
+                    conversation_id: "sess-2".to_string(),
+                    ts: 2,
+                    text: "second entry".to_string(),
+                },
+            ]);
+        } else {
+            panic!("Expected HistorySearch popup to be active after Ctrl+R");
+        }
+
+        // Press Enter to select the current entry and close the popup
+        composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(
+            matches!(composer.active_popup, ActivePopup::None),
+            "Enter should close the history search popup"
+        );
+        // The selected entry text should be placed in the composer.
+        let text = composer.current_text();
+        assert_eq!(
+            text, "first entry",
+            "Composer should contain the first (default-selected) history entry"
         );
     }
 }

@@ -274,6 +274,7 @@ Async hooks fire at the same lifecycle points as their synchronous counterparts,
 - Entry schema: `{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}`
 - Uses advisory file locking for concurrent write safety
 - `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
+- `search_entries()`: Reads all entries from the JSONL file, deduplicates by text (keeping the most recent occurrence of each), sorts newest-first, and returns up to `max_results` entries. Used by the `Op::SearchHistoryRequest` handler to provide history data for the TUI's Ctrl+R reverse-search popup.
 
 **Custom Prompts** (`backend.rs`):
 

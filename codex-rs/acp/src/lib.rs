@@ -34,6 +34,7 @@ pub use message_history::history_filepath;
 pub use message_history::history_metadata;
 #[cfg(any(unix, windows))]
 pub use message_history::lookup;
+pub use message_history::search_entries;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
