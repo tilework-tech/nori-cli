@@ -205,6 +205,35 @@ pub async fn execute_hooks_with_env(
     results
 }
 
+/// Spawn async hook scripts as fire-and-forget background tasks.
+///
+/// Each script is executed via `tokio::spawn` using the same engine as
+/// synchronous hooks, but all output is routed exclusively to tracing logs.
+/// The caller does not wait for completion; results are logged and discarded.
+pub fn execute_hooks_fire_and_forget(
+    hooks: Vec<std::path::PathBuf>,
+    timeout: Duration,
+    env_vars: HashMap<String, String>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    if hooks.is_empty() {
+        return None;
+    }
+    Some(tokio::spawn(async move {
+        let results = execute_hooks_with_env(&hooks, timeout, &env_vars).await;
+        for result in &results {
+            if result.success {
+                if let Some(output) = &result.output {
+                    for line in output.lines() {
+                        tracing::info!(hook = %result.path, "[async hook] {line}");
+                    }
+                }
+            } else if let Some(error) = &result.error {
+                tracing::warn!(hook = %result.path, "[async hook] {error}");
+            }
+        }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,7 +460,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut env = std::collections::HashMap::new();
+        let mut env = HashMap::new();
         env.insert("NORI_HOOK_EVENT".to_string(), "pre_user_prompt".to_string());
         env.insert(
             "NORI_HOOK_PROMPT_TEXT".to_string(),
@@ -458,7 +487,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut env = std::collections::HashMap::new();
+        let mut env = HashMap::new();
         env.insert("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string());
         env.insert("NORI_HOOK_TOOL_NAME".to_string(), "shell".to_string());
         env.insert(
@@ -502,5 +531,70 @@ mod tests {
                 HookOutputLine::OutputError("bad thing".to_string()),
             ]
         );
+    }
+
+    // ---- fire-and-forget async hook tests ----
+
+    #[tokio::test]
+    async fn fire_and_forget_returns_none_for_empty_hooks() {
+        let result = execute_hooks_fire_and_forget(vec![], Duration::from_secs(5), HashMap::new());
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn fire_and_forget_hooks_execute_in_background() {
+        let tmp = tempdir().unwrap();
+        let marker = tmp.path().join("async_marker.txt");
+        let script = tmp.path().join("async_hook.sh");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/bash\necho 'async hook ran' > '{}'",
+                marker.display()
+            ),
+        )
+        .unwrap();
+
+        let handle =
+            execute_hooks_fire_and_forget(vec![script], Duration::from_secs(5), HashMap::new());
+        handle
+            .expect("should spawn task")
+            .await
+            .expect("task should not panic");
+
+        assert!(
+            marker.exists(),
+            "Async hook should have created marker file"
+        );
+        let contents = fs::read_to_string(&marker).unwrap();
+        assert_eq!(contents.trim(), "async hook ran");
+    }
+
+    #[tokio::test]
+    async fn fire_and_forget_hooks_pass_env_vars() {
+        let tmp = tempdir().unwrap();
+        let marker = tmp.path().join("async_env_marker.txt");
+        let script = tmp.path().join("async_env_hook.sh");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/bash\necho \"event=$NORI_HOOK_EVENT\" > '{}'",
+                marker.display()
+            ),
+        )
+        .unwrap();
+
+        let env_vars =
+            HashMap::from([("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string())]);
+
+        let handle = execute_hooks_fire_and_forget(vec![script], Duration::from_secs(5), env_vars);
+        handle
+            .expect("should spawn task")
+            .await
+            .expect("task should not panic");
+
+        assert!(marker.exists());
+        let contents = fs::read_to_string(&marker).unwrap();
+        assert_eq!(contents.trim(), "event=pre_tool_call");
     }
 }

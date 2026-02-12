@@ -424,6 +424,14 @@ mod tests {
             post_tool_call_hooks: vec![],
             pre_agent_response_hooks: vec![],
             post_agent_response_hooks: vec![],
+            async_session_start_hooks: vec![],
+            async_session_end_hooks: vec![],
+            async_pre_user_prompt_hooks: vec![],
+            async_post_user_prompt_hooks: vec![],
+            async_pre_tool_call_hooks: vec![],
+            async_post_tool_call_hooks: vec![],
+            async_pre_agent_response_hooks: vec![],
+            async_post_agent_response_hooks: vec![],
         }
     }
 
