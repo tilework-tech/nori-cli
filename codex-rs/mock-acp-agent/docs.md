@@ -21,6 +21,8 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 
 **Mock Behaviors**: Controlled via environment variables that the E2E tests set on the mock agent process. Each env var activates a specific behavior scenario. Key scenarios include multi-turn conversations, tool call streaming, permission requests, file operations, race condition simulations, and session lifecycle behaviors.
 
+**Multi-Turn Marker Matching** (`MOCK_AGENT_MULTI_TURN`): When enabled, the prompt handler extracts markers (ALPHA, BETA, GAMMA) from user input and echoes back a corresponding response (e.g., `RESPONSE_ALPHA`). The matching uses last-position semantics (`rfind`) rather than first-match -- when the client-side replay fallback prepends a transcript summary via `pending_compact_summary` in `@/codex-rs/acp/src/backend.rs`, earlier markers from the summary appear before the actual user prompt. Last-position matching ensures the agent responds to the real user input, not the summary prefix.
+
 **Session Lifecycle Testing**: Several env vars control `session/load` behavior for testing the resume path in `@/codex-rs/acp/src/backend.rs`:
 - `MOCK_AGENT_SUPPORT_LOAD_SESSION` -- when set, the agent advertises `load_session: true` in its capabilities during `initialize()`
 - `MOCK_AGENT_LOAD_SESSION_FAIL` -- when set, the `load_session()` handler returns an error instead of succeeding, allowing tests to exercise the runtime-failure fallback path

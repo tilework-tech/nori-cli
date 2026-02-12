@@ -315,15 +315,16 @@ impl acp::Agent for MockAgent {
                 .collect::<Vec<_>>()
                 .join(" ");
 
-            let marker = if user_text.contains("ALPHA") {
-                "ALPHA"
-            } else if user_text.contains("BETA") {
-                "BETA"
-            } else if user_text.contains("GAMMA") {
-                "GAMMA"
-            } else {
-                "ECHO"
-            };
+            // Find the last marker in the text. When client-side replay
+            // prepends a transcript summary, earlier markers appear in the
+            // summary while the actual user prompt is at the end.
+            let markers = ["ALPHA", "BETA", "GAMMA"];
+            let marker = markers
+                .iter()
+                .filter_map(|m| user_text.rfind(m).map(|pos| (pos, *m)))
+                .max_by_key(|(pos, _)| *pos)
+                .map(|(_, m)| m)
+                .unwrap_or("ECHO");
 
             eprintln!("Mock agent: multi-turn response with marker {marker}");
             self.send_text_chunk(session_id.clone(), &format!("RESPONSE_{marker}"))

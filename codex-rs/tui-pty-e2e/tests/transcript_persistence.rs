@@ -593,3 +593,167 @@ fn test_resume_viewonly_shows_transcript() {
         tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
     );
 }
+
+/// Test the full /resume flow: start a session, send a message, start a new
+/// session, use /resume to resume the previous session, then send another
+/// message to verify the resumed session is fully interactive.
+///
+/// This exercises the complete resume pipeline:
+/// 1. Transcript persistence (session is saved)
+/// 2. Resume session picker (finds the session)
+/// 3. AcpBackend::resume_session() (reconnects to agent)
+/// 4. Post-resume prompt submission (proves the session works)
+#[test]
+#[cfg(target_os = "linux")]
+fn test_resume_session_end_to_end() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MULTI_TURN", "1")
+        .with_agent_env("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(30, 100, config).expect("Failed to spawn session");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a message with a unique marker
+    session.send_str("UNIQUE_PROMPT_ALPHA_12345").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("RESPONSE_ALPHA", Duration::from_secs(10))
+        .expect("Should receive first response");
+
+    // Allow transcript to flush
+    std::thread::sleep(Duration::from_millis(1000));
+
+    // Start a new session with /new
+    session.send_str("/new").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("New session should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Use /resume to resume the previous session
+    session.send_str("/resume").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the resume session picker to appear
+    session
+        .wait_for_text("Resume previous session", Duration::from_secs(5))
+        .expect("Should show resume session picker");
+
+    std::thread::sleep(Duration::from_millis(200));
+
+    // Select the most recent session (first item)
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for session to resume - the info message says "Resuming session with..."
+    session
+        .wait_for_text("Resuming session", Duration::from_secs(10))
+        .expect("Should show resuming message");
+
+    // Wait for the prompt to appear, indicating the session is ready
+    session
+        .wait_for_text("›", Duration::from_secs(10))
+        .expect("Prompt should appear after resume");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a new message in the resumed session to prove it's interactive
+    session.send_str("UNIQUE_PROMPT_BETA_67890").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Verify we get a response in the resumed session
+    session
+        .wait_for_text("RESPONSE_BETA", Duration::from_secs(10))
+        .expect("Should receive response in resumed session");
+}
+
+/// Test the /resume flow using the client-side replay fallback path.
+/// This exercises the case where the agent does NOT support `load_session`,
+/// so the backend creates a fresh session and injects a transcript summary.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_resume_session_client_side_fallback() {
+    // No MOCK_AGENT_SUPPORT_LOAD_SESSION -- forces client-side replay
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MULTI_TURN", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(30, 100, config).expect("Failed to spawn session");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a message with a unique marker
+    session.send_str("UNIQUE_PROMPT_ALPHA_12345").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("RESPONSE_ALPHA", Duration::from_secs(10))
+        .expect("Should receive first response");
+
+    // Allow transcript to flush
+    std::thread::sleep(Duration::from_millis(1000));
+
+    // Start a new session with /new
+    session.send_str("/new").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("New session should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Use /resume to resume the previous session
+    session.send_str("/resume").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the resume session picker to appear
+    session
+        .wait_for_text("Resume previous session", Duration::from_secs(5))
+        .expect("Should show resume session picker");
+
+    std::thread::sleep(Duration::from_millis(200));
+
+    // Select the most recent session (first item)
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for session to resume
+    session
+        .wait_for_text("Resuming session", Duration::from_secs(10))
+        .expect("Should show resuming message");
+
+    // Wait for the prompt to appear, indicating the session is ready
+    session
+        .wait_for_text("›", Duration::from_secs(10))
+        .expect("Prompt should appear after resume");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a new message in the resumed session to prove it's interactive
+    session.send_str("UNIQUE_PROMPT_BETA_67890").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Verify we get a response in the resumed session
+    session
+        .wait_for_text("RESPONSE_BETA", Duration::from_secs(10))
+        .expect("Should receive response in resumed session (client-side fallback)");
+}

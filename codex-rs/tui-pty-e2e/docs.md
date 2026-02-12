@@ -36,6 +36,12 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 - Checking for absence of trailing tool output by asserting that screen content after the final agent message position contains no tool-related strings
 - Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
 
+**Resume E2E Tests** (`transcript_persistence.rs`):
+
+Tests in this file cover the `/resume` command's dual-path architecture:
+- Server-side resume (`MOCK_AGENT_SUPPORT_LOAD_SESSION` set): the agent advertises `load_session` capability and restores session state on its side. The test sends a message (ALPHA), exits, resumes, sends another message (BETA), and verifies the agent responds correctly to BETA.
+- Client-side replay fallback (no `MOCK_AGENT_SUPPORT_LOAD_SESSION`): the agent does not support session loading, so the backend creates a fresh session, displays the old transcript in the TUI, and prepends a `pending_compact_summary` to the first prompt via `@/codex-rs/acp/src/backend.rs`. The test follows the same ALPHA-then-BETA flow. The mock agent's last-position marker matching (see `@/codex-rs/mock-acp-agent/docs.md`) ensures correct responses even when the summary contains earlier markers.
+
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
 - Expected vs actual screen content
