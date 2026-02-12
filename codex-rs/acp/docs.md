@@ -274,6 +274,7 @@ Async hooks fire at the same lifecycle points as their synchronous counterparts,
 - Entry schema: `{"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}`
 - Uses advisory file locking for concurrent write safety
 - `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
+- `search_entries()`: Reads all entries from the JSONL file, deduplicates by text (keeping the most recent occurrence of each), sorts newest-first, and returns up to `max_results` entries. Used by the `Op::SearchHistoryRequest` handler to provide history data for the TUI's Ctrl+R reverse-search popup.
 
 **Custom Prompts** (`backend.rs`):
 
@@ -494,6 +495,8 @@ Patch operations (Edit/Write/Delete via `ToolKind`) are recorded separately from
 - `ToolKind::Edit` → `PatchOperationType::Edit`
 - `ToolKind::Delete` → `PatchOperationType::Delete`
 - Other (including Write) → `PatchOperationType::Write`
+
+Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. Both this truncation and the `truncate_for_log()` helper (used for tracing previews) use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata

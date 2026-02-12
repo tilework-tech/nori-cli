@@ -949,6 +949,36 @@ impl AcpBackend {
                     let _ = event_tx.send(event).await;
                 });
             }
+            Op::SearchHistoryRequest { max_results } => {
+                let nori_home = self.nori_home.clone();
+                let event_tx = self.event_tx.clone();
+                let id_clone = id.clone();
+                tokio::spawn(async move {
+                    let entries = tokio::task::spawn_blocking(move || {
+                        crate::message_history::search_entries(&nori_home, max_results)
+                    })
+                    .await
+                    .unwrap_or_default();
+
+                    let event = Event {
+                        id: id_clone,
+                        msg: EventMsg::SearchHistoryResponse(
+                            codex_protocol::protocol::SearchHistoryResponseEvent {
+                                entries: entries
+                                    .into_iter()
+                                    .map(|e| codex_protocol::message_history::HistoryEntry {
+                                        conversation_id: e.session_id,
+                                        ts: e.ts,
+                                        text: e.text,
+                                    })
+                                    .collect(),
+                            },
+                        ),
+                    };
+
+                    let _ = event_tx.send(event).await;
+                });
+            }
             Op::Compact => {
                 self.handle_compact(&id).await?;
             }
@@ -2142,6 +2172,7 @@ fn get_op_name(op: &Op) -> &'static str {
         Op::ResolveElicitation { .. } => "ResolveElicitation",
         Op::AddToHistory { .. } => "AddToHistory",
         Op::GetHistoryEntryRequest { .. } => "GetHistoryEntryRequest",
+        Op::SearchHistoryRequest { .. } => "SearchHistoryRequest",
         Op::ListMcpTools => "ListMcpTools",
         Op::ListCustomPrompts => "ListCustomPrompts",
         Op::Compact => "Compact",
@@ -2491,7 +2522,8 @@ async fn record_tool_events_to_transcript(
                 let output = extract_tool_output(&update.fields);
                 let truncated = output.len() > 10000;
                 let output_to_record = if truncated {
-                    format!("{}... (truncated)", &output[..10000])
+                    let safe = codex_utils_string::take_bytes_at_char_boundary(&output, 10000);
+                    format!("{safe}... (truncated)")
                 } else {
                     output
                 };
@@ -2522,7 +2554,8 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len])
+        let safe = codex_utils_string::take_bytes_at_char_boundary(s, max_len);
+        format!("{safe}...")
     }
 }
 
@@ -4779,6 +4812,39 @@ mod tests {
             "Summary should be truncated, got {} chars",
             summary.len()
         );
+    }
+
+    #[test]
+    fn truncate_for_log_with_multibyte_does_not_panic() {
+        // ─ (U+2500) is 3 bytes in UTF-8 (0xE2 0x94 0x80).
+        // Place it so that a naive byte slice at max_len would land
+        // inside the character.
+        let s = format!("{}─end", "a".repeat(9));
+        // s layout: 9 ASCII bytes + 3-byte ─ + 3 ASCII = 15 bytes.
+        // Truncating at byte 10 would split ─ (bytes 9..12).
+        let result = truncate_for_log(&s, 10);
+        assert!(result.len() <= 13, "result too long: {}", result.len()); // 10 + "..."
+        assert!(result.ends_with("..."));
+        // Must be valid UTF-8 (it compiles as String, so this is guaranteed,
+        // but let's also verify the content makes sense).
+        assert!(
+            result.starts_with("aaaaaaaaa"),
+            "unexpected prefix: {result}"
+        );
+    }
+
+    #[test]
+    fn truncate_for_log_ascii_only() {
+        let s = "abcdefghijklmnop";
+        let result = truncate_for_log(s, 10);
+        assert_eq!(result, "abcdefghij...");
+    }
+
+    #[test]
+    fn truncate_for_log_short_string_unchanged() {
+        let s = "hello";
+        let result = truncate_for_log(s, 10);
+        assert_eq!(result, "hello");
     }
 
     /// Helper to build a minimal transcript for resume tests.

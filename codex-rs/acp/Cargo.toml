@@ -17,6 +17,7 @@ anyhow = { workspace = true }
 codex-core = { workspace = true }
 codex-git = { workspace = true }
 codex-protocol = { path = "../protocol" }
+codex-utils-string = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
