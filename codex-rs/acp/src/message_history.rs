@@ -289,6 +289,50 @@ fn lookup_history_entry(path: &Path, log_id: u64, offset: usize) -> Option<Histo
     None
 }
 
+/// Read all history entries from the JSONL file, deduplicate by text
+/// (keeping the most recent occurrence), sort newest-first, and return
+/// up to `max_results` entries.
+///
+/// Returns an empty `Vec` if the file does not exist or cannot be read.
+pub fn search_entries(nori_home: &Path, max_results: usize) -> Vec<HistoryEntry> {
+    use std::collections::HashMap;
+    use std::io::BufRead;
+    use std::io::BufReader;
+
+    let path = history_filepath(nori_home);
+    let file = match File::open(&path) {
+        Ok(f) => f,
+        Err(_) => return Vec::new(),
+    };
+
+    let reader = BufReader::new(file);
+    let mut best_by_text: HashMap<String, HistoryEntry> = HashMap::new();
+
+    for line_res in reader.lines() {
+        let line = match line_res {
+            Ok(l) if !l.is_empty() => l,
+            _ => continue,
+        };
+        let entry: HistoryEntry = match serde_json::from_str(&line) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        best_by_text
+            .entry(entry.text.clone())
+            .and_modify(|existing| {
+                if entry.ts > existing.ts {
+                    *existing = entry.clone();
+                }
+            })
+            .or_insert(entry);
+    }
+
+    let mut entries: Vec<HistoryEntry> = best_by_text.into_values().collect();
+    entries.sort_by(|a, b| b.ts.cmp(&a.ts));
+    entries.truncate(max_results);
+    entries
+}
+
 fn history_log_id(metadata: &std::fs::Metadata) -> Option<u64> {
     #[cfg(unix)]
     {
@@ -500,5 +544,114 @@ mod tests {
         let metadata = std::fs::metadata(&history_path).expect("get metadata");
         let mode = metadata.permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "file permissions should be 0600");
+    }
+
+    #[test]
+    fn test_search_entries_returns_all_entries_newest_first() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let history_path = history_filepath(temp_dir.path());
+
+        let mut file = File::create(&history_path).expect("create history file");
+        for ts in 1..=3 {
+            let entry = HistoryEntry {
+                session_id: "session".to_string(),
+                ts,
+                text: format!("message-{ts}"),
+            };
+            writeln!(
+                file,
+                "{}",
+                serde_json::to_string(&entry).expect("serialize")
+            )
+            .expect("write");
+        }
+        drop(file);
+
+        let results = search_entries(temp_dir.path(), 10);
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].ts, 3);
+        assert_eq!(results[1].ts, 2);
+        assert_eq!(results[2].ts, 1);
+    }
+
+    #[test]
+    fn test_search_entries_deduplicates_by_text() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let history_path = history_filepath(temp_dir.path());
+
+        let mut file = File::create(&history_path).expect("create history file");
+
+        let entries = vec![
+            HistoryEntry {
+                session_id: "session".to_string(),
+                ts: 1,
+                text: "hello".to_string(),
+            },
+            HistoryEntry {
+                session_id: "session".to_string(),
+                ts: 2,
+                text: "world".to_string(),
+            },
+            HistoryEntry {
+                session_id: "session".to_string(),
+                ts: 3,
+                text: "hello".to_string(),
+            },
+        ];
+        for entry in &entries {
+            writeln!(file, "{}", serde_json::to_string(entry).expect("serialize")).expect("write");
+        }
+        drop(file);
+
+        let results = search_entries(temp_dir.path(), 10);
+        assert_eq!(
+            results,
+            vec![
+                HistoryEntry {
+                    session_id: "session".to_string(),
+                    ts: 3,
+                    text: "hello".to_string(),
+                },
+                HistoryEntry {
+                    session_id: "session".to_string(),
+                    ts: 2,
+                    text: "world".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_search_entries_respects_max_results() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let history_path = history_filepath(temp_dir.path());
+
+        let mut file = File::create(&history_path).expect("create history file");
+        for ts in 1..=5 {
+            let entry = HistoryEntry {
+                session_id: "session".to_string(),
+                ts,
+                text: format!("message-{ts}"),
+            };
+            writeln!(
+                file,
+                "{}",
+                serde_json::to_string(&entry).expect("serialize")
+            )
+            .expect("write");
+        }
+        drop(file);
+
+        let results = search_entries(temp_dir.path(), 2);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].ts, 5);
+        assert_eq!(results[1].ts, 4);
+    }
+
+    #[test]
+    fn test_search_entries_returns_empty_for_missing_file() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let results = search_entries(temp_dir.path(), 10);
+        assert_eq!(results, vec![]);
     }
 }

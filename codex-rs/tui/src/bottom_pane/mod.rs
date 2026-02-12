@@ -24,6 +24,7 @@ mod chat_composer_history;
 mod command_popup;
 mod file_search_popup;
 mod footer;
+mod history_search_popup;
 mod list_selection_view;
 mod prompt_args;
 pub(crate) use list_selection_view::SelectionViewParams;
@@ -545,6 +546,14 @@ impl BottomPane {
         if updated {
             self.request_redraw();
         }
+    }
+
+    pub(crate) fn on_search_history_response(
+        &mut self,
+        entries: Vec<codex_protocol::message_history::HistoryEntry>,
+    ) {
+        self.composer.on_search_history_response(entries);
+        self.request_redraw();
     }
 
     pub(crate) fn on_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {

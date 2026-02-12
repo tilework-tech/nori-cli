@@ -87,6 +87,7 @@ pub(crate) fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::ReasoningContentDelta(_)
         | EventMsg::ReasoningRawContentDelta(_)
         | EventMsg::PromptSummary(_)
-        | EventMsg::HookOutput(_) => false,
+        | EventMsg::HookOutput(_)
+        | EventMsg::SearchHistoryResponse(_) => false,
     }
 }

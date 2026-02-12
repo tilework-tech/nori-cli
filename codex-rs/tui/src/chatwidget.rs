@@ -2396,6 +2396,10 @@ impl ChatWidget {
                     self.add_error_message(message);
                 }
             },
+            EventMsg::SearchHistoryResponse(ev) => {
+                self.bottom_pane.on_search_history_response(ev.entries);
+                self.request_redraw();
+            }
         }
     }
 

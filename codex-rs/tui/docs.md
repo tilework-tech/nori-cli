@@ -253,6 +253,25 @@ The state machine is implemented in `textarea.rs` via the `VimModeState` enum. V
 
 Config changes emit `AppEvent::SetConfigVimMode`, handled in `app.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
 
+
+**History Search (Ctrl+R):**
+
+Ctrl+R opens a reverse-incremental-search popup for prompt history, following the same `ActivePopup` pattern as the slash command popup (`Command`) and file mention popup (`File`). The popup is implemented in `history_search_popup.rs` using the shared `ScrollState` and `MAX_POPUP_ROWS` infrastructure from `popup_consts.rs`.
+
+Data flow:
+```
+Ctrl+R pressed in ChatComposer
+  -> Op::SearchHistoryRequest { max_results: 500 }
+  -> AcpBackend spawns blocking read of history.jsonl via search_entries()
+  -> EventMsg::SearchHistoryResponse
+  -> ChatWidget -> BottomPane -> ChatComposer::on_search_history_response()
+  -> HistorySearchPopup::set_entries()
+```
+
+All entries are loaded once when the popup opens; filtering is performed client-side (case-insensitive substring match on each keystroke). The popup manages its own lifecycle -- the post-key-event `sync_command_popup()` / `sync_file_search_popup()` cycle is skipped when `ActivePopup::HistorySearch` is active, preventing those syncs from closing the history popup.
+
+Vim mode is inherited from the composer's current vim state. When vim mode is enabled, the popup starts in Insert mode (for typing search queries) and supports Esc to enter Normal mode (j/k navigation), then a second Esc to close.
+
 **Status Line Footer:**
 
 The footer displays configurable segments, each of which can be enabled/disabled via `/config` -> "Footer Segments" or via `[tui.footer_segments]` in config.toml:
