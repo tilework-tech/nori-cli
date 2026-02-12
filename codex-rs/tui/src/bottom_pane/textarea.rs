@@ -332,21 +332,36 @@ impl TextArea {
                             code: KeyCode::Char('h'),
                             modifiers: KeyModifiers::NONE,
                             ..
+                        }
+                        | KeyEvent {
+                            code: KeyCode::Left,
+                            ..
                         } => self.move_cursor_left(),
                         KeyEvent {
                             code: KeyCode::Char('l'),
                             modifiers: KeyModifiers::NONE,
+                            ..
+                        }
+                        | KeyEvent {
+                            code: KeyCode::Right,
                             ..
                         } => self.move_cursor_right(),
                         KeyEvent {
                             code: KeyCode::Char('j'),
                             modifiers: KeyModifiers::NONE,
                             ..
+                        }
+                        | KeyEvent {
+                            code: KeyCode::Down,
+                            ..
                         } => self.move_cursor_down(),
                         KeyEvent {
                             code: KeyCode::Char('k'),
                             modifiers: KeyModifiers::NONE,
                             ..
+                        }
+                        | KeyEvent {
+                            code: KeyCode::Up, ..
                         } => self.move_cursor_up(),
                         KeyEvent {
                             code: KeyCode::Char('w'),
@@ -2777,5 +2792,25 @@ mod tests {
         t.input(esc_key()); // Escape should cancel pending, NOT change mode
         pretty_assertions::assert_eq!(t.cursor(), 8); // unchanged
         pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal); // still Normal
+    }
+
+    // ===== Arrow key navigation in Normal mode =====
+
+    #[test]
+    fn vim_normal_arrow_up_moves_cursor_up() {
+        let mut t = vim_normal("hello\nworld");
+        t.set_cursor(8); // on 'r' in "world"
+        t.input(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.cursor(), 2); // 'l' in "hello" (same column)
+        pretty_assertions::assert_eq!(t.text(), "hello\nworld");
+    }
+
+    #[test]
+    fn vim_normal_arrow_down_moves_cursor_down() {
+        let mut t = vim_normal("hello\nworld");
+        t.set_cursor(2); // on 'l' in "hello"
+        t.input(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        pretty_assertions::assert_eq!(t.cursor(), 8); // 'r' in "world" (same column)
+        pretty_assertions::assert_eq!(t.text(), "hello\nworld");
     }
 }
