@@ -246,6 +246,14 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
             pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
             post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
+            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
         };
 
@@ -396,6 +404,14 @@ pub(crate) fn spawn_acp_agent_resume(
             post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
             pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
             post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
+            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
         };
 

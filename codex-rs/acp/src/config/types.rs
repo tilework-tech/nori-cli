@@ -1074,6 +1074,30 @@ pub struct NoriConfig {
 
     /// Scripts to run after the agent finishes its response.
     pub post_agent_response_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run when a session starts.
+    pub async_session_start_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run when a session ends.
+    pub async_session_end_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run before a user prompt is sent.
+    pub async_pre_user_prompt_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run after a user prompt is sent.
+    pub async_post_user_prompt_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run before a tool call is executed.
+    pub async_pre_tool_call_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run after a tool call completes.
+    pub async_post_tool_call_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run before the agent produces a response.
+    pub async_pre_agent_response_hooks: Vec<PathBuf>,
+
+    /// Async (fire-and-forget) scripts to run after the agent finishes its response.
+    pub async_post_agent_response_hooks: Vec<PathBuf>,
 }
 
 impl Default for NoriConfig {
@@ -1106,6 +1130,14 @@ impl Default for NoriConfig {
             post_tool_call_hooks: Vec::new(),
             pre_agent_response_hooks: Vec::new(),
             post_agent_response_hooks: Vec::new(),
+            async_session_start_hooks: Vec::new(),
+            async_session_end_hooks: Vec::new(),
+            async_pre_user_prompt_hooks: Vec::new(),
+            async_post_user_prompt_hooks: Vec::new(),
+            async_pre_tool_call_hooks: Vec::new(),
+            async_post_tool_call_hooks: Vec::new(),
+            async_pre_agent_response_hooks: Vec::new(),
+            async_post_agent_response_hooks: Vec::new(),
         }
     }
 }
@@ -1154,6 +1186,38 @@ pub struct HooksConfigToml {
     /// Scripts to run after the agent finishes its response.
     #[serde(default)]
     pub post_agent_response: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run when a session starts.
+    #[serde(default)]
+    pub async_session_start: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run when a session ends.
+    #[serde(default)]
+    pub async_session_end: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run before a user prompt is sent.
+    #[serde(default)]
+    pub async_pre_user_prompt: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run after a user prompt is sent.
+    #[serde(default)]
+    pub async_post_user_prompt: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run before a tool call is executed.
+    #[serde(default)]
+    pub async_pre_tool_call: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run after a tool call completes.
+    #[serde(default)]
+    pub async_post_tool_call: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run before the agent produces a response.
+    #[serde(default)]
+    pub async_pre_agent_response: Option<Vec<String>>,
+
+    /// Async (fire-and-forget) scripts to run after the agent finishes its response.
+    #[serde(default)]
+    pub async_post_agent_response: Option<Vec<String>>,
 }
 
 /// Expand a leading `~` to the user's home directory.

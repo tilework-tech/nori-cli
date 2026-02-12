@@ -148,7 +148,7 @@ The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Opti
 
 **Hooks System** (`config/types.rs`, `hooks.rs`, `backend.rs`):
 
-Hooks allow users to run custom scripts at lifecycle boundaries. All hooks are configured under `[hooks]` in `config.toml`, are **blocking** (executed sequentially), and **fail-open** (failures produce warnings but do not halt operations). They all share the same execution engine (`execute_hooks_with_env()` in `hooks.rs`), output routing, and interpreter detection.
+Hooks allow users to run custom scripts at lifecycle boundaries. There are two flavors: **synchronous** hooks (blocking, executed sequentially) and **async** hooks (fire-and-forget, spawned via `tokio::spawn`). Both are configured under `[hooks]` in `config.toml`, are **fail-open** (failures produce warnings but do not halt operations), and share the same execution engine (`execute_hooks_with_env()` in `hooks.rs`) and interpreter detection. Synchronous hooks support output routing and context injection; async hooks route all output exclusively to tracing.
 
 ```toml
 [hooks]
@@ -160,6 +160,20 @@ pre_tool_call = ["~/.nori/cli/hooks/pre-tool.sh"]
 post_tool_call = ["~/.nori/cli/hooks/post-tool.sh"]
 pre_agent_response = ["~/.nori/cli/hooks/pre-response.sh"]
 post_agent_response = ["~/.nori/cli/hooks/post-response.sh"]
+```
+
+Each synchronous hook has an async counterpart prefixed with `async_`:
+
+```toml
+[hooks]
+async_session_start = ["~/.nori/cli/hooks/async-start.sh"]
+async_session_end = ["~/.nori/cli/hooks/async-cleanup.sh"]
+async_pre_user_prompt = ["~/.nori/cli/hooks/async-pre-prompt.sh"]
+async_post_user_prompt = ["~/.nori/cli/hooks/async-post-prompt.sh"]
+async_pre_tool_call = ["~/.nori/cli/hooks/async-pre-tool.sh"]
+async_post_tool_call = ["~/.nori/cli/hooks/async-post-tool.sh"]
+async_pre_agent_response = ["~/.nori/cli/hooks/async-pre-response.sh"]
+async_post_agent_response = ["~/.nori/cli/hooks/async-post-response.sh"]
 ```
 
 | Field | TOML Key | Default | Execution Point |
@@ -241,6 +255,18 @@ The routing is handled by `route_hook_results()` in `backend.rs`, which is share
 **Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt. Only `pre_user_prompt` and `post_user_prompt` hooks pass the context accumulator to `route_hook_results()`; other hooks pass `None`.
 
 **Session end hook timing:** During `Op::Shutdown`, end hooks execute and their output is routed via `route_hook_results()` before `ShutdownComplete` is sent, so the TUI can still display hook output. Context lines are irrelevant during shutdown, so `None` is passed for the context accumulator.
+
+**Async (fire-and-forget) hooks** (`hooks.rs`, `backend.rs`):
+
+Async hooks fire at the same lifecycle points as their synchronous counterparts, but run in the background without blocking the caller. Key differences from synchronous hooks:
+
+- Dispatched via `execute_hooks_fire_and_forget()`, which calls `tokio::spawn` and returns immediately
+- All script output (stdout/stderr) is routed to `tracing::info!`/`tracing::warn!` only -- no TUI output routing, no `::context::` injection
+- The spawned task takes owned `Vec<PathBuf>` and `HashMap<String, String>` (moved into the future) to avoid lifetime issues
+- Shares the same `script_timeout` and interpreter detection as synchronous hooks
+- Both sync and async hooks for the same lifecycle point are dispatched at the same location in `backend.rs`; sync runs first (blocking), then async fires in the background
+- `async_session_start` hooks are dispatched during backend construction (not stored on `AcpBackend`); the remaining 7 async hook vectors are stored as fields on `AcpBackend`
+- Receive the same environment variables (`NORI_HOOK_EVENT`, `NORI_HOOK_PROMPT_TEXT`, etc.) as their synchronous counterparts
 
 **Message History** (`message_history.rs`):
 
