@@ -2788,6 +2788,22 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Replace the current footer segments picker with a refreshed one.
+    ///
+    /// Used after toggling a segment so the picker shows updated state without
+    /// stacking a new view on top of the old one.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn replace_footer_segments_picker(
+        &mut self,
+        current: &codex_acp::config::FooterSegmentConfig,
+    ) {
+        let params = crate::nori::config_picker::footer_segments_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.replace_selection_view(params);
+    }
+
     /// Set a footer segment's enabled state.
     #[cfg(feature = "nori-config")]
     pub(crate) fn set_footer_segment_enabled(

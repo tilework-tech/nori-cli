@@ -1765,10 +1765,10 @@ impl App {
         self.chat_widget
             .add_info_message(format!("{} {status}.", segment.display_name()), None);
 
-        // Refresh the picker to show updated state
+        // Refresh the picker to show updated state without stacking a new view.
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         self.chat_widget
-            .open_footer_segments_picker(&nori_config.footer_segment_config);
+            .replace_footer_segments_picker(&nori_config.footer_segment_config);
     }
 
     async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {

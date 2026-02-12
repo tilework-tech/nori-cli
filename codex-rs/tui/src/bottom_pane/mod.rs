@@ -411,6 +411,22 @@ impl BottomPane {
         self.push_view(Box::new(view));
     }
 
+    /// Replace the current top-of-stack selection view with a new one.
+    ///
+    /// This pops the existing view before pushing the replacement so the stack
+    /// does not grow on repeated refreshes (e.g. toggling footer segments).
+    pub(crate) fn replace_selection_view(
+        &mut self,
+        params: list_selection_view::SelectionViewParams,
+    ) {
+        debug_assert!(
+            !self.view_stack.is_empty(),
+            "replace_selection_view called with empty view stack"
+        );
+        self.view_stack.pop();
+        self.show_selection_view(params);
+    }
+
     /// Update the queued messages preview shown above the composer.
     pub(crate) fn set_queued_user_messages(&mut self, queued: Vec<String>) {
         self.queued_user_messages.messages = queued;
@@ -891,6 +907,65 @@ mod tests {
         assert_snapshot!(
             "status_and_queued_messages_snapshot",
             render_snapshot(&pane, area)
+        );
+    }
+
+    #[test]
+    fn replace_selection_view_does_not_stack() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Codex to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            vertical_footer: false,
+            model_display_name: String::new(),
+        });
+
+        // Push the initial selection view.
+        let params1 = list_selection_view::SelectionViewParams {
+            title: Some("Picker v1".to_string()),
+            items: vec![list_selection_view::SelectionItem {
+                name: "Item A".to_string(),
+                dismiss_on_select: false,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        pane.show_selection_view(params1);
+        assert_eq!(pane.view_stack.len(), 1, "one view after initial push");
+
+        // Replace with a new selection view — stack should stay at 1, not grow to 2.
+        let params2 = list_selection_view::SelectionViewParams {
+            title: Some("Picker v2".to_string()),
+            items: vec![list_selection_view::SelectionItem {
+                name: "Item B".to_string(),
+                dismiss_on_select: false,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        pane.replace_selection_view(params2);
+        assert_eq!(
+            pane.view_stack.len(),
+            1,
+            "view stack should not grow after replace"
+        );
+
+        // Verify the replacement view is actually on the stack by rendering.
+        let area = Rect::new(0, 0, 40, 10);
+        let snapshot = render_snapshot(&pane, area);
+        assert!(
+            snapshot.contains("Picker v2"),
+            "expected replacement picker title in rendered output: {snapshot:?}"
+        );
+        assert!(
+            !snapshot.contains("Picker v1"),
+            "old picker title should not appear after replacement: {snapshot:?}"
         );
     }
 }
