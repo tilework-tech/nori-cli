@@ -11,12 +11,12 @@ nori *args:
 
 # format code
 fmt:
-    cargo fmt -- --config imports_granularity=Item
+    cargo fmt
 
 fix *args:
     cargo clippy --fix --all-features --tests --allow-dirty "$@"
 
-clippy:
+clippy *args:
     cargo clippy --all-features --tests "$@"
 
 install:
