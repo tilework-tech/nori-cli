@@ -605,10 +605,7 @@ For Edit/Write/Delete operations, ACP emits native patch events:
 
 **Tool Call Event Filtering:**
 
-Two-layer filtering prevents duplicate `ExecCommandBegin` events:
-
-1. **Skip Generic Events**: Filter ToolCall events lacking useful display info (empty `raw_input`, generic titles)
-2. **Dispatch-Loop Deduplication**: Track `emitted_begin_call_ids` HashSet to skip duplicates
+The ACP backend filters `ToolCall` events that lack useful display information before emitting `ExecCommandBegin` events. The ACP protocol emits multiple `ToolCall` events for the same `call_id` -- first a generic event (e.g., title="Read File", empty `raw_input`), then a detailed event (e.g., title="Read /path/to/file.rs", populated `raw_input`). The backend skips the generic events and only emits the detailed ones. Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 
 **Tool Classification System:**
 
