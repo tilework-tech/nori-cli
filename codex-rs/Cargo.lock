@@ -865,6 +865,7 @@ dependencies = [
  "codex-core",
  "codex-git",
  "codex-protocol",
+ "codex-utils-string",
  "diffy",
  "dirs",
  "filetime",

@@ -496,6 +496,8 @@ Patch operations (Edit/Write/Delete via `ToolKind`) are recorded separately from
 - `ToolKind::Delete` → `PatchOperationType::Delete`
 - Other (including Write) → `PatchOperationType::Write`
 
+Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. Both this truncation and the `truncate_for_log()` helper (used for tracing previews) use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
+
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 
