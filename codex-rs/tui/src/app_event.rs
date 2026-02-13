@@ -355,7 +355,7 @@ pub(crate) enum AppEvent {
         name: String,
         /// Whether the installation succeeded (exit code 0).
         success: bool,
-        /// First line of stdout on success, or error message on failure.
+        /// Filtered install output on success, or error message on failure.
         message: String,
     },
 
