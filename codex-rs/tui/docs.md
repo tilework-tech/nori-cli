@@ -57,6 +57,18 @@ The selective flush at task completion ensures tool cells that are already visib
 
 **Begin/End Pairing in `flush_completions_and_clear`**: Begin and End events for the same tool call are always paired in the FIFO queue (Begin precedes its End). When `flush_completions_and_clear` discards a Begin event, it records the `call_id` in a `HashSet`. When it encounters an End event, it checks whether the corresponding Begin was discarded. If so, the End is also discarded. Without this pairing, processing an End whose Begin was discarded causes `handle_exec_end_now` to create an orphan `ExecCell` with the raw `call_id` as the command name (e.g. "Ran toolu_01Lt49..."). This cascade deferral scenario arises when a tool Begin arrives while the queue is non-empty (even if the stream is no longer active), causing the Begin to be deferred and later discarded at task completion.
 
+
+**Turn-Finished Gate** (`chatwidget.rs`):
+
+The ACP protocol has no end-of-turn synchronization guarantee -- `PromptResponse` and `SessionNotification` messages are independent async streams that race. This means tool call events (`ExecCommandBegin/End`, `McpToolCallBegin/End`) can arrive after the agent's final response text (`AgentMessage`). The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard these late-arriving events:
+
+| Transition | Trigger | Effect |
+|------------|---------|--------|
+| `turn_finished = true` | `on_agent_message()` | Closes the gate -- subsequent tool events are discarded |
+| `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
+
+The gate is checked at the entry point of `on_exec_command_begin()`, `on_exec_command_end()`, `on_mcp_tool_call_begin()`, and `on_mcp_tool_call_end()`. When `turn_finished` is true, these methods return immediately without rendering any UI. This is complementary to the interrupt queue -- the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
+
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
 **System Info Collection** (`system_info.rs`):

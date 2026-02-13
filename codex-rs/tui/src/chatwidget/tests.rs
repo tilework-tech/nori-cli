@@ -264,6 +264,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         first_prompt_text: None,
         loop_remaining: None,
         loop_total: None,
+        turn_finished: false,
     };
     (widget, rx, op_rx)
 }
@@ -3611,5 +3612,224 @@ async fn shutdown_while_backend_connecting_triggers_exit() {
     assert!(
         found_exit,
         "expected ExitRequest when Op::Shutdown is sent to a live but unconsumed channel"
+    );
+}
+
+// =============================================================================
+// Late tool event gate: events arriving after AgentMessage should be discarded
+// =============================================================================
+
+#[test]
+fn late_exec_events_after_agent_message_are_discarded() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Start a turn
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Normal tool call during the turn (should appear)
+    let begin_normal = begin_exec(&mut chat, "call-normal", "echo hello");
+    end_exec(&mut chat, begin_normal, "hello", "", 0);
+
+    // Agent finalizes its response
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Here is my response".into(),
+        }),
+    });
+
+    // Drain everything so far — the normal tool call and agent message should be present
+    let cells_before = drain_insert_history(&mut rx);
+    let combined_before: String = cells_before
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+    assert!(
+        combined_before.contains("echo hello"),
+        "normal tool call should appear: {combined_before:?}"
+    );
+    assert!(
+        combined_before.contains("Here is my response"),
+        "agent message should appear: {combined_before:?}"
+    );
+
+    // Now send LATE tool events — these arrive after the agent message
+    // due to the ACP race condition. They should be silently discarded.
+    let begin_late = begin_exec(&mut chat, "call-late", "cat /etc/passwd");
+    end_exec(&mut chat, begin_late, "root:x:0:0", "", 0);
+
+    // Drain anything emitted by the late events — there should be NOTHING
+    let cells_after_late = drain_insert_history(&mut rx);
+    let combined_after_late: String = cells_after_late
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+    assert!(
+        !combined_after_late.contains("cat /etc/passwd"),
+        "late exec tool call should have been discarded but appeared after agent message: {combined_after_late:?}"
+    );
+    assert!(
+        !combined_after_late.contains("root:x:0:0"),
+        "late exec tool output should have been discarded but appeared after agent message: {combined_after_late:?}"
+    );
+
+    // Also verify nothing is sitting in active_cell waiting to leak
+    assert!(
+        chat.active_cell.is_none(),
+        "no active cell should remain after late events are discarded"
+    );
+}
+
+#[test]
+fn turn_finished_gate_resets_on_new_task_started() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // === Turn 1: agent message sets the gate ===
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Turn 1 response".into(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+    // Drain turn 1 output
+    drain_insert_history(&mut rx);
+
+    // === Turn 2: gate should be cleared, tool calls should work again ===
+    chat.handle_codex_event(Event {
+        id: "t2".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // This tool call in turn 2 should NOT be discarded
+    let begin_t2 = begin_exec(&mut chat, "call-t2", "ls -la");
+    end_exec(&mut chat, begin_t2, "total 42", "", 0);
+
+    chat.handle_codex_event(Event {
+        id: "t2".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Turn 2 response".into(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "t2".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+
+    // Turn 2 tool call should appear (gate was reset)
+    assert!(
+        combined.contains("ls -la"),
+        "turn 2 tool call should appear after gate reset: {combined:?}"
+    );
+    assert!(
+        combined.contains("Turn 2 response"),
+        "turn 2 agent message should appear: {combined:?}"
+    );
+}
+
+#[test]
+fn late_mcp_tool_call_after_agent_message_is_discarded() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Start turn
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Agent responds
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Done with the task".into(),
+        }),
+    });
+
+    // Drain agent message
+    drain_insert_history(&mut rx);
+
+    // Late MCP tool call arrives after agent message
+    let mcp_invocation = codex_protocol::protocol::McpInvocation {
+        server: "test-server".into(),
+        tool: "test_tool".into(),
+        arguments: Some(serde_json::json!({})),
+    };
+    chat.handle_codex_event(Event {
+        id: "mcp-late".into(),
+        msg: EventMsg::McpToolCallBegin(McpToolCallBeginEvent {
+            call_id: "mcp-call-late".into(),
+            invocation: mcp_invocation.clone(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "mcp-late".into(),
+        msg: EventMsg::McpToolCallEnd(McpToolCallEndEvent {
+            call_id: "mcp-call-late".into(),
+            invocation: mcp_invocation,
+            duration: std::time::Duration::from_millis(10),
+            result: Ok(mcp_types::CallToolResult {
+                content: vec![mcp_types::ContentBlock::TextContent(
+                    mcp_types::TextContent {
+                        annotations: None,
+                        text: "some output".into(),
+                        r#type: "text".into(),
+                    },
+                )],
+                is_error: Some(false),
+                structured_content: None,
+            }),
+        }),
+    });
+
+    // Complete turn
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+
+    // MCP tool call should NOT appear
+    assert!(
+        !combined.contains("test_tool"),
+        "late MCP tool call should have been discarded: {combined:?}"
+    );
+    assert!(
+        !combined.contains("some output"),
+        "late MCP tool output should have been discarded: {combined:?}"
     );
 }

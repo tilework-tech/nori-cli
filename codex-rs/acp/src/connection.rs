@@ -38,16 +38,6 @@ use tracing::warn;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
-/// Number of yields to allow io_task to drain pending session notifications
-/// before unregistering the session. Empirically chosen to handle typical
-/// notification bursts from ACP agents. This is a workaround for the lack of
-/// explicit end-of-turn synchronization in the ACP protocol.
-///
-/// In practice, agents rarely send more than a few notifications between the
-/// last content chunk and the PromptResponse. Ten yields provides sufficient
-/// headroom for any realistic burst.
-const DRAIN_YIELD_COUNT: usize = 10;
-
 /// The type of approval event to send to the UI.
 ///
 /// This enum allows us to use the more appropriate approval UI for different
@@ -706,13 +696,6 @@ async fn run_command_loop(
                     *state = AcpModelState::from_session_model_state(models);
                 }
 
-                // Yield to allow io_task to drain any pending notifications
-                // that arrived just before the LoadSessionResponse, mirroring
-                // the drain logic used by the Prompt handler.
-                for _ in 0..DRAIN_YIELD_COUNT {
-                    tokio::task::yield_now().await;
-                }
-
                 // Unregister the session so the update channel is closed,
                 // allowing the caller's forwarding task to complete.
                 inner.client_delegate.unregister_session(&acp_session_id);
@@ -785,19 +768,6 @@ async fn run_command_loop(
                 // - Collecting all SessionUpdates received during the prompt
                 // - Converting them to Codex ResponseItem format using translator functions
                 // - Writing to rollout storage (see codex-core/src/rollout.rs)
-
-                // Yield multiple times to allow the io_task to process any pending
-                // notifications that may have arrived just before the PromptResponse.
-                // The io_task runs on the same LocalSet and each yield gives the
-                // scheduler an opportunity to run other ready tasks. Without these
-                // yields, late-arriving notifications would be dropped because
-                // unregister_session removes the session from the sessions map
-                // before io_task can forward them to the update channel.
-                //
-                // See DRAIN_YIELD_COUNT for the rationale behind the chosen value.
-                for _ in 0..DRAIN_YIELD_COUNT {
-                    tokio::task::yield_now().await;
-                }
 
                 inner.client_delegate.unregister_session(&session_id);
                 let _ = response_tx.send(result);
@@ -1178,9 +1148,7 @@ impl acp::Client for ClientDelegate {
                 );
             }
         } else {
-            // This can happen if a notification arrives after prompt_future resolves
-            // but before we've yielded enough times for io_task to drain the buffer.
-            // With DRAIN_YIELD_COUNT yields, this should be rare in practice.
+            // This else-branch is diagnostic for unregistered notifications.
             debug!(
                 target: "acp_message_draining",
                 session_id = %notification.session_id,

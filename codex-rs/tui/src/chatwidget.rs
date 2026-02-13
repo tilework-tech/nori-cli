@@ -400,6 +400,9 @@ pub(crate) struct ChatWidget {
     loop_remaining: Option<i32>,
     // Loop mode state: total iterations configured
     loop_total: Option<i32>,
+    // Gate: set when AgentMessage is received, cleared on next TaskStarted.
+    // While true, late-arriving tool events are silently discarded.
+    turn_finished: bool,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -502,6 +505,11 @@ impl ChatWidget {
         }
         self.flush_answer_stream_with_separator();
         self.handle_stream_finished();
+
+        // Close the gate: any tool events arriving after this point are stale
+        // and should be silently discarded (ACP race condition).
+        self.turn_finished = true;
+
         self.request_redraw();
     }
 
@@ -556,6 +564,7 @@ impl ChatWidget {
         self.set_status_header(crate::status_indicator_widget::random_status_message());
         self.full_reasoning_buffer.clear();
         self.reasoning_buffer.clear();
+        self.turn_finished = false;
         self.request_redraw();
     }
 
@@ -855,6 +864,9 @@ impl ChatWidget {
     }
 
     fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {
+        if self.turn_finished {
+            return;
+        }
         self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
@@ -868,6 +880,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_begin(&mut self, event: PatchApplyBeginEvent) {
+        if self.turn_finished {
+            return;
+        }
         // Track Edit tool call for session statistics
         self.session_stats.record_tool_call("Edit");
 
@@ -881,6 +896,9 @@ impl ChatWidget {
     }
 
     fn on_view_image_tool_call(&mut self, event: ViewImageToolCallEvent) {
+        if self.turn_finished {
+            return;
+        }
         // Track ViewImage tool call for session statistics
         self.session_stats.record_tool_call("ViewImage");
 
@@ -893,6 +911,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_end(&mut self, event: codex_core::protocol::PatchApplyEndEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = event.clone();
         self.defer_or_handle(
             |q| q.push_patch_end(event),
@@ -901,16 +922,25 @@ impl ChatWidget {
     }
 
     fn on_exec_command_end(&mut self, ev: ExecCommandEndEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
     }
 
     fn on_mcp_tool_call_begin(&mut self, ev: McpToolCallBeginEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_mcp_begin(ev), |s| s.handle_mcp_begin_now(ev2));
     }
 
     fn on_mcp_tool_call_end(&mut self, ev: McpToolCallEndEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_mcp_end(ev), |s| s.handle_mcp_end_now(ev2));
     }
@@ -1574,6 +1604,7 @@ impl ChatWidget {
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
+            turn_finished: false,
         };
 
         widget.prefetch_rate_limits();
@@ -1668,6 +1699,7 @@ impl ChatWidget {
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
+            turn_finished: false,
         };
 
         widget.prefetch_rate_limits();
@@ -1764,6 +1796,7 @@ impl ChatWidget {
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
+            turn_finished: false,
         };
 
         widget.prefetch_rate_limits();

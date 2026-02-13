@@ -608,10 +608,7 @@ For Edit/Write/Delete operations, ACP emits native patch events:
 
 **Tool Call Event Filtering:**
 
-Two-layer filtering prevents duplicate `ExecCommandBegin` events:
-
-1. **Skip Generic Events**: Filter ToolCall events lacking useful display info (empty `raw_input`, generic titles)
-2. **Dispatch-Loop Deduplication**: Track `emitted_begin_call_ids` HashSet to skip duplicates
+The ACP backend filters `ToolCall` events that lack useful display information before emitting `ExecCommandBegin` events. The ACP protocol emits multiple `ToolCall` events for the same `call_id` -- first a generic event (e.g., title="Read File", empty `raw_input`), then a detailed event (e.g., title="Read /path/to/file.rs", populated `raw_input`). The backend skips the generic events and only emits the detailed ones. Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 
 **Tool Classification System:**
 
@@ -743,7 +740,6 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 - The minimum supported ACP protocol version is V1
 - The `unstable` feature gates model switching functionality
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
-- A `DRAIN_YIELD_COUNT` of 10 yields allows pending notifications to drain before session cleanup
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
 - Claude Code transcript discovery requires the first user message to function correctly; without it, the discovery returns an error
@@ -755,9 +751,5 @@ RUST_LOG=acp_event_flow=debug cargo run
 ```
 
 The `acp_event_flow` target logs streaming deltas, tool calls, and dispatch loop event counts. Pairs with TUI-side tracing (`tui_event_flow`, `cell_flushing`).
-
-**LocalSet Cooperative Scheduling:**
-
-The `io_task` and `run_command_loop` tasks run cooperatively in a LocalSet. A race condition exists when the agent sends notifications followed immediately by a PromptResponse. The fix adds a yield loop (`yield_now()` × 10) before `unregister_session()` to allow pending notifications to drain.
 
 Created and maintained by Nori.

@@ -1278,11 +1278,6 @@ impl AcpBackend {
                 let mut has_fired_pre_agent_response = false;
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
-                // Track call_ids that have already had ExecCommandBegin emitted.
-                // The ACP protocol can emit multiple ToolCall events for the same call_id
-                // as details become available, but the TUI expects exactly one Begin per call_id.
-                let mut emitted_begin_call_ids: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
                 // Track call_ids that have already been recorded to the transcript.
                 let mut recorded_tool_call_ids: std::collections::HashSet<String> =
                     std::collections::HashSet::new();
@@ -1417,18 +1412,6 @@ impl AcpBackend {
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
                     for mut event_msg in events {
-                        // Deduplicate ExecCommandBegin events - only emit the first one per call_id
-                        if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
-                            if emitted_begin_call_ids.contains(&begin_ev.call_id) {
-                                debug!(
-                                    target: "acp_event_flow",
-                                    call_id = %begin_ev.call_id,
-                                    "ACP dispatch: skipping duplicate ExecCommandBegin"
-                                );
-                                continue;
-                            }
-                            emitted_begin_call_ids.insert(begin_ev.call_id.clone());
-                        }
                         // Accumulate text for transcript
                         if let EventMsg::AgentMessageDelta(ref mut delta) = event_msg {
                             if needs_agent_separator && has_agent_text {
