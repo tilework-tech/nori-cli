@@ -399,6 +399,7 @@ mod tests {
         NoriConfig {
             agent: "claude-code".to_string(),
             model: "claude-code".to_string(),
+            agent_models: std::collections::HashMap::new(),
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: codex_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: codex_acp::config::HistoryPersistence::SaveAll,

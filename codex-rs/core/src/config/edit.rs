@@ -44,6 +44,8 @@ pub enum ConfigEdit {
     /// Set trust_level under `[projects."<path>"]`,
     /// migrating inline tables to explicit tables.
     SetProjectTrustLevel { path: PathBuf, level: TrustLevel },
+    /// Update a per-agent model preference in the `[agent_models]` table.
+    SetAgentModel { agent: String, model: String },
     /// Set the value stored at the exact dotted path.
     SetPath {
         segments: Vec<String>,
@@ -284,6 +286,11 @@ impl ConfigDocument {
                 value(*acknowledged),
             )),
             ConfigEdit::ReplaceMcpServers(servers) => Ok(self.replace_mcp_servers(servers)),
+            ConfigEdit::SetAgentModel { agent, model } => Ok(self.write_value(
+                Scope::Global,
+                &["agent_models", agent],
+                value(model.clone()),
+            )),
             ConfigEdit::SetPath { segments, value } => Ok(self.insert(segments, value.clone())),
             ConfigEdit::ClearPath { segments } => Ok(self.clear_owned(segments)),
             ConfigEdit::SetProjectTrustLevel { path, level } => {
@@ -513,6 +520,14 @@ impl ConfigEditsBuilder {
     pub fn set_agent(mut self, agent: Option<&str>) -> Self {
         self.edits.push(ConfigEdit::SetAgent {
             agent: agent.map(ToOwned::to_owned),
+        });
+        self
+    }
+
+    pub fn set_agent_model(mut self, agent: &str, model: &str) -> Self {
+        self.edits.push(ConfigEdit::SetAgentModel {
+            agent: agent.to_owned(),
+            model: model.to_owned(),
         });
         self
     }
@@ -1115,6 +1130,112 @@ model_reasoning_effort = "high"
             .and_then(|tbl| tbl.get("hide_full_access_warning"))
             .and_then(toml::Value::as_bool);
         assert_eq!(notice, Some(true));
+    }
+
+    #[test]
+    fn blocking_set_agent_model_persists_to_agent_models_table() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        apply_blocking(
+            codex_home,
+            None,
+            &[ConfigEdit::SetAgentModel {
+                agent: "claude-code".to_string(),
+                model: "claude-sonnet-4-5".to_string(),
+            }],
+        )
+        .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let agent_models = config
+            .get("agent_models")
+            .and_then(|v| v.as_table())
+            .expect("agent_models table should exist");
+        assert_eq!(
+            agent_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("claude-sonnet-4-5")
+        );
+    }
+
+    #[test]
+    fn blocking_set_agent_model_preserves_other_entries() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        // Seed with an existing agent_models entry
+        std::fs::write(
+            codex_home.join(CONFIG_TOML_FILE),
+            r#"[agent_models]
+codex = "gpt-4-5"
+"#,
+        )
+        .expect("seed");
+
+        apply_blocking(
+            codex_home,
+            None,
+            &[ConfigEdit::SetAgentModel {
+                agent: "claude-code".to_string(),
+                model: "claude-sonnet-4-5".to_string(),
+            }],
+        )
+        .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let agent_models = config
+            .get("agent_models")
+            .and_then(|v| v.as_table())
+            .expect("agent_models table should exist");
+        assert_eq!(
+            agent_models.get("codex").and_then(|v| v.as_str()),
+            Some("gpt-4-5"),
+            "Existing entry should be preserved"
+        );
+        assert_eq!(
+            agent_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("claude-sonnet-4-5"),
+            "New entry should be added"
+        );
+    }
+
+    #[test]
+    fn blocking_set_agent_model_updates_existing_entry() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        // Seed with an existing agent_models entry for claude-code
+        std::fs::write(
+            codex_home.join(CONFIG_TOML_FILE),
+            r#"[agent_models]
+"claude-code" = "claude-opus-4"
+"#,
+        )
+        .expect("seed");
+
+        apply_blocking(
+            codex_home,
+            None,
+            &[ConfigEdit::SetAgentModel {
+                agent: "claude-code".to_string(),
+                model: "claude-sonnet-4-5".to_string(),
+            }],
+        )
+        .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let agent_models = config
+            .get("agent_models")
+            .and_then(|v| v.as_table())
+            .expect("agent_models table should exist");
+        assert_eq!(
+            agent_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("claude-sonnet-4-5"),
+            "Existing entry should be updated"
+        );
     }
 
     #[test]

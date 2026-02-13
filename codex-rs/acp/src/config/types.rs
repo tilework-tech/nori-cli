@@ -50,6 +50,11 @@ pub struct NoriConfigToml {
     #[serde(default)]
     pub mcp_servers: HashMap<String, McpServerConfigToml>,
 
+    /// Per-agent default model preferences (lookup table)
+    /// Keys are agent slugs (e.g., "claude-code"), values are model identifiers.
+    #[serde(default)]
+    pub agent_models: HashMap<String, String>,
+
     /// Session lifecycle hooks
     #[serde(default)]
     pub hooks: HooksConfigToml,
@@ -976,6 +981,9 @@ pub enum ApprovalPolicy {
 /// CLI overrides for config values
 #[derive(Debug, Clone, Default)]
 pub struct NoriConfigOverrides {
+    /// Override the agent selection (e.g., "claude-code", "codex", "gemini")
+    pub agent: Option<String>,
+
     /// Override the model selection
     pub model: Option<String>,
 
@@ -998,6 +1006,9 @@ pub struct NoriConfig {
 
     /// The ACP agent model to use
     pub model: String,
+
+    /// Per-agent default model preferences (lookup table)
+    pub agent_models: HashMap<String, String>,
 
     /// Sandbox mode for command execution
     pub sandbox_mode: SandboxMode,
@@ -1105,6 +1116,7 @@ impl Default for NoriConfig {
         Self {
             agent: DEFAULT_MODEL.to_string(),
             model: DEFAULT_MODEL.to_string(),
+            agent_models: HashMap::new(),
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,
             history_persistence: HistoryPersistence::default(),

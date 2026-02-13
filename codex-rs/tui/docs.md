@@ -26,7 +26,7 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 ### Core Implementation
 
-Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function resolves the active model via `get_resolved_model(cli.agent, cli.model)` in `nori/config_adapter.rs`, which applies the full resolution chain (CLI `--model` > `agent_models[agent]` > deprecated `model` > agent slug) from `NoriConfig`. The `--agent` / `-a` CLI flag (defined in `cli.rs`) overrides which agent is selected and therefore which `agent_models` entry is consulted. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
 
 The main event loop in `app.rs` processes:
 
@@ -102,7 +102,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | Command | Description |
 |---------|-------------|
 | `/agent` | Switch between available ACP agents |
-| `/model` | Choose model and reasoning effort |
+| `/model` | Choose model and reasoning effort. On success (`AcpModelSetResult` in `app.rs`), the selection is persisted to the `[agent_models]` table in `config.toml` via `ConfigEditsBuilder::set_agent_model()`, keyed by the resolved agent slug (`self.acp_agent_slug`) |
 | `/approvals` | Choose what Nori can do without approval |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |

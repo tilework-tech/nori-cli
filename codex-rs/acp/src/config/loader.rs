@@ -118,19 +118,25 @@ impl NoriConfig {
         let async_post_agent_response_hooks =
             super::types::resolve_hook_paths(toml.hooks.async_post_agent_response);
 
-        // Agent is the user's persisted preference, defaults to DEFAULT_MODEL
-        let agent = toml.agent.unwrap_or_else(|| DEFAULT_MODEL.to_string());
+        // Agent: CLI override > config agent > DEFAULT_MODEL
+        let agent = overrides
+            .agent
+            .or(toml.agent)
+            .unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
-        // Model is the runtime value: CLI override > config model > persisted agent > DEFAULT_MODEL
-        // Using agent as fallback ensures the persisted preference is honored at startup
-        let model = overrides
-            .model
-            .or(toml.model)
-            .unwrap_or_else(|| agent.clone());
+        // Model resolution: CLI override > agent_models[agent] > deprecated model field > agent slug
+        let model = overrides.model.unwrap_or_else(|| {
+            toml.agent_models
+                .get(&agent)
+                .cloned()
+                .or(toml.model)
+                .unwrap_or_else(|| agent.clone())
+        });
 
         Ok(Self {
             agent,
             model,
+            agent_models: toml.agent_models,
             sandbox_mode: overrides
                 .sandbox_mode
                 .or(toml.sandbox_mode)
@@ -564,6 +570,185 @@ post_tool_call = ["/path/to/post-tool.sh"]
         assert!(config.pre_tool_call_hooks.is_empty());
         assert!(config.pre_agent_response_hooks.is_empty());
         assert!(config.post_agent_response_hooks.is_empty());
+    }
+
+    // ========================================================================
+    // Agent Models Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_agent_models_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "claude-code"
+
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+codex = "gpt-4-5"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        assert_eq!(config.agent_models.len(), 2);
+        assert_eq!(
+            config.agent_models.get("claude-code"),
+            Some(&"claude-sonnet-4-5".to_string())
+        );
+        assert_eq!(
+            config.agent_models.get("codex"),
+            Some(&"gpt-4-5".to_string())
+        );
+    }
+
+    #[test]
+    fn test_model_resolved_from_agent_models_table() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        // agent_models has an entry for the active agent; no top-level model set
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "claude-code"
+
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        assert_eq!(
+            config.model, "claude-sonnet-4-5",
+            "Model should be resolved from agent_models lookup for the active agent"
+        );
+    }
+
+    #[test]
+    fn test_model_falls_back_to_agent_slug_when_no_agent_models_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        // agent_models exists but has no entry for the active agent
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "gemini"
+
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        assert_eq!(
+            config.model, "gemini",
+            "Model should fall back to agent slug when no agent_models entry"
+        );
+    }
+
+    #[test]
+    fn test_deprecated_model_field_used_when_no_agent_models_entry() {
+        let toml: NoriConfigToml = toml::from_str(
+            r#"
+agent = "gemini"
+model = "gemini-pro"
+
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+"#,
+        )
+        .unwrap();
+
+        let config =
+            NoriConfig::from_toml(toml, PathBuf::from("/tmp/nori"), Default::default()).unwrap();
+
+        assert_eq!(
+            config.model, "gemini-pro",
+            "Should fall back to deprecated model field when no agent_models entry for the active agent"
+        );
+    }
+
+    #[test]
+    fn test_cli_model_override_takes_precedence_over_agent_models() {
+        let toml: NoriConfigToml = toml::from_str(
+            r#"
+agent = "claude-code"
+
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+"#,
+        )
+        .unwrap();
+
+        let overrides = NoriConfigOverrides {
+            model: Some("claude-opus-4".to_string()),
+            ..Default::default()
+        };
+
+        let config = NoriConfig::from_toml(toml, PathBuf::from("/tmp/nori"), overrides).unwrap();
+
+        assert_eq!(
+            config.model, "claude-opus-4",
+            "CLI --model override should take precedence over agent_models"
+        );
+    }
+
+    #[test]
+    fn test_agent_override_in_config_overrides() {
+        let toml = NoriConfigToml::default();
+
+        let overrides = NoriConfigOverrides {
+            agent: Some("codex".to_string()),
+            ..Default::default()
+        };
+
+        let config = NoriConfig::from_toml(toml, PathBuf::from("/tmp/nori"), overrides).unwrap();
+
+        assert_eq!(
+            config.agent, "codex",
+            "Agent override should take precedence over config and default"
+        );
+        assert_eq!(
+            config.model, "codex",
+            "Model should fall back to agent slug when no agent_models entry"
+        );
+    }
+
+    #[test]
+    fn test_agent_override_with_agent_models_lookup() {
+        let toml: NoriConfigToml = toml::from_str(
+            r#"
+agent = "claude-code"
+
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+codex = "gpt-4-5"
+"#,
+        )
+        .unwrap();
+
+        let overrides = NoriConfigOverrides {
+            agent: Some("codex".to_string()),
+            ..Default::default()
+        };
+
+        let config = NoriConfig::from_toml(toml, PathBuf::from("/tmp/nori"), overrides).unwrap();
+
+        assert_eq!(config.agent, "codex");
+        assert_eq!(
+            config.model, "gpt-4-5",
+            "Model should be looked up from agent_models using the overridden agent"
+        );
     }
 
     #[test]

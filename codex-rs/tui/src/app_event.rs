@@ -237,8 +237,7 @@ pub(crate) enum AppEvent {
         /// Whether the model was set successfully
         success: bool,
         /// The model that was set (on success) or attempted (on failure).
-        /// Kept for logging/debugging even though not currently used in UI.
-        #[allow(dead_code)]
+        /// Used to persist the selection to the agent_models config table.
         model_id: String,
         /// The display name for UI feedback
         display_name: String,

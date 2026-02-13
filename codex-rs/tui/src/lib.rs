@@ -191,18 +191,29 @@ pub async fn run_main(
 
     let model_provider_override: Option<String> = None;
 
-    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
-    let model = cli.model.clone().or_else(|| {
+    // Load resolved agent and model from NoriConfig, taking CLI --agent and --model into account.
+    // Model resolution: CLI --model > agent_models[agent] > deprecated model field > agent slug
+    // Agent resolution: CLI --agent > config agent > DEFAULT_MODEL
+    let (acp_agent_slug, model) = {
         #[cfg(feature = "nori-config")]
         {
-            nori::config_adapter::get_persisted_agent_model()
-                .or_else(|| Some(DEFAULT_ACP_MODEL.to_string()))
+            nori::config_adapter::get_resolved_agent_and_model(
+                cli.agent.as_deref(),
+                cli.model.as_deref(),
+            )
+            .map(|(agent, model)| (Some(agent), Some(model)))
+            .unwrap_or_else(|| (None, Some(DEFAULT_ACP_MODEL.to_string())))
         }
         #[cfg(not(feature = "nori-config"))]
         {
-            Some(DEFAULT_ACP_MODEL.to_string())
+            (
+                None::<String>,
+                cli.model
+                    .clone()
+                    .or_else(|| Some(DEFAULT_ACP_MODEL.to_string())),
+            )
         }
-    });
+    };
 
     // canonicalize the cwd
     let mut cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
@@ -345,6 +356,7 @@ pub async fn run_main(
         cli_kv_overrides,
         active_profile,
         vertical_footer,
+        acp_agent_slug,
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
@@ -357,6 +369,7 @@ async fn run_ratatui_app(
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
     vertical_footer: bool,
+    acp_agent_slug: Option<String>,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -519,6 +532,7 @@ async fn run_ratatui_app(
         images,
         resume_selection,
         vertical_footer,
+        acp_agent_slug,
     )
     .await;
 

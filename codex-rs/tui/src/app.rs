@@ -246,6 +246,10 @@ pub(crate) struct App {
 
     /// Guard to prevent showing the worktree cleanup warning more than once per session.
     worktree_warning_shown: bool,
+
+    /// The ACP agent slug resolved at startup (e.g., "claude-code"). Used as the
+    /// key when persisting model selections to the `[agent_models]` table.
+    acp_agent_slug: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -274,6 +278,7 @@ impl App {
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
+        acp_agent_slug: Option<String>,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -392,6 +397,7 @@ impl App {
             vim_mode_enabled: false,
             system_info_tx,
             worktree_warning_shown: false,
+            acp_agent_slug,
         };
 
         // Load NoriConfig and propagate settings to the textarea.
@@ -1035,6 +1041,9 @@ impl App {
                 // Clear the pending agent since we're applying it now
                 self.pending_agent = None;
 
+                // Update the agent slug so model persistence uses the correct key
+                self.acp_agent_slug = Some(model_name.clone());
+
                 // Update the model in config
                 self.config.model = model_name.clone();
 
@@ -1108,7 +1117,7 @@ impl App {
             #[cfg(feature = "unstable")]
             AppEvent::AcpModelSetResult {
                 success,
-                model_id: _,
+                model_id,
                 display_name,
                 error,
             } => {
@@ -1116,6 +1125,27 @@ impl App {
                     // Update the approval dialog display name to reflect the new model
                     self.chat_widget
                         .update_model_display_name(display_name.clone());
+
+                    // Persist model selection to agent_models table in config.toml.
+                    // Use the resolved agent slug (e.g., "claude-code") rather than
+                    // self.config.model which holds the resolved *model* name.
+                    let agent = self
+                        .acp_agent_slug
+                        .clone()
+                        .unwrap_or_else(|| codex_acp::config::DEFAULT_MODEL.to_string());
+                    if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                        .set_agent_model(&agent, &model_id)
+                        .apply()
+                        .await
+                    {
+                        tracing::error!(
+                            error = %err,
+                            "failed to persist agent model selection"
+                        );
+                        self.chat_widget
+                            .add_error_message(format!("Failed to save model preference: {err}"));
+                    }
+
                     self.chat_widget
                         .add_info_message(format!("Model switched to: {display_name}"), None);
                 } else {
@@ -2017,6 +2047,7 @@ mod tests {
             vim_mode_enabled: false,
             system_info_tx,
             worktree_warning_shown: false,
+            acp_agent_slug: None,
         }
     }
 
@@ -2060,6 +2091,7 @@ mod tests {
                 vim_mode_enabled: false,
                 system_info_tx,
                 worktree_warning_shown: false,
+                acp_agent_slug: None,
             },
             rx,
             op_rx,

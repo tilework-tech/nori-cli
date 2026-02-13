@@ -61,12 +61,34 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 - `DEFAULT_MODEL`: Default agent model (`"claude-code"`)
 
-**Agent vs Model Field Distinction:**
+**Agent, Model, and Agent Models:**
 
-| Field | Purpose | Persistence |
-|-------|---------|-------------|
-| `agent` | User's persistent agent preference | Saved to config.toml |
-| `model` | Active model for current session | Can be overridden by CLI flags |
+| Config Field | Purpose | Persistence |
+|-------------|---------|-------------|
+| `agent` | Which ACP agent to spawn (e.g., "claude-code", "codex") | Saved to config.toml top-level |
+| `model` | Deprecated top-level model field | Read as fallback, no longer written to |
+| `agent_models` | Per-agent default model preferences (lookup table) | `[agent_models]` TOML table |
+
+The `agent_models` table in `config.toml` maps agent slugs to their preferred models:
+
+```toml
+[agent_models]
+"claude-code" = "claude-sonnet-4-5"
+codex = "gpt-4-5"
+```
+
+**Model resolution chain** (in `loader.rs` `from_toml()`):
+1. CLI `--model` override (via `NoriConfigOverrides.model`)
+2. `agent_models[agent]` lookup from the TOML table
+3. Deprecated top-level `model` field (backwards compatibility)
+4. Agent slug as fallback
+
+**Agent resolution chain:**
+1. CLI `--agent` override (via `NoriConfigOverrides.agent`)
+2. Config `agent` field
+3. `DEFAULT_MODEL` ("claude-code")
+
+`NoriConfigOverrides` carries both `agent` and `model` optional overrides from the CLI layer. The agent override also affects which key is looked up in the `agent_models` table during model resolution.
 
 **Notification Configuration** (`config/types.rs`):
 

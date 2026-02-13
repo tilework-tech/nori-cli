@@ -31,6 +31,10 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_show_all: bool,
 
+    /// ACP agent to use (e.g., "claude-code", "codex", "gemini").
+    #[arg(long, short = 'a')]
+    pub agent: Option<String>,
+
     /// Model the agent should use.
     #[arg(long, short = 'm')]
     pub model: Option<String>,
@@ -104,6 +108,30 @@ mod tests {
         assert!(
             !cli.dangerously_bypass_approvals_and_sandbox,
             "dangerously_bypass_approvals_and_sandbox should default to false"
+        );
+    }
+
+    /// Test that --agent flag is recognized and sets agent field.
+    #[test]
+    fn test_agent_flag_is_recognized() {
+        let cli = Cli::try_parse_from(["nori", "--agent", "codex"])
+            .expect("--agent should be a valid flag");
+        assert_eq!(
+            cli.agent,
+            Some("codex".to_string()),
+            "--agent should set the agent field"
+        );
+    }
+
+    /// Test that -a short flag works for --agent.
+    #[test]
+    fn test_agent_short_flag_is_recognized() {
+        let cli = Cli::try_parse_from(["nori", "-a", "gemini"])
+            .expect("-a should be a valid short flag for --agent");
+        assert_eq!(
+            cli.agent,
+            Some("gemini".to_string()),
+            "-a should set the agent field"
         );
     }
 }

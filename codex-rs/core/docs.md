@@ -39,6 +39,8 @@ Key integrations:
 2. Project-local config at `<cwd>/.codex/config.toml`
 3. Command-line overrides
 
+**Config Editing** (`config/edit.rs`): The `ConfigEdit` enum and `ConfigDocument` type provide programmatic TOML editing that preserves comments and formatting. `ConfigEditsBuilder` offers a fluent API for batching edits. Edits include setting project trust levels, MCP server configs, and per-agent model preferences via `SetAgentModel { agent, model }` which writes to the `["agent_models", agent_slug]` path in the global config.
+
 **Authentication** (`auth.rs`, `auth/`): Supports multiple auth modes:
 - API key via `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
 - ChatGPT login flow with OAuth
