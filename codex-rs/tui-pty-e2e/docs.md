@@ -36,6 +36,16 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 - Checking for absence of trailing tool output by asserting that screen content after the final agent message position contains no tool-related strings
 - Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
 
+**Transcript & Resume Tests** (`transcript_persistence.rs`):
+
+Tests in this file verify transcript persistence and the `/resume` command flow. Key test patterns include:
+- Verifying transcript files are created on disk during a session
+- Verifying assistant messages appear in persisted transcripts
+- Testing multiple sessions within the same project create separate transcript files
+- Verifying project metadata is created alongside transcripts
+- Testing `/resume` end-to-end: start a session, send a message, start a new session with `/new`, use `/resume` to pick the previous session, verify history is visible, then send a new message and verify the backend processes it. This test relies on `MOCK_AGENT_MULTI_TURN` mode in `@/codex-rs/mock-acp-agent/` and exercises the client-side replay path where a transcript summary is prepended to the first prompt.
+- Testing `/resume-viewonly` for read-only transcript viewing
+
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
 - Expected vs actual screen content

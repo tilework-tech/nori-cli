@@ -484,6 +484,93 @@ fn test_session_meta_fields() {
     );
 }
 
+/// Test the full /resume flow: start a session, send a message, start a new
+/// session, resume the previous one, verify history is visible, then send a
+/// new message and verify the backend processes it correctly.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_resume_session_full_flow() {
+    // Use MULTI_TURN mode so the mock agent echoes markers from the prompt.
+    // The mock agent uses rfind to match the LAST marker in the text, so
+    // client-side replay (which prepends earlier transcript summary) won't
+    // cause marker collisions.
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_MULTI_TURN", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(30, 120, config).expect("Failed to spawn session");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a message with ALPHA marker
+    session.send_str("UNIQUE_PROMPT_ALPHA_12345").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("RESPONSE_ALPHA", Duration::from_secs(15))
+        .expect("Should receive ALPHA response");
+
+    // Allow transcript to flush to disk
+    std::thread::sleep(Duration::from_millis(1000));
+
+    // Start new session with /new
+    session.send_str("/new").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("New session should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Use /resume
+    session.send_str("/resume").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("Resume previous session", Duration::from_secs(10))
+        .expect("Should show resume session picker");
+
+    // Select the session
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Verify previous messages are visible in the resumed session
+    session
+        .wait_for_text("UNIQUE_PROMPT_ALPHA", Duration::from_secs(15))
+        .expect("Resumed session should show previous user prompt");
+
+    session
+        .wait_for_text("RESPONSE_ALPHA", Duration::from_secs(5))
+        .expect("Resumed session should show previous response");
+
+    // Wait for the prompt to be available
+    session
+        .wait_for_text("›", Duration::from_secs(10))
+        .expect("Should have input prompt after resume");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a new message with BETA marker. The mock agent's rfind-based
+    // matching ensures BETA is matched even though the prepended transcript
+    // summary contains ALPHA.
+    session.send_str("UNIQUE_PROMPT_BETA_67890").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Verify BETA response - proves the resumed session's backend is alive
+    // and the mock agent correctly matches the last marker.
+    session
+        .wait_for_text("RESPONSE_BETA", Duration::from_secs(15))
+        .expect("Should receive BETA response in resumed session");
+}
+
 /// Test that transcripts can be viewed via /resume-viewonly command.
 ///
 /// This test validates the complete view-only transcript flow:
