@@ -134,7 +134,7 @@ async fn run_compact_task_inner(
             Err(e) => {
                 if retries < max_retries {
                     retries += 1;
-                    let delay = backoff(retries);
+                    let delay = backoff(retries as u64);
                     sess.notify_stream_error(
                         turn_context.as_ref(),
                         format!("Reconnecting... {retries}/{max_retries}"),
@@ -292,7 +292,7 @@ async fn drain_to_completed(
     turn_context: &TurnContext,
     prompt: &Prompt,
 ) -> CodexResult<()> {
-    let mut stream = turn_context.client.clone().stream(prompt).await?;
+    let mut stream = turn_context.client.clone().stream(prompt.clone()).await?;
     loop {
         let maybe_event = stream.next().await;
         let Some(event) = maybe_event else {
@@ -309,9 +309,8 @@ async fn drain_to_completed(
             Ok(ResponseEvent::RateLimits(snapshot)) => {
                 sess.update_rate_limits(turn_context, snapshot).await;
             }
-            Ok(ResponseEvent::Completed { token_usage, .. }) => {
-                sess.update_token_usage_info(turn_context, token_usage.as_ref())
-                    .await;
+            Ok(ResponseEvent::Completed { .. }) => {
+                // HTTP backend stub: token_usage field no longer exists
                 return Ok(());
             }
             Ok(_) => continue,

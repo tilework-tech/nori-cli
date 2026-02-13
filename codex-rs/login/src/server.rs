@@ -403,7 +403,7 @@ fn build_authorize_url(
         ("state".to_string(), state.to_string()),
         (
             "originator".to_string(),
-            originator().value.as_str().to_string(),
+            originator().to_str().unwrap_or("nori-cli").to_string(),
         ),
     ];
     if let Some(workspace_id) = forced_chatgpt_workspace_id {

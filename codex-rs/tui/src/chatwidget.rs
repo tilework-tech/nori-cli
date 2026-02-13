@@ -2981,98 +2981,50 @@ impl ChatWidget {
     /// In ACP mode (when current model is an ACP agent), this fetches available
     /// models from the agent and shows them for selection.
     pub(crate) fn open_model_popup(&mut self) {
-        let current_model = self.config.model.clone();
-
-        // Check if we're in ACP mode by checking if the current model is registered
-        // in the ACP agent registry
-        if codex_acp::get_agent_config(&current_model).is_ok() {
-            #[cfg(feature = "unstable")]
-            {
-                // ACP mode with unstable features - try to get model state from the agent
-                if let Some(handle) = self.acp_handle.clone() {
-                    let app_event_tx = self.app_event_tx.clone();
-                    tokio::spawn(async move {
-                        if let Some(model_state) = handle.get_model_state().await {
-                            let models: Vec<crate::app_event::AcpModelInfo> = model_state
-                                .available_models
-                                .iter()
-                                .map(|m| {
-                                    let display_name = if m.name.is_empty() {
-                                        m.model_id.to_string()
-                                    } else {
-                                        m.name.clone()
-                                    };
-                                    crate::app_event::AcpModelInfo {
-                                        model_id: m.model_id.to_string(),
-                                        display_name,
-                                        description: m.description.clone(),
-                                    }
-                                })
-                                .collect();
-                            let current_model_id =
-                                model_state.current_model_id.map(|id| id.to_string());
-                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                                models,
-                                current_model_id,
-                            });
-                        } else {
-                            // Failed to get model state - show empty picker with explanation
-                            tracing::warn!("Failed to get ACP model state");
-                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                                models: vec![],
-                                current_model_id: None,
-                            });
-                        }
-                    });
-                    return;
-                }
-            }
-            // ACP mode but no handle or unstable not enabled - show disabled model picker
-            let params = crate::nori::agent_picker::acp_model_picker_params();
-            self.bottom_pane.show_selection_view(params);
-            return;
-        }
-
-        // Standard HTTP mode - show normal model picker
-        let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
-        let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
-
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for preset in presets.into_iter() {
-            let description = if preset.description.is_empty() {
-                None
-            } else {
-                Some(preset.description.to_string())
-            };
-            let is_current = preset.model == current_model;
-            let single_supported_effort = preset.supported_reasoning_efforts.len() == 1;
-            let preset_for_action = preset.clone();
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                let preset_for_event = preset_for_action.clone();
-                tx.send(AppEvent::OpenReasoningPopup {
-                    model: preset_for_event,
+        #[cfg(feature = "unstable")]
+        {
+            // ACP mode with unstable features - try to get model state from the agent
+            if let Some(handle) = self.acp_handle.clone() {
+                let app_event_tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    if let Some(model_state) = handle.get_model_state().await {
+                        let models: Vec<crate::app_event::AcpModelInfo> = model_state
+                            .available_models
+                            .iter()
+                            .map(|m| {
+                                let display_name = if m.name.is_empty() {
+                                    m.model_id.to_string()
+                                } else {
+                                    m.name.clone()
+                                };
+                                crate::app_event::AcpModelInfo {
+                                    model_id: m.model_id.to_string(),
+                                    display_name,
+                                    description: m.description.clone(),
+                                }
+                            })
+                            .collect();
+                        let current_model_id =
+                            model_state.current_model_id.map(|id| id.to_string());
+                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                            models,
+                            current_model_id,
+                        });
+                    } else {
+                        // Failed to get model state - show empty picker with explanation
+                        tracing::warn!("Failed to get ACP model state");
+                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                            models: vec![],
+                            current_model_id: None,
+                        });
+                    }
                 });
-            })];
-            items.push(SelectionItem {
-                name: preset.display_name.to_string(),
-                description,
-                is_current,
-                actions,
-                dismiss_on_select: single_supported_effort,
-                ..Default::default()
-            });
+                return;
+            }
         }
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select Model and Effort".to_string()),
-            subtitle: Some(
-                "Access legacy models by running codex -m <model_name> or in your config.toml"
-                    .to_string(),
-            ),
-            footer_hint: Some("Press enter to select reasoning effort, or esc to dismiss.".into()),
-            items,
-            ..Default::default()
-        });
+        // ACP mode but no handle or unstable not enabled - show disabled model picker
+        let params = crate::nori::agent_picker::acp_model_picker_params();
+        self.bottom_pane.show_selection_view(params);
     }
 
     /// Open the ACP model picker with fetched models.
@@ -3124,165 +3076,6 @@ impl ChatWidget {
             );
         }
     }
-
-    /// Open a popup to choose the reasoning effort (stage 2) for the given model.
-    pub(crate) fn open_reasoning_popup(&mut self, preset: ModelPreset) {
-        let default_effort: ReasoningEffortConfig = preset.default_reasoning_effort;
-        let supported = preset.supported_reasoning_efforts;
-
-        let warn_effort = if supported
-            .iter()
-            .any(|option| option.effort == ReasoningEffortConfig::XHigh)
-        {
-            Some(ReasoningEffortConfig::XHigh)
-        } else if supported
-            .iter()
-            .any(|option| option.effort == ReasoningEffortConfig::High)
-        {
-            Some(ReasoningEffortConfig::High)
-        } else {
-            None
-        };
-        let warning_text = warn_effort.map(|effort| {
-            let effort_label = Self::reasoning_effort_label(effort);
-            format!("⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits.")
-        });
-        let warn_for_model = preset.model.starts_with("gpt-5.1-codex")
-            || preset.model.starts_with("gpt-5.1-codex-max");
-
-        struct EffortChoice {
-            stored: Option<ReasoningEffortConfig>,
-            display: ReasoningEffortConfig,
-        }
-        let mut choices: Vec<EffortChoice> = Vec::new();
-        for effort in ReasoningEffortConfig::iter() {
-            if supported.iter().any(|option| option.effort == effort) {
-                choices.push(EffortChoice {
-                    stored: Some(effort),
-                    display: effort,
-                });
-            }
-        }
-        if choices.is_empty() {
-            choices.push(EffortChoice {
-                stored: Some(default_effort),
-                display: default_effort,
-            });
-        }
-
-        if choices.len() == 1 {
-            if let Some(effort) = choices.first().and_then(|c| c.stored) {
-                self.apply_model_and_effort(preset.model.to_string(), Some(effort));
-            } else {
-                self.apply_model_and_effort(preset.model.to_string(), None);
-            }
-            return;
-        }
-
-        let default_choice: Option<ReasoningEffortConfig> = choices
-            .iter()
-            .any(|choice| choice.stored == Some(default_effort))
-            .then_some(Some(default_effort))
-            .flatten()
-            .or_else(|| choices.iter().find_map(|choice| choice.stored))
-            .or(Some(default_effort));
-
-        let model_slug = preset.model.to_string();
-        let is_current_model = self.config.model == preset.model;
-        let highlight_choice = if is_current_model {
-            self.config.model_reasoning_effort
-        } else {
-            default_choice
-        };
-        let selection_choice = highlight_choice.or(default_choice);
-        let initial_selected_idx = choices
-            .iter()
-            .position(|choice| choice.stored == selection_choice)
-            .or_else(|| {
-                selection_choice
-                    .and_then(|effort| choices.iter().position(|choice| choice.display == effort))
-            });
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for choice in choices.iter() {
-            let effort = choice.display;
-            let mut effort_label = Self::reasoning_effort_label(effort).to_string();
-            if choice.stored == default_choice {
-                effort_label.push_str(" (default)");
-            }
-
-            let description = choice
-                .stored
-                .and_then(|effort| {
-                    supported
-                        .iter()
-                        .find(|option| option.effort == effort)
-                        .map(|option| option.description.to_string())
-                })
-                .filter(|text| !text.is_empty());
-
-            let show_warning = warn_for_model && warn_effort == Some(effort);
-            let selected_description = if show_warning {
-                warning_text.as_ref().map(|warning_message| {
-                    description.as_ref().map_or_else(
-                        || warning_message.clone(),
-                        |d| format!("{d}\n{warning_message}"),
-                    )
-                })
-            } else {
-                None
-            };
-
-            let model_for_action = model_slug.clone();
-            let effort_for_action = choice.stored;
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                    cwd: None,
-                    approval_policy: None,
-                    sandbox_policy: None,
-                    model: Some(model_for_action.clone()),
-                    effort: Some(effort_for_action),
-                    summary: None,
-                }));
-                tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                tx.send(AppEvent::UpdateReasoningEffort(effort_for_action));
-                tx.send(AppEvent::PersistModelSelection {
-                    model: model_for_action.clone(),
-                    effort: effort_for_action,
-                });
-                tracing::info!(
-                    "Selected model: {}, Selected effort: {}",
-                    model_for_action,
-                    effort_for_action
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "default".to_string())
-                );
-            })];
-
-            items.push(SelectionItem {
-                name: effort_label,
-                description,
-                selected_description,
-                is_current: is_current_model && choice.stored == highlight_choice,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            });
-        }
-
-        let mut header = ColumnRenderable::new();
-        header.push(Line::from(
-            format!("Select Reasoning Level for {model_slug}").bold(),
-        ));
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            header: Box::new(header),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            initial_selected_idx,
-            ..Default::default()
-        });
-    }
-
     fn reasoning_effort_label(effort: ReasoningEffortConfig) -> &'static str {
         match effort {
             ReasoningEffortConfig::None => "None",

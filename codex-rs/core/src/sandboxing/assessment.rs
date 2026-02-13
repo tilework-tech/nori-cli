@@ -5,8 +5,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::AuthManager;
-use crate::ModelProviderInfo;
-use crate::client::ModelClient;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::config::Config;
@@ -42,11 +40,11 @@ struct SandboxAssessmentPromptTemplate<'a> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn assess_command(
     config: Arc<Config>,
-    provider: ModelProviderInfo,
-    auth_manager: Arc<AuthManager>,
+    _provider: crate::config::ModelProviderInfo,
+    _auth_manager: Arc<AuthManager>,
     parent_otel: &OtelEventManager,
-    conversation_id: ConversationId,
-    session_source: SessionSource,
+    _conversation_id: ConversationId,
+    _session_source: SessionSource,
     call_id: &str,
     command: &[String],
     sandbox_policy: &SandboxPolicy,
@@ -56,6 +54,11 @@ pub(crate) async fn assess_command(
     if !config.experimental_sandbox_command_assessment || command.is_empty() {
         return None;
     }
+
+    // HTTP client code removed - assessment disabled
+    tracing::warn!("Sandbox command assessment is not implemented without HTTP backend");
+    parent_otel.sandbox_assessment(call_id, "not_implemented", None, std::time::Duration::ZERO);
+    return None;
 
     let command_json = serde_json::to_string(command).unwrap_or_else(|_| "[]".to_string());
     let command_joined =
@@ -124,74 +127,11 @@ pub(crate) async fn assess_command(
         output_schema: Some(sandbox_assessment_schema()),
     };
 
-    let child_otel =
-        parent_otel.with_model(config.model.as_str(), config.model_family.slug.as_str());
-
-    let client = ModelClient::new(
-        Arc::clone(&config),
-        Some(auth_manager),
-        child_otel,
-        provider,
-        Some(SANDBOX_ASSESSMENT_REASONING_EFFORT),
-        config.model_reasoning_summary,
-        conversation_id,
-        session_source,
-    );
-
-    let start = Instant::now();
-    let assessment_result = timeout(SANDBOX_ASSESSMENT_TIMEOUT, async move {
-        let mut stream = client.stream(&prompt).await?;
-        let mut last_json: Option<String> = None;
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(ResponseEvent::OutputItemDone(item)) => {
-                    if let Some(text) = response_item_text(&item) {
-                        last_json = Some(text);
-                    }
-                }
-                Ok(ResponseEvent::RateLimits(_)) => {}
-                Ok(ResponseEvent::Completed { .. }) => break,
-                Ok(_) => continue,
-                Err(err) => return Err(err),
-            }
-        }
-        Ok(last_json)
-    })
-    .await;
-    let duration = start.elapsed();
-    parent_otel.sandbox_assessment_latency(call_id, duration);
-
-    match assessment_result {
-        Ok(Ok(Some(raw))) => match serde_json::from_str::<SandboxCommandAssessment>(raw.trim()) {
-            Ok(assessment) => {
-                parent_otel.sandbox_assessment(
-                    call_id,
-                    "success",
-                    Some(assessment.risk_level),
-                    duration,
-                );
-                return Some(assessment);
-            }
-            Err(err) => {
-                warn!("failed to parse sandbox assessment JSON: {err}");
-                parent_otel.sandbox_assessment(call_id, "parse_error", None, duration);
-            }
-        },
-        Ok(Ok(None)) => {
-            warn!("sandbox assessment response did not include any message");
-            parent_otel.sandbox_assessment(call_id, "no_output", None, duration);
-        }
-        Ok(Err(err)) => {
-            warn!("sandbox assessment failed: {err}");
-            parent_otel.sandbox_assessment(call_id, "model_error", None, duration);
-        }
-        Err(_) => {
-            warn!("sandbox assessment timed out");
-            parent_otel.sandbox_assessment(call_id, "timeout", None, duration);
-        }
+    // Rest of implementation removed - HTTP backend deleted
+    #[allow(unreachable_code)]
+    {
+        None
     }
-
-    None
 }
 
 fn summarize_sandbox_policy(policy: &SandboxPolicy) -> String {

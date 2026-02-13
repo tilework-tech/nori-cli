@@ -24,11 +24,42 @@ use crate::git_info::resolve_root_git_project_for_trust;
 use crate::model_family::ModelFamily;
 use crate::model_family::derive_default_model_family;
 use crate::model_family::find_family_for_model;
-use crate::model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
-use crate::model_provider_info::ModelProviderInfo;
-use crate::model_provider_info::OLLAMA_OSS_PROVIDER_ID;
-use crate::model_provider_info::built_in_model_providers;
 use crate::openai_model_info::get_model_info;
+
+// Placeholder for model provider info (was in deleted model_provider_info module)
+pub const LMSTUDIO_OSS_PROVIDER_ID: &str = "lmstudio";
+pub const OLLAMA_OSS_PROVIDER_ID: &str = "ollama";
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ModelProviderInfo {
+    // Placeholder - actual implementation depends on backend
+    pub name: String,
+    pub wire_api: crate::WireApi,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub requires_openai_auth: bool,
+}
+
+impl Default for ModelProviderInfo {
+    fn default() -> Self {
+        Self {
+            name: "unknown".to_string(),
+            wire_api: crate::WireApi::default(),
+            base_url: None,
+            requires_openai_auth: false,
+        }
+    }
+}
+
+impl ModelProviderInfo {
+    /// HTTP backend stub: returns a default retry count.
+    /// This code path is unused in nori (ACP-only).
+    #[allow(dead_code)]
+    pub(crate) fn stream_max_retries(&self) -> u32 {
+        3 // Stub value
+    }
+}
 use crate::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
 use crate::project_doc::LOCAL_PROJECT_DOC_FILENAME;
 use crate::protocol::AskForApproval;
@@ -1073,25 +1104,18 @@ impl Config {
             || config_profile.sandbox_mode.is_some()
             || cfg.sandbox_mode.is_some();
 
-        let mut model_providers = built_in_model_providers();
-        // Merge user-defined providers into the built-in list.
-        for (key, provider) in cfg.model_providers.into_iter() {
-            model_providers.entry(key).or_insert(provider);
-        }
-
+        // Model providers are no longer used with HTTP backend removed
+        let model_providers = cfg.model_providers;
         let model_provider_id = model_provider
             .or(config_profile.model_provider)
             .or(cfg.model_provider)
             .unwrap_or_else(|| "openai".to_string());
-        let model_provider = model_providers
-            .get(&model_provider_id)
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("Model provider `{model_provider_id}` not found"),
-                )
-            })?
-            .clone();
+        let model_provider = ModelProviderInfo {
+            name: model_provider_id.clone(),
+            wire_api: crate::WireApi::default(),
+            base_url: None,
+            requires_openai_auth: false,
+        };
 
         let shell_environment_policy = cfg.shell_environment_policy.into();
 
@@ -2893,20 +2917,11 @@ model_verbosity = "high"
         let openai_chat_completions_provider = ModelProviderInfo {
             name: "OpenAI using Chat Completions".to_string(),
             base_url: Some("https://api.openai.com/v1".to_string()),
-            env_key: Some("OPENAI_API_KEY".to_string()),
-            wire_api: crate::WireApi::Chat,
-            env_key_instructions: None,
-            experimental_bearer_token: None,
-            query_params: None,
-            http_headers: None,
-            env_http_headers: None,
-            request_max_retries: Some(4),
-            stream_max_retries: Some(10),
-            stream_idle_timeout_ms: Some(300_000),
+            wire_api: crate::WireApi::default(),
             requires_openai_auth: false,
         };
         let model_provider_map = {
-            let mut model_provider_map = built_in_model_providers();
+            let mut model_provider_map = crate::built_in_model_providers();
             model_provider_map.insert(
                 "openai-chat-completions".to_string(),
                 openai_chat_completions_provider.clone(),

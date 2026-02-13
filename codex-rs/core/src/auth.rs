@@ -23,7 +23,6 @@ pub use crate::auth::storage::AuthDotJson;
 use crate::auth::storage::AuthStorageBackend;
 use crate::auth::storage::create_auth_storage;
 use crate::config::Config;
-use crate::default_client::CodexHttpClient;
 use crate::error::RefreshTokenFailedError;
 use crate::error::RefreshTokenFailedReason;
 use crate::token_data::KnownPlan as InternalKnownPlan;
@@ -42,7 +41,6 @@ pub struct CodexAuth {
     pub(crate) api_key: Option<String>,
     pub(crate) auth_dot_json: Arc<Mutex<Option<AuthDotJson>>>,
     storage: Arc<dyn AuthStorageBackend>,
-    pub(crate) client: CodexHttpClient,
 }
 
 impl PartialEq for CodexAuth {
@@ -101,7 +99,7 @@ impl CodexAuth {
         })?;
         let token = token_data.refresh_token;
 
-        let refresh_response = try_refresh_token(token, &self.client).await?;
+        let refresh_response = try_refresh_token(token).await?;
 
         let updated = update_tokens(
             &self.storage,
@@ -146,7 +144,7 @@ impl CodexAuth {
                 if last_refresh < Utc::now() - chrono::Duration::days(TOKEN_REFRESH_INTERVAL) {
                     let refresh_result = tokio::time::timeout(
                         Duration::from_secs(60),
-                        try_refresh_token(tokens.refresh_token.clone(), &self.client),
+                        try_refresh_token(tokens.refresh_token.clone()),
                     )
                     .await;
                     let refresh_response = match refresh_result {
@@ -272,22 +270,16 @@ impl CodexAuth {
             mode: AuthMode::ChatGPT,
             storage: create_auth_storage(PathBuf::new(), AuthCredentialsStoreMode::File),
             auth_dot_json,
-            client: crate::default_client::create_client(),
         }
     }
 
-    fn from_api_key_with_client(api_key: &str, client: CodexHttpClient) -> Self {
+    pub fn from_api_key(api_key: &str) -> Self {
         Self {
             api_key: Some(api_key.to_owned()),
             mode: AuthMode::ApiKey,
             storage: create_auth_storage(PathBuf::new(), AuthCredentialsStoreMode::File),
             auth_dot_json: Arc::new(Mutex::new(None)),
-            client,
         }
-    }
-
-    pub fn from_api_key(api_key: &str) -> Self {
-        Self::from_api_key_with_client(api_key, crate::default_client::create_client())
     }
 }
 
@@ -447,16 +439,11 @@ fn load_auth(
     auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> std::io::Result<Option<CodexAuth>> {
     if enable_codex_api_key_env && let Some(api_key) = read_codex_api_key_from_env() {
-        let client = crate::default_client::create_client();
-        return Ok(Some(CodexAuth::from_api_key_with_client(
-            api_key.as_str(),
-            client,
-        )));
+        return Ok(Some(CodexAuth::from_api_key(api_key.as_str())));
     }
 
     let storage = create_auth_storage(codex_home.to_path_buf(), auth_credentials_store_mode);
 
-    let client = crate::default_client::create_client();
     let auth_dot_json = match storage.load()? {
         Some(auth) => auth,
         None => return Ok(None),
@@ -470,7 +457,7 @@ fn load_auth(
 
     // Prefer AuthMode.ApiKey if it's set in the auth.json.
     if let Some(api_key) = &auth_json_api_key {
-        return Ok(Some(CodexAuth::from_api_key_with_client(api_key, client)));
+        return Ok(Some(CodexAuth::from_api_key(api_key)));
     }
 
     Ok(Some(CodexAuth {
@@ -482,7 +469,6 @@ fn load_auth(
             tokens,
             last_refresh,
         }))),
-        client,
     }))
 }
 
@@ -511,10 +497,7 @@ async fn update_tokens(
     Ok(auth_dot_json)
 }
 
-async fn try_refresh_token(
-    refresh_token: String,
-    client: &CodexHttpClient,
-) -> Result<RefreshResponse, RefreshTokenError> {
+async fn try_refresh_token(refresh_token: String) -> Result<RefreshResponse, RefreshTokenError> {
     let refresh_request = RefreshRequest {
         client_id: CLIENT_ID,
         grant_type: "refresh_token",
@@ -524,7 +507,7 @@ async fn try_refresh_token(
 
     let endpoint = refresh_token_endpoint();
 
-    // Use shared client factory to include standard headers
+    let client = reqwest::Client::new();
     let response = client
         .post(endpoint.as_str())
         .header("Content-Type", "application/json")

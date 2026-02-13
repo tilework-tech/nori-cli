@@ -4,14 +4,11 @@ use codex_app_server_protocol::AuthMode;
 use codex_protocol::ConversationId;
 use codex_protocol::config_types::ReasoningEffort;
 use codex_protocol::config_types::ReasoningSummary;
-use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::ReviewDecision;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SandboxRiskLevel;
 use codex_protocol::user_input::UserInput;
-use eventsource_stream::Event as StreamEvent;
-use eventsource_stream::EventStreamError as StreamError;
 use reqwest::Error;
 use reqwest::Response;
 use serde::Serialize;
@@ -20,7 +17,6 @@ use std::fmt::Display;
 use std::time::Duration;
 use std::time::Instant;
 use strum_macros::Display;
-use tokio::time::error::Elapsed;
 
 #[derive(Debug, Clone, Serialize, Display)]
 #[serde(rename_all = "snake_case")]
@@ -160,110 +156,6 @@ impl OtelEventManager {
             error.message = error,
             attempt = attempt,
         );
-    }
-
-    pub fn log_sse_event<E>(
-        &self,
-        response: &Result<Option<Result<StreamEvent, StreamError<E>>>, Elapsed>,
-        duration: Duration,
-    ) where
-        E: Display,
-    {
-        match response {
-            Ok(Some(Ok(sse))) => {
-                if sse.data.trim() == "[DONE]" {
-                    self.sse_event(&sse.event, duration);
-                } else {
-                    match serde_json::from_str::<serde_json::Value>(&sse.data) {
-                        Ok(error) if sse.event == "response.failed" => {
-                            self.sse_event_failed(Some(&sse.event), duration, &error);
-                        }
-                        Ok(content) if sse.event == "response.output_item.done" => {
-                            match serde_json::from_value::<ResponseItem>(content) {
-                                Ok(_) => self.sse_event(&sse.event, duration),
-                                Err(_) => {
-                                    self.sse_event_failed(
-                                        Some(&sse.event),
-                                        duration,
-                                        &"failed to parse response.output_item.done",
-                                    );
-                                }
-                            };
-                        }
-                        Ok(_) => {
-                            self.sse_event(&sse.event, duration);
-                        }
-                        Err(error) => {
-                            self.sse_event_failed(Some(&sse.event), duration, &error);
-                        }
-                    }
-                }
-            }
-            Ok(Some(Err(error))) => {
-                self.sse_event_failed(None, duration, error);
-            }
-            Ok(None) => {}
-            Err(_) => {
-                self.sse_event_failed(None, duration, &"idle timeout waiting for SSE");
-            }
-        }
-    }
-
-    fn sse_event(&self, kind: &str, duration: Duration) {
-        tracing::event!(
-            tracing::Level::INFO,
-            event.name = "codex.sse_event",
-            event.timestamp = %timestamp(),
-            event.kind = %kind,
-            conversation.id = %self.metadata.conversation_id,
-            app.version = %self.metadata.app_version,
-            auth_mode = self.metadata.auth_mode,
-            user.account_id = self.metadata.account_id,
-            user.email = self.metadata.account_email,
-            terminal.type = %self.metadata.terminal_type,
-            model = %self.metadata.model,
-            slug = %self.metadata.slug,
-            duration_ms = %duration.as_millis(),
-        );
-    }
-
-    pub fn sse_event_failed<T>(&self, kind: Option<&String>, duration: Duration, error: &T)
-    where
-        T: Display,
-    {
-        match kind {
-            Some(kind) => tracing::event!(
-                tracing::Level::INFO,
-                event.name = "codex.sse_event",
-                event.timestamp = %timestamp(),
-                event.kind = %kind,
-                conversation.id = %self.metadata.conversation_id,
-                app.version = %self.metadata.app_version,
-                auth_mode = self.metadata.auth_mode,
-                user.account_id = self.metadata.account_id,
-                user.email = self.metadata.account_email,
-                terminal.type = %self.metadata.terminal_type,
-                model = %self.metadata.model,
-                slug = %self.metadata.slug,
-                duration_ms = %duration.as_millis(),
-                error.message = %error,
-            ),
-            None => tracing::event!(
-                tracing::Level::INFO,
-                event.name = "codex.sse_event",
-                event.timestamp = %timestamp(),
-                conversation.id = %self.metadata.conversation_id,
-                app.version = %self.metadata.app_version,
-                auth_mode = self.metadata.auth_mode,
-                user.account_id = self.metadata.account_id,
-                user.email = self.metadata.account_email,
-                terminal.type = %self.metadata.terminal_type,
-                model = %self.metadata.model,
-                slug = %self.metadata.slug,
-                duration_ms = %duration.as_millis(),
-                error.message = %error,
-            ),
-        }
     }
 
     pub fn see_event_completed_failed<T>(&self, error: &T)

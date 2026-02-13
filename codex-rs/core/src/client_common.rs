@@ -1,7 +1,6 @@
 use crate::client_common::tools::ToolSpec;
 use crate::error::Result;
 use crate::model_family::ModelFamily;
-pub use codex_api::common::ResponseEvent;
 use codex_apply_patch::APPLY_PATCH_TOOL_INSTRUCTIONS;
 use codex_protocol::models::ResponseItem;
 use futures::Stream;
@@ -14,6 +13,118 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 use tokio::sync::mpsc;
+
+// Placeholder: ModelClient was deleted (HTTP backend removed).
+// This stub exists so existing code can compile, but methods panic if called.
+// Nori uses ACP backend exclusively and should never instantiate this.
+#[derive(Debug, Clone)]
+pub struct ModelClient;
+
+impl ModelClient {
+    #[allow(dead_code)]
+    pub(crate) fn new(
+        _config: std::sync::Arc<crate::config::Config>,
+        _auth_manager: Option<std::sync::Arc<crate::AuthManager>>,
+        _otel: codex_otel::otel_event_manager::OtelEventManager,
+        _provider: crate::config::ModelProviderInfo,
+        _reasoning_effort: Option<codex_protocol::config_types::ReasoningEffort>,
+        _reasoning_summary: codex_protocol::config_types::ReasoningSummary,
+        _conversation_id: codex_protocol::ConversationId,
+        _session_source: codex_protocol::protocol::SessionSource,
+    ) -> Self {
+        ModelClient
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_model(&self) -> String {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_session_source(&self) -> codex_protocol::protocol::SessionSource {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn provider(&self) -> &crate::config::ModelProviderInfo {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn config(&self) -> &std::sync::Arc<crate::config::Config> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_model_context_window(&self) -> Option<i64> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn make_request(&self, _prompt: Prompt) -> Result<ResponseStream> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_otel_event_manager(
+        &self,
+    ) -> &codex_otel::otel_event_manager::OtelEventManager {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_auto_compact_token_limit(&self) -> Option<i64> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_model_family(&self) -> &crate::model_family::ModelFamily {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_provider(&self) -> crate::config::ModelProviderInfo {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_reasoning_effort(
+        &self,
+    ) -> Option<codex_protocol::config_types::ReasoningEffort> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_reasoning_summary(&self) -> codex_protocol::config_types::ReasoningSummary {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn stream(&self, _prompt: Prompt) -> Result<ResponseStream> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn compact_conversation_history(
+        &self,
+        _context: &[codex_protocol::models::ResponseItem],
+        _summary_text: &str,
+    ) -> Result<Vec<codex_protocol::models::ResponseItem>> {
+        panic!("ModelClient is a stub - HTTP backend was removed. Nori uses ACP backend.")
+    }
+}
+
+/// Response event placeholder (was previously from codex_api)
+#[derive(Debug, Clone)]
+pub enum ResponseEvent {
+    Created,
+    OutputItemDone(codex_protocol::models::ResponseItem),
+    OutputItemAdded(codex_protocol::models::ResponseItem),
+    RateLimits(crate::protocol::RateLimitSnapshot),
+    Completed { cancel_reason: Option<String> },
+    OutputTextDelta { text: String },
+    ReasoningContentDelta { text: String },
+}
 
 /// API request payload for a single model turn
 #[derive(Default, Debug, Clone)]
@@ -245,10 +356,6 @@ impl Stream for ResponseStream {
 #[cfg(test)]
 mod tests {
     use crate::model_family::find_family_for_model;
-    use codex_api::ResponsesApiRequest;
-    use codex_api::common::OpenAiVerbosity;
-    use codex_api::common::TextControls;
-    use codex_api::create_text_param_for_request;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -315,105 +422,5 @@ mod tests {
             let full = prompt.get_full_instructions(&model_family);
             assert_eq!(full, expected);
         }
-    }
-
-    #[test]
-    fn serializes_text_verbosity_when_set() {
-        let input: Vec<ResponseItem> = vec![];
-        let tools: Vec<serde_json::Value> = vec![];
-        let req = ResponsesApiRequest {
-            model: "gpt-5.1",
-            instructions: "i",
-            input: &input,
-            tools: &tools,
-            tool_choice: "auto",
-            parallel_tool_calls: true,
-            reasoning: None,
-            store: false,
-            stream: true,
-            include: vec![],
-            prompt_cache_key: None,
-            text: Some(TextControls {
-                verbosity: Some(OpenAiVerbosity::Low),
-                format: None,
-            }),
-        };
-
-        let v = serde_json::to_value(&req).expect("json");
-        assert_eq!(
-            v.get("text")
-                .and_then(|t| t.get("verbosity"))
-                .and_then(|s| s.as_str()),
-            Some("low")
-        );
-    }
-
-    #[test]
-    fn serializes_text_schema_with_strict_format() {
-        let input: Vec<ResponseItem> = vec![];
-        let tools: Vec<serde_json::Value> = vec![];
-        let schema = serde_json::json!({
-            "type": "object",
-            "properties": {
-                "answer": {"type": "string"}
-            },
-            "required": ["answer"],
-        });
-        let text_controls =
-            create_text_param_for_request(None, &Some(schema.clone())).expect("text controls");
-
-        let req = ResponsesApiRequest {
-            model: "gpt-5.1",
-            instructions: "i",
-            input: &input,
-            tools: &tools,
-            tool_choice: "auto",
-            parallel_tool_calls: true,
-            reasoning: None,
-            store: false,
-            stream: true,
-            include: vec![],
-            prompt_cache_key: None,
-            text: Some(text_controls),
-        };
-
-        let v = serde_json::to_value(&req).expect("json");
-        let text = v.get("text").expect("text field");
-        assert!(text.get("verbosity").is_none());
-        let format = text.get("format").expect("format field");
-
-        assert_eq!(
-            format.get("name"),
-            Some(&serde_json::Value::String("codex_output_schema".into()))
-        );
-        assert_eq!(
-            format.get("type"),
-            Some(&serde_json::Value::String("json_schema".into()))
-        );
-        assert_eq!(format.get("strict"), Some(&serde_json::Value::Bool(true)));
-        assert_eq!(format.get("schema"), Some(&schema));
-    }
-
-    #[test]
-    fn omits_text_when_not_set() {
-        let input: Vec<ResponseItem> = vec![];
-        let tools: Vec<serde_json::Value> = vec![];
-        let req = ResponsesApiRequest {
-            model: "gpt-5.1",
-            instructions: "i",
-            input: &input,
-            tools: &tools,
-            tool_choice: "auto",
-            parallel_tool_calls: true,
-            reasoning: None,
-            store: false,
-            stream: true,
-            include: vec![],
-            prompt_cache_key: None,
-            text: None,
-        };
-
-        let v = serde_json::to_value(&req).expect("json");
-        assert!(v.get("text").is_none());
     }
 }

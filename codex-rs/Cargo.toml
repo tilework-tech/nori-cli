@@ -27,8 +27,6 @@ members = [
     "utils/pty",
     "utils/readiness",
     "utils/string",
-    "codex-client",
-    "codex-api",
     "acp",
     "installed",
     "mock-acp-agent",
@@ -48,12 +46,10 @@ license = "Apache-2.0"
 [workspace.dependencies]
 # Internal
 codex-ansi-escape = { path = "ansi-escape" }
-codex-api = { path = "codex-api" }
 codex-app-server-protocol = { path = "app-server-protocol" }
 codex-apply-patch = { path = "apply-patch" }
 codex-arg0 = { path = "arg0" }
 codex-async-utils = { path = "async-utils" }
-codex-client = { path = "codex-client" }
 codex-common = { path = "common" }
 codex-core = { path = "core" }
 codex-execpolicy = { path = "execpolicy" }

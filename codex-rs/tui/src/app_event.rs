@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use codex_common::approval_presets::ApprovalPreset;
-use codex_common::model_presets::ModelPreset;
 use codex_core::protocol::ConversationPathResponseEvent;
 use codex_core::protocol::Event;
 use codex_core::protocol::RateLimitSnapshot;
@@ -92,11 +91,6 @@ pub(crate) enum AppEvent {
     PersistModelSelection {
         model: String,
         effort: Option<ReasoningEffort>,
-    },
-
-    /// Open the reasoning selection popup after picking a model.
-    OpenReasoningPopup {
-        model: ModelPreset,
     },
 
     /// Open the confirmation prompt before enabling full access mode.

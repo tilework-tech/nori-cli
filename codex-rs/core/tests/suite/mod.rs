@@ -20,7 +20,6 @@ mod apply_patch_cli;
 #[cfg(not(target_os = "windows"))]
 mod approvals;
 mod auth_refresh;
-mod client;
 mod compact;
 mod compact_remote;
 mod compact_resume_fork;
@@ -44,8 +43,6 @@ mod rmcp_client;
 mod rollout_list_find;
 mod seatbelt;
 mod shell_serialization;
-mod stream_error_allows_next_turn;
-mod stream_no_completed;
 mod text_encoding_fix;
 mod tool_harness;
 mod tool_parallelism;

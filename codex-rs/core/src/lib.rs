@@ -5,12 +5,10 @@
 // the TUI or the tracing stack).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
-pub mod api_bridge;
 mod apply_patch;
 pub mod auth;
 pub mod bash;
-mod client;
-mod client_common;
+pub(crate) mod client_common;
 pub mod codex;
 mod codex_conversation;
 mod compact_remote;
@@ -36,7 +34,6 @@ pub use mcp_connection_manager::MCP_SANDBOX_STATE_NOTIFICATION;
 pub use mcp_connection_manager::SandboxState;
 mod mcp_tool_call;
 mod message_history;
-mod model_provider_info;
 pub mod parse_command;
 pub mod powershell;
 mod response_processing;
@@ -46,14 +43,7 @@ pub mod token_data;
 mod truncate;
 mod unified_exec;
 mod user_instructions;
-pub use model_provider_info::DEFAULT_LMSTUDIO_PORT;
-pub use model_provider_info::DEFAULT_OLLAMA_PORT;
-pub use model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
-pub use model_provider_info::ModelProviderInfo;
-pub use model_provider_info::OLLAMA_OSS_PROVIDER_ID;
-pub use model_provider_info::WireApi;
-pub use model_provider_info::built_in_model_providers;
-pub use model_provider_info::create_oss_provider_with_base_url;
+
 mod conversation_manager;
 mod event_mapping;
 pub use codex_protocol::protocol::InitialHistory;
@@ -62,7 +52,6 @@ pub use conversation_manager::NewConversation;
 // Re-export common auth types for workspace consumers
 pub use auth::AuthManager;
 pub use auth::CodexAuth;
-pub mod default_client;
 pub mod model_family;
 mod openai_model_info;
 pub mod project_doc;
@@ -105,10 +94,30 @@ pub use codex_protocol::protocol;
 // as those in the protocol crate when constructing protocol messages.
 pub use codex_protocol::config_types as protocol_config_types;
 
-pub use client::ModelClient;
 pub use client_common::Prompt;
 pub use client_common::ResponseEvent;
 pub use client_common::ResponseStream;
+
+/// HTTP backend stub: originator function used by login code
+pub mod default_client {
+    pub fn originator() -> http::HeaderValue {
+        http::HeaderValue::from_static("nori-cli")
+    }
+}
+
+/// HTTP backend stub: WireApi was used to distinguish between API types.
+/// This stub allows config_summary code to compile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum WireApi {
+    Responses,
+}
+
+impl Default for WireApi {
+    fn default() -> Self {
+        WireApi::Responses
+    }
+}
+
 pub use codex_protocol::models::ContentItem;
 pub use codex_protocol::models::LocalShellAction;
 pub use codex_protocol::models::LocalShellExecAction;
@@ -118,3 +127,12 @@ pub use compact::content_items_to_text;
 pub use event_mapping::parse_turn_item;
 pub mod compact;
 pub mod otel_init;
+
+// HTTP backend stub: Re-export ModelProviderInfo for tests
+pub use config::ModelProviderInfo;
+
+/// HTTP backend stub: Returns empty provider map.
+/// This function existed in the deleted model_provider_info module.
+pub fn built_in_model_providers() -> std::collections::HashMap<String, ModelProviderInfo> {
+    std::collections::HashMap::new()
+}

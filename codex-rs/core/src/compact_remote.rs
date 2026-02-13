@@ -41,8 +41,9 @@ async fn run_remote_compact_task_inner_impl(
     turn_context: &Arc<TurnContext>,
 ) -> CodexResult<()> {
     let mut history = sess.clone_history().await;
-    let prompt = Prompt {
-        input: history.get_history_for_prompt(),
+    let history_items = history.get_history_for_prompt();
+    let _prompt = Prompt {
+        input: history_items.clone(),
         tools: vec![],
         parallel_tool_calls: false,
         base_instructions_override: turn_context.base_instructions.clone(),
@@ -51,7 +52,7 @@ async fn run_remote_compact_task_inner_impl(
 
     let mut new_history = turn_context
         .client
-        .compact_conversation_history(&prompt)
+        .compact_conversation_history(&history_items, "Summary text")
         .await?;
     // Required to keep `/undo` available after compaction
     let ghost_snapshots: Vec<ResponseItem> = history

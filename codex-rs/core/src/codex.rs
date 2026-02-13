@@ -56,12 +56,12 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::ModelProviderInfo;
-use crate::client::ModelClient;
+use crate::client_common::ModelClient;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::compact::collect_user_messages;
 use crate::config::Config;
+use crate::config::ModelProviderInfo;
 use crate::config::types::ShellEnvironmentPolicy;
 use crate::context_manager::ContextManager;
 use crate::environment_context::EnvironmentContext;
@@ -838,7 +838,7 @@ impl Session {
         command: &[String],
         failure_message: Option<&str>,
     ) -> Option<SandboxCommandAssessment> {
-        let config = turn_context.client.config();
+        let config = Arc::clone(turn_context.client.config());
         let provider = turn_context.client.provider().clone();
         let auth_manager = Arc::clone(&self.services.auth_manager);
         let otel = self.services.otel_event_manager.clone();
@@ -2003,7 +2003,7 @@ async fn run_turn(
                     retries += 1;
                     let delay = match e {
                         CodexErr::Stream(_, Some(delay)) => delay,
-                        _ => backoff(retries),
+                        _ => backoff(retries as u64),
                     };
                     warn!(
                         "stream disconnected - retrying turn ({retries}/{max_retries} in {delay:?})...",
@@ -2060,7 +2060,7 @@ async fn try_run_turn(
     let mut stream = turn_context
         .client
         .clone()
-        .stream(prompt)
+        .stream(prompt.clone())
         .or_cancel(&cancellation_token)
         .await??;
 
@@ -2192,31 +2192,20 @@ async fn try_run_turn(
                 // token usage is available to avoid duplicate TokenCount events.
                 sess.update_rate_limits(&turn_context, snapshot).await;
             }
-            ResponseEvent::Completed {
-                response_id: _,
-                token_usage,
-            } => {
-                sess.update_token_usage_info(&turn_context, token_usage.as_ref())
-                    .await;
+            ResponseEvent::Completed { cancel_reason: _ } => {
+                // HTTP backend stub: This code path is unused in nori (ACP-only).
+                // In the old HTTP backend, this would update token usage and return.
                 let processed_items = output.try_collect().await?;
-                let unified_diff = {
-                    let mut tracker = turn_diff_tracker.lock().await;
-                    tracker.get_unified_diff()
-                };
-                if let Ok(Some(unified_diff)) = unified_diff {
-                    let msg = EventMsg::TurnDiff(TurnDiffEvent { unified_diff });
-                    sess.send_event(&turn_context, msg).await;
-                }
-
                 return Ok(processed_items);
             }
-            ResponseEvent::OutputTextDelta(delta) => {
+            ResponseEvent::OutputTextDelta { text } => {
+                // HTTP backend stub: This code path is unused in nori (ACP-only).
                 if let Some(active) = active_item.as_ref() {
                     let event = AgentMessageContentDeltaEvent {
                         thread_id: sess.conversation_id.to_string(),
                         turn_id: turn_context.sub_id.clone(),
                         item_id: active.id(),
-                        delta: delta.clone(),
+                        delta: text.clone(),
                     };
                     sess.send_event(&turn_context, EventMsg::AgentMessageContentDelta(event))
                         .await;
@@ -2224,52 +2213,21 @@ async fn try_run_turn(
                     error_or_panic("OutputTextDelta without active item".to_string());
                 }
             }
-            ResponseEvent::ReasoningSummaryDelta {
-                delta,
-                summary_index,
-            } => {
-                if let Some(active) = active_item.as_ref() {
-                    let event = ReasoningContentDeltaEvent {
-                        thread_id: sess.conversation_id.to_string(),
-                        turn_id: turn_context.sub_id.clone(),
-                        item_id: active.id(),
-                        delta,
-                        summary_index,
-                    };
-                    sess.send_event(&turn_context, EventMsg::ReasoningContentDelta(event))
-                        .await;
-                } else {
-                    error_or_panic("ReasoningSummaryDelta without active item".to_string());
-                }
-            }
-            ResponseEvent::ReasoningSummaryPartAdded { summary_index } => {
-                if let Some(active) = active_item.as_ref() {
-                    let event =
-                        EventMsg::AgentReasoningSectionBreak(AgentReasoningSectionBreakEvent {
-                            item_id: active.id(),
-                            summary_index,
-                        });
-                    sess.send_event(&turn_context, event).await;
-                } else {
-                    error_or_panic("ReasoningSummaryPartAdded without active item".to_string());
-                }
-            }
-            ResponseEvent::ReasoningContentDelta {
-                delta,
-                content_index,
-            } => {
+            ResponseEvent::ReasoningContentDelta { text } => {
+                // HTTP backend stub: This code path is unused in nori (ACP-only).
+                // Simplified from the old detailed reasoning events.
                 if let Some(active) = active_item.as_ref() {
                     let event = ReasoningRawContentDeltaEvent {
                         thread_id: sess.conversation_id.to_string(),
                         turn_id: turn_context.sub_id.clone(),
                         item_id: active.id(),
-                        delta,
-                        content_index,
+                        delta: text,
+                        content_index: 0, // Stub value
                     };
                     sess.send_event(&turn_context, EventMsg::ReasoningRawContentDelta(event))
                         .await;
                 } else {
-                    error_or_panic("ReasoningRawContentDelta without active item".to_string());
+                    error_or_panic("ReasoningContentDelta without active item".to_string());
                 }
             }
         }
