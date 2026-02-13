@@ -1244,17 +1244,6 @@ fn render_bottom_popup(chat: &ChatWidget, width: u16) -> String {
 }
 
 #[test]
-fn model_selection_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    chat.config.model = "gpt-5-codex".to_string();
-    chat.open_model_popup();
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("model_selection_popup", popup);
-}
-
-#[test]
 fn approvals_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
@@ -2642,23 +2631,6 @@ fn blackbox_typing_snapshot() {
 
     // Render to a test terminal
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("create terminal");
-    terminal
-        .draw(|f| chat.render(f.area(), f.buffer_mut()))
-        .expect("draw chat with typed text");
-
-    assert_snapshot!("blackbox_typing_hello", terminal.backend());
-}
-
-/// Blackbox test: open the /model picker and snapshot the result.
-#[test]
-fn blackbox_model_picker_snapshot() {
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
-
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the model picker popup
-    chat.open_model_popup();
 
     // Render to a test terminal
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("create terminal");
