@@ -108,15 +108,12 @@ pub mod default_client {
 /// HTTP backend stub: WireApi was used to distinguish between API types.
 /// This stub allows config_summary code to compile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Default)]
 pub enum WireApi {
+    #[default]
     Responses,
 }
 
-impl Default for WireApi {
-    fn default() -> Self {
-        WireApi::Responses
-    }
-}
 
 pub use codex_protocol::models::ContentItem;
 pub use codex_protocol::models::LocalShellAction;

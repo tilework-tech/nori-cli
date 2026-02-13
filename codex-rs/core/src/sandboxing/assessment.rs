@@ -2,11 +2,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use crate::AuthManager;
 use crate::client_common::Prompt;
-use crate::client_common::ResponseEvent;
 use crate::config::Config;
 use crate::protocol::SandboxPolicy;
 use askama::Template;
@@ -19,7 +17,6 @@ use codex_protocol::protocol::SandboxCommandAssessment;
 use codex_protocol::protocol::SessionSource;
 use futures::StreamExt;
 use serde_json::json;
-use tokio::time::timeout;
 use tracing::warn;
 
 const SANDBOX_ASSESSMENT_TIMEOUT: Duration = Duration::from_secs(15);
