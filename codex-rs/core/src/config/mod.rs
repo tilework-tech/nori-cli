@@ -34,6 +34,7 @@ pub const OLLAMA_OSS_PROVIDER_ID: &str = "ollama";
 pub struct ModelProviderInfo {
     // Placeholder - actual implementation depends on backend
     pub name: String,
+    #[serde(default)]
     pub wire_api: crate::WireApi,
     #[serde(default)]
     pub base_url: Option<String>,
