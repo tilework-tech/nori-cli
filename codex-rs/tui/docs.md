@@ -102,7 +102,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | Command | Description |
 |---------|-------------|
 | `/agent` | Switch between available ACP agents |
-| `/model` | Choose model and reasoning effort |
+| `/model` | Choose model (ACP model picker) |
 | `/approvals` | Choose what Nori can do without approval |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
