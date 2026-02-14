@@ -32,7 +32,7 @@ pub struct Cli {
     pub resume_show_all: bool,
 
     /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
-    #[arg(long, short = 'a', alias = "model", short_alias = 'm')]
+    #[arg(long, short = 'a')]
     pub agent: Option<String>,
 
     /// Configuration profile from config.toml to specify default options.
@@ -105,19 +105,5 @@ mod tests {
             !cli.dangerously_bypass_approvals_and_sandbox,
             "dangerously_bypass_approvals_and_sandbox should default to false"
         );
-    }
-
-    #[test]
-    fn test_model_flag_is_alias_for_agent() {
-        let cli = Cli::try_parse_from(["nori", "--model", "claude-code"])
-            .expect("--model should still work as an alias for --agent");
-        assert_eq!(cli.agent.as_deref(), Some("claude-code"));
-    }
-
-    #[test]
-    fn test_model_short_flag_m_is_alias_for_agent() {
-        let cli = Cli::try_parse_from(["nori", "-m", "codex"])
-            .expect("-m should still work as an alias for --agent");
-        assert_eq!(cli.agent.as_deref(), Some("codex"));
     }
 }

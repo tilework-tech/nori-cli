@@ -2932,7 +2932,7 @@ model_verbosity = "high"
     /// Users can specify config values at multiple levels that have the
     /// following precedence:
     ///
-    /// 1. custom command-line argument, e.g. `--model o3`
+    /// 1. custom command-line argument, e.g. `--agent o3`
     /// 2. as part of a profile, where the `--profile` is specified via a CLI
     ///    (or in the config file itself)
     /// 3. as an entry in `config.toml`, e.g. `model = "o3"`
