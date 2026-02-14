@@ -102,7 +102,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | Command | Description |
 |---------|-------------|
 | `/agent` | Switch between available ACP agents |
-| `/model` | Choose model and reasoning effort |
+| `/model` | Choose model (ACP model picker) |
 | `/approvals` | Choose what Nori can do without approval |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
@@ -169,7 +169,7 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 3. If available, runs `nori-skillsets list-skillsets` to get available skillsets
 4. On success (exit code 0), displays a searchable picker with skillset names
 5. On selection, runs `nori-skillsets install <NAME>` to install the selected skillset
-6. Shows the first line of the install output as a confirmation message
+6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 
 Events: `AppEvent::SkillsetListResult`, `AppEvent::InstallSkillset`, `AppEvent::SkillsetInstallResult`
 

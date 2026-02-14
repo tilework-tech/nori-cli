@@ -1,5 +1,18 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/cloud_agent_setup.sh"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.rs)",
@@ -48,8 +61,7 @@
       }
     },
     "additionalDirectories": [
-      "/home/clifford/Documents/source/nori/cli/.nori/profiles",
-      "/home/clifford/Documents/source/nori/cli/.claude/skills"
+      "~/.nori/profiles/"
     ]
   }
 }

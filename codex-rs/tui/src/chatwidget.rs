@@ -130,8 +130,7 @@ use chrono::Local;
 use codex_common::approval_presets::ApprovalPreset;
 use codex_common::approval_presets::approval_mode_label;
 use codex_common::approval_presets::builtin_approval_presets;
-use codex_common::model_presets::ModelPreset;
-use codex_common::model_presets::builtin_model_presets;
+
 use codex_core::AuthManager;
 #[allow(unused_imports)]
 use codex_core::CodexAuth;
@@ -141,7 +140,6 @@ use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_file_search::FileMatch;
 use codex_protocol::plan_tool::UpdatePlanArgs;
-use strum::IntoEnumIterator;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
@@ -167,8 +165,6 @@ impl UnifiedExecWaitState {
 }
 
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
-const NUDGE_MODEL_SLUG: &str = "gpt-5.1-codex-mini";
-const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
 
 #[derive(Default)]
 struct RateLimitWarningState {
@@ -319,14 +315,6 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) expected_model: Option<String>,
 }
 
-#[derive(Default)]
-enum RateLimitSwitchPromptState {
-    #[default]
-    Idle,
-    Pending,
-    Shown,
-}
-
 pub(crate) struct ChatWidget {
     app_event_tx: AppEventSender,
     codex_op_tx: UnboundedSender<Op>,
@@ -339,7 +327,6 @@ pub(crate) struct ChatWidget {
     token_info: Option<TokenUsageInfo>,
     rate_limit_snapshot: Option<RateLimitSnapshotDisplay>,
     rate_limit_warnings: RateLimitWarningState,
-    rate_limit_switch_prompt: RateLimitSwitchPromptState,
     rate_limit_poller: Option<JoinHandle<()>>,
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,
@@ -607,8 +594,6 @@ impl ChatWidget {
             response: last_agent_message.unwrap_or_default(),
         });
 
-        self.maybe_show_pending_rate_limit_prompt();
-
         // Loop mode: if iterations remain, fire the next iteration.
         #[cfg(feature = "nori-config")]
         if let Some(remaining) = self.loop_remaining
@@ -669,28 +654,6 @@ impl ChatWidget {
                     .and_then(|window| window.window_minutes),
             );
 
-            let high_usage = snapshot
-                .secondary
-                .as_ref()
-                .map(|w| w.used_percent >= RATE_LIMIT_SWITCH_PROMPT_THRESHOLD)
-                .unwrap_or(false)
-                || snapshot
-                    .primary
-                    .as_ref()
-                    .map(|w| w.used_percent >= RATE_LIMIT_SWITCH_PROMPT_THRESHOLD)
-                    .unwrap_or(false);
-
-            if high_usage
-                && !self.rate_limit_switch_prompt_hidden()
-                && self.config.model != NUDGE_MODEL_SLUG
-                && !matches!(
-                    self.rate_limit_switch_prompt,
-                    RateLimitSwitchPromptState::Shown
-                )
-            {
-                self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Pending;
-            }
-
             let display = crate::status::rate_limit_snapshot_display(&snapshot, Local::now());
             self.rate_limit_snapshot = Some(display);
 
@@ -714,7 +677,6 @@ impl ChatWidget {
         self.suppressed_exec_calls.clear();
         self.last_unified_wait = None;
         self.stream_controller = None;
-        self.maybe_show_pending_rate_limit_prompt();
     }
 
     fn on_error(&mut self, message: String) {
@@ -1571,7 +1533,7 @@ impl ChatWidget {
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
-            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+
             rate_limit_poller: None,
             stream_controller: None,
             running_commands: HashMap::new(),
@@ -1664,7 +1626,7 @@ impl ChatWidget {
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
-            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+
             rate_limit_poller: None,
             stream_controller: None,
             running_commands: HashMap::new(),
@@ -1763,7 +1725,7 @@ impl ChatWidget {
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
-            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+
             rate_limit_poller: None,
             stream_controller: None,
             running_commands: HashMap::new(),
@@ -2557,109 +2519,6 @@ impl ChatWidget {
         // Rate limit prefetching is not used in Nori (no backend-client)
     }
 
-    fn lower_cost_preset(&self) -> Option<ModelPreset> {
-        let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
-        builtin_model_presets(auth_mode)
-            .into_iter()
-            .find(|preset| preset.model == NUDGE_MODEL_SLUG)
-    }
-
-    fn rate_limit_switch_prompt_hidden(&self) -> bool {
-        self.config
-            .notices
-            .hide_rate_limit_model_nudge
-            .unwrap_or(false)
-    }
-
-    fn maybe_show_pending_rate_limit_prompt(&mut self) {
-        if self.rate_limit_switch_prompt_hidden() {
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-            return;
-        }
-        if !matches!(
-            self.rate_limit_switch_prompt,
-            RateLimitSwitchPromptState::Pending
-        ) {
-            return;
-        }
-        if let Some(preset) = self.lower_cost_preset() {
-            self.open_rate_limit_switch_prompt(preset);
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Shown;
-        } else {
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-        }
-    }
-
-    fn open_rate_limit_switch_prompt(&mut self, preset: ModelPreset) {
-        let switch_model = preset.model.to_string();
-        let display_name = preset.display_name.to_string();
-        let default_effort: ReasoningEffortConfig = preset.default_reasoning_effort;
-
-        let switch_actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-            tx.send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                cwd: None,
-                approval_policy: None,
-                sandbox_policy: None,
-                model: Some(switch_model.clone()),
-                effort: Some(Some(default_effort)),
-                summary: None,
-            }));
-            tx.send(AppEvent::UpdateModel(switch_model.clone()));
-            tx.send(AppEvent::UpdateReasoningEffort(Some(default_effort)));
-        })];
-
-        let keep_actions: Vec<SelectionAction> = Vec::new();
-        let never_actions: Vec<SelectionAction> = vec![Box::new(|tx| {
-            tx.send(AppEvent::UpdateRateLimitSwitchPromptHidden(true));
-            tx.send(AppEvent::PersistRateLimitSwitchPromptHidden);
-        })];
-        let description = if preset.description.is_empty() {
-            Some("Uses fewer credits for upcoming turns.".to_string())
-        } else {
-            Some(preset.description.to_string())
-        };
-
-        let items = vec![
-            SelectionItem {
-                name: format!("Switch to {display_name}"),
-                description,
-                selected_description: None,
-                is_current: false,
-                actions: switch_actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Keep current model".to_string(),
-                description: None,
-                selected_description: None,
-                is_current: false,
-                actions: keep_actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Keep current model (never show again)".to_string(),
-                description: Some(
-                    "Hide future rate limit reminders about switching models.".to_string(),
-                ),
-                selected_description: None,
-                is_current: false,
-                actions: never_actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-        ];
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Approaching rate limits".to_string()),
-            subtitle: Some(format!("Switch to {display_name} for lower credit usage?")),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            ..Default::default()
-        });
-    }
-
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
@@ -2975,104 +2834,52 @@ impl ChatWidget {
         }
     }
 
-    /// Open a popup to choose the model (stage 1). After selecting a model,
-    /// a second popup is shown to choose the reasoning effort.
-    ///
-    /// In ACP mode (when current model is an ACP agent), this fetches available
-    /// models from the agent and shows them for selection.
+    /// Open the ACP model picker popup.
     pub(crate) fn open_model_popup(&mut self) {
-        let current_model = self.config.model.clone();
-
-        // Check if we're in ACP mode by checking if the current model is registered
-        // in the ACP agent registry
-        if codex_acp::get_agent_config(&current_model).is_ok() {
-            #[cfg(feature = "unstable")]
-            {
-                // ACP mode with unstable features - try to get model state from the agent
-                if let Some(handle) = self.acp_handle.clone() {
-                    let app_event_tx = self.app_event_tx.clone();
-                    tokio::spawn(async move {
-                        if let Some(model_state) = handle.get_model_state().await {
-                            let models: Vec<crate::app_event::AcpModelInfo> = model_state
-                                .available_models
-                                .iter()
-                                .map(|m| {
-                                    let display_name = if m.name.is_empty() {
-                                        m.model_id.to_string()
-                                    } else {
-                                        m.name.clone()
-                                    };
-                                    crate::app_event::AcpModelInfo {
-                                        model_id: m.model_id.to_string(),
-                                        display_name,
-                                        description: m.description.clone(),
-                                    }
-                                })
-                                .collect();
-                            let current_model_id =
-                                model_state.current_model_id.map(|id| id.to_string());
-                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                                models,
-                                current_model_id,
-                            });
-                        } else {
-                            // Failed to get model state - show empty picker with explanation
-                            tracing::warn!("Failed to get ACP model state");
-                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                                models: vec![],
-                                current_model_id: None,
-                            });
-                        }
-                    });
-                    return;
-                }
-            }
-            // ACP mode but no handle or unstable not enabled - show disabled model picker
-            let params = crate::nori::agent_picker::acp_model_picker_params();
-            self.bottom_pane.show_selection_view(params);
-            return;
-        }
-
-        // Standard HTTP mode - show normal model picker
-        let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
-        let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
-
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for preset in presets.into_iter() {
-            let description = if preset.description.is_empty() {
-                None
-            } else {
-                Some(preset.description.to_string())
-            };
-            let is_current = preset.model == current_model;
-            let single_supported_effort = preset.supported_reasoning_efforts.len() == 1;
-            let preset_for_action = preset.clone();
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                let preset_for_event = preset_for_action.clone();
-                tx.send(AppEvent::OpenReasoningPopup {
-                    model: preset_for_event,
+        #[cfg(feature = "unstable")]
+        {
+            // ACP mode with unstable features - try to get model state from the agent
+            if let Some(handle) = self.acp_handle.clone() {
+                let app_event_tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    if let Some(model_state) = handle.get_model_state().await {
+                        let models: Vec<crate::app_event::AcpModelInfo> = model_state
+                            .available_models
+                            .iter()
+                            .map(|m| {
+                                let display_name = if m.name.is_empty() {
+                                    m.model_id.to_string()
+                                } else {
+                                    m.name.clone()
+                                };
+                                crate::app_event::AcpModelInfo {
+                                    model_id: m.model_id.to_string(),
+                                    display_name,
+                                    description: m.description.clone(),
+                                }
+                            })
+                            .collect();
+                        let current_model_id =
+                            model_state.current_model_id.map(|id| id.to_string());
+                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                            models,
+                            current_model_id,
+                        });
+                    } else {
+                        // Failed to get model state - show empty picker with explanation
+                        tracing::warn!("Failed to get ACP model state");
+                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                            models: vec![],
+                            current_model_id: None,
+                        });
+                    }
                 });
-            })];
-            items.push(SelectionItem {
-                name: preset.display_name.to_string(),
-                description,
-                is_current,
-                actions,
-                dismiss_on_select: single_supported_effort,
-                ..Default::default()
-            });
+                return;
+            }
         }
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select Model and Effort".to_string()),
-            subtitle: Some(
-                "Access legacy models by running codex -m <model_name> or in your config.toml"
-                    .to_string(),
-            ),
-            footer_hint: Some("Press enter to select reasoning effort, or esc to dismiss.".into()),
-            items,
-            ..Default::default()
-        });
+        // No ACP handle or unstable not enabled - show disabled model picker
+        let params = crate::nori::agent_picker::acp_model_picker_params();
+        self.bottom_pane.show_selection_view(params);
     }
 
     /// Open the ACP model picker with fetched models.
@@ -3123,201 +2930,6 @@ impl ChatWidget {
                 None,
             );
         }
-    }
-
-    /// Open a popup to choose the reasoning effort (stage 2) for the given model.
-    pub(crate) fn open_reasoning_popup(&mut self, preset: ModelPreset) {
-        let default_effort: ReasoningEffortConfig = preset.default_reasoning_effort;
-        let supported = preset.supported_reasoning_efforts;
-
-        let warn_effort = if supported
-            .iter()
-            .any(|option| option.effort == ReasoningEffortConfig::XHigh)
-        {
-            Some(ReasoningEffortConfig::XHigh)
-        } else if supported
-            .iter()
-            .any(|option| option.effort == ReasoningEffortConfig::High)
-        {
-            Some(ReasoningEffortConfig::High)
-        } else {
-            None
-        };
-        let warning_text = warn_effort.map(|effort| {
-            let effort_label = Self::reasoning_effort_label(effort);
-            format!("⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits.")
-        });
-        let warn_for_model = preset.model.starts_with("gpt-5.1-codex")
-            || preset.model.starts_with("gpt-5.1-codex-max");
-
-        struct EffortChoice {
-            stored: Option<ReasoningEffortConfig>,
-            display: ReasoningEffortConfig,
-        }
-        let mut choices: Vec<EffortChoice> = Vec::new();
-        for effort in ReasoningEffortConfig::iter() {
-            if supported.iter().any(|option| option.effort == effort) {
-                choices.push(EffortChoice {
-                    stored: Some(effort),
-                    display: effort,
-                });
-            }
-        }
-        if choices.is_empty() {
-            choices.push(EffortChoice {
-                stored: Some(default_effort),
-                display: default_effort,
-            });
-        }
-
-        if choices.len() == 1 {
-            if let Some(effort) = choices.first().and_then(|c| c.stored) {
-                self.apply_model_and_effort(preset.model.to_string(), Some(effort));
-            } else {
-                self.apply_model_and_effort(preset.model.to_string(), None);
-            }
-            return;
-        }
-
-        let default_choice: Option<ReasoningEffortConfig> = choices
-            .iter()
-            .any(|choice| choice.stored == Some(default_effort))
-            .then_some(Some(default_effort))
-            .flatten()
-            .or_else(|| choices.iter().find_map(|choice| choice.stored))
-            .or(Some(default_effort));
-
-        let model_slug = preset.model.to_string();
-        let is_current_model = self.config.model == preset.model;
-        let highlight_choice = if is_current_model {
-            self.config.model_reasoning_effort
-        } else {
-            default_choice
-        };
-        let selection_choice = highlight_choice.or(default_choice);
-        let initial_selected_idx = choices
-            .iter()
-            .position(|choice| choice.stored == selection_choice)
-            .or_else(|| {
-                selection_choice
-                    .and_then(|effort| choices.iter().position(|choice| choice.display == effort))
-            });
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for choice in choices.iter() {
-            let effort = choice.display;
-            let mut effort_label = Self::reasoning_effort_label(effort).to_string();
-            if choice.stored == default_choice {
-                effort_label.push_str(" (default)");
-            }
-
-            let description = choice
-                .stored
-                .and_then(|effort| {
-                    supported
-                        .iter()
-                        .find(|option| option.effort == effort)
-                        .map(|option| option.description.to_string())
-                })
-                .filter(|text| !text.is_empty());
-
-            let show_warning = warn_for_model && warn_effort == Some(effort);
-            let selected_description = if show_warning {
-                warning_text.as_ref().map(|warning_message| {
-                    description.as_ref().map_or_else(
-                        || warning_message.clone(),
-                        |d| format!("{d}\n{warning_message}"),
-                    )
-                })
-            } else {
-                None
-            };
-
-            let model_for_action = model_slug.clone();
-            let effort_for_action = choice.stored;
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                    cwd: None,
-                    approval_policy: None,
-                    sandbox_policy: None,
-                    model: Some(model_for_action.clone()),
-                    effort: Some(effort_for_action),
-                    summary: None,
-                }));
-                tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                tx.send(AppEvent::UpdateReasoningEffort(effort_for_action));
-                tx.send(AppEvent::PersistModelSelection {
-                    model: model_for_action.clone(),
-                    effort: effort_for_action,
-                });
-                tracing::info!(
-                    "Selected model: {}, Selected effort: {}",
-                    model_for_action,
-                    effort_for_action
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "default".to_string())
-                );
-            })];
-
-            items.push(SelectionItem {
-                name: effort_label,
-                description,
-                selected_description,
-                is_current: is_current_model && choice.stored == highlight_choice,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            });
-        }
-
-        let mut header = ColumnRenderable::new();
-        header.push(Line::from(
-            format!("Select Reasoning Level for {model_slug}").bold(),
-        ));
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            header: Box::new(header),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            initial_selected_idx,
-            ..Default::default()
-        });
-    }
-
-    fn reasoning_effort_label(effort: ReasoningEffortConfig) -> &'static str {
-        match effort {
-            ReasoningEffortConfig::None => "None",
-            ReasoningEffortConfig::Minimal => "Minimal",
-            ReasoningEffortConfig::Low => "Low",
-            ReasoningEffortConfig::Medium => "Medium",
-            ReasoningEffortConfig::High => "High",
-            ReasoningEffortConfig::XHigh => "Extra high",
-        }
-    }
-
-    fn apply_model_and_effort(&self, model: String, effort: Option<ReasoningEffortConfig>) {
-        self.app_event_tx
-            .send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                cwd: None,
-                approval_policy: None,
-                sandbox_policy: None,
-                model: Some(model.clone()),
-                effort: Some(effort),
-                summary: None,
-            }));
-        self.app_event_tx.send(AppEvent::UpdateModel(model.clone()));
-        self.app_event_tx
-            .send(AppEvent::UpdateReasoningEffort(effort));
-        self.app_event_tx.send(AppEvent::PersistModelSelection {
-            model: model.clone(),
-            effort,
-        });
-        tracing::info!(
-            "Selected model: {}, Selected effort: {}",
-            model,
-            effort
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "default".to_string())
-        );
     }
 
     /// Open a popup to choose the approvals mode (ask for approval policy + sandbox policy).
@@ -3752,13 +3364,6 @@ impl ChatWidget {
 
     pub(crate) fn set_world_writable_warning_acknowledged(&mut self, acknowledged: bool) {
         self.config.notices.hide_world_writable_warning = Some(acknowledged);
-    }
-
-    pub(crate) fn set_rate_limit_switch_prompt_hidden(&mut self, hidden: bool) {
-        self.config.notices.hide_rate_limit_model_nudge = Some(hidden);
-        if hidden {
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-        }
     }
 
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

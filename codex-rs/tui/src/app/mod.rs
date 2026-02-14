@@ -714,9 +714,6 @@ impl App {
                     self.config.model_family = family;
                 }
             }
-            AppEvent::OpenReasoningPopup { model } => {
-                self.chat_widget.open_reasoning_popup(model);
-            }
             AppEvent::OpenFullAccessConfirmation { preset } => {
                 self.chat_widget.open_full_access_confirmation(preset);
             }
@@ -897,9 +894,6 @@ impl App {
                 self.chat_widget
                     .set_world_writable_warning_acknowledged(ack);
             }
-            AppEvent::UpdateRateLimitSwitchPromptHidden(hidden) => {
-                self.chat_widget.set_rate_limit_switch_prompt_hidden(hidden);
-            }
             AppEvent::PersistFullAccessWarningAcknowledged => {
                 if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
                     .set_hide_full_access_warning(true)
@@ -927,21 +921,6 @@ impl App {
                     );
                     self.chat_widget.add_error_message(format!(
                         "Failed to save Agent mode warning preference: {err}"
-                    ));
-                }
-            }
-            AppEvent::PersistRateLimitSwitchPromptHidden => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_rate_limit_model_nudge(true)
-                    .apply()
-                    .await
-                {
-                    tracing::error!(
-                        error = %err,
-                        "failed to persist rate limit switch prompt preference"
-                    );
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to save rate limit reminder preference: {err}"
                     ));
                 }
             }
