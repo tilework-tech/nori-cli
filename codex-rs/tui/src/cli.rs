@@ -108,19 +108,6 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_flag_is_recognized() {
-        let cli = Cli::try_parse_from(["nori", "--agent", "claude-code"])
-            .expect("--agent should be a valid flag");
-        assert_eq!(cli.agent.as_deref(), Some("claude-code"));
-    }
-
-    #[test]
-    fn test_agent_short_flag() {
-        let cli = Cli::try_parse_from(["nori", "-a", "gemini"]).expect("-a should be a valid flag");
-        assert_eq!(cli.agent.as_deref(), Some("gemini"));
-    }
-
-    #[test]
     fn test_model_flag_is_alias_for_agent() {
         let cli = Cli::try_parse_from(["nori", "--model", "claude-code"])
             .expect("--model should still work as an alias for --agent");

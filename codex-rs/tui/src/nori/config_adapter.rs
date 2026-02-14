@@ -86,18 +86,13 @@ pub fn load_nori_config_with_overrides(
     NoriConfig::load_with_overrides(overrides)
 }
 
-/// Get the default agent from NoriConfig.
+/// Returns the user's persisted agent preference from `~/.nori/cli/config.toml`.
 ///
-/// This loads the user's persisted agent preference from `~/.nori/cli/config.toml`
-/// and returns it as the default agent. The precedence is:
-/// 1. `model` field in config.toml (if set)
-/// 2. `agent` field in config.toml (persisted user preference)
-/// 3. DEFAULT_AGENT ("claude-code")
-///
-/// Returns `None` if config loading fails (falls back to hardcoded default).
+/// This is the `agent` field in config, defaulting to DEFAULT_AGENT ("claude-code").
+/// Returns `None` if config loading fails.
 pub fn get_persisted_agent() -> Option<String> {
     match NoriConfig::load() {
-        Ok(config) => Some(config.active_agent),
+        Ok(config) => Some(config.agent),
         Err(e) => {
             tracing::warn!("Failed to load NoriConfig for agent preference: {e}");
             None
