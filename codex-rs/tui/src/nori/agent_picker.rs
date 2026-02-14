@@ -21,8 +21,8 @@ use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct PendingAgentSelection {
-    /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
-    pub model_name: String,
+    /// The agent name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
+    pub agent_name: String,
     /// The display name for the status indicator
     pub display_name: String,
 }
@@ -30,26 +30,26 @@ pub struct PendingAgentSelection {
 /// Create selection view parameters for the agent picker.
 ///
 /// # Arguments
-/// * `current_model` - The currently active model name
+/// * `current_agent` - The currently active agent name
 /// * `app_event_tx` - The app event sender for triggering selection events
 pub fn agent_picker_params(
-    current_model: &str,
+    current_agent: &str,
     _app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
     let available_agents = list_available_agents();
-    let current_normalized = current_model.to_lowercase();
+    let current_normalized = current_agent.to_lowercase();
 
     let items: Vec<SelectionItem> = available_agents
         .into_iter()
         .map(|agent| {
-            let is_current = agent.model_name.to_lowercase() == current_normalized;
-            let model_name = agent.model_name.clone();
+            let is_current = agent.agent_name.to_lowercase() == current_normalized;
+            let agent_name = agent.agent_name.clone();
             let display_name = agent.display_name.clone();
 
             // Create action that sends the pending agent selection event
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
                 tx.send(AppEvent::SetPendingAgent {
-                    model_name: model_name.clone(),
+                    agent_name: agent_name.clone(),
                     display_name: display_name.clone(),
                 });
             })];
@@ -176,13 +176,13 @@ pub fn acp_model_picker_params_with_models(
     }
 }
 
-/// Get information about an agent by model name
+/// Get information about an agent by agent name
 #[allow(dead_code)]
-pub fn get_agent_info(model_name: &str) -> Option<AcpAgentInfo> {
-    let normalized = model_name.to_lowercase();
+pub fn get_agent_info(agent_name: &str) -> Option<AcpAgentInfo> {
+    let normalized = agent_name.to_lowercase();
     list_available_agents()
         .into_iter()
-        .find(|agent| agent.model_name.to_lowercase() == normalized)
+        .find(|agent| agent.agent_name.to_lowercase() == normalized)
 }
 
 #[cfg(test)]

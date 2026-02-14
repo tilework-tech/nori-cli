@@ -1,7 +1,7 @@
 //! Configuration loading for Nori CLI
 
 use super::types::ApprovalPolicy;
-use super::types::DEFAULT_MODEL;
+use super::types::DEFAULT_AGENT;
 use super::types::McpServerConfig;
 use super::types::NoriConfig;
 use super::types::NoriConfigOverrides;
@@ -118,19 +118,19 @@ impl NoriConfig {
         let async_post_agent_response_hooks =
             super::types::resolve_hook_paths(toml.hooks.async_post_agent_response);
 
-        // Agent is the user's persisted preference, defaults to DEFAULT_MODEL
-        let agent = toml.agent.unwrap_or_else(|| DEFAULT_MODEL.to_string());
+        // Agent is the user's persisted preference, defaults to DEFAULT_AGENT
+        let agent = toml.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string());
 
-        // Model is the runtime value: CLI override > config model > persisted agent > DEFAULT_MODEL
+        // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
         // Using agent as fallback ensures the persisted preference is honored at startup
-        let model = overrides
-            .model
+        let active_agent = overrides
+            .agent
             .or(toml.model)
             .unwrap_or_else(|| agent.clone());
 
         Ok(Self {
             agent,
-            model,
+            active_agent,
             sandbox_mode: overrides
                 .sandbox_mode
                 .or(toml.sandbox_mode)
@@ -363,10 +363,10 @@ notify_after_idle = "30s"
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
 
-        // Model should fall back to the persisted agent value
+        // Active agent should fall back to the persisted agent value
         assert_eq!(
-            config.model, "gemini",
-            "Model should use persisted agent as fallback when not overridden"
+            config.active_agent, "gemini",
+            "Active agent should use persisted agent as fallback when not overridden"
         );
         assert_eq!(config.agent, "gemini");
     }

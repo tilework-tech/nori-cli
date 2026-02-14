@@ -400,7 +400,7 @@ mod tests {
     fn make_test_config(vertical_footer: bool) -> NoriConfig {
         NoriConfig {
             agent: "claude-code".to_string(),
-            model: "claude-code".to_string(),
+            active_agent: "claude-code".to_string(),
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: codex_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: codex_acp::config::HistoryPersistence::SaveAll,

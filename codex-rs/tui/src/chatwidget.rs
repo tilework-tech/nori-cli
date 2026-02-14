@@ -309,10 +309,10 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
-    /// Expected model name for this widget. When set, events from other models
+    /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
-    /// with a matching model. This prevents race conditions when switching agents.
-    pub(crate) expected_model: Option<String>,
+    /// with a matching agent. This prevents race conditions when switching agents.
+    pub(crate) expected_agent: Option<String>,
 }
 
 pub(crate) struct ChatWidget {
@@ -368,11 +368,11 @@ pub(crate) struct ChatWidget {
     effective_cwd_tracker: EffectiveCwdTracker,
     // Pending agent selection for next prompt submission
     pending_agent: Option<PendingAgentInfo>,
-    // Expected model name for agent switch synchronization.
-    // When set, events are ignored until SessionConfigured arrives with this model.
-    expected_model: Option<String>,
+    // Expected agent name for agent switch synchronization.
+    // When set, events are ignored until SessionConfigured arrives with this agent.
+    expected_agent: Option<String>,
     // Whether SessionConfigured has been received for this widget.
-    // Used with expected_model to filter events from previous agents.
+    // Used with expected_agent to filter events from previous agents.
     session_configured_received: bool,
     // ACP agent handle for model switching (only present in ACP mode)
     #[cfg(feature = "unstable")]
@@ -395,7 +395,7 @@ pub(crate) struct ChatWidget {
 /// Information about a pending agent switch in ChatWidget.
 #[derive(Debug, Clone)]
 pub(crate) struct PendingAgentInfo {
-    pub model_name: String,
+    pub agent_name: String,
     pub display_name: String,
 }
 
@@ -447,7 +447,7 @@ impl ChatWidget {
     // --- Small event handlers ---
     fn on_session_configured(&mut self, event: codex_core::protocol::SessionConfiguredEvent) {
         // Mark that we've received SessionConfigured - this unlocks event processing
-        // when expected_model is set (during agent switching)
+        // when expected_agent is set (during agent switching)
         self.session_configured_received = true;
 
         // Clear the "Connecting to [Agent]" status indicator shown during agent startup
@@ -461,8 +461,8 @@ impl ChatWidget {
         self.conversation_id = Some(event.session_id);
         self.current_rollout_path = Some(event.rollout_path.clone());
         let initial_messages = event.initial_messages.clone();
-        let model_for_header = event.model.clone();
-        self.session_header.set_model(&model_for_header);
+        let agent_for_header = event.model.clone();
+        self.session_header.set_agent(&agent_for_header);
         self.add_to_history(history_cell::new_session_info(
             &self.config,
             event,
@@ -584,7 +584,7 @@ impl ChatWidget {
         self.app_event_tx
             .send(AppEvent::RefreshSystemInfoForDirectory {
                 dir: self.config.cwd.clone(),
-                model: Some(self.config.model.clone()),
+                agent: Some(self.config.model.clone()),
             });
 
         // If there is a queued user message, send exactly one now to begin the next turn.
@@ -1263,7 +1263,7 @@ impl ChatWidget {
                     self.app_event_tx
                         .send(AppEvent::RefreshSystemInfoForDirectory {
                             dir,
-                            model: Some(self.config.model.clone()),
+                            agent: Some(self.config.model.clone()),
                         });
                 }
             }
@@ -1342,7 +1342,7 @@ impl ChatWidget {
             self.app_event_tx
                 .send(AppEvent::RefreshSystemInfoForDirectory {
                     dir: ev.cwd.clone(),
-                    model: Some(self.config.model.clone()),
+                    agent: Some(self.config.model.clone()),
                 });
         }
 
@@ -1498,7 +1498,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            expected_model,
+            expected_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1518,7 +1518,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
             }),
@@ -1557,7 +1557,7 @@ impl ChatWidget {
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_model,
+            expected_agent,
             session_configured_received: false,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
@@ -1589,7 +1589,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            expected_model,
+            expected_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1611,7 +1611,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
             }),
@@ -1650,7 +1650,7 @@ impl ChatWidget {
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_model,
+            expected_agent,
             // For existing conversations, we've already received SessionConfigured
             session_configured_received: true,
             // No ACP handle for existing conversations (they are HTTP mode only)
@@ -1685,7 +1685,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            expected_model,
+            expected_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1710,7 +1710,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
             }),
@@ -1749,7 +1749,7 @@ impl ChatWidget {
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_model,
+            expected_agent,
             session_configured_received: false,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
@@ -1767,12 +1767,12 @@ impl ChatWidget {
     }
 
     /// Set a pending agent to switch to on the next prompt submission.
-    pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
+    pub(crate) fn set_pending_agent(&mut self, agent_name: String, display_name: String) {
         // Update the bottom pane's model display name for approval dialogs
         self.bottom_pane
-            .set_model_display_name(display_name.clone());
+            .set_agent_display_name(display_name.clone());
         self.pending_agent = Some(PendingAgentInfo {
-            model_name,
+            agent_name,
             display_name,
         });
     }
@@ -2155,14 +2155,14 @@ impl ChatWidget {
         self.app_event_tx
             .send(AppEvent::RefreshSystemInfoForDirectory {
                 dir: self.config.cwd.clone(),
-                model: Some(self.config.model.clone()),
+                agent: Some(self.config.model.clone()),
             });
 
         // Check if there's a pending agent switch - if so, send the message through
         // the App to trigger the switch first
         if let Some(pending) = self.pending_agent.take() {
             self.app_event_tx.send(AppEvent::SubmitWithAgentSwitch {
-                model_name: pending.model_name,
+                agent_name: pending.agent_name,
                 display_name: pending.display_name,
                 message_text: text,
                 image_paths,
@@ -2238,11 +2238,11 @@ impl ChatWidget {
     pub(crate) fn handle_codex_event(&mut self, event: Event) {
         let Event { id, msg } = event;
 
-        // When expected_model is set (during agent switching), we need to filter events
+        // When expected_agent is set (during agent switching), we need to filter events
         // to prevent events from the OLD agent from affecting the NEW widget.
-        if let Some(ref expected) = self.expected_model {
+        if let Some(ref expected) = self.expected_agent {
             tracing::debug!(
-                "Event filtering active: expected_model={}, session_configured_received={}",
+                "Event filtering active: expected_agent={}, session_configured_received={}",
                 expected,
                 self.session_configured_received
             );
@@ -3379,15 +3379,15 @@ impl ChatWidget {
         self.config.model_reasoning_effort = effort;
     }
 
-    /// Set the model in the widget's config copy.
-    pub(crate) fn set_model(&mut self, model: &str) {
-        self.session_header.set_model(model);
-        self.config.model = model.to_string();
-        // Update the bottom pane's model display name for approval dialogs
-        let display_name = crate::nori::agent_picker::get_agent_info(model)
+    /// Set the agent in the widget's config copy.
+    pub(crate) fn set_agent(&mut self, agent: &str) {
+        self.session_header.set_agent(agent);
+        self.config.model = agent.to_string();
+        // Update the bottom pane's agent display name for approval dialogs
+        let display_name = crate::nori::agent_picker::get_agent_info(agent)
             .map(|info| info.display_name)
-            .unwrap_or_else(|| model.to_string());
-        self.bottom_pane.set_model_display_name(display_name);
+            .unwrap_or_else(|| agent.to_string());
+        self.bottom_pane.set_agent_display_name(display_name);
     }
 
     /// Set the vertical footer layout flag for the TUI.
@@ -3395,11 +3395,11 @@ impl ChatWidget {
         self.bottom_pane.set_vertical_footer(enabled);
     }
 
-    /// Update the model display name shown in approval dialogs.
-    /// Used when ACP model switch completes successfully.
+    /// Update the agent display name shown in approval dialogs.
+    /// Used when ACP agent switch completes successfully.
     #[cfg(feature = "unstable")]
-    pub(crate) fn update_model_display_name(&mut self, display_name: String) {
-        self.bottom_pane.set_model_display_name(display_name);
+    pub(crate) fn update_agent_display_name(&mut self, display_name: String) {
+        self.bottom_pane.set_agent_display_name(display_name);
     }
 
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
@@ -3441,23 +3441,23 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(crate) fn on_agent_spawn_failed(&mut self, model_name: &str, error: &str) {
+    pub(crate) fn on_agent_spawn_failed(&mut self, agent_name: &str, error: &str) {
         self.bottom_pane.hide_status_indicator();
-        self.add_error_message(format!("Failed to start agent '{model_name}': {error}"));
+        self.add_error_message(format!("Failed to start agent '{agent_name}': {error}"));
         self.open_agent_popup();
     }
 
     /// Handle the /login slash command
     fn handle_login_command(&mut self) {
         // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
-        // otherwise use the current config model
-        let model_name = self
+        // otherwise use the current config agent
+        let agent_name = self
             .pending_agent
             .as_ref()
-            .map(|p| p.model_name.as_str())
+            .map(|p| p.agent_name.as_str())
             .unwrap_or(&self.config.model);
 
-        match LoginHandler::check_agent_support(model_name) {
+        match LoginHandler::check_agent_support(agent_name) {
             AgentLoginSupport::Supported {
                 agent,
                 is_installed,
@@ -3529,9 +3529,9 @@ impl ChatWidget {
                 };
                 self.add_info_message(instructions.to_string(), None);
             }
-            AgentLoginSupport::Unknown { model_name } => {
+            AgentLoginSupport::Unknown { agent_name } => {
                 self.add_info_message(
-                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
+                    format!("Unknown agent '{agent_name}'. Cannot determine login method."),
                     None,
                 );
             }
@@ -3604,9 +3604,9 @@ impl ChatWidget {
                 };
                 self.add_info_message(instructions.to_string(), None);
             }
-            AgentLoginSupport::Unknown { model_name } => {
+            AgentLoginSupport::Unknown { agent_name } => {
                 self.add_info_message(
-                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
+                    format!("Unknown agent '{agent_name}'. Cannot determine login method."),
                     None,
                 );
             }

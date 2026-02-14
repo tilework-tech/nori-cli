@@ -353,14 +353,14 @@ fn agent_spawn_failed_event_exists() {
     // This test verifies the AgentSpawnFailed event variant exists
     // and has the expected fields
     let event = AppEvent::AgentSpawnFailed {
-        model_name: "codex".to_string(),
+        agent_name: "codex".to_string(),
         error: "Failed to spawn ACP agent: npx not found".to_string(),
     };
 
     // Verify it matches the expected pattern
     match event {
-        AppEvent::AgentSpawnFailed { model_name, error } => {
-            assert_eq!(model_name, "codex");
+        AppEvent::AgentSpawnFailed { agent_name, error } => {
+            assert_eq!(agent_name, "codex");
             assert!(error.contains("Failed to spawn"));
         }
         _ => panic!("Expected AgentSpawnFailed event"),

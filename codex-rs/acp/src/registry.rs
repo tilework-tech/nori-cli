@@ -213,8 +213,8 @@ impl fmt::Display for PackageManager {
 pub struct AcpAgentInfo {
     /// Agent identifier
     pub agent: AgentKind,
-    /// Model name used to select this agent (e.g., "claude-code", "gemini")
-    pub model_name: String,
+    /// Agent name used to select this agent (e.g., "claude-code", "gemini")
+    pub agent_name: String,
     /// Display name shown in the picker
     pub display_name: String,
     /// Description of the agent
@@ -234,7 +234,7 @@ impl AcpAgentInfo {
 
         Self {
             agent,
-            model_name: agent.slug().to_string(),
+            agent_name: agent.slug().to_string(),
             display_name: agent.display_name().to_string(),
             description: agent.provider().display_name().to_string(),
             provider_slug: agent.slug().to_string(),
@@ -417,7 +417,7 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
     {
         agents.push(AcpAgentInfo {
             agent: AgentKind::ClaudeCode, // Dummy, not really used
-            model_name: "mock-model".to_string(),
+            agent_name: "mock-model".to_string(),
             display_name: "Mock ACP".to_string(),
             description: "Mock agent for testing".to_string(),
             provider_slug: "mock-acp".to_string(),
@@ -426,7 +426,7 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
         });
         agents.push(AcpAgentInfo {
             agent: AgentKind::ClaudeCode, // Dummy, not really used
-            model_name: "mock-model-alt".to_string(),
+            agent_name: "mock-model-alt".to_string(),
             display_name: "Mock ACP Alt".to_string(),
             description: "Alternate mock agent for testing".to_string(),
             provider_slug: "mock-acp-alt".to_string(),
@@ -443,20 +443,20 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
     agents
 }
 
-/// Get ACP agent configuration for a given model name
+/// Get ACP agent configuration for a given agent name
 ///
 /// # Arguments
-/// * `model_name` - The model identifier (e.g., "claude-code", "gemini")
+/// * `agent_name` - The agent identifier (e.g., "claude-code", "gemini")
 ///   Names are normalized to lowercase for case-insensitive matching.
 ///
 /// # Returns
 /// Configuration with provider_slug, command and args to spawn the agent subprocess
 ///
 /// # Errors
-/// Returns error if model_name is not recognized
-pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
-    // Normalize model name: lowercase
-    let normalized = model_name.to_lowercase();
+/// Returns error if agent_name is not recognized
+pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
+    // Normalize agent name: lowercase
+    let normalized = agent_name.to_lowercase();
 
     // Try mock agents first (only available in debug builds)
     #[cfg(debug_assertions)]
@@ -502,15 +502,15 @@ pub fn get_agent_config(model_name: &str) -> Result<AcpAgentConfig> {
         });
     }
 
-    anyhow::bail!("Unknown ACP model: {model_name}")
+    anyhow::bail!("Unknown ACP agent: {agent_name}")
 }
 
-/// Get the display name for an agent by model name.
+/// Get the display name for an agent by agent name.
 ///
 /// Returns the human-readable display name if the agent is registered.
-/// Falls back to the model_name itself if not recognized.
-pub fn get_agent_display_name(model_name: &str) -> String {
-    let normalized = model_name.to_lowercase();
+/// Falls back to the agent_name itself if not recognized.
+pub fn get_agent_display_name(agent_name: &str) -> String {
+    let normalized = agent_name.to_lowercase();
 
     // Mock agents (debug builds only)
     #[cfg(debug_assertions)]
@@ -528,8 +528,8 @@ pub fn get_agent_display_name(model_name: &str) -> String {
         return agent.display_name().to_string();
     }
 
-    // Fallback to model name
-    model_name.to_string()
+    // Fallback to agent name
+    agent_name.to_string()
 }
 
 /// Get mock agent configuration (only available in debug builds)
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     #[cfg(debug_assertions)]
-    fn test_get_mock_model_config() {
+    fn test_get_mock_agent_config() {
         let config = get_agent_config("mock-model").expect("Should return config for mock-model");
 
         assert_eq!(config.provider_slug, "mock-acp");
@@ -730,7 +730,7 @@ mod tests {
 
     #[test]
     #[cfg(debug_assertions)]
-    fn test_get_mock_model_alt_config() {
+    fn test_get_mock_agent_alt_config() {
         let config =
             get_agent_config("mock-model-alt").expect("Should return config for mock-model-alt");
 

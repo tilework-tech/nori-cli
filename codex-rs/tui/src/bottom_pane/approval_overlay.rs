@@ -67,14 +67,14 @@ pub(crate) struct ApprovalOverlay {
     options: Vec<ApprovalOption>,
     current_complete: bool,
     done: bool,
-    model_display_name: String,
+    agent_display_name: String,
 }
 
 impl ApprovalOverlay {
     pub fn new(
         request: ApprovalRequest,
         app_event_tx: AppEventSender,
-        model_display_name: String,
+        agent_display_name: String,
     ) -> Self {
         let mut view = Self {
             current_request: None,
@@ -85,7 +85,7 @@ impl ApprovalOverlay {
             options: Vec::new(),
             current_complete: false,
             done: false,
-            model_display_name,
+            agent_display_name,
         };
         view.set_current(request);
         view
@@ -100,7 +100,7 @@ impl ApprovalOverlay {
         let ApprovalRequestState { variant, header } = ApprovalRequestState::from(request);
         self.current_variant = Some(variant.clone());
         self.current_complete = false;
-        let (options, params) = Self::build_options(variant, header, &self.model_display_name);
+        let (options, params) = Self::build_options(variant, header, &self.agent_display_name);
         self.options = options;
         self.list = ListSelectionView::new(params, self.app_event_tx.clone());
     }
@@ -108,15 +108,15 @@ impl ApprovalOverlay {
     fn build_options(
         variant: ApprovalVariant,
         header: Box<dyn Renderable>,
-        model_display_name: &str,
+        agent_display_name: &str,
     ) -> (Vec<ApprovalOption>, SelectionViewParams) {
         let (options, title) = match &variant {
             ApprovalVariant::Exec { .. } => (
-                exec_options(model_display_name),
+                exec_options(agent_display_name),
                 "Would you like to run the following command?".to_string(),
             ),
             ApprovalVariant::ApplyPatch { .. } => (
-                patch_options(model_display_name),
+                patch_options(agent_display_name),
                 "Would you like to make the following edits?".to_string(),
             ),
             ApprovalVariant::McpElicitation { server_name, .. } => (
@@ -470,11 +470,11 @@ impl ApprovalOption {
     }
 }
 
-fn exec_options(model_display_name: &str) -> Vec<ApprovalOption> {
-    let display_name = if model_display_name.is_empty() {
+fn exec_options(agent_display_name: &str) -> Vec<ApprovalOption> {
+    let display_name = if agent_display_name.is_empty() {
         "the agent"
     } else {
-        model_display_name
+        agent_display_name
     };
     vec![
         ApprovalOption {
@@ -498,11 +498,11 @@ fn exec_options(model_display_name: &str) -> Vec<ApprovalOption> {
     ]
 }
 
-fn patch_options(model_display_name: &str) -> Vec<ApprovalOption> {
-    let display_name = if model_display_name.is_empty() {
+fn patch_options(agent_display_name: &str) -> Vec<ApprovalOption> {
+    let display_name = if agent_display_name.is_empty() {
         "the agent"
     } else {
-        model_display_name
+        agent_display_name
     };
     vec![
         ApprovalOption {

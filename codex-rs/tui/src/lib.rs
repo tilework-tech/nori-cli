@@ -81,10 +81,10 @@ mod tui;
 mod ui_consts;
 mod viewonly_transcript;
 
-/// Default model for ACP-only mode when no model is specified via CLI or config.
+/// Default agent for ACP-only mode when no agent is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-/// This constant MUST match codex_acp::config::DEFAULT_MODEL to ensure consistency.
-const DEFAULT_ACP_MODEL: &str = "claude-code";
+/// This constant MUST match codex_acp::config::DEFAULT_AGENT to ensure consistency.
+const DEFAULT_ACP_AGENT: &str = "claude-code";
 
 // Nori-specific update modules
 // Re-export as pub mod for external access to UpdateAction type
@@ -191,16 +191,16 @@ pub async fn run_main(
 
     let model_provider_override: Option<String> = None;
 
-    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
-    let model = cli.model.clone().or_else(|| {
+    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_AGENT
+    let agent = cli.agent.clone().or_else(|| {
         #[cfg(feature = "nori-config")]
         {
-            nori::config_adapter::get_persisted_agent_model()
-                .or_else(|| Some(DEFAULT_ACP_MODEL.to_string()))
+            nori::config_adapter::get_persisted_agent()
+                .or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
         }
         #[cfg(not(feature = "nori-config"))]
         {
-            Some(DEFAULT_ACP_MODEL.to_string())
+            Some(DEFAULT_ACP_AGENT.to_string())
         }
     });
 
@@ -232,7 +232,7 @@ pub async fn run_main(
     }
 
     let overrides = ConfigOverrides {
-        model,
+        model: agent,
         approval_policy,
         sandbox_mode,
         cwd,
@@ -703,15 +703,15 @@ mod tests {
     }
 
     #[test]
-    fn default_acp_model_matches_acp_module_default() {
-        // The TUI's DEFAULT_ACP_MODEL should match the ACP module's DEFAULT_MODEL
+    fn default_acp_agent_matches_acp_module_default() {
+        // The TUI's DEFAULT_ACP_AGENT should match the ACP module's DEFAULT_AGENT
         // to ensure consistency between the two modules.
         assert_eq!(
-            DEFAULT_ACP_MODEL,
-            codex_acp::config::DEFAULT_MODEL,
-            "TUI default model '{}' does not match ACP module default '{}'",
-            DEFAULT_ACP_MODEL,
-            codex_acp::config::DEFAULT_MODEL
+            DEFAULT_ACP_AGENT,
+            codex_acp::config::DEFAULT_AGENT,
+            "TUI default agent '{}' does not match ACP module default '{}'",
+            DEFAULT_ACP_AGENT,
+            codex_acp::config::DEFAULT_AGENT
         );
     }
 }

@@ -792,7 +792,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
     let (event_tx, _event_rx) = mpsc::channel(32);
 
     let config = AcpBackendConfig {
-        model: "mock-model".to_string(),
+        agent: "mock-model".to_string(),
         cwd: temp_dir.path().to_path_buf(),
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -991,7 +991,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     let (event_tx, mut event_rx) = mpsc::channel(64);
 
     let config = AcpBackendConfig {
-        model: "mock-model".to_string(),
+        agent: "mock-model".to_string(),
         cwd: temp_dir.path().to_path_buf(),
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -1124,7 +1124,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     let (event_tx, mut event_rx) = mpsc::channel(64);
 
     let config = AcpBackendConfig {
-        model: "mock-model".to_string(),
+        agent: "mock-model".to_string(),
         cwd: temp_dir.path().to_path_buf(),
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -1279,7 +1279,7 @@ async fn test_compact_not_in_unsupported_ops() {
     let (event_tx, mut event_rx) = mpsc::channel(64);
 
     let config = AcpBackendConfig {
-        model: "mock-model".to_string(),
+        agent: "mock-model".to_string(),
         cwd: temp_dir.path().to_path_buf(),
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -1769,7 +1769,7 @@ fn build_test_transcript() -> crate::transcript::Transcript {
 /// Helper to build a standard AcpBackendConfig for testing.
 fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
     AcpBackendConfig {
-        model: "mock-model".to_string(),
+        agent: "mock-model".to_string(),
         cwd: temp_dir.to_path_buf(),
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::new_read_only_policy(),
