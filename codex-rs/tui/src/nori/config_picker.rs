@@ -188,6 +188,7 @@ pub fn config_picker_params(
         subtitle: Some("Toggle TUI settings (changes saved to config.toml)".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        initial_selected_idx: Some(0),
         ..Default::default()
     }
 }
@@ -382,6 +383,7 @@ pub fn footer_segments_picker_params(
         subtitle: Some("Toggle which segments appear in the footer".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        initial_selected_idx: Some(0),
         ..Default::default()
     }
 }
