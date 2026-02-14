@@ -525,20 +525,30 @@ fn test_agent_switch_on_prompt_submission() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for the response to start and subprocess to be spawned
+    // Wait for the response from the new agent to appear on screen, confirming
+    // the agent switch + spawn actually happened.
     session
-        .wait_for_text("esc to interrupt", Duration::from_secs(5))
-        .ok(); // May or may not see this depending on response speed
-    std::thread::sleep(Duration::from_millis(2000));
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("Response from switched agent should appear");
 
-    // Check that a new agent was spawned
-    let post_prompt_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(
-        post_prompt_pids.len() > initial_pids.len(),
-        "New subprocess should be spawned after prompt submission with pending agent: initial={:?}, after={:?}",
-        initial_pids,
-        post_prompt_pids
-    );
+    // Poll the log file for the new PID. The ACP log uses a non-blocking
+    // (async) writer that may not have flushed the "ACP agent spawned" line
+    // to disk yet, even though the agent has already responded on screen.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut post_prompt_pids;
+    loop {
+        post_prompt_pids = extract_mock_agent_pids_from_log(&log_path);
+        if post_prompt_pids.len() > initial_pids.len() {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "New subprocess should be spawned after prompt submission with pending agent: initial={:?}, after={:?}",
+            initial_pids,
+            post_prompt_pids
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
 
     let new_pid = *post_prompt_pids.last().unwrap();
     assert_ne!(
