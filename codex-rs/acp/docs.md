@@ -26,7 +26,7 @@ Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection.rs` - Subprocess spawning and JSON-RPC communication
 - `translator.rs` - Protocol translation between ACP and Codex types
-- `backend.rs` - Implements `ConversationClient` trait from codex-core
+- `backend/mod.rs` - Implements `ConversationClient` trait from codex-core
 - `transcript_discovery.rs` - Discovers transcript files for external agents
 - `auto_worktree.rs` - Orchestrates automatic git worktree creation and summary-based renaming
 
@@ -68,22 +68,22 @@ The config module provides the **canonical source of truth** for Nori home path 
 | `agent` | User's persistent agent preference | Saved to config.toml |
 | `active_agent` | Active agent for current session (CLI override > config agent > persisted agent) | Not persisted |
 
-**Notification Configuration** (`config/types.rs`):
+**Notification Configuration** (`config/types/mod.rs`):
 
 Three config enums control notification behavior, all stored in the `[tui]` section of `config.toml`:
 
 | Enum | TOML Key | Default | Controls |
 |------|----------|---------|----------|
 | `TerminalNotifications` | `terminal_notifications` | `Enabled` | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`) |
-| `OsNotifications` | `os_notifications` | `Enabled` | Native desktop notifications via `notify-rust` (wired in `backend.rs` to `UserNotifier::new()`) |
+| `OsNotifications` | `os_notifications` | `Enabled` | Native desktop notifications via `notify-rust` (wired in `backend/mod.rs` to `UserNotifier::new()`) |
 | `NotifyAfterIdle` | `notify_after_idle` | `FiveSeconds` (`"5s"`) | Duration to wait before firing an idle notification; `Disabled` suppresses the timer entirely |
 
-`NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
+`NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend/mod.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
 
 The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
 
 
-**Hotkey Configuration** (`config/types.rs`):
+**Hotkey Configuration** (`config/types/mod.rs`):
 
 Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in `config.toml`. The config layer defines four types:
 
@@ -96,7 +96,7 @@ Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in
 
 The binding string format is kept terminal-agnostic (no crossterm dependency in the config crate). The TUI layer in `@/codex-rs/tui/src/nori/hotkey_match.rs` handles conversion between binding strings and crossterm `KeyEvent` types. `HotkeyConfig` is carried on `NoriConfig` and resolved during config loading in `loader.rs`.
 
-**Vim Mode Configuration** (`config/types.rs`):
+**Vim Mode Configuration** (`config/types/mod.rs`):
 
 The `vim_mode` boolean in `TuiConfigToml` and `NoriConfig` enables vim-style navigation in the textarea. Stored under `[tui]` in `config.toml`:
 
@@ -106,7 +106,7 @@ The `vim_mode` boolean in `TuiConfigToml` and `NoriConfig` enables vim-style nav
 
 The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys which are string bindings, vim mode is a simple boolean toggle. The TUI layer (`@/codex-rs/tui/`) handles the vim mode state machine and propagation.
 
-**Script Timeout Configuration** (`config/types.rs`):
+**Script Timeout Configuration** (`config/types/mod.rs`):
 
 The `ScriptTimeout` type represents a configurable duration for custom prompt script execution. It stores both the raw string (for TOML round-tripping and display) and the parsed `Duration`. Stored under `[tui]` in `config.toml`:
 
@@ -116,7 +116,7 @@ The `ScriptTimeout` type represents a configurable duration for custom prompt sc
 
 Supported suffixes: `s` (seconds), `m` (minutes). Bare numbers are treated as seconds. `all_common_values()` provides picker options: 10s, 30s, 1m, 2m, 5m. The setting is resolved in `loader.rs` with `unwrap_or_default()` (30 seconds).
 
-**Loop Count Configuration** (`config/types.rs`):
+**Loop Count Configuration** (`config/types/mod.rs`):
 
 The `loop_count` field on `NoriConfigToml` and `NoriConfig` controls how many times the TUI re-runs the first user prompt in fresh conversation sessions. Stored as a top-level key in `config.toml`:
 
@@ -126,7 +126,7 @@ The `loop_count` field on `NoriConfigToml` and `NoriConfig` controls how many ti
 
 The setting is resolved in `loader.rs` by passing `toml.loop_count` directly. The TUI layer (`@/codex-rs/tui/`) orchestrates the loop lifecycle -- the config layer only stores the value.
 
-**Auto-Worktree Configuration** (`config/types.rs`):
+**Auto-Worktree Configuration** (`config/types/mod.rs`):
 
 The `auto_worktree` boolean controls whether the TUI automatically creates a git worktree at session start for process isolation. Stored under `[tui]` in `config.toml`:
 
@@ -136,9 +136,9 @@ The `auto_worktree` boolean controls whether the TUI automatically creates a git
 
 The setting is resolved in `loader.rs` with `unwrap_or(false)`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
 
-**Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend.rs`):
+**Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 
-When `auto_worktree` is enabled, the worktree is initially created with a random name (e.g., `auto/swift-oak-20260202-120000`). After the first user prompt's summary is generated, the git branch is renamed to reflect the summary (e.g., `auto/fix-auth-bug-20260202-120000`). The worktree directory path is left unchanged so that processes running inside it are not disrupted. This renaming is orchestrated inside `run_prompt_summary()` in `backend.rs`:
+When `auto_worktree` is enabled, the worktree is initially created with a random name (e.g., `auto/swift-oak-20260202-120000`). After the first user prompt's summary is generated, the git branch is renamed to reflect the summary (e.g., `auto/fix-auth-bug-20260202-120000`). The worktree directory path is left unchanged so that processes running inside it are not disrupted. This renaming is orchestrated inside `run_prompt_summary()` in `backend/mod.rs`:
 
 1. The prompt summary is generated via a separate ACP connection (same as before)
 2. If `auto_worktree` is true and `auto_worktree_repo_root` is set, `rename_auto_worktree_branch()` is called in a blocking task
@@ -146,7 +146,7 @@ When `auto_worktree` is enabled, the worktree is initially created with a random
 
 The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
-**Hooks System** (`config/types.rs`, `hooks.rs`, `backend.rs`):
+**Hooks System** (`config/types/mod.rs`, `hooks.rs`, `backend/mod.rs`):
 
 Hooks allow users to run custom scripts at lifecycle boundaries. There are two flavors: **synchronous** hooks (blocking, executed sequentially) and **async** hooks (fire-and-forget, spawned via `tokio::spawn`). Both are configured under `[hooks]` in `config.toml`, are **fail-open** (failures produce warnings but do not halt operations), and share the same execution engine (`execute_hooks_with_env()` in `hooks.rs`) and interpreter detection. Synchronous hooks support output routing and context injection; async hooks route all output exclusively to tracing.
 
@@ -238,7 +238,7 @@ Each lifecycle hook receives `NORI_HOOK_EVENT` set to its hook name. Additional 
 
 Hook failures are non-fatal. Failed hooks emit warning events to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
 
-**Hook output routing** (`hooks.rs`, `backend.rs`):
+**Hook output routing** (`hooks.rs`, `backend/mod.rs`):
 
 Hook scripts can route their stdout lines to different destinations by using line prefixes. `parse_hook_output()` parses each non-empty line of stdout:
 
@@ -250,13 +250,13 @@ Hook scripts can route their stdout lines to different destinations by using lin
 | `::output-error::` | Red error text in TUI | `OutputError` |
 | `::context::` | Accumulated and prepended to next user prompt | `Context` |
 
-The routing is handled by `route_hook_results()` in `backend.rs`, which is shared across all hook types. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
+The routing is handled by `route_hook_results()` in `backend/mod.rs`, which is shared across all hook types. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
 
 **Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt. Only `pre_user_prompt` and `post_user_prompt` hooks pass the context accumulator to `route_hook_results()`; other hooks pass `None`.
 
 **Session end hook timing:** During `Op::Shutdown`, end hooks execute and their output is routed via `route_hook_results()` before `ShutdownComplete` is sent, so the TUI can still display hook output. Context lines are irrelevant during shutdown, so `None` is passed for the context accumulator.
 
-**Async (fire-and-forget) hooks** (`hooks.rs`, `backend.rs`):
+**Async (fire-and-forget) hooks** (`hooks.rs`, `backend/mod.rs`):
 
 Async hooks fire at the same lifecycle points as their synchronous counterparts, but run in the background without blocking the caller. Key differences from synchronous hooks:
 
@@ -264,7 +264,7 @@ Async hooks fire at the same lifecycle points as their synchronous counterparts,
 - All script output (stdout/stderr) is routed to `tracing::info!`/`tracing::warn!` only -- no TUI output routing, no `::context::` injection
 - The spawned task takes owned `Vec<PathBuf>` and `HashMap<String, String>` (moved into the future) to avoid lifetime issues
 - Shares the same `script_timeout` and interpreter detection as synchronous hooks
-- Both sync and async hooks for the same lifecycle point are dispatched at the same location in `backend.rs`; sync runs first (blocking), then async fires in the background
+- Both sync and async hooks for the same lifecycle point are dispatched at the same location in `backend/mod.rs`; sync runs first (blocking), then async fires in the background
 - `async_session_start` hooks are dispatched during backend construction (not stored on `AcpBackend`); the remaining 7 async hook vectors are stored as fields on `AcpBackend`
 - Receive the same environment variables (`NORI_HOOK_EVENT`, `NORI_HOOK_PROMPT_TEXT`, etc.) as their synchronous counterparts
 
@@ -276,7 +276,7 @@ Async hooks fire at the same lifecycle points as their synchronous counterparts,
 - `HistoryPersistence` policy: `SaveAll` (default) or `None` (privacy mode)
 - `search_entries()`: Reads all entries from the JSONL file, deduplicates by text (keeping the most recent occurrence of each), sorts newest-first, and returns up to `max_results` entries. Used by the `Op::SearchHistoryRequest` handler to provide history data for the TUI's Ctrl+R reverse-search popup.
 
-**Custom Prompts** (`backend.rs`):
+**Custom Prompts** (`backend/mod.rs`):
 
 When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt files (`.md`, `.sh`, `.py`, `.js`) from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. This reuses `codex_core::custom_prompts::discover_prompts_in()` from `@/codex-rs/core/src/custom_prompts.rs` for filesystem discovery. Markdown files have their frontmatter parsed for metadata; script files are returned with empty content and a `CustomPromptKind::Script` kind. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
 
@@ -479,7 +479,7 @@ The `AcpBackend` automatically:
 
 **Tool Event Recording Flow:**
 
-Tool calls and patch operations are recorded by `record_tool_events_to_transcript()` in `backend.rs`:
+Tool calls and patch operations are recorded by `record_tool_events_to_transcript()` in `backend/mod.rs`:
 
 ```
 ACP SessionUpdate          Transcript Entry
@@ -626,7 +626,7 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 3. Summary is prepended to next user message
 4. Emits `ContextCompacted` event to TUI
 
-**Session Resume** (`backend.rs`, `connection.rs`):
+**Session Resume** (`backend/mod.rs`, `connection.rs`):
 
 `AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>` and `transcript: Option<&Transcript>` and selects between two resume strategies based on agent capabilities:
 
@@ -678,11 +678,11 @@ Deferred replay relay spawned (sends buffered events to event_tx)
 
 A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
-**Prompt Summary** (`backend.rs`):
+**Prompt Summary** (`backend/mod.rs`):
 
 On the first user prompt of a session, the ACP backend spawns a fire-and-forget task that generates a short summary of the prompt and emits it as a `PromptSummary` event for display in the TUI footer.
 
-The summarization uses a completely separate ACP connection (`AcpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend.rs` handles this:
+The summarization uses a completely separate ACP connection (`AcpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/mod.rs` handles this:
 1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
@@ -695,7 +695,7 @@ The `cwd` field on `AcpBackend` is a plain `PathBuf` since the working directory
 
 Failures in the summarization task (including branch rename failures) are logged at debug/warn level and do not affect the main conversation flow.
 
-**Undo / Ghost Snapshots** (`undo.rs`, `backend.rs`):
+**Undo / Ghost Snapshots** (`undo.rs`, `backend/mod.rs`):
 
 The ACP backend supports undo via git ghost snapshots, using the `codex-git` crate (`@/codex-rs/utils/git`). The undo system supports both sequential undo (`Op::Undo`) and selective snapshot restoration via a modal picker (`Op::UndoList` / `Op::UndoTo`).
 
@@ -735,6 +735,10 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 | `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}" |
 
 ### Things to Know
+
+**Module Structure Convention:**
+
+Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file. This separates test code from production code while keeping the Rust module path unchanged. Modules using this pattern include `backend/` and `config/types/`.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1
