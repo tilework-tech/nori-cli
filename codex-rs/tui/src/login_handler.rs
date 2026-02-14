@@ -53,7 +53,7 @@ pub enum AgentLoginSupport {
     /// Agent doesn't support in-app login yet
     NotSupported { agent_name: String },
     /// Unknown agent
-    Unknown { model_name: String },
+    Unknown { agent_name: String },
 }
 
 /// Handler for the /login command flow.
@@ -80,14 +80,14 @@ impl LoginHandler {
     }
 
     /// Check if an agent supports in-app login
-    pub fn check_agent_support(model_name: &str) -> AgentLoginSupport {
-        let normalized = model_name.to_lowercase();
+    pub fn check_agent_support(agent_name: &str) -> AgentLoginSupport {
+        let normalized = agent_name.to_lowercase();
 
         // Try to find the agent in the registry
         let agents = list_available_agents();
         let agent_info = agents
             .into_iter()
-            .find(|a| a.model_name.to_lowercase() == normalized);
+            .find(|a| a.agent_name.to_lowercase() == normalized);
 
         match agent_info {
             Some(info) => {
@@ -114,7 +114,7 @@ impl LoginHandler {
                 }
             }
             None => AgentLoginSupport::Unknown {
-                model_name: model_name.to_string(),
+                agent_name: agent_name.to_string(),
             },
         }
     }
@@ -241,8 +241,8 @@ mod tests {
         let support = LoginHandler::check_agent_support("unknown-agent");
 
         match support {
-            AgentLoginSupport::Unknown { model_name } => {
-                assert_eq!(model_name, "unknown-agent");
+            AgentLoginSupport::Unknown { agent_name } => {
+                assert_eq!(agent_name, "unknown-agent");
             }
             _ => panic!("Expected Unknown variant for unknown-agent"),
         }

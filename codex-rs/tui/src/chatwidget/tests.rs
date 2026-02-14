@@ -188,7 +188,7 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         vertical_footer: false,
-        expected_model: None,
+        expected_agent: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
     // Basic construction sanity.
@@ -214,7 +214,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
         vertical_footer: false,
-        model_display_name: String::new(),
+        agent_display_name: String::new(),
     });
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test"));
     let widget = ChatWidget {
@@ -253,7 +253,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         pending_exec_cells: PendingExecCellTracker::new(),
         effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd),
         pending_agent: None,
-        expected_model: None,
+        expected_agent: None,
         session_configured_received: false,
         #[cfg(feature = "unstable")]
         acp_handle: None,
@@ -2963,7 +2963,7 @@ fn drain_refresh_system_info_events(
 ) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     while let Ok(ev) = rx.try_recv() {
-        if let AppEvent::RefreshSystemInfoForDirectory { dir, model: _ } = ev {
+        if let AppEvent::RefreshSystemInfoForDirectory { dir, agent: _ } = ev {
             dirs.push(dir);
         }
     }

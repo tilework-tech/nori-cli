@@ -147,8 +147,8 @@ pub fn enhanced_error_message(
 /// avoiding a direct dependency on codex_core.
 #[derive(Debug, Clone)]
 pub struct AcpBackendConfig {
-    /// Model name used to look up agent in registry
-    pub model: String,
+    /// Agent name used to look up agent in registry
+    pub agent: String,
     /// Working directory for the session
     pub cwd: PathBuf,
     /// Approval policy for command execution
@@ -245,8 +245,8 @@ pub struct AcpBackend {
     ghost_snapshots: Arc<GhostSnapshotStack>,
     /// Whether the first user prompt has been sent (for prompt summary)
     is_first_prompt: Arc<Mutex<bool>>,
-    /// Model name stored for spawning summarization connection
-    model_name: String,
+    /// Agent name stored for spawning summarization connection
+    agent_name: String,
     /// Whether auto-worktree is enabled (worktree was created at startup)
     auto_worktree: bool,
     /// The git repo root (before worktree creation), used for renaming
@@ -300,10 +300,10 @@ impl AcpBackend {
     /// # Returns
     /// A connected `AcpBackend` ready to receive operations.
     pub async fn spawn(config: &AcpBackendConfig, event_tx: mpsc::Sender<Event>) -> Result<Self> {
-        let agent_config = get_agent_config(&config.model)?;
+        let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
-        debug!("Spawning ACP backend for model: {}", config.model);
+        debug!("Spawning ACP backend for agent: {}", config.agent);
 
         // Spawn the ACP connection with enhanced error handling
         let connection_result = AcpConnection::spawn(&agent_config, &cwd).await;
@@ -384,7 +384,7 @@ impl AcpBackend {
         let transcript_recorder = match TranscriptRecorder::new(
             &config.nori_home,
             &cwd,
-            Some(config.model.clone()),
+            Some(config.agent.clone()),
             &config.cli_version,
             Some(session_id.to_string()),
         )
@@ -415,7 +415,7 @@ impl AcpBackend {
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
-            model_name: config.model.clone(),
+            agent_name: config.agent.clone(),
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
             session_end_hooks: config.session_end_hooks.clone(),
@@ -454,7 +454,7 @@ impl AcpBackend {
         // Send synthetic SessionConfigured event
         let session_configured = SessionConfiguredEvent {
             session_id: conversation_id,
-            model: config.model.clone(),
+            model: config.agent.clone(),
             model_provider_id: "acp".to_string(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -501,12 +501,12 @@ impl AcpBackend {
         transcript: Option<&crate::transcript::Transcript>,
         event_tx: mpsc::Sender<Event>,
     ) -> Result<Self> {
-        let agent_config = get_agent_config(&config.model)?;
+        let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
         debug!(
-            "Resuming ACP session (acp_session_id={:?}) for model: {}",
-            acp_session_id, config.model
+            "Resuming ACP session (acp_session_id={:?}) for agent: {}",
+            acp_session_id, config.agent
         );
 
         let mut connection = AcpConnection::spawn(&agent_config, &cwd)
@@ -681,7 +681,7 @@ impl AcpBackend {
         let transcript_recorder = match TranscriptRecorder::new(
             &config.nori_home,
             &cwd,
-            Some(config.model.clone()),
+            Some(config.agent.clone()),
             &config.cli_version,
             Some(session_id.to_string()),
         )
@@ -712,7 +712,7 @@ impl AcpBackend {
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(is_first_prompt_val)),
-            model_name: config.model.clone(),
+            agent_name: config.agent.clone(),
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
             session_end_hooks: config.session_end_hooks.clone(),
@@ -750,7 +750,7 @@ impl AcpBackend {
 
         let session_configured = SessionConfiguredEvent {
             session_id: conversation_id,
-            model: config.model.clone(),
+            model: config.agent.clone(),
             model_provider_id: "acp".to_string(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -1135,10 +1135,10 @@ impl AcpBackend {
             let mut is_first = self.is_first_prompt.lock().await;
             if *is_first {
                 *is_first = false;
-                let skip_summary = cfg!(debug_assertions) && self.model_name.starts_with("mock-");
+                let skip_summary = cfg!(debug_assertions) && self.agent_name.starts_with("mock-");
                 if !skip_summary {
                     let event_tx = self.event_tx.clone();
-                    let model_name = self.model_name.clone();
+                    let agent_name = self.agent_name.clone();
                     let cwd = self.cwd.clone();
                     let prompt_for_summary = prompt_text.clone();
                     let auto_worktree = self.auto_worktree;
@@ -1146,7 +1146,7 @@ impl AcpBackend {
                     tokio::spawn(async move {
                         if let Err(e) = run_prompt_summary(
                             &event_tx,
-                            &model_name,
+                            &agent_name,
                             &cwd,
                             &prompt_for_summary,
                             auto_worktree,
@@ -1938,7 +1938,7 @@ impl AcpBackend {
 /// fire-and-forget task from `handle_user_input`.
 async fn run_prompt_summary(
     event_tx: &mpsc::Sender<Event>,
-    model_name: &str,
+    agent_name: &str,
     cwd: &std::path::Path,
     user_prompt: &str,
     auto_worktree: bool,
@@ -1947,7 +1947,7 @@ async fn run_prompt_summary(
     use tokio::time::Duration;
     use tokio::time::timeout;
 
-    let agent_config = get_agent_config(model_name)?;
+    let agent_config = get_agent_config(agent_name)?;
     let connection = AcpConnection::spawn(&agent_config, cwd).await?;
     let session_id = connection.create_session(cwd).await?;
 
@@ -3911,7 +3911,7 @@ mod tests {
         let (event_tx, _event_rx) = mpsc::channel(32);
 
         let config = AcpBackendConfig {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             cwd: temp_dir.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -4110,7 +4110,7 @@ mod tests {
         let (event_tx, mut event_rx) = mpsc::channel(64);
 
         let config = AcpBackendConfig {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             cwd: temp_dir.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -4243,7 +4243,7 @@ mod tests {
         let (event_tx, mut event_rx) = mpsc::channel(64);
 
         let config = AcpBackendConfig {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             cwd: temp_dir.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -4398,7 +4398,7 @@ mod tests {
         let (event_tx, mut event_rx) = mpsc::channel(64);
 
         let config = AcpBackendConfig {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             cwd: temp_dir.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),
@@ -4888,7 +4888,7 @@ mod tests {
     /// Helper to build a standard AcpBackendConfig for testing.
     fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         AcpBackendConfig {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             cwd: temp_dir.to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::new_read_only_policy(),

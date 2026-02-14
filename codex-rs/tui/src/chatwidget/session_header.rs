@@ -1,16 +1,16 @@
 pub(crate) struct SessionHeader {
-    model: String,
+    agent: String,
 }
 
 impl SessionHeader {
-    pub(crate) fn new(model: String) -> Self {
-        Self { model }
+    pub(crate) fn new(agent: String) -> Self {
+        Self { agent }
     }
 
-    /// Updates the header's model text.
-    pub(crate) fn set_model(&mut self, model: &str) {
-        if self.model != model {
-            self.model = model.to_string();
+    /// Updates the header's agent text.
+    pub(crate) fn set_agent(&mut self, agent: &str) {
+        if self.agent != agent {
+            self.agent = agent.to_string();
         }
     }
 }

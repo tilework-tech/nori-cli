@@ -170,10 +170,10 @@ async fn handle_model_migration_prompt_if_needed(
 
                 config.model_reasoning_effort = mapped_effort;
 
-                app_event_tx.send(AppEvent::UpdateModel(target_model.clone()));
+                app_event_tx.send(AppEvent::UpdateAgent(target_model.clone()));
                 app_event_tx.send(AppEvent::UpdateReasoningEffort(mapped_effort));
-                app_event_tx.send(AppEvent::PersistModelSelection {
-                    model: target_model.clone(),
+                app_event_tx.send(AppEvent::PersistAgentSelection {
+                    agent: target_model.clone(),
                     effort: mapped_effort,
                 });
             }
@@ -319,7 +319,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
-                    expected_model: None, // No filtering for fresh sessions
+                    expected_agent: None, // No filtering for fresh sessions
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
@@ -343,7 +343,7 @@ impl App {
                     enhanced_keys_supported,
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
-                    expected_model: None, // No filtering for resumed sessions
+                    expected_agent: None, // No filtering for resumed sessions
                 };
                 ChatWidget::new_from_existing(
                     init,
@@ -538,7 +538,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
-                    expected_model: None, // No filtering for /new command
+                    expected_agent: None, // No filtering for /new command
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -698,8 +698,8 @@ impl App {
                 }
                 self.chat_widget.apply_system_info_refresh(info);
             }
-            AppEvent::RefreshSystemInfoForDirectory { dir, model } => {
-                self.request_system_info_refresh(dir, model, self.chat_widget.first_prompt_text());
+            AppEvent::RefreshSystemInfoForDirectory { dir, agent } => {
+                self.request_system_info_refresh(dir, agent, self.chat_widget.first_prompt_text());
             }
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
@@ -707,8 +707,8 @@ impl App {
             AppEvent::UpdateReasoningEffort(effort) => {
                 self.on_update_reasoning_effort(effort);
             }
-            AppEvent::UpdateModel(model) => {
-                self.chat_widget.set_model(&model);
+            AppEvent::UpdateAgent(model) => {
+                self.chat_widget.set_agent(&model);
                 self.config.model = model.clone();
                 if let Some(family) = find_family_for_model(&model) {
                     self.config.model_family = family;
@@ -795,7 +795,10 @@ impl App {
                     let _ = preset;
                 }
             }
-            AppEvent::PersistModelSelection { model, effort } => {
+            AppEvent::PersistAgentSelection {
+                agent: model,
+                effort,
+            } => {
                 let profile = self.active_profile.as_deref();
                 match ConfigEditsBuilder::new(&self.config.codex_home)
                     .with_profile(profile)
@@ -976,21 +979,21 @@ impl App {
                 }
             },
             AppEvent::SetPendingAgent {
-                model_name,
+                agent_name,
                 display_name,
             } => {
                 // Store the pending agent selection in both App and ChatWidget
                 self.pending_agent = Some(PendingAgentSelection {
-                    model_name: model_name.clone(),
+                    agent_name: agent_name.clone(),
                     display_name: display_name.clone(),
                 });
                 // Also set on ChatWidget so it can trigger the switch on prompt submission
                 self.chat_widget
-                    .set_pending_agent(model_name.clone(), display_name.clone());
+                    .set_pending_agent(agent_name.clone(), display_name.clone());
                 tracing::info!(
                     "Pending agent set: {} ({}). Will switch on next prompt.",
                     display_name,
-                    model_name
+                    agent_name
                 );
                 self.chat_widget.add_info_message(
                     format!(
@@ -1000,7 +1003,7 @@ impl App {
                 );
             }
             AppEvent::SubmitWithAgentSwitch {
-                model_name,
+                agent_name,
                 display_name,
                 message_text,
                 image_paths,
@@ -1008,18 +1011,18 @@ impl App {
                 tracing::info!(
                     "Switching agent to {} ({}) and submitting message",
                     display_name,
-                    model_name
+                    agent_name
                 );
 
                 // Clear the pending agent since we're applying it now
                 self.pending_agent = None;
 
                 // Update the model in config
-                self.config.model = model_name.clone();
+                self.config.model = agent_name.clone();
 
                 // Persist the agent selection to config.toml for next TUI startup
                 if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_agent(Some(&model_name))
+                    .set_agent(Some(&agent_name))
                     .apply()
                     .await
                 {
@@ -1031,7 +1034,7 @@ impl App {
                 self.shutdown_current_conversation().await;
 
                 // Create the new chat widget with the new config and the message as initial prompt
-                // Set expected_model to filter events from the OLD agent until SessionConfigured
+                // Set expected_agent to filter events from the OLD agent until SessionConfigured
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: self.config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -1041,7 +1044,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
-                    expected_model: Some(model_name.clone()),
+                    expected_agent: Some(agent_name.clone()),
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -1053,14 +1056,14 @@ impl App {
                     None,
                 );
             }
-            AppEvent::AgentSpawnFailed { model_name, error } => {
+            AppEvent::AgentSpawnFailed { agent_name, error } => {
                 tracing::warn!(
-                    model = %model_name,
+                    agent = %agent_name,
                     error = %error,
                     "Agent failed to spawn, opening agent picker"
                 );
 
-                self.chat_widget.on_agent_spawn_failed(&model_name, &error);
+                self.chat_widget.on_agent_spawn_failed(&agent_name, &error);
             }
             AppEvent::AgentConnecting { display_name } => {
                 tracing::info!(
@@ -1094,7 +1097,7 @@ impl App {
                 if success {
                     // Update the approval dialog display name to reflect the new model
                     self.chat_widget
-                        .update_model_display_name(display_name.clone());
+                        .update_agent_display_name(display_name.clone());
                     self.chat_widget
                         .add_info_message(format!("Model switched to: {display_name}"), None);
                 } else {
@@ -1199,7 +1202,7 @@ impl App {
                     enhanced_keys_supported: self.enhanced_keys_supported,
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
-                    expected_model: None,
+                    expected_agent: None,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -1337,7 +1340,7 @@ impl App {
                             enhanced_keys_supported: self.enhanced_keys_supported,
                             auth_manager: self.auth_manager.clone(),
                             vertical_footer: self.vertical_footer,
-                            expected_model: None,
+                            expected_agent: None,
                         };
                         self.chat_widget =
                             ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
@@ -2294,14 +2297,14 @@ mod tests {
         // This test verifies the AgentSpawnFailed event variant exists
         // and has the expected fields
         let event = AppEvent::AgentSpawnFailed {
-            model_name: "codex".to_string(),
+            agent_name: "codex".to_string(),
             error: "Failed to spawn ACP agent: npx not found".to_string(),
         };
 
         // Verify it matches the expected pattern
         match event {
-            AppEvent::AgentSpawnFailed { model_name, error } => {
-                assert_eq!(model_name, "codex");
+            AppEvent::AgentSpawnFailed { agent_name, error } => {
+                assert_eq!(agent_name, "codex");
                 assert!(error.contains("Failed to spawn"));
             }
             _ => panic!("Expected AgentSpawnFailed event"),

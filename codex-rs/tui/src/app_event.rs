@@ -60,12 +60,12 @@ pub(crate) enum AppEvent {
     /// Request to refresh system info for a specific directory.
     /// This is triggered when the effective CWD changes during agent operations.
     ///
-    /// The optional model name is used to determine which agent's transcripts to search for.
+    /// The optional agent name is used to determine which agent's transcripts to search for.
     RefreshSystemInfoForDirectory {
         /// The directory to collect system info for
         dir: PathBuf,
-        /// Optional model name (e.g., "claude-code", "gemini") to determine agent kind
-        model: Option<String>,
+        /// Optional agent name (e.g., "claude-code", "gemini") to determine agent kind
+        agent: Option<String>,
     },
 
     /// Result of refreshing rate limits
@@ -84,12 +84,12 @@ pub(crate) enum AppEvent {
     /// Update the current reasoning effort in the running app and widget.
     UpdateReasoningEffort(Option<ReasoningEffort>),
 
-    /// Update the current model slug in the running app and widget.
-    UpdateModel(String),
+    /// Update the current agent slug in the running app and widget.
+    UpdateAgent(String),
 
-    /// Persist the selected model and reasoning effort to the appropriate config.
-    PersistModelSelection {
-        model: String,
+    /// Persist the selected agent and reasoning effort to the appropriate config.
+    PersistAgentSelection {
+        agent: String,
         effort: Option<ReasoningEffort>,
     },
 
@@ -166,8 +166,8 @@ pub(crate) enum AppEvent {
     /// Set a pending agent selection. The agent switch will happen on the next
     /// prompt submission to avoid disrupting active prompt turns.
     SetPendingAgent {
-        /// The model name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
-        model_name: String,
+        /// The agent name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
+        agent_name: String,
         /// The display name for the status indicator
         display_name: String,
     },
@@ -175,8 +175,8 @@ pub(crate) enum AppEvent {
     /// Submit a message with a pending agent switch. The agent will be switched
     /// first, then the message will be submitted to the new agent.
     SubmitWithAgentSwitch {
-        /// The model name of the agent to switch to
-        model_name: String,
+        /// The agent name of the agent to switch to
+        agent_name: String,
         /// The display name for the status indicator
         display_name: String,
         /// The user message text to submit after switching
@@ -188,8 +188,8 @@ pub(crate) enum AppEvent {
     /// Agent failed to spawn (ACP or HTTP backend). Show error and prompt user
     /// to select a different agent.
     AgentSpawnFailed {
-        /// The model name of the agent that failed to spawn
-        model_name: String,
+        /// The agent name of the agent that failed to spawn
+        agent_name: String,
         /// The error message describing the failure
         error: String,
     },

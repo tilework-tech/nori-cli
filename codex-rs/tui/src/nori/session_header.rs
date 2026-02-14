@@ -609,7 +609,7 @@ fn truncate_summary(summary: &str, max_len: usize) -> String {
 /// - Directory, agent, and profile info
 /// - Optional: task summary, approval mode, token usage
 pub(crate) fn new_nori_status_output(
-    model: &str,
+    agent: &str,
     directory: PathBuf,
     prompt_summary: Option<String>,
     approval_mode_label: Option<String>,
@@ -618,7 +618,7 @@ pub(crate) fn new_nori_status_output(
 ) -> CompositeHistoryCell {
     let command = PlainHistoryCell::new(vec!["/status".magenta().into()]);
     let header = NoriSessionHeaderCell::new_with_status_info(
-        model.to_string(),
+        agent.to_string(),
         directory,
         prompt_summary,
         approval_mode_label,

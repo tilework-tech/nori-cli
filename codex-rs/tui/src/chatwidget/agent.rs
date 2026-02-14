@@ -146,13 +146,13 @@ pub(crate) fn spawn_agent(
 
         // Model NOT registered and HTTP fallback NOT allowed -> error
         (false, false) => {
-            let model_name = config.model;
+            let agent_name = config.model;
             let error_msg = format!(
-                "Model '{model_name}' is not registered as an ACP agent. \
+                "Model '{agent_name}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
                  Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp"
             );
-            let op_tx = spawn_error_agent(model_name, error_msg, app_event_tx);
+            let op_tx = spawn_error_agent(agent_name, error_msg, app_event_tx);
             SpawnAgentResult {
                 op_tx,
                 #[cfg(feature = "unstable")]
@@ -166,7 +166,7 @@ pub(crate) fn spawn_agent(
 ///
 /// This is used when the requested model is not a valid ACP agent.
 fn spawn_error_agent(
-    model_name: String,
+    agent_name: String,
     error_msg: String,
     app_event_tx: AppEventSender,
 ) -> UnboundedSender<Op> {
@@ -176,7 +176,7 @@ fn spawn_error_agent(
         tracing::error!("{}", error_msg);
         // Send AgentSpawnFailed so the user can select a different agent
         app_event_tx.send(AppEvent::AgentSpawnFailed {
-            model_name,
+            agent_name,
             error: error_msg,
         });
     });
@@ -226,7 +226,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
         };
 
         let acp_config = AcpBackendConfig {
-            model: config.model.clone(),
+            agent: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -267,7 +267,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
                         tracing::error!("failed to spawn ACP backend: {e}");
                         drop(codex_op_rx);
                         app_event_tx.send(AppEvent::AgentSpawnFailed {
-                            model_name: config.model.clone(),
+                            agent_name: config.model.clone(),
                             error: format!("Failed to spawn ACP agent: {e}"),
                         });
                         return;
@@ -284,7 +284,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
                 tracing::warn!("ACP backend connection timed out");
                 drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
-                    model_name: config.model.clone(),
+                    agent_name: config.model.clone(),
                     error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
@@ -384,7 +384,7 @@ pub(crate) fn spawn_acp_agent_resume(
         };
 
         let acp_config = AcpBackendConfig {
-            model: config.model.clone(),
+            agent: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -429,7 +429,7 @@ pub(crate) fn spawn_acp_agent_resume(
                         tracing::error!("failed to resume ACP session: {e}");
                         drop(codex_op_rx);
                         app_event_tx.send(AppEvent::AgentSpawnFailed {
-                            model_name: config.model.clone(),
+                            agent_name: config.model.clone(),
                             error: format!("Failed to resume ACP session: {e}"),
                         });
                         return;
@@ -446,7 +446,7 @@ pub(crate) fn spawn_acp_agent_resume(
                 tracing::warn!("ACP session resume timed out");
                 drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
-                    model_name: config.model.clone(),
+                    agent_name: config.model.clone(),
                     error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
@@ -509,8 +509,8 @@ fn spawn_http_agent(
 ) -> UnboundedSender<Op> {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
-    // Clone model name before config is moved
-    let model_name = config.model.clone();
+    // Clone agent name before config is moved
+    let agent_name = config.model.clone();
     let app_event_tx_clone = app_event_tx;
     tokio::spawn(async move {
         // Race backend init against shutdown requests and a timeout.
@@ -524,7 +524,7 @@ fn spawn_http_agent(
                         eprintln!("{message}");
                         drop(codex_op_rx);
                         app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                            model_name,
+                            agent_name,
                             error: format!("Failed to initialize HTTP agent: {err}"),
                         });
                         tracing::error!("failed to initialize codex: {err}");
@@ -542,7 +542,7 @@ fn spawn_http_agent(
                 tracing::warn!("HTTP backend connection timed out");
                 drop(codex_op_rx);
                 app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                    model_name,
+                    agent_name,
                     error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;

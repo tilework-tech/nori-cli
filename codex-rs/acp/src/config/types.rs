@@ -19,8 +19,8 @@ pub enum HistoryPersistence {
     None,
 }
 
-/// Default model for ACP-only mode
-pub const DEFAULT_MODEL: &str = "claude-code";
+/// Default agent for ACP-only mode
+pub const DEFAULT_AGENT: &str = "claude-code";
 
 /// TOML-deserializable config structure (all fields optional)
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -30,7 +30,7 @@ pub struct NoriConfigToml {
     /// This is persisted separately from model to track user's agent preference
     pub agent: Option<String>,
 
-    /// The ACP agent model to use (e.g., "claude-code", "codex", "gemini")
+    /// Legacy field: the ACP agent to use. Prefer `agent` field.
     pub model: Option<String>,
 
     /// Sandbox mode for command execution
@@ -976,8 +976,8 @@ pub enum ApprovalPolicy {
 /// CLI overrides for config values
 #[derive(Debug, Clone, Default)]
 pub struct NoriConfigOverrides {
-    /// Override the model selection
-    pub model: Option<String>,
+    /// Override the agent selection
+    pub agent: Option<String>,
 
     /// Override sandbox mode
     pub sandbox_mode: Option<SandboxMode>,
@@ -996,8 +996,8 @@ pub struct NoriConfig {
     /// Persisted to track user's agent preference across sessions
     pub agent: String,
 
-    /// The ACP agent model to use
-    pub model: String,
+    /// The active ACP agent slug (CLI override > config model > persisted agent)
+    pub active_agent: String,
 
     /// Sandbox mode for command execution
     pub sandbox_mode: SandboxMode,
@@ -1103,8 +1103,8 @@ pub struct NoriConfig {
 impl Default for NoriConfig {
     fn default() -> Self {
         Self {
-            agent: DEFAULT_MODEL.to_string(),
-            model: DEFAULT_MODEL.to_string(),
+            agent: DEFAULT_AGENT.to_string(),
+            active_agent: DEFAULT_AGENT.to_string(),
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,
             history_persistence: HistoryPersistence::default(),

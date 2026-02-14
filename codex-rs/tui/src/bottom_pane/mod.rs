@@ -72,8 +72,8 @@ pub(crate) struct BottomPane {
     /// Queued user messages to show above the composer while a turn is running.
     queued_user_messages: QueuedUserMessages,
     context_window_percent: Option<i64>,
-    /// Display name of the current model/agent for use in approval dialogs.
-    model_display_name: String,
+    /// Display name of the current agent for use in approval dialogs.
+    agent_display_name: String,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -85,7 +85,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) disable_paste_burst: bool,
     pub(crate) animations_enabled: bool,
     pub(crate) vertical_footer: bool,
-    pub(crate) model_display_name: String,
+    pub(crate) agent_display_name: String,
 }
 
 impl BottomPane {
@@ -99,7 +99,7 @@ impl BottomPane {
             disable_paste_burst,
             animations_enabled,
             vertical_footer,
-            model_display_name,
+            agent_display_name,
         } = params;
         let mut composer = ChatComposer::new(
             has_input_focus,
@@ -136,7 +136,7 @@ impl BottomPane {
             esc_backtrack_hint: false,
             animations_enabled,
             context_window_percent: None,
-            model_display_name,
+            agent_display_name,
         }
     }
 
@@ -376,9 +376,9 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Update the model display name used in approval dialogs.
-    pub(crate) fn set_model_display_name(&mut self, name: String) {
-        self.model_display_name = name;
+    /// Update the agent display name used in approval dialogs.
+    pub(crate) fn set_agent_display_name(&mut self, name: String) {
+        self.agent_display_name = name;
     }
 
     /// Set the vertical footer layout flag.
@@ -504,7 +504,7 @@ impl BottomPane {
         let modal = ApprovalOverlay::new(
             request,
             self.app_event_tx.clone(),
-            self.model_display_name.clone(),
+            self.agent_display_name.clone(),
         );
         self.pause_status_timer_for_modal();
         self.push_view(Box::new(modal));
@@ -676,7 +676,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
         pane.push_approval_request(exec_request());
         assert_eq!(CancellationEvent::Handled, pane.on_ctrl_c());
@@ -699,7 +699,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Create an approval modal (active view).
@@ -730,7 +730,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Start a running task so the status indicator is active above the composer.
@@ -802,7 +802,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Begin a task: show initial status.
@@ -832,7 +832,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Activate spinner (status view replaces composer) with no live ring.
@@ -865,7 +865,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         pane.set_task_running(true);
@@ -894,7 +894,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         pane.set_task_running(true);
@@ -923,7 +923,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Push the initial selection view.
