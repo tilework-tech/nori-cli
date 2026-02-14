@@ -132,12 +132,12 @@ impl ListSelectionView {
             .state
             .selected_idx
             .and_then(|visible_idx| self.filtered_indices.get(visible_idx).copied())
+            .or_else(|| self.initial_selected_idx.take())
             .or_else(|| {
                 (!self.is_searchable)
                     .then(|| self.items.iter().position(|item| item.is_current))
                     .flatten()
-            })
-            .or_else(|| self.initial_selected_idx.take());
+            });
 
         if self.is_searchable && !self.search_query.is_empty() {
             let query_lower = self.search_query.to_lowercase();
