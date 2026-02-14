@@ -32,10 +32,10 @@ Key files:
 
 ### Core Implementation
 
-**Model Registry** (`registry.rs`):
+**Agent Registry** (`registry.rs`):
 
-The registry is **model-centric** rather than provider-centric:
-- `get_agent_config()` accepts model names (e.g., "claude-code", "gemini-2.5-flash") instead of provider names
+The registry is **agent-centric** rather than provider-centric:
+- `get_agent_config()` accepts agent names (e.g., "claude-code", "gemini-2.5-flash") instead of provider names
 - Returns `AcpAgentConfig` containing:
   - `provider_slug`: Identifies which agent subprocess to spawn
   - `command`: Executable path or command name
@@ -59,14 +59,14 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `NORI_HOME_ENV`: Environment variable name (`"NORI_HOME"`)
 - `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
-- `DEFAULT_MODEL`: Default agent model (`"claude-code"`)
+- `DEFAULT_AGENT`: Default agent (`"claude-code"`)
 
-**Agent vs Model Field Distinction:**
+**Agent Config Field Resolution:**
 
 | Field | Purpose | Persistence |
 |-------|---------|-------------|
 | `agent` | User's persistent agent preference | Saved to config.toml |
-| `model` | Active model for current session | Can be overridden by CLI flags |
+| `active_agent` | Active agent for current session (CLI override > config agent > persisted agent) | Not persisted |
 
 **Notification Configuration** (`config/types.rs`):
 
@@ -590,7 +590,7 @@ Parses token usage from agent session files:
 |--------|----------|
 | `AskForApproval::UnlessTrusted` | Auto-approve known-safe read-only commands, prompt for all else |
 | `AskForApproval::OnFailure` | Auto-approve in sandbox, prompt on failure to escalate |
-| `AskForApproval::OnRequest` | (Default) Model decides when to request approval |
+| `AskForApproval::OnRequest` | (Default) Agent decides when to request approval |
 | `AskForApproval::Never` | Auto-approve all requests (yolo mode) |
 
 Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` command to take effect immediately.
@@ -683,13 +683,13 @@ A new `TranscriptRecorder` is created for the resumed session in all paths, pers
 On the first user prompt of a session, the ACP backend spawns a fire-and-forget task that generates a short summary of the prompt and emits it as a `PromptSummary` event for display in the TUI footer.
 
 The summarization uses a completely separate ACP connection (`AcpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend.rs` handles this:
-1. Spawns a new agent subprocess via `get_agent_config()` with the same model name
+1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
 4. If `auto_worktree` is enabled, renames the branch based on the summary (see Auto-Worktree Branch Renaming above) -- the directory is left unchanged
 5. Emits `EventMsg::PromptSummary(PromptSummaryEvent { summary })` through the shared `event_tx`
 
-State tracking: `AcpBackend` holds `is_first_prompt: Arc<Mutex<bool>>` which is set to `false` after the first prompt fires the summarization task. The `model_name: String` field stores the model for spawning the separate connection.
+State tracking: `AcpBackend` holds `is_first_prompt: Arc<Mutex<bool>>` which is set to `false` after the first prompt fires the summarization task. The `agent_name: String` field stores the agent name for spawning the separate connection.
 
 The `cwd` field on `AcpBackend` is a plain `PathBuf` since the working directory does not change during a session.
 
@@ -738,7 +738,7 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1
-- The `unstable` feature gates model switching functionality
+- The `unstable` feature gates agent switching functionality
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)

@@ -4,7 +4,7 @@ Path: @/codex-rs/tui
 
 ### Overview
 
-The `nori-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of model responses with markdown rendering.
+The `nori-tui` crate provides the interactive terminal user interface for Nori, built with the Ratatui framework. It handles the fullscreen TUI experience including chat display, input composition, onboarding flows, and real-time streaming of agent responses with markdown rendering.
 
 ### How it fits into the larger codebase
 
@@ -32,7 +32,7 @@ The main event loop in `app.rs` processes:
 
 1. **Terminal events** (keyboard input, resize) via `tui.rs`
 2. **ACP events** from the backend (streaming content, approval requests, completion)
-3. **App events** for state changes (model selection, config updates)
+3. **App events** for state changes (agent selection, config updates)
 
 The chat interface is managed by `chatwidget.rs`, which handles:
 - User input composition with multi-line editing
@@ -201,7 +201,7 @@ ChatComposer (Enter key)           app.rs                       codex_core::cust
 
 The composer intercepts Script-kind prompts in two places: when a command popup selection is confirmed, and when the user types a `/prompts:<name>` command directly and presses Enter. In both cases, positional arguments are extracted via `extract_positional_args_for_prompt_line()` and the `ExecuteScript` event is dispatched. The composer is cleared immediately.
 
-In `app.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the model can see it.
+In `app.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
 
 The script timeout is configurable via `/config` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/codex-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
 
@@ -379,7 +379,7 @@ Session filtering: `load_resumable_sessions()` in `@/codex-rs/tui/src/nori/resum
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/codex-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. The spawned task structure (op forwarding, event forwarding, model command handling) is identical.
+`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. The spawned task structure (op forwarding, event forwarding, agent command handling) is identical.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 
@@ -446,7 +446,7 @@ The loop is cancelled (both fields set to `None`) when an error occurs (`on_erro
 
 | Feature | Dependencies | Default | Purpose |
 |---------|--------------|---------|---------|
-| `unstable` | `codex-acp/unstable` | Yes | Unstable ACP features like model switching |
+| `unstable` | `codex-acp/unstable` | Yes | Unstable ACP features like agent switching |
 | `nori-config` | - | Yes | Use Nori's simplified ACP-only config |
 | `login` | `codex-login`, `codex-utils-pty` | Yes | ChatGPT/API login functionality |
 | `otel` | `opentelemetry-appender-tracing` | No | OpenTelemetry tracing export |
