@@ -44,7 +44,7 @@ Key integrations:
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
+**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
 - Session creation and resumption
 - Message history tracking
 - Token usage accumulation
@@ -103,6 +103,10 @@ Notification modes:
 Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading.
 
 ### Things to Know
+
+**Module Structure Convention:**
+
+Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file. This separates test code from production code while keeping the Rust module path unchanged. Modules using this pattern include `codex/`, `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`).
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt
