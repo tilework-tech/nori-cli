@@ -248,7 +248,7 @@ Normal mode supports standard vim keybindings:
 | Category | Keys | Behavior |
 |----------|------|----------|
 | Navigation | `h`/`j`/`k`/`l` (or arrow keys) | Move cursor left/down/up/right |
-| Navigation | `w`/`b` | Forward/backward by word (`w` lands on start of next word via `beginning_of_next_word()`) |
+| Navigation | `w`/`b`/`e` | Forward/backward/end-of-word navigation (`w` moves to start of next word, `b` to start of previous word, `e` to end of current/next word) |
 | Navigation | `0`/`$`/`^` | Beginning of line / end of line / first non-whitespace on line |
 | Navigation | `G`/`gg` | End of text / beginning of text |
 | Insert entry | `i`/`a` | Enter Insert at cursor / after cursor |

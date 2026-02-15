@@ -380,6 +380,14 @@ impl TextArea {
                             self.set_cursor(target);
                         }
                         KeyEvent {
+                            code: KeyCode::Char('e'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            let target = self.end_of_next_word();
+                            self.set_cursor(target);
+                        }
+                        KeyEvent {
                             code: KeyCode::Char('0'),
                             modifiers: KeyModifiers::NONE,
                             ..
