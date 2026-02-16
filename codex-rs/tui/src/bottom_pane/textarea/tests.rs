@@ -1284,6 +1284,43 @@ fn vim_normal_b_moves_backward_word() {
 }
 
 #[test]
+fn vim_normal_e_moves_to_end_of_word() {
+    // From start of first word, 'e' should move to end of "hello"
+    let mut t = vim_normal("hello world foo");
+    t.set_cursor(0);
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 5); // end of "hello"
+
+    // From end of "hello", 'e' should move to end of "world"
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 11); // end of "world"
+
+    // From end of "world", 'e' should move to end of "foo"
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 15); // end of "foo" (end of text)
+
+    // 'e' at end of text stays at end
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 15);
+
+    // 'e' from middle of a word jumps to end of that word's run
+    let mut t = vim_normal("hello world");
+    t.set_cursor(2); // on 'l' in "hello"
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 5); // end of "hello"
+
+    // 'e' respects word separators
+    let mut t = vim_normal("hello.world");
+    t.set_cursor(0);
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 5); // end of "hello"
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 6); // end of "." separator
+    t.input(key('e'));
+    pretty_assertions::assert_eq!(t.cursor(), 11); // end of "world"
+}
+
+#[test]
 fn vim_normal_0_moves_to_bol() {
     let mut t = vim_normal("hello\nworld");
     t.set_cursor(8); // on 'r' in "world"
