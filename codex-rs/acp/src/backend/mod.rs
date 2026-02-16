@@ -1918,17 +1918,26 @@ impl AcpBackend {
                 ),
             };
 
-            // Send OS notification that we're awaiting approval
-            user_notifier.notify(&codex_core::UserNotification::AwaitingApproval {
-                call_id: id.clone(),
-                command: command_for_notification,
-                cwd: cwd.display().to_string(),
-            });
-
-            let _ = event_tx.send(Event { id, msg }).await;
+            // Send the approval event to the TUI first, then notify.
+            // Notification must come after event delivery because
+            // notif.show() can block on some platforms (e.g. macOS),
+            // which would prevent the TUI from ever receiving the event.
+            let _ = event_tx
+                .send(Event {
+                    id: id.clone(),
+                    msg,
+                })
+                .await;
 
             // Store the pending approval for later resolution
             pending_approvals.lock().await.push(request);
+
+            // Send OS notification (non-blocking, but ordered after event delivery)
+            user_notifier.notify(&codex_core::UserNotification::AwaitingApproval {
+                call_id: id,
+                command: command_for_notification,
+                cwd: cwd.display().to_string(),
+            });
         }
     }
 }

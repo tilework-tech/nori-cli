@@ -595,6 +595,8 @@ Parses token usage from agent session files:
 
 Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` command to take effect immediately.
 
+`run_approval_handler()` in `backend/mod.rs` enforces a strict ordering invariant: the approval event is sent to the TUI (`event_tx.send()`) and the request is pushed into `pending_approvals` **before** the OS notification fires (`user_notifier.notify()`). This ordering is critical because `notify-rust`'s `notif.show()` blocks synchronously on some platforms (macOS), so if the notification were sent first, the TUI would never receive the approval overlay.
+
 **Patch Event Translation:**
 
 For Edit/Write/Delete operations, ACP emits native patch events:
