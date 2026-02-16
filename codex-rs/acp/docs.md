@@ -146,6 +146,28 @@ When `auto_worktree` is enabled, the worktree is initially created with a random
 
 The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
+
+**Default Models Configuration** (`config/types/mod.rs`, `backend/mod.rs`):
+
+Model preferences can be persisted per agent in the `[default_models]` table of `config.toml`. When a session starts, the configured default model is automatically applied if available:
+
+| Field | TOML Section | Purpose |
+|-------|--------------|---------|
+| `default_models` | `[default_models]` | Maps agent slugs to model IDs (e.g., `claude-code = "haiku"`) |
+
+The config flow is:
+1. `NoriConfigToml.default_models` deserializes the `[default_models]` table from TOML (empty HashMap by default via `#[serde(default)]`)
+2. `NoriConfig.default_models` stores the resolved map after config loading
+3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in `chatwidget/agent.rs`
+4. `AcpBackend::spawn()` applies the model via `connection.set_model()` after session creation (behind `#[cfg(feature = "unstable")]`)
+
+The model is only applied if:
+- The feature `unstable` is enabled (model switching requires this feature)
+- The default model is listed in the agent's `available_models` (checked against `model_state`)
+- The session was successfully created
+
+Failures to apply the default model (e.g., model unavailable, API error) produce warnings but do not block session startup. When users switch models via `/model` command, the TUI persists the selection by calling `ConfigEditsBuilder::set_default_model()` (see `@/codex-rs/core/docs.md`).
+
 **Hooks System** (`config/types/mod.rs`, `hooks.rs`, `backend/mod.rs`):
 
 Hooks allow users to run custom scripts at lifecycle boundaries. There are two flavors: **synchronous** hooks (blocking, executed sequentially) and **async** hooks (fire-and-forget, spawned via `tokio::spawn`). Both are configured under `[hooks]` in `config.toml`, are **fail-open** (failures produce warnings but do not halt operations), and share the same execution engine (`execute_hooks_with_env()` in `hooks.rs`) and interpreter detection. Synchronous hooks support output routing and context injection; async hooks route all output exclusively to tracing.
@@ -500,6 +522,7 @@ Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes whe
 
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
+- `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 
 **Re-exported Types:**
 

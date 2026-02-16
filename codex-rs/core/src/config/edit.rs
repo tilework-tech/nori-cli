@@ -564,6 +564,11 @@ impl ConfigEditsBuilder {
         self
     }
 
+    /// Set the default model for a specific agent in the `[default_models]` table.
+    pub fn set_default_model(self, agent: &str, model: &str) -> Self {
+        self.set_path(&["default_models", agent], value(model.to_owned()))
+    }
+
     /// Set a value at an arbitrary path in the config.
     ///
     /// # Example
@@ -1097,5 +1102,97 @@ model_reasoning_effort = "high"
         let contents =
             std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
         assert!(!contents.contains("mcp_servers"));
+    }
+
+    #[test]
+    fn blocking_set_default_model_creates_table() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("claude-code", "haiku")
+            .apply_blocking()
+            .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let default_models = config
+            .get("default_models")
+            .and_then(|v| v.as_table())
+            .expect("default_models table");
+        assert_eq!(
+            default_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("haiku")
+        );
+    }
+
+    #[test]
+    fn blocking_set_default_model_overwrites_existing() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        std::fs::write(
+            codex_home.join(CONFIG_TOML_FILE),
+            r#"agent = "claude-code"
+
+[default_models]
+claude-code = "opus"
+"#,
+        )
+        .expect("seed");
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("claude-code", "haiku")
+            .apply_blocking()
+            .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+
+        // Agent field should be preserved
+        assert_eq!(
+            config.get("agent").and_then(|v| v.as_str()),
+            Some("claude-code")
+        );
+        // default_models should have the updated value
+        let default_models = config
+            .get("default_models")
+            .and_then(|v| v.as_table())
+            .expect("default_models table");
+        assert_eq!(
+            default_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("haiku")
+        );
+    }
+
+    #[test]
+    fn blocking_set_default_model_multiple_agents() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("claude-code", "haiku")
+            .apply_blocking()
+            .expect("persist first");
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("gemini", "flash")
+            .apply_blocking()
+            .expect("persist second");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let default_models = config
+            .get("default_models")
+            .and_then(|v| v.as_table())
+            .expect("default_models table");
+        assert_eq!(
+            default_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("haiku")
+        );
+        assert_eq!(
+            default_models.get("gemini").and_then(|v| v.as_str()),
+            Some("flash")
+        );
     }
 }

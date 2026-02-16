@@ -53,6 +53,10 @@ pub struct NoriConfigToml {
     /// Session lifecycle hooks
     #[serde(default)]
     pub hooks: HooksConfigToml,
+
+    /// Default model overrides per agent (e.g., claude-code = "haiku")
+    #[serde(default)]
+    pub default_models: HashMap<String, String>,
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -1098,6 +1102,9 @@ pub struct NoriConfig {
 
     /// Async (fire-and-forget) scripts to run after the agent finishes its response.
     pub async_post_agent_response_hooks: Vec<PathBuf>,
+
+    /// Default model overrides per agent (e.g., "claude-code" -> "haiku")
+    pub default_models: HashMap<String, String>,
 }
 
 impl Default for NoriConfig {
@@ -1138,6 +1145,7 @@ impl Default for NoriConfig {
             async_post_tool_call_hooks: Vec::new(),
             async_pre_agent_response_hooks: Vec::new(),
             async_post_agent_response_hooks: Vec::new(),
+            default_models: HashMap::new(),
         }
     }
 }

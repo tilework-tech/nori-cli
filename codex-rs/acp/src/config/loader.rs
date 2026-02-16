@@ -183,6 +183,7 @@ impl NoriConfig {
             async_post_tool_call_hooks,
             async_pre_agent_response_hooks,
             async_post_agent_response_hooks,
+            default_models: toml.default_models,
         })
     }
 }
@@ -698,5 +699,69 @@ async_session_start = ["~/hooks/async-start.sh"]
         let path = &config.async_session_start_hooks[0];
         assert!(!path.starts_with("~"));
         assert!(path.ends_with("hooks/async-start.sh"));
+    }
+
+    // ========================================================================
+    // Default Models Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_default_models_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "claude-code"
+
+[default_models]
+claude-code = "haiku"
+gemini = "flash"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.default_models.len(), 2);
+        assert_eq!(config.default_models.get("claude-code").unwrap(), "haiku");
+        assert_eq!(config.default_models.get("gemini").unwrap(), "flash");
+    }
+
+    #[test]
+    fn test_default_models_empty_when_absent() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "agent = \"claude-code\"").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.default_models.is_empty());
+    }
+
+    #[test]
+    fn test_default_models_coexist_with_other_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "gemini"
+sandbox_mode = "workspace-write"
+
+[default_models]
+claude-code = "haiku"
+
+[tui]
+vim_mode = true
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.agent, "gemini");
+        assert_eq!(config.default_models.get("claude-code").unwrap(), "haiku");
+        assert!(config.vim_mode);
     }
 }

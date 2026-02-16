@@ -261,6 +261,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
+            default_model: nori_config.default_models.get(&config.model).cloned(),
         };
 
         // Race backend init against shutdown requests and a timeout.
@@ -419,6 +420,7 @@ pub(crate) fn spawn_acp_agent_resume(
             async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
+            default_model: nori_config.default_models.get(&config.model).cloned(),
         };
 
         // Race backend resume against shutdown requests and a timeout.

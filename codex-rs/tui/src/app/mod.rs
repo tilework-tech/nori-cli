@@ -1090,7 +1090,7 @@ impl App {
             #[cfg(feature = "unstable")]
             AppEvent::AcpModelSetResult {
                 success,
-                model_id: _,
+                model_id,
                 display_name,
                 error,
             } => {
@@ -1100,6 +1100,19 @@ impl App {
                         .update_agent_display_name(display_name.clone());
                     self.chat_widget
                         .add_info_message(format!("Model switched to: {display_name}"), None);
+
+                    // Persist the model selection to [default_models] in config.toml
+                    let agent = self.config.model.clone();
+                    if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                        .set_default_model(&agent, &model_id)
+                        .apply()
+                        .await
+                    {
+                        tracing::error!(
+                            error = %err,
+                            "failed to persist default model selection"
+                        );
+                    }
                 } else {
                     let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
                     self.chat_widget

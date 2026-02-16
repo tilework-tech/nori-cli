@@ -205,6 +205,8 @@ pub struct AcpBackendConfig {
     pub async_post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     pub script_timeout: std::time::Duration,
+    /// Default model to apply on session start (from config.toml [default_models])
+    pub default_model: Option<String>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -355,6 +357,29 @@ impl AcpBackend {
         };
 
         debug!("ACP session created: {:?}", session_id);
+
+        // Apply default model from config if one is set for this agent
+        #[cfg(feature = "unstable")]
+        if let Some(ref default_model) = config.default_model {
+            let model_state = connection.model_state();
+            let model_available = model_state
+                .available_models
+                .iter()
+                .any(|m| m.model_id.to_string() == *default_model);
+            if model_available {
+                let model_id = acp::ModelId::from(default_model.clone());
+                match connection.set_model(&session_id, &model_id).await {
+                    Ok(()) => {
+                        debug!("Applied default model from config: {default_model}");
+                    }
+                    Err(e) => {
+                        warn!("Failed to apply default model '{default_model}': {e}");
+                    }
+                }
+            } else {
+                debug!("Default model '{default_model}' not in available models, skipping");
+            }
+        }
 
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();

@@ -821,6 +821,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
         async_pre_agent_response_hooks: vec![],
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
+        default_model: None,
     };
 
     let result = AcpBackend::spawn(&config, event_tx).await;
@@ -1020,6 +1021,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         async_pre_agent_response_hooks: vec![],
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
+        default_model: None,
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)
@@ -1153,6 +1155,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         async_pre_agent_response_hooks: vec![],
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
+        default_model: None,
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)
@@ -1308,6 +1311,7 @@ async fn test_compact_not_in_unsupported_ops() {
         async_pre_agent_response_hooks: vec![],
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
+        default_model: None,
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)
@@ -1798,6 +1802,7 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         async_pre_agent_response_hooks: vec![],
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
+        default_model: None,
     }
 }
 

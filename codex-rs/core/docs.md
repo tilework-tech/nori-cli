@@ -39,6 +39,26 @@ Key integrations:
 2. Project-local config at `<cwd>/.codex/config.toml`
 3. Command-line overrides
 
+
+**Configuration Editing** (`config/edit.rs`): Provides a builder API for programmatic config updates via `toml_edit`:
+
+The `ConfigEditsBuilder` allows code to modify `config.toml` atomically without losing comments or formatting:
+
+```rust
+ConfigEditsBuilder::new(codex_home)
+    .set_default_model("claude-code", "haiku")
+    .apply()
+    .await?;
+```
+
+Key methods:
+- `set_default_model(agent, model)`: Persists a model preference to the `[default_models]` table for a specific agent
+- `set_path(path, value)`: Sets arbitrary TOML paths for advanced config mutations
+- `apply()`: Writes changes asynchronously; locks config file during write
+- `apply_blocking()`: Synchronous variant for non-async contexts
+
+The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user preferences like model selections when `/model` is invoked (see `@/codex-rs/tui/docs.md`).
+
 **Authentication** (`auth.rs`, `auth/`): Supports multiple auth modes:
 - API key via `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
 - ChatGPT login flow with OAuth
