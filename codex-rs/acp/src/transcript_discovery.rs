@@ -4,26 +4,23 @@
 //! for Claude Code, Codex, and Gemini agents. This enables session statistics
 //! display (e.g., token usage) in the TUI footer.
 //!
-//! ## Agent Transcript Locations
+//! ## Discovery Method
 //!
-//! Each agent stores session transcripts in different locations:
+//! Transcript discovery uses a unified approach that searches for the session's
+//! first user message within transcript files. This is done using shell tools
+//! (`rg` if available, falling back to `grep`) to avoid coupling to any specific
+//! agent's JSON schema.
 //!
-//! - **Claude Code**: `~/.claude/projects/<transformed-path>/<session-uuid>.jsonl`
-//!   - Path is transformed by replacing non-alphanumeric chars with dashes
-//!   - Example: `/home/user/project` → `-home-user-project`
+//! Each agent stores transcripts in its own base directory:
+//! - **Claude Code**: `~/.claude/projects/`
+//! - **Codex**: `~/.codex/sessions/`
+//! - **Gemini**: `~/.gemini/tmp/`
 //!
-//! - **Codex**: `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`
-//!   - Sessions matched by comparing CWD in first JSON line
-//!
-//! - **Gemini**: `~/.gemini/tmp/<sha256-hash>/chats/<session>.json`
-//!   - Hash is SHA256 of the canonical working directory path
+//! Discovery requires a first_message to match against; without it, no transcript
+//! will be detected. This prevents returning the wrong transcript.
 
 use crate::AgentKind;
-use sha2::Digest;
-use sha2::Sha256;
 use std::fs;
-use std::io::BufRead;
-use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -82,13 +79,9 @@ pub enum DiscoveryError {
 
 /// Discover the transcript location for a specific agent kind.
 ///
-/// This function is useful when you already know which agent is running
-/// (e.g., from the ACP backend configuration) and don't need to detect
-/// it from environment variables.
-///
-/// **Note:** For Claude Code, this falls back to the most recent file which
-/// may not be the correct transcript. Use `discover_transcript_for_agent_with_message`
-/// with the first user message for more accurate matching.
+/// **Deprecated:** This function always returns an error because transcript
+/// discovery now requires a first_message to avoid returning the wrong transcript.
+/// Use `discover_transcript_for_agent_with_message` instead.
 ///
 /// # Arguments
 ///
@@ -97,255 +90,58 @@ pub enum DiscoveryError {
 ///
 /// # Returns
 ///
-/// Returns the discovered transcript location, or an error if no transcript
-/// could be found.
+/// Always returns `NoSessionsFound` error. Use `discover_transcript_for_agent_with_message`
+/// with a first_message parameter instead.
 pub fn discover_transcript_for_agent(
     cwd: &Path,
-    agent: AgentKind,
+    _agent: AgentKind,
 ) -> Result<TranscriptLocation, DiscoveryError> {
-    match agent {
-        AgentKind::ClaudeCode => find_current_transcript_claude(cwd),
-        AgentKind::Codex => find_current_transcript_codex(cwd),
-        AgentKind::Gemini => find_current_transcript_gemini(cwd),
-    }
+    // No fallback - require first_message to avoid wrong transcript
+    Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()))
 }
 
 /// Discover the transcript location for a specific agent kind with first-message matching.
 ///
-/// This is the preferred method for Claude Code as it uses the first user message
-/// to accurately identify the correct transcript file. For other agents (Codex, Gemini),
-/// the first_message parameter is ignored as they use different matching strategies.
+/// This is the unified discovery method that searches for transcripts by matching the
+/// first user message across all agent types. It uses shell tools (rg or grep) to
+/// search recursively through the agent's transcript directory, avoiding coupling
+/// to any specific JSON schema.
 ///
 /// # Arguments
 ///
-/// * `cwd` - The current working directory to find transcripts for
+/// * `cwd` - The current working directory (unused, kept for API compatibility)
 /// * `agent` - The agent kind to search for transcripts
-/// * `first_message` - The first user message of the current session (required for Claude Code)
+/// * `first_message` - The first user message of the current session (required)
 ///
 /// # Returns
 ///
-/// Returns the discovered transcript location, or an error if no transcript
-/// could be found. For Claude Code, returns an error if no first_message is provided
-/// or no matching transcript is found (does NOT fall back to most recent file).
+/// Returns the discovered transcript location, or an error if:
+/// - No first_message is provided (returns NoSessionsFound)
+/// - No matching transcript is found (returns NoSessionsFound)
+/// - Home directory cannot be determined (returns HomeNotFound)
+///
+/// **Note:** Unlike previous implementations, this does NOT fall back to most recent
+/// file when no match is found. It's better to show no tokens than wrong tokens.
 pub fn discover_transcript_for_agent_with_message(
     cwd: &Path,
     agent: AgentKind,
     first_message: Option<&str>,
 ) -> Result<TranscriptLocation, DiscoveryError> {
-    match agent {
-        AgentKind::ClaudeCode => find_current_transcript_claude_with_message(cwd, first_message),
-        // Codex and Gemini use CWD/hash matching, not first-message matching
-        AgentKind::Codex => find_current_transcript_codex(cwd),
-        AgentKind::Gemini => find_current_transcript_gemini(cwd),
-    }
-}
-
-/// Transform a path to Claude Code's project directory name format.
-///
-/// Claude Code transforms working directory paths by:
-/// 1. Resolving symlinks (if possible)
-/// 2. Replacing all non-alphanumeric characters (except `-`) with `-`
-/// 3. Adding a leading `-` if not present
-///
-/// # Example
-///
-/// `/home/user/my-project` → `-home-user-my-project`
-pub fn transform_path_to_claude_project_name(path: &Path) -> String {
-    // Try to resolve symlinks, fall back to original path if not possible
-    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-
-    // Convert to string
-    let path_str = resolved.to_string_lossy();
-
-    // Replace all non-alphanumeric characters (except -) with -
-    let mut transformed: String = path_str
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect();
-
-    // Add leading dash if not present
-    if !transformed.starts_with('-') {
-        transformed.insert(0, '-');
-    }
-
-    transformed
-}
-
-/// Find the current transcript for Claude Code.
-///
-/// Looks in `~/.claude/projects/<transformed-path>/` and returns the most
-/// recently modified `.jsonl` file.
-pub fn find_current_transcript_claude(cwd: &Path) -> Result<TranscriptLocation, DiscoveryError> {
     let home = dirs::home_dir().ok_or_else(|| DiscoveryError::HomeNotFound("~".to_string()))?;
+    let base_dir = home.join(agent.transcript_base_dir());
 
-    let project_name = transform_path_to_claude_project_name(cwd);
-    let project_dir = home.join(".claude").join("projects").join(&project_name);
-
-    if !project_dir.exists() {
+    if !base_dir.exists() {
         return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
     }
 
-    let transcript_path = most_recent_file(&project_dir, "jsonl")?
-        .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
+    // Require first_message - no fallback to avoid wrong transcript
+    let first_message =
+        first_message.ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
 
-    // Extract session ID from filename (UUID before .jsonl)
-    let session_id = transcript_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown")
-        .to_string();
+    // Normalize the message for searching (strip whitespace, truncate)
+    let search_pattern = normalize_message_for_matching(first_message);
 
-    // Parse token usage from the transcript
-    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::ClaudeCode);
-    Ok(TranscriptLocation {
-        agent_kind: AgentKind::ClaudeCode,
-        transcript_path,
-        session_id,
-        token_breakdown,
-    })
-}
-
-/// Find the current transcript for Codex.
-///
-/// Traverses `~/.codex/sessions/YYYY/MM/DD/` and finds sessions where the
-/// `cwd` field in the first JSON line matches the provided working directory.
-/// Returns the most recently modified matching session.
-pub fn find_current_transcript_codex(cwd: &Path) -> Result<TranscriptLocation, DiscoveryError> {
-    let home = dirs::home_dir().ok_or_else(|| DiscoveryError::HomeNotFound("~".to_string()))?;
-    let sessions_root = home.join(".codex").join("sessions");
-
-    if !sessions_root.exists() {
-        return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
-    }
-
-    // Normalize the CWD for comparison
-    let normalized_cwd = normalize_path(cwd);
-
-    let mut most_recent: Option<(PathBuf, String, SystemTime)> = None;
-
-    // Traverse year/month/day structure
-    for year_entry in read_dir_sorted_desc(&sessions_root)? {
-        if !year_entry.path().is_dir() {
-            continue;
-        }
-
-        for month_entry in read_dir_sorted_desc(&year_entry.path())? {
-            if !month_entry.path().is_dir() {
-                continue;
-            }
-
-            for day_entry in read_dir_sorted_desc(&month_entry.path())? {
-                if !day_entry.path().is_dir() {
-                    continue;
-                }
-
-                for session_entry in read_dir_sorted_desc(&day_entry.path())? {
-                    let path = session_entry.path();
-                    if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-                        continue;
-                    }
-
-                    // Read first line to get session metadata
-                    if let Ok(meta) = read_codex_session_meta(&path) {
-                        let session_cwd = normalize_path(Path::new(&meta.cwd));
-
-                        if session_cwd == normalized_cwd {
-                            let modified = session_entry.metadata()?.modified()?;
-
-                            match &most_recent {
-                                None => {
-                                    most_recent = Some((path, meta.id, modified));
-                                }
-                                Some((_, _, prev_time)) if modified > *prev_time => {
-                                    most_recent = Some((path, meta.id, modified));
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let (transcript_path, session_id, _) =
-        most_recent.ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
-
-    // Parse token usage from the transcript
-    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Codex);
-    Ok(TranscriptLocation {
-        agent_kind: AgentKind::Codex,
-        transcript_path,
-        session_id,
-        token_breakdown,
-    })
-}
-
-/// Session metadata extracted from the first line of a Codex session file.
-#[derive(Debug)]
-struct CodexSessionMeta {
-    id: String,
-    cwd: String,
-}
-
-/// Read the session metadata from the first line of a Codex JSONL file.
-fn read_codex_session_meta(path: &Path) -> Result<CodexSessionMeta, DiscoveryError> {
-    let file = fs::File::open(path)?;
-    let reader = BufReader::new(file);
-
-    if let Some(first_line) = reader.lines().next() {
-        let line = first_line?;
-        let v: serde_json::Value = serde_json::from_str(&line)?;
-
-        // Extract payload.id and payload.cwd
-        let id = v
-            .get("payload")
-            .and_then(|p| p.get("id"))
-            .and_then(|i| i.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let cwd = v
-            .get("payload")
-            .and_then(|p| p.get("cwd"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        Ok(CodexSessionMeta { id, cwd })
-    } else {
-        Err(DiscoveryError::IoError(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "empty session file",
-        )))
-    }
-}
-
-/// Find the current transcript for Gemini.
-///
-/// Computes SHA256 hash of the canonical path, then looks in
-/// `~/.gemini/tmp/<hash>/chats/` for the most recently modified `.json` file.
-pub fn find_current_transcript_gemini(cwd: &Path) -> Result<TranscriptLocation, DiscoveryError> {
-    let home = dirs::home_dir().ok_or_else(|| DiscoveryError::HomeNotFound("~".to_string()))?;
-
-    // Compute SHA256 hash of the canonical path
-    let canonical = fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let path_str = canonical.to_string_lossy();
-    let hash = format!("{:x}", Sha256::digest(path_str.as_bytes()));
-
-    let chats_dir = home.join(".gemini").join("tmp").join(&hash).join("chats");
-
-    if !chats_dir.exists() {
-        return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
-    }
-
-    let transcript_path = most_recent_file(&chats_dir, "json")?
+    let transcript_path = find_transcript_by_shell_search(&base_dir, &search_pattern)
         .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
 
     // Extract session ID from filename
@@ -356,272 +152,167 @@ pub fn find_current_transcript_gemini(cwd: &Path) -> Result<TranscriptLocation, 
         .to_string();
 
     // Parse token usage from the transcript
-    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::Gemini);
+    let token_breakdown = parse_transcript_tokens(&transcript_path, agent);
+
     Ok(TranscriptLocation {
-        agent_kind: AgentKind::Gemini,
+        agent_kind: agent,
         transcript_path,
         session_id,
         token_breakdown,
     })
 }
 
-/// Normalize a path for comparison.
-///
-/// Cleans the path, converts to absolute, and resolves symlinks if possible.
-fn normalize_path(path: &Path) -> PathBuf {
-    let cleaned = path.to_path_buf();
-
-    // Try to get absolute path
-    let absolute = if cleaned.is_absolute() {
-        cleaned
-    } else {
-        std::env::current_dir()
-            .map(|cwd| cwd.join(&cleaned))
-            .unwrap_or(cleaned)
-    };
-
-    // Try to resolve symlinks
-    fs::canonicalize(&absolute).unwrap_or(absolute)
-}
-
-/// Read directory entries sorted in descending order by name.
-fn read_dir_sorted_desc(path: &Path) -> std::io::Result<Vec<fs::DirEntry>> {
-    let mut entries: Vec<_> = fs::read_dir(path)?
-        .filter_map(std::result::Result::ok)
-        .collect();
-    entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
-    Ok(entries)
-}
-
-/// Find the most recently modified file with the given extension in a directory.
-fn most_recent_file(path: &Path, extension: &str) -> std::io::Result<Option<PathBuf>> {
-    let mut most_recent: Option<(PathBuf, SystemTime)> = None;
-
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if entry_path.extension().and_then(|e| e.to_str()) == Some(extension)
-            && entry_path.is_file()
-        {
-            let metadata = entry.metadata()?;
-            let modified = metadata.modified()?;
-
-            match &most_recent {
-                None => most_recent = Some((entry_path, modified)),
-                Some((_, prev_time)) if modified > *prev_time => {
-                    most_recent = Some((entry_path, modified));
-                }
-                _ => {}
-            }
-        }
-    }
-
-    Ok(most_recent.map(|(path, _)| path))
-}
-
 /// Maximum age for transcript files to be considered (2 days in seconds).
 const MAX_TRANSCRIPT_AGE_SECS: u64 = 2 * 24 * 60 * 60;
 
-/// Maximum number of lines to search for the first user message.
-const MAX_LINES_TO_SEARCH: usize = 10;
-
-/// Length to truncate normalized messages to for matching.
-const NORMALIZED_MESSAGE_LENGTH: usize = 20;
-
-/// Normalize a message for matching by stripping all whitespace and truncating.
+/// Find a transcript file by searching for the normalized first message using shell tools.
 ///
-/// This creates a "fingerprint" of the message that can be used to match
-/// transcripts by their first user message.
-fn normalize_message_for_matching(message: &str) -> String {
-    let stripped: String = message.chars().filter(|c| !c.is_whitespace()).collect();
-    stripped.chars().take(NORMALIZED_MESSAGE_LENGTH).collect()
-}
-
-/// Extract the first user text message from a Claude transcript file.
+/// This function uses `rg` (ripgrep) if available, falling back to `grep`, to search
+/// recursively through `.json` and `.jsonl` files in the given directory. This approach
+/// avoids coupling to any specific agent's JSON schema and works across different
+/// transcript formats.
 ///
-/// Reads up to the first 10 lines OR until the first `"type":"user"` entry
-/// with a text content is found. Returns `None` if no user text message
-/// is found within these constraints.
-///
-/// This handles the Claude Code transcript format where:
-/// - Lines 1-N may be progress/hook entries
-/// - User entries have `"type":"user"` with `message.content[0].text`
-/// - Tool result entries have `"type":"user"` but `message.content[0].type` is "tool_result"
-fn extract_first_user_message(path: &Path) -> Option<String> {
-    let file = fs::File::open(path).ok()?;
-    let reader = BufReader::new(file);
-
-    for (line_num, line_result) in reader.lines().enumerate() {
-        // Stop after MAX_LINES_TO_SEARCH lines
-        if line_num >= MAX_LINES_TO_SEARCH {
-            break;
-        }
-
-        let line = match line_result {
-            Ok(l) => l,
-            Err(_) => continue, // Skip problematic lines, don't fail entirely
-        };
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let v: serde_json::Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        // Check if this is a user entry
-        if v.get("type").and_then(serde_json::Value::as_str) != Some("user") {
-            continue;
-        }
-
-        // Found a user entry - now check if it has text content
-        // (not a tool_result which also has type:"user")
-        if let Some(message) = v.get("message")
-            && let Some(content) = message.get("content")
-            && let Some(content_array) = content.as_array()
-        {
-            for item in content_array {
-                // Check for text type specifically
-                if item.get("type").and_then(serde_json::Value::as_str) == Some("text")
-                    && let Some(text) = item.get("text").and_then(serde_json::Value::as_str)
-                {
-                    return Some(text.to_string());
-                }
-            }
-        }
-
-        // This was a user entry but didn't have text content (e.g., tool_result)
-        // Continue searching for an actual text message
-    }
-
-    None
-}
-
-/// Find a Claude transcript file by matching the first user message.
-///
-/// Searches through all `.jsonl` files in the given directory, extracts the
-/// first user message from each, and returns the path of the file whose
-/// normalized first message matches the provided search query.
-///
-/// Only considers files modified within the last 2 days to avoid matching
-/// stale transcripts. If multiple files match, returns the most recently
-/// modified one.
+/// The search pattern is a normalized message fingerprint (trimmed and truncated
+/// to 120 characters) which should uniquely identify a session by its first user message.
 ///
 /// # Arguments
 ///
-/// * `project_dir` - The Claude project directory to search in
-/// * `first_message` - The first user message to search for
+/// * `base_dir` - The base directory to search in (recursively)
+/// * `normalized_message` - The normalized message fingerprint to search for
 ///
 /// # Returns
 ///
 /// The path to the matching transcript file, or `None` if no match is found.
-fn find_claude_transcript_by_first_message(
-    project_dir: &Path,
-    first_message: &str,
-) -> Option<PathBuf> {
-    let normalized_search = normalize_message_for_matching(first_message);
+/// If multiple files match, returns the most recently modified one.
+fn find_transcript_by_shell_search(base_dir: &Path, normalized_message: &str) -> Option<PathBuf> {
+    // Try rg first (faster), fall back to grep
+    let matching_files = search_with_rg(base_dir, normalized_message)
+        .or_else(|| search_with_grep(base_dir, normalized_message))?;
+
+    if matching_files.is_empty() {
+        return None;
+    }
+
+    // Find the most recently modified file among matches
     let now = SystemTime::now();
     let max_age = std::time::Duration::from_secs(MAX_TRANSCRIPT_AGE_SECS);
 
     let mut best_match: Option<(PathBuf, SystemTime)> = None;
 
-    let entries = fs::read_dir(project_dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-
-        // Only consider .jsonl files
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") || !path.is_file() {
+    for file_path in matching_files {
+        let path = PathBuf::from(&file_path);
+        if !path.exists() {
             continue;
         }
 
-        // Check file age - skip files older than 2 days
-        let metadata = match entry.metadata() {
+        let metadata = match fs::metadata(&path) {
             Ok(m) => m,
             Err(_) => continue,
         };
+
         let modified = match metadata.modified() {
             Ok(m) => m,
             Err(_) => continue,
         };
 
+        // Skip files older than max age
         if let Ok(age) = now.duration_since(modified)
             && age > max_age
         {
             continue;
         }
 
-        // Extract first user message and compare
-        if let Some(file_first_message) = extract_first_user_message(&path) {
-            let normalized_file_message = normalize_message_for_matching(&file_first_message);
-            if normalized_file_message == normalized_search {
-                // Found a match - track it if it's more recent than previous matches
-                match &best_match {
-                    None => best_match = Some((path, modified)),
-                    Some((_, prev_time)) if modified > *prev_time => {
-                        best_match = Some((path, modified));
-                    }
-                    _ => {}
-                }
+        match &best_match {
+            None => best_match = Some((path, modified)),
+            Some((_, prev_time)) if modified > *prev_time => {
+                best_match = Some((path, modified));
             }
+            _ => {}
         }
     }
 
     best_match.map(|(path, _)| path)
 }
 
-/// Find the current transcript for Claude Code using first-message matching.
-///
-/// This function requires a first_message to match against transcript files.
-/// Unlike the basic `find_current_transcript_claude`, this does NOT fall back
-/// to the most recent file if no match is found - it returns an error instead.
-/// This prevents returning the wrong transcript.
-///
-/// # Arguments
-///
-/// * `cwd` - The current working directory (used to find the project directory)
-/// * `first_message` - The first user message of the current session
-///
-/// # Returns
-///
-/// Returns the discovered transcript location, or an error if no matching
-/// transcript could be found.
-pub fn find_current_transcript_claude_with_message(
-    cwd: &Path,
-    first_message: Option<&str>,
-) -> Result<TranscriptLocation, DiscoveryError> {
-    let home = dirs::home_dir().ok_or_else(|| DiscoveryError::HomeNotFound("~".to_string()))?;
+/// Search for matching files using ripgrep (rg).
+fn search_with_rg(base_dir: &Path, pattern: &str) -> Option<Vec<String>> {
+    use std::process::Command;
 
-    let project_name = transform_path_to_claude_project_name(cwd);
-    let project_dir = home.join(".claude").join("projects").join(&project_name);
+    let output = Command::new("rg")
+        .args([
+            "--files-with-matches",
+            "--glob",
+            "*.json",
+            "--glob",
+            "*.jsonl",
+            "--fixed-strings",
+            pattern,
+            base_dir.to_str()?,
+        ])
+        .output()
+        .ok()?;
 
-    if !project_dir.exists() {
-        return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
+    if !output.status.success() {
+        // rg returns exit code 1 when no matches found, which is not an error
+        // Exit code 2+ indicates actual errors
+        if output.status.code() == Some(1) {
+            return Some(vec![]);
+        }
+        return None;
     }
 
-    // Require first_message - don't fall back to most_recent_file
-    let first_message =
-        first_message.ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let files: Vec<String> = stdout.lines().map(String::from).collect();
+    Some(files)
+}
 
-    let transcript_path = find_claude_transcript_by_first_message(&project_dir, first_message)
-        .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
+/// Search for matching files using grep (fallback).
+fn search_with_grep(base_dir: &Path, pattern: &str) -> Option<Vec<String>> {
+    use std::process::Command;
 
-    // Extract session ID from filename (UUID before .jsonl)
-    let session_id = transcript_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown")
-        .to_string();
+    // Use find + grep combination for recursive search
+    let output = Command::new("grep")
+        .args([
+            "-r",
+            "-l",
+            "--include=*.json",
+            "--include=*.jsonl",
+            "-F",
+            pattern,
+            base_dir.to_str()?,
+        ])
+        .output()
+        .ok()?;
 
-    // Parse token usage from the transcript
-    let token_breakdown = parse_transcript_tokens(&transcript_path, AgentKind::ClaudeCode);
-    Ok(TranscriptLocation {
-        agent_kind: AgentKind::ClaudeCode,
-        transcript_path,
-        session_id,
-        token_breakdown,
-    })
+    if !output.status.success() {
+        // grep returns exit code 1 when no matches found
+        if output.status.code() == Some(1) {
+            return Some(vec![]);
+        }
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let files: Vec<String> = stdout.lines().map(String::from).collect();
+    Some(files)
+}
+
+/// Length to truncate normalized messages to for matching.
+const NORMALIZED_MESSAGE_LENGTH: usize = 120;
+
+/// Normalize a message for matching by trimming and truncating.
+///
+/// This creates a "fingerprint" of the message that can be used to match
+/// transcripts by their first user message. We only trim leading/trailing
+/// whitespace and truncate to keep the search pattern short while preserving
+/// internal whitespace so that `rg --fixed-strings` / `grep -F` can match
+/// the message as it appears in transcript files.
+fn normalize_message_for_matching(message: &str) -> String {
+    message
+        .trim()
+        .chars()
+        .take(NORMALIZED_MESSAGE_LENGTH)
+        .collect()
 }
 
 /// Parse token usage from a transcript file (synchronous).
@@ -873,54 +564,6 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_transform_path_to_claude_project_name_basic() {
-        let path = Path::new("/home/user/my-project");
-        let result = transform_path_to_claude_project_name(path);
-        assert_eq!(result, "-home-user-my-project");
-    }
-
-    #[test]
-    fn test_transform_path_to_claude_project_name_special_chars() {
-        // Path with special characters should have them replaced with dashes
-        let path = Path::new("/home/user/My Projects(1)/app");
-        let result = transform_path_to_claude_project_name(path);
-        assert_eq!(result, "-home-user-My-Projects-1--app");
-    }
-
-    #[test]
-    fn test_transform_path_to_claude_project_name_preserves_existing_dashes() {
-        let path = Path::new("/home/user/my-cool-project");
-        let result = transform_path_to_claude_project_name(path);
-        assert_eq!(result, "-home-user-my-cool-project");
-    }
-
-    #[test]
-    fn test_normalize_path_handles_relative() {
-        let path = Path::new("./some/path");
-        let normalized = normalize_path(path);
-        assert!(normalized.is_absolute());
-    }
-
-    #[test]
-    fn test_read_codex_session_meta_extracts_fields() {
-        let temp_dir = TempDir::new().unwrap();
-        let session_file = temp_dir.path().join("test-session.jsonl");
-
-        {
-            let mut f = fs::File::create(&session_file).unwrap();
-            writeln!(
-                f,
-                r#"{{"type": "session_meta", "payload": {{"id": "test-id-123", "cwd": "/path/to/project"}}}}"#
-            )
-            .unwrap();
-        }
-
-        let meta = read_codex_session_meta(&session_file).unwrap();
-        assert_eq!(meta.id, "test-id-123");
-        assert_eq!(meta.cwd, "/path/to/project");
-    }
-
-    #[test]
     fn test_parse_claude_total_tokens() {
         let temp_dir = TempDir::new().unwrap();
         let transcript_file = temp_dir.path().join("session.jsonl");
@@ -1131,156 +774,95 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_message_for_matching_strips_whitespace_and_truncates() {
+    fn test_normalize_message_for_matching_trims_and_truncates() {
         use pretty_assertions::assert_eq;
 
-        // Basic whitespace stripping
+        // Trims leading/trailing whitespace but preserves internal whitespace
         assert_eq!(
             normalize_message_for_matching("  hello world  "),
-            "helloworld"
+            "hello world"
         );
 
-        // Truncation to 20 characters
+        // No truncation needed for short messages
         assert_eq!(
             normalize_message_for_matching(
                 "this is a very long message that exceeds twenty characters"
             ),
-            "thisisaverylongmessa"
+            "this is a very long message that exceeds twenty characters"
         );
 
-        // Mixed: whitespace + truncation
+        // Trims leading/trailing whitespace
         assert_eq!(
             normalize_message_for_matching("  Currently the transcript detection  "),
-            "Currentlythetranscri"
+            "Currently the transcript detection"
         );
 
-        // Short message stays as-is (minus whitespace)
+        // Short message stays as-is
         assert_eq!(normalize_message_for_matching("short"), "short");
 
-        // Newlines and tabs count as whitespace
+        // Trims newlines and tabs from edges, preserves internal ones
         assert_eq!(
-            normalize_message_for_matching("hello\n\tworld"),
-            "helloworld"
+            normalize_message_for_matching("\n\thello\n\tworld\n"),
+            "hello\n\tworld"
+        );
+
+        // Verify actual truncation at 120 characters with a very long input
+        let long_input = "a".repeat(200);
+        let result = normalize_message_for_matching(&long_input);
+        assert_eq!(
+            result.len(),
+            120,
+            "Should truncate to exactly 120 characters"
+        );
+        assert_eq!(result, "a".repeat(120));
+    }
+
+    #[test]
+    fn test_normalize_message_distinguishes_prompts_with_shared_prefix() {
+        use pretty_assertions::assert_ne;
+
+        // These two prompts share the first 30+ characters after whitespace stripping.
+        // At length 20 they would collide; at 120 they must be distinct.
+        let prompt_a =
+            "Fix the authentication bug in the login page that causes users to be logged out";
+        let prompt_b =
+            "Fix the authentication bug in the login page rendering to show the correct avatar";
+
+        let fingerprint_a = normalize_message_for_matching(prompt_a);
+        let fingerprint_b = normalize_message_for_matching(prompt_b);
+
+        assert_ne!(
+            fingerprint_a, fingerprint_b,
+            "Prompts with shared prefix but different content should produce different fingerprints"
         );
     }
 
     #[test]
-    fn test_extract_first_user_message_finds_user_text_in_first_10_lines() {
-        use pretty_assertions::assert_eq;
-
-        let temp_dir = TempDir::new().unwrap();
-        let transcript_file = temp_dir.path().join("session.jsonl");
-
-        {
-            let mut f = fs::File::create(&transcript_file).unwrap();
-            // Lines 1-6: non-user entries (progress, hooks, etc.)
-            writeln!(f, r#"{{"type":"queue-operation","operation":"dequeue"}}"#).unwrap();
-            writeln!(
-                f,
-                r#"{{"type":"progress","data":{{"type":"hook_progress"}}}}"#
-            )
-            .unwrap();
-            writeln!(
-                f,
-                r#"{{"type":"progress","data":{{"type":"hook_progress"}}}}"#
-            )
-            .unwrap();
-            writeln!(
-                f,
-                r#"{{"type":"progress","data":{{"type":"hook_progress"}}}}"#
-            )
-            .unwrap();
-            writeln!(
-                f,
-                r#"{{"type":"progress","data":{{"type":"hook_progress"}}}}"#
-            )
-            .unwrap();
-            writeln!(
-                f,
-                r#"{{"type":"progress","data":{{"type":"hook_progress"}}}}"#
-            )
-            .unwrap();
-            // Line 7: first user message with text content
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Help me implement a feature"}}]}}}}"#).unwrap();
-            // More lines that shouldn't be read
-            writeln!(
-                f,
-                r#"{{"type":"assistant","message":{{"role":"assistant"}}}}"#
-            )
-            .unwrap();
-        }
-
-        let result = extract_first_user_message(&transcript_file);
-        assert_eq!(result, Some("Help me implement a feature".to_string()));
-    }
-
-    #[test]
-    fn test_extract_first_user_message_handles_tool_result_user_entries() {
-        use pretty_assertions::assert_eq;
-
-        let temp_dir = TempDir::new().unwrap();
-        let transcript_file = temp_dir.path().join("session.jsonl");
-
-        {
-            let mut f = fs::File::create(&transcript_file).unwrap();
-            // User entry that is a tool_result (not a text message) - should be skipped
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"tool_use_id":"toolu_123","type":"tool_result","content":"some result"}}]}}}}"#).unwrap();
-            // Real user text message
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Actual user prompt"}}]}}}}"#).unwrap();
-        }
-
-        let result = extract_first_user_message(&transcript_file);
-        assert_eq!(result, Some("Actual user prompt".to_string()));
-    }
-
-    #[test]
-    fn test_extract_first_user_message_returns_none_if_no_user_in_first_10_lines() {
-        let temp_dir = TempDir::new().unwrap();
-        let transcript_file = temp_dir.path().join("session.jsonl");
-
-        {
-            let mut f = fs::File::create(&transcript_file).unwrap();
-            // 15 lines of non-user entries
-            for i in 0..15 {
-                writeln!(f, r#"{{"type":"progress","line":{i}}}"#).unwrap();
-            }
-            // User message after line 10 - should NOT be found
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Too late"}}]}}}}"#).unwrap();
-        }
-
-        let result = extract_first_user_message(&transcript_file);
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn test_find_claude_transcript_by_first_message_matches_correct_file() {
+    fn test_find_transcript_by_shell_search_finds_matching_file_in_flat_directory() {
         use pretty_assertions::assert_eq;
         use std::thread;
         use std::time::Duration;
 
         let temp_dir = TempDir::new().unwrap();
-        let project_dir = temp_dir.path();
+        let base_dir = temp_dir.path();
 
         // Create three transcript files with different first messages
-        let file1 = project_dir.join("session-aaa.jsonl");
-        let file2 = project_dir.join("session-bbb.jsonl");
-        let file3 = project_dir.join("session-ccc.jsonl");
+        let file1 = base_dir.join("session-aaa.jsonl");
+        let file2 = base_dir.join("session-bbb.jsonl");
+        let file3 = base_dir.join("session-ccc.jsonl");
 
         // File 1: "Help me debug this"
         {
             let mut f = fs::File::create(&file1).unwrap();
-            writeln!(f, r#"{{"type":"progress"}}"#).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Help me debug this"}}]}}}}"#).unwrap();
+            writeln!(f, "Help me debug this problem").unwrap();
         }
 
-        // Small delay to ensure different mtimes
         thread::sleep(Duration::from_millis(50));
 
-        // File 2: "Currently the transcript detection" (the one we're looking for)
+        // File 2: "Implement the feature" (the one we're looking for)
         {
             let mut f = fs::File::create(&file2).unwrap();
-            writeln!(f, r#"{{"type":"progress"}}"#).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Currently the transcript detection implemented on this branch"}}]}}}}"#).unwrap();
+            writeln!(f, "Implement the feature for users").unwrap();
         }
 
         thread::sleep(Duration::from_millis(50));
@@ -1288,15 +870,11 @@ mod tests {
         // File 3: "Write some tests" - most recent but wrong message
         {
             let mut f = fs::File::create(&file3).unwrap();
-            writeln!(f, r#"{{"type":"progress"}}"#).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Write some tests"}}]}}}}"#).unwrap();
+            writeln!(f, "Write some tests for this").unwrap();
         }
 
-        // Search for "Currently the transcript" - should match file2
-        let result = find_claude_transcript_by_first_message(
-            project_dir,
-            "Currently the transcript detection",
-        );
+        // Search for a substring that appears in file2 - shell search uses literal matching
+        let result = find_transcript_by_shell_search(base_dir, "Implement the feature");
 
         assert!(result.is_some(), "Should find a matching transcript");
         let found_path = result.unwrap();
@@ -1304,54 +882,102 @@ mod tests {
     }
 
     #[test]
-    fn test_find_claude_transcript_by_first_message_returns_none_when_no_match() {
+    fn test_find_transcript_by_shell_search_finds_file_in_nested_directories() {
         let temp_dir = TempDir::new().unwrap();
-        let project_dir = temp_dir.path();
+        let base_dir = temp_dir.path();
 
-        // Create a transcript file with a different message
-        let file1 = project_dir.join("session-aaa.jsonl");
+        // Create nested directory structure like Codex: YYYY/MM/DD/
+        let nested_dir = base_dir.join("2026").join("01").join("28");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        let file = nested_dir.join("session.jsonl");
         {
-            let mut f = fs::File::create(&file1).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Some other message"}}]}}}}"#).unwrap();
+            let mut f = fs::File::create(&file).unwrap();
+            writeln!(f, "Find me in nested directories please").unwrap();
         }
 
-        // Search for a message that doesn't exist
-        let result = find_claude_transcript_by_first_message(
-            project_dir,
-            "This message does not exist anywhere",
+        // Search should find file in nested directory
+        let result = find_transcript_by_shell_search(base_dir, "Find me in nested");
+
+        assert!(
+            result.is_some(),
+            "Should find transcript in nested directory"
         );
+        let found_path = result.unwrap();
+        assert!(
+            found_path.to_string_lossy().contains("2026/01/28"),
+            "Found path should be in nested directory"
+        );
+    }
+
+    #[test]
+    fn test_find_transcript_by_shell_search_returns_none_without_match() {
+        let temp_dir = TempDir::new().unwrap();
+        let base_dir = temp_dir.path();
+
+        // Create a file with a different message
+        let file = base_dir.join("session.jsonl");
+        {
+            let mut f = fs::File::create(&file).unwrap();
+            writeln!(f, "Some completely different content").unwrap();
+        }
+
+        // Search for non-existent message
+        let result = find_transcript_by_shell_search(base_dir, "This string does not exist");
 
         assert!(result.is_none(), "Should return None when no match found");
     }
 
     #[test]
-    fn test_find_claude_transcript_by_first_message_picks_most_recent_on_multiple_matches() {
+    fn test_find_transcript_by_shell_search_searches_both_jsonl_and_json() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let base_dir = temp_dir.path();
+
+        // Create a .json file (like Gemini uses)
+        let json_file = base_dir.join("session.json");
+        {
+            let mut f = fs::File::create(&json_file).unwrap();
+            writeln!(f, "Find the json file content here").unwrap();
+        }
+
+        // Search should find .json file
+        let result = find_transcript_by_shell_search(base_dir, "Find the json file");
+
+        assert!(result.is_some(), "Should find .json file");
+        let found_path = result.unwrap();
+        assert_eq!(found_path.file_name().unwrap(), "session.json");
+    }
+
+    #[test]
+    fn test_find_transcript_by_shell_search_picks_most_recent_on_multiple_matches() {
         use pretty_assertions::assert_eq;
         use std::thread;
         use std::time::Duration;
 
         let temp_dir = TempDir::new().unwrap();
-        let project_dir = temp_dir.path();
+        let base_dir = temp_dir.path();
 
-        // Create two files with the SAME first message (edge case: duplicate sessions)
-        let file1 = project_dir.join("session-older.jsonl");
-        let file2 = project_dir.join("session-newer.jsonl");
+        // Create two files with the SAME content
+        let file1 = base_dir.join("session-older.jsonl");
+        let file2 = base_dir.join("session-newer.jsonl");
 
         // Older file
         {
             let mut f = fs::File::create(&file1).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Help me implement"}}]}}}}"#).unwrap();
+            writeln!(f, "Duplicate content here for testing").unwrap();
         }
 
         thread::sleep(Duration::from_millis(50));
 
-        // Newer file with same message
+        // Newer file with same content
         {
             let mut f = fs::File::create(&file2).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Help me implement"}}]}}}}"#).unwrap();
+            writeln!(f, "Duplicate content here for testing").unwrap();
         }
 
-        let result = find_claude_transcript_by_first_message(project_dir, "Help me implement");
+        let result = find_transcript_by_shell_search(base_dir, "Duplicate content here");
 
         assert!(result.is_some());
         let found_path = result.unwrap();
@@ -1363,47 +989,34 @@ mod tests {
     }
 
     #[test]
-    fn test_find_claude_transcript_by_first_message_ignores_old_files() {
-        use filetime::FileTime;
-        use std::time::Duration;
-        use std::time::SystemTime;
+    fn test_normalized_message_matches_transcript_with_whitespace() {
+        use pretty_assertions::assert_eq;
 
         let temp_dir = TempDir::new().unwrap();
-        let project_dir = temp_dir.path();
+        let base_dir = temp_dir.path();
 
-        // Create a file with matching message but set mtime to 3 days ago
-        let old_file = project_dir.join("session-old.jsonl");
+        // Create a transcript file with a realistic JSON line containing whitespace-intact message
+        let file = base_dir.join("session-abc.jsonl");
         {
-            let mut f = fs::File::create(&old_file).unwrap();
-            writeln!(f, r#"{{"type":"user","message":{{"role":"user","content":[{{"type":"text","text":"Help me implement"}}]}}}}"#).unwrap();
+            let mut f = fs::File::create(&file).unwrap();
+            writeln!(
+                f,
+                r#"{{"message":{{"content":"Fix the authentication bug in the login page"}}}}"#
+            )
+            .unwrap();
         }
 
-        // Set modification time to 3 days ago
-        let three_days_ago = SystemTime::now() - Duration::from_secs(3 * 24 * 60 * 60);
-        let mtime = FileTime::from_system_time(three_days_ago);
-        filetime::set_file_mtime(&old_file, mtime).unwrap();
+        // Normalize the message exactly as production code does
+        let search_pattern =
+            normalize_message_for_matching("Fix the authentication bug in the login page");
 
-        // Search for the message - should NOT find it because file is too old
-        let result = find_claude_transcript_by_first_message(project_dir, "Help me implement");
-
-        assert!(result.is_none(), "Should not match files older than 2 days");
-    }
-
-    #[test]
-    fn test_discover_transcript_for_agent_with_first_message_returns_error_without_message() {
-        // When no first_message is provided for Claude, it should return an error
-        // (not fallback to most_recent_file which could be wrong)
-        let temp_dir = TempDir::new().unwrap();
-
-        // We can't easily test the full discover_transcript_for_agent flow without
-        // mocking home directory, but we can test find_current_transcript_claude_with_message
-        // Returns error when first_message is None
-        let result = find_current_transcript_claude_with_message(temp_dir.path(), None);
-
+        // The normalized pattern must match inside the transcript file
+        let result = find_transcript_by_shell_search(base_dir, &search_pattern);
         assert!(
-            result.is_err(),
-            "Should return error when no first_message provided"
+            result.is_some(),
+            "Normalized message should match transcript file content. Pattern: {search_pattern:?}"
         );
+        assert_eq!(result.unwrap().file_name().unwrap(), "session-abc.jsonl");
     }
 
     #[test]

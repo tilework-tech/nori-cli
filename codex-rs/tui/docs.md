@@ -89,7 +89,7 @@ The `transcript_location` field includes both `token_usage` (total tokens) and `
 
 Two collection methods are provided:
 - `collect_for_directory()` - Basic collection without first-message matching (test-only)
-- `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate Claude Code transcript identification
+- `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate transcript identification across all agents
 
 The first-message is obtained from `ChatWidget::first_prompt_text()`, which stores the text of the first submitted prompt. This flows through `SystemInfoRefreshRequest` to the background worker, enabling accurate transcript matching when multiple sessions exist in the same project directory.
 

@@ -317,39 +317,60 @@ Note: The ACP backend uses `{nori_home}/commands/` (e.g., `~/.nori/cli/commands/
 
 Detects the current running transcript file when Nori runs within an external agent environment. Used by the TUI's `SystemInfo` module (see `@/codex-rs/tui/src/system_info.rs`) to display token usage in the footer.
 
-Two discovery entry points are provided:
-- `discover_transcript_for_agent()` - Basic discovery using directory/CWD matching (legacy)
-- `discover_transcript_for_agent_with_message()` - Preferred entry point that uses first-message matching for Claude Code
+**Unified Discovery Method:**
 
-Agent detection via environment variables:
+All agents use a single unified discovery approach that searches for the session's first user message within transcript files. This avoids coupling to any specific agent's JSON schema.
 
-| Env Var | Agent |
-|---------|-------|
-| `CLAUDECODE=1` | Claude Code |
-| `CODEX_CLI=1` | Codex |
-| `GEMINI_CLI=1` | Gemini |
+```
+discover_transcript_for_agent_with_message(cwd, agent, first_message)
+    |
+    v
+AgentKind::transcript_base_dir()  -->  Base search directory
+    |
+    v
+find_transcript_by_shell_search(base_dir, normalized_message)
+    |
+    v
+search_with_rg() or search_with_grep()  -->  Files containing message
+    |
+    v
+Pick most recently modified file within 2 days
+```
 
-Transcript file locations and matching strategy:
+Entry points:
+- `discover_transcript_for_agent_with_message()` - Required entry point using first-message matching
+- `discover_transcript_for_agent()` - Deprecated, always returns `NoSessionsFound` error
 
-| Agent | Path Pattern | Matching Strategy |
-|-------|--------------|-------------------|
-| Claude Code | `~/.claude/projects/<transformed-path>/<uuid>.jsonl` | First-message matching (requires `first_message` parameter) |
-| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | Parse first JSON line for `payload.cwd` field, match against CWD |
-| Gemini | `~/.gemini/tmp/<sha256-hash>/chats/<session>.json` | Hash is SHA256 of canonical working directory path |
+**Agent Transcript Base Directories:**
 
-**Claude Code First-Message Matching:**
+Each agent's base directory is provided by `AgentKind::transcript_base_dir()` in `registry.rs`:
 
-Claude Code transcript discovery uses the first user message to accurately identify the correct transcript file. This is necessary because multiple sessions may exist in the same project directory, and picking the most-recently-modified file could return the wrong transcript.
+| Agent | Base Directory | File Types |
+|-------|----------------|------------|
+| Claude Code | `~/.claude/projects/` | `.jsonl` |
+| Codex | `~/.codex/sessions/` | `.jsonl` |
+| Gemini | `~/.gemini/tmp/` | `.json` |
 
-The matching process:
-1. Normalize both the search message and file messages by stripping whitespace and truncating to 20 characters
-2. Only consider files modified in the last 2 days (`MAX_TRANSCRIPT_AGE_SECS = 172800`)
-3. Read up to 10 lines (`MAX_LINES_TO_SEARCH`) or until the first user text entry is found
-4. Skip `tool_result` entries (which also have `"type":"user"`)
-5. If multiple files match, pick the most recently modified one
-6. If no first_message is provided or no match is found, return an error (fail closed rather than return wrong transcript)
+**Shell Search Implementation:**
 
-The `first_message` flows from the TUI's `ChatWidget::first_prompt_text()` through the system info refresh mechanism to the discovery layer.
+The `find_transcript_by_shell_search()` function uses shell tools to search recursively:
+
+1. Tries `rg` (ripgrep) first for better performance
+2. Falls back to `grep -r` if `rg` is unavailable
+3. Searches both `.json` and `.jsonl` files
+4. Uses fixed-string matching (`-F` flag) for the normalized message fingerprint
+
+**Message Normalization:**
+
+Messages are normalized before searching via `normalize_message_for_matching()` to create a consistent fingerprint:
+- Trim leading/trailing whitespace
+- Truncate to first 120 characters (`NORMALIZED_MESSAGE_LENGTH`)
+
+Internal whitespace is preserved so the pattern matches the message as it appears in transcript files when searched with `rg --fixed-strings` / `grep -F`.
+
+**Fail-Closed Behavior:**
+
+Discovery requires a `first_message` parameter. If no message is provided or no matching transcript is found, an error is returned. There is no fallback to "most recent file" behavior. The rationale is that showing no tokens is preferable to showing wrong tokens from a different session.
 
 **Token Usage Parsing** (`transcript_discovery.rs`):
 
@@ -783,7 +804,7 @@ Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of 
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
-- Claude Code transcript discovery requires the first user message to function correctly; without it, the discovery returns an error
+- Transcript discovery for all agents requires the first user message to function correctly; without it, the discovery returns an error. This is enforced via shell-based search using `rg` or `grep`.
 
 **Event Flow Tracing:**
 
