@@ -1102,8 +1102,10 @@ impl AcpBackend {
 
     /// Handle user input by sending a prompt to the ACP agent.
     async fn handle_user_input(&self, items: Vec<UserInput>, id: &str) -> Result<()> {
-        // Extract text from user input items
+        // Separate text items (needed for hooks, summary, transcript) from
+        // image items (converted to ACP ContentBlock::Image).
         let mut prompt_text = String::new();
+        let mut image_items = Vec::new();
         for item in items {
             match item {
                 UserInput::Text { text } => {
@@ -1113,25 +1115,34 @@ impl AcpBackend {
                     prompt_text.push_str(&text);
                 }
                 UserInput::Image { .. } | UserInput::LocalImage { .. } => {
-                    // Images not yet supported in ACP mode
-                    warn!("Image input not supported in ACP mode");
+                    image_items.push(item);
                 }
-                // Handle any future UserInput variants
                 _ => {
                     warn!("Unknown UserInput variant in ACP mode");
                 }
             }
         }
 
-        if prompt_text.is_empty() {
+        // Convert image items to ACP content blocks
+        let image_blocks = translator::user_inputs_to_content_blocks(image_items)?;
+
+        if prompt_text.is_empty() && image_blocks.is_empty() {
             return Ok(());
         }
+
+        // For image-only prompts, use a placeholder for downstream consumers
+        // (hooks, transcript, summary, snapshot labels) that expect non-empty text.
+        let display_text = if prompt_text.is_empty() && !image_blocks.is_empty() {
+            "[image]".to_string()
+        } else {
+            prompt_text.clone()
+        };
 
         // Execute pre_user_prompt hooks before sending the prompt
         if !self.pre_user_prompt_hooks.is_empty() {
             let env_vars = HashMap::from([
                 ("NORI_HOOK_EVENT".to_string(), "pre_user_prompt".to_string()),
-                ("NORI_HOOK_PROMPT_TEXT".to_string(), prompt_text.clone()),
+                ("NORI_HOOK_PROMPT_TEXT".to_string(), display_text.clone()),
             ]);
             let results = crate::hooks::execute_hooks_with_env(
                 &self.pre_user_prompt_hooks,
@@ -1152,7 +1163,7 @@ impl AcpBackend {
         if !self.async_pre_user_prompt_hooks.is_empty() {
             let env_vars = HashMap::from([
                 ("NORI_HOOK_EVENT".to_string(), "pre_user_prompt".to_string()),
-                ("NORI_HOOK_PROMPT_TEXT".to_string(), prompt_text.clone()),
+                ("NORI_HOOK_PROMPT_TEXT".to_string(), display_text.clone()),
             ]);
             let _ = crate::hooks::execute_hooks_fire_and_forget(
                 self.async_pre_user_prompt_hooks.clone(),
@@ -1173,7 +1184,7 @@ impl AcpBackend {
                     let event_tx = self.event_tx.clone();
                     let agent_name = self.agent_name.clone();
                     let cwd = self.cwd.clone();
-                    let prompt_for_summary = prompt_text.clone();
+                    let prompt_for_summary = display_text.clone();
                     let auto_worktree = self.auto_worktree;
                     let auto_worktree_repo_root = self.auto_worktree_repo_root.clone();
                     tokio::spawn(async move {
@@ -1198,7 +1209,7 @@ impl AcpBackend {
         // This captures the working tree state so /undo can restore it.
         let snapshot_cwd = self.cwd.clone();
         let ghost_snapshots = Arc::clone(&self.ghost_snapshots);
-        let label_for_snapshot = prompt_text.clone();
+        let label_for_snapshot = display_text.clone();
         match tokio::task::spawn_blocking(move || {
             let options = codex_git::CreateGhostCommitOptions::new(&snapshot_cwd);
             codex_git::create_ghost_commit(&options)
@@ -1221,13 +1232,15 @@ impl AcpBackend {
 
         // Record user message to transcript
         if let Some(ref recorder) = self.transcript_recorder
-            && let Err(e) = recorder.record_user_message(id, &prompt_text, vec![]).await
+            && let Err(e) = recorder
+                .record_user_message(id, &display_text, vec![])
+                .await
         {
             warn!("Failed to record user message to transcript: {e}");
         }
 
         // Save prompt text for post_user_prompt hooks (before it gets moved)
-        let prompt_text_for_hooks = prompt_text.clone();
+        let prompt_text_for_hooks = display_text;
 
         // Prepend any accumulated hook context (from ::context:: lines)
         // This must happen before the compact summary prefix so that the
@@ -1247,7 +1260,11 @@ impl AcpBackend {
             prompt_with_context
         };
 
-        let prompt = vec![translator::text_to_content_block(&final_prompt_text)];
+        let mut prompt = Vec::new();
+        if !final_prompt_text.is_empty() {
+            prompt.push(translator::text_to_content_block(&final_prompt_text));
+        }
+        prompt.extend(image_blocks);
 
         // Create channel for receiving session updates
         let (update_tx, mut update_rx) = mpsc::channel(32);

@@ -25,7 +25,7 @@ The ACP crate serves as a bridge between:
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection.rs` - Subprocess spawning and JSON-RPC communication
-- `translator.rs` - Protocol translation between ACP and Codex types
+- `translator.rs` - Bidirectional protocol translation: ACP session updates to Codex events, and Codex `UserInput` items to ACP `ContentBlock`s (including image conversion)
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core
 - `transcript_discovery.rs` - Discovers transcript files for external agents
 - `auto_worktree.rs` - Orchestrates automatic git worktree creation and summary-based renaming
@@ -259,6 +259,15 @@ Each lifecycle hook receives `NORI_HOOK_EVENT` set to its hook name. Additional 
 | other/none | executed directly |
 
 Hook failures are non-fatal. Failed hooks emit warning events to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
+
+**Image input handling** (`translator.rs`, `backend/mod.rs`):
+
+`handle_user_input()` separates text items from image items during the extraction loop. Text is accumulated into `prompt_text` for use by hooks, compact summary, and transcript recording. Image items (`UserInput::Image` and `UserInput::LocalImage`) are collected separately and converted to ACP `ContentBlock::Image` via `translator::user_inputs_to_content_blocks()`:
+
+- `UserInput::Image` carries a data URI (`data:<mime>;base64,<data>`), which is parsed into mime type and base64 data
+- `UserInput::LocalImage` carries a file path; the file is read and base64-encoded, with MIME type inferred from the file extension (defaults to `image/png`)
+
+The resulting image blocks are appended after any text block in the prompt vector sent to the agent. A turn with only images (no text) is permitted; the empty check requires both `prompt_text` and `image_blocks` to be empty before returning early.
 
 **Hook output routing** (`hooks.rs`, `backend/mod.rs`):
 
