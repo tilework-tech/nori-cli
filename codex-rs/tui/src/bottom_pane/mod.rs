@@ -22,9 +22,9 @@ mod bottom_pane_view;
 mod chat_composer;
 mod chat_composer_history;
 mod command_popup;
-pub mod custom_prompt_view;
 mod file_search_popup;
 mod footer;
+mod history_search_popup;
 mod list_selection_view;
 mod prompt_args;
 pub(crate) use list_selection_view::SelectionViewParams;
@@ -72,8 +72,8 @@ pub(crate) struct BottomPane {
     /// Queued user messages to show above the composer while a turn is running.
     queued_user_messages: QueuedUserMessages,
     context_window_percent: Option<i64>,
-    /// Display name of the current model/agent for use in approval dialogs.
-    model_display_name: String,
+    /// Display name of the current agent for use in approval dialogs.
+    agent_display_name: String,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -85,7 +85,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) disable_paste_burst: bool,
     pub(crate) animations_enabled: bool,
     pub(crate) vertical_footer: bool,
-    pub(crate) model_display_name: String,
+    pub(crate) agent_display_name: String,
 }
 
 impl BottomPane {
@@ -99,7 +99,7 @@ impl BottomPane {
             disable_paste_burst,
             animations_enabled,
             vertical_footer,
-            model_display_name,
+            agent_display_name,
         } = params;
         let mut composer = ChatComposer::new(
             has_input_focus,
@@ -136,7 +136,7 @@ impl BottomPane {
             esc_backtrack_hint: false,
             animations_enabled,
             context_window_percent: None,
-            model_display_name,
+            agent_display_name,
         }
     }
 
@@ -144,7 +144,6 @@ impl BottomPane {
         self.status.as_ref()
     }
 
-    #[cfg(test)]
     pub(crate) fn context_window_percent(&self) -> Option<i64> {
         self.context_window_percent
     }
@@ -267,8 +266,7 @@ impl BottomPane {
     }
 
     /// Update the animated header shown to the left of the brackets in the
-    /// status indicator (defaults to "Working"). No-ops if the status
-    /// indicator is not active.
+    /// status indicator. No-ops if the status indicator is not active.
     pub(crate) fn update_status_header(&mut self, header: String) {
         if let Some(status) = self.status.as_mut() {
             status.update_header(header);
@@ -378,9 +376,9 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Update the model display name used in approval dialogs.
-    pub(crate) fn set_model_display_name(&mut self, name: String) {
-        self.model_display_name = name;
+    /// Update the agent display name used in approval dialogs.
+    pub(crate) fn set_agent_display_name(&mut self, name: String) {
+        self.agent_display_name = name;
     }
 
     /// Set the vertical footer layout flag.
@@ -393,10 +391,40 @@ impl BottomPane {
         self.composer.set_hotkey_config(config);
     }
 
+    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        self.composer.set_vim_mode_enabled(enabled);
+    }
+
+    /// Set a footer segment's enabled state.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_footer_segment_enabled(
+        &mut self,
+        segment: codex_acp::config::FooterSegment,
+        enabled: bool,
+    ) {
+        self.composer.set_footer_segment_enabled(segment, enabled);
+    }
+
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
         self.push_view(Box::new(view));
+    }
+
+    /// Replace the current top-of-stack selection view with a new one.
+    ///
+    /// This pops the existing view before pushing the replacement so the stack
+    /// does not grow on repeated refreshes (e.g. toggling footer segments).
+    pub(crate) fn replace_selection_view(
+        &mut self,
+        params: list_selection_view::SelectionViewParams,
+    ) {
+        debug_assert!(
+            !self.view_stack.is_empty(),
+            "replace_selection_view called with empty view stack"
+        );
+        self.view_stack.pop();
+        self.show_selection_view(params);
     }
 
     /// Update the queued messages preview shown above the composer.
@@ -421,6 +449,22 @@ impl BottomPane {
     pub(crate) fn set_approval_mode_label(&mut self, label: Option<String>) {
         self.composer.set_approval_mode_label(label);
         self.request_redraw();
+    }
+
+    /// Update the prompt summary displayed in the footer.
+    pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
+        self.composer.set_prompt_summary(summary);
+        self.request_redraw();
+    }
+
+    /// Get the prompt summary for status card display.
+    pub(crate) fn prompt_summary(&self) -> Option<String> {
+        self.composer.prompt_summary()
+    }
+
+    /// Get the token breakdown from transcript location (for status card display).
+    pub(crate) fn transcript_token_breakdown(&self) -> Option<codex_acp::TranscriptTokenUsage> {
+        self.composer.transcript_token_breakdown()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {
@@ -460,7 +504,7 @@ impl BottomPane {
         let modal = ApprovalOverlay::new(
             request,
             self.app_event_tx.clone(),
-            self.model_display_name.clone(),
+            self.agent_display_name.clone(),
         );
         self.pause_status_timer_for_modal();
         self.push_view(Box::new(modal));
@@ -518,6 +562,14 @@ impl BottomPane {
         if updated {
             self.request_redraw();
         }
+    }
+
+    pub(crate) fn on_search_history_response(
+        &mut self,
+        entries: Vec<codex_protocol::message_history::HistoryEntry>,
+    ) {
+        self.composer.on_search_history_response(entries);
+        self.request_redraw();
     }
 
     pub(crate) fn on_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
@@ -624,7 +676,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
         pane.push_approval_request(exec_request());
         assert_eq!(CancellationEvent::Handled, pane.on_ctrl_c());
@@ -647,7 +699,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Create an approval modal (active view).
@@ -662,10 +714,7 @@ mod tests {
         for x in 0..area.width {
             r0.push(buf[(x, 0)].symbol().chars().next().unwrap_or(' '));
         }
-        assert!(
-            !r0.contains("Working"),
-            "overlay should not render above modal"
-        );
+        assert!(!r0.contains("•"), "overlay should not render above modal");
     }
 
     #[test]
@@ -681,7 +730,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Start a running task so the status indicator is active above the composer.
@@ -703,7 +752,7 @@ mod tests {
             "no active modal view after denial"
         );
 
-        // Render and ensure the top row includes the Working header and a composer line below.
+        // Render and ensure the top row includes the status indicator and a composer line below.
         // Give the animation thread a moment to tick.
         std::thread::sleep(Duration::from_millis(120));
         let area = Rect::new(0, 0, 40, 6);
@@ -714,8 +763,12 @@ mod tests {
             row0.push(buf[(x, 0)].symbol().chars().next().unwrap_or(' '));
         }
         assert!(
-            row0.contains("Working"),
-            "expected Working header after denial on row 0: {row0:?}"
+            pane.status_indicator_visible(),
+            "expected status indicator visible after denial"
+        );
+        assert!(
+            row0.contains("•"),
+            "expected status indicator spinner on row 0: {row0:?}"
         );
 
         // Composer placeholder should be visible somewhere below.
@@ -749,7 +802,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Begin a task: show initial status.
@@ -760,8 +813,10 @@ mod tests {
         let mut buf = Buffer::empty(area);
         pane.render(area, &mut buf);
 
-        let bufs = snapshot_buffer(&buf);
-        assert!(bufs.contains("• Working"), "expected Working header");
+        assert!(
+            pane.status_indicator_visible(),
+            "expected status indicator to be visible"
+        );
     }
 
     #[test]
@@ -777,11 +832,12 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         // Activate spinner (status view replaces composer) with no live ring.
         pane.set_task_running(true);
+        pane.update_status_header("Thinking really hard".to_string());
 
         // Use height == desired_height; expect spacer + status + composer rows without trailing padding.
         let height = pane.desired_height(30);
@@ -809,7 +865,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         pane.set_task_running(true);
@@ -838,10 +894,11 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
-            model_display_name: String::new(),
+            agent_display_name: String::new(),
         });
 
         pane.set_task_running(true);
+        pane.update_status_header("Thinking really hard".to_string());
         pane.set_queued_user_messages(vec!["Queued follow-up question".to_string()]);
 
         let width = 48;
@@ -850,6 +907,65 @@ mod tests {
         assert_snapshot!(
             "status_and_queued_messages_snapshot",
             render_snapshot(&pane, area)
+        );
+    }
+
+    #[test]
+    fn replace_selection_view_does_not_stack() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Codex to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            vertical_footer: false,
+            agent_display_name: String::new(),
+        });
+
+        // Push the initial selection view.
+        let params1 = list_selection_view::SelectionViewParams {
+            title: Some("Picker v1".to_string()),
+            items: vec![list_selection_view::SelectionItem {
+                name: "Item A".to_string(),
+                dismiss_on_select: false,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        pane.show_selection_view(params1);
+        assert_eq!(pane.view_stack.len(), 1, "one view after initial push");
+
+        // Replace with a new selection view — stack should stay at 1, not grow to 2.
+        let params2 = list_selection_view::SelectionViewParams {
+            title: Some("Picker v2".to_string()),
+            items: vec![list_selection_view::SelectionItem {
+                name: "Item B".to_string(),
+                dismiss_on_select: false,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        pane.replace_selection_view(params2);
+        assert_eq!(
+            pane.view_stack.len(),
+            1,
+            "view stack should not grow after replace"
+        );
+
+        // Verify the replacement view is actually on the stack by rendering.
+        let area = Rect::new(0, 0, 40, 10);
+        let snapshot = render_snapshot(&pane, area);
+        assert!(
+            snapshot.contains("Picker v2"),
+            "expected replacement picker title in rendered output: {snapshot:?}"
+        );
+        assert!(
+            !snapshot.contains("Picker v1"),
+            "old picker title should not appear after replacement: {snapshot:?}"
         );
     }
 }

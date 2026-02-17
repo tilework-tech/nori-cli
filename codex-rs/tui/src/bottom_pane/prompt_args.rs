@@ -322,6 +322,7 @@ mod tests {
             content: "Review $USER changes on $BRANCH".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }];
 
         let out =
@@ -337,6 +338,7 @@ mod tests {
             content: "Pair $USER with $BRANCH".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }];
 
         let out = expand_custom_prompt(
@@ -355,6 +357,7 @@ mod tests {
             content: "Review $USER changes".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }];
         let err = expand_custom_prompt("/prompts:my-prompt USER=Alice stray", &prompts)
             .unwrap_err()
@@ -370,6 +373,7 @@ mod tests {
             content: "Review $USER changes on $BRANCH".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }];
         let err = expand_custom_prompt("/prompts:my-prompt USER=Alice", &prompts)
             .unwrap_err()
@@ -398,6 +402,7 @@ mod tests {
             content: "literal $$USER".to_string(),
             description: None,
             argument_hint: None,
+            kind: Default::default(),
         }];
 
         let out = expand_custom_prompt("/prompts:my-prompt", &prompts).unwrap();

@@ -1,7 +1,6 @@
 mod compact;
 mod ghost_snapshot;
 mod regular;
-mod review;
 mod undo;
 mod user_shell;
 
@@ -16,7 +15,6 @@ use tokio_util::task::AbortOnDropHandle;
 use tracing::trace;
 use tracing::warn;
 
-use crate::AuthManager;
 use crate::codex::Session;
 use crate::codex::TurnContext;
 use crate::protocol::EventMsg;
@@ -31,7 +29,6 @@ use codex_protocol::user_input::UserInput;
 pub(crate) use compact::CompactTask;
 pub(crate) use ghost_snapshot::GhostSnapshotTask;
 pub(crate) use regular::RegularTask;
-pub(crate) use review::ReviewTask;
 pub(crate) use undo::UndoTask;
 pub(crate) use user_shell::UserShellCommandTask;
 
@@ -51,16 +48,12 @@ impl SessionTaskContext {
     pub(crate) fn clone_session(&self) -> Arc<Session> {
         Arc::clone(&self.session)
     }
-
-    pub(crate) fn auth_manager(&self) -> Arc<AuthManager> {
-        Arc::clone(&self.session.services.auth_manager)
-    }
 }
 
 /// Async task that drives a [`Session`] turn.
 ///
 /// Implementations encapsulate a specific Codex workflow (regular chat,
-/// reviews, ghost snapshots, etc.). Each task instance is owned by a
+/// ghost snapshots, compaction, etc.). Each task instance is owned by a
 /// [`Session`] and executed on a background Tokio task. The trait is
 /// intentionally small: implementers identify themselves via
 /// [`SessionTask::kind`], perform their work in [`SessionTask::run`], and may

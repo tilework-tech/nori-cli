@@ -129,11 +129,6 @@ client_request_definitions! {
         params: v2::TurnInterruptParams,
         response: v2::TurnInterruptResponse,
     },
-    ReviewStart => "review/start" {
-        params: v2::ReviewStartParams,
-        response: v2::ReviewStartResponse,
-    },
-
     ModelList => "model/list" {
         params: v2::ModelListParams,
         response: v2::ModelListResponse,

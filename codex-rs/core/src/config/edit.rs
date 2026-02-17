@@ -33,8 +33,6 @@ pub enum ConfigEdit {
     SetNoticeHideFullAccessWarning(bool),
     /// Toggle the Windows world-writable directories warning acknowledgement flag.
     SetNoticeHideWorldWritableWarning(bool),
-    /// Toggle the rate limit model nudge acknowledgement flag.
-    SetNoticeHideRateLimitModelNudge(bool),
     /// Toggle the Windows onboarding acknowledgement flag.
     SetWindowsWslSetupAcknowledged(bool),
     /// Toggle the model migration prompt acknowledgement flag.
@@ -264,11 +262,6 @@ impl ConfigDocument {
             ConfigEdit::SetNoticeHideWorldWritableWarning(acknowledged) => Ok(self.write_value(
                 Scope::Global,
                 &[Notice::TABLE_KEY, "hide_world_writable_warning"],
-                value(*acknowledged),
-            )),
-            ConfigEdit::SetNoticeHideRateLimitModelNudge(acknowledged) => Ok(self.write_value(
-                Scope::Global,
-                &[Notice::TABLE_KEY, "hide_rate_limit_model_nudge"],
                 value(*acknowledged),
             )),
             ConfigEdit::SetNoticeHideModelMigrationPrompt(migration_config, acknowledged) => {
@@ -529,12 +522,6 @@ impl ConfigEditsBuilder {
         self
     }
 
-    pub fn set_hide_rate_limit_model_nudge(mut self, acknowledged: bool) -> Self {
-        self.edits
-            .push(ConfigEdit::SetNoticeHideRateLimitModelNudge(acknowledged));
-        self
-    }
-
     pub fn set_hide_model_migration_prompt(mut self, model: &str, acknowledged: bool) -> Self {
         self.edits
             .push(ConfigEdit::SetNoticeHideModelMigrationPrompt(
@@ -575,6 +562,11 @@ impl ConfigEditsBuilder {
             value: value(enabled),
         });
         self
+    }
+
+    /// Set the default model for a specific agent in the `[default_models]` table.
+    pub fn set_default_model(self, agent: &str, model: &str) -> Self {
+        self.set_path(&["default_models", agent], value(model.to_owned()))
     }
 
     /// Set a value at an arbitrary path in the config.
@@ -820,33 +812,6 @@ hide_full_access_warning = true
         assert_eq!(contents, expected);
     }
 
-    #[test]
-    fn blocking_set_hide_rate_limit_model_nudge_preserves_table() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"[notice]
-existing = "value"
-"#,
-        )
-        .expect("seed");
-
-        apply_blocking(
-            codex_home,
-            None,
-            &[ConfigEdit::SetNoticeHideRateLimitModelNudge(true)],
-        )
-        .expect("persist");
-
-        let contents =
-            std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let expected = r#"[notice]
-existing = "value"
-hide_rate_limit_model_nudge = true
-"#;
-        assert_eq!(contents, expected);
-    }
     #[test]
     fn blocking_set_hide_gpt5_1_migration_prompt_preserves_table() {
         let tmp = tempdir().expect("tmpdir");
@@ -1137,5 +1102,97 @@ model_reasoning_effort = "high"
         let contents =
             std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
         assert!(!contents.contains("mcp_servers"));
+    }
+
+    #[test]
+    fn blocking_set_default_model_creates_table() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("claude-code", "haiku")
+            .apply_blocking()
+            .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let default_models = config
+            .get("default_models")
+            .and_then(|v| v.as_table())
+            .expect("default_models table");
+        assert_eq!(
+            default_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("haiku")
+        );
+    }
+
+    #[test]
+    fn blocking_set_default_model_overwrites_existing() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        std::fs::write(
+            codex_home.join(CONFIG_TOML_FILE),
+            r#"agent = "claude-code"
+
+[default_models]
+claude-code = "opus"
+"#,
+        )
+        .expect("seed");
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("claude-code", "haiku")
+            .apply_blocking()
+            .expect("persist");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+
+        // Agent field should be preserved
+        assert_eq!(
+            config.get("agent").and_then(|v| v.as_str()),
+            Some("claude-code")
+        );
+        // default_models should have the updated value
+        let default_models = config
+            .get("default_models")
+            .and_then(|v| v.as_table())
+            .expect("default_models table");
+        assert_eq!(
+            default_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("haiku")
+        );
+    }
+
+    #[test]
+    fn blocking_set_default_model_multiple_agents() {
+        let tmp = tempdir().expect("tmpdir");
+        let codex_home = tmp.path();
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("claude-code", "haiku")
+            .apply_blocking()
+            .expect("persist first");
+
+        ConfigEditsBuilder::new(codex_home)
+            .set_default_model("gemini", "flash")
+            .apply_blocking()
+            .expect("persist second");
+
+        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
+        let config: TomlValue = toml::from_str(&raw).expect("parse config");
+        let default_models = config
+            .get("default_models")
+            .and_then(|v| v.as_table())
+            .expect("default_models table");
+        assert_eq!(
+            default_models.get("claude-code").and_then(|v| v.as_str()),
+            Some("haiku")
+        );
+        assert_eq!(
+            default_models.get("gemini").and_then(|v| v.as_str()),
+            Some("flash")
+        );
     }
 }

@@ -1,0 +1,27 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› Analyze the codebase
+
+
+• Explored
+  └ Read file1.rs, file2.rs
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Here is my analysis of the codebase.
+
+• Explored
+  └ Read SKILL.md
+    Search undefined
+    Read config.toml
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Let me know if you need anything else.
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approvals: Agent · ? for shortcuts

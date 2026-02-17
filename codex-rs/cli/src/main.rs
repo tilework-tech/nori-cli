@@ -71,6 +71,9 @@ enum Subcommand {
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
 
+    /// Manage skillsets. An alias for `npx nori-skillsets` or `bunx nori-skillsets`.
+    Skillsets(SkillsetsCommand),
+
     /// Execpolicy tooling.
     #[clap(hide = true)]
     Execpolicy(ExecpolicyCommand),
@@ -170,6 +173,14 @@ struct StdioToUdsCommand {
     socket_path: PathBuf,
 }
 
+#[derive(Debug, Parser)]
+#[clap(disable_help_flag = true)]
+struct SkillsetsCommand {
+    /// Arguments to pass to nori-skillsets.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    args: Vec<String>,
+}
+
 fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<String> {
     let AppExitInfo {
         token_usage,
@@ -249,6 +260,53 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
 
 fn run_execpolicycheck(cmd: ExecPolicyCheckCommand) -> anyhow::Result<()> {
     cmd.run()
+}
+
+fn run_skillsets_command(cmd: SkillsetsCommand) -> anyhow::Result<()> {
+    const NORI_SKILLSETS_CMD: &str = "nori-skillsets";
+
+    // First, check if nori-skillsets is available directly in PATH
+    let status = if let Ok(skillsets_path) = which::which(NORI_SKILLSETS_CMD) {
+        #[cfg(windows)]
+        {
+            // On Windows, run via cmd.exe so .CMD/.BAT are correctly resolved (PATHEXT semantics).
+            let mut cmd_args = vec!["/C".to_string(), skillsets_path.display().to_string()];
+            cmd_args.extend(cmd.args.iter().cloned());
+            std::process::Command::new("cmd").args(&cmd_args).status()?
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new(&skillsets_path)
+                .args(&cmd.args)
+                .status()?
+        }
+    } else {
+        // Fall back to npx/bunx if not in PATH
+        use codex_acp::registry::detect_preferred_package_manager;
+
+        let package_manager = detect_preferred_package_manager();
+        let runner = package_manager.command(); // "npx" or "bunx"
+
+        #[cfg(windows)]
+        {
+            let mut cmd_args = vec!["/C", runner, NORI_SKILLSETS_CMD];
+            cmd_args.extend(cmd.args.iter().map(String::as_str));
+            std::process::Command::new("cmd").args(&cmd_args).status()?
+        }
+        #[cfg(not(windows))]
+        {
+            let command_path = crate::wsl_paths::normalize_for_wsl(runner);
+            std::process::Command::new(&command_path)
+                .arg(NORI_SKILLSETS_CMD)
+                .args(&cmd.args)
+                .status()?
+        }
+    };
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
 }
 
 /// As early as possible in the process lifecycle, apply hardening measures. We
@@ -386,6 +444,9 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 .await?;
             }
         },
+        Some(Subcommand::Skillsets(cmd)) => {
+            run_skillsets_command(cmd)?;
+        }
         Some(Subcommand::Execpolicy(ExecpolicyCommand { sub })) => match sub {
             ExecpolicySubcommand::Check(cmd) => run_execpolicycheck(cmd)?,
         },
@@ -532,5 +593,50 @@ mod tests {
             Some("completion"),
             "completion should be parsed as prompt"
         );
+    }
+
+    /// "skillsets" should be recognized as a subcommand, not a prompt
+    #[test]
+    fn skillsets_subcommand_is_recognized() {
+        let cli = MultitoolCli::try_parse_from(["nori", "skillsets"]).expect("should parse");
+        assert!(
+            matches!(cli.subcommand, Some(Subcommand::Skillsets(_))),
+            "skillsets should be parsed as subcommand, got: {:?}",
+            cli.subcommand
+        );
+    }
+
+    /// "skillsets" subcommand should capture trailing arguments
+    #[test]
+    fn skillsets_subcommand_captures_trailing_args() {
+        let cli =
+            MultitoolCli::try_parse_from(["nori", "skillsets", "list-skillsets", "--verbose"])
+                .expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Skillsets(cmd)) => {
+                assert_eq!(
+                    cmd.args,
+                    vec!["list-skillsets".to_string(), "--verbose".to_string()],
+                    "should capture trailing args"
+                );
+            }
+            _ => panic!("expected Skillsets subcommand"),
+        }
+    }
+
+    /// "skillsets -h" should pass -h to nori-skillsets, not show clap help
+    #[test]
+    fn skillsets_subcommand_passes_help_flag_through() {
+        let cli = MultitoolCli::try_parse_from(["nori", "skillsets", "-h"]).expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Skillsets(cmd)) => {
+                assert_eq!(
+                    cmd.args,
+                    vec!["-h".to_string()],
+                    "-h should be passed through to nori-skillsets"
+                );
+            }
+            _ => panic!("expected Skillsets subcommand"),
+        }
     }
 }

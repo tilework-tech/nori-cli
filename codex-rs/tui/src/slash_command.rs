@@ -16,8 +16,9 @@ pub enum SlashCommand {
     Model,
     Approvals,
     Config,
-    Review,
     New,
+    Resume,
+    ResumeViewonly,
     Init,
     Compact,
     Undo,
@@ -41,14 +42,15 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::New => "start a new chat during a conversation",
+            SlashCommand::Resume => "resume a previous session",
+            SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
-            SlashCommand::Review => "review my current changes and find issues",
             SlashCommand::Undo => "ask Nori to undo a turn",
             SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
-            SlashCommand::Status => "show current session configuration and token usage",
+            SlashCommand::Status => "show current session configuration and context window usage",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
@@ -73,13 +75,14 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent
             | SlashCommand::New
+            | SlashCommand::Resume
+            | SlashCommand::ResumeViewonly
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Undo
             | SlashCommand::Model
             | SlashCommand::Approvals
             | SlashCommand::Config
-            | SlashCommand::Review
             | SlashCommand::Login
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset => false,
@@ -234,5 +237,32 @@ mod tests {
             !SlashCommand::SwitchSkillset.available_during_task(),
             "/switch-skillset should not be available while task is running"
         );
+    }
+
+    #[test]
+    fn resume_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_resume = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Resume);
+        assert!(has_resume, "/resume should be visible in commands list");
+    }
+
+    #[test]
+    fn resume_has_description() {
+        let desc = SlashCommand::Resume.description();
+        assert!(!desc.is_empty(), "/resume should have a description");
+    }
+
+    #[test]
+    fn resume_not_available_during_task() {
+        assert!(
+            !SlashCommand::Resume.available_during_task(),
+            "/resume should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn resume_parses_from_string() {
+        let cmd: SlashCommand = "resume".parse().expect("/resume should parse from string");
+        assert_eq!(cmd, SlashCommand::Resume);
     }
 }

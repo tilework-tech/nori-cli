@@ -215,7 +215,7 @@ mod tests {
 
         let request = ResponsesRequestBuilder::new("gpt-test", "inst", &input)
             .conversation(Some("conv-1".into()))
-            .session_source(Some(SessionSource::SubAgent(SubAgentSource::Review)))
+            .session_source(Some(SessionSource::SubAgent(SubAgentSource::Compact)))
             .build(&provider)
             .expect("request");
 
@@ -241,7 +241,7 @@ mod tests {
         );
         assert_eq!(
             request.headers.get("x-openai-subagent"),
-            Some(&HeaderValue::from_static("review"))
+            Some(&HeaderValue::from_static("compact"))
         );
     }
 }

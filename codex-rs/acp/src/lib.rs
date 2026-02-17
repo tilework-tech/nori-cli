@@ -6,15 +6,19 @@
 //! It also provides the Nori configuration system for ACP-only mode,
 //! loading settings from `~/.nori/cli/config.toml`.
 
+pub mod auto_worktree;
 pub mod backend;
 pub mod config;
 pub mod connection;
+pub mod hooks;
 pub mod message_history;
 pub mod registry;
 pub mod session_parser;
 pub mod tracing_setup;
+pub mod transcript;
 pub mod transcript_discovery;
 pub mod translator;
+pub mod undo;
 
 // Re-export config types for convenience
 pub use config::ApprovalPolicy;
@@ -30,6 +34,7 @@ pub use message_history::history_filepath;
 pub use message_history::history_metadata;
 #[cfg(any(unix, windows))]
 pub use message_history::lookup;
+pub use message_history::search_entries;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
@@ -58,6 +63,14 @@ pub use transcript_discovery::parse_transcript_tokens;
 pub use transcript_discovery::parse_transcript_total_tokens;
 pub use translator::TranslatedEvent;
 pub use translator::translate_session_update;
+
+// Re-export transcript types
+pub use transcript::ProjectId;
+pub use transcript::ProjectInfo;
+pub use transcript::SessionInfo;
+pub use transcript::Transcript;
+pub use transcript::TranscriptLoader;
+pub use transcript::TranscriptRecorder;
 
 // Re-export commonly used types from agent-client-protocol
 pub use agent_client_protocol::Agent;

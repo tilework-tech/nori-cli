@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use codex_acp::AcpBackend;
 use codex_acp::AcpBackendConfig;
@@ -8,18 +9,50 @@ use codex_acp::HistoryPersistence;
 use codex_acp::find_nori_home;
 use codex_acp::get_agent_config;
 use codex_acp::get_agent_display_name;
+use codex_acp::list_available_agents;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
-use codex_core::NewConversation;
 use codex_core::config::Config;
 use codex_core::protocol::Op;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
+
+/// Duration before showing a warning that connection is taking too long.
+const CONNECT_WARNING_SECS: u64 = 8;
+/// Duration after the warning before forcibly aborting the connection attempt.
+const CONNECT_ABORT_SECS: u64 = 30;
+
+/// Drain ops from the channel, discarding everything except `Op::Shutdown`.
+/// Returns when `Op::Shutdown` is received or the channel is closed.
+pub(crate) async fn drain_until_shutdown(rx: &mut UnboundedReceiver<Op>) {
+    while let Some(op) = rx.recv().await {
+        if matches!(op, Op::Shutdown) {
+            return;
+        }
+    }
+}
+
+/// Two-phase timeout: warn after `CONNECT_WARNING_SECS`, abort after an
+/// additional `CONNECT_ABORT_SECS`.
+async fn spawn_timeout_sequence(app_event_tx: &AppEventSender) {
+    tokio::time::sleep(Duration::from_secs(CONNECT_WARNING_SECS)).await;
+    app_event_tx.send(AppEvent::CodexEvent(codex_core::protocol::Event {
+        id: String::new(),
+        msg: codex_core::protocol::EventMsg::Warning(codex_core::protocol::WarningEvent {
+            message: format!(
+                "Connection is taking longer than expected. \
+                 Will abort in {CONNECT_ABORT_SECS}s if still unresponsive."
+            ),
+        }),
+    }));
+    tokio::time::sleep(Duration::from_secs(CONNECT_ABORT_SECS)).await;
+}
 
 /// Command for controlling the ACP agent.
 #[cfg(feature = "unstable")]
@@ -88,9 +121,9 @@ pub(crate) struct SpawnAgentResult {
 /// that includes the Op sender and optionally an ACP handle for model control.
 ///
 /// This function detects whether to use ACP mode or HTTP mode based on:
-/// 1. If the model is registered in the ACP registry, use ACP mode
-/// 2. If the model is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
-/// 3. If the model is NOT registered and `acp_allow_http_fallback` is false (default), error
+/// 1. If the agent is registered in the ACP registry, use ACP mode
+/// 2. If the agent is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
+/// 3. If the agent is NOT registered and `acp_allow_http_fallback` is false (default), error
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
@@ -99,10 +132,10 @@ pub(crate) fn spawn_agent(
     let acp_agent_result = get_agent_config(&config.model);
 
     match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
-        // Model is registered in ACP registry -> use ACP
+        // Agent is registered in ACP registry -> use ACP
         (true, _) => spawn_acp_agent(config, app_event_tx),
 
-        // Model NOT registered, but HTTP fallback is allowed -> use HTTP
+        // Agent NOT registered, but HTTP fallback is allowed -> use HTTP
         (false, true) => {
             let op_tx = spawn_http_agent(config, app_event_tx, server);
             SpawnAgentResult {
@@ -112,15 +145,20 @@ pub(crate) fn spawn_agent(
             }
         }
 
-        // Model NOT registered and HTTP fallback NOT allowed -> error
+        // Agent NOT registered and HTTP fallback NOT allowed -> error
         (false, false) => {
-            let model_name = config.model;
+            let agent_name = config.model;
+            let known: Vec<String> = list_available_agents()
+                .iter()
+                .map(|a| a.agent_name.clone())
+                .collect();
             let error_msg = format!(
-                "Model '{model_name}' is not registered as an ACP agent. \
+                "Agent '{agent_name}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp"
+                 Known ACP agents: {}",
+                known.join(", ")
             );
-            let op_tx = spawn_error_agent(model_name, error_msg, app_event_tx);
+            let op_tx = spawn_error_agent(agent_name, error_msg, app_event_tx);
             SpawnAgentResult {
                 op_tx,
                 #[cfg(feature = "unstable")]
@@ -132,9 +170,9 @@ pub(crate) fn spawn_agent(
 
 /// Spawn an agent that emits an error and opens the agent picker.
 ///
-/// This is used when the requested model is not a valid ACP agent.
+/// This is used when the requested agent is not a valid ACP agent.
 fn spawn_error_agent(
-    model_name: String,
+    agent_name: String,
     error_msg: String,
     app_event_tx: AppEventSender,
 ) -> UnboundedSender<Op> {
@@ -144,7 +182,7 @@ fn spawn_error_agent(
         tracing::error!("{}", error_msg);
         // Send AgentSpawnFailed so the user can select a different agent
         app_event_tx.send(AppEvent::AgentSpawnFailed {
-            model_name,
+            agent_name,
             error: error_msg,
         });
     });
@@ -178,8 +216,23 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         // Load NoriConfig for ACP-specific settings (os_notifications)
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        // Detect auto-worktree repo root from the cwd path.
+        // When auto_worktree is enabled, cwd is {repo_root}/.worktrees/{name},
+        // so we can derive repo_root by going up two directories.
+        let auto_worktree_enabled = nori_config.auto_worktree;
+        let auto_worktree_repo_root = if auto_worktree_enabled {
+            config
+                .cwd
+                .parent()
+                .filter(|p| p.file_name().is_some_and(|n| n == ".worktrees"))
+                .and_then(|p| p.parent())
+                .map(std::path::Path::to_path_buf)
+        } else {
+            None
+        };
+
         let acp_config = AcpBackendConfig {
-            model: config.model.clone(),
+            agent: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -188,16 +241,58 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             notify_after_idle: nori_config.notify_after_idle,
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
+            cli_version: env!("CARGO_PKG_VERSION").to_string(),
+            auto_worktree: auto_worktree_enabled,
+            auto_worktree_repo_root,
+            session_start_hooks: nori_config.session_start_hooks.clone(),
+            session_end_hooks: nori_config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
+            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
+            script_timeout: nori_config.script_timeout.as_duration(),
+            default_model: nori_config.default_models.get(&config.model).cloned(),
         };
 
-        let backend = match AcpBackend::spawn(&acp_config, event_tx).await {
-            Ok(b) => Arc::new(b),
-            Err(e) => {
-                tracing::error!("failed to spawn ACP backend: {e}");
-                // Send AgentSpawnFailed so the user can select a different agent
+        // Race backend init against shutdown requests and a timeout.
+        // This ensures the user can always exit even if the backend hangs.
+        let backend = tokio::select! {
+            result = AcpBackend::spawn(&acp_config, event_tx) => {
+                match result {
+                    Ok(b) => Arc::new(b),
+                    Err(e) => {
+                        tracing::error!("failed to spawn ACP backend: {e}");
+                        drop(codex_op_rx);
+                        app_event_tx.send(AppEvent::AgentSpawnFailed {
+                            agent_name: config.model.clone(),
+                            error: format!("Failed to spawn ACP agent: {e}"),
+                        });
+                        return;
+                    }
+                }
+            }
+            () = drain_until_shutdown(&mut codex_op_rx) => {
+                tracing::info!("shutdown requested while ACP backend was connecting");
+                drop(codex_op_rx);
+                app_event_tx.send(AppEvent::ExitRequest);
+                return;
+            }
+            () = spawn_timeout_sequence(&app_event_tx) => {
+                tracing::warn!("ACP backend connection timed out");
+                drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
-                    model_name: config.model.clone(),
-                    error: format!("Failed to spawn ACP agent: {e}"),
+                    agent_name: config.model.clone(),
+                    error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
             }
@@ -255,6 +350,163 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
     }
 }
 
+/// Spawn an ACP agent backend that resumes a previous session.
+///
+/// Similar to `spawn_acp_agent`, but calls `AcpBackend::resume_session`
+/// instead of `AcpBackend::spawn`. If the agent supports `session/load`,
+/// server-side resume is used. Otherwise, falls back to client-side replay
+/// using the provided transcript.
+pub(crate) fn spawn_acp_agent_resume(
+    config: Config,
+    acp_session_id: Option<String>,
+    transcript: codex_acp::transcript::Transcript,
+    app_event_tx: AppEventSender,
+) -> SpawnAgentResult {
+    let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
+
+    #[cfg(feature = "unstable")]
+    let (model_cmd_tx, mut model_cmd_rx) = unbounded_channel::<AcpModelCommand>();
+
+    #[cfg(feature = "unstable")]
+    let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
+
+    let display_name = get_agent_display_name(&config.model);
+    app_event_tx.send(AppEvent::AgentConnecting { display_name });
+
+    tokio::spawn(async move {
+        let (event_tx, mut event_rx) = mpsc::channel(32);
+
+        let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
+        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        let auto_worktree_enabled = nori_config.auto_worktree;
+        let auto_worktree_repo_root = if auto_worktree_enabled {
+            config
+                .cwd
+                .parent()
+                .filter(|p| p.file_name().is_some_and(|n| n == ".worktrees"))
+                .and_then(|p| p.parent())
+                .map(std::path::Path::to_path_buf)
+        } else {
+            None
+        };
+
+        let acp_config = AcpBackendConfig {
+            agent: config.model.clone(),
+            cwd: config.cwd.clone(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            notify: config.notify.clone(),
+            os_notifications: nori_config.os_notifications,
+            notify_after_idle: nori_config.notify_after_idle,
+            nori_home,
+            history_persistence: HistoryPersistence::SaveAll,
+            cli_version: env!("CARGO_PKG_VERSION").to_string(),
+            auto_worktree: auto_worktree_enabled,
+            auto_worktree_repo_root,
+            session_start_hooks: nori_config.session_start_hooks.clone(),
+            session_end_hooks: nori_config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
+            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
+            script_timeout: nori_config.script_timeout.as_duration(),
+            default_model: nori_config.default_models.get(&config.model).cloned(),
+        };
+
+        // Race backend resume against shutdown requests and a timeout.
+        let backend = tokio::select! {
+            result = AcpBackend::resume_session(
+                &acp_config,
+                acp_session_id.as_deref(),
+                Some(&transcript),
+                event_tx,
+            ) => {
+                match result {
+                    Ok(b) => Arc::new(b),
+                    Err(e) => {
+                        tracing::error!("failed to resume ACP session: {e}");
+                        drop(codex_op_rx);
+                        app_event_tx.send(AppEvent::AgentSpawnFailed {
+                            agent_name: config.model.clone(),
+                            error: format!("Failed to resume ACP session: {e}"),
+                        });
+                        return;
+                    }
+                }
+            }
+            () = drain_until_shutdown(&mut codex_op_rx) => {
+                tracing::info!("shutdown requested while resuming ACP session");
+                drop(codex_op_rx);
+                app_event_tx.send(AppEvent::ExitRequest);
+                return;
+            }
+            () = spawn_timeout_sequence(&app_event_tx) => {
+                tracing::warn!("ACP session resume timed out");
+                drop(codex_op_rx);
+                app_event_tx.send(AppEvent::AgentSpawnFailed {
+                    agent_name: config.model.clone(),
+                    error: "Connection timed out. The agent did not respond.".to_string(),
+                });
+                return;
+            }
+        };
+
+        let backend_for_ops = Arc::clone(&backend);
+        tokio::spawn(async move {
+            while let Some(op) = codex_op_rx.recv().await {
+                if let Err(e) = backend_for_ops.submit(op).await {
+                    tracing::error!("failed to submit op: {e}");
+                }
+            }
+        });
+
+        #[cfg(feature = "unstable")]
+        {
+            let backend_for_model = Arc::clone(&backend);
+            tokio::spawn(async move {
+                while let Some(cmd) = model_cmd_rx.recv().await {
+                    match cmd {
+                        AcpModelCommand::GetModelState { response_tx } => {
+                            let state = backend_for_model.model_state();
+                            let _ = response_tx.send(state);
+                        }
+                        AcpModelCommand::SetModel {
+                            model_id,
+                            response_tx,
+                        } => {
+                            let model_id = codex_acp::ModelId::from(model_id);
+                            let result = backend_for_model.set_model(&model_id).await;
+                            let _ = response_tx.send(result);
+                        }
+                    }
+                }
+            });
+        }
+
+        drop(backend);
+
+        while let Some(event) = event_rx.recv().await {
+            app_event_tx.send(AppEvent::CodexEvent(event));
+        }
+    });
+
+    SpawnAgentResult {
+        op_tx: codex_op_tx,
+        #[cfg(feature = "unstable")]
+        acp_handle,
+    }
+}
+
 /// Spawn an HTTP agent (the original implementation).
 ///
 /// This uses `codex_core` to communicate with LLM providers via HTTP APIs.
@@ -265,26 +517,42 @@ fn spawn_http_agent(
 ) -> UnboundedSender<Op> {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
-    // Clone model name before config is moved
-    let model_name = config.model.clone();
+    // Clone agent name before config is moved
+    let agent_name = config.model.clone();
     let app_event_tx_clone = app_event_tx;
     tokio::spawn(async move {
-        let NewConversation {
-            conversation_id: _,
-            conversation,
-            session_configured,
-        } = match server.new_conversation(config).await {
-            Ok(v) => v,
-            #[allow(clippy::print_stderr)]
-            Err(err) => {
-                let message = err.to_string();
-                eprintln!("{message}");
-                // Send AgentSpawnFailed so the user can select a different agent
+        // Race backend init against shutdown requests and a timeout.
+        let (conversation, session_configured) = tokio::select! {
+            result = server.new_conversation(config) => {
+                match result {
+                    Ok(v) => (v.conversation, v.session_configured),
+                    #[allow(clippy::print_stderr)]
+                    Err(err) => {
+                        let message = err.to_string();
+                        eprintln!("{message}");
+                        drop(codex_op_rx);
+                        app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
+                            agent_name,
+                            error: format!("Failed to initialize HTTP agent: {err}"),
+                        });
+                        tracing::error!("failed to initialize codex: {err}");
+                        return;
+                    }
+                }
+            }
+            () = drain_until_shutdown(&mut codex_op_rx) => {
+                tracing::info!("shutdown requested while HTTP backend was connecting");
+                drop(codex_op_rx);
+                app_event_tx_clone.send(AppEvent::ExitRequest);
+                return;
+            }
+            () = spawn_timeout_sequence(&app_event_tx_clone) => {
+                tracing::warn!("HTTP backend connection timed out");
+                drop(codex_op_rx);
                 app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                    model_name,
-                    error: format!("Failed to initialize HTTP agent: {err}"),
+                    agent_name,
+                    error: "Connection timed out. The agent did not respond.".to_string(),
                 });
-                tracing::error!("failed to initialize codex: {err}");
                 return;
             }
         };

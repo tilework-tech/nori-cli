@@ -17,6 +17,7 @@ fn test_footer_displays_git_branch() {
 
     // Wait for the TUI to start
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -49,6 +50,7 @@ fn test_footer_without_git_repo() {
 
     // Wait for the TUI to start
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -100,6 +102,7 @@ fn test_footer_full_startup_with_all_info() {
 
     // Wait for footer to render
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -169,6 +172,7 @@ vertical_footer = true
             .expect("Failed to spawn");
 
     session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -200,4 +204,69 @@ vertical_footer = true
     );
 
     assert_snapshot!("vertical_footer", normalize_for_input_snapshot(contents));
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_footer_with_segments_disabled() {
+    // Test that footer segments can be disabled via config.toml
+    let config_toml = r#"
+model = "mock-model"
+model_provider = "mock_provider"
+
+[model_providers.mock_provider]
+name = "Mock ACP provider for tests"
+
+[tui.footer_segments]
+git_branch = false
+approval_mode = false
+"#;
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 120, SessionConfig::new().with_config_toml(config_toml))
+            .expect("Failed to spawn");
+
+    // Wait for the TUI to fully start (session header contains "Nori CLI")
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session
+        .wait_for_text("Nori CLI", TIMEOUT)
+        .expect("Session header should appear");
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    let contents = session.screen_contents();
+
+    // Git branch should NOT be displayed (disabled in config)
+    assert!(
+        !contents.contains("⎇"),
+        "Footer should NOT contain git branch symbol when disabled. Contents: {}",
+        contents
+    );
+    assert!(
+        !contents.contains("master"),
+        "Footer should NOT contain branch name when disabled. Contents: {}",
+        contents
+    );
+
+    // Approval mode should NOT be displayed (disabled in config)
+    assert!(
+        !contents.contains("Approvals"),
+        "Footer should NOT contain Approvals when disabled. Contents: {}",
+        contents
+    );
+
+    // Shortcuts hint should still be present (always shown)
+    assert!(
+        contents.contains("? for shortcuts"),
+        "Footer should still show shortcuts hint. Contents: {}",
+        contents
+    );
+
+    // Session header shows "Nori CLI v{version}" which confirms version info is visible.
+    // The footer's NoriVersion segment requires nori-skillsets/nori-ai in PATH, which
+    // this test doesn't provide, so we check for the session header version instead.
+    assert!(
+        contents.contains("Nori CLI v"),
+        "Session header should show Nori CLI version. Contents: {}",
+        contents
+    );
 }

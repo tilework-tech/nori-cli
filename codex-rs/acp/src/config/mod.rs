@@ -11,8 +11,12 @@ pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
 pub use types::ApprovalPolicy;
-pub use types::DEFAULT_MODEL;
+pub use types::DEFAULT_AGENT;
+pub use types::FooterSegment;
+pub use types::FooterSegmentConfig;
+pub use types::FooterSegmentConfigToml;
 pub use types::HistoryPersistence;
+pub use types::HooksConfigToml;
 pub use types::HotkeyAction;
 pub use types::HotkeyBinding;
 pub use types::HotkeyConfig;
@@ -24,8 +28,10 @@ pub use types::NoriConfigOverrides;
 pub use types::NoriConfigToml;
 pub use types::NotifyAfterIdle;
 pub use types::OsNotifications;
+pub use types::ScriptTimeout;
 pub use types::TerminalNotifications;
 pub use types::TuiConfig;
+pub use types::resolve_hook_paths;
 
 #[cfg(test)]
 mod tests {
@@ -71,7 +77,7 @@ mod tests {
     fn test_nori_config_default() {
         let config = NoriConfig::default();
 
-        assert_eq!(config.model, "claude-code");
+        assert_eq!(config.active_agent, "claude-code");
         assert!(config.animations);
         assert_eq!(
             config.terminal_notifications,
@@ -146,7 +152,7 @@ vertical_footer = true
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
 
-        assert_eq!(config.model, "gemini");
+        assert_eq!(config.active_agent, "gemini");
         assert!(!config.animations);
         assert_eq!(
             config.terminal_notifications,
@@ -174,14 +180,14 @@ model = "gemini"
         unsafe { env::set_var(NORI_HOME_ENV, temp_dir.path()) };
 
         let overrides = NoriConfigOverrides {
-            model: Some("claude-code".to_string()),
+            agent: Some("claude-code".to_string()),
             ..Default::default()
         };
 
         let config = NoriConfig::load_with_overrides(overrides).unwrap();
 
         // Override should win
-        assert_eq!(config.model, "claude-code");
+        assert_eq!(config.active_agent, "claude-code");
 
         // SAFETY: Test runs serially
         unsafe { env::remove_var(NORI_HOME_ENV) };
@@ -198,7 +204,7 @@ model = "gemini"
 
         let config = NoriConfig::load().unwrap();
 
-        assert_eq!(config.model, "claude-code");
+        assert_eq!(config.active_agent, "claude-code");
         assert!(config.animations);
         assert_eq!(
             config.terminal_notifications,
@@ -275,5 +281,57 @@ args = ["--arg1", "value"]
             server.args,
             Some(vec!["--arg1".to_string(), "value".to_string()])
         );
+    }
+
+    #[test]
+    fn test_loop_count_deserializes_from_tui_section() {
+        let toml_str = r#"
+[tui]
+loop_count = 5
+"#;
+        let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.tui.loop_count, Some(5));
+    }
+
+    #[test]
+    fn test_loop_count_defaults_to_none_when_absent() {
+        let toml_str = "";
+        let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.tui.loop_count, None);
+    }
+
+    #[test]
+    fn test_loop_count_resolved_from_config_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+loop_count = 3
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.loop_count, Some(3));
+    }
+
+    #[test]
+    fn test_loop_count_none_when_not_in_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.loop_count, None);
+    }
+
+    #[test]
+    fn test_nori_config_default_has_no_loop() {
+        let config = NoriConfig::default();
+        assert_eq!(config.loop_count, None);
     }
 }

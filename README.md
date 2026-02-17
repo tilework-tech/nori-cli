@@ -3,6 +3,7 @@
 [![CI](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml/badge.svg?branch=dev)](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml)
 [![npm version](https://img.shields.io/npm/v/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/dev/LICENSE)
+[![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
 **One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and Codex. All from the same native CLI.
 

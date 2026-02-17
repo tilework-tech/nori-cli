@@ -13,6 +13,8 @@ settings.local.json
 .claude/skills/memorize
 .claude/skills/prompt-analysis
 .claude/skills/recall
+.claude/skills/**/.nori-version
+.claude/skills/**/nori.json
 .claude/**/*.js
 .claude/**/*.js.map
 .claude/**/*.ts

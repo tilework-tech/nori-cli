@@ -53,6 +53,10 @@ pub enum EventMsg {
 | `UserTurn` | Send user message |
 | `ApproveTool` / `RejectTool` | Handle approval requests |
 | `CancelTurn` | Cancel current generation |
+| `Undo` | Undo the most recent turn (sequential pop from snapshot stack) |
+| `UndoList` | Request the list of available undo snapshots |
+| `UndoTo { index }` | Restore to a specific snapshot by display index (0 = most recent) |
+| `SearchHistoryRequest { max_results }` | Request all history entries for client-side search; response via `SearchHistoryResponse` |
 
 **Events** (`events.rs`): Messages from core to TUI:
 
@@ -63,16 +67,58 @@ pub enum EventMsg {
 | `ToolCall` / `ToolResult` | Tool invocation lifecycle |
 | `ApprovalRequired` | User approval needed |
 | `TaskComplete` | Turn finished |
+| `UndoCompleted` | Result of an undo operation (success/failure with message) |
+| `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
+| `PromptSummary` | Short summary of the first user prompt for display in the footer |
+| `HookOutput` | Output from a hook script, routed by level (Info/Warn/Error) for TUI display |
+| `SearchHistoryResponse` | Response to `SearchHistoryRequest` with deduplicated history entries (newest first). Not persisted to rollout policy. |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
 **Conversation Types**: `ConversationId`, `ConversationStoredState`, `SessionSource` for session management.
+
+**Custom Prompt Types** (`custom_prompts.rs`): Defines types for user-authored custom prompts invoked via `/prompts:<name>` slash commands:
+
+| Type | Purpose |
+|------|--------|
+| `CustomPrompt` | A single custom prompt with name, path, content, description, argument hint, and kind |
+| `CustomPromptKind` | Discriminates between `Markdown` (template text expanded inline) and `Script { interpreter }` (executable whose stdout becomes the prompt) |
+| `PROMPTS_CMD_PREFIX` | The slash command prefix constant (`"prompts"`) |
+
+`CustomPromptKind::Script` carries an `interpreter` string (e.g. `"bash"`, `"python3"`, `"node"`) that determines how the script file is executed. `CustomPromptKind` defaults to `Markdown` and is serde-tagged as `"type"` for JSON serialization.
 
 ### Things to Know
 
 - Types are serde-serializable for persistence and wire transfer
 - `ResponseItem` wraps different response content types (text, tool calls, reasoning)
 - `TokenUsage` tracks input/output/cache token counts
+
+**Undo Types:**
+
+| Type | Purpose |
+|------|---------|
+| `SnapshotInfo` | Display metadata for a single undo snapshot: `index` (display order, 0 = most recent), `short_id` (7-char commit hash), `label` (user message) |
+| `UndoListResultEvent` | Wraps `Vec<SnapshotInfo>` for the `UndoListResult` event |
+| `UndoCompletedEvent` | Contains `success: bool` and optional `message` describing the result |
+
+**Prompt Summary Types:**
+
+| Type | Purpose |
+|------|---------|
+| `PromptSummaryEvent` | Carries a `summary: String` field with a short summary of the first user prompt. Emitted by the ACP backend and rendered in the TUI footer. Not persisted to rollout policy. |
+
+**Hook Output Types:**
+
+| Type | Purpose |
+|------|---------|
+| `HookOutputLevel` | Enum with `Info`, `Warn`, `Error` variants controlling TUI display style |
+| `HookOutputEvent` | Carries a `message: String` and `level: HookOutputLevel`. Emitted by the ACP backend's hook routing. Not persisted to rollout policy. |
+
+**Search History Types:**
+
+| Type | Purpose |
+|------|--------|
+| `SearchHistoryResponseEvent` | Wraps `Vec<HistoryEntry>` (from `codex_protocol::message_history`). Each entry has `conversation_id`, `ts`, and `text`. Not persisted to rollout policy. |
 
 **Approval Policy:**
 

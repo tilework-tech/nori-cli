@@ -3,9 +3,12 @@
 //! This module provides the UI for modifying TUI configuration settings
 //! that are persisted to ~/.nori/cli/config.toml.
 
+use codex_acp::config::FooterSegment;
+use codex_acp::config::FooterSegmentConfig;
 use codex_acp::config::NoriConfig;
 use codex_acp::config::NotifyAfterIdle;
 use codex_acp::config::OsNotifications;
+use codex_acp::config::ScriptTimeout;
 use codex_acp::config::TerminalNotifications;
 
 use crate::app_event::AppEvent;
@@ -59,10 +62,34 @@ pub fn config_picker_params(
             "Send native desktop notifications on events",
             os_notifications_enabled,
             {
-                let tx = app_event_tx;
+                let tx = app_event_tx.clone();
                 let new_value = !os_notifications_enabled;
                 move || {
                     tx.send(AppEvent::SetConfigOsNotifications(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "Vim Mode",
+            "Enable vim-style navigation in the textarea (Escape enters normal mode)",
+            config.vim_mode,
+            {
+                let tx = app_event_tx.clone();
+                let new_value = !config.vim_mode;
+                move || {
+                    tx.send(AppEvent::SetConfigVimMode(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "Auto Worktree",
+            "Automatically create a git worktree at session start",
+            config.auto_worktree,
+            {
+                let tx = app_event_tx;
+                let new_value = !config.auto_worktree;
+                move || {
+                    tx.send(AppEvent::SetConfigAutoWorktree(new_value));
                 }
             },
         ),
@@ -100,6 +127,60 @@ pub fn config_picker_params(
                 ..Default::default()
             }
         },
+        {
+            let current_timeout = config.script_timeout.clone();
+            let display_name = format!("Script Timeout ({})", current_timeout.display_name());
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenScriptTimeoutPicker);
+                }
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some("Timeout for custom prompt script execution".to_string()),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
+        {
+            let current_loop = config.loop_count;
+            let display_name = match current_loop {
+                Some(n) => format!("Loop Count ({n})"),
+                None => "Loop Count (Disabled)".to_string(),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenLoopCountPicker);
+                }
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some(
+                    "Number of times to re-run the first prompt in fresh sessions".to_string(),
+                ),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
+        {
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenFooterSegmentsPicker);
+                }
+            })];
+            SelectionItem {
+                name: "Footer Segments".to_string(),
+                description: Some("Configure which segments are shown in the footer".to_string()),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
     ];
 
     SelectionViewParams {
@@ -107,6 +188,7 @@ pub fn config_picker_params(
         subtitle: Some("Toggle TUI settings (changes saved to config.toml)".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        initial_selected_idx: Some(0),
         ..Default::default()
     }
 }
@@ -176,6 +258,136 @@ pub fn notify_after_idle_picker_params(
     }
 }
 
+/// Create selection view parameters for the script timeout sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently configured ScriptTimeout
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn script_timeout_picker_params(
+    current: ScriptTimeout,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = ScriptTimeout::all_common_values()
+        .into_iter()
+        .map(|variant| {
+            let is_current = variant == current;
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                let variant = variant.clone();
+                move |tx| {
+                    tx.send(AppEvent::SetConfigScriptTimeout(variant.clone()));
+                }
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description: None,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Script Timeout".to_string()),
+        subtitle: Some("Select script execution timeout".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
+/// Create selection view parameters for the loop count sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently configured loop count (`None` means disabled)
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn loop_count_picker_params(
+    current: Option<i32>,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let options: Vec<Option<i32>> = vec![None, Some(2), Some(3), Some(5), Some(10)];
+
+    let items: Vec<SelectionItem> = options
+        .into_iter()
+        .map(|value| {
+            let is_current = value == current;
+            let name = match value {
+                Some(n) => n.to_string(),
+                None => "Disabled".to_string(),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::SetConfigLoopCount(value));
+                }
+            })];
+            SelectionItem {
+                name,
+                description: None,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Loop Count".to_string()),
+        subtitle: Some("Select number of loop iterations".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
+/// Create selection view parameters for the footer segments sub-picker.
+///
+/// Each segment can be toggled on/off. The order of segments is controlled
+/// via the TOML config file (not via this picker).
+///
+/// # Arguments
+/// * `current` - The current footer segment configuration
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn footer_segments_picker_params(
+    current: &FooterSegmentConfig,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = FooterSegment::all_variants()
+        .iter()
+        .map(|&segment| {
+            let is_enabled = current.is_enabled(segment);
+            let status = if is_enabled { "on" } else { "off" };
+            let name = format!("{} ({})", segment.display_name(), status);
+
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                let new_value = !is_enabled;
+                move |tx| {
+                    tx.send(AppEvent::SetConfigFooterSegment(segment, new_value));
+                }
+            })];
+
+            SelectionItem {
+                name,
+                description: None,
+                is_current: is_enabled,
+                actions,
+                dismiss_on_select: false, // Keep picker open for toggling multiple segments
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Footer Segments".to_string()),
+        subtitle: Some("Toggle which segments appear in the footer".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        initial_selected_idx: Some(0),
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,7 +400,7 @@ mod tests {
     fn make_test_config(vertical_footer: bool) -> NoriConfig {
         NoriConfig {
             agent: "claude-code".to_string(),
-            model: "claude-code".to_string(),
+            active_agent: "claude-code".to_string(),
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: codex_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: codex_acp::config::HistoryPersistence::SaveAll,
@@ -197,10 +409,32 @@ mod tests {
             os_notifications: OsNotifications::Enabled,
             vertical_footer,
             notify_after_idle: codex_acp::config::NotifyAfterIdle::FiveSeconds,
+            vim_mode: false,
             hotkeys: codex_acp::config::HotkeyConfig::default(),
+            script_timeout: codex_acp::config::ScriptTimeout::default(),
+            loop_count: None,
+            auto_worktree: false,
+            footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
+            session_start_hooks: vec![],
+            session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
+            async_session_start_hooks: vec![],
+            async_session_end_hooks: vec![],
+            async_pre_user_prompt_hooks: vec![],
+            async_post_user_prompt_hooks: vec![],
+            async_pre_tool_call_hooks: vec![],
+            async_post_tool_call_hooks: vec![],
+            async_pre_agent_response_hooks: vec![],
+            async_post_agent_response_hooks: vec![],
+            default_models: std::collections::HashMap::new(),
         }
     }
 
@@ -212,7 +446,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 5);
+        assert_eq!(params.items.len(), 10);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -240,18 +474,26 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_five_items() {
+    fn config_picker_returns_eight_items() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 5);
-        // The 4th item should be Notify After Idle
-        assert!(params.items[3].name.contains("Notify After Idle"));
-        // The 5th item should be Hotkeys
-        assert!(params.items[4].name.contains("Hotkeys"));
+        assert_eq!(params.items.len(), 10);
+        // The 4th item should be Vim Mode
+        assert!(params.items[3].name.contains("Vim Mode"));
+        // The 5th item should be Auto Worktree
+        assert!(params.items[4].name.contains("Auto Worktree"));
+        // The 6th item should be Notify After Idle
+        assert!(params.items[5].name.contains("Notify After Idle"));
+        // The 7th item should be Hotkeys
+        assert!(params.items[6].name.contains("Hotkeys"));
+        // The 8th item should be Script Timeout
+        assert!(params.items[7].name.contains("Script Timeout"));
+        // The 9th item should be Loop Count
+        assert!(params.items[8].name.contains("Loop Count"));
     }
 
     #[test]
@@ -263,7 +505,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[3];
+        let idle_item = &params.items[5];
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -279,8 +521,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the notify after idle action (4th item)
-        let idle_item = &params.items[3];
+        // Trigger the notify after idle action (6th item, index 5)
+        let idle_item = &params.items[5];
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -326,8 +568,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the hotkeys action (5th item)
-        let hotkeys_item = &params.items[4];
+        // Trigger the hotkeys action (7th item, index 6)
+        let hotkeys_item = &params.items[6];
         assert!(hotkeys_item.name.contains("Hotkeys"));
         for action in &hotkeys_item.actions {
             action(&tx);
@@ -397,6 +639,358 @@ mod tests {
                 assert_eq!(value, codex_acp::config::NotifyAfterIdle::SixtySeconds);
             }
             _ => panic!("expected SetConfigNotifyAfterIdle event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_includes_vim_mode_toggle() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        // Should now have 9 items (includes vim mode, auto worktree, script timeout, and loop count)
+        assert_eq!(params.items.len(), 10);
+        // Find the vim mode item
+        let vim_mode_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vim Mode"));
+        assert!(
+            vim_mode_item.is_some(),
+            "config picker should include Vim Mode toggle"
+        );
+    }
+
+    #[test]
+    fn config_picker_vim_mode_shows_current_state() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.vim_mode = true;
+
+        let params = config_picker_params(&config, tx);
+
+        let vim_mode_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vim Mode"))
+            .expect("should have vim mode item");
+        assert!(
+            vim_mode_item.name.contains("(on)"),
+            "vim mode should show (on) when enabled"
+        );
+    }
+
+    #[test]
+    fn config_picker_vim_mode_action_sends_correct_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.vim_mode = false;
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let vim_mode_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vim Mode"))
+            .expect("should have vim mode item");
+
+        // Trigger the action
+        for action in &vim_mode_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigVimMode(value) => {
+                // Was false, should toggle to true
+                assert!(value, "vim_mode was off, should toggle to on");
+            }
+            _ => panic!("expected SetConfigVimMode event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_script_timeout_shows_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        // Default config has 30s timeout
+        let timeout_item = &params.items[7];
+        assert!(
+            timeout_item.name.contains("30s"),
+            "Expected '30s' in name, got: {}",
+            timeout_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_script_timeout_action_sends_open_picker_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        // Trigger the script timeout action (8th item, index 7)
+        let timeout_item = &params.items[7];
+        assert!(timeout_item.name.contains("Script Timeout"));
+        for action in &timeout_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenScriptTimeoutPicker),
+            "expected OpenScriptTimeoutPicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn script_timeout_picker_returns_five_items() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = script_timeout_picker_params(codex_acp::config::ScriptTimeout::default(), tx);
+
+        assert_eq!(params.items.len(), 5);
+        assert!(params.title.unwrap().contains("Script Timeout"));
+    }
+
+    #[test]
+    fn script_timeout_picker_marks_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params =
+            script_timeout_picker_params(codex_acp::config::ScriptTimeout::from_str("1m"), tx);
+
+        for item in &params.items {
+            if item.name == "1m" {
+                assert!(item.is_current, "1m should be marked current");
+            } else {
+                assert!(
+                    !item.is_current,
+                    "{} should not be marked current",
+                    item.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn script_timeout_picker_action_sends_set_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params =
+            script_timeout_picker_params(codex_acp::config::ScriptTimeout::default(), tx.clone());
+
+        // Select the "2m" option (index 3)
+        let two_min_item = &params.items[3];
+        assert_eq!(two_min_item.name, "2m");
+        for action in &two_min_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigScriptTimeout(value) => {
+                assert_eq!(value, codex_acp::config::ScriptTimeout::from_str("2m"));
+            }
+            _ => panic!("expected SetConfigScriptTimeout event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_includes_loop_count_item() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"));
+        assert!(
+            loop_item.is_some(),
+            "config picker should include a Loop Count item"
+        );
+    }
+
+    #[test]
+    fn config_picker_loop_count_shows_disabled_when_none() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"))
+            .expect("should have loop count item");
+        assert!(
+            loop_item.name.contains("Disabled"),
+            "Loop count should show 'Disabled' when None, got: {}",
+            loop_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_loop_count_shows_value_when_set() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.loop_count = Some(5);
+
+        let params = config_picker_params(&config, tx);
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"))
+            .expect("should have loop count item");
+        assert!(
+            loop_item.name.contains("5"),
+            "Loop count should show '5' when set to Some(5), got: {}",
+            loop_item.name
+        );
+    }
+
+    #[test]
+    fn config_picker_loop_count_action_sends_open_picker_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let loop_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Loop Count"))
+            .expect("should have loop count item");
+
+        for action in &loop_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenLoopCountPicker),
+            "expected OpenLoopCountPicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn loop_count_picker_returns_expected_options() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(None, tx);
+
+        assert_eq!(params.items.len(), 5);
+        assert!(params.title.unwrap().contains("Loop Count"));
+        assert!(params.items[0].name.contains("Disabled"));
+        assert!(params.items[1].name.contains("2"));
+        assert!(params.items[2].name.contains("3"));
+        assert!(params.items[3].name.contains("5"));
+        assert!(params.items[4].name.contains("10"));
+    }
+
+    #[test]
+    fn loop_count_picker_marks_current_value() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(Some(5), tx);
+
+        for item in &params.items {
+            if item.name == "5" {
+                assert!(item.is_current, "5 should be marked current");
+            } else {
+                assert!(
+                    !item.is_current,
+                    "{} should not be marked current",
+                    item.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn loop_count_picker_marks_disabled_when_none() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(None, tx);
+
+        assert!(
+            params.items[0].is_current,
+            "Disabled should be marked current when loop_count is None"
+        );
+        for item in &params.items[1..] {
+            assert!(
+                !item.is_current,
+                "{} should not be marked current",
+                item.name
+            );
+        }
+    }
+
+    #[test]
+    fn loop_count_picker_action_sends_set_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(None, tx.clone());
+
+        // Select "5" (index 3)
+        let five_item = &params.items[3];
+        assert_eq!(five_item.name, "5");
+        for action in &five_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigLoopCount(value) => {
+                assert_eq!(value, Some(5));
+            }
+            _ => panic!("expected SetConfigLoopCount event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn loop_count_picker_disabled_sends_none() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = loop_count_picker_params(Some(5), tx.clone());
+
+        // Select "Disabled" (index 0)
+        let disabled_item = &params.items[0];
+        assert!(disabled_item.name.contains("Disabled"));
+        for action in &disabled_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigLoopCount(value) => {
+                assert_eq!(value, None);
+            }
+            _ => panic!("expected SetConfigLoopCount event, got: {event:?}"),
         }
     }
 }

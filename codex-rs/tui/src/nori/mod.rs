@@ -6,8 +6,11 @@
 pub(crate) mod agent_picker;
 pub(crate) mod exit_message;
 pub(crate) mod onboarding;
+pub(crate) mod resume_session_picker;
 pub(crate) mod session_header;
 pub(crate) mod skillset_picker;
+pub(crate) mod token_count;
+pub(crate) mod viewonly_session_picker;
 
 #[cfg(feature = "nori-config")]
 pub(crate) mod config_adapter;

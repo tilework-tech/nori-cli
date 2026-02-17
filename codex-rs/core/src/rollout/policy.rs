@@ -43,8 +43,6 @@ pub(crate) fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::AgentReasoningRawContent(_)
         | EventMsg::TokenCount(_)
         | EventMsg::ContextCompacted(_)
-        | EventMsg::EnteredReviewMode(_)
-        | EventMsg::ExitedReviewMode(_)
         | EventMsg::UndoCompleted(_)
         | EventMsg::TurnAborted(_) => true,
         EventMsg::Error(_)
@@ -74,6 +72,7 @@ pub(crate) fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::TurnDiff(_)
         | EventMsg::GetHistoryEntryResponse(_)
         | EventMsg::UndoStarted(_)
+        | EventMsg::UndoListResult(_)
         | EventMsg::McpListToolsResponse(_)
         | EventMsg::McpStartupUpdate(_)
         | EventMsg::McpStartupComplete(_)
@@ -86,6 +85,9 @@ pub(crate) fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::ItemCompleted(_)
         | EventMsg::AgentMessageContentDelta(_)
         | EventMsg::ReasoningContentDelta(_)
-        | EventMsg::ReasoningRawContentDelta(_) => false,
+        | EventMsg::ReasoningRawContentDelta(_)
+        | EventMsg::PromptSummary(_)
+        | EventMsg::HookOutput(_)
+        | EventMsg::SearchHistoryResponse(_) => false,
     }
 }

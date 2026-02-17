@@ -178,6 +178,10 @@ pub enum Op {
     /// Request a single history entry identified by `log_id` + `offset`.
     GetHistoryEntryRequest { offset: usize, log_id: u64 },
 
+    /// Request all history entries for client-side search. Reply is delivered
+    /// via `EventMsg::SearchHistoryResponse`.
+    SearchHistoryRequest { max_results: usize },
+
     /// Request the list of MCP tools available across all configured servers.
     /// Reply is delivered via `EventMsg::McpListToolsResponse`.
     ListMcpTools,
@@ -193,8 +197,11 @@ pub enum Op {
     /// Request Codex to undo a turn (turn are stacked so it is the same effect as CMD + Z).
     Undo,
 
-    /// Request a code review from the agent.
-    Review { review_request: ReviewRequest },
+    /// Request the list of available undo snapshots.
+    UndoList,
+
+    /// Undo to a specific snapshot by index (0 = most recent).
+    UndoTo { index: i64 },
 
     /// Request to shut down codex instance.
     Shutdown,
@@ -535,6 +542,9 @@ pub enum EventMsg {
 
     UndoCompleted(UndoCompletedEvent),
 
+    /// Response to `Op::UndoList` containing available snapshots.
+    UndoListResult(UndoListResultEvent),
+
     /// Notification that a model stream experienced an error or disconnect
     /// and the system is handling it (e.g., retrying with backoff).
     StreamError(StreamErrorEvent),
@@ -551,6 +561,9 @@ pub enum EventMsg {
     /// Response to GetHistoryEntryRequest.
     GetHistoryEntryResponse(GetHistoryEntryResponseEvent),
 
+    /// Response to SearchHistoryRequest with matching history entries.
+    SearchHistoryResponse(SearchHistoryResponseEvent),
+
     /// List of MCP tools available to the agent.
     McpListToolsResponse(McpListToolsResponseEvent),
 
@@ -564,12 +577,6 @@ pub enum EventMsg {
     /// Notification that the agent is shutting down.
     ShutdownComplete,
 
-    /// Entered review mode.
-    EnteredReviewMode(ReviewRequest),
-
-    /// Exited review mode with an optional final result to apply.
-    ExitedReviewMode(ExitedReviewModeEvent),
-
     RawResponseItem(RawResponseItemEvent),
 
     ItemStarted(ItemStartedEvent),
@@ -578,6 +585,11 @@ pub enum EventMsg {
     AgentMessageContentDelta(AgentMessageContentDeltaEvent),
     ReasoningContentDelta(ReasoningContentDeltaEvent),
     ReasoningRawContentDelta(ReasoningRawContentDeltaEvent),
+
+    PromptSummary(PromptSummaryEvent),
+
+    /// Output from a hook script, routed by level for TUI display.
+    HookOutput(HookOutputEvent),
 }
 
 /// Codex errors that we expose to clients.
@@ -721,11 +733,6 @@ impl HasLegacyEvent for EventMsg {
             _ => Vec::new(),
         }
     }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
-pub struct ExitedReviewModeEvent {
-    pub review_output: Option<ReviewOutputEvent>,
 }
 
 // Individual event payload types matching each `EventMsg` variant.
@@ -1132,7 +1139,6 @@ pub enum SessionSource {
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
 pub enum SubAgentSource {
-    Review,
     Compact,
     Other(String),
 }
@@ -1153,7 +1159,6 @@ impl fmt::Display for SessionSource {
 impl fmt::Display for SubAgentSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SubAgentSource::Review => f.write_str("review"),
             SubAgentSource::Compact => f.write_str("compact"),
             SubAgentSource::Other(other) => f.write_str(other),
         }
@@ -1258,75 +1263,13 @@ pub struct GitInfo {
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
-pub enum ReviewDelivery {
-    Inline,
-    Detached,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
-/// Review request sent to the review session.
-pub struct ReviewRequest {
-    pub prompt: String,
-    pub user_facing_hint: String,
-}
-
-/// Structured review result produced by a child review session.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
-pub struct ReviewOutputEvent {
-    pub findings: Vec<ReviewFinding>,
-    pub overall_correctness: String,
-    pub overall_explanation: String,
-    pub overall_confidence_score: f32,
-}
-
-impl Default for ReviewOutputEvent {
-    fn default() -> Self {
-        Self {
-            findings: Vec::new(),
-            overall_correctness: String::default(),
-            overall_explanation: String::default(),
-            overall_confidence_score: 0.0,
-        }
-    }
-}
-
-/// A single review finding describing an observed issue or recommendation.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
-pub struct ReviewFinding {
-    pub title: String,
-    pub body: String,
-    pub confidence_score: f32,
-    pub priority: i32,
-    pub code_location: ReviewCodeLocation,
-}
-
-/// Location of the code related to a review finding.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
-pub struct ReviewCodeLocation {
-    pub absolute_file_path: PathBuf,
-    pub line_range: ReviewLineRange,
-}
-
-/// Inclusive line range in a file associated with the finding.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
-pub struct ReviewLineRange {
-    pub start: u32,
-    pub end: u32,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ExecCommandSource {
+    #[default]
     Agent,
     UserShell,
     UnifiedExecStartup,
     UnifiedExecInteraction,
-}
-
-impl Default for ExecCommandSource {
-    fn default() -> Self {
-        Self::Agent
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
@@ -1448,6 +1391,23 @@ pub struct UndoCompletedEvent {
     pub message: Option<String>,
 }
 
+/// Information about a single undo snapshot for display in the undo list.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct SnapshotInfo {
+    /// Display index (0 = most recent).
+    pub index: i64,
+    /// Short git commit id (first 7 chars).
+    pub short_id: String,
+    /// User message label from when the snapshot was taken.
+    pub label: String,
+}
+
+/// Response payload for `Op::UndoList`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct UndoListResultEvent {
+    pub snapshots: Vec<SnapshotInfo>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct StreamErrorEvent {
     pub message: String,
@@ -1505,6 +1465,11 @@ pub struct GetHistoryEntryResponseEvent {
     /// The entry at the requested offset, if available and parseable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<HistoryEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct SearchHistoryResponseEvent {
+    pub entries: Vec<HistoryEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
@@ -1669,12 +1634,31 @@ pub struct TurnAbortedEvent {
     pub reason: TurnAbortReason,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct PromptSummaryEvent {
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HookOutputLevel {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct HookOutputEvent {
+    pub message: String,
+    pub level: HookOutputLevel,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum TurnAbortReason {
     Interrupted,
     Replaced,
-    ReviewEnded,
 }
 
 #[cfg(test)]

@@ -31,9 +31,9 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_show_all: bool,
 
-    /// Model the agent should use.
-    #[arg(long, short = 'm')]
-    pub model: Option<String>,
+    /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
+    #[arg(long, short = 'a')]
+    pub agent: Option<String>,
 
     /// Configuration profile from config.toml to specify default options.
     #[arg(long = "profile", short = 'p')]

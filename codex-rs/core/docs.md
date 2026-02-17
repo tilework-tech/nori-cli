@@ -39,12 +39,32 @@ Key integrations:
 2. Project-local config at `<cwd>/.codex/config.toml`
 3. Command-line overrides
 
+
+**Configuration Editing** (`config/edit.rs`): Provides a builder API for programmatic config updates via `toml_edit`:
+
+The `ConfigEditsBuilder` allows code to modify `config.toml` atomically without losing comments or formatting:
+
+```rust
+ConfigEditsBuilder::new(codex_home)
+    .set_default_model("claude-code", "haiku")
+    .apply()
+    .await?;
+```
+
+Key methods:
+- `set_default_model(agent, model)`: Persists a model preference to the `[default_models]` table for a specific agent
+- `set_path(path, value)`: Sets arbitrary TOML paths for advanced config mutations
+- `apply()`: Writes changes asynchronously; locks config file during write
+- `apply_blocking()`: Synchronous variant for non-async contexts
+
+The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user preferences like model selections when `/model` is invoked (see `@/codex-rs/tui/docs.md`).
+
 **Authentication** (`auth.rs`, `auth/`): Supports multiple auth modes:
 - API key via `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
+**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
 - Session creation and resumption
 - Message history tracking
 - Token usage accumulation
@@ -55,6 +75,17 @@ Key integrations:
 - Windows: Restricted process tokens (`codex-windows-sandbox`)
 
 **Execution Policy** (`exec_policy.rs`, `command_safety/`): Evaluates whether commands should be auto-approved or require user confirmation based on policy rules.
+
+**Custom Prompts** (`custom_prompts.rs`): Discovers and executes user-authored custom prompts from a directory. Two kinds of prompts are supported:
+
+| Kind | Extensions | Behavior |
+|------|-----------|----------|
+| Markdown | `.md` | Content is read, frontmatter parsed for `description` and `argument_hint`, body becomes the prompt template |
+| Script | `.sh`, `.py`, `.js` | File is discovered with an assigned interpreter; content is empty at discovery time; execution happens later via `execute_script()` |
+
+`discover_prompts_in()` scans a directory for supported file extensions, assigns a `CustomPromptKind` (from `@/codex-rs/protocol/src/custom_prompts.rs`), and returns sorted `CustomPrompt` structs. Scripts are assigned interpreters: `.sh` -> `bash`, `.py` -> `python3`, `.js` -> `node`.
+
+`execute_script()` runs a `Script`-kind prompt via its interpreter (e.g. `bash script.sh arg1 arg2`), captures stdout, and enforces a configurable timeout. Returns `Ok(stdout)` on zero exit or `Err(message)` on non-zero exit, I/O error, or timeout.
 
 **MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model.
 
@@ -86,12 +117,16 @@ The `user_notification.rs` module provides OS-level notification support:
 | `Idle` | "Nori: Session Idle" | Idle duration in seconds |
 
 Notification modes:
-1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. On X11 Linux, supports click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/codex-rs/acp/src/config/types.rs`).
+1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. All calls to `send_native()` are non-blocking -- they spawn a background thread to call `notif.show()`, because some platforms (notably macOS) block synchronously on that call. On X11 Linux, the spawned thread also handles click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/codex-rs/acp/src/config/types.rs`).
 2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload.
 
 Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading.
 
 ### Things to Know
+
+**Module Structure Convention:**
+
+Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file. This separates test code from production code while keeping the Rust module path unchanged. Modules using this pattern include `codex/`, `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`).
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt

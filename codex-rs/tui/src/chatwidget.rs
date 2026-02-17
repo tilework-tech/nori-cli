@@ -9,8 +9,6 @@ use std::time::Duration;
 #[allow(unused_imports)]
 use codex_app_server_protocol::AuthMode;
 use codex_core::config::Config;
-use codex_core::git_info::current_branch_name;
-use codex_core::git_info::local_git_branches;
 use codex_core::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
 use codex_core::protocol::AgentMessageDeltaEvent;
 use codex_core::protocol::AgentMessageEvent;
@@ -28,7 +26,8 @@ use codex_core::protocol::ExecApprovalRequestEvent;
 use codex_core::protocol::ExecCommandBeginEvent;
 use codex_core::protocol::ExecCommandEndEvent;
 use codex_core::protocol::ExecCommandSource;
-use codex_core::protocol::ExitedReviewModeEvent;
+use codex_core::protocol::HookOutputEvent;
+use codex_core::protocol::HookOutputLevel;
 use codex_core::protocol::ListCustomPromptsResponseEvent;
 use codex_core::protocol::McpListToolsResponseEvent;
 use codex_core::protocol::McpStartupCompleteEvent;
@@ -39,7 +38,6 @@ use codex_core::protocol::McpToolCallEndEvent;
 use codex_core::protocol::Op;
 use codex_core::protocol::PatchApplyBeginEvent;
 use codex_core::protocol::RateLimitSnapshot;
-use codex_core::protocol::ReviewRequest;
 use codex_core::protocol::StreamErrorEvent;
 use codex_core::protocol::TaskCompleteEvent;
 use codex_core::protocol::TokenUsage;
@@ -47,6 +45,7 @@ use codex_core::protocol::TokenUsageInfo;
 use codex_core::protocol::TurnAbortReason;
 use codex_core::protocol::TurnDiffEvent;
 use codex_core::protocol::UndoCompletedEvent;
+use codex_core::protocol::UndoListResultEvent;
 use codex_core::protocol::UndoStartedEvent;
 use codex_core::protocol::UserMessageEvent;
 use codex_core::protocol::ViewImageToolCallEvent;
@@ -83,8 +82,6 @@ use crate::bottom_pane::InputResult;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
-use crate::bottom_pane::custom_prompt_view::CustomPromptView;
-use crate::bottom_pane::popup_consts::searchable_popup_hint_line;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::clipboard_paste::paste_image_to_temp_png;
 use crate::diff_render::display_path_for;
@@ -94,7 +91,6 @@ use crate::exec_cell::ExecCell;
 use crate::exec_cell::new_active_exec_command;
 use crate::get_git_diff::get_git_diff;
 use crate::history_cell;
-use crate::history_cell::AgentMessageCell;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::McpToolCallCell;
 use crate::history_cell::PlainHistoryCell;
@@ -102,7 +98,6 @@ use crate::login_handler::AgentLoginSupport;
 use crate::login_handler::LoginHandler;
 #[allow(unused_imports)]
 use crate::login_handler::LoginMethod;
-use crate::markdown::append_markdown;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::FlexRenderable;
@@ -125,19 +120,17 @@ use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
 #[cfg(feature = "unstable")]
 pub(crate) use self::agent::AcpAgentHandle;
+use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
 use self::agent::spawn_agent_from_existing;
 mod session_header;
 use self::session_header::SessionHeader;
 use crate::streaming::controller::StreamController;
-use std::path::Path;
-
 use chrono::Local;
 use codex_common::approval_presets::ApprovalPreset;
 use codex_common::approval_presets::approval_mode_label;
 use codex_common::approval_presets::builtin_approval_presets;
-use codex_common::model_presets::ModelPreset;
-use codex_common::model_presets::builtin_model_presets;
+
 use codex_core::AuthManager;
 #[allow(unused_imports)]
 use codex_core::CodexAuth;
@@ -147,7 +140,6 @@ use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_file_search::FileMatch;
 use codex_protocol::plan_tool::UpdatePlanArgs;
-use strum::IntoEnumIterator;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
@@ -173,8 +165,6 @@ impl UnifiedExecWaitState {
 }
 
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
-const NUDGE_MODEL_SLUG: &str = "gpt-5.1-codex-mini";
-const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
 
 #[derive(Default)]
 struct RateLimitWarningState {
@@ -319,18 +309,10 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
-    /// Expected model name for this widget. When set, events from other models
+    /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
-    /// with a matching model. This prevents race conditions when switching agents.
-    pub(crate) expected_model: Option<String>,
-}
-
-#[derive(Default)]
-enum RateLimitSwitchPromptState {
-    #[default]
-    Idle,
-    Pending,
-    Shown,
+    /// with a matching agent. This prevents race conditions when switching agents.
+    pub(crate) expected_agent: Option<String>,
 }
 
 pub(crate) struct ChatWidget {
@@ -345,7 +327,6 @@ pub(crate) struct ChatWidget {
     token_info: Option<TokenUsageInfo>,
     rate_limit_snapshot: Option<RateLimitSnapshotDisplay>,
     rate_limit_warnings: RateLimitWarningState,
-    rate_limit_switch_prompt: RateLimitSwitchPromptState,
     rate_limit_poller: Option<JoinHandle<()>>,
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,
@@ -375,10 +356,6 @@ pub(crate) struct ChatWidget {
     queued_user_messages: VecDeque<UserMessage>,
     // Pending notification to show when unfocused on next Draw
     pending_notification: Option<Notification>,
-    // Simple review mode flag; used to adjust layout and banners.
-    is_review_mode: bool,
-    // Snapshot of token usage to restore after review mode exits.
-    pre_review_token_info: Option<Option<TokenUsageInfo>>,
     // Whether to add a final message separator after the last message
     needs_final_message_separator: bool,
 
@@ -391,11 +368,11 @@ pub(crate) struct ChatWidget {
     effective_cwd_tracker: EffectiveCwdTracker,
     // Pending agent selection for next prompt submission
     pending_agent: Option<PendingAgentInfo>,
-    // Expected model name for agent switch synchronization.
-    // When set, events are ignored until SessionConfigured arrives with this model.
-    expected_model: Option<String>,
+    // Expected agent name for agent switch synchronization.
+    // When set, events are ignored until SessionConfigured arrives with this agent.
+    expected_agent: Option<String>,
     // Whether SessionConfigured has been received for this widget.
-    // Used with expected_model to filter events from previous agents.
+    // Used with expected_agent to filter events from previous agents.
     session_configured_received: bool,
     // ACP agent handle for model switching (only present in ACP mode)
     #[cfg(feature = "unstable")]
@@ -406,12 +383,19 @@ pub(crate) struct ChatWidget {
     login_handler: Option<LoginHandler>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
+    // Loop mode state: remaining iterations (None = not looping)
+    loop_remaining: Option<i32>,
+    // Loop mode state: total iterations configured
+    loop_total: Option<i32>,
+    // Gate: set when AgentMessage is received, cleared on next TaskStarted.
+    // While true, late-arriving tool events are silently discarded.
+    turn_finished: bool,
 }
 
 /// Information about a pending agent switch in ChatWidget.
 #[derive(Debug, Clone)]
 pub(crate) struct PendingAgentInfo {
-    pub model_name: String,
+    pub agent_name: String,
     pub display_name: String,
 }
 
@@ -463,7 +447,7 @@ impl ChatWidget {
     // --- Small event handlers ---
     fn on_session_configured(&mut self, event: codex_core::protocol::SessionConfiguredEvent) {
         // Mark that we've received SessionConfigured - this unlocks event processing
-        // when expected_model is set (during agent switching)
+        // when expected_agent is set (during agent switching)
         self.session_configured_received = true;
 
         // Clear the "Connecting to [Agent]" status indicator shown during agent startup
@@ -477,8 +461,8 @@ impl ChatWidget {
         self.conversation_id = Some(event.session_id);
         self.current_rollout_path = Some(event.rollout_path.clone());
         let initial_messages = event.initial_messages.clone();
-        let model_for_header = event.model.clone();
-        self.session_header.set_model(&model_for_header);
+        let agent_for_header = event.model.clone();
+        self.session_header.set_agent(&agent_for_header);
         self.add_to_history(history_cell::new_session_info(
             &self.config,
             event,
@@ -508,6 +492,11 @@ impl ChatWidget {
         }
         self.flush_answer_stream_with_separator();
         self.handle_stream_finished();
+
+        // Close the gate: any tool events arriving after this point are stale
+        // and should be silently discarded (ACP race condition).
+        self.turn_finished = true;
+
         self.request_redraw();
     }
 
@@ -559,19 +548,26 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(true);
         self.retry_status_header = None;
         self.bottom_pane.set_interrupt_hint_visible(true);
-        self.set_status_header(String::from("Working"));
+        self.set_status_header(crate::status_indicator_widget::random_status_message());
         self.full_reasoning_buffer.clear();
         self.reasoning_buffer.clear();
+        self.turn_finished = false;
         self.request_redraw();
     }
 
     fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
-        // Flush any queued interrupts (e.g., approval requests) that were deferred
-        // during streaming. This is necessary for ACP mode which doesn't send a
-        // separate AgentMessage event to trigger handle_stream_finished().
-        self.flush_interrupt_queue();
+        // Process any deferred completion events (ExecEnd, McpEnd, PatchEnd) so
+        // in-progress tool cells transition to their finished state ("Running" →
+        // "Ran"). Discard begin events that would create new cells below the
+        // agent's final message.
+        let mut mgr = std::mem::take(&mut self.interrupts);
+        let discarded = mgr.flush_completions_and_clear(self);
+        self.interrupts = mgr;
+        if discarded > 0 {
+            debug!("on_task_complete: discarded {discarded} deferred begin/other interrupt events");
+        }
 
         // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
         self.pending_exec_cells.drain_failed();
@@ -588,7 +584,7 @@ impl ChatWidget {
         self.app_event_tx
             .send(AppEvent::RefreshSystemInfoForDirectory {
                 dir: self.config.cwd.clone(),
-                model: Some(self.config.model.clone()),
+                agent: Some(self.config.model.clone()),
             });
 
         // If there is a queued user message, send exactly one now to begin the next turn.
@@ -598,7 +594,19 @@ impl ChatWidget {
             response: last_agent_message.unwrap_or_default(),
         });
 
-        self.maybe_show_pending_rate_limit_prompt();
+        // Loop mode: if iterations remain, fire the next iteration.
+        #[cfg(feature = "nori-config")]
+        if let Some(remaining) = self.loop_remaining
+            && remaining > 0
+            && let Some(prompt) = self.first_prompt_text.clone()
+        {
+            let total = self.loop_total.unwrap_or(0);
+            self.app_event_tx.send(AppEvent::LoopIteration {
+                prompt,
+                remaining: remaining - 1,
+                total,
+            });
+        }
     }
 
     pub(crate) fn set_token_info(&mut self, info: Option<TokenUsageInfo>) {
@@ -628,18 +636,6 @@ impl ChatWidget {
             })
     }
 
-    fn restore_pre_review_token_info(&mut self) {
-        if let Some(saved) = self.pre_review_token_info.take() {
-            match saved {
-                Some(info) => self.apply_token_info(info),
-                None => {
-                    self.bottom_pane.set_context_window_percent(None);
-                    self.token_info = None;
-                }
-            }
-        }
-    }
-
     pub(crate) fn on_rate_limit_snapshot(&mut self, snapshot: Option<RateLimitSnapshot>) {
         if let Some(snapshot) = snapshot {
             let warnings = self.rate_limit_warnings.take_warnings(
@@ -657,28 +653,6 @@ impl ChatWidget {
                     .as_ref()
                     .and_then(|window| window.window_minutes),
             );
-
-            let high_usage = snapshot
-                .secondary
-                .as_ref()
-                .map(|w| w.used_percent >= RATE_LIMIT_SWITCH_PROMPT_THRESHOLD)
-                .unwrap_or(false)
-                || snapshot
-                    .primary
-                    .as_ref()
-                    .map(|w| w.used_percent >= RATE_LIMIT_SWITCH_PROMPT_THRESHOLD)
-                    .unwrap_or(false);
-
-            if high_usage
-                && !self.rate_limit_switch_prompt_hidden()
-                && self.config.model != NUDGE_MODEL_SLUG
-                && !matches!(
-                    self.rate_limit_switch_prompt,
-                    RateLimitSwitchPromptState::Shown
-                )
-            {
-                self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Pending;
-            }
 
             let display = crate::status::rate_limit_snapshot_display(&snapshot, Local::now());
             self.rate_limit_snapshot = Some(display);
@@ -703,11 +677,11 @@ impl ChatWidget {
         self.suppressed_exec_calls.clear();
         self.last_unified_wait = None;
         self.stream_controller = None;
-        self.maybe_show_pending_rate_limit_prompt();
     }
 
     fn on_error(&mut self, message: String) {
         self.finalize_turn();
+        self.cancel_loop();
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
 
@@ -791,15 +765,14 @@ impl ChatWidget {
     /// Handle a turn aborted due to user interrupt (Esc).
     /// When there are queued user messages, restore them into the composer
     /// separated by newlines rather than auto‑submitting the next one.
-    fn on_interrupted_turn(&mut self, reason: TurnAbortReason) {
+    fn on_interrupted_turn(&mut self, _reason: TurnAbortReason) {
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
+        self.cancel_loop();
 
-        if reason != TurnAbortReason::ReviewEnded {
-            self.add_to_history(history_cell::new_error_event(
-                "Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues".to_owned(),
-            ));
-        }
+        self.add_to_history(history_cell::new_error_event(
+            "Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues".to_owned(),
+        ));
 
         // If any messages were queued during the task, restore them into the composer.
         if !self.queued_user_messages.is_empty() {
@@ -853,6 +826,9 @@ impl ChatWidget {
     }
 
     fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {
+        if self.turn_finished {
+            return;
+        }
         self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
@@ -866,6 +842,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_begin(&mut self, event: PatchApplyBeginEvent) {
+        if self.turn_finished {
+            return;
+        }
         // Track Edit tool call for session statistics
         self.session_stats.record_tool_call("Edit");
 
@@ -879,6 +858,9 @@ impl ChatWidget {
     }
 
     fn on_view_image_tool_call(&mut self, event: ViewImageToolCallEvent) {
+        if self.turn_finished {
+            return;
+        }
         // Track ViewImage tool call for session statistics
         self.session_stats.record_tool_call("ViewImage");
 
@@ -891,6 +873,9 @@ impl ChatWidget {
     }
 
     fn on_patch_apply_end(&mut self, event: codex_core::protocol::PatchApplyEndEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = event.clone();
         self.defer_or_handle(
             |q| q.push_patch_end(event),
@@ -899,16 +884,25 @@ impl ChatWidget {
     }
 
     fn on_exec_command_end(&mut self, ev: ExecCommandEndEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
     }
 
     fn on_mcp_tool_call_begin(&mut self, ev: McpToolCallBeginEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_mcp_begin(ev), |s| s.handle_mcp_begin_now(ev2));
     }
 
     fn on_mcp_tool_call_end(&mut self, ev: McpToolCallEndEvent) {
+        if self.turn_finished {
+            return;
+        }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_mcp_end(ev), |s| s.handle_mcp_end_now(ev2));
     }
@@ -962,6 +956,10 @@ impl ChatWidget {
         self.set_status_header(message);
     }
 
+    fn on_prompt_summary(&mut self, summary: String) {
+        self.bottom_pane.set_prompt_summary(Some(summary));
+    }
+
     fn on_undo_started(&mut self, event: UndoStartedEvent) {
         self.bottom_pane.ensure_status_indicator();
         self.bottom_pane.set_interrupt_hint_visible(false);
@@ -986,6 +984,47 @@ impl ChatWidget {
         } else {
             self.add_error_message(message);
         }
+    }
+
+    fn on_undo_list_result(&mut self, event: UndoListResultEvent) {
+        if event.snapshots.is_empty() {
+            self.add_info_message("No undo snapshots available.".to_string(), None);
+            return;
+        }
+
+        let items: Vec<SelectionItem> = event
+            .snapshots
+            .into_iter()
+            .map(|snap| {
+                let index = snap.index;
+                let label = truncate_text(&snap.label, 60);
+                let name = format!("[{}] {label}", snap.short_id);
+                let tx = self.app_event_tx.clone();
+                SelectionItem {
+                    name,
+                    display_shortcut: None,
+                    description: None,
+                    selected_description: None,
+                    is_current: false,
+                    actions: vec![Box::new(move |_| {
+                        tx.send(AppEvent::CodexOp(Op::UndoTo { index }));
+                    })],
+                    dismiss_on_select: true,
+                    search_value: None,
+                }
+            })
+            .collect();
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Undo to snapshot".to_string()),
+            subtitle: None,
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            header: Box::new(()),
+            is_searchable: false,
+            ..Default::default()
+        });
+        self.request_redraw();
     }
 
     fn on_stream_error(&mut self, message: String) {
@@ -1224,7 +1263,7 @@ impl ChatWidget {
                     self.app_event_tx
                         .send(AppEvent::RefreshSystemInfoForDirectory {
                             dir,
-                            model: Some(self.config.model.clone()),
+                            agent: Some(self.config.model.clone()),
                         });
                 }
             }
@@ -1303,7 +1342,7 @@ impl ChatWidget {
             self.app_event_tx
                 .send(AppEvent::RefreshSystemInfoForDirectory {
                     dir: ev.cwd.clone(),
-                    model: Some(self.config.model.clone()),
+                    agent: Some(self.config.model.clone()),
                 });
         }
 
@@ -1459,7 +1498,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            expected_model,
+            expected_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1479,7 +1518,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
             }),
@@ -1494,7 +1533,7 @@ impl ChatWidget {
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
-            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+
             rate_limit_poller: None,
             stream_controller: None,
             running_commands: HashMap::new(),
@@ -1505,28 +1544,29 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: String::from("Working"),
+            current_status_header: crate::status_indicator_widget::random_status_message(),
             retry_status_header: None,
             conversation_id: None,
             queued_user_messages: VecDeque::new(),
             show_welcome_banner: true,
             suppress_session_configured_redraw: false,
             pending_notification: None,
-            is_review_mode: false,
-            pre_review_token_info: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_model,
+            expected_agent,
             session_configured_received: false,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
+            turn_finished: false,
         };
 
         widget.prefetch_rate_limits();
@@ -1549,7 +1589,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
-            expected_model,
+            expected_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -1571,7 +1611,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
-                model_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
             }),
@@ -1586,7 +1626,7 @@ impl ChatWidget {
             token_info: None,
             rate_limit_snapshot: None,
             rate_limit_warnings: RateLimitWarningState::default(),
-            rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
+
             rate_limit_poller: None,
             stream_controller: None,
             running_commands: HashMap::new(),
@@ -1597,22 +1637,20 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: String::from("Working"),
+            current_status_header: crate::status_indicator_widget::random_status_message(),
             retry_status_header: None,
             conversation_id: None,
             queued_user_messages: VecDeque::new(),
             show_welcome_banner: true,
             suppress_session_configured_redraw: true,
             pending_notification: None,
-            is_review_mode: false,
-            pre_review_token_info: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
             current_rollout_path: None,
             pending_exec_cells: PendingExecCellTracker::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_model,
+            expected_agent,
             // For existing conversations, we've already received SessionConfigured
             session_configured_received: true,
             // No ACP handle for existing conversations (they are HTTP mode only)
@@ -1621,6 +1659,106 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
+            turn_finished: false,
+        };
+
+        widget.prefetch_rate_limits();
+
+        widget
+    }
+
+    /// Create a ChatWidget that resumes an ACP session via `session/load`
+    /// or client-side replay when the agent doesn't support `session/load`.
+    pub(crate) fn new_resumed_acp(
+        common: ChatWidgetInit,
+        acp_session_id: Option<String>,
+        transcript: codex_acp::transcript::Transcript,
+    ) -> Self {
+        let ChatWidgetInit {
+            config,
+            frame_requester,
+            app_event_tx,
+            initial_prompt,
+            initial_images,
+            enhanced_keys_supported,
+            auth_manager,
+            vertical_footer,
+            expected_agent,
+        } = common;
+        let mut rng = rand::rng();
+        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+        let spawn_result = spawn_acp_agent_resume(
+            config.clone(),
+            acp_session_id,
+            transcript,
+            app_event_tx.clone(),
+        );
+
+        let first_prompt_text = initial_prompt.clone();
+        let mut widget = Self {
+            app_event_tx: app_event_tx.clone(),
+            frame_requester: frame_requester.clone(),
+            codex_op_tx: spawn_result.op_tx,
+            bottom_pane: BottomPane::new(BottomPaneParams {
+                frame_requester,
+                app_event_tx,
+                has_input_focus: true,
+                enhanced_keys_supported,
+                placeholder_text: placeholder,
+                disable_paste_burst: config.disable_paste_burst,
+                animations_enabled: config.animations,
+                vertical_footer,
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| config.model.clone()),
+            }),
+            active_cell: None,
+            config: config.clone(),
+            auth_manager,
+            session_header: SessionHeader::new(config.model),
+            initial_user_message: create_initial_user_message(
+                initial_prompt.unwrap_or_default(),
+                initial_images,
+            ),
+            token_info: None,
+            rate_limit_snapshot: None,
+            rate_limit_warnings: RateLimitWarningState::default(),
+
+            rate_limit_poller: None,
+            stream_controller: None,
+            running_commands: HashMap::new(),
+            suppressed_exec_calls: HashSet::new(),
+            last_unified_wait: None,
+            task_complete_pending: false,
+            mcp_startup_status: None,
+            interrupts: InterruptManager::new(),
+            reasoning_buffer: String::new(),
+            full_reasoning_buffer: String::new(),
+            current_status_header: crate::status_indicator_widget::random_status_message(),
+            retry_status_header: None,
+            conversation_id: None,
+            queued_user_messages: VecDeque::new(),
+            show_welcome_banner: false,
+            suppress_session_configured_redraw: false,
+            pending_notification: None,
+            needs_final_message_separator: false,
+            last_rendered_width: std::cell::Cell::new(None),
+            current_rollout_path: None,
+            pending_exec_cells: PendingExecCellTracker::new(),
+            effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
+            pending_agent: None,
+            expected_agent,
+            session_configured_received: false,
+            #[cfg(feature = "unstable")]
+            acp_handle: spawn_result.acp_handle,
+            session_stats: SessionStats::new(),
+            login_handler: None,
+            first_prompt_text,
+            loop_remaining: None,
+            loop_total: None,
+            turn_finished: false,
         };
 
         widget.prefetch_rate_limits();
@@ -1629,12 +1767,12 @@ impl ChatWidget {
     }
 
     /// Set a pending agent to switch to on the next prompt submission.
-    pub(crate) fn set_pending_agent(&mut self, model_name: String, display_name: String) {
+    pub(crate) fn set_pending_agent(&mut self, agent_name: String, display_name: String) {
         // Update the bottom pane's model display name for approval dialogs
         self.bottom_pane
-            .set_model_display_name(display_name.clone());
+            .set_agent_display_name(display_name.clone());
         self.pending_agent = Some(PendingAgentInfo {
-            model_name,
+            agent_name,
             display_name,
         });
     }
@@ -1742,6 +1880,12 @@ impl ChatWidget {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
+            SlashCommand::Resume => {
+                self.open_resume_session_picker();
+            }
+            SlashCommand::ResumeViewonly => {
+                self.open_viewonly_session_picker();
+            }
             SlashCommand::Init => {
                 let init_target = self.config.cwd.join(DEFAULT_PROJECT_DOC_FILENAME);
                 if init_target.exists() {
@@ -1757,9 +1901,6 @@ impl ChatWidget {
             SlashCommand::Compact => {
                 self.clear_token_usage();
                 self.app_event_tx.send(AppEvent::CodexOp(Op::Compact));
-            }
-            SlashCommand::Review => {
-                self.open_review_popup();
             }
             SlashCommand::Agent => {
                 self.open_agent_popup();
@@ -1790,7 +1931,7 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Quit | SlashCommand::Exit => {
-                self.request_exit();
+                self.submit_op(Op::Shutdown);
             }
             SlashCommand::Login => {
                 self.handle_login_command();
@@ -1803,7 +1944,7 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Undo => {
-                self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
+                self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
@@ -1941,7 +2082,7 @@ impl ChatWidget {
         self.add_boxed_history(Box::new(cell));
     }
 
-    fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
+    pub(crate) fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
         if !cell.display_lines(u16::MAX).is_empty() {
             // Only break exec grouping if the cell renders visible lines.
             // EXCEPT: Don't flush incomplete ExecCells - they should remain visible
@@ -1990,6 +2131,19 @@ impl ChatWidget {
 
         if self.first_prompt_text.is_none() {
             self.first_prompt_text = Some(text.clone());
+
+            // Initialize loop mode from NoriConfig on the very first prompt.
+            #[cfg(feature = "nori-config")]
+            {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                if let Some(count) = nori_config.loop_count
+                    && count > 1
+                {
+                    self.loop_remaining = Some(count - 1);
+                    self.loop_total = Some(count);
+                    self.add_info_message(format!("Loop mode: will run {count} iterations."), None);
+                }
+            }
         }
 
         // Track user message for session statistics
@@ -2001,14 +2155,14 @@ impl ChatWidget {
         self.app_event_tx
             .send(AppEvent::RefreshSystemInfoForDirectory {
                 dir: self.config.cwd.clone(),
-                model: Some(self.config.model.clone()),
+                agent: Some(self.config.model.clone()),
             });
 
         // Check if there's a pending agent switch - if so, send the message through
         // the App to trigger the switch first
         if let Some(pending) = self.pending_agent.take() {
             self.app_event_tx.send(AppEvent::SubmitWithAgentSwitch {
-                model_name: pending.model_name,
+                agent_name: pending.agent_name,
                 display_name: pending.display_name,
                 message_text: text,
                 image_paths,
@@ -2084,11 +2238,11 @@ impl ChatWidget {
     pub(crate) fn handle_codex_event(&mut self, event: Event) {
         let Event { id, msg } = event;
 
-        // When expected_model is set (during agent switching), we need to filter events
+        // When expected_agent is set (during agent switching), we need to filter events
         // to prevent events from the OLD agent from affecting the NEW widget.
-        if let Some(ref expected) = self.expected_model {
+        if let Some(ref expected) = self.expected_agent {
             tracing::debug!(
-                "Event filtering active: expected_model={}, session_configured_received={}",
+                "Event filtering active: expected_agent={}, session_configured_received={}",
                 expected,
                 self.session_configured_received
             );
@@ -2176,9 +2330,6 @@ impl ChatWidget {
                 TurnAbortReason::Replaced => {
                     self.on_error("Turn aborted: replaced by a new task".to_owned())
                 }
-                TurnAbortReason::ReviewEnded => {
-                    self.on_interrupted_turn(ev.reason);
-                }
             },
             EventMsg::PlanUpdate(update) => self.on_plan_update(update),
             EventMsg::ExecApprovalRequest(ev) => {
@@ -2212,6 +2363,7 @@ impl ChatWidget {
             }
             EventMsg::UndoStarted(ev) => self.on_undo_started(ev),
             EventMsg::UndoCompleted(ev) => self.on_undo_completed(ev),
+            EventMsg::UndoListResult(ev) => self.on_undo_list_result(ev),
             EventMsg::StreamError(StreamErrorEvent { message, .. }) => {
                 self.on_stream_error(message)
             }
@@ -2220,10 +2372,6 @@ impl ChatWidget {
                     self.on_user_message_event(ev);
                 }
             }
-            EventMsg::EnteredReviewMode(review_request) => {
-                self.on_entered_review_mode(review_request)
-            }
-            EventMsg::ExitedReviewMode(review) => self.on_exited_review_mode(review),
             EventMsg::ContextCompacted(_) => self.on_agent_message("Context compacted".to_owned()),
             EventMsg::RawResponseItem(_)
             | EventMsg::ItemStarted(_)
@@ -2231,60 +2379,23 @@ impl ChatWidget {
             | EventMsg::AgentMessageContentDelta(_)
             | EventMsg::ReasoningContentDelta(_)
             | EventMsg::ReasoningRawContentDelta(_) => {}
-        }
-    }
-
-    fn on_entered_review_mode(&mut self, review: ReviewRequest) {
-        // Enter review mode and emit a concise banner
-        if self.pre_review_token_info.is_none() {
-            self.pre_review_token_info = Some(self.token_info.clone());
-        }
-        self.is_review_mode = true;
-        let banner = format!(">> Code review started: {} <<", review.user_facing_hint);
-        self.add_to_history(history_cell::new_review_status_line(banner));
-        self.request_redraw();
-    }
-
-    fn on_exited_review_mode(&mut self, review: ExitedReviewModeEvent) {
-        // Leave review mode; if output is present, flush pending stream + show results.
-        if let Some(output) = review.review_output {
-            self.flush_answer_stream_with_separator();
-            self.flush_interrupt_queue();
-            self.flush_active_cell();
-
-            if output.findings.is_empty() {
-                let explanation = output.overall_explanation.trim().to_string();
-                if explanation.is_empty() {
-                    tracing::error!("Reviewer failed to output a response.");
-                    self.add_to_history(history_cell::new_error_event(
-                        "Reviewer failed to output a response.".to_owned(),
-                    ));
-                } else {
-                    // Show explanation when there are no structured findings.
-                    let mut rendered: Vec<ratatui::text::Line<'static>> = vec!["".into()];
-                    append_markdown(&explanation, None, &mut rendered);
-                    let body_cell = AgentMessageCell::new(rendered, false);
-                    self.app_event_tx
-                        .send(AppEvent::InsertHistoryCell(Box::new(body_cell)));
+            EventMsg::PromptSummary(ev) => self.on_prompt_summary(ev.summary),
+            EventMsg::HookOutput(HookOutputEvent { message, level }) => match level {
+                HookOutputLevel::Info => {
+                    self.add_plain_history_lines(vec![Line::from(message)]);
                 }
-            } else {
-                let message_text =
-                    codex_core::review_format::format_review_findings_block(&output.findings, None);
-                let mut message_lines: Vec<ratatui::text::Line<'static>> = Vec::new();
-                append_markdown(&message_text, None, &mut message_lines);
-                let body_cell = AgentMessageCell::new(message_lines, true);
-                self.app_event_tx
-                    .send(AppEvent::InsertHistoryCell(Box::new(body_cell)));
+                HookOutputLevel::Warn => {
+                    self.on_warning(message);
+                }
+                HookOutputLevel::Error => {
+                    self.add_error_message(message);
+                }
+            },
+            EventMsg::SearchHistoryResponse(ev) => {
+                self.bottom_pane.on_search_history_response(ev.entries);
+                self.request_redraw();
             }
         }
-
-        self.is_review_mode = false;
-        self.restore_pre_review_token_info();
-        // Append a finishing banner at the end of this turn.
-        self.add_to_history(history_cell::new_review_status_line(
-            "<< Code review finished >>".to_string(),
-        ));
-        self.request_redraw();
     }
 
     fn on_user_message_event(&mut self, event: UserMessageEvent) {
@@ -2380,9 +2491,22 @@ impl ChatWidget {
     }
 
     pub(crate) fn add_status_output(&mut self) {
+        // Get optional status card fields from bottom_pane
+        let prompt_summary = self.bottom_pane.prompt_summary();
+        let token_breakdown = self.bottom_pane.transcript_token_breakdown();
+        let context_window_percent = self.bottom_pane.context_window_percent();
+
+        // Calculate approval mode label from config
+        let approval_mode_label =
+            approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
+
         self.add_to_history(crate::nori::session_header::new_nori_status_output(
             &self.config.model,
             self.config.cwd.clone(),
+            prompt_summary,
+            approval_mode_label,
+            token_breakdown,
+            context_window_percent,
         ));
     }
     fn stop_rate_limit_poller(&mut self) {
@@ -2395,109 +2519,6 @@ impl ChatWidget {
         // Rate limit prefetching is not used in Nori (no backend-client)
     }
 
-    fn lower_cost_preset(&self) -> Option<ModelPreset> {
-        let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
-        builtin_model_presets(auth_mode)
-            .into_iter()
-            .find(|preset| preset.model == NUDGE_MODEL_SLUG)
-    }
-
-    fn rate_limit_switch_prompt_hidden(&self) -> bool {
-        self.config
-            .notices
-            .hide_rate_limit_model_nudge
-            .unwrap_or(false)
-    }
-
-    fn maybe_show_pending_rate_limit_prompt(&mut self) {
-        if self.rate_limit_switch_prompt_hidden() {
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-            return;
-        }
-        if !matches!(
-            self.rate_limit_switch_prompt,
-            RateLimitSwitchPromptState::Pending
-        ) {
-            return;
-        }
-        if let Some(preset) = self.lower_cost_preset() {
-            self.open_rate_limit_switch_prompt(preset);
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Shown;
-        } else {
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-        }
-    }
-
-    fn open_rate_limit_switch_prompt(&mut self, preset: ModelPreset) {
-        let switch_model = preset.model.to_string();
-        let display_name = preset.display_name.to_string();
-        let default_effort: ReasoningEffortConfig = preset.default_reasoning_effort;
-
-        let switch_actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-            tx.send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                cwd: None,
-                approval_policy: None,
-                sandbox_policy: None,
-                model: Some(switch_model.clone()),
-                effort: Some(Some(default_effort)),
-                summary: None,
-            }));
-            tx.send(AppEvent::UpdateModel(switch_model.clone()));
-            tx.send(AppEvent::UpdateReasoningEffort(Some(default_effort)));
-        })];
-
-        let keep_actions: Vec<SelectionAction> = Vec::new();
-        let never_actions: Vec<SelectionAction> = vec![Box::new(|tx| {
-            tx.send(AppEvent::UpdateRateLimitSwitchPromptHidden(true));
-            tx.send(AppEvent::PersistRateLimitSwitchPromptHidden);
-        })];
-        let description = if preset.description.is_empty() {
-            Some("Uses fewer credits for upcoming turns.".to_string())
-        } else {
-            Some(preset.description.to_string())
-        };
-
-        let items = vec![
-            SelectionItem {
-                name: format!("Switch to {display_name}"),
-                description,
-                selected_description: None,
-                is_current: false,
-                actions: switch_actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Keep current model".to_string(),
-                description: None,
-                selected_description: None,
-                is_current: false,
-                actions: keep_actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Keep current model (never show again)".to_string(),
-                description: Some(
-                    "Hide future rate limit reminders about switching models.".to_string(),
-                ),
-                selected_description: None,
-                is_current: false,
-                actions: never_actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-        ];
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Approaching rate limits".to_string()),
-            subtitle: Some(format!("Switch to {display_name} for lower credit usage?")),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            ..Default::default()
-        });
-    }
-
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
@@ -2506,6 +2527,101 @@ impl ChatWidget {
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Show a selection view in the bottom pane.
+    pub(crate) fn show_selection_view(&mut self, params: SelectionViewParams) {
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the viewonly session picker to select a previous session to view.
+    pub(crate) fn open_viewonly_session_picker(&mut self) {
+        let cwd = self.config.cwd.clone();
+        let tx = self.app_event_tx.clone();
+
+        // Get NORI_HOME - if not available, show error
+        let nori_home = match crate::nori::config_adapter::get_nori_home() {
+            Ok(home) => home,
+            Err(e) => {
+                self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
+                return;
+            }
+        };
+
+        let nori_home_for_event = nori_home.clone();
+        tokio::spawn(async move {
+            match crate::nori::viewonly_session_picker::load_sessions_with_preview(&nori_home, &cwd)
+                .await
+            {
+                Ok(sessions) => {
+                    if sessions.is_empty() {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(
+                                "No previous sessions found for this project.".to_string(),
+                            ),
+                        )));
+                    } else {
+                        tx.send(crate::app_event::AppEvent::ShowViewonlySessionPicker {
+                            sessions,
+                            nori_home: nori_home_for_event,
+                        });
+                    }
+                }
+                Err(e) => {
+                    tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                        crate::history_cell::new_error_event(format!(
+                            "Failed to load sessions: {e}"
+                        )),
+                    )));
+                }
+            }
+        });
+    }
+
+    pub(crate) fn open_resume_session_picker(&mut self) {
+        let cwd = self.config.cwd.clone();
+        let tx = self.app_event_tx.clone();
+        let model = self.config.model.clone();
+
+        let nori_home = match crate::nori::config_adapter::get_nori_home() {
+            Ok(home) => home,
+            Err(e) => {
+                self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
+                return;
+            }
+        };
+
+        let nori_home_for_event = nori_home.clone();
+        tokio::spawn(async move {
+            match crate::nori::resume_session_picker::load_resumable_sessions(
+                &nori_home, &cwd, &model,
+            )
+            .await
+            {
+                Ok(sessions) => {
+                    if sessions.is_empty() {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(
+                                "No resumable sessions found for this project and agent."
+                                    .to_string(),
+                            ),
+                        )));
+                    } else {
+                        tx.send(crate::app_event::AppEvent::ShowResumeSessionPicker {
+                            sessions,
+                            nori_home: nori_home_for_event,
+                        });
+                    }
+                }
+                Err(e) => {
+                    tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                        crate::history_cell::new_error_event(format!(
+                            "Failed to load sessions: {e}"
+                        )),
+                    )));
+                }
+            }
+        });
     }
 
     /// Open the config popup for TUI settings.
@@ -2531,6 +2647,82 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the script timeout sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_script_timeout_picker(&mut self, current: codex_acp::config::ScriptTimeout) {
+        let params = crate::nori::config_picker::script_timeout_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the loop count sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_loop_count_picker(&mut self, current: Option<i32>) {
+        let params = crate::nori::config_picker::loop_count_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the footer segments picker popup.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_footer_segments_picker(
+        &mut self,
+        current: &codex_acp::config::FooterSegmentConfig,
+    ) {
+        let params = crate::nori::config_picker::footer_segments_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Replace the current footer segments picker with a refreshed one.
+    ///
+    /// Used after toggling a segment so the picker shows updated state without
+    /// stacking a new view on top of the old one.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn replace_footer_segments_picker(
+        &mut self,
+        current: &codex_acp::config::FooterSegmentConfig,
+    ) {
+        let params = crate::nori::config_picker::footer_segments_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.replace_selection_view(params);
+    }
+
+    /// Set a footer segment's enabled state.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_footer_segment_enabled(
+        &mut self,
+        segment: codex_acp::config::FooterSegment,
+        enabled: bool,
+    ) {
+        self.bottom_pane
+            .set_footer_segment_enabled(segment, enabled);
+    }
+
+    /// Set the loop state for a new iteration.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {
+        self.loop_remaining = Some(remaining);
+        self.loop_total = Some(total);
+    }
+
+    /// Cancel any active loop.
+    fn cancel_loop(&mut self) {
+        if self.loop_remaining.is_some() {
+            self.loop_remaining = None;
+            self.loop_total = None;
+            self.add_info_message("Loop cancelled.".to_string(), None);
+        }
+    }
+
     /// Open the hotkey picker sub-view.
     pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: codex_acp::config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
@@ -2543,6 +2735,10 @@ impl ChatWidget {
     /// Update the hotkey configuration used by the textarea for editing bindings.
     pub(crate) fn set_hotkey_config(&mut self, config: codex_acp::config::HotkeyConfig) {
         self.bottom_pane.set_hotkey_config(config);
+    }
+
+    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        self.bottom_pane.set_vim_mode_enabled(enabled);
     }
 
     /// Handle the /switch-skillset command.
@@ -2638,104 +2834,52 @@ impl ChatWidget {
         }
     }
 
-    /// Open a popup to choose the model (stage 1). After selecting a model,
-    /// a second popup is shown to choose the reasoning effort.
-    ///
-    /// In ACP mode (when current model is an ACP agent), this fetches available
-    /// models from the agent and shows them for selection.
+    /// Open the ACP model picker popup.
     pub(crate) fn open_model_popup(&mut self) {
-        let current_model = self.config.model.clone();
-
-        // Check if we're in ACP mode by checking if the current model is registered
-        // in the ACP agent registry
-        if codex_acp::get_agent_config(&current_model).is_ok() {
-            #[cfg(feature = "unstable")]
-            {
-                // ACP mode with unstable features - try to get model state from the agent
-                if let Some(handle) = self.acp_handle.clone() {
-                    let app_event_tx = self.app_event_tx.clone();
-                    tokio::spawn(async move {
-                        if let Some(model_state) = handle.get_model_state().await {
-                            let models: Vec<crate::app_event::AcpModelInfo> = model_state
-                                .available_models
-                                .iter()
-                                .map(|m| {
-                                    let display_name = if m.name.is_empty() {
-                                        m.model_id.to_string()
-                                    } else {
-                                        m.name.clone()
-                                    };
-                                    crate::app_event::AcpModelInfo {
-                                        model_id: m.model_id.to_string(),
-                                        display_name,
-                                        description: m.description.clone(),
-                                    }
-                                })
-                                .collect();
-                            let current_model_id =
-                                model_state.current_model_id.map(|id| id.to_string());
-                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                                models,
-                                current_model_id,
-                            });
-                        } else {
-                            // Failed to get model state - show empty picker with explanation
-                            tracing::warn!("Failed to get ACP model state");
-                            app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                                models: vec![],
-                                current_model_id: None,
-                            });
-                        }
-                    });
-                    return;
-                }
-            }
-            // ACP mode but no handle or unstable not enabled - show disabled model picker
-            let params = crate::nori::agent_picker::acp_model_picker_params();
-            self.bottom_pane.show_selection_view(params);
-            return;
-        }
-
-        // Standard HTTP mode - show normal model picker
-        let auth_mode = self.auth_manager.auth().map(|auth| auth.mode);
-        let presets: Vec<ModelPreset> = builtin_model_presets(auth_mode);
-
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for preset in presets.into_iter() {
-            let description = if preset.description.is_empty() {
-                None
-            } else {
-                Some(preset.description.to_string())
-            };
-            let is_current = preset.model == current_model;
-            let single_supported_effort = preset.supported_reasoning_efforts.len() == 1;
-            let preset_for_action = preset.clone();
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                let preset_for_event = preset_for_action.clone();
-                tx.send(AppEvent::OpenReasoningPopup {
-                    model: preset_for_event,
+        #[cfg(feature = "unstable")]
+        {
+            // ACP mode with unstable features - try to get model state from the agent
+            if let Some(handle) = self.acp_handle.clone() {
+                let app_event_tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    if let Some(model_state) = handle.get_model_state().await {
+                        let models: Vec<crate::app_event::AcpModelInfo> = model_state
+                            .available_models
+                            .iter()
+                            .map(|m| {
+                                let display_name = if m.name.is_empty() {
+                                    m.model_id.to_string()
+                                } else {
+                                    m.name.clone()
+                                };
+                                crate::app_event::AcpModelInfo {
+                                    model_id: m.model_id.to_string(),
+                                    display_name,
+                                    description: m.description.clone(),
+                                }
+                            })
+                            .collect();
+                        let current_model_id =
+                            model_state.current_model_id.map(|id| id.to_string());
+                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                            models,
+                            current_model_id,
+                        });
+                    } else {
+                        // Failed to get model state - show empty picker with explanation
+                        tracing::warn!("Failed to get ACP model state");
+                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                            models: vec![],
+                            current_model_id: None,
+                        });
+                    }
                 });
-            })];
-            items.push(SelectionItem {
-                name: preset.display_name.to_string(),
-                description,
-                is_current,
-                actions,
-                dismiss_on_select: single_supported_effort,
-                ..Default::default()
-            });
+                return;
+            }
         }
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select Model and Effort".to_string()),
-            subtitle: Some(
-                "Access legacy models by running codex -m <model_name> or in your config.toml"
-                    .to_string(),
-            ),
-            footer_hint: Some("Press enter to select reasoning effort, or esc to dismiss.".into()),
-            items,
-            ..Default::default()
-        });
+        // No ACP handle or unstable not enabled - show disabled model picker
+        let params = crate::nori::agent_picker::acp_model_picker_params();
+        self.bottom_pane.show_selection_view(params);
     }
 
     /// Open the ACP model picker with fetched models.
@@ -2786,201 +2930,6 @@ impl ChatWidget {
                 None,
             );
         }
-    }
-
-    /// Open a popup to choose the reasoning effort (stage 2) for the given model.
-    pub(crate) fn open_reasoning_popup(&mut self, preset: ModelPreset) {
-        let default_effort: ReasoningEffortConfig = preset.default_reasoning_effort;
-        let supported = preset.supported_reasoning_efforts;
-
-        let warn_effort = if supported
-            .iter()
-            .any(|option| option.effort == ReasoningEffortConfig::XHigh)
-        {
-            Some(ReasoningEffortConfig::XHigh)
-        } else if supported
-            .iter()
-            .any(|option| option.effort == ReasoningEffortConfig::High)
-        {
-            Some(ReasoningEffortConfig::High)
-        } else {
-            None
-        };
-        let warning_text = warn_effort.map(|effort| {
-            let effort_label = Self::reasoning_effort_label(effort);
-            format!("⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits.")
-        });
-        let warn_for_model = preset.model.starts_with("gpt-5.1-codex")
-            || preset.model.starts_with("gpt-5.1-codex-max");
-
-        struct EffortChoice {
-            stored: Option<ReasoningEffortConfig>,
-            display: ReasoningEffortConfig,
-        }
-        let mut choices: Vec<EffortChoice> = Vec::new();
-        for effort in ReasoningEffortConfig::iter() {
-            if supported.iter().any(|option| option.effort == effort) {
-                choices.push(EffortChoice {
-                    stored: Some(effort),
-                    display: effort,
-                });
-            }
-        }
-        if choices.is_empty() {
-            choices.push(EffortChoice {
-                stored: Some(default_effort),
-                display: default_effort,
-            });
-        }
-
-        if choices.len() == 1 {
-            if let Some(effort) = choices.first().and_then(|c| c.stored) {
-                self.apply_model_and_effort(preset.model.to_string(), Some(effort));
-            } else {
-                self.apply_model_and_effort(preset.model.to_string(), None);
-            }
-            return;
-        }
-
-        let default_choice: Option<ReasoningEffortConfig> = choices
-            .iter()
-            .any(|choice| choice.stored == Some(default_effort))
-            .then_some(Some(default_effort))
-            .flatten()
-            .or_else(|| choices.iter().find_map(|choice| choice.stored))
-            .or(Some(default_effort));
-
-        let model_slug = preset.model.to_string();
-        let is_current_model = self.config.model == preset.model;
-        let highlight_choice = if is_current_model {
-            self.config.model_reasoning_effort
-        } else {
-            default_choice
-        };
-        let selection_choice = highlight_choice.or(default_choice);
-        let initial_selected_idx = choices
-            .iter()
-            .position(|choice| choice.stored == selection_choice)
-            .or_else(|| {
-                selection_choice
-                    .and_then(|effort| choices.iter().position(|choice| choice.display == effort))
-            });
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for choice in choices.iter() {
-            let effort = choice.display;
-            let mut effort_label = Self::reasoning_effort_label(effort).to_string();
-            if choice.stored == default_choice {
-                effort_label.push_str(" (default)");
-            }
-
-            let description = choice
-                .stored
-                .and_then(|effort| {
-                    supported
-                        .iter()
-                        .find(|option| option.effort == effort)
-                        .map(|option| option.description.to_string())
-                })
-                .filter(|text| !text.is_empty());
-
-            let show_warning = warn_for_model && warn_effort == Some(effort);
-            let selected_description = if show_warning {
-                warning_text.as_ref().map(|warning_message| {
-                    description.as_ref().map_or_else(
-                        || warning_message.clone(),
-                        |d| format!("{d}\n{warning_message}"),
-                    )
-                })
-            } else {
-                None
-            };
-
-            let model_for_action = model_slug.clone();
-            let effort_for_action = choice.stored;
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                    cwd: None,
-                    approval_policy: None,
-                    sandbox_policy: None,
-                    model: Some(model_for_action.clone()),
-                    effort: Some(effort_for_action),
-                    summary: None,
-                }));
-                tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                tx.send(AppEvent::UpdateReasoningEffort(effort_for_action));
-                tx.send(AppEvent::PersistModelSelection {
-                    model: model_for_action.clone(),
-                    effort: effort_for_action,
-                });
-                tracing::info!(
-                    "Selected model: {}, Selected effort: {}",
-                    model_for_action,
-                    effort_for_action
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "default".to_string())
-                );
-            })];
-
-            items.push(SelectionItem {
-                name: effort_label,
-                description,
-                selected_description,
-                is_current: is_current_model && choice.stored == highlight_choice,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            });
-        }
-
-        let mut header = ColumnRenderable::new();
-        header.push(Line::from(
-            format!("Select Reasoning Level for {model_slug}").bold(),
-        ));
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            header: Box::new(header),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            initial_selected_idx,
-            ..Default::default()
-        });
-    }
-
-    fn reasoning_effort_label(effort: ReasoningEffortConfig) -> &'static str {
-        match effort {
-            ReasoningEffortConfig::None => "None",
-            ReasoningEffortConfig::Minimal => "Minimal",
-            ReasoningEffortConfig::Low => "Low",
-            ReasoningEffortConfig::Medium => "Medium",
-            ReasoningEffortConfig::High => "High",
-            ReasoningEffortConfig::XHigh => "Extra high",
-        }
-    }
-
-    fn apply_model_and_effort(&self, model: String, effort: Option<ReasoningEffortConfig>) {
-        self.app_event_tx
-            .send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                cwd: None,
-                approval_policy: None,
-                sandbox_policy: None,
-                model: Some(model.clone()),
-                effort: Some(effort),
-                summary: None,
-            }));
-        self.app_event_tx.send(AppEvent::UpdateModel(model.clone()));
-        self.app_event_tx
-            .send(AppEvent::UpdateReasoningEffort(effort));
-        self.app_event_tx.send(AppEvent::PersistModelSelection {
-            model: model.clone(),
-            effort,
-        });
-        tracing::info!(
-            "Selected model: {}, Selected effort: {}",
-            model,
-            effort
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "default".to_string())
-        );
     }
 
     /// Open a popup to choose the approvals mode (ask for approval policy + sandbox policy).
@@ -3417,13 +3366,6 @@ impl ChatWidget {
         self.config.notices.hide_world_writable_warning = Some(acknowledged);
     }
 
-    pub(crate) fn set_rate_limit_switch_prompt_hidden(&mut self, hidden: bool) {
-        self.config.notices.hide_rate_limit_model_nudge = Some(hidden);
-        if hidden {
-            self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-        }
-    }
-
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) fn world_writable_warning_hidden(&self) -> bool {
         self.config
@@ -3437,15 +3379,15 @@ impl ChatWidget {
         self.config.model_reasoning_effort = effort;
     }
 
-    /// Set the model in the widget's config copy.
-    pub(crate) fn set_model(&mut self, model: &str) {
-        self.session_header.set_model(model);
-        self.config.model = model.to_string();
-        // Update the bottom pane's model display name for approval dialogs
-        let display_name = crate::nori::agent_picker::get_agent_info(model)
+    /// Set the agent in the widget's config copy.
+    pub(crate) fn set_agent(&mut self, agent: &str) {
+        self.session_header.set_agent(agent);
+        self.config.model = agent.to_string();
+        // Update the bottom pane's agent display name for approval dialogs
+        let display_name = crate::nori::agent_picker::get_agent_info(agent)
             .map(|info| info.display_name)
-            .unwrap_or_else(|| model.to_string());
-        self.bottom_pane.set_model_display_name(display_name);
+            .unwrap_or_else(|| agent.to_string());
+        self.bottom_pane.set_agent_display_name(display_name);
     }
 
     /// Set the vertical footer layout flag for the TUI.
@@ -3453,11 +3395,11 @@ impl ChatWidget {
         self.bottom_pane.set_vertical_footer(enabled);
     }
 
-    /// Update the model display name shown in approval dialogs.
-    /// Used when ACP model switch completes successfully.
+    /// Update the agent display name shown in approval dialogs.
+    /// Used when ACP agent switch completes successfully.
     #[cfg(feature = "unstable")]
-    pub(crate) fn update_model_display_name(&mut self, display_name: String) {
-        self.bottom_pane.set_model_display_name(display_name);
+    pub(crate) fn update_agent_display_name(&mut self, display_name: String) {
+        self.bottom_pane.set_agent_display_name(display_name);
     }
 
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
@@ -3475,6 +3417,18 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(crate) fn add_warning_message(&mut self, message: String) {
+        self.add_to_history(history_cell::new_warning_event(message));
+        self.request_redraw();
+    }
+
+    /// Queue a plain text message to be submitted as a user turn. If no task
+    /// is currently running the message is submitted immediately; otherwise
+    /// it is appended to the pending queue.
+    pub(crate) fn queue_text_as_user_message(&mut self, text: String) {
+        self.queue_user_message(UserMessage::from(text));
+    }
+
     /// Show "Connecting to [Agent]" status indicator during agent startup.
     ///
     /// Called when an ACP agent is being spawned and may take time
@@ -3487,17 +3441,23 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(crate) fn on_agent_spawn_failed(&mut self, agent_name: &str, error: &str) {
+        self.bottom_pane.hide_status_indicator();
+        self.add_error_message(format!("Failed to start agent '{agent_name}': {error}"));
+        self.open_agent_popup();
+    }
+
     /// Handle the /login slash command
     fn handle_login_command(&mut self) {
         // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
-        // otherwise use the current config model
-        let model_name = self
+        // otherwise use the current config agent
+        let agent_name = self
             .pending_agent
             .as_ref()
-            .map(|p| p.model_name.as_str())
+            .map(|p| p.agent_name.as_str())
             .unwrap_or(&self.config.model);
 
-        match LoginHandler::check_agent_support(model_name) {
+        match LoginHandler::check_agent_support(agent_name) {
             AgentLoginSupport::Supported {
                 agent,
                 is_installed,
@@ -3569,9 +3529,9 @@ impl ChatWidget {
                 };
                 self.add_info_message(instructions.to_string(), None);
             }
-            AgentLoginSupport::Unknown { model_name } => {
+            AgentLoginSupport::Unknown { agent_name } => {
                 self.add_info_message(
-                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
+                    format!("Unknown agent '{agent_name}'. Cannot determine login method."),
                     None,
                 );
             }
@@ -3644,9 +3604,9 @@ impl ChatWidget {
                 };
                 self.add_info_message(instructions.to_string(), None);
             }
-            AgentLoginSupport::Unknown { model_name } => {
+            AgentLoginSupport::Unknown { agent_name } => {
                 self.add_info_message(
-                    format!("Unknown agent '{model_name}'. Cannot determine login method."),
+                    format!("Unknown agent '{agent_name}'. Cannot determine login method."),
                     None,
                 );
             }
@@ -3923,6 +3883,12 @@ impl ChatWidget {
         crate::session_log::log_outbound_op(&op);
         if let Err(e) = self.codex_op_tx.send(op) {
             tracing::error!("failed to submit op: {e}");
+            // If we tried to send a Shutdown but the backend channel is dead,
+            // trigger an exit directly since there is no backend to gracefully
+            // shut down.
+            if matches!(e.0, Op::Shutdown) {
+                self.app_event_tx.send(AppEvent::ExitRequest);
+            }
         }
     }
 
@@ -3941,167 +3907,6 @@ impl ChatWidget {
         debug!("received {len} custom prompts");
         // Forward to bottom pane so the slash popup can show them now.
         self.bottom_pane.set_custom_prompts(ev.custom_prompts);
-    }
-
-    pub(crate) fn open_review_popup(&mut self) {
-        let mut items: Vec<SelectionItem> = Vec::new();
-
-        items.push(SelectionItem {
-            name: "Review against a base branch".to_string(),
-            description: Some("(PR Style)".into()),
-            actions: vec![Box::new({
-                let cwd = self.config.cwd.clone();
-                move |tx| {
-                    tx.send(AppEvent::OpenReviewBranchPicker(cwd.clone()));
-                }
-            })],
-            dismiss_on_select: false,
-            ..Default::default()
-        });
-
-        items.push(SelectionItem {
-            name: "Review uncommitted changes".to_string(),
-            actions: vec![Box::new(
-                move |tx: &AppEventSender| {
-                    tx.send(AppEvent::CodexOp(Op::Review {
-                        review_request: ReviewRequest {
-                            prompt: "Review the current code changes (staged, unstaged, and untracked files) and provide prioritized findings.".to_string(),
-                            user_facing_hint: "current changes".to_string(),
-                        },
-                    }));
-                },
-            )],
-            dismiss_on_select: true,
-            ..Default::default()
-        });
-
-        // New: Review a specific commit (opens commit picker)
-        items.push(SelectionItem {
-            name: "Review a commit".to_string(),
-            actions: vec![Box::new({
-                let cwd = self.config.cwd.clone();
-                move |tx| {
-                    tx.send(AppEvent::OpenReviewCommitPicker(cwd.clone()));
-                }
-            })],
-            dismiss_on_select: false,
-            ..Default::default()
-        });
-
-        items.push(SelectionItem {
-            name: "Custom review instructions".to_string(),
-            actions: vec![Box::new(move |tx| {
-                tx.send(AppEvent::OpenReviewCustomPrompt);
-            })],
-            dismiss_on_select: false,
-            ..Default::default()
-        });
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select a review preset".into()),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            ..Default::default()
-        });
-    }
-
-    pub(crate) async fn show_review_branch_picker(&mut self, cwd: &Path) {
-        let branches = local_git_branches(cwd).await;
-        let current_branch = current_branch_name(cwd)
-            .await
-            .unwrap_or_else(|| "(detached HEAD)".to_string());
-        let mut items: Vec<SelectionItem> = Vec::with_capacity(branches.len());
-
-        for option in branches {
-            let branch = option.clone();
-            items.push(SelectionItem {
-                name: format!("{current_branch} -> {branch}"),
-                actions: vec![Box::new(move |tx3: &AppEventSender| {
-                    tx3.send(AppEvent::CodexOp(Op::Review {
-                        review_request: ReviewRequest {
-                            prompt: format!(
-                                "Review the code changes against the base branch '{branch}'. Start by finding the merge diff between the current branch and {branch}'s upstream e.g. (`git merge-base HEAD \"$(git rev-parse --abbrev-ref \"{branch}@{{upstream}}\")\"`), then run `git diff` against that SHA to see what changes we would merge into the {branch} branch. Provide prioritized, actionable findings."
-                            ),
-                            user_facing_hint: format!("changes against '{branch}'"),
-                        },
-                    }));
-                })],
-                dismiss_on_select: true,
-                search_value: Some(option),
-                ..Default::default()
-            });
-        }
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select a base branch".to_string()),
-            footer_hint: Some(searchable_popup_hint_line()),
-            items,
-            is_searchable: true,
-            search_placeholder: Some("Type to search branches".to_string()),
-            ..Default::default()
-        });
-    }
-
-    pub(crate) async fn show_review_commit_picker(&mut self, cwd: &Path) {
-        let commits = codex_core::git_info::recent_commits(cwd, 100).await;
-
-        let mut items: Vec<SelectionItem> = Vec::with_capacity(commits.len());
-        for entry in commits {
-            let subject = entry.subject.clone();
-            let sha = entry.sha.clone();
-            let short = sha.chars().take(7).collect::<String>();
-            let search_val = format!("{subject} {sha}");
-
-            items.push(SelectionItem {
-                name: subject.clone(),
-                actions: vec![Box::new(move |tx3: &AppEventSender| {
-                    let hint = format!("commit {short}");
-                    let prompt = format!(
-                        "Review the code changes introduced by commit {sha} (\"{subject}\"). Provide prioritized, actionable findings."
-                    );
-                    tx3.send(AppEvent::CodexOp(Op::Review {
-                        review_request: ReviewRequest {
-                            prompt,
-                            user_facing_hint: hint,
-                        },
-                    }));
-                })],
-                dismiss_on_select: true,
-                search_value: Some(search_val),
-                ..Default::default()
-            });
-        }
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select a commit to review".to_string()),
-            footer_hint: Some(searchable_popup_hint_line()),
-            items,
-            is_searchable: true,
-            search_placeholder: Some("Type to search commits".to_string()),
-            ..Default::default()
-        });
-    }
-
-    pub(crate) fn show_review_custom_prompt(&mut self) {
-        let tx = self.app_event_tx.clone();
-        let view = CustomPromptView::new(
-            "Custom review instructions".to_string(),
-            "Type instructions and press Enter".to_string(),
-            None,
-            Box::new(move |prompt: String| {
-                let trimmed = prompt.trim().to_string();
-                if trimmed.is_empty() {
-                    return;
-                }
-                tx.send(AppEvent::CodexOp(Op::Review {
-                    review_request: ReviewRequest {
-                        prompt: trimmed.clone(),
-                        user_facing_hint: trimmed,
-                    },
-                }));
-            }),
-        );
-        self.bottom_pane.show_view(Box::new(view));
     }
 
     pub(crate) fn token_usage(&self) -> TokenUsage {
@@ -4270,48 +4075,6 @@ fn extract_first_bold(s: &str) -> Option<String> {
         i += 1;
     }
     None
-}
-
-#[cfg(test)]
-pub(crate) fn show_review_commit_picker_with_entries(
-    chat: &mut ChatWidget,
-    entries: Vec<codex_core::git_info::CommitLogEntry>,
-) {
-    let mut items: Vec<SelectionItem> = Vec::with_capacity(entries.len());
-    for entry in entries {
-        let subject = entry.subject.clone();
-        let sha = entry.sha.clone();
-        let short = sha.chars().take(7).collect::<String>();
-        let search_val = format!("{subject} {sha}");
-
-        items.push(SelectionItem {
-            name: subject.clone(),
-            actions: vec![Box::new(move |tx3: &AppEventSender| {
-                let hint = format!("commit {short}");
-                let prompt = format!(
-                    "Review the code changes introduced by commit {sha} (\"{subject}\"). Provide prioritized, actionable findings."
-                );
-                tx3.send(AppEvent::CodexOp(Op::Review {
-                    review_request: ReviewRequest {
-                        prompt,
-                        user_facing_hint: hint,
-                    },
-                }));
-            })],
-            dismiss_on_select: true,
-            search_value: Some(search_val),
-            ..Default::default()
-        });
-    }
-
-    chat.bottom_pane.show_selection_view(SelectionViewParams {
-        title: Some("Select a commit to review".to_string()),
-        footer_hint: Some(searchable_popup_hint_line()),
-        items,
-        is_searchable: true,
-        search_placeholder: Some("Type to search commits".to_string()),
-        ..Default::default()
-    });
 }
 
 #[cfg(test)]

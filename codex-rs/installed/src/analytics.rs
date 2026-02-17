@@ -283,7 +283,6 @@ mod tests {
         assert!(params.get("tilework_cli_is_ci").is_none());
     }
 
-    // @current-session
     #[test]
     fn test_track_event_request_uses_snake_case() {
         let state = create_test_state();

@@ -51,6 +51,7 @@ codex-common = { workspace = true, features = [
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
+codex-git = { workspace = true }
 nori-installed = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true, optional = true }
@@ -87,6 +88,7 @@ strum_macros = { workspace = true }
 supports-color = { workspace = true }
 tempfile = { workspace = true }
 textwrap = { workspace = true }
+tiktoken-rs = { workspace = true }
 tokio = { workspace = true, features = [
     "io-std",
     "macros",

@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/footer.rs
-assertion_line: 457
 expression: terminal.backend()
 ---
-"  ⎇ main · Approval Mode: Read Only · ? for shortcuts                           "
+"  ⎇ main · Approvals: Read Only · ? for shortcuts                               "

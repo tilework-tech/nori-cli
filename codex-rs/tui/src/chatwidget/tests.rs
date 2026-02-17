@@ -6,8 +6,7 @@ use crate::test_backend::VT100Backend;
 use crate::tui::FrameRequester;
 use assert_matches::assert_matches;
 use codex_common::approval_presets::builtin_approval_presets;
-use codex_common::model_presets::ModelPreset;
-use codex_common::model_presets::ReasoningEffortPreset;
+
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
 use codex_core::config::Config;
@@ -25,17 +24,11 @@ use codex_core::protocol::ExecApprovalRequestEvent;
 use codex_core::protocol::ExecCommandBeginEvent;
 use codex_core::protocol::ExecCommandEndEvent;
 use codex_core::protocol::ExecCommandSource;
-use codex_core::protocol::ExitedReviewModeEvent;
 use codex_core::protocol::FileChange;
 use codex_core::protocol::Op;
 use codex_core::protocol::PatchApplyBeginEvent;
 use codex_core::protocol::PatchApplyEndEvent;
 use codex_core::protocol::RateLimitWindow;
-use codex_core::protocol::ReviewCodeLocation;
-use codex_core::protocol::ReviewFinding;
-use codex_core::protocol::ReviewLineRange;
-use codex_core::protocol::ReviewOutputEvent;
-use codex_core::protocol::ReviewRequest;
 use codex_core::protocol::StreamErrorEvent;
 use codex_core::protocol::TaskCompleteEvent;
 use codex_core::protocol::TaskStartedEvent;
@@ -146,126 +139,6 @@ fn resumed_initial_messages_render_history() {
     );
 }
 
-/// Entering review mode uses the hint provided by the review request.
-#[test]
-fn entered_review_mode_uses_request_hint() {
-    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
-
-    chat.handle_codex_event(Event {
-        id: "review-start".into(),
-        msg: EventMsg::EnteredReviewMode(ReviewRequest {
-            prompt: "Review the latest changes".to_string(),
-            user_facing_hint: "feature branch".to_string(),
-        }),
-    });
-
-    let cells = drain_insert_history(&mut rx);
-    let banner = lines_to_single_string(cells.last().expect("review banner"));
-    assert_eq!(banner, ">> Code review started: feature branch <<\n");
-    assert!(chat.is_review_mode);
-}
-
-/// Entering review mode renders the current changes banner when requested.
-#[test]
-fn entered_review_mode_defaults_to_current_changes_banner() {
-    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
-
-    chat.handle_codex_event(Event {
-        id: "review-start".into(),
-        msg: EventMsg::EnteredReviewMode(ReviewRequest {
-            prompt: "Review the current changes".to_string(),
-            user_facing_hint: "current changes".to_string(),
-        }),
-    });
-
-    let cells = drain_insert_history(&mut rx);
-    let banner = lines_to_single_string(cells.last().expect("review banner"));
-    assert_eq!(banner, ">> Code review started: current changes <<\n");
-    assert!(chat.is_review_mode);
-}
-
-/// Completing review with findings shows the selection popup and finishes with
-/// the closing banner while clearing review mode state.
-#[test]
-fn exited_review_mode_emits_results_and_finishes() {
-    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
-
-    let review = ReviewOutputEvent {
-        findings: vec![ReviewFinding {
-            title: "[P1] Fix bug".to_string(),
-            body: "Something went wrong".to_string(),
-            confidence_score: 0.9,
-            priority: 1,
-            code_location: ReviewCodeLocation {
-                absolute_file_path: PathBuf::from("src/lib.rs"),
-                line_range: ReviewLineRange { start: 10, end: 12 },
-            },
-        }],
-        overall_correctness: "needs work".to_string(),
-        overall_explanation: "Investigate the failure".to_string(),
-        overall_confidence_score: 0.5,
-    };
-
-    chat.handle_codex_event(Event {
-        id: "review-end".into(),
-        msg: EventMsg::ExitedReviewMode(ExitedReviewModeEvent {
-            review_output: Some(review),
-        }),
-    });
-
-    let cells = drain_insert_history(&mut rx);
-    let banner = lines_to_single_string(cells.last().expect("finished banner"));
-    assert_eq!(banner, "\n<< Code review finished >>\n");
-    assert!(!chat.is_review_mode);
-}
-
-/// Exiting review restores the pre-review context window indicator.
-#[test]
-fn review_restores_context_window_indicator() {
-    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
-
-    let context_window = 13_000;
-    let pre_review_tokens = 12_700; // ~30% remaining after subtracting baseline.
-    let review_tokens = 12_030; // ~97% remaining after subtracting baseline.
-
-    chat.handle_codex_event(Event {
-        id: "token-before".into(),
-        msg: EventMsg::TokenCount(TokenCountEvent {
-            info: Some(make_token_info(pre_review_tokens, context_window)),
-            rate_limits: None,
-        }),
-    });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
-
-    chat.handle_codex_event(Event {
-        id: "review-start".into(),
-        msg: EventMsg::EnteredReviewMode(ReviewRequest {
-            prompt: "Review the latest changes".to_string(),
-            user_facing_hint: "feature branch".to_string(),
-        }),
-    });
-
-    chat.handle_codex_event(Event {
-        id: "token-review".into(),
-        msg: EventMsg::TokenCount(TokenCountEvent {
-            info: Some(make_token_info(review_tokens, context_window)),
-            rate_limits: None,
-        }),
-    });
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(3));
-
-    chat.handle_codex_event(Event {
-        id: "review-end".into(),
-        msg: EventMsg::ExitedReviewMode(ExitedReviewModeEvent {
-            review_output: None,
-        }),
-    });
-    let _ = drain_insert_history(&mut rx);
-
-    assert_eq!(chat.bottom_pane.context_window_percent(), Some(70));
-    assert!(!chat.is_review_mode);
-}
-
 /// Receiving a TokenCount event without usage clears the context indicator.
 #[test]
 fn token_count_none_resets_context_indicator() {
@@ -315,7 +188,7 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         vertical_footer: false,
-        expected_model: None,
+        expected_agent: None,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
     // Basic construction sanity.
@@ -341,7 +214,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
         vertical_footer: false,
-        model_display_name: String::new(),
+        agent_display_name: String::new(),
     });
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test"));
     let widget = ChatWidget {
@@ -356,7 +229,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         token_info: None,
         rate_limit_snapshot: None,
         rate_limit_warnings: RateLimitWarningState::default(),
-        rate_limit_switch_prompt: RateLimitSwitchPromptState::default(),
         rate_limit_poller: None,
         stream_controller: None,
         running_commands: HashMap::new(),
@@ -367,7 +239,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         interrupts: InterruptManager::new(),
         reasoning_buffer: String::new(),
         full_reasoning_buffer: String::new(),
-        current_status_header: String::from("Working"),
+        current_status_header: String::from("Thinking really hard"),
         retry_status_header: None,
         conversation_id: None,
         frame_requester: FrameRequester::test_dummy(),
@@ -375,21 +247,22 @@ pub(crate) fn make_chatwidget_manual() -> (
         queued_user_messages: VecDeque::new(),
         suppress_session_configured_redraw: false,
         pending_notification: None,
-        is_review_mode: false,
-        pre_review_token_info: None,
         needs_final_message_separator: false,
         last_rendered_width: std::cell::Cell::new(None),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
         effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd),
         pending_agent: None,
-        expected_model: None,
+        expected_agent: None,
         session_configured_received: false,
         #[cfg(feature = "unstable")]
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
         first_prompt_text: None,
+        loop_remaining: None,
+        loop_total: None,
+        turn_finished: false,
     };
     (widget, rx, op_rx)
 }
@@ -493,100 +366,6 @@ fn test_rate_limit_warnings_monthly() {
         "expected one warning per limit for the highest crossed threshold"
     );
 }
-
-#[test]
-fn rate_limit_switch_prompt_skips_when_on_lower_cost_model() {
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-    chat.config.model = NUDGE_MODEL_SLUG.to_string();
-
-    chat.on_rate_limit_snapshot(Some(snapshot(95.0)));
-
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Idle
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_shows_once_per_session() {
-    let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.config.model = "gpt-5".to_string();
-    chat.auth_manager = AuthManager::from_auth_for_testing(auth);
-
-    chat.on_rate_limit_snapshot(Some(snapshot(90.0)));
-    assert!(
-        chat.rate_limit_warnings.primary_index >= 1,
-        "warnings not emitted"
-    );
-    chat.maybe_show_pending_rate_limit_prompt();
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Shown
-    ));
-
-    chat.on_rate_limit_snapshot(Some(snapshot(95.0)));
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Shown
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_respects_hidden_notice() {
-    let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.config.model = "gpt-5".to_string();
-    chat.auth_manager = AuthManager::from_auth_for_testing(auth);
-    chat.config.notices.hide_rate_limit_model_nudge = Some(true);
-
-    chat.on_rate_limit_snapshot(Some(snapshot(95.0)));
-
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Idle
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_defers_until_task_complete() {
-    let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
-    let (mut chat, _, _) = make_chatwidget_manual();
-    chat.config.model = "gpt-5".to_string();
-    chat.auth_manager = AuthManager::from_auth_for_testing(auth);
-
-    chat.bottom_pane.set_task_running(true);
-    chat.on_rate_limit_snapshot(Some(snapshot(90.0)));
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Pending
-    ));
-
-    chat.bottom_pane.set_task_running(false);
-    chat.maybe_show_pending_rate_limit_prompt();
-    assert!(matches!(
-        chat.rate_limit_switch_prompt,
-        RateLimitSwitchPromptState::Shown
-    ));
-}
-
-#[test]
-fn rate_limit_switch_prompt_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-    chat.auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
-    chat.config.model = "gpt-5".to_string();
-
-    chat.on_rate_limit_snapshot(Some(snapshot(92.0)));
-    chat.maybe_show_pending_rate_limit_prompt();
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("rate_limit_switch_prompt_popup", popup);
-}
-
-// (removed experimental resize snapshot test)
 
 #[test]
 fn exec_approval_emits_proposed_command_and_decision_history() {
@@ -1038,33 +817,6 @@ fn exec_history_shows_unified_exec_startup_commands() {
     );
 }
 
-/// Selecting the custom prompt option from the review popup sends
-/// OpenReviewCustomPrompt to the app event channel.
-#[test]
-fn review_popup_custom_prompt_action_sends_event() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the preset selection popup
-    chat.open_review_popup();
-
-    // Move selection down to the fourth item: "Custom review instructions"
-    chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    // Activate
-    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    // Drain events and ensure we saw the OpenReviewCustomPrompt request
-    let mut found = false;
-    while let Ok(ev) = rx.try_recv() {
-        if let AppEvent::OpenReviewCustomPrompt = ev {
-            found = true;
-            break;
-        }
-    }
-    assert!(found, "expected OpenReviewCustomPrompt event to be sent");
-}
-
 #[test]
 fn slash_init_skips_when_project_doc_exists() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
@@ -1098,21 +850,21 @@ fn slash_init_skips_when_project_doc_exists() {
 }
 
 #[test]
-fn slash_quit_requests_exit() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+fn slash_quit_sends_shutdown() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
     chat.dispatch_command(SlashCommand::Quit);
 
-    assert_matches!(rx.try_recv(), Ok(AppEvent::ExitRequest));
+    assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
 }
 
 #[test]
-fn slash_exit_requests_exit() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+fn slash_exit_sends_shutdown() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
     chat.dispatch_command(SlashCommand::Exit);
 
-    assert_matches!(rx.try_recv(), Ok(AppEvent::ExitRequest));
+    assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
 }
 
 #[test]
@@ -1122,8 +874,8 @@ fn slash_undo_sends_op() {
     chat.dispatch_command(SlashCommand::Undo);
 
     match rx.try_recv() {
-        Ok(AppEvent::CodexOp(Op::Undo)) => {}
-        other => panic!("expected AppEvent::CodexOp(Op::Undo), got {other:?}"),
+        Ok(AppEvent::CodexOp(Op::UndoList)) => {}
+        other => panic!("expected AppEvent::CodexOp(Op::UndoList), got {other:?}"),
     }
 }
 
@@ -1285,108 +1037,6 @@ fn undo_started_hides_interrupt_hint() {
     );
 }
 
-/// The commit picker shows only commit subjects (no timestamps).
-#[test]
-fn review_commit_picker_shows_subjects_without_timestamps() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the Review presets parent popup.
-    chat.open_review_popup();
-
-    // Show commit picker with synthetic entries.
-    let entries = vec![
-        codex_core::git_info::CommitLogEntry {
-            sha: "1111111deadbeef".to_string(),
-            timestamp: 0,
-            subject: "Add new feature X".to_string(),
-        },
-        codex_core::git_info::CommitLogEntry {
-            sha: "2222222cafebabe".to_string(),
-            timestamp: 0,
-            subject: "Fix bug Y".to_string(),
-        },
-    ];
-    super::show_review_commit_picker_with_entries(&mut chat, entries);
-
-    // Render the bottom pane and inspect the lines for subjects and absence of time words.
-    let width = 72;
-    let height = chat.desired_height(width);
-    let area = ratatui::layout::Rect::new(0, 0, width, height);
-    let mut buf = ratatui::buffer::Buffer::empty(area);
-    chat.render(area, &mut buf);
-
-    let mut blob = String::new();
-    for y in 0..area.height {
-        for x in 0..area.width {
-            let s = buf[(x, y)].symbol();
-            if s.is_empty() {
-                blob.push(' ');
-            } else {
-                blob.push_str(s);
-            }
-        }
-        blob.push('\n');
-    }
-
-    assert!(
-        blob.contains("Add new feature X"),
-        "expected subject in output"
-    );
-    assert!(blob.contains("Fix bug Y"), "expected subject in output");
-
-    // Ensure no relative-time phrasing is present.
-    let lowered = blob.to_lowercase();
-    assert!(
-        !lowered.contains("ago")
-            && !lowered.contains(" second")
-            && !lowered.contains(" minute")
-            && !lowered.contains(" hour")
-            && !lowered.contains(" day"),
-        "expected no relative time in commit picker output: {blob:?}"
-    );
-}
-
-/// Submitting the custom prompt view sends Op::Review with the typed prompt
-/// and uses the same text for the user-facing hint.
-#[test]
-fn custom_prompt_submit_sends_review_op() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-
-    chat.show_review_custom_prompt();
-    // Paste prompt text via ChatWidget handler, then submit
-    chat.handle_paste("  please audit dependencies  ".to_string());
-    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    // Expect AppEvent::CodexOp(Op::Review { .. }) with trimmed prompt
-    let evt = rx.try_recv().expect("expected one app event");
-    match evt {
-        AppEvent::CodexOp(Op::Review { review_request }) => {
-            assert_eq!(
-                review_request.prompt,
-                "please audit dependencies".to_string()
-            );
-            assert_eq!(
-                review_request.user_facing_hint,
-                "please audit dependencies".to_string()
-            );
-        }
-        other => panic!("unexpected app event: {other:?}"),
-    }
-}
-
-/// Hitting Enter on an empty custom prompt view does not submit.
-#[test]
-fn custom_prompt_enter_empty_does_not_send() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-
-    chat.show_review_custom_prompt();
-    // Enter without any text
-    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    // No AppEvent::CodexOp should be sent
-    assert!(rx.try_recv().is_err(), "no app event should be sent");
-}
-
 #[test]
 fn view_image_tool_call_adds_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
@@ -1464,99 +1114,6 @@ fn interrupted_turn_error_message_snapshot() {
     );
     let last = lines_to_single_string(cells.last().unwrap());
     assert_snapshot!("interrupted_turn_error_message", last);
-}
-
-/// Opening custom prompt from the review popup, pressing Esc returns to the
-/// parent popup, pressing Esc again dismisses all panels (back to normal mode).
-#[test]
-fn review_custom_prompt_escape_navigates_back_then_dismisses() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the Review presets parent popup.
-    chat.open_review_popup();
-
-    // Open the custom prompt submenu (child view) directly.
-    chat.show_review_custom_prompt();
-
-    // Verify child view is on top.
-    let header = render_bottom_first_row(&chat, 60);
-    assert!(
-        header.contains("Custom review instructions"),
-        "expected custom prompt view header: {header:?}"
-    );
-
-    // Esc once: child view closes, parent (review presets) remains.
-    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    let header = render_bottom_first_row(&chat, 60);
-    assert!(
-        header.contains("Select a review preset"),
-        "expected to return to parent review popup: {header:?}"
-    );
-
-    // Esc again: parent closes; back to normal composer state.
-    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(
-        chat.is_normal_backtrack_mode(),
-        "expected to be back in normal composer mode"
-    );
-}
-
-/// Opening base-branch picker from the review popup, pressing Esc returns to the
-/// parent popup, pressing Esc again dismisses all panels (back to normal mode).
-#[tokio::test]
-async fn review_branch_picker_escape_navigates_back_then_dismisses() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Open the Review presets parent popup.
-    chat.open_review_popup();
-
-    // Open the branch picker submenu (child view). Using a temp cwd with no git repo is fine.
-    let cwd = std::env::temp_dir();
-    chat.show_review_branch_picker(&cwd).await;
-
-    // Verify child view header.
-    let header = render_bottom_first_row(&chat, 60);
-    assert!(
-        header.contains("Select a base branch"),
-        "expected branch picker header: {header:?}"
-    );
-
-    // Esc once: child view closes, parent remains.
-    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    let header = render_bottom_first_row(&chat, 60);
-    assert!(
-        header.contains("Select a review preset"),
-        "expected to return to parent review popup: {header:?}"
-    );
-
-    // Esc again: parent closes; back to normal composer state.
-    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(
-        chat.is_normal_backtrack_mode(),
-        "expected to be back in normal composer mode"
-    );
-}
-
-fn render_bottom_first_row(chat: &ChatWidget, width: u16) -> String {
-    let height = chat.desired_height(width);
-    let area = Rect::new(0, 0, width, height);
-    let mut buf = Buffer::empty(area);
-    chat.render(area, &mut buf);
-    for y in 0..area.height {
-        let mut row = String::new();
-        for x in 0..area.width {
-            let s = buf[(x, y)].symbol();
-            if s.is_empty() {
-                row.push(' ');
-            } else {
-                row.push_str(s);
-            }
-        }
-        if !row.trim().is_empty() {
-            return row;
-        }
-    }
-    String::new()
 }
 
 fn render_bottom_popup(chat: &ChatWidget, width: u16) -> String {
@@ -1693,126 +1250,6 @@ fn startup_prompts_for_windows_sandbox_when_agent_requested() {
     );
 
     set_windows_sandbox_enabled(true);
-}
-
-#[test]
-fn model_reasoning_selection_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    chat.config.model = "gpt-5.1-codex-max".to_string();
-    chat.config.model_reasoning_effort = Some(ReasoningEffortConfig::High);
-
-    let preset = builtin_model_presets(None)
-        .into_iter()
-        .find(|preset| preset.model == "gpt-5.1-codex-max")
-        .expect("gpt-5.1-codex-max preset");
-    chat.open_reasoning_popup(preset);
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("model_reasoning_selection_popup", popup);
-}
-
-#[test]
-fn model_reasoning_selection_popup_extra_high_warning_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    chat.config.model = "gpt-5.1-codex-max".to_string();
-    chat.config.model_reasoning_effort = Some(ReasoningEffortConfig::XHigh);
-
-    let preset = builtin_model_presets(None)
-        .into_iter()
-        .find(|preset| preset.model == "gpt-5.1-codex-max")
-        .expect("gpt-5.1-codex-max preset");
-    chat.open_reasoning_popup(preset);
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert_snapshot!("model_reasoning_selection_popup_extra_high_warning", popup);
-}
-
-#[test]
-fn reasoning_popup_shows_extra_high_with_space() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    chat.config.model = "gpt-5.1-codex-max".to_string();
-
-    let preset = builtin_model_presets(None)
-        .into_iter()
-        .find(|preset| preset.model == "gpt-5.1-codex-max")
-        .expect("gpt-5.1-codex-max preset");
-    chat.open_reasoning_popup(preset);
-
-    let popup = render_bottom_popup(&chat, 120);
-    assert!(
-        popup.contains("Extra high"),
-        "expected popup to include 'Extra high'; popup: {popup}"
-    );
-    assert!(
-        !popup.contains("Extrahigh"),
-        "expected popup not to include 'Extrahigh'; popup: {popup}"
-    );
-}
-
-#[test]
-fn single_reasoning_option_skips_selection() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-
-    static SINGLE_EFFORT: [ReasoningEffortPreset; 1] = [ReasoningEffortPreset {
-        effort: ReasoningEffortConfig::High,
-        description: "Maximizes reasoning depth for complex or ambiguous problems",
-    }];
-    let preset = ModelPreset {
-        id: "model-with-single-reasoning",
-        model: "model-with-single-reasoning",
-        display_name: "model-with-single-reasoning",
-        description: "",
-        default_reasoning_effort: ReasoningEffortConfig::High,
-        supported_reasoning_efforts: &SINGLE_EFFORT,
-        is_default: false,
-        upgrade: None,
-        show_in_picker: true,
-    };
-    chat.open_reasoning_popup(preset);
-
-    let popup = render_bottom_popup(&chat, 80);
-    assert!(
-        !popup.contains("Select Reasoning Level"),
-        "expected reasoning selection popup to be skipped"
-    );
-
-    let mut events = Vec::new();
-    while let Ok(ev) = rx.try_recv() {
-        events.push(ev);
-    }
-
-    assert!(
-        events
-            .iter()
-            .any(|ev| matches!(ev, AppEvent::UpdateReasoningEffort(Some(effort)) if *effort == ReasoningEffortConfig::High)),
-        "expected reasoning effort to be applied automatically; events: {events:?}"
-    );
-}
-
-#[test]
-fn reasoning_popup_escape_returns_to_model_popup() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    chat.config.model = "gpt-5.1".to_string();
-    chat.open_model_popup();
-
-    let presets = builtin_model_presets(None)
-        .into_iter()
-        .find(|preset| preset.model == "gpt-5.1-codex")
-        .expect("gpt-5.1-codex preset");
-    chat.open_reasoning_popup(presets);
-
-    let before_escape = render_bottom_popup(&chat, 80);
-    assert!(before_escape.contains("Select Reasoning Level"));
-
-    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-
-    let after_escape = render_bottom_popup(&chat, 80);
-    assert!(after_escape.contains("Select Model and Effort"));
-    assert!(!after_escape.contains("Select Reasoning Level"));
 }
 
 #[test]
@@ -3074,6 +2511,8 @@ fn chatwidget_tall() {
             model_context_window: None,
         }),
     });
+    chat.bottom_pane
+        .update_status_header("Thinking really hard".to_string());
     for i in 0..30 {
         chat.queue_user_message(format!("Hello, world! {i}").into());
     }
@@ -3524,7 +2963,7 @@ fn drain_refresh_system_info_events(
 ) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     while let Ok(ev) = rx.try_recv() {
-        if let AppEvent::RefreshSystemInfoForDirectory { dir, model: _ } = ev {
+        if let AppEvent::RefreshSystemInfoForDirectory { dir, agent: _ } = ev {
             dirs.push(dir);
         }
     }
@@ -3860,5 +3299,321 @@ fn task_complete_triggers_system_info_refresh() {
     assert!(
         !refresh_dirs.is_empty(),
         "expected RefreshSystemInfoForDirectory event after task completion"
+    );
+}
+
+/// Bug fix: when an agent spawn fails, the "Connecting to ..." status indicator
+/// should be cleared. Currently `AgentSpawnFailed` calls `add_error_message` and
+/// `open_agent_popup` but never hides the status indicator, leaving the TUI stuck
+/// in a "Connecting" state.
+#[test]
+fn agent_spawn_failed_clears_connecting_status() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Simulate what AgentConnecting does: show the connecting spinner.
+    chat.show_connecting_status("test-agent");
+    assert!(
+        chat.bottom_pane.status_indicator_visible(),
+        "status indicator should be visible after show_connecting_status"
+    );
+
+    // Simulate what the AgentSpawnFailed handler does.
+    chat.on_agent_spawn_failed("test-agent", "connection refused");
+    assert!(
+        !chat.bottom_pane.status_indicator_visible(),
+        "status indicator should be hidden after agent spawn failure"
+    );
+}
+
+/// Bug fix: when the op channel receiver has been dropped (backend died), sending
+/// Op::Shutdown should trigger an exit instead of silently logging an error.
+/// Without this fix, /exit and double-ctrl-c are broken when the backend is dead.
+#[test]
+fn shutdown_on_dead_channel_triggers_exit() {
+    let (chat, mut rx, op_rx) = make_chatwidget_manual();
+
+    // Drop the op receiver to simulate the backend having died.
+    drop(op_rx);
+
+    // Attempt to send Op::Shutdown (what /exit and double-ctrl-c do).
+    chat.submit_op(Op::Shutdown);
+
+    // The widget should have sent an ExitRequest since the backend is gone.
+    let mut found_exit = false;
+    while let Ok(ev) = rx.try_recv() {
+        if matches!(ev, AppEvent::ExitRequest) {
+            found_exit = true;
+            break;
+        }
+    }
+    assert!(
+        found_exit,
+        "expected ExitRequest to be sent when Op::Shutdown fails on a dead channel"
+    );
+}
+
+/// Bug fix: when the backend is still connecting (simulated by an async task
+/// that never completes), sending Op::Shutdown via the op channel must cause
+/// the spawn task to detect it via `drain_until_shutdown` and emit ExitRequest.
+#[tokio::test]
+async fn shutdown_while_backend_connecting_triggers_exit() {
+    use tokio::sync::mpsc::unbounded_channel;
+
+    let (app_tx_raw, mut app_rx) = unbounded_channel::<AppEvent>();
+    let app_event_tx = AppEventSender::new(app_tx_raw);
+    let (op_tx, mut op_rx) = unbounded_channel::<Op>();
+
+    // Simulate a spawn task that races a "never-completing backend" against
+    // drain_until_shutdown — the same pattern used in spawn_acp_agent.
+    let tx = app_event_tx.clone();
+    let handle = tokio::spawn(async move {
+        tokio::select! {
+            // Simulates AcpBackend::spawn() that hangs forever.
+            () = std::future::pending::<()>() => {
+                unreachable!("backend should not complete");
+            }
+            () = super::agent::drain_until_shutdown(&mut op_rx) => {
+                drop(op_rx);
+                tx.send(AppEvent::ExitRequest);
+            }
+        }
+    });
+
+    // Send Op::Shutdown (what /exit and double-ctrl-c do).
+    op_tx.send(Op::Shutdown).unwrap();
+
+    // Wait for the spawn task to finish.
+    handle.await.unwrap();
+
+    // The task should have produced an ExitRequest.
+    let mut found_exit = false;
+    while let Ok(ev) = app_rx.try_recv() {
+        if matches!(ev, AppEvent::ExitRequest) {
+            found_exit = true;
+            break;
+        }
+    }
+    assert!(
+        found_exit,
+        "expected ExitRequest when Op::Shutdown is sent to a live but unconsumed channel"
+    );
+}
+
+// =============================================================================
+// Late tool event gate: events arriving after AgentMessage should be discarded
+// =============================================================================
+
+#[test]
+fn late_exec_events_after_agent_message_are_discarded() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Start a turn
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Normal tool call during the turn (should appear)
+    let begin_normal = begin_exec(&mut chat, "call-normal", "echo hello");
+    end_exec(&mut chat, begin_normal, "hello", "", 0);
+
+    // Agent finalizes its response
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Here is my response".into(),
+        }),
+    });
+
+    // Drain everything so far — the normal tool call and agent message should be present
+    let cells_before = drain_insert_history(&mut rx);
+    let combined_before: String = cells_before
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+    assert!(
+        combined_before.contains("echo hello"),
+        "normal tool call should appear: {combined_before:?}"
+    );
+    assert!(
+        combined_before.contains("Here is my response"),
+        "agent message should appear: {combined_before:?}"
+    );
+
+    // Now send LATE tool events — these arrive after the agent message
+    // due to the ACP race condition. They should be silently discarded.
+    let begin_late = begin_exec(&mut chat, "call-late", "cat /etc/passwd");
+    end_exec(&mut chat, begin_late, "root:x:0:0", "", 0);
+
+    // Drain anything emitted by the late events — there should be NOTHING
+    let cells_after_late = drain_insert_history(&mut rx);
+    let combined_after_late: String = cells_after_late
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+    assert!(
+        !combined_after_late.contains("cat /etc/passwd"),
+        "late exec tool call should have been discarded but appeared after agent message: {combined_after_late:?}"
+    );
+    assert!(
+        !combined_after_late.contains("root:x:0:0"),
+        "late exec tool output should have been discarded but appeared after agent message: {combined_after_late:?}"
+    );
+
+    // Also verify nothing is sitting in active_cell waiting to leak
+    assert!(
+        chat.active_cell.is_none(),
+        "no active cell should remain after late events are discarded"
+    );
+}
+
+#[test]
+fn turn_finished_gate_resets_on_new_task_started() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // === Turn 1: agent message sets the gate ===
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Turn 1 response".into(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+    // Drain turn 1 output
+    drain_insert_history(&mut rx);
+
+    // === Turn 2: gate should be cleared, tool calls should work again ===
+    chat.handle_codex_event(Event {
+        id: "t2".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // This tool call in turn 2 should NOT be discarded
+    let begin_t2 = begin_exec(&mut chat, "call-t2", "ls -la");
+    end_exec(&mut chat, begin_t2, "total 42", "", 0);
+
+    chat.handle_codex_event(Event {
+        id: "t2".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Turn 2 response".into(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "t2".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+
+    // Turn 2 tool call should appear (gate was reset)
+    assert!(
+        combined.contains("ls -la"),
+        "turn 2 tool call should appear after gate reset: {combined:?}"
+    );
+    assert!(
+        combined.contains("Turn 2 response"),
+        "turn 2 agent message should appear: {combined:?}"
+    );
+}
+
+#[test]
+fn late_mcp_tool_call_after_agent_message_is_discarded() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Start turn
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // Agent responds
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessage(AgentMessageEvent {
+            message: "Done with the task".into(),
+        }),
+    });
+
+    // Drain agent message
+    drain_insert_history(&mut rx);
+
+    // Late MCP tool call arrives after agent message
+    let mcp_invocation = codex_protocol::protocol::McpInvocation {
+        server: "test-server".into(),
+        tool: "test_tool".into(),
+        arguments: Some(serde_json::json!({})),
+    };
+    chat.handle_codex_event(Event {
+        id: "mcp-late".into(),
+        msg: EventMsg::McpToolCallBegin(McpToolCallBeginEvent {
+            call_id: "mcp-call-late".into(),
+            invocation: mcp_invocation.clone(),
+        }),
+    });
+    chat.handle_codex_event(Event {
+        id: "mcp-late".into(),
+        msg: EventMsg::McpToolCallEnd(McpToolCallEndEvent {
+            call_id: "mcp-call-late".into(),
+            invocation: mcp_invocation,
+            duration: std::time::Duration::from_millis(10),
+            result: Ok(mcp_types::CallToolResult {
+                content: vec![mcp_types::ContentBlock::TextContent(
+                    mcp_types::TextContent {
+                        annotations: None,
+                        text: "some output".into(),
+                        r#type: "text".into(),
+                    },
+                )],
+                is_error: Some(false),
+                structured_content: None,
+            }),
+        }),
+    });
+
+    // Complete turn
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+
+    // MCP tool call should NOT appear
+    assert!(
+        !combined.contains("test_tool"),
+        "late MCP tool call should have been discarded: {combined:?}"
+    );
+    assert!(
+        !combined.contains("some output"),
+        "late MCP tool output should have been discarded: {combined:?}"
     );
 }

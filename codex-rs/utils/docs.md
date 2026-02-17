@@ -15,7 +15,7 @@ These utilities are consumed by various crates throughout the workspace, primari
 | Crate | Description |
 |-------|-------------|
 | `cache` | Thread-safe LRU cache with SHA1 hashing |
-| `git` | Git operations (patches, ghost commits, branch operations) |
+| `git` | Git operations (patches, ghost commits, branch operations, worktree management) |
 | `image` | Image processing (resize, encode, base64) |
 | `json-to-toml` | Converts JSON values to TOML values |
 | `pty` | PTY session management for command execution |
@@ -26,7 +26,9 @@ These utilities are consumed by various crates throughout the workspace, primari
 
 **cache**: `BlockingLruCache<K, V>` provides get-or-insert semantics with Tokio mutex protection. Includes `sha1_digest()` for content hashing.
 
-**git**: Ghost commits allow non-destructive workspace snapshots. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`.
+**git**: Ghost commits allow non-destructive workspace snapshots. Also provides worktree management primitives for creating, listing, naming, and renaming isolated workspaces. Key functions: `create_ghost_commit()`, `restore_ghost_commit()`, `apply_git_patch()`, `create_worktree()`, `list_worktrees()`, `ensure_gitignore_entry()`, `generate_worktree_branch_name()`, `summary_to_branch_name()`, `rename_worktree_branch()`. The `list_worktrees()` function parses `git worktree list --porcelain` output into `WorktreeInfo` structs (path + optional branch), always excluding the main worktree. This is consumed by `@/codex-rs/tui/src/system_info.rs` for the worktree cleanup warning feature.
+
+`summary_to_branch_name()` converts a prompt summary string into a git-branch-safe slug with `auto/` prefix and timestamp (e.g., "Fix auth bug" becomes `auto/fix-auth-bug-20260202-120000`). It sanitizes non-alphanumeric characters, collapses consecutive hyphens, truncates at 40 characters on word boundaries, and falls back to `generate_worktree_branch_name()` for empty input. `rename_worktree_branch()` performs a `git branch -m` to rename the branch in place. The worktree directory is left unchanged so that processes running inside it are not disrupted.
 
 **image**: Resizes images to `MAX_WIDTH=2048` / `MAX_HEIGHT=768` and encodes as JPEG/PNG with base64. Uses LRU cache to avoid re-encoding.
 

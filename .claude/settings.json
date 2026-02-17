@@ -1,9 +1,33 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/cloud_agent_setup.sh"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:ratatui.rs)",
+      "WebFetch(domain:serde.rs)",
       "Bash(cat:*)",
       "Bash(cd:*)",
+      "Bash(just fmt:*)",
+      "Bash(just fix:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(git diff:*)",
       "Bash(git status:*)",
       "Bash(mkdir:*)",
       "Bash(tree:*)",
@@ -35,6 +59,9 @@
           ]
         }
       }
-    }
+    },
+    "additionalDirectories": [
+      "~/.nori/profiles/"
+    ]
   }
 }

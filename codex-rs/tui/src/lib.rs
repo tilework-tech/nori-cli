@@ -79,11 +79,12 @@ mod terminal_palette;
 mod text_formatting;
 mod tui;
 mod ui_consts;
+mod viewonly_transcript;
 
-/// Default model for ACP-only mode when no model is specified via CLI or config.
+/// Default agent for ACP-only mode when no agent is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-/// This constant MUST match codex_acp::config::DEFAULT_MODEL to ensure consistency.
-const DEFAULT_ACP_MODEL: &str = "claude-code";
+/// This constant MUST match codex_acp::config::DEFAULT_AGENT to ensure consistency.
+const DEFAULT_ACP_AGENT: &str = "claude-code";
 
 // Nori-specific update modules
 // Re-export as pub mod for external access to UpdateAction type
@@ -190,26 +191,48 @@ pub async fn run_main(
 
     let model_provider_override: Option<String> = None;
 
-    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_MODEL
-    let model = cli.model.clone().or_else(|| {
+    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_AGENT
+    let agent = cli.agent.clone().or_else(|| {
         #[cfg(feature = "nori-config")]
         {
-            nori::config_adapter::get_persisted_agent_model()
-                .or_else(|| Some(DEFAULT_ACP_MODEL.to_string()))
+            nori::config_adapter::get_persisted_agent()
+                .or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
         }
         #[cfg(not(feature = "nori-config"))]
         {
-            Some(DEFAULT_ACP_MODEL.to_string())
+            Some(DEFAULT_ACP_AGENT.to_string())
         }
     });
 
     // canonicalize the cwd
-    let cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
+    let mut cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
     let additional_dirs = cli.add_dir.clone();
 
+    // Auto-worktree: if enabled in NoriConfig, create a worktree and override cwd
+    #[cfg(feature = "nori-config")]
+    let nori_config = nori::config_adapter::load_nori_config().ok();
+    #[cfg(not(feature = "nori-config"))]
+    let nori_config: Option<codex_acp::NoriConfig> = None;
+
+    #[cfg(feature = "nori-config")]
+    if nori_config.as_ref().is_some_and(|c| c.auto_worktree) {
+        if let Some(effective_cwd) = cwd.clone().or_else(|| std::env::current_dir().ok()) {
+            match codex_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
+                Ok(worktree_path) => {
+                    tracing::info!("Auto-worktree created at {}", worktree_path.display());
+                    cwd = Some(worktree_path);
+                }
+                Err(e) => {
+                    tracing::warn!("Auto-worktree setup skipped: {e}");
+                }
+            }
+        } else {
+            tracing::warn!("Auto-worktree setup skipped: could not determine working directory");
+        }
+    }
+
     let overrides = ConfigOverrides {
-        model,
-        review_model: None,
+        model: agent,
         approval_policy,
         sandbox_mode,
         cwd,
@@ -310,9 +333,21 @@ pub async fn run_main(
         let _ = tracing_subscriber::registry().with(file_layer).try_init();
     }
 
-    run_ratatui_app(cli, config, overrides, cli_kv_overrides, active_profile)
-        .await
-        .map_err(|err| std::io::Error::other(err.to_string()))
+    let vertical_footer = nori_config
+        .as_ref()
+        .map(|c| c.vertical_footer)
+        .unwrap_or(false);
+
+    run_ratatui_app(
+        cli,
+        config,
+        overrides,
+        cli_kv_overrides,
+        active_profile,
+        vertical_footer,
+    )
+    .await
+    .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
 async fn run_ratatui_app(
@@ -321,6 +356,7 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
+    vertical_footer: bool,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -473,16 +509,6 @@ async fn run_ratatui_app(
     };
 
     let Cli { prompt, images, .. } = cli;
-
-    #[cfg(feature = "nori-config")]
-    let vertical_footer = nori::config_adapter::load_nori_config()
-        .map(|config| config.vertical_footer)
-        .unwrap_or_else(|err| {
-            tracing::warn!("Failed to load Nori config for footer layout: {err}");
-            false
-        });
-    #[cfg(not(feature = "nori-config"))]
-    let vertical_footer = false;
 
     let app_result = App::run(
         &mut tui,
@@ -677,15 +703,15 @@ mod tests {
     }
 
     #[test]
-    fn default_acp_model_matches_acp_module_default() {
-        // The TUI's DEFAULT_ACP_MODEL should match the ACP module's DEFAULT_MODEL
+    fn default_acp_agent_matches_acp_module_default() {
+        // The TUI's DEFAULT_ACP_AGENT should match the ACP module's DEFAULT_AGENT
         // to ensure consistency between the two modules.
         assert_eq!(
-            DEFAULT_ACP_MODEL,
-            codex_acp::config::DEFAULT_MODEL,
-            "TUI default model '{}' does not match ACP module default '{}'",
-            DEFAULT_ACP_MODEL,
-            codex_acp::config::DEFAULT_MODEL
+            DEFAULT_ACP_AGENT,
+            codex_acp::config::DEFAULT_AGENT,
+            "TUI default agent '{}' does not match ACP module default '{}'",
+            DEFAULT_ACP_AGENT,
+            codex_acp::config::DEFAULT_AGENT
         );
     }
 }
