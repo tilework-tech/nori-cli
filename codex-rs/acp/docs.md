@@ -758,6 +758,9 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 | `QuotaExceeded` | "quota", "rate limit", "429", "usage limit" | "Rate limit or quota exceeded for {provider}" |
 | `ExecutableNotFound` | "not found", "command not found" | "Could not find the {agent} CLI. Install with: npm install -g {package}" |
 | `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}" |
+| `PromptTooLong` | "prompt is too long" | "Prompt is too long. Try using /compact to reduce context size, or start a new session." |
+
+Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to inspect the full error chain, while the user-facing `display_error` string uses `{e:#}` (alternate Display) in the prompt error handler to show the complete chain rather than just the outermost `.context()` wrapper.
 
 ### Things to Know
 

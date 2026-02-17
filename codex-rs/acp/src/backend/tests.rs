@@ -21,6 +21,68 @@ fn test_translate_agent_message_chunk_to_event() {
     }
 }
 
+/// Test that "prompt is too long" errors are correctly categorized
+#[test]
+fn test_categorize_acp_error_prompt_too_long() {
+    assert_eq!(
+        categorize_acp_error("Internal error: Prompt is too long"),
+        AcpErrorCategory::PromptTooLong
+    );
+    assert_eq!(
+        categorize_acp_error("Error code -32603: Internal error: Prompt is too long"),
+        AcpErrorCategory::PromptTooLong
+    );
+    assert_eq!(
+        categorize_acp_error("prompt is too long"),
+        AcpErrorCategory::PromptTooLong
+    );
+    // Case insensitive
+    assert_eq!(
+        categorize_acp_error("PROMPT IS TOO LONG"),
+        AcpErrorCategory::PromptTooLong
+    );
+}
+
+/// Test that enhanced_error_message for PromptTooLong suggests /compact
+#[test]
+fn test_enhanced_error_message_prompt_too_long() {
+    use crate::registry::AgentKind;
+
+    let enhanced = enhanced_error_message(
+        AcpErrorCategory::PromptTooLong,
+        "Internal error: Prompt is too long",
+        "Claude Code",
+        AgentKind::ClaudeCode.auth_hint(),
+        AgentKind::ClaudeCode.display_name(),
+        AgentKind::ClaudeCode.npm_package(),
+    );
+
+    assert!(
+        enhanced.contains("/compact"),
+        "PromptTooLong message should suggest /compact, got: {enhanced}"
+    );
+}
+
+/// Test that a wrapped "prompt is too long" error produces an actionable user message
+/// when processed through the full categorize + format path (simulating what
+/// handle_user_input does on prompt failure).
+#[test]
+fn test_prompt_too_long_error_produces_actionable_message() {
+    // Simulate the error chain: acp library error -> .context("ACP prompt failed")
+    let inner = anyhow::anyhow!("Internal error: Prompt is too long");
+    let wrapped: anyhow::Error = inner.context("ACP prompt failed");
+
+    // This is what categorize_and_handle_prompt_error does in backend/mod.rs:
+    let error_string = format!("{wrapped:?}");
+    let category = categorize_acp_error(&error_string);
+
+    assert_eq!(
+        category,
+        AcpErrorCategory::PromptTooLong,
+        "Debug-formatted error chain should be categorized as PromptTooLong"
+    );
+}
+
 /// Test that translate_session_update_to_events correctly translates
 /// AgentThoughtChunk to AgentReasoningDelta events.
 #[test]

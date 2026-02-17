@@ -64,6 +64,8 @@ pub enum AcpErrorCategory {
     ExecutableNotFound,
     /// General initialization failure
     Initialization,
+    /// Prompt exceeds the agent's context window
+    PromptTooLong,
     /// Unknown error (fallback)
     Unknown,
 }
@@ -103,6 +105,8 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
         || error_lower.contains("protocol")
     {
         AcpErrorCategory::Initialization
+    } else if error_lower.contains("prompt is too long") {
+        AcpErrorCategory::PromptTooLong
     } else {
         AcpErrorCategory::Unknown
     }
@@ -136,6 +140,10 @@ pub fn enhanced_error_message(
             format!(
                 "Failed to initialize {provider_name}. The agent may be incompatible or experiencing issues. Original error: {original_error}"
             )
+        }
+        AcpErrorCategory::PromptTooLong => {
+            "Prompt is too long. Try using /compact to reduce context size, or start a new session."
+                .to_string()
         }
         AcpErrorCategory::Unknown => original_error.to_string(),
     }
@@ -1580,7 +1588,7 @@ impl AcpBackend {
             if let Err(ref e) = result {
                 let error_string = format!("{e:?}");
                 let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e}");
+                let display_error = format!("{e:#}");
 
                 // Generate user-friendly message based on error category
                 let user_message = match category {
@@ -1597,6 +1605,10 @@ impl AcpBackend {
                     }
                     AcpErrorCategory::Initialization => {
                         format!("Agent initialization failed: {display_error}")
+                    }
+                    AcpErrorCategory::PromptTooLong => {
+                        "Prompt is too long. Try using /compact to reduce context size, or start a new session."
+                            .to_string()
                     }
                     AcpErrorCategory::Unknown => {
                         format!("ACP prompt failed: {display_error}")
