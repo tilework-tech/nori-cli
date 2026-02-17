@@ -465,18 +465,48 @@ pub fn review_decision_to_permission_outcome(
 ) -> acp::RequestPermissionOutcome {
     use codex_protocol::protocol::ReviewDecision;
 
-    // Find the appropriate option based on the decision
+    // Find the appropriate option based on the decision.
+    // Critically, Approved maps to AllowOnce (one-time, no persistence) while
+    // ApprovedForSession maps to AllowAlways (persistent "don't ask again").
+    // This distinction prevents yolo/full-access auto-approvals from polluting
+    // the user's settings file with permanent command approvals.
     let option_id = match decision {
-        ReviewDecision::Approved | ReviewDecision::ApprovedForSession => {
-            // Look for an "Allow" kind option (AllowOnce or AllowAlways)
+        ReviewDecision::Approved => {
+            // One-time approval: prefer AllowOnce to avoid persistent storage
             options
                 .iter()
-                .find(|opt| {
-                    matches!(
-                        opt.kind,
-                        acp::PermissionOptionKind::AllowOnce
-                            | acp::PermissionOptionKind::AllowAlways
-                    )
+                .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowOnce))
+                .or_else(|| {
+                    options
+                        .iter()
+                        .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowAlways))
+                })
+                .or_else(|| {
+                    options.iter().find(|opt| {
+                        let name_lower = opt.name.to_lowercase();
+                        name_lower.contains("allow")
+                            || name_lower.contains("approve")
+                            || name_lower.contains("yes")
+                    })
+                })
+                .map(|opt| opt.option_id.clone())
+                .unwrap_or_else(|| {
+                    // Default to first option if no clear "allow" option
+                    options
+                        .first()
+                        .map(|opt| opt.option_id.clone())
+                        .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()))
+                })
+        }
+        ReviewDecision::ApprovedForSession => {
+            // Session/persistent approval: prefer AllowAlways for "don't ask again"
+            options
+                .iter()
+                .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowAlways))
+                .or_else(|| {
+                    options
+                        .iter()
+                        .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowOnce))
                 })
                 .or_else(|| {
                     options.iter().find(|opt| {
@@ -858,12 +888,30 @@ mod tests {
         assert!(event.reason.is_some());
     }
 
+    /// Extract the selected option_id from a RequestPermissionOutcome.
+    fn selected_option_id(outcome: acp::RequestPermissionOutcome) -> String {
+        match outcome {
+            acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome {
+                option_id,
+                ..
+            }) => option_id.0.as_ref().to_string(),
+            other => panic!("Expected Selected outcome, got {other:?}"),
+        }
+    }
+
     #[test]
-    fn test_review_decision_to_permission_outcome_approved() {
+    fn test_approved_prefers_allow_once_over_allow_always() {
+        // When both AllowAlways and AllowOnce are available, Approved should
+        // pick AllowOnce to avoid persisting a permanent approval.
         let options = vec![
             acp::PermissionOption::new(
-                acp::PermissionOptionId::from("allow".to_string()),
-                "Allow",
+                acp::PermissionOptionId::from("always".to_string()),
+                "Allow Always",
+                acp::PermissionOptionKind::AllowAlways,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("once".to_string()),
+                "Allow Once",
                 acp::PermissionOptionKind::AllowOnce,
             ),
             acp::PermissionOption::new(
@@ -874,14 +922,77 @@ mod tests {
         ];
 
         let outcome = review_decision_to_permission_outcome(ReviewDecision::Approved, &options);
-        assert!(matches!(
-            outcome,
-            acp::RequestPermissionOutcome::Selected { .. }
-        ));
+        assert_eq!(selected_option_id(outcome), "once");
     }
 
     #[test]
-    fn test_review_decision_to_permission_outcome_denied() {
+    fn test_approved_for_session_prefers_allow_always() {
+        // When both AllowAlways and AllowOnce are available,
+        // ApprovedForSession should pick AllowAlways for "don't ask again".
+        let options = vec![
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("once".to_string()),
+                "Allow Once",
+                acp::PermissionOptionKind::AllowOnce,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("always".to_string()),
+                "Allow Always",
+                acp::PermissionOptionKind::AllowAlways,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
+        ];
+
+        let outcome =
+            review_decision_to_permission_outcome(ReviewDecision::ApprovedForSession, &options);
+        assert_eq!(selected_option_id(outcome), "always");
+    }
+
+    #[test]
+    fn test_approved_falls_back_to_allow_always_when_no_allow_once() {
+        let options = vec![
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("always".to_string()),
+                "Allow Always",
+                acp::PermissionOptionKind::AllowAlways,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
+        ];
+
+        let outcome = review_decision_to_permission_outcome(ReviewDecision::Approved, &options);
+        assert_eq!(selected_option_id(outcome), "always");
+    }
+
+    #[test]
+    fn test_approved_for_session_falls_back_to_allow_once_when_no_allow_always() {
+        let options = vec![
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("once".to_string()),
+                "Allow Once",
+                acp::PermissionOptionKind::AllowOnce,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
+        ];
+
+        let outcome =
+            review_decision_to_permission_outcome(ReviewDecision::ApprovedForSession, &options);
+        assert_eq!(selected_option_id(outcome), "once");
+    }
+
+    #[test]
+    fn test_denied_selects_reject_option() {
         let options = vec![
             acp::PermissionOption::new(
                 acp::PermissionOptionId::from("allow".to_string()),
@@ -896,10 +1007,7 @@ mod tests {
         ];
 
         let outcome = review_decision_to_permission_outcome(ReviewDecision::Denied, &options);
-        assert!(matches!(
-            outcome,
-            acp::RequestPermissionOutcome::Selected { .. }
-        ));
+        assert_eq!(selected_option_id(outcome), "deny");
     }
 
     #[test]
