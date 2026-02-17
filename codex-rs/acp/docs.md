@@ -152,10 +152,10 @@ The `find_transcript_by_shell_search()` function uses shell tools to search recu
 **Message Normalization:**
 
 Messages are normalized before searching via `normalize_message_for_matching()` to create a consistent fingerprint:
-- Strip all whitespace characters
-- Truncate to first 20 characters (`NORMALIZED_MESSAGE_LENGTH`)
+- Trim leading/trailing whitespace
+- Truncate to first 120 characters (`NORMALIZED_MESSAGE_LENGTH`)
 
-This allows matching across different transcript formats where the same message might have different whitespace handling.
+Internal whitespace is preserved so the pattern matches the message as it appears in transcript files when searched with `rg --fixed-strings` / `grep -F`.
 
 **Fail-Closed Behavior:**
 

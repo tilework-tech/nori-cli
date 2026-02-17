@@ -172,8 +172,8 @@ const MAX_TRANSCRIPT_AGE_SECS: u64 = 2 * 24 * 60 * 60;
 /// avoids coupling to any specific agent's JSON schema and works across different
 /// transcript formats.
 ///
-/// The search pattern is a normalized message fingerprint (whitespace stripped, truncated
-/// to 20 characters) which should uniquely identify a session by its first user message.
+/// The search pattern is a normalized message fingerprint (trimmed and truncated
+/// to 120 characters) which should uniquely identify a session by its first user message.
 ///
 /// # Arguments
 ///
@@ -298,15 +298,21 @@ fn search_with_grep(base_dir: &Path, pattern: &str) -> Option<Vec<String>> {
 }
 
 /// Length to truncate normalized messages to for matching.
-const NORMALIZED_MESSAGE_LENGTH: usize = 20;
+const NORMALIZED_MESSAGE_LENGTH: usize = 120;
 
-/// Normalize a message for matching by stripping all whitespace and truncating.
+/// Normalize a message for matching by trimming and truncating.
 ///
 /// This creates a "fingerprint" of the message that can be used to match
-/// transcripts by their first user message.
+/// transcripts by their first user message. We only trim leading/trailing
+/// whitespace and truncate to keep the search pattern short while preserving
+/// internal whitespace so that `rg --fixed-strings` / `grep -F` can match
+/// the message as it appears in transcript files.
 fn normalize_message_for_matching(message: &str) -> String {
-    let stripped: String = message.chars().filter(|c| !c.is_whitespace()).collect();
-    stripped.chars().take(NORMALIZED_MESSAGE_LENGTH).collect()
+    message
+        .trim()
+        .chars()
+        .take(NORMALIZED_MESSAGE_LENGTH)
+        .collect()
 }
 
 /// Parse token usage from a transcript file (synchronous).
@@ -747,36 +753,66 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_message_for_matching_strips_whitespace_and_truncates() {
+    fn test_normalize_message_for_matching_trims_and_truncates() {
         use pretty_assertions::assert_eq;
 
-        // Basic whitespace stripping
+        // Trims leading/trailing whitespace but preserves internal whitespace
         assert_eq!(
             normalize_message_for_matching("  hello world  "),
-            "helloworld"
+            "hello world"
         );
 
-        // Truncation to 20 characters
+        // No truncation needed for short messages
         assert_eq!(
             normalize_message_for_matching(
                 "this is a very long message that exceeds twenty characters"
             ),
-            "thisisaverylongmessa"
+            "this is a very long message that exceeds twenty characters"
         );
 
-        // Mixed: whitespace + truncation
+        // Trims leading/trailing whitespace
         assert_eq!(
             normalize_message_for_matching("  Currently the transcript detection  "),
-            "Currentlythetranscri"
+            "Currently the transcript detection"
         );
 
-        // Short message stays as-is (minus whitespace)
+        // Short message stays as-is
         assert_eq!(normalize_message_for_matching("short"), "short");
 
-        // Newlines and tabs count as whitespace
+        // Trims newlines and tabs from edges, preserves internal ones
         assert_eq!(
-            normalize_message_for_matching("hello\n\tworld"),
-            "helloworld"
+            normalize_message_for_matching("\n\thello\n\tworld\n"),
+            "hello\n\tworld"
+        );
+
+        // Verify actual truncation at 120 characters with a very long input
+        let long_input = "a".repeat(200);
+        let result = normalize_message_for_matching(&long_input);
+        assert_eq!(
+            result.len(),
+            120,
+            "Should truncate to exactly 120 characters"
+        );
+        assert_eq!(result, "a".repeat(120));
+    }
+
+    #[test]
+    fn test_normalize_message_distinguishes_prompts_with_shared_prefix() {
+        use pretty_assertions::assert_ne;
+
+        // These two prompts share the first 30+ characters after whitespace stripping.
+        // At length 20 they would collide; at 120 they must be distinct.
+        let prompt_a =
+            "Fix the authentication bug in the login page that causes users to be logged out";
+        let prompt_b =
+            "Fix the authentication bug in the login page rendering to show the correct avatar";
+
+        let fingerprint_a = normalize_message_for_matching(prompt_a);
+        let fingerprint_b = normalize_message_for_matching(prompt_b);
+
+        assert_ne!(
+            fingerprint_a, fingerprint_b,
+            "Prompts with shared prefix but different content should produce different fingerprints"
         );
     }
 
@@ -929,5 +965,36 @@ mod tests {
             "session-newer.jsonl",
             "Should pick the most recently modified file"
         );
+    }
+
+    #[test]
+    fn test_normalized_message_matches_transcript_with_whitespace() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let base_dir = temp_dir.path();
+
+        // Create a transcript file with a realistic JSON line containing whitespace-intact message
+        let file = base_dir.join("session-abc.jsonl");
+        {
+            let mut f = fs::File::create(&file).unwrap();
+            writeln!(
+                f,
+                r#"{{"message":{{"content":"Fix the authentication bug in the login page"}}}}"#
+            )
+            .unwrap();
+        }
+
+        // Normalize the message exactly as production code does
+        let search_pattern =
+            normalize_message_for_matching("Fix the authentication bug in the login page");
+
+        // The normalized pattern must match inside the transcript file
+        let result = find_transcript_by_shell_search(base_dir, &search_pattern);
+        assert!(
+            result.is_some(),
+            "Normalized message should match transcript file content. Pattern: {search_pattern:?}"
+        );
+        assert_eq!(result.unwrap().file_name().unwrap(), "session-abc.jsonl");
     }
 }
