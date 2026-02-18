@@ -133,9 +133,10 @@ impl LoopCountPickerView {
     fn item_label(&self, idx: usize) -> String {
         if idx == self.custom_idx() {
             if !self.current_is_preset()
-                && let Some(n) = self.current {
-                    return format!("Custom... ({n})");
-                }
+                && let Some(n) = self.current
+            {
+                return format!("Custom... ({n})");
+            }
             "Custom...".to_string()
         } else {
             match PRESETS[idx] {
