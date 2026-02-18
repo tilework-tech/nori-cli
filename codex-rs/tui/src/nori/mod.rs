@@ -21,6 +21,9 @@ pub(crate) mod config_picker;
 pub(crate) mod hotkey_match;
 pub(crate) mod hotkey_picker;
 
+#[cfg(feature = "nori-config")]
+pub(crate) mod loop_count_picker;
+
 // update_action is available in all builds for the UpdateAction type
 // update_prompt and updates are only for release builds
 pub(crate) mod update_action;
