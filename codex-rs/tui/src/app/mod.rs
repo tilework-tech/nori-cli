@@ -236,6 +236,11 @@ pub(crate) struct App {
     /// prompt submission. This avoids disrupting active prompt turns.
     pending_agent: Option<PendingAgentSelection>,
 
+    /// Ephemeral per-session loop count override (set via /config menu).
+    /// Outer Option: whether overridden; inner Option<i32>: the value.
+    #[cfg(feature = "nori-config")]
+    loop_count_override: Option<Option<i32>>,
+
     /// Configurable hotkey bindings loaded from NoriConfig.
     pub(crate) hotkey_config: codex_acp::config::HotkeyConfig,
 
@@ -388,6 +393,8 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            #[cfg(feature = "nori-config")]
+            loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode_enabled: false,
             system_info_tx,
@@ -544,6 +551,9 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                #[cfg(feature = "nori-config")]
+                self.chat_widget
+                    .set_loop_count_override(self.loop_count_override);
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
                     if let Some(command) = summary.resume_command {
@@ -1050,6 +1060,9 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                #[cfg(feature = "nori-config")]
+                self.chat_widget
+                    .set_loop_count_override(self.loop_count_override);
 
                 self.chat_widget.add_info_message(
                     format!("Started new conversation with agent: {display_name}"),
@@ -1173,13 +1186,19 @@ impl App {
             }
             #[cfg(feature = "nori-config")]
             AppEvent::OpenLoopCountPicker => {
-                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
-                self.chat_widget
-                    .open_loop_count_picker(nori_config.loop_count);
+                let current = match self.loop_count_override {
+                    Some(overridden) => overridden,
+                    None => {
+                        codex_acp::config::NoriConfig::load()
+                            .unwrap_or_default()
+                            .loop_count
+                    }
+                };
+                self.chat_widget.open_loop_count_picker(current);
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigLoopCount(value) => {
-                self.persist_loop_count_setting(value).await;
+                self.set_session_loop_count(value);
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAutoWorktree(enabled) => {
@@ -1221,6 +1240,8 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                self.chat_widget
+                    .set_loop_count_override(self.loop_count_override);
                 self.chat_widget.set_loop_state(remaining, total);
 
                 self.chat_widget
@@ -1654,32 +1675,20 @@ impl App {
         );
     }
 
+    /// Store the loop count as an ephemeral per-session override (not persisted
+    /// to the TOML config). The user can still edit the home TOML directly for
+    /// a persistent change.
     #[cfg(feature = "nori-config")]
-    async fn persist_loop_count_setting(&mut self, value: Option<i32>) {
-        // Store 0 for disabled (None), which deserializes as Some(0) and is
-        // treated the same as None by the loop orchestration code.
-        let stored = value.unwrap_or(0) as i64;
-
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "loop_count"], toml_value(stored))
-            .apply()
-            .await
-        {
-            tracing::error!(
-                error = %err,
-                "failed to persist loop_count setting"
-            );
-            self.chat_widget
-                .add_error_message(format!("Failed to save loop_count setting: {err}"));
-            return;
-        }
+    fn set_session_loop_count(&mut self, value: Option<i32>) {
+        self.loop_count_override = Some(value);
+        self.chat_widget.set_loop_count_override(Some(value));
 
         let display = match value {
             Some(n) => format!("{n}"),
             None => "Disabled".to_string(),
         };
         self.chat_widget
-            .add_info_message(format!("Loop count set to {display}."), None);
+            .add_info_message(format!("Loop count set to {display} (this session)."), None);
     }
 
     async fn persist_vim_mode_setting(&mut self, enabled: bool) {
