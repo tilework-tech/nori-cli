@@ -411,6 +411,32 @@ impl TextArea {
                             ..
                         } => self.set_cursor(self.text.len()),
 
+                        // -- Capital WORD motions --
+                        KeyEvent {
+                            code: KeyCode::Char('W'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => {
+                            let target = self.beginning_of_next_big_word();
+                            self.set_cursor(target);
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('B'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => {
+                            let target = self.beginning_of_previous_big_word();
+                            self.set_cursor(target);
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('E'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => {
+                            let target = self.end_of_next_big_word();
+                            self.set_cursor(target);
+                        }
+
                         // -- Pending key starters --
                         KeyEvent {
                             code: KeyCode::Char('g'),
@@ -506,6 +532,36 @@ impl TextArea {
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => self.yank(),
+
+                        // -- Capital editing variants --
+                        KeyEvent {
+                            code: KeyCode::Char('X'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => self.delete_backward(1),
+                        KeyEvent {
+                            code: KeyCode::Char('P'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => self.yank(),
+                        KeyEvent {
+                            code: KeyCode::Char('J'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => self.join_lines(),
+                        KeyEvent {
+                            code: KeyCode::Char('S'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => {
+                            self.substitute_line();
+                            self.vim_mode_state = VimModeState::Insert;
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('Y'),
+                            modifiers: KeyModifiers::SHIFT,
+                            ..
+                        } => self.yank_line(),
 
                         _ => {
                             // Ignore other keys in Normal mode.
@@ -1221,6 +1277,121 @@ impl TextArea {
             }
         }
         self.adjust_pos_out_of_elements(end, false)
+    }
+
+    /// Move forward by WORD (whitespace-delimited, ignoring separators).
+    fn beginning_of_next_big_word(&self) -> usize {
+        if self.cursor_pos >= self.text.len() {
+            return self.text.len();
+        }
+        let rest = &self.text[self.cursor_pos..];
+        let Some(first_ch) = rest.chars().next() else {
+            return self.text.len();
+        };
+
+        let mut pos = self.cursor_pos;
+        if !first_ch.is_whitespace() {
+            // Skip non-whitespace (current WORD)
+            match rest.find(char::is_whitespace) {
+                Some(offset) => pos = self.cursor_pos + offset,
+                None => return self.text.len(),
+            }
+        }
+        // Skip whitespace to find start of next WORD
+        match self.text[pos..].find(|c: char| !c.is_whitespace()) {
+            Some(offset) => self.adjust_pos_out_of_elements(pos + offset, false),
+            None => self.text.len(),
+        }
+    }
+
+    /// Move backward by WORD (whitespace-delimited, ignoring separators).
+    fn beginning_of_previous_big_word(&self) -> usize {
+        let prefix = &self.text[..self.cursor_pos];
+        let Some((last_non_ws_idx, _)) = prefix
+            .char_indices()
+            .rev()
+            .find(|&(_, c)| !c.is_whitespace())
+        else {
+            return 0;
+        };
+        // From there, find the beginning of the WORD (go backward until whitespace)
+        let mut start = 0;
+        for (idx, ch) in prefix[..last_non_ws_idx].char_indices().rev() {
+            if ch.is_whitespace() {
+                start = idx + ch.len_utf8();
+                break;
+            }
+        }
+        self.adjust_pos_out_of_elements(start, true)
+    }
+
+    /// Move to end of current/next WORD (whitespace-delimited, ignoring separators).
+    /// Advances at least one position (like vim's E) so the cursor doesn't
+    /// get stuck when already on the last character of a WORD.
+    fn end_of_next_big_word(&self) -> usize {
+        if self.cursor_pos >= self.text.len() {
+            return self.text.len();
+        }
+
+        // Advance one character to ensure progress when already at end of a WORD.
+        let scan_start = self.next_atomic_boundary(self.cursor_pos);
+        if scan_start >= self.text.len() {
+            return self.text.len();
+        }
+
+        // Skip whitespace from scan_start.
+        let Some(first_non_ws) = self.text[scan_start..].find(|c: char| !c.is_whitespace()) else {
+            return self.text.len();
+        };
+        let word_start = scan_start + first_non_ws;
+
+        // Find the last character of the WORD (not one past it).
+        let mut last_pos = word_start;
+        for (idx, ch) in self.text[word_start..].char_indices() {
+            if ch.is_whitespace() {
+                break;
+            }
+            last_pos = word_start + idx;
+        }
+        self.adjust_pos_out_of_elements(last_pos, false)
+    }
+
+    /// Join the current line with the next line, replacing the newline and
+    /// leading whitespace with a single space.
+    fn join_lines(&mut self) {
+        let eol = self.end_of_current_line();
+        if eol >= self.text.len() {
+            return; // No next line to join
+        }
+        // Find the start of actual content on the next line (skip leading whitespace, not newlines)
+        let next_line_start = eol + 1;
+        let leading_ws_end = self.text[next_line_start..]
+            .find(|c: char| !c.is_whitespace() || c == '\n')
+            .map(|offset| next_line_start + offset)
+            .unwrap_or(self.text.len());
+        // Replace newline + leading whitespace with a single space
+        self.set_cursor(eol);
+        self.replace_range_raw(eol..leading_ws_end, " ");
+    }
+
+    /// Delete the contents of the current line (but keep the line itself),
+    /// saving the deleted text to the kill buffer.
+    fn substitute_line(&mut self) {
+        let bol = self.beginning_of_current_line();
+        let eol = self.end_of_current_line();
+        if bol < eol {
+            self.kill_range(bol..eol);
+        }
+    }
+
+    /// Copy the current line into the kill buffer without deleting it.
+    fn yank_line(&mut self) {
+        let bol = self.beginning_of_current_line();
+        let eol = self.end_of_current_line();
+        self.kill_buffer = self.text[bol..eol].to_string();
+        if eol < self.text.len() {
+            self.kill_buffer.push('\n');
+        }
     }
 
     fn adjust_pos_out_of_elements(&self, pos: usize, prefer_start: bool) -> usize {
