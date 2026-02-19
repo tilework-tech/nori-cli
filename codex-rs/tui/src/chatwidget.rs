@@ -2660,11 +2660,11 @@ impl ChatWidget {
     /// Open the loop count sub-picker.
     #[cfg(feature = "nori-config")]
     pub(crate) fn open_loop_count_picker(&mut self, current: Option<i32>) {
-        let params = crate::nori::config_picker::loop_count_picker_params(
+        let view = crate::nori::loop_count_picker::LoopCountPickerView::new(
             current,
             self.app_event_tx.clone(),
         );
-        self.bottom_pane.show_selection_view(params);
+        self.bottom_pane.show_view(Box::new(view));
     }
 
     /// Open the footer segments picker popup.
