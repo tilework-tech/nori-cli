@@ -262,6 +262,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         first_prompt_text: None,
         loop_remaining: None,
         loop_total: None,
+        #[cfg(feature = "nori-config")]
+        loop_count_override: None,
         turn_finished: false,
     };
     (widget, rx, op_rx)

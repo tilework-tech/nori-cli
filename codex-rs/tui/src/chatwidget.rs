@@ -387,6 +387,10 @@ pub(crate) struct ChatWidget {
     loop_remaining: Option<i32>,
     // Loop mode state: total iterations configured
     loop_total: Option<i32>,
+    // Ephemeral per-session override for loop_count (set via /config menu).
+    // Outer Option: whether overridden; inner Option<i32>: the value.
+    #[cfg(feature = "nori-config")]
+    loop_count_override: Option<Option<i32>>,
     // Gate: set when AgentMessage is received, cleared on next TaskStarted.
     // While true, late-arriving tool events are silently discarded.
     turn_finished: bool,
@@ -1566,6 +1570,8 @@ impl ChatWidget {
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
+            #[cfg(feature = "nori-config")]
+            loop_count_override: None,
             turn_finished: false,
         };
 
@@ -1661,6 +1667,8 @@ impl ChatWidget {
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
+            #[cfg(feature = "nori-config")]
+            loop_count_override: None,
             turn_finished: false,
         };
 
@@ -1758,6 +1766,8 @@ impl ChatWidget {
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
+            #[cfg(feature = "nori-config")]
+            loop_count_override: None,
             turn_finished: false,
         };
 
@@ -1913,9 +1923,14 @@ impl ChatWidget {
             }
             #[cfg(feature = "nori-config")]
             SlashCommand::Config => {
-                // Load NoriConfig from the default path and open the config popup
+                // Load NoriConfig from the default path and open the config popup.
+                // Apply ephemeral session overrides so the picker shows the
+                // current in-session value rather than the persisted one.
                 match codex_acp::config::NoriConfig::load() {
-                    Ok(nori_config) => {
+                    Ok(mut nori_config) => {
+                        if let Some(overridden) = self.loop_count_override {
+                            nori_config.loop_count = overridden;
+                        }
                         self.open_config_popup(&nori_config);
                     }
                     Err(err) => {
@@ -2132,11 +2147,20 @@ impl ChatWidget {
         if self.first_prompt_text.is_none() {
             self.first_prompt_text = Some(text.clone());
 
-            // Initialize loop mode from NoriConfig on the very first prompt.
+            // Initialize loop mode on the very first prompt.
+            // Use the ephemeral per-session override if set, otherwise fall
+            // back to the persisted NoriConfig value.
             #[cfg(feature = "nori-config")]
             {
-                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
-                if let Some(count) = nori_config.loop_count
+                let effective_loop_count = match self.loop_count_override {
+                    Some(overridden) => overridden,
+                    None => {
+                        codex_acp::config::NoriConfig::load()
+                            .unwrap_or_default()
+                            .loop_count
+                    }
+                };
+                if let Some(count) = effective_loop_count
                     && count > 1
                 {
                     self.loop_remaining = Some(count - 1);
@@ -2712,6 +2736,12 @@ impl ChatWidget {
     pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {
         self.loop_remaining = Some(remaining);
         self.loop_total = Some(total);
+    }
+
+    /// Set the ephemeral per-session loop count override.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_loop_count_override(&mut self, value: Option<Option<i32>>) {
+        self.loop_count_override = value;
     }
 
     /// Cancel any active loop.
