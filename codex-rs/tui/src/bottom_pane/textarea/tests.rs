@@ -1545,17 +1545,21 @@ fn vim_normal_shift_b_moves_backward_big_word() {
 
 #[test]
 fn vim_normal_shift_e_moves_to_end_of_big_word() {
-    // E skips over separators as part of the WORD
+    // E skips over separators as part of the WORD, landing on the last character
     let mut t = vim_normal("hello.world foo");
     t.set_cursor(0);
     t.input(shift_key('E'));
-    pretty_assertions::assert_eq!(t.cursor(), 11); // end of "hello.world"
+    pretty_assertions::assert_eq!(t.cursor(), 10); // last char 'd' of "hello.world"
 
-    // E from whitespace lands at end of next WORD
+    // E advances to last char of next WORD
     t.input(shift_key('E'));
-    pretty_assertions::assert_eq!(t.cursor(), 15); // end of "foo"
+    pretty_assertions::assert_eq!(t.cursor(), 14); // last char 'o' of "foo"
 
-    // E at end of text stays at end
+    // E at end of text moves to text.len()
+    t.input(shift_key('E'));
+    pretty_assertions::assert_eq!(t.cursor(), 15);
+
+    // E past end stays at end
     t.input(shift_key('E'));
     pretty_assertions::assert_eq!(t.cursor(), 15);
 }

@@ -1326,16 +1326,34 @@ impl TextArea {
     }
 
     /// Move to end of current/next WORD (whitespace-delimited, ignoring separators).
+    /// Advances at least one position (like vim's E) so the cursor doesn't
+    /// get stuck when already on the last character of a WORD.
     fn end_of_next_big_word(&self) -> usize {
-        let Some(first_non_ws) = self.text[self.cursor_pos..].find(|c: char| !c.is_whitespace())
-        else {
+        if self.cursor_pos >= self.text.len() {
+            return self.text.len();
+        }
+
+        // Advance one character to ensure progress when already at end of a WORD.
+        let scan_start = self.next_atomic_boundary(self.cursor_pos);
+        if scan_start >= self.text.len() {
+            return self.text.len();
+        }
+
+        // Skip whitespace from scan_start.
+        let Some(first_non_ws) = self.text[scan_start..].find(|c: char| !c.is_whitespace()) else {
             return self.text.len();
         };
-        let word_start = self.cursor_pos + first_non_ws;
-        match self.text[word_start..].find(char::is_whitespace) {
-            Some(offset) => self.adjust_pos_out_of_elements(word_start + offset, false),
-            None => self.text.len(),
+        let word_start = scan_start + first_non_ws;
+
+        // Find the last character of the WORD (not one past it).
+        let mut last_pos = word_start;
+        for (idx, ch) in self.text[word_start..].char_indices() {
+            if ch.is_whitespace() {
+                break;
+            }
+            last_pos = word_start + idx;
         }
+        self.adjust_pos_out_of_elements(last_pos, false)
     }
 
     /// Join the current line with the next line, replacing the newline and
