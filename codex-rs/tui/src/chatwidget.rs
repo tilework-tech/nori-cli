@@ -491,11 +491,23 @@ impl ChatWidget {
             self.handle_streaming_delta(message);
         }
         self.flush_answer_stream_with_separator();
-        self.handle_stream_finished();
 
-        // Close the gate: any tool events arriving after this point are stale
-        // and should be silently discarded (ACP race condition).
+        // Close the gate BEFORE flushing: any tool events arriving after this
+        // point are stale and should be silently discarded.
         self.turn_finished = true;
+
+        // Handle pending task_complete state.
+        if self.task_complete_pending {
+            self.bottom_pane.hide_status_indicator();
+            self.task_complete_pending = false;
+        }
+
+        // Flush pending End events while discarding stale Begin events, so
+        // completed tool results are rendered but new tool-call cells don't
+        // appear below the agent's final message.
+        let mut mgr = std::mem::take(&mut self.interrupts);
+        mgr.flush_completions_and_clear(self);
+        self.interrupts = mgr;
 
         self.request_redraw();
     }
@@ -1053,12 +1065,6 @@ impl ChatWidget {
         }
     }
 
-    fn flush_interrupt_queue(&mut self) {
-        let mut mgr = std::mem::take(&mut self.interrupts);
-        mgr.flush_all(self);
-        self.interrupts = mgr;
-    }
-
     #[inline]
     fn defer_or_handle(
         &mut self,
@@ -1073,15 +1079,6 @@ impl ChatWidget {
         } else {
             handle(self);
         }
-    }
-
-    fn handle_stream_finished(&mut self) {
-        if self.task_complete_pending {
-            self.bottom_pane.hide_status_indicator();
-            self.task_complete_pending = false;
-        }
-        // A completed stream indicates non-exec content was just inserted.
-        self.flush_interrupt_queue();
     }
 
     #[inline]

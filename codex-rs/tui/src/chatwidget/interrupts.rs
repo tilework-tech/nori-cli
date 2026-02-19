@@ -145,21 +145,4 @@ impl InterruptManager {
     pub(crate) fn push_patch_end(&mut self, ev: PatchApplyEndEvent) {
         self.queue.push_back(QueuedInterrupt::PatchEnd(ev));
     }
-
-    pub(crate) fn flush_all(&mut self, chat: &mut ChatWidget) {
-        while let Some(q) = self.queue.pop_front() {
-            match q {
-                QueuedInterrupt::ExecApproval(id, ev) => chat.handle_exec_approval_now(id, ev),
-                QueuedInterrupt::ApplyPatchApproval(id, ev) => {
-                    chat.handle_apply_patch_approval_now(id, ev)
-                }
-                QueuedInterrupt::Elicitation(ev) => chat.handle_elicitation_request_now(ev),
-                QueuedInterrupt::ExecBegin(ev) => chat.handle_exec_begin_now(ev),
-                QueuedInterrupt::ExecEnd(ev) => chat.handle_exec_end_now(ev),
-                QueuedInterrupt::McpBegin(ev) => chat.handle_mcp_begin_now(ev),
-                QueuedInterrupt::McpEnd(ev) => chat.handle_mcp_end_now(ev),
-                QueuedInterrupt::PatchEnd(ev) => chat.handle_patch_apply_end_now(ev),
-            }
-        }
-    }
 }

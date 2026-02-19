@@ -3617,3 +3617,126 @@ fn late_mcp_tool_call_after_agent_message_is_discarded() {
         "late MCP tool output should have been discarded: {combined:?}"
     );
 }
+
+/// Issue 1 regression test: when ExecBegin events are deferred during streaming
+/// and then AgentMessage arrives, the deferred ExecBegin events should be
+/// discarded (not rendered below the agent's final message).
+///
+/// `on_agent_message` uses `flush_completions_and_clear` to process pending End
+/// events while discarding stale Begin events. This prevents tool-call cells
+/// from appearing AFTER the agent's final response text.
+///
+/// Sequence:
+/// 1. Start task, begin an exec command (creates active exec cell)
+/// 2. Start streaming agent content (creates stream_controller)
+/// 3. ExecEnd arrives for the running command → deferred (stream_controller is Some)
+/// 4. New ExecBegin arrives → also deferred (queue is non-empty)
+/// 5. on_agent_message → should discard the new ExecBegin but process the ExecEnd
+#[test]
+fn agent_message_discards_deferred_exec_begin_events() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // 1. Start a task and begin an exec command (before streaming starts)
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    let first_begin = begin_exec(&mut chat, "running-call", "echo first");
+
+    // 2. Start streaming agent content (creates stream_controller)
+    chat.on_agent_message_delta("Here is my answer".to_string());
+    assert!(
+        chat.stream_controller.is_some(),
+        "stream_controller should exist after delta"
+    );
+
+    // 3. ExecEnd arrives for the running command → deferred (stream_controller is Some)
+    let ExecCommandBeginEvent {
+        call_id,
+        process_id,
+        turn_id,
+        command,
+        cwd,
+        parsed_cmd,
+        source,
+        interaction_input,
+    } = first_begin;
+    chat.handle_codex_event(Event {
+        id: call_id.clone(),
+        msg: EventMsg::ExecCommandEnd(ExecCommandEndEvent {
+            call_id,
+            process_id,
+            turn_id,
+            command,
+            cwd,
+            parsed_cmd,
+            source,
+            interaction_input,
+            stdout: "first output".to_string(),
+            stderr: String::new(),
+            aggregated_output: "first output".to_string(),
+            exit_code: 0,
+            duration: std::time::Duration::from_millis(5),
+            formatted_output: "first output".to_string(),
+        }),
+    });
+    assert!(
+        !chat.interrupts.is_empty(),
+        "ExecEnd should be deferred while streaming"
+    );
+
+    // 4. New ExecBegin arrives → also deferred (queue is non-empty from ExecEnd)
+    let stale_begin = ExecCommandBeginEvent {
+        call_id: "stale-call".to_string(),
+        process_id: None,
+        turn_id: "turn-1".to_string(),
+        command: vec![
+            "bash".to_string(),
+            "-lc".to_string(),
+            "echo stale".to_string(),
+        ],
+        cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        parsed_cmd: vec![],
+        source: ExecCommandSource::Agent,
+        interaction_input: None,
+    };
+    chat.handle_codex_event(Event {
+        id: "stale-call".into(),
+        msg: EventMsg::ExecCommandBegin(stale_begin),
+    });
+
+    // 5. Drain any cells emitted so far
+    drain_insert_history(&mut rx);
+
+    // 6. AgentMessage arrives - should use flush_completions_and_clear:
+    //    - Process ExecEnd (completing the first command)
+    //    - Discard the new ExecBegin ("echo stale")
+    chat.on_agent_message("Here is my answer".to_string());
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+
+    // The stale ExecBegin ("echo stale") should NOT appear in history
+    assert!(
+        !combined.contains("echo stale"),
+        "deferred ExecBegin should have been discarded by on_agent_message, \
+         but it was rendered: {combined:?}"
+    );
+
+    // Also verify the active_cell doesn't contain the stale exec
+    if let Some(ref cell) = chat.active_cell {
+        let active_text = lines_to_single_string(&cell.display_lines(80));
+        assert!(
+            !active_text.contains("echo stale"),
+            "deferred ExecBegin should not appear in active_cell: {active_text:?}"
+        );
+    }
+
+    // The interrupt queue should be empty after the flush
+    assert!(
+        chat.interrupts.is_empty(),
+        "interrupt queue should be empty after on_agent_message flush"
+    );
+}

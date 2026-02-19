@@ -391,6 +391,7 @@ impl AcpBackend {
 
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
+        let persistent_rx = connection.take_persistent_receiver();
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
@@ -516,6 +517,9 @@ impl AcpBackend {
             cwd.clone(),
             approval_policy_rx,
         ));
+
+        // Spawn persistent listener relay for inter-turn notifications
+        tokio::spawn(Self::run_persistent_relay(persistent_rx, event_tx.clone()));
 
         Ok(backend)
     }
@@ -697,6 +701,7 @@ impl AcpBackend {
         };
 
         let approval_rx = connection.take_approval_receiver();
+        let persistent_rx = connection.take_persistent_receiver();
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let use_native_notifications =
@@ -827,6 +832,9 @@ impl AcpBackend {
             cwd.clone(),
             approval_policy_rx,
         ));
+
+        // Spawn persistent listener relay for inter-turn notifications
+        tokio::spawn(Self::run_persistent_relay(persistent_rx, event_tx.clone()));
 
         // Spawn the replay relay *after* all setup events (SessionConfigured,
         // Warning, etc.) have been sent.  Spawning it earlier causes a
@@ -1992,6 +2000,31 @@ impl AcpBackend {
                 command: command_for_notification,
                 cwd: cwd.display().to_string(),
             });
+        }
+    }
+
+    /// Background task that relays inter-turn notifications from the persistent
+    /// listener channel to the TUI event stream.
+    ///
+    /// The persistent listener receives `SessionUpdate`s that arrive after
+    /// `unregister_session` has been called (i.e. between prompt turns). Without
+    /// this relay, those updates would be silently dropped.
+    async fn run_persistent_relay(
+        mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
+        event_tx: mpsc::Sender<Event>,
+    ) {
+        let mut pending_patch_changes = HashMap::new();
+        while let Some(update) = persistent_rx.recv().await {
+            let event_msgs =
+                translate_session_update_to_events(&update, &mut pending_patch_changes);
+            for msg in event_msgs {
+                let _ = event_tx
+                    .send(Event {
+                        id: String::new(),
+                        msg,
+                    })
+                    .await;
+            }
         }
     }
 }

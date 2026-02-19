@@ -157,6 +157,9 @@ pub struct AcpConnection {
     /// Channel to receive approval requests from the agent.
     /// The UI layer should listen on this channel and respond via the oneshot sender.
     approval_rx: mpsc::Receiver<ApprovalRequest>,
+    /// Channel to receive inter-turn notifications that arrive after
+    /// `unregister_session` but before the next `register_session`.
+    persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
     /// Thread-safe model state shared between the main thread and worker thread.
     /// Updated when sessions are created or models are switched.
     model_state: Arc<RwLock<AcpModelState>>,
@@ -191,6 +194,10 @@ impl AcpConnection {
         // Create approval channel - sender goes to worker, receiver stays here
         let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
 
+        // Create persistent listener channel for inter-turn notifications.
+        // Sender goes to the worker (ClientDelegate), receiver stays here.
+        let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(64);
+
         // Create shared model state - accessible from both main thread and worker
         let model_state = Arc::new(RwLock::new(AcpModelState::new()));
         let model_state_for_worker = Arc::clone(&model_state);
@@ -214,7 +221,9 @@ impl AcpConnection {
                 let local = tokio::task::LocalSet::new();
                 local
                     .run_until(async move {
-                        match spawn_connection_internal(&config, &cwd, approval_tx).await {
+                        match spawn_connection_internal(&config, &cwd, approval_tx, persistent_tx)
+                            .await
+                        {
                             Ok((inner, capabilities)) => {
                                 let _ = init_tx.send(Ok(capabilities));
                                 run_command_loop(
@@ -245,6 +254,7 @@ impl AcpConnection {
             command_tx,
             agent_capabilities: capabilities,
             approval_rx,
+            persistent_rx,
             model_state,
             worker_thread: Mutex::new(Some(worker_thread)),
             shutdown_complete_rx: Mutex::new(Some(shutdown_complete_rx)),
@@ -341,6 +351,15 @@ impl AcpConnection {
     /// This method can only be called once. Calling it again will panic.
     pub fn take_approval_receiver(&mut self) -> mpsc::Receiver<ApprovalRequest> {
         std::mem::replace(&mut self.approval_rx, mpsc::channel(1).1)
+    }
+
+    /// Take ownership of the persistent notification receiver.
+    ///
+    /// Inter-turn notifications (arriving after `unregister_session` but before
+    /// the next `register_session`) are forwarded through this channel. The UI
+    /// layer should drain it and translate updates into codex events.
+    pub fn take_persistent_receiver(&mut self) -> mpsc::Receiver<acp::SessionUpdate> {
+        std::mem::replace(&mut self.persistent_rx, mpsc::channel(1).1)
     }
 
     /// Get the current model state.
@@ -489,6 +508,7 @@ async fn spawn_connection_internal(
     config: &AcpAgentConfig,
     cwd: &Path,
     approval_tx: mpsc::Sender<ApprovalRequest>,
+    persistent_tx: mpsc::Sender<acp::SessionUpdate>,
 ) -> Result<(AcpConnectionInner, acp::AgentCapabilities)> {
     debug!(
         "Spawning ACP agent: {} {:?} in {}",
@@ -566,7 +586,9 @@ async fn spawn_connection_internal(
     });
 
     // Create client delegate for handling agent requests
-    let client_delegate = Rc::new(ClientDelegate::new(cwd.to_path_buf(), approval_tx));
+    let delegate = ClientDelegate::new(cwd.to_path_buf(), approval_tx);
+    delegate.set_persistent_listener(persistent_tx);
+    let client_delegate = Rc::new(delegate);
 
     // Establish JSON-RPC connection
     let (connection, io_task) = acp::ClientSideConnection::new(
@@ -912,6 +934,11 @@ fn kill_child_process_group(child: &mut Child) -> std::io::Result<()> {
 /// - Terminal operations (stubbed)
 pub struct ClientDelegate {
     sessions: RefCell<HashMap<acp::SessionId, mpsc::Sender<acp::SessionUpdate>>>,
+    /// Persistent fallback listener for inter-turn notifications.
+    /// When a session notification arrives for an unregistered session (e.g.,
+    /// between turns after `unregister_session` is called), the notification
+    /// is forwarded here instead of being silently dropped.
+    persistent_tx: RefCell<Option<mpsc::Sender<acp::SessionUpdate>>>,
     /// Working directory for approval events
     cwd: PathBuf,
     /// Channel to send approval requests to the UI layer
@@ -922,6 +949,7 @@ impl ClientDelegate {
     fn new(cwd: PathBuf, approval_tx: mpsc::Sender<ApprovalRequest>) -> Self {
         Self {
             sessions: RefCell::new(HashMap::new()),
+            persistent_tx: RefCell::new(None),
             cwd,
             approval_tx,
         }
@@ -933,6 +961,11 @@ impl ClientDelegate {
 
     fn unregister_session(&self, session_id: &acp::SessionId) {
         self.sessions.borrow_mut().remove(session_id);
+    }
+
+    /// Set a persistent fallback listener for inter-turn notifications.
+    pub fn set_persistent_listener(&self, tx: mpsc::Sender<acp::SessionUpdate>) {
+        *self.persistent_tx.borrow_mut() = Some(tx);
     }
 }
 
@@ -1148,12 +1181,26 @@ impl acp::Client for ClientDelegate {
                 );
             }
         } else {
-            // This else-branch is diagnostic for unregistered notifications.
-            debug!(
-                target: "acp_message_draining",
-                session_id = %notification.session_id,
-                "Notification for unregistered session (late arrival)"
-            );
+            // Session is not registered (inter-turn gap). Forward to persistent
+            // listener if one exists, otherwise log and drop.
+            drop(sessions);
+            let persistent = self.persistent_tx.borrow();
+            if let Some(tx) = persistent.as_ref() {
+                if let Err(e) = tx.try_send(notification.update) {
+                    debug!(
+                        target: "acp_message_draining",
+                        session_id = %notification.session_id,
+                        error = %e,
+                        "Persistent listener notification dropped (channel full or closed)"
+                    );
+                }
+            } else {
+                debug!(
+                    target: "acp_message_draining",
+                    session_id = %notification.session_id,
+                    "Notification for unregistered session (no persistent listener)"
+                );
+            }
         }
         Ok(())
     }
@@ -1383,5 +1430,54 @@ mod tests {
         }
 
         delegate.unregister_session(&session_id);
+    }
+
+    /// Test that notifications for unregistered sessions are forwarded to the
+    /// persistent listener instead of being silently dropped.
+    /// This covers the case where the ACP agent sends events between turns
+    /// (after unregister_session is called but before the next prompt registers).
+    #[tokio::test]
+    async fn test_persistent_listener_receives_inter_turn_notifications() {
+        use acp::Client;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let (approval_tx, _approval_rx) = mpsc::channel(16);
+        let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+
+        // Set up a persistent listener
+        let (persistent_tx, mut persistent_rx) = mpsc::channel(32);
+        delegate.set_persistent_listener(persistent_tx);
+
+        // Register a per-prompt session, then unregister it (simulating end-of-turn)
+        let session_id = acp::SessionId::from("session-between-turns".to_string());
+        let (prompt_tx, _prompt_rx) = mpsc::channel(32);
+        delegate.register_session(session_id.clone(), prompt_tx);
+        delegate.unregister_session(&session_id);
+
+        // Send a notification for the now-unregistered session (inter-turn event)
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("background event")),
+        ));
+        let notification = acp::SessionNotification::new(session_id.clone(), update);
+        delegate
+            .session_notification(notification)
+            .await
+            .expect("session_notification should succeed");
+
+        // The persistent listener should have received the notification
+        let received = persistent_rx
+            .try_recv()
+            .expect("Persistent listener should receive inter-turn notification");
+
+        match received {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                if let acp::ContentBlock::Text(text) = chunk.content {
+                    assert_eq!(text.text, "background event");
+                } else {
+                    panic!("Expected text content, got: {:?}", chunk.content);
+                }
+            }
+            other => panic!("Expected AgentMessageChunk, got: {other:?}"),
+        }
     }
 }
