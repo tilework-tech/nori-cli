@@ -45,7 +45,7 @@ pub enum EventMsg {
 }
 ```
 
-**Operations** (`protocol.rs`): Commands sent from TUI to core:
+**Operations** (`protocol/mod.rs`): Commands sent from TUI to core:
 
 | Op | Purpose |
 |----|---------|
@@ -88,6 +88,8 @@ pub enum EventMsg {
 `CustomPromptKind::Script` carries an `interpreter` string (e.g. `"bash"`, `"python3"`, `"node"`) that determines how the script file is executed. `CustomPromptKind` defaults to `Markdown` and is serde-tagged as `"type"` for JSON serialization.
 
 ### Things to Know
+
+**Module Structure:** The `protocol` module uses a directory layout (`protocol/mod.rs` + submodules) instead of a single `protocol.rs` file. Submodules include `display.rs` (Display impls), `history.rs` (conversation history types), `legacy_events.rs` (legacy event types), `sandbox.rs` (sandbox config types), `token_usage.rs` (token tracking types), and `tests.rs`.
 
 - Types are serde-serializable for persistence and wire transfer
 - `ResponseItem` wraps different response content types (text, tool calls, reasoning)

@@ -126,7 +126,7 @@ Core's `Config::tui_notifications` is a simple `bool` that controls whether the 
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `session_lifecycle.rs`, `history.rs`, `approval.rs`), `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` also use the `mod.rs` + `part*.rs` pattern.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `session_lifecycle.rs`, `history.rs`, `approval.rs`, `event_emission.rs`, `session_ops.rs`, `submission_loop.rs`, `token_tracking.rs`, `turn_execution.rs`), `parse_command/` (with `parsing.rs`, `path_utils.rs`, `simplify.rs`, `summarize.rs`, `tests.rs`), `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/`, `tests/suite/client/`, and `tests/suite/unified_exec/` also use the `mod.rs` + `part*.rs` pattern.
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt
