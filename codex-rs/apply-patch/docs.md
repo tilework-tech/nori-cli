@@ -21,14 +21,14 @@ The crate can also be run as a standalone executable for testing.
 - `DeleteFile` - Remove an existing file
 - `UpdateFile` - Modify file contents with optional move
 
-**Shell Detection** (`lib.rs`): Detects `apply_patch` invocations from shell scripts:
-- Unix shells (bash, zsh, sh) with heredoc syntax
+**Shell Detection** (`shell_parsing.rs`, `heredoc.rs`): Detects `apply_patch` invocations from shell scripts:
+- Unix shells (bash, zsh, sh) with heredoc syntax (`heredoc.rs`)
 - PowerShell
 - Windows cmd
 
 Uses tree-sitter-bash for robust AST-based parsing of shell scripts.
 
-**Change Application** (`lib.rs`): The `apply_patch()` function:
+**Change Application** (`application.rs`): The `apply_patch()` function:
 1. Parses patch into hunks
 2. For updates, uses `seek_sequence` to find matching lines
 3. Computes replacements and applies them
@@ -40,6 +40,8 @@ Uses tree-sitter-bash for robust AST-based parsing of shell scripts.
 - Working directory resolution
 
 ### Things to Know
+
+**Module Structure:** The crate's `lib.rs` serves as the public API surface and re-exports from submodules: `application.rs` (patch application logic), `shell_parsing.rs` (shell script detection and parsing), `heredoc.rs` (heredoc extraction from shell ASTs), and `tests.rs`.
 
 - The patch format supports context lines (` `), additions (`+`), and deletions (`-`)
 - `@@` markers with optional context lines help locate changes in files

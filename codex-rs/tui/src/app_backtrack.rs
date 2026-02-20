@@ -347,7 +347,7 @@ impl App {
             enhanced_keys_supported: self.enhanced_keys_supported,
             auth_manager: self.auth_manager.clone(),
             vertical_footer: self.vertical_footer,
-            expected_model: None, // No filtering for backtracked conversations
+            expected_agent: None, // No filtering for backtracked conversations
         };
         self.chat_widget =
             crate::chatwidget::ChatWidget::new_from_existing(init, conv, session_configured);

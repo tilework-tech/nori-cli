@@ -1,0 +1,14 @@
+---
+source: tui/src/chatwidget/tests/part4.rs
+expression: term.backend().vt100().screen().contents()
+---
+• I'll help you implement that feature.
+
+  Here's the code:
+
+  fn calculate_sum(numbers: &[i32]) -> i32 {
+      numbers.iter().sum()
+  }
+
+  This function takes a slice of integers and returns their sum using iterator
+  methods.

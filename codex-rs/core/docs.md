@@ -39,12 +39,32 @@ Key integrations:
 2. Project-local config at `<cwd>/.codex/config.toml`
 3. Command-line overrides
 
+
+**Configuration Editing** (`config/edit.rs`): Provides a builder API for programmatic config updates via `toml_edit`:
+
+The `ConfigEditsBuilder` allows code to modify `config.toml` atomically without losing comments or formatting:
+
+```rust
+ConfigEditsBuilder::new(codex_home)
+    .set_default_model("claude-code", "haiku")
+    .apply()
+    .await?;
+```
+
+Key methods:
+- `set_default_model(agent, model)`: Persists a model preference to the `[default_models]` table for a specific agent
+- `set_path(path, value)`: Sets arbitrary TOML paths for advanced config mutations
+- `apply()`: Writes changes asynchronously; locks config file during write
+- `apply_blocking()`: Synchronous variant for non-async contexts
+
+The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user preferences like model selections when `/model` is invoked (see `@/codex-rs/tui/docs.md`).
+
 **Authentication** (`auth.rs`, `auth/`): Supports multiple auth modes:
 - API key via `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
+**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
 - Session creation and resumption
 - Message history tracking
 - Token usage accumulation
@@ -97,12 +117,16 @@ The `user_notification.rs` module provides OS-level notification support:
 | `Idle` | "Nori: Session Idle" | Idle duration in seconds |
 
 Notification modes:
-1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. On X11 Linux, supports click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/codex-rs/acp/src/config/types.rs`).
+1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. All calls to `send_native()` are non-blocking -- they spawn a background thread to call `notif.show()`, because some platforms (notably macOS) block synchronously on that call. On X11 Linux, the spawned thread also handles click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/codex-rs/acp/src/config/types.rs`).
 2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload.
 
 Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading.
 
 ### Things to Know
+
+**Module Structure Convention:**
+
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `session_lifecycle.rs`, `history.rs`, `approval.rs`, `event_emission.rs`, `session_ops.rs`, `submission_loop.rs`, `token_tracking.rs`, `turn_execution.rs`), `parse_command/` (with `parsing.rs`, `path_utils.rs`, `simplify.rs`, `summarize.rs`, `tests.rs`), `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/`, `tests/suite/client/`, and `tests/suite/unified_exec/` also use the `mod.rs` + `part*.rs` pattern.
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt

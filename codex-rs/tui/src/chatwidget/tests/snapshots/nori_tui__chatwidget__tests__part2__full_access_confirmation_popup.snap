@@ -1,0 +1,15 @@
+---
+source: tui/src/chatwidget/tests/part2.rs
+expression: popup
+---
+  Enable full access?
+  When Nori runs with full access, it can edit any file on your computer and
+  run commands with network, without your approval.Exercise caution when
+  enabling full access. This significantly increases the risk of data loss,
+  leaks, or unexpected behavior.
+
+› 1. Yes, continue anyway      Apply full access for this session
+  2. Yes, and don't ask again  Enable full access and remember this choice
+  3. Cancel                    Go back without enabling full access
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

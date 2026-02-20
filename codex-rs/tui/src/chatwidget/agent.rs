@@ -9,6 +9,7 @@ use codex_acp::HistoryPersistence;
 use codex_acp::find_nori_home;
 use codex_acp::get_agent_config;
 use codex_acp::get_agent_display_name;
+use codex_acp::list_available_agents;
 use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::config::Config;
@@ -120,9 +121,9 @@ pub(crate) struct SpawnAgentResult {
 /// that includes the Op sender and optionally an ACP handle for model control.
 ///
 /// This function detects whether to use ACP mode or HTTP mode based on:
-/// 1. If the model is registered in the ACP registry, use ACP mode
-/// 2. If the model is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
-/// 3. If the model is NOT registered and `acp_allow_http_fallback` is false (default), error
+/// 1. If the agent is registered in the ACP registry, use ACP mode
+/// 2. If the agent is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
+/// 3. If the agent is NOT registered and `acp_allow_http_fallback` is false (default), error
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
@@ -131,10 +132,10 @@ pub(crate) fn spawn_agent(
     let acp_agent_result = get_agent_config(&config.model);
 
     match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
-        // Model is registered in ACP registry -> use ACP
+        // Agent is registered in ACP registry -> use ACP
         (true, _) => spawn_acp_agent(config, app_event_tx),
 
-        // Model NOT registered, but HTTP fallback is allowed -> use HTTP
+        // Agent NOT registered, but HTTP fallback is allowed -> use HTTP
         (false, true) => {
             let op_tx = spawn_http_agent(config, app_event_tx, server);
             SpawnAgentResult {
@@ -144,15 +145,20 @@ pub(crate) fn spawn_agent(
             }
         }
 
-        // Model NOT registered and HTTP fallback NOT allowed -> error
+        // Agent NOT registered and HTTP fallback NOT allowed -> error
         (false, false) => {
-            let model_name = config.model;
+            let agent_name = config.model;
+            let known: Vec<String> = list_available_agents()
+                .iter()
+                .map(|a| a.agent_name.clone())
+                .collect();
             let error_msg = format!(
-                "Model '{model_name}' is not registered as an ACP agent. \
+                "Agent '{agent_name}' is not registered as an ACP agent. \
                  Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, mock-model-alt, claude, claude-acp, gemini-2.5-flash, gemini-acp"
+                 Known ACP agents: {}",
+                known.join(", ")
             );
-            let op_tx = spawn_error_agent(model_name, error_msg, app_event_tx);
+            let op_tx = spawn_error_agent(agent_name, error_msg, app_event_tx);
             SpawnAgentResult {
                 op_tx,
                 #[cfg(feature = "unstable")]
@@ -164,9 +170,9 @@ pub(crate) fn spawn_agent(
 
 /// Spawn an agent that emits an error and opens the agent picker.
 ///
-/// This is used when the requested model is not a valid ACP agent.
+/// This is used when the requested agent is not a valid ACP agent.
 fn spawn_error_agent(
-    model_name: String,
+    agent_name: String,
     error_msg: String,
     app_event_tx: AppEventSender,
 ) -> UnboundedSender<Op> {
@@ -176,7 +182,7 @@ fn spawn_error_agent(
         tracing::error!("{}", error_msg);
         // Send AgentSpawnFailed so the user can select a different agent
         app_event_tx.send(AppEvent::AgentSpawnFailed {
-            model_name,
+            agent_name,
             error: error_msg,
         });
     });
@@ -226,7 +232,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
         };
 
         let acp_config = AcpBackendConfig {
-            model: config.model.clone(),
+            agent: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -240,7 +246,22 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
             auto_worktree_repo_root,
             session_start_hooks: nori_config.session_start_hooks.clone(),
             session_end_hooks: nori_config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
+            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
+            default_model: nori_config.default_models.get(&config.model).cloned(),
         };
 
         // Race backend init against shutdown requests and a timeout.
@@ -253,7 +274,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
                         tracing::error!("failed to spawn ACP backend: {e}");
                         drop(codex_op_rx);
                         app_event_tx.send(AppEvent::AgentSpawnFailed {
-                            model_name: config.model.clone(),
+                            agent_name: config.model.clone(),
                             error: format!("Failed to spawn ACP agent: {e}"),
                         });
                         return;
@@ -270,7 +291,7 @@ fn spawn_acp_agent(config: Config, app_event_tx: AppEventSender) -> SpawnAgentRe
                 tracing::warn!("ACP backend connection timed out");
                 drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
-                    model_name: config.model.clone(),
+                    agent_name: config.model.clone(),
                     error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
@@ -370,7 +391,7 @@ pub(crate) fn spawn_acp_agent_resume(
         };
 
         let acp_config = AcpBackendConfig {
-            model: config.model.clone(),
+            agent: config.model.clone(),
             cwd: config.cwd.clone(),
             approval_policy: config.approval_policy,
             sandbox_policy: config.sandbox_policy.clone(),
@@ -384,7 +405,22 @@ pub(crate) fn spawn_acp_agent_resume(
             auto_worktree_repo_root,
             session_start_hooks: nori_config.session_start_hooks.clone(),
             session_end_hooks: nori_config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
+            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
             script_timeout: nori_config.script_timeout.as_duration(),
+            default_model: nori_config.default_models.get(&config.model).cloned(),
         };
 
         // Race backend resume against shutdown requests and a timeout.
@@ -401,7 +437,7 @@ pub(crate) fn spawn_acp_agent_resume(
                         tracing::error!("failed to resume ACP session: {e}");
                         drop(codex_op_rx);
                         app_event_tx.send(AppEvent::AgentSpawnFailed {
-                            model_name: config.model.clone(),
+                            agent_name: config.model.clone(),
                             error: format!("Failed to resume ACP session: {e}"),
                         });
                         return;
@@ -418,7 +454,7 @@ pub(crate) fn spawn_acp_agent_resume(
                 tracing::warn!("ACP session resume timed out");
                 drop(codex_op_rx);
                 app_event_tx.send(AppEvent::AgentSpawnFailed {
-                    model_name: config.model.clone(),
+                    agent_name: config.model.clone(),
                     error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;
@@ -481,8 +517,8 @@ fn spawn_http_agent(
 ) -> UnboundedSender<Op> {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
-    // Clone model name before config is moved
-    let model_name = config.model.clone();
+    // Clone agent name before config is moved
+    let agent_name = config.model.clone();
     let app_event_tx_clone = app_event_tx;
     tokio::spawn(async move {
         // Race backend init against shutdown requests and a timeout.
@@ -496,7 +532,7 @@ fn spawn_http_agent(
                         eprintln!("{message}");
                         drop(codex_op_rx);
                         app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                            model_name,
+                            agent_name,
                             error: format!("Failed to initialize HTTP agent: {err}"),
                         });
                         tracing::error!("failed to initialize codex: {err}");
@@ -514,7 +550,7 @@ fn spawn_http_agent(
                 tracing::warn!("HTTP backend connection timed out");
                 drop(codex_op_rx);
                 app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                    model_name,
+                    agent_name,
                     error: "Connection timed out. The agent did not respond.".to_string(),
                 });
                 return;

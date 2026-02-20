@@ -12,11 +12,41 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::num::NonZero;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use tokio::process::Command;
+
+/// Find the git repository root for a given path by walking up the directory tree.
+///
+/// Returns the directory containing `.git` (either as a directory or a file,
+/// since git worktrees and submodules use a `.git` file pointing to the main repository).
+///
+/// Returns `None` if no git root is found or if the starting path doesn't exist.
+fn find_git_root(start: &Path) -> Option<PathBuf> {
+    let mut current = if start.is_dir() {
+        start.to_path_buf()
+    } else {
+        start.parent()?.to_path_buf()
+    };
+
+    loop {
+        let git_marker = current.join(".git");
+        // .git can be a directory (regular repo) or a file (worktree)
+        if git_marker.is_dir() || git_marker.is_file() {
+            return Some(current);
+        }
+
+        match current.parent() {
+            Some(parent) if parent != current => {
+                current = parent.to_path_buf();
+            }
+            _ => return None,
+        }
+    }
+}
 
 mod cli;
 
@@ -154,22 +184,38 @@ pub fn run(
 
     // Use the same tree-walker library that ripgrep uses. We use it directly so
     // that we can leverage the parallelism it provides.
-    let mut walk_builder = WalkBuilder::new(search_directory);
+    //
+    // When respecting gitignore, we limit gitignore traversal to the current git
+    // repository. This prevents a parent directory's .gitignore (from a different
+    // git repo acting as a monorepo root) from affecting our search results.
+    //
+    // We find the git root and walk from there (not search_directory) so that:
+    // 1. We read .gitignore files from the git root down
+    // 2. With .parents(false), we don't traverse above the git root
+    //
+    // If search_directory is not within a git repo, we walk from it directly.
+    // Files are filtered to only include those within search_directory.
+    let git_root = find_git_root(search_directory);
+    let walk_start_dir = git_root.as_deref().unwrap_or(search_directory);
+
+    let mut walk_builder = WalkBuilder::new(walk_start_dir);
     walk_builder
         .threads(num_walk_builder_threads)
         // Allow hidden entries.
         .hidden(false)
         // Follow symlinks to search their contents.
         .follow_links(true)
-        // Don't require git to be present to apply to apply git-related ignore rules.
-        .require_git(false);
+        // Don't require git to be present to apply git-related ignore rules.
+        .require_git(false)
+        // Don't traverse parent directories for gitignore files. This ensures
+        // we only respect gitignore files within the current git repository.
+        .parents(false);
     if !respect_gitignore {
         walk_builder
             .git_ignore(false)
             .git_global(false)
             .git_exclude(false)
-            .ignore(false)
-            .parents(false);
+            .ignore(false);
     }
 
     if !exclude.is_empty() {
@@ -433,5 +479,73 @@ mod tests {
         ];
 
         assert_eq!(matches, expected);
+    }
+
+    #[test]
+    fn find_git_root_from_subdirectory() {
+        // This test runs in the actual git repo
+        let current_dir = std::env::current_dir().expect("should have current dir");
+        let git_root = find_git_root(&current_dir);
+
+        assert!(git_root.is_some(), "should find git root from current dir");
+
+        let root = git_root.unwrap();
+        let git_marker = root.join(".git");
+        assert!(
+            git_marker.is_dir() || git_marker.is_file(),
+            ".git should exist at root"
+        );
+    }
+
+    #[test]
+    fn find_git_root_from_file_path() {
+        let current_dir = std::env::current_dir().expect("should have current dir");
+        let file_path = current_dir.join("some_file.rs");
+
+        let git_root = find_git_root(&file_path);
+        assert!(git_root.is_some(), "should find git root from file path");
+    }
+
+    #[test]
+    fn find_git_root_non_git_directory() {
+        // Create a unique temp directory that we know is not inside a git repo.
+        // We create a subdirectory with a random name to ensure isolation.
+        let temp_base = std::env::temp_dir();
+        let unique_dir = temp_base.join(format!("test_no_git_{}", std::process::id()));
+        std::fs::create_dir_all(&unique_dir).expect("should create temp dir");
+
+        // Clean up after ourselves
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(unique_dir.clone());
+
+        let git_root = find_git_root(&unique_dir);
+
+        // If temp_dir happens to be inside a git repo, this test is inconclusive.
+        // We only assert if we're confident the directory is not in a git repo.
+        if temp_base.join(".git").exists() || find_git_root(&temp_base).is_some() {
+            // Skip assertion - temp is inside a git repo
+            return;
+        }
+
+        assert!(
+            git_root.is_none(),
+            "should not find git root in isolated temp directory"
+        );
+    }
+
+    #[test]
+    fn find_git_root_nonexistent_path() {
+        let nonexistent = PathBuf::from("/nonexistent/path/that/does/not/exist");
+        let git_root = find_git_root(&nonexistent);
+
+        assert!(
+            git_root.is_none(),
+            "should not find git root for nonexistent path"
+        );
     }
 }

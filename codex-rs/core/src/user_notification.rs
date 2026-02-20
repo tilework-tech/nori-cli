@@ -105,11 +105,14 @@ impl UserNotifier {
             }
         }
 
-        // Default: just show the notification without click handling
-        // Note: macOS click-to-focus could be implemented via AppleScript in the future
-        if let Err(e) = notif.show() {
-            warn!("failed to show native notification: {e}");
-        }
+        // Default: spawn a thread so the notification never blocks the caller.
+        // On macOS, notif.show() can block synchronously, which would stall
+        // the async approval handler and prevent the TUI from receiving events.
+        std::thread::spawn(move || {
+            if let Err(e) = notif.show() {
+                warn!("failed to show native notification: {e}");
+            }
+        });
     }
 
     /// Create a new UserNotifier.

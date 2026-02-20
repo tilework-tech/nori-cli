@@ -45,7 +45,7 @@ pub enum EventMsg {
 }
 ```
 
-**Operations** (`protocol.rs`): Commands sent from TUI to core:
+**Operations** (`protocol/mod.rs`): Commands sent from TUI to core:
 
 | Op | Purpose |
 |----|---------|
@@ -56,6 +56,7 @@ pub enum EventMsg {
 | `Undo` | Undo the most recent turn (sequential pop from snapshot stack) |
 | `UndoList` | Request the list of available undo snapshots |
 | `UndoTo { index }` | Restore to a specific snapshot by display index (0 = most recent) |
+| `SearchHistoryRequest { max_results }` | Request all history entries for client-side search; response via `SearchHistoryResponse` |
 
 **Events** (`events.rs`): Messages from core to TUI:
 
@@ -70,6 +71,7 @@ pub enum EventMsg {
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 | `PromptSummary` | Short summary of the first user prompt for display in the footer |
 | `HookOutput` | Output from a hook script, routed by level (Info/Warn/Error) for TUI display |
+| `SearchHistoryResponse` | Response to `SearchHistoryRequest` with deduplicated history entries (newest first). Not persisted to rollout policy. |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -86,6 +88,8 @@ pub enum EventMsg {
 `CustomPromptKind::Script` carries an `interpreter` string (e.g. `"bash"`, `"python3"`, `"node"`) that determines how the script file is executed. `CustomPromptKind` defaults to `Markdown` and is serde-tagged as `"type"` for JSON serialization.
 
 ### Things to Know
+
+**Module Structure:** The `protocol` module uses a directory layout (`protocol/mod.rs` + submodules) instead of a single `protocol.rs` file. Submodules include `display.rs` (Display impls), `history.rs` (conversation history types), `legacy_events.rs` (legacy event types), `sandbox.rs` (sandbox config types), `token_usage.rs` (token tracking types), and `tests.rs`.
 
 - Types are serde-serializable for persistence and wire transfer
 - `ResponseItem` wraps different response content types (text, tool calls, reasoning)
@@ -111,6 +115,12 @@ pub enum EventMsg {
 |------|---------|
 | `HookOutputLevel` | Enum with `Info`, `Warn`, `Error` variants controlling TUI display style |
 | `HookOutputEvent` | Carries a `message: String` and `level: HookOutputLevel`. Emitted by the ACP backend's hook routing. Not persisted to rollout policy. |
+
+**Search History Types:**
+
+| Type | Purpose |
+|------|--------|
+| `SearchHistoryResponseEvent` | Wraps `Vec<HistoryEntry>` (from `codex_protocol::message_history`). Each entry has `conversation_id`, `ts`, and `text`. Not persisted to rollout policy. |
 
 **Approval Policy:**
 

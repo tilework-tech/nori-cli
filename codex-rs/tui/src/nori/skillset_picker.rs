@@ -62,7 +62,7 @@ pub async fn list_skillsets() -> Result<Vec<String>, String> {
 /// Install a skillset by running `nori-skillsets install <name>`.
 ///
 /// Returns:
-/// - `Ok(first_line)` with first line of stdout on success
+/// - `Ok(message)` with filtered stdout on success (last section for long output)
 /// - `Err(message)` with error output on failure
 pub async fn install_skillset(name: &str) -> Result<String, String> {
     let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
@@ -74,14 +74,7 @@ pub async fn install_skillset(name: &str) -> Result<String, String> {
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let first_line = stdout
-            .lines()
-            .next()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .unwrap_or_else(|| format!("Skillset '{name}' installed successfully"));
-        Ok(first_line)
+        Ok(filter_install_output(&stdout, name))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -139,6 +132,33 @@ pub fn skillset_picker_params(skillset_names: Vec<String>) -> SelectionViewParam
     }
 }
 
+/// Filter install output to extract the meaningful message.
+///
+/// If stdout has more than 3 lines, splits on double newlines and takes the
+/// first non-empty trimmed line from the last section. Otherwise, takes the
+/// first non-empty trimmed line. Falls back to a default message.
+fn filter_install_output(stdout: &str, name: &str) -> String {
+    let line_count = stdout.lines().count();
+
+    let section = if line_count > 3 {
+        // For long output, take the section after the last "\n\n"
+        if let Some(pos) = stdout.rfind("\n\n") {
+            &stdout[pos..]
+        } else {
+            stdout
+        }
+    } else {
+        stdout
+    };
+
+    section
+        .lines()
+        .map(str::trim)
+        .find(|s| !s.is_empty())
+        .map(String::from)
+        .unwrap_or_else(|| format!("Skillset '{name}' installed successfully"))
+}
+
 /// Message shown when nori-skillsets is not installed.
 pub fn not_installed_message() -> String {
     "nori-skillsets is not installed. Install it with: `npm i -g nori-skillsets`".to_string()
@@ -149,6 +169,7 @@ mod tests {
     use super::*;
     use crate::app_event::AppEvent;
     use crate::app_event_sender::AppEventSender;
+    use pretty_assertions::assert_eq;
     use tokio::sync::mpsc::unbounded_channel;
 
     #[test]
@@ -220,6 +241,72 @@ mod tests {
     fn test_not_installed_message() {
         let msg = not_installed_message();
         assert!(msg.contains("npm i -g nori-skillsets"));
+    }
+
+    #[test]
+    fn test_filter_short_output_three_lines() {
+        let stdout = "Line one\nLine two\nLine three\n";
+        let result = filter_install_output(stdout, "test");
+        assert_eq!(result, "Line one");
+    }
+
+    #[test]
+    fn test_filter_long_output_takes_last_section() {
+        let stdout = "Setting up Nori...\nDoing stuff\nMore stuff\nEven more\n\nSkillset \"test\" is now active.\nRestart Claude Code to apply.\n";
+        let result = filter_install_output(stdout, "test");
+        assert_eq!(result, "Skillset \"test\" is now active.");
+    }
+
+    #[test]
+    fn test_filter_long_output_no_double_newline_falls_back() {
+        let stdout = "Line one\nLine two\nLine three\nLine four\n";
+        let result = filter_install_output(stdout, "test");
+        assert_eq!(result, "Line one");
+    }
+
+    #[test]
+    fn test_filter_empty_output_returns_default() {
+        let stdout = "";
+        let result = filter_install_output(stdout, "my-skillset");
+        assert_eq!(result, "Skillset 'my-skillset' installed successfully");
+    }
+
+    #[test]
+    fn test_filter_real_world_example() {
+        let stdout = r#"Setting up Nori for first time use...
+
+Warning: ⚠️  Nori managed installation detected in ancestor directory!
+
+Claude Code loads CLAUDE.md files from all parent directories.
+Having multiple Nori managed installations can cause duplicate or conflicting configurations.
+
+Existing Nori managed installations found at:
+  • /home/clifford/Documents/source/nori/registrar
+  • /home/clifford/Documents/source/nori
+
+Please remove the conflicting managed installation before continuing.
+
+✓ Nori initialized successfully
+Error: You do not have access to organization "dev".
+
+Cannot download "dev/test-onboard" from https://dev.noriskillsets.dev.
+
+Your available organizations: org-alpha, org-beta
+Warning: Skillset "dev/test-onboard" not found in registry. Using locally installed version.
+Switched to "dev/test-onboard" profile for Claude Code
+Restart Claude Code to load the new profile configuration
+
+Skillset "dev/test-onboard" is now active.
+Restart Claude Code to apply the new skillset."#;
+        let result = filter_install_output(stdout, "dev/test-onboard");
+        assert_eq!(result, r#"Skillset "dev/test-onboard" is now active."#);
+    }
+
+    #[test]
+    fn test_filter_long_output_last_section_has_empty_first_line() {
+        let stdout = "Line 1\nLine 2\nLine 3\nLine 4\n\n\nActual message here.\n";
+        let result = filter_install_output(stdout, "test");
+        assert_eq!(result, "Actual message here.");
     }
 
     #[test]

@@ -50,6 +50,78 @@ pub fn text_to_content_block(text: &str) -> acp::ContentBlock {
     acp::ContentBlock::Text(acp::TextContent::new(text))
 }
 
+/// Convert a list of UserInput items into ACP ContentBlocks.
+///
+/// - `UserInput::Text` → `ContentBlock::Text`
+/// - `UserInput::Image` (data URI) → `ContentBlock::Image` (base64 + mime)
+/// - `UserInput::LocalImage` → read file, base64-encode, `ContentBlock::Image`
+pub fn user_inputs_to_content_blocks(
+    items: Vec<codex_protocol::user_input::UserInput>,
+) -> anyhow::Result<Vec<acp::ContentBlock>> {
+    use base64::Engine;
+    use codex_protocol::user_input::UserInput;
+
+    let mut blocks = Vec::new();
+
+    for item in items {
+        match item {
+            UserInput::Text { text } => {
+                blocks.push(acp::ContentBlock::Text(acp::TextContent::new(&text)));
+            }
+            UserInput::Image { image_url } => {
+                // Parse data URI: "data:<mime>;base64,<data>"
+                let (mime_type, b64_data) = parse_data_uri(&image_url)?;
+                blocks.push(acp::ContentBlock::Image(acp::ImageContent::new(
+                    b64_data, &mime_type,
+                )));
+            }
+            UserInput::LocalImage { path } => {
+                let bytes = std::fs::read(&path).map_err(|e| {
+                    anyhow::anyhow!("Failed to read image file {}: {e}", path.display())
+                })?;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                let mime_type = mime_type_from_extension(&path);
+                blocks.push(acp::ContentBlock::Image(acp::ImageContent::new(
+                    b64, &mime_type,
+                )));
+            }
+            _ => {
+                tracing::warn!("Unknown UserInput variant, skipping");
+            }
+        }
+    }
+
+    Ok(blocks)
+}
+
+/// Parse a data URI into (mime_type, base64_data).
+fn parse_data_uri(uri: &str) -> anyhow::Result<(String, String)> {
+    // Expected format: "data:<mime>;base64,<data>"
+    let rest = uri
+        .strip_prefix("data:")
+        .ok_or_else(|| anyhow::anyhow!("Invalid data URI: missing 'data:' prefix"))?;
+    let (mime_type, b64_data) = rest
+        .split_once(";base64,")
+        .ok_or_else(|| anyhow::anyhow!("Invalid data URI: missing ';base64,' separator"))?;
+    Ok((mime_type.to_string(), b64_data.to_string()))
+}
+
+/// Determine MIME type from a file extension.
+fn mime_type_from_extension(path: &std::path::Path) -> String {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("png") => "image/png".to_string(),
+        Some("jpg") | Some("jpeg") => "image/jpeg".to_string(),
+        Some("gif") => "image/gif".to_string(),
+        Some("webp") => "image/webp".to_string(),
+        _ => "image/png".to_string(),
+    }
+}
+
 /// Represents an event translated from an ACP SessionUpdate.
 #[derive(Debug)]
 pub enum TranslatedEvent {
@@ -465,18 +537,48 @@ pub fn review_decision_to_permission_outcome(
 ) -> acp::RequestPermissionOutcome {
     use codex_protocol::protocol::ReviewDecision;
 
-    // Find the appropriate option based on the decision
+    // Find the appropriate option based on the decision.
+    // Critically, Approved maps to AllowOnce (one-time, no persistence) while
+    // ApprovedForSession maps to AllowAlways (persistent "don't ask again").
+    // This distinction prevents yolo/full-access auto-approvals from polluting
+    // the user's settings file with permanent command approvals.
     let option_id = match decision {
-        ReviewDecision::Approved | ReviewDecision::ApprovedForSession => {
-            // Look for an "Allow" kind option (AllowOnce or AllowAlways)
+        ReviewDecision::Approved => {
+            // One-time approval: prefer AllowOnce to avoid persistent storage
             options
                 .iter()
-                .find(|opt| {
-                    matches!(
-                        opt.kind,
-                        acp::PermissionOptionKind::AllowOnce
-                            | acp::PermissionOptionKind::AllowAlways
-                    )
+                .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowOnce))
+                .or_else(|| {
+                    options
+                        .iter()
+                        .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowAlways))
+                })
+                .or_else(|| {
+                    options.iter().find(|opt| {
+                        let name_lower = opt.name.to_lowercase();
+                        name_lower.contains("allow")
+                            || name_lower.contains("approve")
+                            || name_lower.contains("yes")
+                    })
+                })
+                .map(|opt| opt.option_id.clone())
+                .unwrap_or_else(|| {
+                    // Default to first option if no clear "allow" option
+                    options
+                        .first()
+                        .map(|opt| opt.option_id.clone())
+                        .unwrap_or_else(|| acp::PermissionOptionId::from("allow".to_string()))
+                })
+        }
+        ReviewDecision::ApprovedForSession => {
+            // Session/persistent approval: prefer AllowAlways for "don't ask again"
+            options
+                .iter()
+                .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowAlways))
+                .or_else(|| {
+                    options
+                        .iter()
+                        .find(|opt| matches!(opt.kind, acp::PermissionOptionKind::AllowOnce))
                 })
                 .or_else(|| {
                     options.iter().find(|opt| {
@@ -858,12 +960,30 @@ mod tests {
         assert!(event.reason.is_some());
     }
 
+    /// Extract the selected option_id from a RequestPermissionOutcome.
+    fn selected_option_id(outcome: acp::RequestPermissionOutcome) -> String {
+        match outcome {
+            acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome {
+                option_id,
+                ..
+            }) => option_id.0.as_ref().to_string(),
+            other => panic!("Expected Selected outcome, got {other:?}"),
+        }
+    }
+
     #[test]
-    fn test_review_decision_to_permission_outcome_approved() {
+    fn test_approved_prefers_allow_once_over_allow_always() {
+        // When both AllowAlways and AllowOnce are available, Approved should
+        // pick AllowOnce to avoid persisting a permanent approval.
         let options = vec![
             acp::PermissionOption::new(
-                acp::PermissionOptionId::from("allow".to_string()),
-                "Allow",
+                acp::PermissionOptionId::from("always".to_string()),
+                "Allow Always",
+                acp::PermissionOptionKind::AllowAlways,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("once".to_string()),
+                "Allow Once",
                 acp::PermissionOptionKind::AllowOnce,
             ),
             acp::PermissionOption::new(
@@ -874,14 +994,77 @@ mod tests {
         ];
 
         let outcome = review_decision_to_permission_outcome(ReviewDecision::Approved, &options);
-        assert!(matches!(
-            outcome,
-            acp::RequestPermissionOutcome::Selected { .. }
-        ));
+        assert_eq!(selected_option_id(outcome), "once");
     }
 
     #[test]
-    fn test_review_decision_to_permission_outcome_denied() {
+    fn test_approved_for_session_prefers_allow_always() {
+        // When both AllowAlways and AllowOnce are available,
+        // ApprovedForSession should pick AllowAlways for "don't ask again".
+        let options = vec![
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("once".to_string()),
+                "Allow Once",
+                acp::PermissionOptionKind::AllowOnce,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("always".to_string()),
+                "Allow Always",
+                acp::PermissionOptionKind::AllowAlways,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
+        ];
+
+        let outcome =
+            review_decision_to_permission_outcome(ReviewDecision::ApprovedForSession, &options);
+        assert_eq!(selected_option_id(outcome), "always");
+    }
+
+    #[test]
+    fn test_approved_falls_back_to_allow_always_when_no_allow_once() {
+        let options = vec![
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("always".to_string()),
+                "Allow Always",
+                acp::PermissionOptionKind::AllowAlways,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
+        ];
+
+        let outcome = review_decision_to_permission_outcome(ReviewDecision::Approved, &options);
+        assert_eq!(selected_option_id(outcome), "always");
+    }
+
+    #[test]
+    fn test_approved_for_session_falls_back_to_allow_once_when_no_allow_always() {
+        let options = vec![
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("once".to_string()),
+                "Allow Once",
+                acp::PermissionOptionKind::AllowOnce,
+            ),
+            acp::PermissionOption::new(
+                acp::PermissionOptionId::from("deny".to_string()),
+                "Deny",
+                acp::PermissionOptionKind::RejectOnce,
+            ),
+        ];
+
+        let outcome =
+            review_decision_to_permission_outcome(ReviewDecision::ApprovedForSession, &options);
+        assert_eq!(selected_option_id(outcome), "once");
+    }
+
+    #[test]
+    fn test_denied_selects_reject_option() {
         let options = vec![
             acp::PermissionOption::new(
                 acp::PermissionOptionId::from("allow".to_string()),
@@ -896,10 +1079,7 @@ mod tests {
         ];
 
         let outcome = review_decision_to_permission_outcome(ReviewDecision::Denied, &options);
-        assert!(matches!(
-            outcome,
-            acp::RequestPermissionOutcome::Selected { .. }
-        ));
+        assert_eq!(selected_option_id(outcome), "deny");
     }
 
     #[test]
@@ -1144,6 +1324,121 @@ mod tests {
 
         let event = permission_request_to_patch_approval_event(&request);
         assert!(event.is_none());
+    }
+
+    // ==================== User Input to Content Block Tests ====================
+
+    #[test]
+    fn user_inputs_to_content_blocks_text_only() {
+        use codex_protocol::user_input::UserInput;
+
+        let items = vec![
+            UserInput::Text {
+                text: "Hello".to_string(),
+            },
+            UserInput::Text {
+                text: "World".to_string(),
+            },
+        ];
+
+        let blocks = user_inputs_to_content_blocks(items).unwrap();
+        assert_eq!(blocks.len(), 2);
+
+        match &blocks[0] {
+            acp::ContentBlock::Text(t) => assert_eq!(t.text, "Hello"),
+            other => panic!("Expected Text block, got {other:?}"),
+        }
+        match &blocks[1] {
+            acp::ContentBlock::Text(t) => assert_eq!(t.text, "World"),
+            other => panic!("Expected Text block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn user_inputs_to_content_blocks_data_uri_image() {
+        use codex_protocol::user_input::UserInput;
+
+        let b64_data = "iVBORw0KGgo=";
+        let data_uri = format!("data:image/png;base64,{b64_data}");
+
+        let items = vec![UserInput::Image {
+            image_url: data_uri,
+        }];
+
+        let blocks = user_inputs_to_content_blocks(items).unwrap();
+        assert_eq!(blocks.len(), 1);
+
+        match &blocks[0] {
+            acp::ContentBlock::Image(img) => {
+                assert_eq!(img.data, b64_data);
+                assert_eq!(img.mime_type, "image/png");
+            }
+            other => panic!("Expected Image block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn user_inputs_to_content_blocks_mixed_text_and_image() {
+        use codex_protocol::user_input::UserInput;
+
+        let items = vec![
+            UserInput::Text {
+                text: "Describe this image:".to_string(),
+            },
+            UserInput::Image {
+                image_url: "data:image/jpeg;base64,/9j/4AAQ".to_string(),
+            },
+        ];
+
+        let blocks = user_inputs_to_content_blocks(items).unwrap();
+        assert_eq!(blocks.len(), 2);
+
+        assert!(matches!(&blocks[0], acp::ContentBlock::Text(_)));
+        assert!(matches!(&blocks[1], acp::ContentBlock::Image(_)));
+    }
+
+    #[test]
+    fn user_inputs_to_content_blocks_local_image_file() {
+        use codex_protocol::user_input::UserInput;
+        use std::io::Write;
+
+        // Create a real temp PNG file with minimal valid content
+        let mut tmp = tempfile::Builder::new().suffix(".png").tempfile().unwrap();
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        tmp.write_all(png_bytes).unwrap();
+        tmp.flush().unwrap();
+
+        let items = vec![UserInput::LocalImage {
+            path: tmp.path().to_path_buf(),
+        }];
+
+        let blocks = user_inputs_to_content_blocks(items).unwrap();
+        assert_eq!(blocks.len(), 1);
+
+        match &blocks[0] {
+            acp::ContentBlock::Image(img) => {
+                assert_eq!(img.mime_type, "image/png");
+                // Verify the data is valid base64 that decodes to our bytes
+                use base64::Engine;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(&img.data)
+                    .unwrap();
+                assert_eq!(decoded, png_bytes);
+            }
+            other => panic!("Expected Image block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn user_inputs_to_content_blocks_local_image_missing_file_returns_error() {
+        use codex_protocol::user_input::UserInput;
+
+        let items = vec![UserInput::LocalImage {
+            path: PathBuf::from("/nonexistent/path/to/image.png"),
+        }];
+
+        let result = user_inputs_to_content_blocks(items);
+        assert!(result.is_err());
     }
 
     #[test]

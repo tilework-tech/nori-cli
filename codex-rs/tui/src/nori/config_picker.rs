@@ -188,6 +188,7 @@ pub fn config_picker_params(
         subtitle: Some("Toggle TUI settings (changes saved to config.toml)".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        initial_selected_idx: Some(0),
         ..Default::default()
     }
 }
@@ -296,50 +297,6 @@ pub fn script_timeout_picker_params(
     }
 }
 
-/// Create selection view parameters for the loop count sub-picker.
-///
-/// # Arguments
-/// * `current` - The currently configured loop count (`None` means disabled)
-/// * `_app_event_tx` - The app event sender for triggering config change events
-pub fn loop_count_picker_params(
-    current: Option<i32>,
-    _app_event_tx: AppEventSender,
-) -> SelectionViewParams {
-    let options: Vec<Option<i32>> = vec![None, Some(2), Some(3), Some(5), Some(10)];
-
-    let items: Vec<SelectionItem> = options
-        .into_iter()
-        .map(|value| {
-            let is_current = value == current;
-            let name = match value {
-                Some(n) => n.to_string(),
-                None => "Disabled".to_string(),
-            };
-            let actions: Vec<SelectionAction> = vec![Box::new({
-                move |tx| {
-                    tx.send(AppEvent::SetConfigLoopCount(value));
-                }
-            })];
-            SelectionItem {
-                name,
-                description: None,
-                is_current,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            }
-        })
-        .collect();
-
-    SelectionViewParams {
-        title: Some("Loop Count".to_string()),
-        subtitle: Some("Select number of loop iterations".to_string()),
-        footer_hint: Some(standard_popup_hint_line()),
-        items,
-        ..Default::default()
-    }
-}
-
 /// Create selection view parameters for the footer segments sub-picker.
 ///
 /// Each segment can be toggled on/off. The order of segments is controlled
@@ -382,6 +339,7 @@ pub fn footer_segments_picker_params(
         subtitle: Some("Toggle which segments appear in the footer".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        initial_selected_idx: Some(0),
         ..Default::default()
     }
 }
@@ -398,7 +356,7 @@ mod tests {
     fn make_test_config(vertical_footer: bool) -> NoriConfig {
         NoriConfig {
             agent: "claude-code".to_string(),
-            model: "claude-code".to_string(),
+            active_agent: "claude-code".to_string(),
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: codex_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: codex_acp::config::HistoryPersistence::SaveAll,
@@ -418,6 +376,21 @@ mod tests {
             mcp_servers: std::collections::HashMap::new(),
             session_start_hooks: vec![],
             session_end_hooks: vec![],
+            pre_user_prompt_hooks: vec![],
+            post_user_prompt_hooks: vec![],
+            pre_tool_call_hooks: vec![],
+            post_tool_call_hooks: vec![],
+            pre_agent_response_hooks: vec![],
+            post_agent_response_hooks: vec![],
+            async_session_start_hooks: vec![],
+            async_session_end_hooks: vec![],
+            async_pre_user_prompt_hooks: vec![],
+            async_post_user_prompt_hooks: vec![],
+            async_pre_tool_call_hooks: vec![],
+            async_post_tool_call_hooks: vec![],
+            async_pre_agent_response_hooks: vec![],
+            async_post_agent_response_hooks: vec![],
+            default_models: std::collections::HashMap::new(),
         }
     }
 
@@ -873,107 +846,5 @@ mod tests {
             matches!(event, AppEvent::OpenLoopCountPicker),
             "expected OpenLoopCountPicker event, got: {event:?}"
         );
-    }
-
-    #[test]
-    fn loop_count_picker_returns_expected_options() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        let params = loop_count_picker_params(None, tx);
-
-        assert_eq!(params.items.len(), 5);
-        assert!(params.title.unwrap().contains("Loop Count"));
-        assert!(params.items[0].name.contains("Disabled"));
-        assert!(params.items[1].name.contains("2"));
-        assert!(params.items[2].name.contains("3"));
-        assert!(params.items[3].name.contains("5"));
-        assert!(params.items[4].name.contains("10"));
-    }
-
-    #[test]
-    fn loop_count_picker_marks_current_value() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        let params = loop_count_picker_params(Some(5), tx);
-
-        for item in &params.items {
-            if item.name == "5" {
-                assert!(item.is_current, "5 should be marked current");
-            } else {
-                assert!(
-                    !item.is_current,
-                    "{} should not be marked current",
-                    item.name
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn loop_count_picker_marks_disabled_when_none() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        let params = loop_count_picker_params(None, tx);
-
-        assert!(
-            params.items[0].is_current,
-            "Disabled should be marked current when loop_count is None"
-        );
-        for item in &params.items[1..] {
-            assert!(
-                !item.is_current,
-                "{} should not be marked current",
-                item.name
-            );
-        }
-    }
-
-    #[test]
-    fn loop_count_picker_action_sends_set_event() {
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        let params = loop_count_picker_params(None, tx.clone());
-
-        // Select "5" (index 3)
-        let five_item = &params.items[3];
-        assert_eq!(five_item.name, "5");
-        for action in &five_item.actions {
-            action(&tx);
-        }
-
-        let event = rx.try_recv().expect("should receive event");
-        match event {
-            AppEvent::SetConfigLoopCount(value) => {
-                assert_eq!(value, Some(5));
-            }
-            _ => panic!("expected SetConfigLoopCount event, got: {event:?}"),
-        }
-    }
-
-    #[test]
-    fn loop_count_picker_disabled_sends_none() {
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        let params = loop_count_picker_params(Some(5), tx.clone());
-
-        // Select "Disabled" (index 0)
-        let disabled_item = &params.items[0];
-        assert!(disabled_item.name.contains("Disabled"));
-        for action in &disabled_item.actions {
-            action(&tx);
-        }
-
-        let event = rx.try_recv().expect("should receive event");
-        match event {
-            AppEvent::SetConfigLoopCount(value) => {
-                assert_eq!(value, None);
-            }
-            _ => panic!("expected SetConfigLoopCount event, got: {event:?}"),
-        }
     }
 }

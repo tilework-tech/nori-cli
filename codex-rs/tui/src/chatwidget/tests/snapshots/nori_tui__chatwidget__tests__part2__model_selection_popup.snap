@@ -1,0 +1,11 @@
+---
+source: tui/src/chatwidget/tests/part2.rs
+expression: popup
+---
+  Select Model
+  Not available in ACP mode - use /agent instead
+
+› 1. Model switching disabled in ACP mode  Use /agent to switch between ACP
+                                           agents
+
+  Press esc to dismiss, or use /agent to switch agents.

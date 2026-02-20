@@ -239,8 +239,8 @@ impl TuiSession {
             cmd.cwd(cwd);
         }
 
-        // Use mock-acp-agent model
-        cmd.arg("--model");
+        // Use mock-acp-agent agent
+        cmd.arg("--agent");
         cmd.arg(&config.model);
 
         // Skip trust directory prompt for E2E tests (avoids interactive prompts)

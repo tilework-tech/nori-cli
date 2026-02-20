@@ -11,7 +11,7 @@ pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
 pub use types::ApprovalPolicy;
-pub use types::DEFAULT_MODEL;
+pub use types::DEFAULT_AGENT;
 pub use types::FooterSegment;
 pub use types::FooterSegmentConfig;
 pub use types::FooterSegmentConfigToml;
@@ -77,7 +77,7 @@ mod tests {
     fn test_nori_config_default() {
         let config = NoriConfig::default();
 
-        assert_eq!(config.model, "claude-code");
+        assert_eq!(config.active_agent, "claude-code");
         assert!(config.animations);
         assert_eq!(
             config.terminal_notifications,
@@ -152,7 +152,7 @@ vertical_footer = true
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
 
-        assert_eq!(config.model, "gemini");
+        assert_eq!(config.active_agent, "gemini");
         assert!(!config.animations);
         assert_eq!(
             config.terminal_notifications,
@@ -180,14 +180,14 @@ model = "gemini"
         unsafe { env::set_var(NORI_HOME_ENV, temp_dir.path()) };
 
         let overrides = NoriConfigOverrides {
-            model: Some("claude-code".to_string()),
+            agent: Some("claude-code".to_string()),
             ..Default::default()
         };
 
         let config = NoriConfig::load_with_overrides(overrides).unwrap();
 
         // Override should win
-        assert_eq!(config.model, "claude-code");
+        assert_eq!(config.active_agent, "claude-code");
 
         // SAFETY: Test runs serially
         unsafe { env::remove_var(NORI_HOME_ENV) };
@@ -204,7 +204,7 @@ model = "gemini"
 
         let config = NoriConfig::load().unwrap();
 
-        assert_eq!(config.model, "claude-code");
+        assert_eq!(config.active_agent, "claude-code");
         assert!(config.animations);
         assert_eq!(
             config.terminal_notifications,
