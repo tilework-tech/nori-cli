@@ -500,6 +500,42 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    fn on_context_compacted(&mut self, event: codex_core::protocol::ContextCompactedEvent) {
+        // Step 1: Flush the streamed summary from the old session.
+        self.flush_answer_stream_with_separator();
+        self.handle_stream_finished();
+        self.turn_finished = true;
+
+        // Step 2: Show "Context compacted" as an info message.
+        self.add_info_message("Context compacted".to_owned(), None);
+
+        // When the ACP backend provides a summary, show a session header
+        // followed by the summary reprinted as the first assistant message
+        // of the new session. This makes the session boundary visible.
+        if let Some(summary) = event.summary {
+            // Step 3: Insert a new session header (same card as a fresh session,
+            // but without install hints since this is not the first launch).
+            use crate::nori::session_header::{DisplayMode, NoriSessionHeaderCell};
+            let header = NoriSessionHeaderCell::new(
+                self.config.model.clone(),
+                self.config.cwd.clone(),
+            )
+            .with_display_mode(DisplayMode::Compact);
+            self.add_to_history(history_cell::SessionInfoCell::new(
+                history_cell::CompositeHistoryCell::new(vec![Box::new(header)]),
+            ));
+
+            // Step 4: Reprint the summary as the first assistant message of the
+            // new session. Reset turn_finished so streaming works.
+            self.turn_finished = false;
+            self.handle_streaming_delta(summary);
+            self.flush_answer_stream_with_separator();
+            self.turn_finished = true;
+        }
+
+        self.request_redraw();
+    }
+
     fn on_agent_message_delta(&mut self, delta: String) {
         self.handle_streaming_delta(delta);
     }
@@ -2372,7 +2408,7 @@ impl ChatWidget {
                     self.on_user_message_event(ev);
                 }
             }
-            EventMsg::ContextCompacted(_) => self.on_agent_message("Context compacted".to_owned()),
+            EventMsg::ContextCompacted(event) => self.on_context_compacted(event),
             EventMsg::RawResponseItem(_)
             | EventMsg::ItemStarted(_)
             | EventMsg::ItemCompleted(_)
