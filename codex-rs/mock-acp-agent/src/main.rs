@@ -328,6 +328,51 @@ impl acp::Agent for MockAgent {
             eprintln!("Mock agent: multi-turn response with marker {marker}");
             self.send_text_chunk(session_id.clone(), &format!("RESPONSE_{marker}"))
                 .await?;
+
+            // Schedule inter-turn notifications if requested.
+            // These fire AFTER PromptResponse is returned, simulating background
+            // agent completions that arrive between user turns.
+            if std::env::var("MOCK_AGENT_INTER_TURN_NOTIFICATIONS").is_ok() {
+                let tx = self.session_update_tx.clone();
+                let sid = session_id.clone();
+                let marker_owned = marker.to_owned();
+                let count: i32 = std::env::var("MOCK_AGENT_INTER_TURN_NOTIFICATION_COUNT")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(3);
+                let delay_ms: i64 = std::env::var("MOCK_AGENT_INTER_TURN_NOTIFICATION_DELAY_MS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(500);
+                eprintln!(
+                    "Mock agent: scheduling {count} inter-turn notifications for {marker} (delay={delay_ms}ms)"
+                );
+                tokio::task::spawn_local(async move {
+                    for i in 1..=count {
+                        sleep(Duration::from_millis(delay_ms as u64)).await;
+                        let text = format!("BACKGROUND_AGENT_{marker_owned}_{i}_COMPLETE");
+                        eprintln!("Mock agent: sending inter-turn notification: {text}");
+                        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(&text)),
+                        ));
+                        let (ack_tx, ack_rx) = oneshot::channel();
+                        if tx
+                            .send((acp::SessionNotification::new(sid.clone(), update), ack_tx))
+                            .is_err()
+                        {
+                            eprintln!("Mock agent: inter-turn notification channel closed");
+                            break;
+                        }
+                        // Wait for acknowledgment before sending next
+                        if ack_rx.await.is_err() {
+                            eprintln!("Mock agent: inter-turn notification ack failed");
+                            break;
+                        }
+                    }
+                    eprintln!("Mock agent: all inter-turn notifications sent");
+                });
+            }
+
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 

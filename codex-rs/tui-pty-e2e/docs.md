@@ -36,6 +36,12 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 - Checking for absence of trailing tool output by asserting that screen content after the final agent message position contains no tool-related strings
 - Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
 
+**Background Agent Desync Tests** (`acp_background_agent_desync.rs`):
+
+Tests in this file verify that inter-turn background agent notifications (arriving between user turns via the persistent channel) render correctly and do not cause conversation desync. Uses the `MOCK_AGENT_INTER_TURN_NOTIFICATIONS` mode of the mock agent. Two test scenarios:
+- `test_all_inter_turn_notifications_surface`: Verifies all background notifications appear on screen without requiring additional user input
+- `test_inter_turn_notifications_do_not_desync_conversation`: Sends a second prompt after notifications queue up and verifies the response appears correctly without replay or ordering corruption
+
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
 - Expected vs actual screen content

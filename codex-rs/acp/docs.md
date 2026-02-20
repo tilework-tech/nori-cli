@@ -606,6 +606,10 @@ The solution is a thread-safe wrapper pattern:
 └─────────────────────────┘                     └─────────────────────────┘
 ```
 
+**Inter-Turn Notification Finalization** (`backend/mod.rs`):
+
+The `run_persistent_relay` background task drains the persistent notification channel (for updates arriving between user turns) and translates them into codex events. For `AgentMessageChunk` updates containing non-empty text, the relay sends a two-event sequence: first `AgentMessageDelta` (for streaming), then a synthetic `AgentMessage` (for finalization). The finalization event is necessary because the TUI's `StreamController` only flushes buffered text to visible history when `finalize()` is called -- without it, inter-turn notification text remains permanently invisible in the collector buffer.
+
 **Subprocess Lifecycle Management:**
 
 Multi-layer cleanup strategy for robust process termination:

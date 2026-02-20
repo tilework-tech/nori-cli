@@ -2015,6 +2015,21 @@ impl AcpBackend {
     ) {
         let mut pending_patch_changes = HashMap::new();
         while let Some(update) = persistent_rx.recv().await {
+            // For AgentMessageChunk updates arriving via the persistent channel
+            // (inter-turn notifications), we need to send a finalizing
+            // AgentMessage after the delta so the TUI's StreamController
+            // flushes the text to visible history. Without this, the delta
+            // text sits in the StreamController's buffer forever because
+            // no TaskComplete or AgentMessage event arrives to finalize it.
+            let full_text = if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+                && let acp::ContentBlock::Text(t) = &chunk.content
+                && !t.text.is_empty()
+            {
+                Some(t.text.clone())
+            } else {
+                None
+            };
+
             let event_msgs =
                 translate_session_update_to_events(&update, &mut pending_patch_changes);
             for msg in event_msgs {
@@ -2022,6 +2037,17 @@ impl AcpBackend {
                     .send(Event {
                         id: String::new(),
                         msg,
+                    })
+                    .await;
+            }
+
+            if let Some(text) = full_text {
+                let _ = event_tx
+                    .send(Event {
+                        id: String::new(),
+                        msg: EventMsg::AgentMessage(codex_protocol::protocol::AgentMessageEvent {
+                            message: text,
+                        }),
                     })
                     .await;
             }

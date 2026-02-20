@@ -42,6 +42,8 @@ This simulates the real-world race condition that the `InterruptManager.flush_co
 5. Tool B End deferred
 6. Turn ends -- `flush_completions_and_clear` must discard both Begin-B and End-B to avoid creating an orphan `ExecCell` with the raw `call_id` as the command name
 
+**Inter-Turn Notification Simulation**: The `MOCK_AGENT_INTER_TURN_NOTIFICATIONS` env var (requires `MOCK_AGENT_MULTI_TURN`) triggers background notifications after a prompt response completes, simulating background agent completions arriving between user turns. After returning `PromptResponse`, a `spawn_local` task sends N notifications (default 3, configurable via `MOCK_AGENT_INTER_TURN_NOTIFICATION_COUNT`) with configurable delay between each (default 500ms, configurable via `MOCK_AGENT_INTER_TURN_NOTIFICATION_DELAY_MS`). Each notification is an `AgentMessageChunk` with text like `BACKGROUND_AGENT_{marker}_{i}_COMPLETE`, where `{marker}` is derived from the prompt text for disambiguation in multi-turn tests. The task waits for acknowledgment between notifications to ensure ordered delivery.
+
 **Client Requests**: Outbound requests to the client:
 - `ReadFile` - Request file contents
 - `WriteFile` - Request file write
