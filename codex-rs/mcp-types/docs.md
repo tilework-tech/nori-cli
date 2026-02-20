@@ -15,7 +15,7 @@ Used by:
 
 ### Core Implementation
 
-**Generated Types**: The `lib.rs` is auto-generated from the MCP schema. Do not edit directly - regenerate using `./generate_mcp_types.py`.
+**Generated Types**: The source is auto-generated from the MCP schema. Do not edit directly - regenerate using `./generate_mcp_types.py`. The types are organized across submodules: `content.rs` (content types), `dispatch.rs` (request/notification dispatch enums and TryFrom impls), `jsonrpc.rs` (JSON-RPC message types), `prompts.rs` (prompt-related types), `resources.rs` (resource-related types), `schema.rs` (JSON schema types), and `tools.rs` (tool-related types). The `lib.rs` re-exports all public types.
 
 **Key Traits**:
 - `ModelContextProtocolRequest` - Paired request/response types with `METHOD`, `Params`, `Result`
