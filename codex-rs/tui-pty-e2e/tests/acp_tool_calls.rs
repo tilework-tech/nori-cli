@@ -468,7 +468,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
 /// ## The race condition:
 /// When tool call completions arrive while the stream_controller is active (text is
 /// streaming), they get deferred into the interrupt queue. Previously, on_task_complete()
-/// would flush_interrupt_queue(), rendering all deferred tool events below the final
+/// would flush all deferred tool events, rendering them below the final
 /// agent text. This creates a confusing UX where "Explored" / "Ran" cells appear
 /// after the message the user needs to respond to.
 ///

@@ -53,6 +53,8 @@ fn make_test_app() -> App {
         suppress_shutdown_complete: false,
         skip_world_writable_scan_once: false,
         pending_agent: None,
+        #[cfg(feature = "nori-config")]
+        loop_count_override: None,
         hotkey_config: codex_acp::config::HotkeyConfig::default(),
         vim_mode_enabled: false,
         system_info_tx,
@@ -95,6 +97,8 @@ fn make_test_app_with_channels() -> (
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
+            #[cfg(feature = "nori-config")]
+            loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode_enabled: false,
             system_info_tx,

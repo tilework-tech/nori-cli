@@ -1504,3 +1504,154 @@ fn vim_normal_arrow_down_moves_cursor_down() {
     pretty_assertions::assert_eq!(t.cursor(), 8); // 'r' in "world" (same column)
     pretty_assertions::assert_eq!(t.text(), "hello\nworld");
 }
+
+// ===== Capital letter vim variants =====
+
+#[test]
+fn vim_normal_shift_w_moves_forward_big_word() {
+    // W skips over separators as part of the WORD
+    let mut t = vim_normal("hello.world foo");
+    t.set_cursor(0);
+    t.input(shift_key('W'));
+    pretty_assertions::assert_eq!(t.cursor(), 12); // start of "foo"
+
+    // W from whitespace skips to next WORD
+    let mut t = vim_normal("hello   world");
+    t.set_cursor(5); // on first space
+    t.input(shift_key('W'));
+    pretty_assertions::assert_eq!(t.cursor(), 8); // start of "world"
+
+    // W at end of text stays at end
+    let mut t = vim_normal("hello");
+    t.set_cursor(3);
+    t.input(shift_key('W'));
+    pretty_assertions::assert_eq!(t.cursor(), 5);
+}
+
+#[test]
+fn vim_normal_shift_b_moves_backward_big_word() {
+    // B skips over separators as part of the WORD
+    let mut t = vim_normal("foo hello.world");
+    t.set_cursor(15); // end
+    t.input(shift_key('B'));
+    pretty_assertions::assert_eq!(t.cursor(), 4); // start of "hello.world"
+
+    // B from beginning stays at 0
+    let mut t = vim_normal("hello");
+    t.set_cursor(0);
+    t.input(shift_key('B'));
+    pretty_assertions::assert_eq!(t.cursor(), 0);
+}
+
+#[test]
+fn vim_normal_shift_e_moves_to_end_of_big_word() {
+    // E skips over separators as part of the WORD, landing on the last character
+    let mut t = vim_normal("hello.world foo");
+    t.set_cursor(0);
+    t.input(shift_key('E'));
+    pretty_assertions::assert_eq!(t.cursor(), 10); // last char 'd' of "hello.world"
+
+    // E advances to last char of next WORD
+    t.input(shift_key('E'));
+    pretty_assertions::assert_eq!(t.cursor(), 14); // last char 'o' of "foo"
+
+    // E at end of text moves to text.len()
+    t.input(shift_key('E'));
+    pretty_assertions::assert_eq!(t.cursor(), 15);
+
+    // E past end stays at end
+    t.input(shift_key('E'));
+    pretty_assertions::assert_eq!(t.cursor(), 15);
+}
+
+#[test]
+fn vim_normal_shift_x_deletes_char_before_cursor() {
+    let mut t = vim_normal("hello");
+    t.set_cursor(3); // on second 'l'
+    t.input(shift_key('X'));
+    pretty_assertions::assert_eq!(t.text(), "helo");
+    pretty_assertions::assert_eq!(t.cursor(), 2);
+
+    // X at beginning of text is a no-op
+    t.set_cursor(0);
+    t.input(shift_key('X'));
+    pretty_assertions::assert_eq!(t.text(), "helo");
+    pretty_assertions::assert_eq!(t.cursor(), 0);
+}
+
+#[test]
+fn vim_normal_shift_p_pastes_from_kill_buffer() {
+    let mut t = vim_normal("hello world");
+    t.set_cursor(5);
+    // Kill to end of line to fill kill buffer
+    t.input(shift_key('D'));
+    pretty_assertions::assert_eq!(t.text(), "hello");
+    // P pastes at cursor
+    t.input(shift_key('P'));
+    pretty_assertions::assert_eq!(t.text(), "hello world");
+}
+
+#[test]
+fn vim_normal_shift_j_joins_lines() {
+    let mut t = vim_normal("hello\nworld");
+    t.set_cursor(2); // on 'l' in "hello"
+    t.input(shift_key('J'));
+    pretty_assertions::assert_eq!(t.text(), "hello world");
+
+    // J on the last line is a no-op
+    let mut t = vim_normal("hello");
+    t.set_cursor(2);
+    t.input(shift_key('J'));
+    pretty_assertions::assert_eq!(t.text(), "hello");
+}
+
+#[test]
+fn vim_normal_shift_j_strips_leading_whitespace() {
+    let mut t = vim_normal("hello\n   world");
+    t.set_cursor(0);
+    t.input(shift_key('J'));
+    pretty_assertions::assert_eq!(t.text(), "hello world");
+}
+
+#[test]
+fn vim_normal_shift_s_substitutes_line() {
+    let mut t = vim_normal("hello\nworld\nfoo");
+    t.set_cursor(8); // on 'r' in "world"
+    t.input(shift_key('S'));
+    pretty_assertions::assert_eq!(t.text(), "hello\n\nfoo");
+    pretty_assertions::assert_eq!(t.cursor(), 6); // at the now-empty line
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+}
+
+#[test]
+fn vim_normal_shift_s_on_empty_line_enters_insert() {
+    let mut t = vim_normal("hello\n\nworld");
+    t.set_cursor(6); // on the empty line
+    t.input(shift_key('S'));
+    pretty_assertions::assert_eq!(t.text(), "hello\n\nworld");
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+}
+
+#[test]
+fn vim_normal_shift_y_yanks_line() {
+    let mut t = vim_normal("hello\nworld\nfoo");
+    t.set_cursor(8); // on 'r' in "world"
+    t.input(shift_key('Y'));
+    // Text should be unchanged
+    pretty_assertions::assert_eq!(t.text(), "hello\nworld\nfoo");
+    pretty_assertions::assert_eq!(t.cursor(), 8);
+    // Pasting should insert the yanked line
+    t.input(key('p'));
+    assert!(t.text().contains("world\n"));
+}
+
+#[test]
+fn vim_normal_shift_y_on_last_line_yanks_without_newline() {
+    let mut t = vim_normal("hello\nworld");
+    t.set_cursor(8); // on 'r' in "world"
+    t.input(shift_key('Y'));
+    pretty_assertions::assert_eq!(t.text(), "hello\nworld");
+    // Paste the yanked text
+    t.input(key('p'));
+    assert!(t.text().contains("world"));
+}

@@ -1,5 +1,0 @@
----
-source: tui/src/chatwidget/tests.rs
-expression: last
----
-■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues
