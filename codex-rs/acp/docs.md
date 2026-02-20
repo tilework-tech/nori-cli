@@ -796,7 +796,7 @@ Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file. This separates test code from production code while keeping the Rust module path unchanged. Modules using this pattern include `backend/` and `config/types/`.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `event_translation.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`) and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1

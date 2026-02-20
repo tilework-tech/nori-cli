@@ -1,0 +1,20 @@
+---
+source: tui/src/chatwidget/tests/part5.rs
+expression: term.backend().vt100().screen().contents()
+---
+• The user wants to sort a list. I should consider:
+
+  - Time complexity requirements
+  - Whether stability matters
+  - Memory constraints
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+• Based on your requirements, here's a quicksort implementation:
+
+  def quicksort(arr):
+      if len(arr) <= 1:
+          return arr
+      pivot = arr[len(arr) // 2]
+      left = [x for x in arr if x < pivot]
+      middle = [x for x in arr if x == pivot]
+      right = [x for x in arr if x > pivot]
+      return quicksort(left) + middle + quicksort(right)

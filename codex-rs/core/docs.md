@@ -126,7 +126,7 @@ Core's `Config::tui_notifications` is a simple `bool` that controls whether the 
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file. This separates test code from production code while keeping the Rust module path unchanged. Modules using this pattern include `codex/`, `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`).
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `session_lifecycle.rs`, `history.rs`, `approval.rs`), `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` also use the `mod.rs` + `part*.rs` pattern.
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt

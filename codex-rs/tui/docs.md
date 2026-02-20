@@ -34,7 +34,7 @@ The main event loop in `app/mod.rs` processes:
 2. **ACP events** from the backend (streaming content, approval requests, completion)
 3. **App events** for state changes (agent selection, config updates)
 
-The chat interface is managed by `chatwidget.rs`, which handles:
+The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` + submodules), which handles:
 - User input composition with multi-line editing
 - Message history display with markdown rendering
 - File search integration (`file_search.rs`)
@@ -42,9 +42,9 @@ The chat interface is managed by `chatwidget.rs`, which handles:
 
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
 
-**Interrupt Queue & Tool Event Deferral** (`chatwidget/interrupts.rs`):
+**Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. The `InterruptManager` queues these events via `defer_or_handle()` in `chatwidget.rs` so they do not interleave with active text output. The deferral condition is: if a `stream_controller` is active OR the queue is already non-empty, new events are pushed onto the queue to preserve FIFO ordering.
+When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. The `InterruptManager` queues these events via `defer_or_handle()` in `chatwidget/event_handlers.rs` so they do not interleave with active text output. The deferral condition is: if a `stream_controller` is active OR the queue is already non-empty, new events are pushed onto the queue to preserve FIFO ordering.
 
 One operation consumes the queue:
 
@@ -57,7 +57,7 @@ The selective flush ensures tool cells that are already visible transition from 
 **Begin/End Pairing in `flush_completions_and_clear`**: Begin and End events for the same tool call are always paired in the FIFO queue (Begin precedes its End). When `flush_completions_and_clear` discards a Begin event, it records the `call_id` in a `HashSet`. When it encounters an End event, it checks whether the corresponding Begin was discarded. If so, the End is also discarded. Without this pairing, processing an End whose Begin was discarded causes `handle_exec_end_now` to create an orphan `ExecCell` with the raw `call_id` as the command name (e.g. "Ran toolu_01Lt49..."). This cascade deferral scenario arises when a tool Begin arrives while the queue is non-empty (even if the stream is no longer active), causing the Begin to be deferred and later discarded at task completion.
 
 
-**Turn-Finished Gate** (`chatwidget.rs`):
+**Turn-Finished Gate** (`chatwidget/event_handlers.rs`):
 
 The ACP protocol has no end-of-turn synchronization guarantee -- `PromptResponse` and `SessionNotification` messages are independent async streams that race. This means tool call events (`ExecCommandBegin/End`, `McpToolCallBegin/End`) can arrive after the agent's final response text (`AgentMessage`). The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard these late-arriving events:
 
@@ -176,11 +176,11 @@ Events: `AppEvent::SkillsetListResult`, `AppEvent::InstallSkillset`, `AppEvent::
 
 Three notification settings are toggled via `/config` and persisted to the `[tui]` section of `config.toml`:
 
-- **Terminal Notifications** (`TerminalNotifications` enum from `@/codex-rs/acp/src/config/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget.rs::notify()` gates on that bool.
+- **Terminal Notifications** (`TerminalNotifications` enum from `@/codex-rs/acp/src/config/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
 - **OS Notifications** (`OsNotifications` enum from `@/codex-rs/acp/src/config/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
 - **Notify After Idle** (`NotifyAfterIdle` enum from `@/codex-rs/acp/src/config/types/mod.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
-Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app/mod.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
+Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app/config_persistence.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
 
 **Custom Prompt Script Execution:**
 
@@ -200,7 +200,7 @@ ChatComposer (Enter key)           app/mod.rs                       codex_core::
 
 The composer intercepts Script-kind prompts in two places: when a command popup selection is confirmed, and when the user types a `/prompts:<name>` command directly and presses Enter. In both cases, positional arguments are extracted via `extract_positional_args_for_prompt_line()` and the `ExecuteScript` event is dispatched. The composer is cleared immediately.
 
-In `app/mod.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
+In `app/event_handling.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
 
 The script timeout is configurable via `/config` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/codex-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
 
@@ -211,13 +211,13 @@ Keyboard shortcuts are configurable through the `/config` panel ("Hotkeys" item)
 - **Config layer** (`@/codex-rs/acp/src/config/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
 - **TUI layer** (`@/codex-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
 
-The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()`, configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
+The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()` (`app/event_handling.rs`), configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` (`app/config_persistence.rs`) which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
 
 Hotkey actions fall into two categories that are consumed at different layers:
 
 | Category | Actions | Consumed By |
 |----------|---------|-------------|
-| App-level | OpenTranscript, OpenEditor | `app/mod.rs::handle_key_event()` |
+| App-level | OpenTranscript, OpenEditor | `app/event_handling.rs::handle_key_event()` |
 | Editing | MoveBackwardChar, MoveForwardChar, MoveBeginningOfLine, MoveEndOfLine, MoveBackwardWord, MoveForwardWord, DeleteBackwardChar, DeleteForwardChar, DeleteBackwardWord, KillToEndOfLine, KillToBeginningOfLine, Yank | `textarea/mod.rs::input()` |
 
 Editing hotkeys are propagated from `App` down to the textarea via a `set_hotkey_config()` chain: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea. This propagation occurs at startup, after config changes via `persist_hotkey_setting()`, and when new sessions or agent switches create fresh ChatWidgets.
@@ -262,7 +262,7 @@ Two-key sequences (`gg`, `dd`) use a `vim_pending_key: Option<char>` field on Te
 
 The state machine is implemented in `textarea/mod.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer/mod.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
 
-Config changes emit `AppEvent::SetConfigVimMode`, handled in `app/mod.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
+Config changes emit `AppEvent::SetConfigVimMode`, handled in `app/config_persistence.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
 
 
 **History Search (Ctrl+R):**
@@ -317,7 +317,7 @@ The TUI detects the repo root for auto-worktree branch renaming by inspecting th
 
 **External Editor Integration (`editor.rs`):**
 
-The external editor hotkey (default Ctrl-G, configurable via hotkeys) opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app/mod.rs::open_external_editor()`:
+The external editor hotkey (default Ctrl-G, configurable via hotkeys) opens the user's preferred text editor for composing prompts. The editor is resolved from `$VISUAL` > `$EDITOR` > platform default (`vi` on Unix, `notepad` on Windows). The lifecycle in `app/session_setup.rs::open_external_editor()`:
 
 1. Reads current composer text via `ChatWidget::composer_text()`
 2. Writes content to a temp file (`nori-editor-*.md`)
@@ -333,7 +333,7 @@ The `/resume-viewonly` command allows viewing previous session transcripts witho
 
 - `viewonly_transcript.rs`: Converts `codex_acp::transcript::Transcript` entries to `ViewonlyEntry` enum (User, Assistant, Thinking, Info variants)
 - `nori/viewonly_session_picker.rs`: Session picker UI for selecting past sessions
-- `app/mod.rs::display_viewonly_transcript()`: Renders entries in the chat history
+- `app/session_setup.rs::display_viewonly_transcript()`: Renders entries in the chat history
 
 Rendering behavior:
 - User messages display via `UserHistoryCell` with standard user styling
@@ -393,14 +393,14 @@ When the user selects an agent (or resumes a session), the TUI shows a "Connecti
 
 `drain_until_shutdown()` reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds it sends a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
 
-`on_agent_spawn_failed()` in `chatwidget.rs` performs three recovery steps in order:
+`on_agent_spawn_failed()` in `chatwidget/helpers.rs` performs three recovery steps in order:
 1. Clears the "Connecting" status indicator via `bottom_pane.hide_status_indicator()`
 2. Displays an error message in chat history: "Failed to start agent '{name}': {error}"
 3. Reopens the agent picker so the user can select a different agent
 
 **Status Indicator Whimsical Messages (`status_indicator_widget.rs`):**
 
-When the agent begins processing a task, the `StatusIndicatorWidget` displays an animated header with a randomly selected tongue-in-cheek message (e.g., "Thinking really hard", "Hallucinating responsibly") drawn from the `WHIMSICAL_STATUS_MESSAGES` pool via `random_status_message()`. A new random message is selected each time `on_task_started()` fires in `chatwidget.rs`. During streaming, reasoning chunk headers (extracted from bold markdown text) dynamically replace this initial message via `update_status_header()`.
+When the agent begins processing a task, the `StatusIndicatorWidget` displays an animated header with a randomly selected tongue-in-cheek message (e.g., "Thinking really hard", "Hallucinating responsibly") drawn from the `WHIMSICAL_STATUS_MESSAGES` pool via `random_status_message()`. A new random message is selected each time `on_task_started()` fires in `chatwidget/event_handlers.rs`. During streaming, reasoning chunk headers (extracted from bold markdown text) dynamically replace this initial message via `update_status_header()`.
 
 **Exit Path When Backend Is Dead:**
 
@@ -443,7 +443,7 @@ The loop is cancelled (both fields set to `None`) when an error occurs (`on_erro
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file. This separates test code from production code while keeping the Rust module path unchanged. Modules using this pattern include `app/`, `bottom_pane/chat_composer/`, `bottom_pane/textarea/`, `history_cell/`, and `nori/session_header/`. Snapshot `.snap` files live in a `snapshots/` subdirectory within each module directory.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `app/` (with `event_handling.rs`, `config_persistence.rs`, `session_setup.rs`), `chatwidget/` (with `event_handlers.rs`, `helpers.rs`, `user_input.rs`, `key_handling.rs`, `constructors.rs`, `approvals.rs`, `pickers.rs`, `login.rs`, `agent.rs`, `session_header.rs`, `interrupts.rs`, `pending_exec_cells.rs`), `bottom_pane/chat_composer/` (with `key_handling.rs`, `paste_handling.rs`, `popup_management.rs`, `rendering.rs`), `bottom_pane/textarea/`, `history_cell/`, and `nori/session_header/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites. Snapshot `.snap` files live in a `snapshots/` subdirectory within each test module directory.
 
 **Cargo Feature Flags:**
 
@@ -475,7 +475,7 @@ When errors occur, users are directed to report bugs at `https://github.com/tile
 - Markdown rendering uses `pulldown-cmark` for parsing with `tree-sitter-highlight` for syntax highlighting
 - Clipboard integration provided via `arboard` crate (disabled on Android/Termux)
 - Terminal state is restored on exit or crash via the `tui.rs` module using `color-eyre` for panic handling. The `tui::restore()` / `tui::set_modes()` pair is also used for temporary terminal suspension (job control signals, external editor spawning).
-- The `chatwidget.rs` file is large (~165K) and contains most of the chat rendering logic
+- The `chatwidget/` module (split across `mod.rs` + submodules) contains most of the chat rendering logic
 - The `first_prompt_text` field in `ChatWidget` is set when the user submits their first message and is used for both transcript matching in Claude Code sessions and as the prompt text replayed during loop mode iterations
 
 Created and maintained by Nori.

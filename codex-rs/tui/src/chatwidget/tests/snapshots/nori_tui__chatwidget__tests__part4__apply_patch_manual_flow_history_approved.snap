@@ -1,0 +1,6 @@
+---
+source: tui/src/chatwidget/tests/part4.rs
+expression: lines_to_single_string(&approved_lines)
+---
+• Added foo.txt (+1 -0)
+    1 +hello

@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/part1.rs
+expression: lines_to_single_string(&aborted_multi)
+---
+✗ You canceled the request to run echo line1 ...
