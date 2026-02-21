@@ -678,12 +678,12 @@ The ACP backend filters `ToolCall` events that lack useful display information b
 
 Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 1. `/compact` sends summarization prompt to agent
-2. Agent's summary response is streamed to the TUI as deltas and captured in `pending_compact_summary`
+2. Agent's summary response chunks (`AgentMessageChunk`) are captured internally into `pending_compact_summary` but are NOT forwarded to the TUI as `AgentMessageDelta` events. The `continue` statement in the update handler loop prevents text chunks from being translated and sent to the event channel, while non-text events (e.g., `TaskStarted`) are still forwarded normally.
 3. A new ACP session is created (the old session's context is discarded)
 4. The `ContextCompactedEvent` is emitted with the summary text cloned from `pending_compact_summary`, enabling the TUI to render a visual session boundary
 5. Summary is prepended to the next user message (via `SUMMARY_PREFIX` framing)
 
-The `ContextCompactedEvent.summary` field is the coupling point between the ACP backend and the TUI's session boundary rendering. The TUI uses it to flush the streamed summary, show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/codex-rs/tui/docs.md`).
+The `ContextCompactedEvent.summary` field is the sole delivery mechanism for the compact summary to the TUI. The TUI uses it to show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/codex-rs/tui/docs.md`). This design ensures the summary appears exactly once in the chat history.
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 

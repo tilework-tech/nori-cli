@@ -316,14 +316,19 @@ impl AcpBackend {
                 > = std::collections::HashMap::new();
 
                 while let Some(update) = update_rx.recv().await {
-                    // Capture text from agent message chunks
+                    // Capture text from agent message chunks but do NOT
+                    // forward them to the TUI. The summary will be delivered
+                    // via ContextCompactedEvent and reprinted under the new
+                    // session header. Forwarding the chunks would cause the
+                    // summary to appear twice.
                     if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
                         && let acp::ContentBlock::Text(text) = &chunk.content
                     {
                         summary_text.push_str(&text.text);
+                        continue;
                     }
 
-                    // Translate and forward events to TUI for display
+                    // Translate and forward non-text events to TUI for display
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
                     for event_msg in events {

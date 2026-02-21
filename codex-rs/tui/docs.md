@@ -127,14 +127,13 @@ The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backe
 
 **Compact Session Boundary (`/compact`):**
 
-When the ACP backend sends a `ContextCompactedEvent` with a summary, `on_context_compacted()` renders a visual session boundary to show that a new session has begun. The sequence is:
+When the ACP backend sends a `ContextCompactedEvent` with a summary, `on_context_compacted()` renders a visual session boundary to show that a new session has begun. The ACP backend does NOT forward `AgentMessageDelta` events during compact -- the summary is delivered exclusively via the `ContextCompactedEvent`. The sequence is:
 
-1. Flush the in-progress streamed summary (old session content)
-2. Show "Context compacted" as an info message
-3. Insert a `NoriSessionHeaderCell` (the "Nori CLI" card, same as starting a fresh session) by constructing a `SessionConfiguredEvent` from the current widget config state
-4. Reprint the summary text as the first assistant message of the new session (temporarily clears `turn_finished` to allow streaming)
+1. Show "Context compacted" as an info message
+2. Insert a `NoriSessionHeaderCell` (the "Nori CLI" card, same as starting a fresh session) by constructing a `SessionConfiguredEvent` from the current widget config state
+3. Reprint the summary text as the first assistant message of the new session (temporarily clears `turn_finished` to allow streaming)
 
-When the event has no summary (core backend path), only the "Context compacted" info message is shown. This asymmetry exists because the core backend compacts history in-place without producing a summary for the TUI.
+This means the summary appears exactly once in the chat history (the reprint after the session header), not twice. When the event has no summary (core backend path), only the "Context compacted" info message is shown. This asymmetry exists because the core backend compacts history in-place without producing a summary for the TUI.
 
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 

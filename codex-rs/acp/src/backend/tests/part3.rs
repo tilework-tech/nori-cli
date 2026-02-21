@@ -606,6 +606,9 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     let has_task_complete = events
         .iter()
         .any(|e| matches!(e.msg, EventMsg::TaskComplete(_)));
+    let has_agent_message_delta = events
+        .iter()
+        .any(|e| matches!(e.msg, EventMsg::AgentMessageDelta(_)));
 
     assert!(
         has_task_started,
@@ -622,5 +625,12 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     assert!(
         has_task_complete,
         "Expected TaskComplete event. Events received: {events:?}"
+    );
+    // Compact should NOT emit AgentMessageDelta events to the TUI.
+    // The summary is captured internally and sent via ContextCompactedEvent.
+    assert!(
+        !has_agent_message_delta,
+        "Compact should NOT emit AgentMessageDelta events. The summary should only \
+         be delivered via ContextCompactedEvent. Events received: {events:?}"
     );
 }
