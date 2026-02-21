@@ -650,6 +650,21 @@ mod tests {
         }
     }
 
+    /// "completion" (singular) should still be treated as a prompt, not a subcommand
+    #[test]
+    fn completion_singular_treated_as_prompt() {
+        let cli = MultitoolCli::try_parse_from(["nori", "completion"]).expect("should parse");
+        assert!(
+            cli.subcommand.is_none(),
+            "singular 'completion' should not be parsed as subcommand"
+        );
+        assert_eq!(
+            cli.interactive.prompt.as_deref(),
+            Some("completion"),
+            "singular 'completion' should be parsed as prompt"
+        );
+    }
+
     /// "skillsets" should be recognized as a subcommand, not a prompt
     #[test]
     fn skillsets_subcommand_is_recognized() {
