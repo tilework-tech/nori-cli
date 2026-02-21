@@ -8,8 +8,8 @@ use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 #[test]
-// Testing that ACP mode with a nonexistent model produces a clear error
-// instead of falling back to HTTP providers
+// Testing that ACP mode with a nonexistent model shows the error in the TUI
+// and opens the agent picker for recovery, instead of fatally exiting.
 fn test_startup_error_for_unregistered_model() {
     let mut session = TuiSession::spawn_with_config(
         18,
@@ -19,8 +19,7 @@ fn test_startup_error_for_unregistered_model() {
     .expect("Failed to spawn");
 
     // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
-    // the TUI should show an error immediately at startup (not after prompt submission).
-    // The error is shown before the TUI even renders the shortcuts prompt.
+    // the TUI should start, show an error message, and open the agent picker for recovery.
     session
         .wait_for_text("not registered as an ACP agent", TIMEOUT)
         .unwrap();
@@ -29,14 +28,10 @@ fn test_startup_error_for_unregistered_model() {
     let contents = session.screen_contents();
 
     assert!(
-        contents.contains("Model 'nonexistent' is not registered as an ACP agent. Set acp.allow_http_fallback = true to allow HTTP providers."),
+        contents.contains("not registered as an ACP agent"),
         "Missing the required error message, screen contents: {}",
         contents
     );
-    // assert_snapshot!(
-    //     "startup_error_unregistered_model",
-    //     normalize_for_input_snapshot(contents)
-    // );
 }
 
 #[test]

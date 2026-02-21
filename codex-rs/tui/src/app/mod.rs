@@ -278,19 +278,6 @@ impl App {
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
-        // Early check: if ACP-only mode is enabled (allow_http_fallback=false) and
-        // the model is not registered in the ACP registry, fail immediately.
-        // This prevents showing model migration prompts or other UI for HTTP models
-        // that will ultimately fail.
-        if !config.acp_allow_http_fallback && codex_acp::get_agent_config(&config.model).is_err() {
-            return Err(color_eyre::eyre::eyre!(
-                "Model '{}' is not registered as an ACP agent. \
-                 Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp",
-                config.model
-            ));
-        }
-
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 

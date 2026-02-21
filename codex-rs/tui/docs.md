@@ -393,6 +393,8 @@ The resume session picker reuses the `SessionPickerInfo` type and `format_relati
 
 **Agent Connection Lifecycle & Failure Recovery:**
 
+Agent registration validation is performed exclusively in `spawn_agent()` (`chatwidget/agent.rs`). When `acp_allow_http_fallback` is disabled and the configured model is not in the ACP registry, `spawn_agent()` routes to `spawn_error_agent()` which sends `AppEvent::AgentSpawnFailed` -- triggering `on_agent_spawn_failed()` to display the error and reopen the agent picker for recovery. There is no early validation in `App::run()`; this single validation point ensures that unregistered agents (including custom agents that were configured but later removed) always get graceful recovery through the agent picker rather than a fatal startup error.
+
 When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. Each spawn function (`spawn_acp_agent`, `spawn_acp_agent_resume`, `spawn_http_agent`) uses a `tokio::select!` to race three concurrent futures during backend initialization:
 
 | Arm | Trigger | Action |
