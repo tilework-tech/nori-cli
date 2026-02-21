@@ -1,3 +1,4 @@
+use clap::CommandFactory;
 use clap::Parser;
 use codex_acp::find_nori_home;
 use codex_acp::init_rolling_file_tracing;
@@ -81,6 +82,15 @@ enum Subcommand {
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
     StdioToUds(StdioToUdsCommand),
+
+    /// Generate shell completion scripts.
+    Completions(CompletionsCommand),
+}
+
+#[derive(Debug, Parser)]
+struct CompletionsCommand {
+    /// The shell to generate completions for.
+    shell: clap_complete::Shell,
 }
 
 #[derive(Debug, Parser)]
@@ -455,6 +465,14 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
         }
+        Some(Subcommand::Completions(cmd)) => {
+            clap_complete::generate(
+                cmd.shell,
+                &mut MultitoolCli::command(),
+                "nori",
+                &mut std::io::stdout(),
+            );
+        }
     }
 
     Ok(())
@@ -474,7 +492,6 @@ fn prepend_config_flags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
@@ -569,29 +586,82 @@ mod tests {
         );
     }
 
-    /// The completion subcommand should not appear in help output (legacy Codex feature)
+    /// The completions subcommand should appear in help output
     #[test]
-    fn completion_subcommand_not_in_help() {
+    fn completions_subcommand_in_help() {
         let help = MultitoolCli::command().render_help().to_string();
         assert!(
-            !help.contains("completion"),
-            "Help should not show 'completion' subcommand, got: {help}"
+            help.contains("completions"),
+            "Help should show 'completions' subcommand, got: {help}"
         );
     }
 
-    /// When "completion" is passed, it should be treated as prompt, not subcommand
+    /// "completions bash" should be parsed as the Completions subcommand, not a prompt
     #[test]
-    fn completion_treated_as_prompt_not_subcommand() {
+    fn completions_parsed_as_subcommand() {
+        let cli =
+            MultitoolCli::try_parse_from(["nori", "completions", "bash"]).expect("should parse");
+        assert!(
+            matches!(cli.subcommand, Some(Subcommand::Completions(_))),
+            "completions should be parsed as subcommand, got: {:?}",
+            cli.subcommand
+        );
+        assert!(
+            cli.interactive.prompt.is_none(),
+            "prompt should be None when completions subcommand is used"
+        );
+    }
+
+    /// "completions" with no shell argument should produce an error
+    #[test]
+    fn completions_requires_shell_argument() {
+        let result = MultitoolCli::try_parse_from(["nori", "completions"]);
+        assert!(
+            result.is_err(),
+            "completions without a shell argument should fail"
+        );
+    }
+
+    /// completions generates non-empty output containing "nori" for each supported shell
+    #[test]
+    fn completions_generates_valid_output_for_all_shells() {
+        use clap_complete::Shell;
+
+        let shells = [
+            Shell::Bash,
+            Shell::Zsh,
+            Shell::Fish,
+            Shell::PowerShell,
+            Shell::Elvish,
+        ];
+
+        for shell in shells {
+            let mut buf = Vec::new();
+            clap_complete::generate(shell, &mut MultitoolCli::command(), "nori", &mut buf);
+            let output = String::from_utf8(buf).expect("completion output should be valid UTF-8");
+            assert!(
+                !output.is_empty(),
+                "completion output for {shell:?} should not be empty"
+            );
+            assert!(
+                output.contains("nori"),
+                "completion output for {shell:?} should contain 'nori', got: {output}"
+            );
+        }
+    }
+
+    /// "completion" (singular) should still be treated as a prompt, not a subcommand
+    #[test]
+    fn completion_singular_treated_as_prompt() {
         let cli = MultitoolCli::try_parse_from(["nori", "completion"]).expect("should parse");
-        // "completion" should be interpreted as the prompt argument, not a subcommand
         assert!(
             cli.subcommand.is_none(),
-            "completion should not be parsed as subcommand"
+            "singular 'completion' should not be parsed as subcommand"
         );
         assert_eq!(
             cli.interactive.prompt.as_deref(),
             Some("completion"),
-            "completion should be parsed as prompt"
+            "singular 'completion' should be parsed as prompt"
         );
     }
 
