@@ -574,3 +574,47 @@ fn vim_normal_shift_y_on_last_line_yanks_without_newline() {
     t.input(key('p'));
     assert!(t.text().contains("world"));
 }
+
+// ===== Escape from insert mode moves cursor back =====
+
+#[test]
+fn vim_escape_from_insert_moves_cursor_back() {
+    let mut t = ta_with("hello");
+    t.set_vim_mode_enabled(true);
+    t.set_cursor(3); // on second 'l'
+    // Escape should switch to normal mode AND move cursor back one position
+    t.input(esc_key());
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+    pretty_assertions::assert_eq!(t.cursor(), 2);
+    pretty_assertions::assert_eq!(t.text(), "hello");
+}
+
+#[test]
+fn vim_escape_from_insert_at_bol_does_not_move_cursor() {
+    let mut t = ta_with("hello");
+    t.set_vim_mode_enabled(true);
+    t.set_cursor(0); // at beginning of text
+    t.input(esc_key());
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+    pretty_assertions::assert_eq!(t.cursor(), 0); // stays at 0
+}
+
+#[test]
+fn vim_escape_from_insert_at_beginning_of_second_line_does_not_move() {
+    let mut t = ta_with("hello\nworld");
+    t.set_vim_mode_enabled(true);
+    t.set_cursor(6); // beginning of "world" (right after \n)
+    t.input(esc_key());
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+    pretty_assertions::assert_eq!(t.cursor(), 6); // stays at beginning of line
+}
+
+#[test]
+fn vim_escape_from_insert_at_pos_1_moves_to_0() {
+    let mut t = ta_with("hello");
+    t.set_vim_mode_enabled(true);
+    t.set_cursor(1);
+    t.input(esc_key());
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+    pretty_assertions::assert_eq!(t.cursor(), 0);
+}

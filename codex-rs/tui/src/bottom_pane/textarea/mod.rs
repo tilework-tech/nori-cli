@@ -290,6 +290,12 @@ impl TextArea {
                         }
                     ) {
                         self.vim_mode_state = VimModeState::Normal;
+                        // Vim moves cursor back one position when exiting insert mode,
+                        // but never past the beginning of the current line.
+                        let bol = self.beginning_of_current_line();
+                        if self.cursor_pos > bol {
+                            self.move_cursor_left();
+                        }
                         return;
                     }
                     // Otherwise fall through to normal input handling

@@ -250,7 +250,7 @@ When enabled, the textarea operates in two modes:
 
 | Mode | Behavior |
 |------|----------|
-| Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode. |
+| Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode; the cursor moves back one position (standard vim behavior), but never past the beginning of the current line. |
 | Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input. |
 
 Normal mode supports standard vim keybindings:
