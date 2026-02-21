@@ -1003,3 +1003,286 @@ nori_profile = true
     assert_eq!(config.tui.footer_segments.nori_profile, Some(true));
     assert_eq!(config.tui.footer_segments.git_branch, None);
 }
+
+// ========================================================================
+// Agent Configuration Tests
+// ========================================================================
+
+#[test]
+fn test_agent_config_toml_deserialize_npx_distribution() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "Claude Code"
+slug = "claude-code"
+
+[agents.distribution.npx]
+package = "@zed-industries/claude-code-acp"
+"#,
+    )
+    .unwrap();
+    assert_eq!(config.agents.len(), 1);
+    assert_eq!(config.agents[0].name, "Claude Code");
+    assert_eq!(config.agents[0].slug, "claude-code");
+    assert!(config.agents[0].distribution.npx.is_some());
+    assert_eq!(
+        config.agents[0].distribution.npx.as_ref().unwrap().package,
+        "@zed-industries/claude-code-acp"
+    );
+}
+
+#[test]
+fn test_agent_config_toml_deserialize_bunx_distribution() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "Gemini"
+slug = "gemini"
+
+[agents.distribution.bunx]
+package = "@google/gemini-cli"
+args = ["--experimental-acp"]
+"#,
+    )
+    .unwrap();
+    assert_eq!(config.agents.len(), 1);
+    assert_eq!(config.agents[0].name, "Gemini");
+    let bunx = config.agents[0].distribution.bunx.as_ref().unwrap();
+    assert_eq!(bunx.package, "@google/gemini-cli");
+    assert_eq!(bunx.args, vec!["--experimental-acp"]);
+}
+
+#[test]
+fn test_agent_config_toml_deserialize_uvx_distribution() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "Kimi"
+slug = "kimi"
+
+[agents.distribution.uvx]
+package = "kimi-cli"
+args = ["acp"]
+"#,
+    )
+    .unwrap();
+    assert_eq!(config.agents.len(), 1);
+    assert_eq!(config.agents[0].slug, "kimi");
+    let uvx = config.agents[0].distribution.uvx.as_ref().unwrap();
+    assert_eq!(uvx.package, "kimi-cli");
+    assert_eq!(uvx.args, vec!["acp"]);
+}
+
+#[test]
+fn test_agent_config_toml_deserialize_pipx_distribution() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "Python Agent"
+slug = "py-agent"
+
+[agents.distribution.pipx]
+package = "py-agent-cli"
+"#,
+    )
+    .unwrap();
+    assert_eq!(config.agents.len(), 1);
+    let pipx = config.agents[0].distribution.pipx.as_ref().unwrap();
+    assert_eq!(pipx.package, "py-agent-cli");
+}
+
+#[test]
+fn test_agent_config_toml_deserialize_local_distribution() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "My Local Agent"
+slug = "my-agent"
+
+[agents.distribution.local]
+command = "/usr/local/bin/my-agent"
+args = ["--acp"]
+
+[agents.distribution.local.env]
+MY_VAR = "value"
+"#,
+    )
+    .unwrap();
+    assert_eq!(config.agents.len(), 1);
+    let local = config.agents[0].distribution.local.as_ref().unwrap();
+    assert_eq!(local.command, "/usr/local/bin/my-agent");
+    assert_eq!(local.args, vec!["--acp"]);
+    assert_eq!(local.env.get("MY_VAR").unwrap(), "value");
+}
+
+#[test]
+fn test_agent_config_toml_deserialize_multiple_agents() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "Claude Code"
+slug = "claude-code"
+
+[agents.distribution.npx]
+package = "@zed-industries/claude-code-acp"
+
+[[agents]]
+name = "Kimi"
+slug = "kimi"
+
+[agents.distribution.uvx]
+package = "kimi-cli"
+args = ["acp"]
+"#,
+    )
+    .unwrap();
+    assert_eq!(config.agents.len(), 2);
+    assert_eq!(config.agents[0].slug, "claude-code");
+    assert_eq!(config.agents[1].slug, "kimi");
+}
+
+#[test]
+fn test_agent_config_toml_default_has_no_agents() {
+    let config: NoriConfigToml = toml::from_str("").unwrap();
+    assert!(config.agents.is_empty());
+}
+
+#[test]
+fn test_agent_config_toml_optional_fields() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[[agents]]
+name = "Custom Agent"
+slug = "custom"
+auth_hint = "Set CUSTOM_API_KEY"
+context_window_size = 500000
+transcript_base_dir = ".custom/sessions"
+
+[agents.distribution.local]
+command = "/usr/bin/custom-agent"
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        config.agents[0].auth_hint.as_deref(),
+        Some("Set CUSTOM_API_KEY")
+    );
+    assert_eq!(config.agents[0].context_window_size, Some(500000));
+    assert_eq!(
+        config.agents[0].transcript_base_dir.as_deref(),
+        Some(".custom/sessions")
+    );
+}
+
+#[test]
+fn test_agent_distribution_resolve_exactly_one_required() {
+    // No distribution set
+    let dist = AgentDistributionToml::default();
+    assert!(dist.resolve().is_err());
+
+    // Exactly one set - should pass
+    let dist = AgentDistributionToml {
+        npx: Some(PackageDistribution {
+            package: "some-pkg".to_string(),
+            args: vec![],
+        }),
+        ..Default::default()
+    };
+    assert!(dist.resolve().is_ok());
+}
+
+#[test]
+fn test_agent_distribution_resolve_rejects_multiple() {
+    let dist = AgentDistributionToml {
+        npx: Some(PackageDistribution {
+            package: "pkg-a".to_string(),
+            args: vec![],
+        }),
+        bunx: Some(PackageDistribution {
+            package: "pkg-b".to_string(),
+            args: vec![],
+        }),
+        ..Default::default()
+    };
+    assert!(dist.resolve().is_err());
+}
+
+#[test]
+fn test_agent_distribution_resolve_npx() {
+    let dist = AgentDistributionToml {
+        npx: Some(PackageDistribution {
+            package: "@zed-industries/claude-code-acp".to_string(),
+            args: vec![],
+        }),
+        ..Default::default()
+    };
+    let resolved = dist.resolve().unwrap();
+    assert!(matches!(resolved, ResolvedDistribution::Npx { .. }));
+    if let ResolvedDistribution::Npx { package, args } = resolved {
+        assert_eq!(package, "@zed-industries/claude-code-acp");
+        assert!(args.is_empty());
+    }
+}
+
+#[test]
+fn test_agent_distribution_resolve_local() {
+    let dist = AgentDistributionToml {
+        local: Some(LocalDistribution {
+            command: "/usr/bin/agent".to_string(),
+            args: vec!["--acp".to_string()],
+            env: HashMap::from([("KEY".to_string(), "val".to_string())]),
+        }),
+        ..Default::default()
+    };
+    let resolved = dist.resolve().unwrap();
+    assert!(matches!(resolved, ResolvedDistribution::Local { .. }));
+    if let ResolvedDistribution::Local { command, args, env } = resolved {
+        assert_eq!(command, "/usr/bin/agent");
+        assert_eq!(args, vec!["--acp"]);
+        assert_eq!(env.get("KEY").unwrap(), "val");
+    }
+}
+
+#[test]
+fn test_agent_distribution_resolve_uvx() {
+    let dist = AgentDistributionToml {
+        uvx: Some(PackageDistribution {
+            package: "kimi-cli".to_string(),
+            args: vec!["acp".to_string()],
+        }),
+        ..Default::default()
+    };
+    let resolved = dist.resolve().unwrap();
+    assert!(matches!(resolved, ResolvedDistribution::Uvx { .. }));
+}
+
+#[test]
+fn test_agent_distribution_resolve_pipx() {
+    let dist = AgentDistributionToml {
+        pipx: Some(PackageDistribution {
+            package: "py-agent".to_string(),
+            args: vec![],
+        }),
+        ..Default::default()
+    };
+    let resolved = dist.resolve().unwrap();
+    assert!(matches!(resolved, ResolvedDistribution::Pipx { .. }));
+}
+
+#[test]
+fn test_agent_distribution_resolve_bunx() {
+    let dist = AgentDistributionToml {
+        bunx: Some(PackageDistribution {
+            package: "@google/gemini-cli".to_string(),
+            args: vec!["--experimental-acp".to_string()],
+        }),
+        ..Default::default()
+    };
+    let resolved = dist.resolve().unwrap();
+    if let ResolvedDistribution::Bunx { package, args } = resolved {
+        assert_eq!(package, "@google/gemini-cli");
+        assert_eq!(args, vec!["--experimental-acp"]);
+    } else {
+        panic!("Expected Bunx variant");
+    }
+}

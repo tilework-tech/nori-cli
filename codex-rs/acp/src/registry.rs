@@ -15,10 +15,15 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::process::Command;
 use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::time::Duration;
+
+use crate::config::AgentConfigToml;
+use crate::config::ResolvedDistribution;
 
 /// Default idle timeout for ACP streaming (5 minutes)
 const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -216,6 +221,119 @@ impl fmt::Display for PackageManager {
 }
 
 // =============================================================================
+// Data-driven Registry
+// =============================================================================
+
+/// A registered agent entry in the data-driven registry.
+///
+/// Built-in agents have `kind` set to `Some(AgentKind)` for first-class metadata.
+/// Custom agents (from config) have `kind` set to `None`.
+#[derive(Debug, Clone)]
+pub struct RegisteredAgent {
+    /// Display name shown in the agent picker (e.g. "Claude Code")
+    pub name: String,
+    /// Machine identifier / slug (e.g. "claude-code")
+    pub slug: String,
+    /// First-class agent kind, if this is a built-in agent
+    pub kind: Option<AgentKind>,
+    /// How this agent is invoked (None for built-in agents that use auto-detection)
+    pub distribution: Option<ResolvedDistribution>,
+    /// Context window size override (in tokens)
+    pub context_window_size: Option<i64>,
+    /// Auth hint displayed on auth failures
+    pub auth_hint: Option<String>,
+    /// Transcript base directory (relative to home)
+    pub transcript_base_dir: Option<String>,
+}
+
+/// Global agent registry. Protected by RwLock so tests can reset it.
+static AGENT_REGISTRY: RwLock<Option<Vec<RegisteredAgent>>> = RwLock::new(None);
+
+/// Build the three default (built-in) agents.
+pub fn build_default_agents() -> Vec<RegisteredAgent> {
+    AgentKind::all()
+        .iter()
+        .map(|kind| RegisteredAgent {
+            name: kind.display_name().to_string(),
+            slug: kind.slug().to_string(),
+            kind: Some(*kind),
+            distribution: None, // built-ins use auto-detection
+            context_window_size: Some(kind.context_window_size()),
+            auth_hint: Some(kind.auth_hint().to_string()),
+            transcript_base_dir: Some(kind.transcript_base_dir().to_string()),
+        })
+        .collect()
+}
+
+/// Build the full registry from built-in defaults + custom agent configs.
+///
+/// Custom agents with a slug matching a built-in override the built-in entry.
+/// Duplicate slugs among custom agents are rejected.
+pub fn build_registry(custom_agents: Vec<AgentConfigToml>) -> Result<Vec<RegisteredAgent>> {
+    let mut agents = build_default_agents();
+
+    // Check for duplicate slugs among custom agents
+    let mut seen_custom_slugs = HashSet::new();
+    for custom in &custom_agents {
+        if !seen_custom_slugs.insert(custom.slug.clone()) {
+            anyhow::bail!(
+                "Duplicate custom agent slug: '{}'. Each agent must have a unique slug.",
+                custom.slug
+            );
+        }
+    }
+
+    for custom in custom_agents {
+        let resolved = custom.distribution.resolve().map_err(|e| {
+            anyhow::anyhow!("Invalid distribution for agent '{}': {e}", custom.slug)
+        })?;
+
+        let registered = RegisteredAgent {
+            name: custom.name,
+            slug: custom.slug.clone(),
+            kind: None,
+            distribution: Some(resolved),
+            context_window_size: custom.context_window_size,
+            auth_hint: custom.auth_hint,
+            transcript_base_dir: custom.transcript_base_dir,
+        };
+
+        // Override built-in if slug matches, otherwise append
+        if let Some(existing) = agents.iter_mut().find(|a| a.slug == registered.slug) {
+            *existing = registered;
+        } else {
+            agents.push(registered);
+        }
+    }
+
+    Ok(agents)
+}
+
+/// Initialize the global agent registry with custom agents from config.
+///
+/// This should be called once at startup after loading config.
+/// If called multiple times, later calls replace the registry.
+pub fn initialize_registry(custom_agents: Vec<AgentConfigToml>) -> Result<()> {
+    let agents = build_registry(custom_agents)?;
+    let mut registry = AGENT_REGISTRY
+        .write()
+        .map_err(|e| anyhow::anyhow!("agent registry lock poisoned: {e}"))?;
+    *registry = Some(agents);
+    Ok(())
+}
+
+/// Get the current registry, falling back to defaults if not initialized.
+fn get_registry() -> Vec<RegisteredAgent> {
+    match AGENT_REGISTRY.read() {
+        Ok(guard) => match &*guard {
+            Some(agents) => agents.clone(),
+            None => build_default_agents(),
+        },
+        Err(_) => build_default_agents(),
+    }
+}
+
+// =============================================================================
 // Agent Info (for UI)
 // =============================================================================
 
@@ -402,7 +520,7 @@ impl Default for AcpProviderInfo {
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
-    /// Agent identifier
+    /// Agent identifier (placeholder for custom agents)
     pub agent: AgentKind,
     /// Provider identifier (e.g., "claude-code", "gemini")
     /// Used to determine when subprocess can be reused vs needs replacement
@@ -417,6 +535,31 @@ pub struct AcpAgentConfig {
     pub provider_info: AcpProviderInfo,
     /// Authentication hint for this agent (displayed on auth failures)
     pub auth_hint: String,
+    /// Display name for this agent (avoids going through AgentKind for custom agents)
+    pub display_name: String,
+    /// Install command hint for error messages (e.g. "npm install -g @pkg" or "ensure /usr/bin/x is in PATH")
+    pub install_hint: String,
+}
+
+impl AcpAgentConfig {
+    /// Context window size for this agent, if known.
+    pub fn context_window_size(&self) -> Option<i64> {
+        // Check registry first (may have custom override)
+        let registry = get_registry();
+        registry
+            .iter()
+            .find(|a| a.slug == self.provider_slug)
+            .and_then(|a| a.context_window_size)
+    }
+
+    /// Transcript base directory for this agent, if known.
+    pub fn transcript_base_dir(&self) -> Option<String> {
+        let registry = get_registry();
+        registry
+            .iter()
+            .find(|a| a.slug == self.provider_slug)
+            .and_then(|a| a.transcript_base_dir.clone())
+    }
 }
 
 /// Get list of all available ACP agents for the agent picker
@@ -446,9 +589,23 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
         });
     }
 
-    // Production agents
-    for agent in AgentKind::all() {
-        agents.push(AcpAgentInfo::from_agent(*agent));
+    // Include all agents from the registry (built-in + custom)
+    for registered in get_registry() {
+        if let Some(kind) = registered.kind {
+            // Built-in agent: use existing detection logic
+            agents.push(AcpAgentInfo::from_agent(kind));
+        } else {
+            // Custom agent: always shown, installation detection not applicable
+            agents.push(AcpAgentInfo {
+                agent: AgentKind::ClaudeCode, // Placeholder for custom agents
+                agent_name: registered.slug.clone(),
+                display_name: registered.name.clone(),
+                description: registered.slug.clone(),
+                provider_slug: registered.slug,
+                is_installed: true,
+                managed_by: None,
+            });
+        }
     }
 
     agents
@@ -475,7 +632,73 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         return Ok(config);
     }
 
-    // Try to parse as an AgentKind
+    // Check the data-driven registry first for custom/overridden agents
+    let registry = get_registry();
+    if let Some(registered) = registry.iter().find(|a| a.slug == normalized)
+        && let Some(ref dist) = registered.distribution
+    {
+        // Custom distribution: use the resolved distribution directly
+        let (command, args, env) = match dist {
+            ResolvedDistribution::Local { command, args, env } => {
+                (command.clone(), args.clone(), env.clone())
+            }
+            ResolvedDistribution::Npx { package, args } => {
+                let mut full_args = vec![package.clone()];
+                full_args.extend(args.iter().cloned());
+                ("npx".to_string(), full_args, HashMap::new())
+            }
+            ResolvedDistribution::Bunx { package, args } => {
+                let mut full_args = vec![package.clone()];
+                full_args.extend(args.iter().cloned());
+                ("bunx".to_string(), full_args, HashMap::new())
+            }
+            ResolvedDistribution::Pipx { package, args } => {
+                let mut full_args = vec!["run".to_string(), package.clone()];
+                full_args.extend(args.iter().cloned());
+                ("pipx".to_string(), full_args, HashMap::new())
+            }
+            ResolvedDistribution::Uvx { package, args } => {
+                let mut full_args = vec![package.clone()];
+                full_args.extend(args.iter().cloned());
+                ("uvx".to_string(), full_args, HashMap::new())
+            }
+        };
+
+        let install_hint = match dist {
+            ResolvedDistribution::Local { command, .. } => {
+                format!("ensure '{command}' is in your PATH")
+            }
+            ResolvedDistribution::Npx { package, .. } => {
+                format!("npm install -g {package}")
+            }
+            ResolvedDistribution::Bunx { package, .. } => {
+                format!("bun add -g {package}")
+            }
+            ResolvedDistribution::Pipx { package, .. } => {
+                format!("pipx install {package}")
+            }
+            ResolvedDistribution::Uvx { package, .. } => {
+                format!("uv tool install {package}")
+            }
+        };
+
+        return Ok(AcpAgentConfig {
+            agent: registered.kind.unwrap_or(AgentKind::ClaudeCode),
+            provider_slug: registered.slug.clone(),
+            command,
+            args,
+            env,
+            provider_info: AcpProviderInfo {
+                name: format!("{} ACP", registered.name),
+                ..Default::default()
+            },
+            auth_hint: registered.auth_hint.clone().unwrap_or_default(),
+            display_name: registered.name.clone(),
+            install_hint,
+        });
+    }
+
+    // Try to parse as a built-in AgentKind (auto-detection path)
     if let Some(agent) = AgentKind::from_slug(&normalized) {
         let package_manager = detect_preferred_package_manager();
 
@@ -510,6 +733,8 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
                 ..Default::default()
             },
             auth_hint: agent.auth_hint().to_string(),
+            display_name: agent.display_name().to_string(),
+            install_hint: format!("npm install -g {}", agent.npm_package()),
         });
     }
 
@@ -534,7 +759,13 @@ pub fn get_agent_display_name(agent_name: &str) -> String {
         }
     }
 
-    // Production agents
+    // Check the data-driven registry (includes both built-in and custom)
+    let registry = get_registry();
+    if let Some(registered) = registry.iter().find(|a| a.slug == normalized) {
+        return registered.name.clone();
+    }
+
+    // Fallback: try AgentKind parsing for legacy aliases
     if let Some(agent) = AgentKind::from_slug(&normalized) {
         return agent.display_name().to_string();
     }
@@ -598,6 +829,8 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                     ..Default::default()
                 },
                 auth_hint: "Mock agent - no authentication required.".to_string(),
+                display_name: "Mock ACP".to_string(),
+                install_hint: "Mock agent - no installation required".to_string(),
             })
         }
         "mock-model-alt" => {
@@ -644,6 +877,8 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                     ..Default::default()
                 },
                 auth_hint: "Mock agent - no authentication required.".to_string(),
+                display_name: "Mock ACP Alt".to_string(),
+                install_hint: "Mock agent - no installation required".to_string(),
             })
         }
         _ => None,
@@ -657,6 +892,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_agent_slugs() {
@@ -924,6 +1160,264 @@ mod tests {
         );
         assert_eq!(AgentKind::Codex.transcript_base_dir(), ".codex/sessions");
         assert_eq!(AgentKind::Gemini.transcript_base_dir(), ".gemini/tmp");
+    }
+
+    // ========================================================================
+    // Data-driven registry tests
+    // ========================================================================
+
+    /// Reset the global registry so tests don't interfere with each other.
+    fn reset_registry() {
+        let mut registry = AGENT_REGISTRY.write().unwrap();
+        *registry = None;
+    }
+
+    #[test]
+    fn test_build_default_agents_returns_three_builtins() {
+        let agents = build_default_agents();
+        assert_eq!(agents.len(), 3);
+        let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
+        assert!(slugs.contains(&"claude-code"));
+        assert!(slugs.contains(&"codex"));
+        assert!(slugs.contains(&"gemini"));
+    }
+
+    #[test]
+    fn test_build_default_agents_have_correct_names() {
+        let agents = build_default_agents();
+        let claude = agents.iter().find(|a| a.slug == "claude-code").unwrap();
+        assert_eq!(claude.name, "Claude Code");
+        let codex = agents.iter().find(|a| a.slug == "codex").unwrap();
+        assert_eq!(codex.name, "Codex");
+        let gemini = agents.iter().find(|a| a.slug == "gemini").unwrap();
+        assert_eq!(gemini.name, "Gemini");
+    }
+
+    #[test]
+    fn test_build_default_agents_have_agent_kind() {
+        let agents = build_default_agents();
+        for agent in &agents {
+            assert!(
+                agent.kind.is_some(),
+                "Built-in agent {} should have AgentKind",
+                agent.slug
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_registry_with_no_custom_agents() {
+        let registry = build_registry(vec![]).unwrap();
+        assert_eq!(registry.len(), 3);
+    }
+
+    #[test]
+    fn test_build_registry_appends_custom_agent() {
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::PackageDistribution;
+        let custom = AgentConfigToml {
+            name: "Kimi".to_string(),
+            slug: "kimi".to_string(),
+            distribution: AgentDistributionToml {
+                uvx: Some(PackageDistribution {
+                    package: "kimi-cli".to_string(),
+                    args: vec!["acp".to_string()],
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+        };
+        let registry = build_registry(vec![custom]).unwrap();
+        assert_eq!(registry.len(), 4);
+        let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
+        assert_eq!(kimi.name, "Kimi");
+        assert!(kimi.kind.is_none());
+    }
+
+    #[test]
+    fn test_build_registry_custom_overrides_builtin() {
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::LocalDistribution;
+        let custom_claude = AgentConfigToml {
+            name: "My Claude".to_string(),
+            slug: "claude-code".to_string(),
+            distribution: AgentDistributionToml {
+                local: Some(LocalDistribution {
+                    command: "/my/claude".to_string(),
+                    args: vec![],
+                    env: std::collections::HashMap::new(),
+                }),
+                ..Default::default()
+            },
+            context_window_size: Some(300_000),
+            auth_hint: Some("Use my auth".to_string()),
+            transcript_base_dir: None,
+        };
+        let registry = build_registry(vec![custom_claude]).unwrap();
+        // Should still be 3 agents (override, not add)
+        assert_eq!(registry.len(), 3);
+        let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
+        assert_eq!(claude.name, "My Claude");
+        assert_eq!(claude.context_window_size, Some(300_000));
+    }
+
+    #[test]
+    fn test_build_registry_rejects_duplicate_custom_slugs() {
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::PackageDistribution;
+        let agents = vec![
+            AgentConfigToml {
+                name: "Agent A".to_string(),
+                slug: "my-agent".to_string(),
+                distribution: AgentDistributionToml {
+                    npx: Some(PackageDistribution {
+                        package: "pkg-a".to_string(),
+                        args: vec![],
+                    }),
+                    ..Default::default()
+                },
+                context_window_size: None,
+                auth_hint: None,
+                transcript_base_dir: None,
+            },
+            AgentConfigToml {
+                name: "Agent B".to_string(),
+                slug: "my-agent".to_string(),
+                distribution: AgentDistributionToml {
+                    npx: Some(PackageDistribution {
+                        package: "pkg-b".to_string(),
+                        args: vec![],
+                    }),
+                    ..Default::default()
+                },
+                context_window_size: None,
+                auth_hint: None,
+                transcript_base_dir: None,
+            },
+        ];
+        let result = build_registry(agents);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_agent_config_resolves_custom_uvx_agent() {
+        reset_registry();
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::PackageDistribution;
+        let custom = AgentConfigToml {
+            name: "Kimi".to_string(),
+            slug: "kimi".to_string(),
+            distribution: AgentDistributionToml {
+                uvx: Some(PackageDistribution {
+                    package: "kimi-cli".to_string(),
+                    args: vec!["acp".to_string()],
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+        };
+        initialize_registry(vec![custom]).unwrap();
+        let config = get_agent_config("kimi").expect("should find kimi");
+        assert_eq!(config.command, "uvx");
+        assert_eq!(config.args, vec!["kimi-cli", "acp"]);
+        assert_eq!(config.provider_slug, "kimi");
+        reset_registry();
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_agent_config_resolves_custom_local_agent() {
+        reset_registry();
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::LocalDistribution;
+        let custom = AgentConfigToml {
+            name: "Local Agent".to_string(),
+            slug: "local-test".to_string(),
+            distribution: AgentDistributionToml {
+                local: Some(LocalDistribution {
+                    command: "/usr/bin/my-agent".to_string(),
+                    args: vec!["--mode".to_string(), "acp".to_string()],
+                    env: std::collections::HashMap::from([("KEY".to_string(), "val".to_string())]),
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: Some("Set KEY env var".to_string()),
+            transcript_base_dir: None,
+        };
+        initialize_registry(vec![custom]).unwrap();
+        let config = get_agent_config("local-test").expect("should find local-test");
+        assert_eq!(config.command, "/usr/bin/my-agent");
+        assert_eq!(config.args, vec!["--mode", "acp"]);
+        assert_eq!(config.env.get("KEY").unwrap(), "val");
+        assert_eq!(config.auth_hint, "Set KEY env var");
+        reset_registry();
+    }
+
+    #[test]
+    #[serial]
+    fn test_list_available_agents_includes_custom() {
+        reset_registry();
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::PackageDistribution;
+        let custom = AgentConfigToml {
+            name: "Kimi".to_string(),
+            slug: "kimi".to_string(),
+            distribution: AgentDistributionToml {
+                uvx: Some(PackageDistribution {
+                    package: "kimi-cli".to_string(),
+                    args: vec![],
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+        };
+        initialize_registry(vec![custom]).unwrap();
+        let agents = list_available_agents();
+        assert!(
+            agents.iter().any(|a| a.display_name.as_str() == "Kimi"),
+            "Should contain custom agent Kimi"
+        );
+        reset_registry();
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_agent_display_name_custom_agent() {
+        reset_registry();
+        use crate::config::AgentConfigToml;
+        use crate::config::AgentDistributionToml;
+        use crate::config::PackageDistribution;
+        let custom = AgentConfigToml {
+            name: "My Custom Agent".to_string(),
+            slug: "my-custom".to_string(),
+            distribution: AgentDistributionToml {
+                npx: Some(PackageDistribution {
+                    package: "my-custom-pkg".to_string(),
+                    args: vec![],
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+        };
+        initialize_registry(vec![custom]).unwrap();
+        assert_eq!(get_agent_display_name("my-custom"), "My Custom Agent");
+        reset_registry();
     }
 
     #[test]

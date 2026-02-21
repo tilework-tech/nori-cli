@@ -184,6 +184,7 @@ impl NoriConfig {
             async_pre_agent_response_hooks,
             async_post_agent_response_hooks,
             default_models: toml.default_models,
+            agents: toml.agents,
         })
     }
 }
@@ -737,6 +738,52 @@ gemini = "flash"
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert!(config.default_models.is_empty());
+    }
+
+    #[test]
+    fn test_agents_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "claude-code"
+
+[[agents]]
+name = "Kimi"
+slug = "kimi"
+
+[agents.distribution.uvx]
+package = "kimi-cli"
+args = ["acp"]
+
+[[agents]]
+name = "My Local Agent"
+slug = "my-local"
+
+[agents.distribution.local]
+command = "/usr/bin/my-agent"
+args = ["--acp"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.agents.len(), 2);
+        assert_eq!(config.agents[0].slug, "kimi");
+        assert_eq!(config.agents[1].slug, "my-local");
+    }
+
+    #[test]
+    fn test_agents_default_to_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "agent = \"claude-code\"").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.agents.is_empty());
     }
 
     #[test]

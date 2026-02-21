@@ -391,6 +391,7 @@ mod tests {
             async_pre_agent_response_hooks: vec![],
             async_post_agent_response_hooks: vec![],
             default_models: std::collections::HashMap::new(),
+            agents: vec![],
         }
     }
 
