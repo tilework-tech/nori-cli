@@ -328,6 +328,13 @@ impl AcpBackend {
                         continue;
                     }
 
+                    // Suppress reasoning events during compact — the
+                    // summarization prompt is an internal operation and
+                    // its thinking output should not be shown to the user.
+                    if matches!(&update, acp::SessionUpdate::AgentThoughtChunk(_)) {
+                        continue;
+                    }
+
                     // Translate and forward non-text events to TUI for display
                     let events =
                         translate_session_update_to_events(&update, &mut pending_patch_changes);
