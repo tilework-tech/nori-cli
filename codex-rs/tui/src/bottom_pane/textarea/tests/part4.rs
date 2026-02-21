@@ -618,3 +618,25 @@ fn vim_escape_from_insert_at_pos_1_moves_to_0() {
     pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
     pretty_assertions::assert_eq!(t.cursor(), 0);
 }
+
+#[test]
+fn vim_escape_from_insert_at_end_of_text_moves_back() {
+    let mut t = ta_with("hello");
+    t.set_vim_mode_enabled(true);
+    // cursor starts at 5 (end of text, the default after ta_with)
+    pretty_assertions::assert_eq!(t.cursor(), 5);
+    t.input(esc_key());
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Normal);
+    pretty_assertions::assert_eq!(t.cursor(), 4); // on 'o', not past it
+}
+
+#[test]
+fn vim_escape_then_a_then_escape_returns_to_same_position() {
+    let mut t = vim_normal("hello");
+    t.set_cursor(2); // on first 'l'
+    // 'a' enters insert after cursor (pos 3), then Escape moves back (pos 2)
+    t.input(key('a'));
+    pretty_assertions::assert_eq!(t.cursor(), 3);
+    t.input(esc_key());
+    pretty_assertions::assert_eq!(t.cursor(), 2); // back where we started
+}
