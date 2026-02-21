@@ -379,11 +379,15 @@ impl AcpBackend {
                     }
                 }
 
-                // Send ContextCompacted event to notify TUI
+                // Send ContextCompacted event to notify TUI, including the
+                // summary text so the TUI can reprint it under a new session header.
+                let compact_summary = pending_compact_summary.lock().await.clone();
                 let _ = event_tx
                     .send(Event {
                         id: id_clone.clone(),
-                        msg: EventMsg::ContextCompacted(ContextCompactedEvent {}),
+                        msg: EventMsg::ContextCompacted(ContextCompactedEvent {
+                            summary: compact_summary,
+                        }),
                     })
                     .await;
 

@@ -323,6 +323,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         #[cfg(feature = "nori-config")]
         loop_count_override: None,
         turn_finished: false,
+        session_skillset_name: None,
     };
     (widget, rx, op_rx)
 }

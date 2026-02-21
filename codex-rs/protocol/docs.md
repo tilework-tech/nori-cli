@@ -67,6 +67,7 @@ pub enum EventMsg {
 | `ToolCall` / `ToolResult` | Tool invocation lifecycle |
 | `ApprovalRequired` | User approval needed |
 | `TaskComplete` | Turn finished |
+| `ContextCompacted` | Conversation history was compacted; carries optional summary text for TUI session boundary rendering |
 | `UndoCompleted` | Result of an undo operation (success/failure with message) |
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 | `PromptSummary` | Short summary of the first user prompt for display in the footer |
@@ -121,6 +122,12 @@ pub enum EventMsg {
 | Type | Purpose |
 |------|--------|
 | `SearchHistoryResponseEvent` | Wraps `Vec<HistoryEntry>` (from `codex_protocol::message_history`). Each entry has `conversation_id`, `ts`, and `text`. Not persisted to rollout policy. |
+
+**Context Compaction Types:**
+
+| Type | Purpose |
+|------|---------|
+| `ContextCompactedEvent` | Carries an optional `summary: Option<String>` field. When emitted by the ACP backend (`@/codex-rs/acp/`), the summary contains the compact summary text so the TUI can render a session boundary and reprint it. When emitted by the core backend (`@/codex-rs/core/`), the summary is `None` and the TUI shows only an info message. |
 
 **Approval Policy:**
 

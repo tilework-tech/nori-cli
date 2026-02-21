@@ -133,8 +133,9 @@ The `auto_worktree` boolean controls whether the TUI automatically creates a git
 | Field | TOML Key | Default | Controls |
 |-------|----------|---------|----------|
 | `auto_worktree` | `auto_worktree` | `false` | When enabled, the TUI creates a new git worktree in `<repo>/.worktrees/` and sets the session's working directory to it |
+| `skillset_per_session` | `skillset_per_session` | `false` | When enabled, each session gets its own skillset. Forces `auto_worktree = true` at resolution time in `loader.rs` regardless of the explicit `auto_worktree` value |
 
-The setting is resolved in `loader.rs` with `unwrap_or(false)`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
+Both settings are resolved in `loader.rs`. `skillset_per_session` defaults to `false`; when it is `true`, `auto_worktree` is forced to `true` regardless of its TOML value. `auto_worktree` otherwise defaults to `false`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
 
 **Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 
@@ -677,9 +678,12 @@ The ACP backend filters `ToolCall` events that lack useful display information b
 
 Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 1. `/compact` sends summarization prompt to agent
-2. Agent's summary response is captured
-3. Summary is prepended to next user message
-4. Emits `ContextCompacted` event to TUI
+2. Agent's summary response is streamed to the TUI as deltas and captured in `pending_compact_summary`
+3. A new ACP session is created (the old session's context is discarded)
+4. The `ContextCompactedEvent` is emitted with the summary text cloned from `pending_compact_summary`, enabling the TUI to render a visual session boundary
+5. Summary is prepended to the next user message (via `SUMMARY_PREFIX` framing)
+
+The `ContextCompactedEvent.summary` field is the coupling point between the ACP backend and the TUI's session boundary rendering. The TUI uses it to flush the streamed summary, show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/codex-rs/tui/docs.md`).
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 

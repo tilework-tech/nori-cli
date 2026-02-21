@@ -229,9 +229,14 @@ impl ChatWidget {
         self.bottom_pane.set_vim_mode_enabled(enabled);
     }
 
+    pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {
+        self.bottom_pane.set_session_skillset_name(name.clone());
+        self.session_skillset_name = name;
+    }
+
     /// Handle the /switch-skillset command.
     /// Checks if nori-skillsets is available and lists available skillsets.
-    pub(super) fn handle_switch_skillset_command(&mut self) {
+    pub(crate) fn handle_switch_skillset_command(&mut self) {
         use crate::nori::skillset_picker;
 
         // Check if nori-skillsets is available in PATH
@@ -239,6 +244,10 @@ impl ChatWidget {
             self.add_info_message(skillset_picker::not_installed_message(), None);
             return;
         }
+
+        // Detect if we're in a worktree and pass cwd as the install directory
+        let install_dir = crate::system_info::extract_worktree_name(&self.config.cwd)
+            .map(|_| self.config.cwd.clone());
 
         // Spawn async task to list skillsets
         let tx = self.app_event_tx.clone();
@@ -248,18 +257,21 @@ impl ChatWidget {
                     tx.send(AppEvent::SkillsetListResult {
                         names: Some(vec![]),
                         error: Some("No skillsets available.".to_string()),
+                        install_dir,
                     });
                 }
                 Ok(names) => {
                     tx.send(AppEvent::SkillsetListResult {
                         names: Some(names),
                         error: None,
+                        install_dir,
                     });
                 }
                 Err(message) => {
                     tx.send(AppEvent::SkillsetListResult {
                         names: None,
                         error: Some(message),
+                        install_dir,
                     });
                 }
             }
@@ -271,11 +283,12 @@ impl ChatWidget {
         &mut self,
         names: Option<Vec<String>>,
         error: Option<String>,
+        install_dir: Option<PathBuf>,
     ) {
         match (names, error) {
             (Some(names), None) if !names.is_empty() => {
-                // Open the skillset picker
-                let params = crate::nori::skillset_picker::skillset_picker_params(names);
+                let params =
+                    crate::nori::skillset_picker::skillset_picker_params(names, install_dir);
                 self.bottom_pane.show_selection_view(params);
             }
             (_, Some(error)) => {
@@ -319,6 +332,43 @@ impl ChatWidget {
             self.add_info_message(message.to_string(), None);
         } else {
             self.add_error_message(format!("Failed to install skillset '{name}': {message}"));
+        }
+    }
+
+    /// Handle a request to switch to a skillset with a specific install directory.
+    pub(crate) fn on_switch_skillset_request(&mut self, name: &str, install_dir: &std::path::Path) {
+        use crate::nori::skillset_picker;
+
+        let name = name.to_string();
+        let install_dir = install_dir.to_path_buf();
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            match skillset_picker::switch_skillset(&name, &install_dir).await {
+                Ok(message) => {
+                    tx.send(AppEvent::SkillsetSwitchResult {
+                        name,
+                        success: true,
+                        message,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetSwitchResult {
+                        name,
+                        success: false,
+                        message,
+                    });
+                }
+            }
+        });
+    }
+
+    /// Handle the result of switching a skillset.
+    pub(crate) fn on_skillset_switch_result(&mut self, name: &str, success: bool, message: &str) {
+        if success {
+            self.set_session_skillset_name(Some(name.to_string()));
+            self.add_info_message(message.to_string(), None);
+        } else {
+            self.add_error_message(format!("Failed to switch to skillset '{name}': {message}"));
         }
     }
 

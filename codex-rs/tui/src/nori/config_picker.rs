@@ -17,6 +17,7 @@ use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
+use crate::nori::skillset_picker;
 
 /// Create selection view parameters for the config picker.
 ///
@@ -81,18 +82,67 @@ pub fn config_picker_params(
                 }
             },
         ),
-        build_toggle_item(
-            "Auto Worktree",
-            "Automatically create a git worktree at session start",
-            config.auto_worktree,
-            {
-                let tx = app_event_tx;
-                let new_value = !config.auto_worktree;
-                move || {
-                    tx.send(AppEvent::SetConfigAutoWorktree(new_value));
+        if config.skillset_per_session {
+            // Auto Worktree is locked on when Per Session Skillsets is enabled
+            let actions: Vec<SelectionAction> = vec![Box::new(|_tx| {
+                // No-op: cannot toggle while skillset_per_session is enabled
+            })];
+            SelectionItem {
+                name: "Auto Worktree (on, required by Per Session Skillsets)".to_string(),
+                description: Some(
+                    "Cannot be disabled while Per Session Skillsets is enabled".to_string(),
+                ),
+                is_current: true,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        } else {
+            build_toggle_item(
+                "Auto Worktree",
+                "Automatically create a git worktree at session start",
+                config.auto_worktree,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !config.auto_worktree;
+                    move || {
+                        tx.send(AppEvent::SetConfigAutoWorktree(new_value));
+                    }
+                },
+            )
+        },
+        {
+            let skillset_per_session = config.skillset_per_session;
+            let status = if skillset_per_session { "on" } else { "off" };
+            let display_name = format!("Per Session Skillsets ({status})");
+            let tx = app_event_tx;
+            let actions: Vec<SelectionAction> = vec![Box::new(move |_tx_arg| {
+                if skillset_per_session {
+                    // Toggle off
+                    tx.send(AppEvent::SetConfigSkillsetPerSession(false));
+                } else if !skillset_picker::is_nori_skillsets_available() {
+                    // nori-skillsets not available, show info message
+                    tx.send(AppEvent::InsertHistoryCell(Box::new(
+                        crate::history_cell::new_error_event(
+                            skillset_picker::not_installed_message(),
+                        ),
+                    )));
+                } else {
+                    // Toggle on
+                    tx.send(AppEvent::SetConfigSkillsetPerSession(true));
                 }
-            },
-        ),
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some(
+                    "Use unique skillsets for each session (requires Auto Worktree)".to_string(),
+                ),
+                is_current: skillset_per_session,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
         {
             let current_idle = config.notify_after_idle;
             let display_name = format!("Notify After Idle ({})", current_idle.display_name());
@@ -391,6 +441,7 @@ mod tests {
             async_pre_agent_response_hooks: vec![],
             async_post_agent_response_hooks: vec![],
             default_models: std::collections::HashMap::new(),
+            skillset_per_session: false,
         }
     }
 
@@ -402,7 +453,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 10);
+        assert_eq!(params.items.len(), 11);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -437,19 +488,21 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 10);
+        assert_eq!(params.items.len(), 11);
         // The 4th item should be Vim Mode
         assert!(params.items[3].name.contains("Vim Mode"));
         // The 5th item should be Auto Worktree
         assert!(params.items[4].name.contains("Auto Worktree"));
-        // The 6th item should be Notify After Idle
-        assert!(params.items[5].name.contains("Notify After Idle"));
-        // The 7th item should be Hotkeys
-        assert!(params.items[6].name.contains("Hotkeys"));
-        // The 8th item should be Script Timeout
-        assert!(params.items[7].name.contains("Script Timeout"));
-        // The 9th item should be Loop Count
-        assert!(params.items[8].name.contains("Loop Count"));
+        // The 6th item should be Per Session Skillsets
+        assert!(params.items[5].name.contains("Per Session Skillsets"));
+        // The 7th item should be Notify After Idle
+        assert!(params.items[6].name.contains("Notify After Idle"));
+        // The 8th item should be Hotkeys
+        assert!(params.items[7].name.contains("Hotkeys"));
+        // The 9th item should be Script Timeout
+        assert!(params.items[8].name.contains("Script Timeout"));
+        // The 10th item should be Loop Count
+        assert!(params.items[9].name.contains("Loop Count"));
     }
 
     #[test]
@@ -461,7 +514,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[5];
+        let idle_item = &params.items[6];
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -477,8 +530,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the notify after idle action (6th item, index 5)
-        let idle_item = &params.items[5];
+        // Trigger the notify after idle action (7th item, index 6)
+        let idle_item = &params.items[6];
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -524,8 +577,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the hotkeys action (7th item, index 6)
-        let hotkeys_item = &params.items[6];
+        // Trigger the hotkeys action (8th item, index 7)
+        let hotkeys_item = &params.items[7];
         assert!(hotkeys_item.name.contains("Hotkeys"));
         for action in &hotkeys_item.actions {
             action(&tx);
@@ -606,8 +659,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Should now have 9 items (includes vim mode, auto worktree, script timeout, and loop count)
-        assert_eq!(params.items.len(), 10);
+        // Should now have 11 items (includes vim mode, auto worktree, per session skillsets, script timeout, and loop count)
+        assert_eq!(params.items.len(), 11);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -678,7 +731,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has 30s timeout
-        let timeout_item = &params.items[7];
+        let timeout_item = &params.items[8];
         assert!(
             timeout_item.name.contains("30s"),
             "Expected '30s' in name, got: {}",
@@ -694,8 +747,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the script timeout action (8th item, index 7)
-        let timeout_item = &params.items[7];
+        // Trigger the script timeout action (9th item, index 8)
+        let timeout_item = &params.items[8];
         assert!(timeout_item.name.contains("Script Timeout"));
         for action in &timeout_item.actions {
             action(&tx);
@@ -845,6 +898,27 @@ mod tests {
         assert!(
             matches!(event, AppEvent::OpenLoopCountPicker),
             "expected OpenLoopCountPicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn config_picker_auto_worktree_locked_when_skillset_per_session() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.skillset_per_session = true;
+
+        let params = config_picker_params(&config, tx);
+
+        let auto_worktree_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Auto Worktree"))
+            .expect("should have Auto Worktree item");
+        assert!(
+            auto_worktree_item.name.contains("required"),
+            "Auto Worktree should show 'required' when skillset_per_session is true, got: {}",
+            auto_worktree_item.name
         );
     }
 }

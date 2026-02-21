@@ -991,3 +991,130 @@ fn agent_message_discards_deferred_exec_begin_events() {
         "interrupt queue should be empty after on_agent_message flush"
     );
 }
+
+/// After /compact, the TUI should show: (1) the streamed summary from the old
+/// session, (2) a "Context compacted" indicator, (3) a new session header
+/// (containing "Nori CLI"), and (4) the summary reprinted as the first
+/// assistant message of the new session.
+#[test]
+fn compact_shows_session_header_and_reprints_summary() {
+    use codex_core::protocol::ContextCompactedEvent;
+
+    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
+
+    // Simulate the compact event sequence from the ACP backend.
+    // 1. TaskStarted
+    chat.handle_codex_event(Event {
+        id: "compact-1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+
+    // 2. Stream the summary as AgentMessageDelta events
+    let summary_text = "This conversation covered refactoring the auth module.\n";
+    chat.handle_codex_event(Event {
+        id: "compact-1".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: summary_text.to_string(),
+        }),
+    });
+    // Flush streamed lines through commit ticks
+    for _ in 0..20 {
+        chat.on_commit_tick();
+    }
+
+    // 3. ContextCompacted with summary
+    chat.handle_codex_event(Event {
+        id: "compact-1".into(),
+        msg: EventMsg::ContextCompacted(ContextCompactedEvent {
+            summary: Some(summary_text.to_string()),
+        }),
+    });
+
+    // 4. TaskComplete
+    chat.handle_codex_event(Event {
+        id: "compact-1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    // Drain all history cells and convert to a single text blob
+    let cells = drain_insert_history(&mut rx);
+    let all_text: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let combined = all_text.join("");
+
+    // The session header should appear (rendered as the Nori CLI card)
+    assert!(
+        combined.contains("Nori CLI"),
+        "expected session header with 'Nori CLI' after compact: {combined:?}"
+    );
+
+    // "Context compacted" indicator should appear
+    assert!(
+        combined.contains("Context compacted"),
+        "expected 'Context compacted' message: {combined:?}"
+    );
+
+    // The summary should appear at least twice:
+    // once from the original stream, once from the reprint after the header
+    let summary_needle = "refactoring the auth module";
+    let occurrences = combined.matches(summary_needle).count();
+    assert!(
+        occurrences >= 2,
+        "expected summary to appear at least twice (original stream + reprint), found {occurrences}: {combined:?}"
+    );
+
+    // Verify ordering: session header comes after "Context compacted" and before
+    // the reprinted summary. Find positions of key markers.
+    let compacted_pos = combined.find("Context compacted").unwrap();
+    let header_pos = combined.find("Nori CLI").unwrap();
+
+    // Find the SECOND occurrence of the summary (the reprint)
+    let first_summary_pos = combined.find(summary_needle).unwrap();
+    let reprint_pos = combined[first_summary_pos + 1..]
+        .find(summary_needle)
+        .map(|p| p + first_summary_pos + 1)
+        .expect("expected second occurrence of summary");
+
+    assert!(
+        compacted_pos < header_pos,
+        "'Context compacted' (pos {compacted_pos}) should come before session header (pos {header_pos})"
+    );
+    assert!(
+        header_pos < reprint_pos,
+        "session header (pos {header_pos}) should come before reprinted summary (pos {reprint_pos})"
+    );
+}
+
+/// When ContextCompacted has no summary (e.g. from the core backend), the
+/// handler falls back to the original behavior: just show "Context compacted"
+/// with no session header or reprint.
+#[test]
+fn compact_without_summary_shows_only_compacted_message() {
+    use codex_core::protocol::ContextCompactedEvent;
+
+    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
+
+    // No streaming — just a direct ContextCompacted with no summary
+    chat.handle_codex_event(Event {
+        id: "compact-2".into(),
+        msg: EventMsg::ContextCompacted(ContextCompactedEvent { summary: None }),
+    });
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells.iter().map(|c| lines_to_single_string(c)).collect();
+
+    // "Context compacted" should appear
+    assert!(
+        combined.contains("Context compacted"),
+        "expected 'Context compacted' message: {combined:?}"
+    );
+
+    // No session header should appear
+    assert!(
+        !combined.contains("Nori CLI"),
+        "should NOT show session header when summary is None: {combined:?}"
+    );
+}
