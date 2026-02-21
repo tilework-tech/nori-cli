@@ -722,6 +722,17 @@ impl App {
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAutoWorktree(enabled) => {
+                if !enabled
+                    && let Ok(current) = codex_acp::config::NoriConfig::load()
+                    && current.skillset_per_session
+                {
+                    self.chat_widget.add_info_message(
+                        "Auto Worktree cannot be disabled while Per Session Skillsets is enabled."
+                            .to_string(),
+                        None,
+                    );
+                    return Ok(true);
+                }
                 self.persist_auto_worktree_setting(enabled).await;
             }
             #[cfg(feature = "nori-config")]
