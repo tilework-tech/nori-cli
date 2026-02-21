@@ -133,8 +133,9 @@ The `auto_worktree` boolean controls whether the TUI automatically creates a git
 | Field | TOML Key | Default | Controls |
 |-------|----------|---------|----------|
 | `auto_worktree` | `auto_worktree` | `false` | When enabled, the TUI creates a new git worktree in `<repo>/.worktrees/` and sets the session's working directory to it |
+| `skillset_per_session` | `skillset_per_session` | `false` | When enabled, each session gets its own skillset. Forces `auto_worktree = true` at resolution time in `loader.rs` regardless of the explicit `auto_worktree` value |
 
-The setting is resolved in `loader.rs` with `unwrap_or(false)`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
+Both settings are resolved in `loader.rs`. `skillset_per_session` defaults to `false`; when it is `true`, `auto_worktree` is forced to `true` regardless of its TOML value. `auto_worktree` otherwise defaults to `false`. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when enabled. The config layer only stores the boolean -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
 
 **Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 

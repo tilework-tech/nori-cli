@@ -77,7 +77,7 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | Field | Source |
 |-------|--------|
 | `git_branch` | Git repository branch name |
-| `nori_profile` | Active Nori profile |
+| `nori_profile` | Active Nori profile from `.nori-config.json` (reads `activeSkillset` first, then `agents.claude-code.profile.baseProfile`, then `profile.baseProfile`) |
 | `git_lines_added` / `git_lines_removed` | Git diff statistics |
 | `is_worktree` | Whether CWD is a git worktree |
 | `worktree_name` | Last path component of CWD when parent directory is `.worktrees`; used to display the immutable worktree directory identifier in the footer |
@@ -103,7 +103,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model (ACP model picker) |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count, footer segments) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -176,7 +176,7 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 
 1. Checks if `nori-skillsets` is available in PATH
 2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
-3. If available, runs `nori-skillsets list-skillsets` to get available skillsets
+3. If available, runs `nori-skillsets list` to get available skillsets
 4. On success (exit code 0), displays a searchable picker with skillset names
 5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets install <NAME>`
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)

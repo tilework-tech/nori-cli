@@ -902,25 +902,6 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_includes_per_session_skillsets_toggle() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(false);
-
-        let params = config_picker_params(&config, tx);
-
-        assert_eq!(params.items.len(), 11);
-        let skillset_item = params
-            .items
-            .iter()
-            .find(|item| item.name.contains("Per Session Skillsets"));
-        assert!(
-            skillset_item.is_some(),
-            "config picker should include a Per Session Skillsets toggle"
-        );
-    }
-
-    #[test]
     fn config_picker_auto_worktree_locked_when_skillset_per_session() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);

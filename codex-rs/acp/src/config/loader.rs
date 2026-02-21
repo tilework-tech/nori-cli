@@ -123,11 +123,7 @@ impl NoriConfig {
 
         // Resolve skillset_per_session and auto_worktree (skillset_per_session forces auto_worktree on)
         let skillset_per_session = toml.tui.skillset_per_session.unwrap_or(false);
-        let auto_worktree = if skillset_per_session {
-            true
-        } else {
-            toml.tui.auto_worktree.unwrap_or(false)
-        };
+        let auto_worktree = skillset_per_session || toml.tui.auto_worktree.unwrap_or(false);
 
         // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
         // Using agent as fallback ensures the persisted preference is honored at startup

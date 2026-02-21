@@ -415,8 +415,8 @@ impl App {
             );
         }
 
-        // If skillset_per_session is enabled and we're in a worktree, trigger the
-        // skillset picker at startup so the user can select a skillset.
+        // If skillset_per_session is enabled and we're in a worktree, check if a
+        // skillset is already active. If so, load it; otherwise show the picker.
         #[cfg(feature = "nori-config")]
         if nori_config.skillset_per_session {
             let is_in_worktree = app
@@ -426,7 +426,29 @@ impl App {
                 .and_then(|p| p.file_name())
                 .is_some_and(|name| name == ".worktrees");
             if is_in_worktree {
-                app.chat_widget.handle_switch_skillset_command();
+                // Check if .nori-config.json already has an activeSkillset
+                let existing_skillset = app
+                    .config
+                    .cwd
+                    .join(".nori-config.json")
+                    .exists()
+                    .then(|| {
+                        std::fs::read_to_string(app.config.cwd.join(".nori-config.json"))
+                            .ok()
+                            .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+                            .and_then(|j| {
+                                j.get("activeSkillset")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from)
+                            })
+                    })
+                    .flatten();
+
+                if let Some(name) = existing_skillset {
+                    app.chat_widget.set_session_skillset_name(Some(name));
+                } else {
+                    app.chat_widget.handle_switch_skillset_command();
+                }
             }
         }
 

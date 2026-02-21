@@ -229,6 +229,14 @@ fn get_nori_profile() -> Option<String> {
                 {
                     return Some(profile.to_string());
                 }
+                // Fall back to oldest format: profile.baseProfile
+                if let Some(profile) = json
+                    .get("profile")
+                    .and_then(|p| p.get("baseProfile"))
+                    .and_then(|b| b.as_str())
+                {
+                    return Some(profile.to_string());
+                }
             }
         }
 

@@ -1,37 +1,46 @@
 # Current Progress: Per-Session Skillset
 
-## Completed
+## Status: Complete
 
-### Session-local skillset tracking (Part A)
-- Added `session_skillset_name: Option<String>` field to `ChatWidget` in `chatwidget/mod.rs`
-- Added setter method `set_session_skillset_name` that propagates through `BottomPane` -> `ChatComposer` -> `FooterProps`
-- Wired the field through all three ChatWidget constructors (`new`, `new_from_existing`, `new_resumed_acp`)
+All items from APPLICATION-SPEC.md have been implemented.
 
-### Footer displays session skillset (Part B)
-- Updated `footer_segments()` in `footer.rs` to prefer `session_skillset_name` over `nori_profile` for the "Skillset:" segment
-- Added `session_skillset_name` field to `FooterProps`, `ChatComposer`, and `BottomPane` with passthrough setters
-- Added two snapshot tests verifying override behavior
+## Implemented Features
 
-### /switch-skillset uses worktree path (Part C)
-- Updated `handle_switch_skillset_command` to detect worktree context (parent dir named `.worktrees`) and pass `install_dir`
-- Added `install_dir: Option<PathBuf>` to `SkillsetListResult` variant in `AppEvent`
-- Updated `on_skillset_list_result` to accept and forward `install_dir` to `skillset_picker_params`
-- Updated `on_skillset_switch_result` to call `set_session_skillset_name` on success
-- Changed `handle_switch_skillset_command` visibility from `pub(super)` to `pub(crate)` for startup access
+### Config field + loading
+- Added `skillset_per_session: Option<bool>` to `TuiConfigToml` and `skillset_per_session: bool` to `NoriConfig` (defaults to `false`)
+- When `skillset_per_session=true`, forces `auto_worktree=true` at config resolution time in `loader.rs`
+- 3 unit tests covering enabled, default, and force-auto-worktree behavior
 
-### Startup skillset picker (Part D)
-- Added startup trigger in `App::run()` that fires `handle_switch_skillset_command` when `skillset_per_session` is enabled and session is in a worktree
+### Config picker integration
+- "Per Session Skillsets" toggle added to `/config` picker with nori-skillsets availability check
+- Auto Worktree item shows as locked ("required by Per Session Skillsets") when per-session is enabled
+- Persistence writes both `skillset_per_session` and `auto_worktree` to TOML when enabling
 
-### Config picker integration (prior commits on this branch)
-- Added `skillset_per_session` toggle to config picker
-- Auto-worktree is locked on when `skillset_per_session` is enabled
-- Added `skillset_per_session` field to `NoriConfig` with persistence
+### Updated nori-skillsets CLI commands
+- Changed from `list-skillsets` to `list` and from `install` to `switch --install-dir`
+- Added `switch_skillset()` function in `skillset_picker.rs`
+- `skillset_picker_params` accepts `install_dir: Option<PathBuf>` to select between `SwitchSkillset` and `InstallSkillset` events
 
-### Skillset picker enhancements (prior commits on this branch)
-- `skillset_picker_params` accepts `install_dir: Option<PathBuf>` and sends `InstallSkillset` or `SwitchSkillset` events accordingly
-- Snapshot tests for install-dir behavior
+### Statusline reads activeSkillset
+- Both `system_info.rs::get_nori_profile()` and `session_header/mod.rs::read_nori_profile()` now try `activeSkillset` first from `.nori-config.json`, falling back to `agents.claude-code.profile.baseProfile`, then `profile.baseProfile`
+
+### Session-local skillset tracking
+- `session_skillset_name: Option<String>` field on `ChatWidget`, propagated through `BottomPane` -> `ChatComposer` -> `FooterProps`
+- Footer prefers `session_skillset_name` over `nori_profile` for the "Skillset:" display segment
+- 2 snapshot tests for footer session skillset display
+
+### Startup skillset picker
+- When `skillset_per_session` enabled and session is in a worktree, automatically opens skillset picker at startup via `App::run()`
+
+### /switch-skillset worktree awareness
+- Detects worktree context (parent dir named `.worktrees`) and passes `install_dir` to the switch flow
+- On successful switch, updates `session_skillset_name` for the session
+
+## New AppEvent variants
+- `SetConfigSkillsetPerSession(bool)`
+- `SwitchSkillset { name: String, install_dir: PathBuf }`
+- `SkillsetSwitchResult { name: String, success: bool, message: String }`
+- `install_dir: Option<PathBuf>` added to `SkillsetListResult`
 
 ## Remaining Work
-- Active skillset detection from `nori-config.json` `activeSkillset` field (currently uses `nori_profile` which reads from agents field)
-- Full E2E flow testing with `nori-skillsets` CLI tool
-- The config picker should show a message when user tries to disable auto-worktree while `skillset_per_session` is enabled
+- Full E2E flow testing with actual `nori-skillsets` CLI tool (requires the tool to be installed)
