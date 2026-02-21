@@ -190,6 +190,8 @@ Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`),
 
 The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it emits `AppEvent::SetConfigSkillsetPerSession`, which is handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`. When per-session skillsets is enabled, the "Auto Worktree" item in the config picker is locked to "on (required)" and its toggle callback is a no-op, because `skillset_per_session` forces `auto_worktree = true` at the config resolution layer (see `@/codex-rs/acp/src/config/loader.rs`).
 
+As a defense-in-depth measure, the `SetConfigAutoWorktree(false)` handler in `app/event_handling.rs` also reloads the config and blocks the disable if `skillset_per_session` is currently enabled, displaying an info message to the user.
+
 The `session_skillset_name` field propagates through the widget hierarchy: `ChatWidget` -> `BottomPane` -> `ChatComposer` -> `Footer`. In the footer, `session_skillset_name` takes priority over `nori_profile` from `SystemInfo` for the skillset display segment.
 
 
