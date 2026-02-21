@@ -934,6 +934,9 @@ pub struct TuiConfigToml {
 
     /// Automatically create a git worktree at session start.
     pub auto_worktree: Option<bool>,
+
+    /// Enable per-session skillset isolation.
+    pub skillset_per_session: Option<bool>,
 }
 
 /// Resolved TUI configuration
@@ -1043,6 +1046,9 @@ pub struct NoriConfig {
     /// Automatically create a git worktree at session start.
     pub auto_worktree: bool,
 
+    /// Enable per-session skillset isolation.
+    pub skillset_per_session: bool,
+
     /// Footer segment visibility configuration.
     pub footer_segment_config: FooterSegmentConfig,
 
@@ -1125,6 +1131,7 @@ impl Default for NoriConfig {
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
             auto_worktree: false,
+            skillset_per_session: false,
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),

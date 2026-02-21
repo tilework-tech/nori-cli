@@ -51,6 +51,8 @@ pub(crate) struct FooterProps {
     pub(crate) prompt_summary: Option<String>,
     /// The worktree directory name (e.g., "good-ash-20260205-204831") when in a worktree.
     pub(crate) worktree_name: Option<String>,
+    /// Session-local skillset name, overrides nori_profile when set.
+    pub(crate) session_skillset_name: Option<String>,
     /// Configuration for which footer segments to show.
     pub(crate) footer_segment_config: FooterSegmentConfig,
 }
@@ -384,8 +386,12 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
     }
 
     // Add nori profile if available and enabled: "Skillset: name" (cyan)
+    // Prefer session_skillset_name (set during per-session skillset selection) over nori_profile
     if config.is_enabled(FooterSegment::NoriProfile)
-        && let Some(profile) = &props.nori_profile
+        && let Some(profile) = props
+            .session_skillset_name
+            .as_ref()
+            .or(props.nori_profile.as_ref())
     {
         segments.push(Line::from(vec![
             Span::from("Skillset: ").cyan(),
@@ -631,6 +637,7 @@ mod tests {
             vim_mode_state: None,
             prompt_summary: None,
             worktree_name: None,
+            session_skillset_name: None,
             footer_segment_config: FooterSegmentConfig::default(),
         }
     }
@@ -977,6 +984,32 @@ mod tests {
                 worktree_name: Some("good-ash-20260205-204831".to_string()),
                 nori_profile: Some("clifford".to_string()),
                 footer_segment_config: segment_config,
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_session_skillset_overrides_nori_profile() {
+        snapshot_footer(
+            "footer_session_skillset_overrides_profile",
+            FooterProps {
+                git_branch: Some("auto/my-branch-20260220".to_string()),
+                is_worktree: true,
+                nori_profile: Some("clifford".to_string()),
+                session_skillset_name: Some("rust-dev".to_string()),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_session_skillset_without_nori_profile() {
+        snapshot_footer(
+            "footer_session_skillset_no_profile",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                session_skillset_name: Some("python-ml".to_string()),
                 ..default_props()
             },
         );

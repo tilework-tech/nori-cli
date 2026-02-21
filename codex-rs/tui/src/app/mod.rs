@@ -415,6 +415,21 @@ impl App {
             );
         }
 
+        // If skillset_per_session is enabled and we're in a worktree, trigger the
+        // skillset picker at startup so the user can select a skillset.
+        #[cfg(feature = "nori-config")]
+        if nori_config.skillset_per_session {
+            let is_in_worktree = app
+                .config
+                .cwd
+                .parent()
+                .and_then(|p| p.file_name())
+                .is_some_and(|name| name == ".worktrees");
+            if is_in_worktree {
+                app.chat_widget.handle_switch_skillset_command();
+            }
+        }
+
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
         {

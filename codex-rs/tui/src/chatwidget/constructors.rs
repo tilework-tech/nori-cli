@@ -85,6 +85,7 @@ impl ChatWidget {
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             turn_finished: false,
+            session_skillset_name: None,
         };
 
         widget.prefetch_rate_limits();
@@ -182,6 +183,7 @@ impl ChatWidget {
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             turn_finished: false,
+            session_skillset_name: None,
         };
 
         widget.prefetch_rate_limits();
@@ -281,6 +283,7 @@ impl ChatWidget {
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             turn_finished: false,
+            session_skillset_name: None,
         };
 
         widget.prefetch_rate_limits();
