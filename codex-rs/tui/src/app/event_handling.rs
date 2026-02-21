@@ -722,7 +722,22 @@ impl App {
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAutoWorktree(enabled) => {
+                if !enabled
+                    && let Ok(current) = codex_acp::config::NoriConfig::load()
+                    && current.skillset_per_session
+                {
+                    self.chat_widget.add_info_message(
+                        "Auto Worktree cannot be disabled while Per Session Skillsets is enabled."
+                            .to_string(),
+                        None,
+                    );
+                    return Ok(true);
+                }
                 self.persist_auto_worktree_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigSkillsetPerSession(enabled) => {
+                self.persist_skillset_per_session_setting(enabled).await;
             }
             #[cfg(feature = "nori-config")]
             AppEvent::OpenFooterSegmentsPicker => {
@@ -770,11 +785,20 @@ impl App {
             AppEvent::SetConfigVimMode(value) => {
                 self.persist_vim_mode_setting(value).await;
             }
-            AppEvent::SkillsetListResult { names, error } => {
-                self.chat_widget.on_skillset_list_result(names, error);
+            AppEvent::SkillsetListResult {
+                names,
+                error,
+                install_dir,
+            } => {
+                self.chat_widget
+                    .on_skillset_list_result(names, error, install_dir);
             }
             AppEvent::InstallSkillset { name } => {
                 self.chat_widget.on_install_skillset_request(&name);
+            }
+            AppEvent::SwitchSkillset { name, install_dir } => {
+                self.chat_widget
+                    .on_switch_skillset_request(&name, &install_dir);
             }
             AppEvent::SkillsetInstallResult {
                 name,
@@ -783,6 +807,14 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_install_result(&name, success, &message);
+            }
+            AppEvent::SkillsetSwitchResult {
+                name,
+                success,
+                message,
+            } => {
+                self.chat_widget
+                    .on_skillset_switch_result(&name, success, &message);
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();

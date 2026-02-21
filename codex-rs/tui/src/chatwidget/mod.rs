@@ -403,6 +403,8 @@ pub(crate) struct ChatWidget {
     // Gate: set when AgentMessage is received, cleared on next TaskStarted.
     // While true, late-arriving tool events are silently discarded.
     turn_finished: bool,
+    /// Session-local skillset name (used when per-session skillsets are active).
+    pub(crate) session_skillset_name: Option<String>,
 }
 
 /// Information about a pending agent switch in ChatWidget.

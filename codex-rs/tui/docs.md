@@ -77,7 +77,7 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | Field | Source |
 |-------|--------|
 | `git_branch` | Git repository branch name |
-| `nori_profile` | Active Nori profile |
+| `nori_profile` | Active Nori profile from `.nori-config.json` (reads `activeSkillset` first, then `agents.claude-code.profile.baseProfile`, then `profile.baseProfile`) |
 | `git_lines_added` / `git_lines_removed` | Git diff statistics |
 | `is_worktree` | Whether CWD is a git worktree |
 | `worktree_name` | Last path component of CWD when parent directory is `.worktrees`; used to display the immutable worktree directory identifier in the footer |
@@ -103,7 +103,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/agent` | Switch between available ACP agents |
 | `/model` | Choose model (ACP model picker) |
 | `/approvals` | Choose what Nori can do without approval |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, notify after idle, hotkeys, script timeout, loop count, footer segments) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -176,12 +176,24 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 
 1. Checks if `nori-skillsets` is available in PATH
 2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
-3. If available, runs `nori-skillsets list-skillsets` to get available skillsets
+3. If available, runs `nori-skillsets list` to get available skillsets
 4. On success (exit code 0), displays a searchable picker with skillset names
-5. On selection, runs `nori-skillsets install <NAME>` to install the selected skillset
+5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets install <NAME>`
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
+7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
 
-Events: `AppEvent::SkillsetListResult`, `AppEvent::InstallSkillset`, `AppEvent::SkillsetInstallResult`
+The worktree context is detected by `handle_switch_skillset_command()`: if the cwd's parent directory is named `.worktrees`, the cwd is passed as `install_dir`. This enables per-worktree skillset installation.
+
+When `skillset_per_session` is enabled in `NoriConfig` and the session is in a worktree, the skillset picker is automatically triggered at startup in `App::run()`.
+
+Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`), `AppEvent::InstallSkillset`, `AppEvent::SwitchSkillset`, `AppEvent::SkillsetInstallResult`, `AppEvent::SkillsetSwitchResult`
+
+The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it emits `AppEvent::SetConfigSkillsetPerSession`, which is handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`. When per-session skillsets is enabled, the "Auto Worktree" item in the config picker is locked to "on (required)" and its toggle callback is a no-op, because `skillset_per_session` forces `auto_worktree = true` at the config resolution layer (see `@/codex-rs/acp/src/config/loader.rs`).
+
+As a defense-in-depth measure, the `SetConfigAutoWorktree(false)` handler in `app/event_handling.rs` also reloads the config and blocks the disable if `skillset_per_session` is currently enabled, displaying an info message to the user.
+
+The `session_skillset_name` field propagates through the widget hierarchy: `ChatWidget` -> `BottomPane` -> `ChatComposer` -> `Footer`. In the footer, `session_skillset_name` takes priority over `nori_profile` from `SystemInfo` for the skillset display segment.
+
 
 **Notification Configuration:**
 
@@ -307,7 +319,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Git Stats | `git_stats` | Lines added/removed in current session |
 | Context Window | `context` | "Context: 34K (27%)" when running within an agent environment |
 | Approval Mode | `approval_mode` | "Approvals: Agent/Full Access/Read Only" |
-| Nori Profile | `nori_profile` | "Skillset: <name>" |
+| Nori Profile | `nori_profile` | "Skillset: <name>" (prefers session_skillset_name when set) |
 | Nori Version | `nori_version` | "Skillsets v<version>" |
 | Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
 

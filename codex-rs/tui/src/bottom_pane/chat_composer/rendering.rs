@@ -101,6 +101,7 @@ impl ChatComposer {
                 .system_info
                 .as_ref()
                 .and_then(|s| s.worktree_name.clone()),
+            session_skillset_name: self.session_skillset_name.clone(),
             footer_segment_config: self.footer_segment_config.clone(),
         }
     }
