@@ -215,11 +215,23 @@ fn get_nori_profile() -> Option<String> {
             if let Ok(contents) = fs::read_to_string(&config_path)
                 && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
             {
-                // Extract agents.claude-code.profile.baseProfile
+                // Try new format: activeSkillset
+                if let Some(profile) = json.get("activeSkillset").and_then(|v| v.as_str()) {
+                    return Some(profile.to_string());
+                }
+                // Fall back to old format: agents.claude-code.profile.baseProfile
                 if let Some(profile) = json
                     .get("agents")
                     .and_then(|a| a.get("claude-code"))
                     .and_then(|c| c.get("profile"))
+                    .and_then(|p| p.get("baseProfile"))
+                    .and_then(|b| b.as_str())
+                {
+                    return Some(profile.to_string());
+                }
+                // Fall back to oldest format: profile.baseProfile
+                if let Some(profile) = json
+                    .get("profile")
                     .and_then(|p| p.get("baseProfile"))
                     .and_then(|b| b.as_str())
                 {

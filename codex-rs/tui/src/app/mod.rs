@@ -278,19 +278,6 @@ impl App {
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
-        // Early check: if ACP-only mode is enabled (allow_http_fallback=false) and
-        // the model is not registered in the ACP registry, fail immediately.
-        // This prevents showing model migration prompts or other UI for HTTP models
-        // that will ultimately fail.
-        if !config.acp_allow_http_fallback && codex_acp::get_agent_config(&config.model).is_err() {
-            return Err(color_eyre::eyre::eyre!(
-                "Model '{}' is not registered as an ACP agent. \
-                 Set acp.allow_http_fallback = true to allow HTTP providers. \
-                 Known ACP models: mock-model, claude, claude-acp, gemini-2.5-flash, gemini-acp",
-                config.model
-            ));
-        }
-
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 
@@ -413,6 +400,39 @@ impl App {
                 *segment,
                 nori_config.footer_segment_config.is_enabled(*segment),
             );
+        }
+
+        // If skillset_per_session is enabled and we're in a worktree, check if a
+        // skillset is already active. If so, load it; otherwise show the picker.
+        #[cfg(feature = "nori-config")]
+        if nori_config.skillset_per_session {
+            let is_in_worktree =
+                crate::system_info::extract_worktree_name(&app.config.cwd).is_some();
+            if is_in_worktree {
+                // Check if .nori-config.json already has an activeSkillset
+                let existing_skillset = app
+                    .config
+                    .cwd
+                    .join(".nori-config.json")
+                    .exists()
+                    .then(|| {
+                        std::fs::read_to_string(app.config.cwd.join(".nori-config.json"))
+                            .ok()
+                            .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+                            .and_then(|j| {
+                                j.get("activeSkillset")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from)
+                            })
+                    })
+                    .flatten();
+
+                if let Some(name) = existing_skillset {
+                    app.chat_widget.set_session_skillset_name(Some(name));
+                } else {
+                    app.chat_widget.handle_switch_skillset_command();
+                }
+            }
         }
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.

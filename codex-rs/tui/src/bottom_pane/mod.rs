@@ -457,6 +457,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update the session-local skillset name displayed in the footer.
+    pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {
+        self.composer.set_session_skillset_name(name);
+        self.request_redraw();
+    }
+
     /// Get the prompt summary for status card display.
     pub(crate) fn prompt_summary(&self) -> Option<String> {
         self.composer.prompt_summary()

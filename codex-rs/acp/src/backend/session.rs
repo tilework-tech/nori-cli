@@ -34,8 +34,8 @@ impl AcpBackend {
                     &display_error,
                     &agent_config.provider_info.name,
                     &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
+                    &agent_config.display_name,
+                    &agent_config.install_hint,
                 ))
             })?;
 
@@ -116,8 +116,8 @@ impl AcpBackend {
                             &display_error,
                             &agent_config.provider_info.name,
                             &agent_config.auth_hint,
-                            agent_config.agent.display_name(),
-                            agent_config.agent.npm_package(),
+                            &agent_config.display_name,
+                            &agent_config.install_hint,
                         ))
                     })?;
 
@@ -156,8 +156,8 @@ impl AcpBackend {
                     &display_error,
                     &agent_config.provider_info.name,
                     &agent_config.auth_hint,
-                    agent_config.agent.display_name(),
-                    agent_config.agent.npm_package(),
+                    &agent_config.display_name,
+                    &agent_config.install_hint,
                 ))
             })?;
 

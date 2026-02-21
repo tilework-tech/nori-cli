@@ -121,6 +121,10 @@ impl NoriConfig {
         // Agent is the user's persisted preference, defaults to DEFAULT_AGENT
         let agent = toml.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string());
 
+        // Resolve skillset_per_session and auto_worktree (skillset_per_session forces auto_worktree on)
+        let skillset_per_session = toml.tui.skillset_per_session.unwrap_or(false);
+        let auto_worktree = skillset_per_session || toml.tui.auto_worktree.unwrap_or(false);
+
         // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
         // Using agent as fallback ensures the persisted preference is honored at startup
         let active_agent = overrides
@@ -160,7 +164,8 @@ impl NoriConfig {
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
-            auto_worktree: toml.tui.auto_worktree.unwrap_or(false),
+            skillset_per_session,
+            auto_worktree,
             footer_segment_config: super::types::FooterSegmentConfig::from_toml(
                 &toml.tui.footer_segments,
             ),
@@ -184,6 +189,7 @@ impl NoriConfig {
             async_pre_agent_response_hooks,
             async_post_agent_response_hooks,
             default_models: toml.default_models,
+            agents: toml.agents,
         })
     }
 }
@@ -737,6 +743,117 @@ gemini = "flash"
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert!(config.default_models.is_empty());
+    }
+
+    // ========================================================================
+    // Skillset Per-Session Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_skillset_per_session_enabled_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+skillset_per_session = true
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(
+            config.skillset_per_session,
+            "skillset_per_session should be true when set in config"
+        );
+        assert!(
+            config.auto_worktree,
+            "auto_worktree should be forced true when skillset_per_session is enabled"
+        );
+    }
+
+    #[test]
+    fn test_skillset_per_session_defaults_to_false() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(
+            !config.skillset_per_session,
+            "skillset_per_session should default to false"
+        );
+    }
+
+    #[test]
+    fn test_skillset_per_session_forces_auto_worktree() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+skillset_per_session = true
+auto_worktree = false
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(
+            config.auto_worktree,
+            "auto_worktree should be true even when explicitly set to false, because skillset_per_session forces it"
+        );
+    }
+
+    #[test]
+    fn test_agents_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+agent = "claude-code"
+
+[[agents]]
+name = "Kimi"
+slug = "kimi"
+
+[agents.distribution.uvx]
+package = "kimi-cli"
+args = ["acp"]
+
+[[agents]]
+name = "My Local Agent"
+slug = "my-local"
+
+[agents.distribution.local]
+command = "/usr/bin/my-agent"
+args = ["--acp"]
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.agents.len(), 2);
+        assert_eq!(config.agents[0].slug, "kimi");
+        assert_eq!(config.agents[1].slug, "my-local");
+    }
+
+    #[test]
+    fn test_agents_default_to_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "agent = \"claude-code\"").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.agents.is_empty());
     }
 
     #[test]

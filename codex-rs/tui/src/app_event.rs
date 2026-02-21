@@ -302,6 +302,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigAutoWorktree(bool),
 
+    /// Set the TUI skillset per session config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigSkillsetPerSession(bool),
+
     /// Open the footer segments sub-picker.
     #[cfg(feature = "nori-config")]
     OpenFooterSegmentsPicker,
@@ -328,12 +332,22 @@ pub(crate) enum AppEvent {
         names: Option<Vec<String>>,
         /// Error message if command failed (non-zero exit) or not found.
         error: Option<String>,
+        /// When in a worktree, the directory to install skillsets into.
+        install_dir: Option<PathBuf>,
     },
 
     /// Request to install a skillset by name.
     InstallSkillset {
         /// The name of the skillset to install.
         name: String,
+    },
+
+    /// Request to switch to a skillset in a specific directory.
+    SwitchSkillset {
+        /// The name of the skillset to switch to.
+        name: String,
+        /// The directory to install the skillset into.
+        install_dir: PathBuf,
     },
 
     /// Result of installing a skillset.
@@ -343,6 +357,16 @@ pub(crate) enum AppEvent {
         /// Whether the installation succeeded (exit code 0).
         success: bool,
         /// Filtered install output on success, or error message on failure.
+        message: String,
+    },
+
+    /// Result of switching a skillset.
+    SkillsetSwitchResult {
+        /// The name of the skillset that was switched to.
+        name: String,
+        /// Whether the switch succeeded.
+        success: bool,
+        /// Filtered output on success, or error message on failure.
         message: String,
     },
 

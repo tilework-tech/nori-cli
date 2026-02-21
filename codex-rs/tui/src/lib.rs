@@ -214,6 +214,13 @@ pub async fn run_main(
     #[cfg(not(feature = "nori-config"))]
     let nori_config: Option<codex_acp::NoriConfig> = None;
 
+    // Initialize the agent registry with custom agents from config
+    if let Some(ref config) = nori_config
+        && let Err(e) = codex_acp::initialize_registry(config.agents.clone())
+    {
+        tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
+    }
+
     #[cfg(feature = "nori-config")]
     if nori_config.as_ref().is_some_and(|c| c.auto_worktree) {
         if let Some(effective_cwd) = cwd.clone().or_else(|| std::env::current_dir().ok()) {

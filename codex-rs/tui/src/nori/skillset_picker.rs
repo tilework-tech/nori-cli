@@ -6,6 +6,8 @@
 //! - Building a picker UI for skillset selection
 //! - Installing selected skillsets
 
+use std::path::PathBuf;
+
 use crate::app_event::AppEvent;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
@@ -20,14 +22,14 @@ pub fn is_nori_skillsets_available() -> bool {
     which::which(NORI_SKILLSETS_CMD).is_ok()
 }
 
-/// List available skillsets by running `nori-skillsets list-skillsets`.
+/// List available skillsets by running `nori-skillsets list`.
 ///
 /// Returns:
 /// - `Ok(names)` with skillset names on success (exit code 0)
 /// - `Err(message)` with stdout/stderr on failure (non-zero exit)
 pub async fn list_skillsets() -> Result<Vec<String>, String> {
     let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .arg("list-skillsets")
+        .arg("list")
         .output()
         .await
         .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD}: {e}"))?;
@@ -51,7 +53,7 @@ pub async fn list_skillsets() -> Result<Vec<String>, String> {
             stdout.to_string()
         } else {
             format!(
-                "{NORI_SKILLSETS_CMD} list-skillsets failed with exit code {}",
+                "{NORI_SKILLSETS_CMD} list failed with exit code {}",
                 output.status.code().unwrap_or(-1)
             )
         };
@@ -92,22 +94,69 @@ pub async fn install_skillset(name: &str) -> Result<String, String> {
     }
 }
 
+/// Switch to a skillset by running `nori-skillsets switch <name> --install-dir <dir>`.
+///
+/// Returns:
+/// - `Ok(message)` with filtered stdout on success
+/// - `Err(message)` with error output on failure
+pub async fn switch_skillset(name: &str, install_dir: &std::path::Path) -> Result<String, String> {
+    let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
+        .arg("switch")
+        .arg(name)
+        .arg("--install-dir")
+        .arg(install_dir)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD} switch: {e}"))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(filter_install_output(&stdout, name))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let message = if !stderr.is_empty() {
+            stderr.trim().to_string()
+        } else if !stdout.is_empty() {
+            stdout.trim().to_string()
+        } else {
+            format!(
+                "Failed to switch to skillset '{name}' (exit code {})",
+                output.status.code().unwrap_or(-1)
+            )
+        };
+        Err(message)
+    }
+}
+
 /// Create selection view parameters for the skillset picker.
 ///
 /// # Arguments
 /// * `skillset_names` - List of available skillset names
-/// * `_app_event_tx` - The app event sender (used in actions)
-pub fn skillset_picker_params(skillset_names: Vec<String>) -> SelectionViewParams {
+/// * `install_dir` - When `Some`, sends `SwitchSkillset` with the given directory;
+///   when `None`, sends `InstallSkillset` for backward compatibility.
+pub fn skillset_picker_params(
+    skillset_names: Vec<String>,
+    install_dir: Option<PathBuf>,
+) -> SelectionViewParams {
     let items: Vec<SelectionItem> = skillset_names
         .into_iter()
         .map(|name| {
             let name_for_action = name.clone();
+            let install_dir = install_dir.clone();
 
-            // Create action that sends the install skillset event
+            // Create action that sends the appropriate skillset event
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::InstallSkillset {
-                    name: name_for_action.clone(),
-                });
+                if let Some(dir) = install_dir.clone() {
+                    tx.send(AppEvent::SwitchSkillset {
+                        name: name_for_action.clone(),
+                        install_dir: dir,
+                    });
+                } else {
+                    tx.send(AppEvent::InstallSkillset {
+                        name: name_for_action.clone(),
+                    });
+                }
             })];
 
             SelectionItem {
@@ -180,7 +229,7 @@ mod tests {
             "web-frontend".to_string(),
         ];
 
-        let params = skillset_picker_params(names);
+        let params = skillset_picker_params(names, None);
 
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Skillset"));
@@ -193,7 +242,7 @@ mod tests {
     #[test]
     fn test_skillset_picker_params_empty_list() {
         let names: Vec<String> = vec![];
-        let params = skillset_picker_params(names);
+        let params = skillset_picker_params(names, None);
 
         assert!(params.items.is_empty());
     }
@@ -201,7 +250,7 @@ mod tests {
     #[test]
     fn test_skillset_picker_is_searchable() {
         let names = vec!["test".to_string()];
-        let params = skillset_picker_params(names);
+        let params = skillset_picker_params(names, None);
 
         assert!(params.is_searchable);
         assert!(params.search_placeholder.is_some());
@@ -210,7 +259,7 @@ mod tests {
     #[test]
     fn test_skillset_picker_items_dismiss_on_select() {
         let names = vec!["test".to_string()];
-        let params = skillset_picker_params(names);
+        let params = skillset_picker_params(names, None);
 
         assert!(params.items[0].dismiss_on_select);
     }
@@ -218,7 +267,7 @@ mod tests {
     #[test]
     fn test_skillset_picker_action_sends_install_event() {
         let names = vec!["my-skillset".to_string()];
-        let params = skillset_picker_params(names);
+        let params = skillset_picker_params(names, None);
 
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -234,6 +283,30 @@ mod tests {
                 assert_eq!(name, "my-skillset");
             }
             _ => panic!("Expected InstallSkillset event"),
+        }
+    }
+
+    #[test]
+    fn test_skillset_picker_with_install_dir_sends_switch_event() {
+        let names = vec!["my-skillset".to_string()];
+        let dir = PathBuf::from("/tmp/worktree");
+        let params = skillset_picker_params(names, Some(dir));
+
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        // Execute the action
+        assert!(!params.items[0].actions.is_empty());
+        (params.items[0].actions[0])(&tx);
+
+        // Check that the correct event was sent
+        let event = rx.try_recv().expect("Should have received an event");
+        match event {
+            AppEvent::SwitchSkillset { name, install_dir } => {
+                assert_eq!(name, "my-skillset");
+                assert_eq!(install_dir, PathBuf::from("/tmp/worktree"));
+            }
+            _ => panic!("Expected SwitchSkillset event, got {event:?}"),
         }
     }
 
