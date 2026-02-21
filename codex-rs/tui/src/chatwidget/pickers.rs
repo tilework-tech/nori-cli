@@ -230,8 +230,8 @@ impl ChatWidget {
     }
 
     pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {
-        self.session_skillset_name = name.clone();
-        self.bottom_pane.set_session_skillset_name(name);
+        self.bottom_pane.set_session_skillset_name(name.clone());
+        self.session_skillset_name = name;
     }
 
     /// Handle the /switch-skillset command.
@@ -245,13 +245,8 @@ impl ChatWidget {
             return;
         }
 
-        // Detect if we're in a worktree by checking if the parent of cwd is named `.worktrees`
-        let install_dir = self
-            .config
-            .cwd
-            .parent()
-            .and_then(|p| p.file_name())
-            .filter(|name| *name == ".worktrees")
+        // Detect if we're in a worktree and pass cwd as the install directory
+        let install_dir = crate::system_info::extract_worktree_name(&self.config.cwd)
             .map(|_| self.config.cwd.clone());
 
         // Spawn async task to list skillsets

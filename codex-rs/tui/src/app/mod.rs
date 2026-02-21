@@ -419,12 +419,8 @@ impl App {
         // skillset is already active. If so, load it; otherwise show the picker.
         #[cfg(feature = "nori-config")]
         if nori_config.skillset_per_session {
-            let is_in_worktree = app
-                .config
-                .cwd
-                .parent()
-                .and_then(|p| p.file_name())
-                .is_some_and(|name| name == ".worktrees");
+            let is_in_worktree =
+                crate::system_info::extract_worktree_name(&app.config.cwd).is_some();
             if is_in_worktree {
                 // Check if .nori-config.json already has an activeSkillset
                 let existing_skillset = app
