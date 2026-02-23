@@ -26,7 +26,7 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 ### Core Implementation
 
-Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `codex_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/codex-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
 
 The main event loop in `app/mod.rs` processes:
 
@@ -262,7 +262,7 @@ When enabled, the textarea operates in two modes:
 
 | Mode | Behavior |
 |------|----------|
-| Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode. |
+| Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode; the cursor moves back one position (standard vim behavior), but never past the beginning of the current line. |
 | Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input. |
 
 Normal mode supports standard vim keybindings:
@@ -404,6 +404,8 @@ The resume session picker reuses the `SessionPickerInfo` type and `format_relati
 `spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. The spawned task structure (op forwarding, event forwarding, agent command handling) is identical.
 
 **Agent Connection Lifecycle & Failure Recovery:**
+
+Agent registration validation is performed exclusively in `spawn_agent()` (`chatwidget/agent.rs`). When `acp_allow_http_fallback` is disabled and the configured model is not in the ACP registry, `spawn_agent()` routes to `spawn_error_agent()` which sends `AppEvent::AgentSpawnFailed` -- triggering `on_agent_spawn_failed()` to display the error and reopen the agent picker for recovery. There is no early validation in `App::run()`; this single validation point ensures that unregistered agents (including custom agents that were configured but later removed) always get graceful recovery through the agent picker rather than a fatal startup error.
 
 When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. Each spawn function (`spawn_acp_agent`, `spawn_acp_agent_resume`, `spawn_http_agent`) uses a `tokio::select!` to race three concurrent futures during backend initialization:
 

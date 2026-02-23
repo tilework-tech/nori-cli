@@ -22,6 +22,163 @@ pub enum HistoryPersistence {
 /// Default agent for ACP-only mode
 pub const DEFAULT_AGENT: &str = "claude-code";
 
+// ============================================================================
+// Agent Configuration (TOML schema)
+// ============================================================================
+
+/// A single agent definition from `[[agents]]` in config.toml.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AgentConfigToml {
+    /// Display name shown in the agent picker (e.g. "Claude Code")
+    pub name: String,
+    /// Machine identifier used as a cmdline arg or in UIs (e.g. "claude-code")
+    pub slug: String,
+    /// How to invoke this agent
+    pub distribution: AgentDistributionToml,
+    /// Optional context window size override (in tokens)
+    pub context_window_size: Option<i64>,
+    /// Optional auth instructions (displayed on auth failures)
+    pub auth_hint: Option<String>,
+    /// Optional transcript base directory (relative to home)
+    pub transcript_base_dir: Option<String>,
+}
+
+/// Distribution configuration for an agent.
+///
+/// Exactly one variant must be set. The field names correspond to the
+/// package manager or distribution method.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AgentDistributionToml {
+    /// Local binary execution
+    pub local: Option<LocalDistribution>,
+    /// Node.js: `npx <package> [args...]`
+    pub npx: Option<PackageDistribution>,
+    /// Bun: `bunx <package> [args...]`
+    pub bunx: Option<PackageDistribution>,
+    /// Python: `pipx run <package> [args...]`
+    pub pipx: Option<PackageDistribution>,
+    /// Python (uv): `uvx <package> [args...]`
+    pub uvx: Option<PackageDistribution>,
+    // Future: cargo (cargo-binstall / cargo install)
+    // Future: binary (platform-specific archive downloads)
+}
+
+impl AgentDistributionToml {
+    /// Validate that exactly one distribution variant is set.
+    fn validate(&self) -> Result<(), String> {
+        let count = [
+            self.local.is_some(),
+            self.npx.is_some(),
+            self.bunx.is_some(),
+            self.pipx.is_some(),
+            self.uvx.is_some(),
+        ]
+        .iter()
+        .filter(|&&b| b)
+        .count();
+
+        if count == 0 {
+            return Err(
+                "Agent distribution must specify exactly one of: local, npx, bunx, pipx, uvx"
+                    .to_string(),
+            );
+        }
+        if count > 1 {
+            return Err(
+                "Agent distribution must specify exactly one of: local, npx, bunx, pipx, uvx (found multiple)"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Validate and resolve into a clean enum variant.
+    pub fn resolve(&self) -> Result<ResolvedDistribution, String> {
+        self.validate()?;
+
+        if let Some(local) = &self.local {
+            return Ok(ResolvedDistribution::Local {
+                command: local.command.clone(),
+                args: local.args.clone(),
+                env: local.env.clone(),
+            });
+        }
+        if let Some(npx) = &self.npx {
+            return Ok(ResolvedDistribution::Npx {
+                package: npx.package.clone(),
+                args: npx.args.clone(),
+            });
+        }
+        if let Some(bunx) = &self.bunx {
+            return Ok(ResolvedDistribution::Bunx {
+                package: bunx.package.clone(),
+                args: bunx.args.clone(),
+            });
+        }
+        if let Some(pipx) = &self.pipx {
+            return Ok(ResolvedDistribution::Pipx {
+                package: pipx.package.clone(),
+                args: pipx.args.clone(),
+            });
+        }
+        if let Some(uvx) = &self.uvx {
+            return Ok(ResolvedDistribution::Uvx {
+                package: uvx.package.clone(),
+                args: uvx.args.clone(),
+            });
+        }
+        unreachable!("validate() ensures exactly one variant is set")
+    }
+}
+
+/// Local binary distribution: direct command execution.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct LocalDistribution {
+    /// Path to the executable
+    pub command: String,
+    /// Arguments to pass to the command
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Environment variables to set
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+}
+
+/// Package manager distribution: `<manager> <package> [args...]`
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PackageDistribution {
+    /// Package name (e.g. "@google/gemini-cli", "kimi-cli")
+    pub package: String,
+    /// Extra arguments to pass after the package name
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// Resolved (validated) distribution — exactly one variant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedDistribution {
+    /// Local binary: direct command execution
+    Local {
+        command: String,
+        args: Vec<String>,
+        env: HashMap<String, String>,
+    },
+    /// Node.js: `npx <package> [args...]`
+    Npx { package: String, args: Vec<String> },
+    /// Bun: `bunx <package> [args...]`
+    Bunx { package: String, args: Vec<String> },
+    /// Python: `pipx run <package> [args...]`
+    Pipx { package: String, args: Vec<String> },
+    /// Python (uv): `uvx <package> [args...]`
+    Uvx { package: String, args: Vec<String> },
+    // Future: Cargo { crate_name: String, version: Option<String>, binary: Option<String> }
+    // Future: Binary { url: String, platforms: HashMap<String, BinaryPlatformConfig> }
+}
+
 /// TOML-deserializable config structure (all fields optional)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,6 +214,10 @@ pub struct NoriConfigToml {
     /// Default model overrides per agent (e.g., claude-code = "haiku")
     #[serde(default)]
     pub default_models: HashMap<String, String>,
+
+    /// Custom agent definitions
+    #[serde(default)]
+    pub agents: Vec<AgentConfigToml>,
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -1111,6 +1272,9 @@ pub struct NoriConfig {
 
     /// Default model overrides per agent (e.g., "claude-code" -> "haiku")
     pub default_models: HashMap<String, String>,
+
+    /// Custom agent definitions from config
+    pub agents: Vec<AgentConfigToml>,
 }
 
 impl Default for NoriConfig {
@@ -1153,6 +1317,7 @@ impl Default for NoriConfig {
             async_pre_agent_response_hooks: Vec::new(),
             async_post_agent_response_hooks: Vec::new(),
             default_models: HashMap::new(),
+            agents: Vec::new(),
         }
     }
 }

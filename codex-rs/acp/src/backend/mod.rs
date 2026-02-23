@@ -122,7 +122,7 @@ pub fn enhanced_error_message(
     provider_name: &str,
     auth_hint: &str,
     display_name: &str,
-    npm_package: &str,
+    install_hint: &str,
 ) -> String {
     match category {
         AcpErrorCategory::Authentication => {
@@ -132,9 +132,7 @@ pub fn enhanced_error_message(
             format!("Rate limit or quota exceeded for {provider_name}: {original_error}")
         }
         AcpErrorCategory::ExecutableNotFound => {
-            format!(
-                "Could not find the {display_name} CLI. Please install it with: npm install -g {npm_package}"
-            )
+            format!("Could not find the {display_name} CLI. Please install it with: {install_hint}")
         }
         AcpErrorCategory::Initialization => {
             format!(

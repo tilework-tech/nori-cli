@@ -32,6 +32,7 @@ match subcommand {
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
+    Some(Subcommand::Completions(cmd)) => clap_complete::generate(...),
     // ... other subcommands
 }
 ```
@@ -74,6 +75,10 @@ The `skillsets` subcommand is an alias that delegates to the `nori-skillsets` pa
 - If found in PATH, runs it directly
 - If not in PATH, falls back to `npx nori-skillsets` or `bunx nori-skillsets` based on `detect_preferred_package_manager()`
 - Passes through all arguments, stdout, stderr, and exit code
+
+**Shell Completions:**
+
+The `completions` subcommand generates shell-specific tab-completion scripts via `clap_complete::generate()`. It takes a required shell argument (bash, zsh, fish, powershell, elvish) and writes the completion script to stdout. Users redirect the output to their shell's completions directory (e.g., `nori completions bash > ~/.bash_completion.d/nori`). This subcommand is visible in `nori --help`.
 
 **Sandbox Debugging:**
 

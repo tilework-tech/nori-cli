@@ -34,23 +34,69 @@ Key files:
 
 **Agent Registry** (`registry.rs`):
 
-The registry is **agent-centric** rather than provider-centric:
-- `get_agent_config()` accepts agent names (e.g., "claude-code", "gemini-2.5-flash") instead of provider names
-- Returns `AcpAgentConfig` containing:
-  - `provider_slug`: Identifies which agent subprocess to spawn
-  - `command`: Executable path or command name
-  - `args`: Arguments to pass to the subprocess
-  - `env`: Environment variables (used by mock agents for testing)
-  - `provider_info`: Retry settings, timeouts
-  - `auth_hint`: Agent-specific authentication instructions for error messages
+The registry is **data-driven** and **agent-centric**: it combines built-in agents (Claude Code, Codex, Gemini) with user-defined custom agents from `[[agents]]` entries in `config.toml`. The global registry is stored in a `RwLock<Option<Vec<RegisteredAgent>>>` (`AGENT_REGISTRY`) and initialized once at startup via `initialize_registry()`, which is called from `@/codex-rs/tui/src/lib.rs` after config loading. If not initialized, `get_registry()` falls back to built-in defaults.
 
-Agent display names and auth hints:
+`RegisteredAgent` is the unified representation for both built-in and custom agents:
 
-| Agent | Display Name | Auth Hint |
-|-------|--------------|-----------|
-| Claude Code | "Claude Code" | "Run /login for instructions, or set ANTHROPIC_API_KEY." |
-| Codex | "Codex" | "Run /login to authenticate, or set OPENAI_API_KEY." |
-| Gemini | "Gemini" | "Run /login for instructions, or set GOOGLE_API_KEY." |
+| Field | Built-in Agent | Custom Agent |
+|-------|---------------|--------------|
+| `kind` | `Some(AgentKind)` | `None` |
+| `distribution` | `None` (uses auto-detection) | `Some(ResolvedDistribution)` |
+| `context_window_size` | From `AgentKind::context_window_size()` | From TOML config (optional) |
+| `auth_hint` | From `AgentKind::auth_hint()` | From TOML config (optional) |
+| `transcript_base_dir` | From `AgentKind::transcript_base_dir()` | From TOML config (optional) |
+
+**Registry construction** (`build_registry()`): starts with `build_default_agents()` (the three built-ins), then iterates custom agents. If a custom agent's slug matches a built-in slug, it **overrides** the built-in entry in-place. Otherwise it is appended. Duplicate slugs among custom agents are rejected with an error.
+
+**Agent config resolution** (`get_agent_config()`): resolves an agent name to `AcpAgentConfig` using a priority chain:
+
+```
+agent_name (normalized to lowercase)
+    |
+    +--> Mock agents (debug builds only)
+    |
+    +--> Registry lookup: if slug has a custom distribution
+    |      --> use ResolvedDistribution directly (npx/bunx/pipx/uvx/local)
+    |
+    +--> Built-in auto-detection: AgentKind::from_slug()
+    |      --> detect_preferred_package_manager() to choose npx vs bunx
+    |      --> use AgentKind::acp_package() for the adapter package
+    |
+    +--> Error: unknown agent
+```
+
+Built-in agents use `detect_preferred_package_manager()` which checks `NORI_MANAGED_BY_BUN`/`NORI_MANAGED_BY_NPM` env vars, then falls back to checking if `bun` is in PATH, defaulting to `npx`. Custom agents bypass auto-detection entirely and use their literal `ResolvedDistribution`.
+
+`AcpAgentConfig` carries `display_name` and `install_hint` as direct `String` fields (rather than deriving them from `AgentKind` methods), so both built-in and custom agents can be handled uniformly by `session.rs` and `spawn_and_relay.rs`. The `install_hint` field contains a distribution-appropriate install command (e.g. `npm install -g @pkg` for npx, `uv tool install pkg` for uvx, `ensure '/path/to/cmd' is in your PATH` for local). The `context_window_size()` and `transcript_base_dir()` methods on `AcpAgentConfig` look up values from the registry by `provider_slug`.
+
+**Custom Agent TOML Schema** (`config/types/mod.rs`):
+
+Custom agents are defined under `[[agents]]` in `config.toml`. Each entry is deserialized as `AgentConfigToml`:
+
+```toml
+[[agents]]
+name = "Kimi"                        # Display name
+slug = "kimi"                        # Machine identifier
+context_window_size = 128000         # Optional
+auth_hint = "Set KIMI_API_KEY"       # Optional
+transcript_base_dir = ".kimi/logs"   # Optional, relative to home
+
+[agents.distribution.uvx]            # Exactly one distribution variant
+package = "kimi-cli"
+args = ["acp"]
+```
+
+`AgentDistributionToml` requires exactly one of these distribution variants to be set (validated by `resolve()`):
+
+| Variant | TOML Key | Command Generated | Use Case |
+|---------|----------|-------------------|----------|
+| `LocalDistribution` | `local` | `{command} {args...}` with env vars | Local binary |
+| `PackageDistribution` (npx) | `npx` | `npx {package} {args...}` | Node.js via npm |
+| `PackageDistribution` (bunx) | `bunx` | `bunx {package} {args...}` | Node.js via bun |
+| `PackageDistribution` (pipx) | `pipx` | `pipx run {package} {args...}` | Python via pipx |
+| `PackageDistribution` (uvx) | `uvx` | `uvx {package} {args...}` | Python via uv |
+
+`resolve()` returns `ResolvedDistribution` enum or errors if zero or multiple variants are set.
 
 **Nori Config Path Resolution** (`config/`):
 
