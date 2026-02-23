@@ -1,11 +1,16 @@
 # Nori Release Workflow
 #
 # This workflow builds and publishes nori-ai-cli releases to npm.
-# It is triggered by tag pushes created via the create_nori_release script.
 #
-# The script creates "synthetic commits" - release tags point to commits that
-# exist only for the release (not on any branch), with Cargo.toml updated to
-# the release version. This keeps the dev branch's Cargo.toml at a placeholder.
+# Triggers:
+#   1. Tag push (nori-v*.*.*) - created via the create_nori_release script
+#   2. Push to dev branch    - automatically publishes a @next dev snapshot
+#   3. Manual workflow_dispatch
+#
+# The create_nori_release script creates "synthetic commits" - release tags
+# point to commits that exist only for the release (not on any branch), with
+# Cargo.toml updated to the release version. This keeps the dev branch's
+# Cargo.toml at a placeholder.
 #
 # Usage:
 #   # Create a release (from local machine with gh CLI authenticated)
@@ -30,6 +35,13 @@ on:
   push:
     tags:
       - "nori-v*.*.*"
+    branches:
+      - dev
+    paths:
+      - "codex-rs/**"
+      - "nori-cli/**"
+      - "scripts/**"
+      - ".github/workflows/nori-release.yml"
   workflow_dispatch:
     inputs:
       version:
@@ -51,6 +63,10 @@ on:
         required: false
         default: false
         type: boolean
+
+concurrency:
+  group: nori-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/dev' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -87,13 +103,14 @@ jobs:
           IS_TAG_PUSH="false"
           PUBLISH_NEXT="false"
 
-          if [[ "${{ github.event_name }}" == "push" ]]; then
+          if [[ "${{ github.event_name }}" == "push" && "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
             IS_TAG_PUSH="true"
             # Extract version from tag name (nori-v0.2.0 -> 0.2.0)
             VERSION="${GITHUB_REF_NAME#${{ env.TAG_PREFIX }}}"
             TAG_NAME="${GITHUB_REF_NAME}"
             CHECKOUT_REF="${GITHUB_REF}"
-          elif [[ "${{ inputs.publish_next }}" == "true" ]]; then
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/dev") || \
+                  "${{ inputs.publish_next }}" == "true" ]]; then
             PUBLISH_NEXT="true"
             # Auto-determine the next -next.N version using the Python script
             # as the single source of truth for version detection logic.
@@ -479,13 +496,13 @@ jobs:
           retention-days: 7
 
   # ============================================================================
-  # CREATE TAG FOR PUBLISH_NEXT (only for workflow_dispatch with publish_next=true and dry_run=false)
+  # CREATE TAG FOR PUBLISH_NEXT (for @next publishes: dev branch push or workflow_dispatch)
   # ============================================================================
   create-next-tag:
     name: Create @next Tag
     needs: [validate, stage-npm]
-    # Only run when publish_next=true and dry_run=false (not for tag pushes)
-    if: ${{ !failure() && !cancelled() && needs.validate.outputs.publish_next == 'true' && inputs.dry_run == false }}
+    # Only run when publish_next=true and not a dry run (not for tag pushes)
+    if: ${{ !failure() && !cancelled() && needs.validate.outputs.publish_next == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false) }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -573,9 +590,9 @@ jobs:
   publish-npm:
     name: Publish to npm
     needs: [validate, stage-npm, create-next-tag]
-    # Publish for tag pushes OR when publish_next=true with dry_run=false
+    # Publish for tag pushes OR when publish_next=true and not a dry run
     # Note: create-next-tag is skipped for tag pushes but we still need the dependency for ordering
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || (needs.validate.outputs.publish_next == 'true' && inputs.dry_run == false)) }}
+    if: ${{ !failure() && !cancelled() && (needs.validate.outputs.is_tag_push == 'true' || (needs.validate.outputs.publish_next == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false))) }}
     runs-on: ubuntu-24.04
     environment: npm-publish
     permissions:
@@ -664,9 +681,9 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [validate, build-native, publish-npm, create-next-tag]
-    # Create release for tag pushes OR when publish_next=true with dry_run=false
+    # Create release for tag pushes OR when publish_next=true and not a dry run
     # Note: create-next-tag is skipped for tag pushes but we still need the dependency for ordering
-    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || (needs.validate.outputs.publish_next == 'true' && inputs.dry_run == false)) }}
+    if: ${{ !failure() && !cancelled() && (needs.validate.outputs.is_tag_push == 'true' || (needs.validate.outputs.publish_next == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false))) }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
