@@ -1,0 +1,129 @@
+use insta::assert_snapshot;
+use tui_pty_e2e::Key;
+use tui_pty_e2e::SessionConfig;
+use tui_pty_e2e::TIMEOUT;
+use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
+use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_submit_text() {
+    let config = SessionConfig::new().with_stream_until_cancel();
+    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt did not appear");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Submit prompt
+    session.send_str("testing!!!").unwrap();
+    session.wait_for_text("testing!!!", TIMEOUT).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    assert_snapshot!(
+        "submit_input",
+        normalize_for_input_snapshot(session.screen_contents())
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_escape_cancels_streaming() {
+    // Use git_init to prevent "Snapshots disabled" from racing with "Working" status
+    let config = SessionConfig::new().with_stream_until_cancel();
+    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
+
+    // Wait for the prompt to appear (indicated by the chevron character)
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt did not appear");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Submit prompt
+    session.send_str("testing!!!").unwrap();
+    session.wait_for_text("testing!!!", TIMEOUT).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for streaming to start (status indicator appears with interrupt hint)
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("Conversation did not start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    // Verify cancellation completed
+    // (exact behavior depends on TUI implementation)
+    session
+        .wait_for_text(
+            "Conversation interrupted - tell the model what to do differently",
+            TIMEOUT,
+        )
+        .expect("No interrupt reported");
+
+    // There are timing issues for when the "Streaming..." chunk shows up,
+    // that make a snapshot here very flaky. Rely on the above assert for now
+    // assert_snapshot!(
+    //     "escape_cancelled_stream",
+    //     normalize_for_input_snapshot(session.screen_contents())
+    // )
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_ctrl_c_cancels_streaming() {
+    // Use git_init to prevent "Snapshots disabled" from racing with "Working" status
+    let config = SessionConfig::new().with_stream_until_cancel();
+    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
+
+    // Wait for the prompt to appear (indicated by the chevron character)
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt did not appear");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Submit prompt
+    session.send_str("testing!!!").unwrap();
+    session.wait_for_text("testing!!!", TIMEOUT).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for streaming to start (status indicator appears with interrupt hint)
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("Conversation did not start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Ctrl('c')).unwrap();
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    // Verify cancellation completed
+    // (exact behavior depends on TUI implementation)
+    session
+        .wait_for_text(
+            "Conversation interrupted - tell the model what to do differently",
+            TIMEOUT,
+        )
+        .expect("No interrupt reported");
+
+    // There are timing issues for when the "Streaming..." chunk shows up,
+    // that make a snapshot here very flaky. Rely on the above assert for now
+    // assert_snapshot!(
+    //     "ctrl_c_cancelled_stream",
+    //     normalize_for_input_snapshot(session.screen_contents())
+    // )
+}

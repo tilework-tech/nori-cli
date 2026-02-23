@@ -1,0 +1,34 @@
+---
+source: tui-pty-e2e/tests/transcript_persistence.rs
+expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())"
+---
+• ────────── Viewing Previous Session ──────────
+
+• Session from [TIMESTAMP] ([SESSION_ID]) transcript
+
+
+
+
+› UNIQUE_PROMPT_ALPHA_12345
+
+
+
+
+• RESPONSE_ALPHA
+
+
+
+
+› UNIQUE_PROMPT_BETA_67890
+
+
+
+
+• RESPONSE_BETA
+
+• ────────── End of Transcript ──────────
+
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approvals: Agent · ? for shortcuts

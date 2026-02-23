@@ -1,0 +1,18 @@
+[target.'cfg(target_os = "linux")']
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "link-arg=/STACK:8388608"]
+
+[target.'cfg(all(windows, target_env = "gnu"))']
+rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
+
+[build]
+# Remap the workspace path to a static string so hashes match across worktrees
+rustflags = ["--remap-path-prefix", "$CARGO_MANIFEST_DIR=."]
+
+[env]
+# Limit test parallelism to half the available cores (4 on 8-core system).
+# Prevents the test suite from consuming all CPU and making the system unusable.
+RUST_TEST_THREADS = "4"

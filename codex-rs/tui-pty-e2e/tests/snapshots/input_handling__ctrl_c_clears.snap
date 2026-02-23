@@ -1,0 +1,7 @@
+---
+source: tui-pty-e2e/tests/input_handling.rs
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+› [DEFAULT_PROMPT]
+
+  ctrl + c again to quit

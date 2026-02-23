@@ -1,0 +1,15 @@
+# This workflow runs on push
+name: With Comments
+
+on:
+  # Run on push to main
+  push:
+    branches: [main]
+  # Also on PRs
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "test"

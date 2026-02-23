@@ -1,0 +1,18 @@
+---
+source: tui-pty-e2e/tests/streaming.rs
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+› testing!!!
+
+
+■ Operation 'AddToHistory' is not supported in ACP mode
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────
+
+■ Conversation interrupted - tell the model what to do differently. Something
+went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues
+
+
+› [DEFAULT_PROMPT]
+
+  ctrl + c again to quit

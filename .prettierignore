@@ -1,0 +1,7 @@
+/nori-cli/dist
+/nori-cli/node_modules
+pnpm-lock.yaml
+
+prompt.md
+*_prompt.md
+*_instructions.md
