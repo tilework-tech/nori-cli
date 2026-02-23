@@ -176,6 +176,84 @@ async fn test_write_text_file_emits_tool_call_event() {
     delegate.unregister_session(&session_id);
 }
 
+/// Test that CODEX_HOME is NOT inherited by spawned ACP agent subprocesses.
+/// This prevents third-party agents (like @zed-industries/codex-acp) from
+/// reading Nori-specific config that they can't parse (e.g. [[agents]] tables).
+#[tokio::test]
+#[serial]
+async fn test_codex_home_not_inherited_by_agent_subprocess() {
+    // Set CODEX_HOME in the current process to simulate what the Nori TUI does.
+    // The mock agent will echo back this env var's value if it was inherited.
+    // Use a panic-safe guard to restore the original value.
+    struct EnvGuard(Option<String>);
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(val) => unsafe { std::env::set_var("CODEX_HOME", val) },
+                None => unsafe { std::env::remove_var("CODEX_HOME") },
+            }
+        }
+    }
+    let _guard = EnvGuard(std::env::var("CODEX_HOME").ok());
+    unsafe {
+        std::env::set_var("CODEX_HOME", "/tmp/fake-nori-home");
+    }
+
+    let mut config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+
+    // Check if mock agent binary exists
+    if !std::path::Path::new(&config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            config.command
+        );
+        return;
+    }
+
+    // Tell the mock agent to echo back the CODEX_HOME env var
+    config
+        .env
+        .insert("MOCK_AGENT_ECHO_ENV".to_string(), "CODEX_HOME".to_string());
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+
+    // Spawn connection
+    let conn = AcpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("Failed to spawn ACP connection");
+
+    // Create session
+    let session_id = conn
+        .create_session(temp_dir.path())
+        .await
+        .expect("Failed to create session");
+
+    // Send prompt and collect response
+    let (tx, mut rx) = mpsc::channel(32);
+    let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("check env"))];
+
+    conn.prompt(session_id, prompt, tx)
+        .await
+        .expect("Prompt failed");
+
+    let mut messages = Vec::new();
+    while let Ok(update) = rx.try_recv() {
+        if let acp::SessionUpdate::AgentMessageChunk(chunk) = update
+            && let acp::ContentBlock::Text(text) = chunk.content
+        {
+            messages.push(text.text);
+        }
+    }
+
+    // The mock agent should report CODEX_HOME as <unset>
+    let combined = messages.join("");
+    assert!(
+        combined.contains("ENV:CODEX_HOME=<unset>"),
+        "CODEX_HOME should NOT be inherited by ACP agent subprocess, but agent saw: {combined}"
+    );
+}
+
 /// Test that notifications for unregistered sessions are forwarded to the
 /// persistent listener instead of being silently dropped.
 /// This covers the case where the ACP agent sends events between turns

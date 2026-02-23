@@ -26,6 +26,8 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 - `MOCK_AGENT_LOAD_SESSION_FAIL` -- when set, the `load_session()` handler returns an error instead of succeeding, allowing tests to exercise the runtime-failure fallback path
 - `MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT` -- when set to an integer N, the `load_session()` handler sends N text-chunk notifications (via `send_text_chunk()`) before returning, simulating history replay with a configurable volume of events. Used to test the deferred-relay pattern in `resume_session()` that prevents deadlocks when the notification count exceeds the bounded `event_tx` channel capacity.
 
+**Environment Variable Echo**: The `MOCK_AGENT_ECHO_ENV` env var causes the mock agent's `prompt()` handler to respond with `ENV:<name>=<value>` (or `ENV:<name>=<unset>` if the variable is absent). Used by `test_codex_home_not_inherited_by_agent_subprocess` in `@/codex-rs/acp/src/connection/tests.rs` to verify that the parent's `CODEX_HOME` is not inherited by the spawned ACP subprocess.
+
 **Race Condition Simulation**: The `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` env var triggers a scenario that reproduces the timing where tool call completions arrive while the final text response is streaming. This is structured in phases:
 1. Tool calls that complete before text streaming starts (rendered normally)
 2. Text streaming begins (activates the TUI's stream_controller)

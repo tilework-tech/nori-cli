@@ -1102,8 +1102,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     #[cfg(debug_assertions)]
     fn test_list_available_agents_debug_build() {
+        reset_registry();
         let agents = list_available_agents();
         // Debug build should have 5 agents: mock, mock-alt, claude-code, codex, gemini
         assert_eq!(agents.len(), 5, "Debug build should have 5 agents");
