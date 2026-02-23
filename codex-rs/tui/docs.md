@@ -177,8 +177,8 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 1. Checks if `nori-skillsets` is available in PATH
 2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
 3. If available, runs `nori-skillsets list` to get available skillsets
-4. On success (exit code 0), displays a searchable picker with skillset names
-5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets install <NAME>`
+4. On success (exit code 0), displays a searchable picker with skillset names. Each `SelectionItem` sets `search_value` to the skillset name so the picker's search filtering can match against it.
+5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets --non-interactive switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets --non-interactive install <NAME>`. The `--non-interactive` flag is required because the TUI captures stdout/stderr via `.output()` and provides no stdin, so any interactive prompt would hang indefinitely.
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
 

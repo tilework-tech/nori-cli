@@ -67,9 +67,9 @@ pub async fn list_skillsets() -> Result<Vec<String>, String> {
 /// - `Ok(message)` with filtered stdout on success (last section for long output)
 /// - `Err(message)` with error output on failure
 pub async fn install_skillset(name: &str) -> Result<String, String> {
+    let args = build_install_args(name);
     let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .arg("install")
-        .arg(name)
+        .args(&args)
         .output()
         .await
         .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD} install: {e}"))?;
@@ -100,11 +100,9 @@ pub async fn install_skillset(name: &str) -> Result<String, String> {
 /// - `Ok(message)` with filtered stdout on success
 /// - `Err(message)` with error output on failure
 pub async fn switch_skillset(name: &str, install_dir: &std::path::Path) -> Result<String, String> {
+    let args = build_switch_args(name, install_dir);
     let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .arg("switch")
-        .arg(name)
-        .arg("--install-dir")
-        .arg(install_dir)
+        .args(&args)
         .output()
         .await
         .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD} switch: {e}"))?;
@@ -160,6 +158,7 @@ pub fn skillset_picker_params(
             })];
 
             SelectionItem {
+                search_value: Some(name.clone()),
                 name,
                 description: None,
                 is_current: false,
@@ -206,6 +205,30 @@ fn filter_install_output(stdout: &str, name: &str) -> String {
         .find(|s| !s.is_empty())
         .map(String::from)
         .unwrap_or_else(|| format!("Skillset '{name}' installed successfully"))
+}
+
+/// Build the argument list for the `nori-skillsets switch` command.
+///
+/// Extracted for testability.
+fn build_switch_args(name: &str, install_dir: &std::path::Path) -> Vec<String> {
+    vec![
+        "--non-interactive".to_string(),
+        "switch".to_string(),
+        name.to_string(),
+        "--install-dir".to_string(),
+        install_dir.to_string_lossy().to_string(),
+    ]
+}
+
+/// Build the argument list for the `nori-skillsets install` command.
+///
+/// Extracted for testability.
+fn build_install_args(name: &str) -> Vec<String> {
+    vec![
+        "--non-interactive".to_string(),
+        "install".to_string(),
+        name.to_string(),
+    ]
 }
 
 /// Message shown when nori-skillsets is not installed.
@@ -308,6 +331,56 @@ mod tests {
             }
             _ => panic!("Expected SwitchSkillset event, got {event:?}"),
         }
+    }
+
+    #[test]
+    fn test_skillset_picker_items_have_search_value() {
+        // Each item must have search_value set so the searchable picker can
+        // filter items when the user types. Without search_value, typing
+        // any character causes all items to be filtered out.
+        let names = vec![
+            "rust-dev".to_string(),
+            "python-ml".to_string(),
+            "web-frontend".to_string(),
+        ];
+        let params = skillset_picker_params(names, None);
+
+        for item in &params.items {
+            assert_eq!(
+                item.search_value.as_deref(),
+                Some(item.name.as_str()),
+                "item '{}' must have search_value set to its name for filtering to work",
+                item.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_switch_skillset_command_includes_non_interactive() {
+        // The switch command must include --non-interactive since the TUI
+        // captures stdout/stderr and provides no stdin. Without it, the
+        // CLI prompts for confirmation and hangs forever.
+        // --non-interactive must precede the subcommand for correct parsing.
+        assert_eq!(
+            build_switch_args("my-skillset", std::path::Path::new("/tmp/worktree")),
+            vec![
+                "--non-interactive",
+                "switch",
+                "my-skillset",
+                "--install-dir",
+                "/tmp/worktree",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_install_skillset_command_includes_non_interactive() {
+        // Same as switch: install must not prompt interactively.
+        // --non-interactive must precede the subcommand for correct parsing.
+        assert_eq!(
+            build_install_args("my-skillset"),
+            vec!["--non-interactive", "install", "my-skillset"]
+        );
     }
 
     #[test]
