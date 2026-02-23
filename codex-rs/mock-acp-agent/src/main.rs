@@ -619,6 +619,16 @@ impl acp::Agent for MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
+        // Support echoing an environment variable's value for testing env inheritance.
+        // Set MOCK_AGENT_ECHO_ENV to the name of the env var to check.
+        // The agent will respond with "ENV:<name>=<value>" or "ENV:<name>=<unset>".
+        if let Ok(env_name) = std::env::var("MOCK_AGENT_ECHO_ENV") {
+            let value = std::env::var(&env_name).unwrap_or_else(|_| "<unset>".to_string());
+            let msg = format!("ENV:{env_name}={value}");
+            self.send_text_chunk(session_id.clone(), &msg).await?;
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
             self.send_text_chunk(session_id.clone(), &response).await?;
