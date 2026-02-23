@@ -560,10 +560,12 @@ fn transcript_to_summary_builds_conversation_text() {
 }
 
 #[test]
-fn transcript_to_summary_truncates_long_content() {
+fn transcript_to_summary_preserves_large_content_without_truncation() {
     use crate::transcript::*;
 
-    let long_text = "x".repeat(30_000);
+    // 50K chars — well above the old 20K limit, should now be fully preserved.
+    // Use a distinguishable marker at the end so we can verify the tail survived.
+    let long_text = format!("{}MARKER_END", "x".repeat(50_000));
     let entries = vec![
         TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
             session_id: "s1".into(),
@@ -592,11 +594,10 @@ fn transcript_to_summary_truncates_long_content() {
 
     let summary = transcript_to_summary(&transcript);
 
-    // Summary should be capped at a reasonable size
+    // The tail marker should be present — proving nothing was truncated
     assert!(
-        summary.len() <= 25_000,
-        "Summary should be truncated, got {} chars",
-        summary.len()
+        summary.contains("MARKER_END"),
+        "Summary should contain the full content including the tail marker"
     );
 }
 
