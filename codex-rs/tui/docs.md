@@ -100,8 +100,8 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 
 | Command | Description |
 |---------|-------------|
-| `/agent` | Switch between available ACP agents |
-| `/model` | Choose model (ACP model picker) |
+| `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
+| `/model` | Choose model (dynamically shows current agent/model name) |
 | `/approvals` | Choose what Nori can do without approval |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
@@ -177,7 +177,7 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 1. Checks if `nori-skillsets` is available in PATH
 2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
 3. If available, runs `nori-skillsets list` to get available skillsets
-4. On success (exit code 0), displays a searchable picker with skillset names
+4. On success (exit code 0), displays a picker with skillset names (navigable via arrows/j/k)
 5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets install <NAME>`
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer

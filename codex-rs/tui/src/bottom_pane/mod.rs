@@ -376,9 +376,17 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Update the agent display name used in approval dialogs.
+    /// Update the agent display name used in approval dialogs and slash command descriptions.
     pub(crate) fn set_agent_display_name(&mut self, name: String) {
-        self.agent_display_name = name;
+        self.agent_display_name = name.clone();
+        self.composer.set_command_description_override(
+            crate::slash_command::SlashCommand::Agent,
+            format!("switch between available ACP agents (current: {name})"),
+        );
+        self.composer.set_command_description_override(
+            crate::slash_command::SlashCommand::Model,
+            format!("choose what model and reasoning effort to use (current: {name})"),
+        );
     }
 
     /// Set the vertical footer layout flag.
