@@ -1,7 +1,9 @@
 use super::*;
 
-/// Maximum character length for the transcript summary text.
-const TRANSCRIPT_SUMMARY_MAX_CHARS: usize = 20_000;
+/// Character threshold above which we log a warning about transcript summary
+/// size. The summary is not truncated — the agent-side "prompt too long"
+/// rejection is the real guard — but large summaries are worth logging.
+const TRANSCRIPT_SUMMARY_WARN_CHARS: usize = 200_000;
 
 /// Convert a loaded transcript into a list of `EventMsg` suitable for
 /// `SessionConfiguredEvent.initial_messages` (UI replay).
@@ -50,15 +52,15 @@ pub fn transcript_to_replay_events(transcript: &crate::transcript::Transcript) -
 /// The summary captures user messages, assistant responses, and tool call
 /// names so the agent has context about the previous conversation without
 /// needing the full tool lifecycle details.
+///
+/// No truncation is applied — the full transcript is preserved so the agent
+/// retains as much context as possible on resume. If the resulting prompt
+/// exceeds the model's context window, the agent will reject it with a
+/// "prompt too long" error, which is handled gracefully by the caller.
 pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> String {
     let mut summary = String::new();
 
     for line in &transcript.entries {
-        if summary.len() >= TRANSCRIPT_SUMMARY_MAX_CHARS {
-            summary.push_str("\n[...transcript truncated...]");
-            break;
-        }
-
         match &line.entry {
             crate::transcript::TranscriptEntry::User(user) => {
                 summary.push_str(&format!("User: {}\n", user.content));
@@ -84,15 +86,12 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
         }
     }
 
-    // Final truncation guard: find the nearest char boundary at or before
-    // the limit to avoid panicking on multi-byte UTF-8 (CJK, emoji, etc.).
-    if summary.len() > TRANSCRIPT_SUMMARY_MAX_CHARS {
-        let mut boundary = TRANSCRIPT_SUMMARY_MAX_CHARS;
-        while !summary.is_char_boundary(boundary) {
-            boundary -= 1;
-        }
-        summary.truncate(boundary);
-        summary.push_str("\n[...truncated...]");
+    if summary.len() > TRANSCRIPT_SUMMARY_WARN_CHARS {
+        warn!(
+            "Transcript summary is very large ({} chars). \
+             If the agent rejects it as too long, try /compact or start a new session.",
+            summary.len()
+        );
     }
 
     summary
