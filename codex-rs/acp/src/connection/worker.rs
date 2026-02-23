@@ -17,6 +17,11 @@ pub(super) async fn spawn_connection_internal(
     let mut cmd = Command::new(&config.command);
     cmd.args(&config.args)
         .envs(&config.env)
+        // Prevent Nori-specific CODEX_HOME from leaking into ACP agent
+        // subprocesses. External agents (e.g. @zed-industries/codex-acp) use
+        // their own config directories and cannot parse Nori-specific config
+        // fields like [[agents]].
+        .env_remove("CODEX_HOME")
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

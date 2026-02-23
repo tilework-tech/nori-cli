@@ -667,6 +667,10 @@ Multi-layer cleanup strategy for robust process termination:
 
 5. **Synchronous Drop Cleanup**: `Drop` waits for completion signal (2-second timeout) before returning.
 
+**Environment Isolation (`worker.rs`):**
+
+`CODEX_HOME` is explicitly stripped from the subprocess environment via `.env_remove("CODEX_HOME")` in `spawn_connection_internal()`. Nori sets `CODEX_HOME=~/.nori/cli` in its own process so its config loader finds the right directory. Third-party ACP agents (e.g. `@zed-industries/codex-acp`) inherit the parent environment and use the upstream Codex config parser, which cannot parse Nori-specific TOML fields like `[[agents]]` -- causing a parse error on startup. Stripping `CODEX_HOME` before spawn causes those agents to fall back to their own default config paths. Custom agents defined under `[[agents]]` in Nori's config are unaffected because they communicate via the ACP protocol, not by reading Nori's config files.
+
 **File Write Security Boundaries** (`ClientDelegate`):
 
 - Workspace writes: Any path within or under the workspace directory
