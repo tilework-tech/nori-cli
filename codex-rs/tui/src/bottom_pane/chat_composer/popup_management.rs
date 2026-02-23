@@ -205,7 +205,10 @@ impl ChatComposer {
             }
             _ => {
                 if is_editing_slash_command_name {
-                    let mut command_popup = CommandPopup::new(self.custom_prompts.clone());
+                    let mut command_popup = CommandPopup::new_with_overrides(
+                        self.custom_prompts.clone(),
+                        self.command_description_overrides.clone(),
+                    );
                     command_popup.on_composer_text_change(first_line.to_string());
                     self.active_popup = ActivePopup::Command(command_popup);
                 }

@@ -13,6 +13,7 @@ use crate::slash_command::built_in_slash_commands;
 use codex_common::fuzzy_match::fuzzy_match;
 use codex_protocol::custom_prompts::CustomPrompt;
 use codex_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 /// A selectable item in the popup: either a built-in command or a user prompt.
@@ -28,10 +29,19 @@ pub(crate) struct CommandPopup {
     builtins: Vec<(&'static str, SlashCommand)>,
     prompts: Vec<CustomPrompt>,
     state: ScrollState,
+    description_overrides: HashMap<SlashCommand, String>,
 }
 
 impl CommandPopup {
-    pub(crate) fn new(mut prompts: Vec<CustomPrompt>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn new(prompts: Vec<CustomPrompt>) -> Self {
+        Self::new_with_overrides(prompts, HashMap::new())
+    }
+
+    pub(crate) fn new_with_overrides(
+        mut prompts: Vec<CustomPrompt>,
+        description_overrides: HashMap<SlashCommand, String>,
+    ) -> Self {
         let builtins = built_in_slash_commands();
         // Exclude prompts that collide with builtin command names and sort by name.
         let exclude: HashSet<String> = builtins.iter().map(|(n, _)| (*n).to_string()).collect();
@@ -42,6 +52,7 @@ impl CommandPopup {
             builtins,
             prompts,
             state: ScrollState::new(),
+            description_overrides,
         }
     }
 
@@ -162,7 +173,12 @@ impl CommandPopup {
             .map(|(item, indices, _)| {
                 let (name, description) = match item {
                     CommandItem::Builtin(cmd) => {
-                        (format!("/{}", cmd.command()), cmd.description().to_string())
+                        let desc = self
+                            .description_overrides
+                            .get(&cmd)
+                            .cloned()
+                            .unwrap_or_else(|| cmd.description().to_string());
+                        (format!("/{}", cmd.command()), desc)
                     }
                     CommandItem::UserPrompt(i) => {
                         let prompt = &self.prompts[i];
@@ -365,5 +381,36 @@ mod tests {
         let rows = popup.rows_from_matches(vec![(CommandItem::UserPrompt(0), None, 0)]);
         let description = rows.first().and_then(|row| row.description.as_deref());
         assert_eq!(description, Some("send saved prompt"));
+    }
+
+    #[test]
+    fn description_override_replaces_builtin_description() {
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            SlashCommand::Agent,
+            "switch between available ACP agents (current: Claude Code)".to_string(),
+        );
+        let popup = CommandPopup::new_with_overrides(Vec::new(), overrides);
+        let rows =
+            popup.rows_from_matches(vec![(CommandItem::Builtin(SlashCommand::Agent), None, 0)]);
+        let description = rows.first().and_then(|row| row.description.as_deref());
+        assert_eq!(
+            description,
+            Some("switch between available ACP agents (current: Claude Code)")
+        );
+    }
+
+    #[test]
+    fn description_override_does_not_affect_other_commands() {
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            SlashCommand::Agent,
+            "switch between available ACP agents (current: Claude Code)".to_string(),
+        );
+        let popup = CommandPopup::new_with_overrides(Vec::new(), overrides);
+        let rows =
+            popup.rows_from_matches(vec![(CommandItem::Builtin(SlashCommand::Model), None, 0)]);
+        let description = rows.first().and_then(|row| row.description.as_deref());
+        assert_eq!(description, Some(SlashCommand::Model.description()));
     }
 }
