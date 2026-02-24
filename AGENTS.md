@@ -29,6 +29,7 @@ Run `just fmt` (in `codex-rs` directory) automatically after making Rust code ch
 2. Once those pass, if any changes were made in common, core, or protocol, run the complete test suite with `cargo test --all-features`.
    When running interactively, ask the user before running `just fix` to finalize. `just fmt` does not require approval. project-specific or individual tests can be run without asking the user, but do ask the user before running the complete test suite.
 3. If any changes were made in tui, cli, or acp, run the E2E test suite with `cargo test -p tui-pty-e2e`.
+   **Important:** The E2E tests expect a binary named `nori` (from the `cli` crate), not `nori-tui`. Before running E2E tests, build it with `cargo build --bin nori`. Building `nori-tui` alone is not sufficient — the `nori` binary is the main entry point that imports `nori-tui` as a library.
 
 ## TUI style conventions
 
