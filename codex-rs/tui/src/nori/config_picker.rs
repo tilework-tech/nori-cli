@@ -972,6 +972,11 @@ mod tests {
 
     #[test]
     fn config_picker_enabling_skillset_per_session_opens_worktree_choice() {
+        if !super::skillset_picker::is_nori_skillsets_available() {
+            // Skip: nori-skillsets not installed on this machine (e.g. CI).
+            return;
+        }
+
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
