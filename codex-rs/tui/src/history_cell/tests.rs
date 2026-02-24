@@ -892,6 +892,23 @@ fn reasoning_summary_block_splits_header_and_summary_when_present() {
 }
 
 #[test]
+fn skillset_switched_event_renders_checkmark_and_name() {
+    let cell = new_skillset_switched_event("rust-dev");
+    let rendered = render_lines(&cell.display_lines(80));
+    assert_eq!(rendered, vec!["✔ Switched to skillset \"rust-dev\""]);
+
+    // Verify all spans are green so the message is visible.
+    let lines = cell.display_lines(80);
+    for span in &lines[0].spans {
+        assert!(
+            span.style.fg == Some(ratatui::style::Color::Green),
+            "span {:?} should be green",
+            span.content
+        );
+    }
+}
+
+#[test]
 fn deprecation_notice_renders_summary_with_details() {
     let cell = new_deprecation_notice(
         "Feature flag `foo`".to_string(),
