@@ -1035,6 +1035,18 @@ fn try_new_completed_mcp_tool_call_with_image_output(
     }
 }
 
+pub(crate) fn new_skillset_switched_event(name: &str) -> PlainHistoryCell {
+    let lines: Vec<Line<'static>> = vec![
+        vec![
+            "✔ ".green(),
+            "Switched to skillset ".green(),
+            format!("\"{name}\"").green().bold(),
+        ]
+        .into(),
+    ];
+    PlainHistoryCell { lines }
+}
+
 #[allow(clippy::disallowed_methods)]
 pub(crate) fn new_warning_event(message: String) -> PrefixedWrappedHistoryCell {
     PrefixedWrappedHistoryCell::new(message.yellow(), "⚠ ".yellow(), "  ")

@@ -350,6 +350,15 @@ jobs:
           EOF
           cat ~/.cargo/config.toml
 
+      - name: Set version in Cargo.toml
+        if: ${{ needs.validate.outputs.publish_next == 'true' }}
+        working-directory: codex-rs
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          echo "Injecting version $VERSION into Cargo.toml"
+          sed -i "0,/^version = \"[^\"]*\"/s//version = \"$VERSION\"/" Cargo.toml
+          grep '^version' Cargo.toml | head -1
+
       - name: Build release binaries
         working-directory: codex-rs
         run: |

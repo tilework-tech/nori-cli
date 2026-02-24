@@ -329,7 +329,8 @@ impl ChatWidget {
     /// Handle the result of installing a skillset.
     pub(crate) fn on_skillset_install_result(&mut self, name: &str, success: bool, message: &str) {
         if success {
-            self.add_info_message(message.to_string(), None);
+            self.add_to_history(history_cell::new_skillset_switched_event(name));
+            self.request_redraw();
         } else {
             self.add_error_message(format!("Failed to install skillset '{name}': {message}"));
         }
@@ -366,7 +367,8 @@ impl ChatWidget {
     pub(crate) fn on_skillset_switch_result(&mut self, name: &str, success: bool, message: &str) {
         if success {
             self.set_session_skillset_name(Some(name.to_string()));
-            self.add_info_message(message.to_string(), None);
+            self.add_to_history(history_cell::new_skillset_switched_event(name));
+            self.request_redraw();
         } else {
             self.add_error_message(format!("Failed to switch to skillset '{name}': {message}"));
         }
