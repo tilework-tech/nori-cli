@@ -121,9 +121,8 @@ impl NoriConfig {
         // Agent is the user's persisted preference, defaults to DEFAULT_AGENT
         let agent = toml.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string());
 
-        // Resolve skillset_per_session and auto_worktree (skillset_per_session forces auto_worktree on)
         let skillset_per_session = toml.tui.skillset_per_session.unwrap_or(false);
-        let auto_worktree = skillset_per_session || toml.tui.auto_worktree.unwrap_or(false);
+        let auto_worktree = toml.tui.auto_worktree.unwrap_or(false);
 
         // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
         // Using agent as fallback ensures the persisted preference is honored at startup
@@ -769,8 +768,8 @@ skillset_per_session = true
             "skillset_per_session should be true when set in config"
         );
         assert!(
-            config.auto_worktree,
-            "auto_worktree should be forced true when skillset_per_session is enabled"
+            !config.auto_worktree,
+            "auto_worktree should remain false (default) since the settings are independent"
         );
     }
 
@@ -789,7 +788,7 @@ skillset_per_session = true
     }
 
     #[test]
-    fn test_skillset_per_session_forces_auto_worktree() {
+    fn test_skillset_per_session_does_not_force_auto_worktree() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
 
@@ -805,8 +804,12 @@ auto_worktree = false
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert!(
-            config.auto_worktree,
-            "auto_worktree should be true even when explicitly set to false, because skillset_per_session forces it"
+            config.skillset_per_session,
+            "skillset_per_session should be true"
+        );
+        assert!(
+            !config.auto_worktree,
+            "auto_worktree should be false because the two settings are independent"
         );
     }
 

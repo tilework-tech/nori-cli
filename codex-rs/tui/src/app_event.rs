@@ -306,6 +306,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigSkillsetPerSession(bool),
 
+    /// Open the worktree choice modal when enabling per-session skillsets.
+    #[cfg(feature = "nori-config")]
+    OpenSkillsetPerSessionWorktreeChoice,
+
     /// Open the footer segments sub-picker.
     #[cfg(feature = "nori-config")]
     OpenFooterSegmentsPicker,

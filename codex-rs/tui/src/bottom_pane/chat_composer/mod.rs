@@ -113,6 +113,7 @@ pub(crate) struct ChatComposer {
     // When true, disables paste-burst logic and inserts characters immediately.
     disable_paste_burst: bool,
     custom_prompts: Vec<CustomPrompt>,
+    command_description_overrides: HashMap<SlashCommand, String>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
@@ -169,6 +170,7 @@ impl ChatComposer {
             paste_burst: PasteBurst::default(),
             disable_paste_burst: false,
             custom_prompts: Vec::new(),
+            command_description_overrides: HashMap::new(),
             footer_mode: FooterMode::ShortcutSummary,
             footer_hint_override: None,
             context_window_percent: None,
@@ -363,6 +365,10 @@ impl ChatComposer {
 
     pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {
         self.session_skillset_name = name;
+    }
+
+    pub(crate) fn set_command_description_override(&mut self, cmd: SlashCommand, desc: String) {
+        self.command_description_overrides.insert(cmd, desc);
     }
 
     pub(crate) fn set_esc_backtrack_hint(&mut self, show: bool) {

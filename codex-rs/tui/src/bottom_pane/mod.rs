@@ -123,7 +123,7 @@ impl BottomPane {
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
-        Self {
+        let mut pane = Self {
             composer,
             view_stack: Vec::new(),
             app_event_tx,
@@ -137,7 +137,16 @@ impl BottomPane {
             animations_enabled,
             context_window_percent: None,
             agent_display_name,
+        };
+
+        // Set description overrides for the slash command popup so that
+        // /agent and /model show the current agent name from startup.
+        if !pane.agent_display_name.is_empty() {
+            let name = pane.agent_display_name.clone();
+            pane.set_agent_display_name(name);
         }
+
+        pane
     }
 
     pub fn status_widget(&self) -> Option<&StatusIndicatorWidget> {
@@ -376,9 +385,23 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Update the agent display name used in approval dialogs.
+    /// Update the agent display name used in approval dialogs and slash command descriptions.
     pub(crate) fn set_agent_display_name(&mut self, name: String) {
-        self.agent_display_name = name;
+        self.agent_display_name = name.clone();
+        self.composer.set_command_description_override(
+            crate::slash_command::SlashCommand::Agent,
+            format!(
+                "{} (current: {name})",
+                crate::slash_command::SlashCommand::Agent.description()
+            ),
+        );
+        self.composer.set_command_description_override(
+            crate::slash_command::SlashCommand::Model,
+            format!(
+                "{} (current: {name})",
+                crate::slash_command::SlashCommand::Model.description()
+            ),
+        );
     }
 
     /// Set the vertical footer layout flag.
@@ -445,8 +468,18 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Update the approval mode label displayed in the footer.
+    /// Update the approval mode label displayed in the footer and the slash
+    /// command description override for `/approvals`.
     pub(crate) fn set_approval_mode_label(&mut self, label: Option<String>) {
+        if let Some(ref mode) = label {
+            self.composer.set_command_description_override(
+                crate::slash_command::SlashCommand::Approvals,
+                format!(
+                    "{} (current: {mode})",
+                    crate::slash_command::SlashCommand::Approvals.description()
+                ),
+            );
+        }
         self.composer.set_approval_mode_label(label);
         self.request_redraw();
     }

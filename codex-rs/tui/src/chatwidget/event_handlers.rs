@@ -503,6 +503,7 @@ impl ChatWidget {
         if self.turn_finished {
             return;
         }
+        self.flush_answer_stream_with_separator();
         let ev2 = event.clone();
         self.defer_or_handle(
             |q| q.push_patch_end(event),
@@ -514,6 +515,7 @@ impl ChatWidget {
         if self.turn_finished {
             return;
         }
+        self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
     }
@@ -522,6 +524,7 @@ impl ChatWidget {
         if self.turn_finished {
             return;
         }
+        self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_mcp_begin(ev), |s| s.handle_mcp_begin_now(ev2));
     }
@@ -530,6 +533,7 @@ impl ChatWidget {
         if self.turn_finished {
             return;
         }
+        self.flush_answer_stream_with_separator();
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_mcp_end(ev), |s| s.handle_mcp_end_now(ev2));
     }
