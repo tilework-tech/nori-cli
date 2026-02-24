@@ -125,6 +125,17 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 
 `/agent`, `/model`, and `/approvals` show the current runtime value in parentheses in the slash command popup (e.g., `(current: Mock ACP)`). This is implemented via a `command_description_overrides: HashMap<SlashCommand, String>` that flows through `BottomPane` -> `ChatComposer` -> `CommandPopup`. `BottomPane::set_agent_display_name()` sets overrides for both `/agent` and `/model`; `BottomPane::set_approval_mode_label()` sets the override for `/approvals`. The agent override is populated at startup in `BottomPane::new()` and updated on agent switches. The approval override is set whenever the approval mode changes.
 
+**Selection Popup Row Layout (`bottom_pane/selection_popup_common.rs`):**
+
+`render_rows()` and `measure_rows_height()` are the shared rendering functions used by all selection popups (`ListSelectionView`, `CommandPopup`, `FileSearchPopup`). Each popup item has an optional description that appears alongside the item name. The layout engine chooses between two modes per-row via `wrap_row()`:
+
+| Mode | Condition | Layout |
+|------|-----------|--------|
+| Side-by-side | `total_width - desc_col >= MIN_DESC_COLUMNS` (12) | Description starts at `desc_col` on the same line as the name, wrapped lines indented to `desc_col` |
+| Stacked | `total_width - desc_col < MIN_DESC_COLUMNS` | Name on its own line(s), description on separate line(s) below with 4-space indent |
+
+The `desc_col` is computed once per render pass from the widest visible name plus 2 columns of padding. The stacked fallback prevents descriptions from being squeezed into 1-2 characters of horizontal space on narrow terminals. Because both `render_rows()` and `measure_rows_height()` call the same `wrap_row()` function, layout and height calculation are always consistent.
+
 **Undo Snapshot Picker (`/undo`):**
 
 The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backend. When the backend responds with `UndoListResult`, the TUI opens a `ListSelectionView` modal (the same pattern used by the approvals popup, etc.) displaying all available snapshots. Each item shows `[short_id] truncated_label` where the label is truncated to 60 characters. Selecting a snapshot dispatches `Op::UndoTo { index }` to restore to that point. If no snapshots are available, an info message is displayed instead of the modal.

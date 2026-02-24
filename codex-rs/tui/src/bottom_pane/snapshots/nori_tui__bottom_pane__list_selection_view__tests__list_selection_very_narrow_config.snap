@@ -1,0 +1,14 @@
+---
+source: tui/src/bottom_pane/list_selection_view.rs
+expression: "render_lines_with_width(&view, 30)"
+---
+                              
+  Configuration               
+                              
+› 1. Vertical Footer (on) (…  
+    Stack footer segments     
+    vertically instead of     
+    horizontally              
+  2. OS Notifications (off)   
+    Send native desktop       
+    notifications on events

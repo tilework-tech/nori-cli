@@ -108,7 +108,9 @@ impl CommandPopup {
         use super::selection_popup_common::measure_rows_height;
         let rows = self.rows_from_matches(self.filtered());
 
-        measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, width)
+        // Subtract 2 to match the horizontal inset applied to the render area
+        // in render_ref (Insets::tlbr(0, 2, 0, 0)).
+        measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, width.saturating_sub(2))
     }
 
     /// Compute fuzzy-filtered matches over built-in commands and user prompts,

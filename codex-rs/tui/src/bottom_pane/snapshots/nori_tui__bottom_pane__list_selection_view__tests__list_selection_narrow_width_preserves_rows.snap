@@ -6,11 +6,8 @@ expression: "render_lines_with_width(&view, 24)"
   Debug                 
                         
 › 1. Item 1             
-             xxxxxxxxx  
-             x          
+    xxxxxxxxxx          
   2. Item 2             
-             xxxxxxxxx  
-             x          
+    xxxxxxxxxx          
   3. Item 3             
-             xxxxxxxxx  
-             x
+    xxxxxxxxxx

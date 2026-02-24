@@ -343,12 +343,7 @@ impl Renderable for ListSelectionView {
         // Build the same display rows used by the renderer so wrapping math matches.
         let rows = self.build_rows();
         let rows_width = Self::rows_width(width);
-        let rows_height = measure_rows_height(
-            &rows,
-            &self.state,
-            MAX_POPUP_ROWS,
-            rows_width.saturating_add(1),
-        );
+        let rows_height = measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, rows_width);
 
         // Subtract 4 for the padding on the left and right of the header.
         let mut height = self.header.desired_height(width.saturating_sub(4));
@@ -383,12 +378,7 @@ impl Renderable for ListSelectionView {
             .desired_height(content_area.width.saturating_sub(4));
         let rows = self.build_rows();
         let rows_width = Self::rows_width(content_area.width);
-        let rows_height = measure_rows_height(
-            &rows,
-            &self.state,
-            MAX_POPUP_ROWS,
-            rows_width.saturating_add(1),
-        );
+        let rows_height = measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, rows_width);
         let [header_area, _, search_area, list_area] = Layout::vertical([
             Constraint::Max(header_height),
             Constraint::Max(1),
@@ -840,5 +830,88 @@ mod tests {
         view.search_query.clear();
         view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
         assert_eq!(view.search_query, "k", "k should be added to search query");
+    }
+
+    #[test]
+    fn narrow_terminal_no_single_char_description_lines() {
+        // Reproduce the bug: on a narrow terminal, descriptions that are pushed
+        // to a high desc_col wrap with huge indent, producing one-char-per-line.
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Vertical Footer (on)".to_string(),
+                description: Some(
+                    "Stack footer segments vertically instead of horizontally".to_string(),
+                ),
+                is_current: true,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Terminal Notifications (on)".to_string(),
+                description: Some("Send OSC 9 escape sequences to notify the terminal".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Configuration".to_string()),
+                items,
+                ..Default::default()
+            },
+            tx,
+        );
+        let rendered = render_lines_with_width(&view, 30);
+
+        // The rendered output should NOT have lines that are just whitespace + a
+        // single visible character. That pattern is the telltale sign of the
+        // one-char-per-line wrapping bug.
+        for (line_num, line) in rendered.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.len() == 1 && trimmed != "›" {
+                panic!(
+                    "line {} has single-char content '{trimmed}', \
+                     indicating broken description wrapping:\n{rendered}",
+                    line_num + 1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_very_narrow_config_popup() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Vertical Footer (on)".to_string(),
+                description: Some(
+                    "Stack footer segments vertically instead of horizontally".to_string(),
+                ),
+                is_current: true,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "OS Notifications (off)".to_string(),
+                description: Some("Send native desktop notifications on events".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Configuration".to_string()),
+                items,
+                ..Default::default()
+            },
+            tx,
+        );
+        assert_snapshot!(
+            "list_selection_very_narrow_config",
+            render_lines_with_width(&view, 30)
+        );
     }
 }
