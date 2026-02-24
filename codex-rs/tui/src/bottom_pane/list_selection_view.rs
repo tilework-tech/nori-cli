@@ -53,6 +53,9 @@ pub(crate) struct SelectionViewParams {
     pub search_placeholder: Option<String>,
     pub header: Box<dyn Renderable>,
     pub initial_selected_idx: Option<usize>,
+    /// Optional callback fired when the picker is dismissed without selection
+    /// (e.g. via Escape or Ctrl-C).
+    pub on_dismiss: Option<SelectionAction>,
 }
 
 impl Default for SelectionViewParams {
@@ -66,6 +69,7 @@ impl Default for SelectionViewParams {
             search_placeholder: None,
             header: Box::new(()),
             initial_selected_idx: None,
+            on_dismiss: None,
         }
     }
 }
@@ -83,6 +87,7 @@ pub(crate) struct ListSelectionView {
     last_selected_actual_idx: Option<usize>,
     header: Box<dyn Renderable>,
     initial_selected_idx: Option<usize>,
+    on_dismiss: Option<SelectionAction>,
 }
 
 impl ListSelectionView {
@@ -114,6 +119,7 @@ impl ListSelectionView {
             last_selected_actual_idx: None,
             header,
             initial_selected_idx: params.initial_selected_idx,
+            on_dismiss: params.on_dismiss,
         };
         s.apply_filter();
         s
@@ -331,6 +337,9 @@ impl BottomPaneView for ListSelectionView {
     }
 
     fn on_ctrl_c(&mut self) -> CancellationEvent {
+        if let Some(cb) = self.on_dismiss.take() {
+            cb(&self.app_event_tx);
+        }
         self.complete = true;
         CancellationEvent::Handled
     }
@@ -604,6 +613,71 @@ mod tests {
         assert!(
             missing.is_empty(),
             "third option missing at widths {missing:?}"
+        );
+    }
+
+    #[test]
+    fn on_dismiss_callback_fires_on_ctrl_c() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let dismissed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dismissed_clone = dismissed.clone();
+        let items = vec![SelectionItem {
+            name: "Option A".to_string(),
+            dismiss_on_select: true,
+            ..Default::default()
+        }];
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items,
+                on_dismiss: Some(Box::new(move |_tx| {
+                    dismissed_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                })),
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Dismiss via Ctrl-C
+        view.on_ctrl_c();
+
+        assert!(
+            dismissed.load(std::sync::atomic::Ordering::SeqCst),
+            "on_dismiss callback should fire when picker is dismissed via Ctrl-C"
+        );
+        assert!(view.is_complete(), "view should be complete after dismiss");
+    }
+
+    #[test]
+    fn on_dismiss_callback_not_fired_on_accept() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let dismissed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dismissed_clone = dismissed.clone();
+        let items = vec![SelectionItem {
+            name: "Option A".to_string(),
+            dismiss_on_select: true,
+            ..Default::default()
+        }];
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items,
+                on_dismiss: Some(Box::new(move |_tx| {
+                    dismissed_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                })),
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Accept via Enter (should NOT fire on_dismiss)
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(
+            !dismissed.load(std::sync::atomic::Ordering::SeqCst),
+            "on_dismiss callback should NOT fire when an item is selected"
         );
     }
 

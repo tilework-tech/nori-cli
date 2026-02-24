@@ -27,6 +27,8 @@ mod footer;
 mod history_search_popup;
 mod list_selection_view;
 mod prompt_args;
+#[cfg(test)]
+pub(crate) use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::SelectionViewParams;
 mod paste_burst;
 pub mod popup_consts;

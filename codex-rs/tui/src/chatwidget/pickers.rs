@@ -303,8 +303,14 @@ impl ChatWidget {
     ) {
         match (names, error) {
             (Some(names), None) if !names.is_empty() => {
-                let params =
-                    crate::nori::skillset_picker::skillset_picker_params(names, install_dir);
+                let on_dismiss: SelectionAction = Box::new(|tx| {
+                    tx.send(AppEvent::SkillsetPickerDismissed);
+                });
+                let params = crate::nori::skillset_picker::skillset_picker_params(
+                    names,
+                    install_dir,
+                    Some(on_dismiss),
+                );
                 self.bottom_pane.show_selection_view(params);
             }
             (_, Some(error)) => {

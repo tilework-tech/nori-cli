@@ -302,14 +302,14 @@ impl App {
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
 
-        // When skillset_per_session is enabled and we're in a worktree, defer
-        // spawning the agent until after the user picks a skillset and the switch
-        // writes `.claude/CLAUDE.md` to disk.
+        // When skillset_per_session is enabled, defer spawning the agent until
+        // after the user picks a skillset and the switch writes
+        // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
+        // agent spawns without a skillset.
         #[cfg(feature = "nori-config")]
         let needs_deferred_spawn = {
             let nori_cfg = codex_acp::config::NoriConfig::load().unwrap_or_default();
             nori_cfg.skillset_per_session
-                && crate::system_info::extract_worktree_name(&config.cwd).is_some()
         };
         #[cfg(not(feature = "nori-config"))]
         let needs_deferred_spawn = false;
@@ -428,15 +428,15 @@ impl App {
             );
         }
 
-        // If skillset_per_session is enabled and we're in a worktree, show the
-        // skillset picker. The agent spawn was deferred so that
-        // `nori-skillsets switch` can write `.claude/CLAUDE.md` before the agent
-        // reads it. Once the user picks a skillset and the switch completes,
-        // `event_handling.rs` triggers `spawn_deferred_agent()`.
+        // If skillset_per_session is enabled, show the skillset picker. The
+        // agent spawn was deferred so that `nori-skillsets switch` can write
+        // `.claude/CLAUDE.md` before the agent reads it. Once the user picks a
+        // skillset and the switch completes, `event_handling.rs` triggers
+        // `spawn_deferred_agent()`. If the user dismisses the picker, the
+        // `SkillsetPickerDismissed` event triggers the deferred spawn without a
+        // skillset.
         #[cfg(feature = "nori-config")]
-        if nori_config.skillset_per_session
-            && crate::system_info::extract_worktree_name(&app.config.cwd).is_some()
-        {
+        if nori_config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         }
 

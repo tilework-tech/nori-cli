@@ -374,6 +374,11 @@ pub(crate) enum AppEvent {
         message: String,
     },
 
+    /// The skillset picker was dismissed without selection. When agent spawn was
+    /// deferred for skillset_per_session, this triggers spawning the agent
+    /// without a skillset (behaves as if the feature is disabled).
+    SkillsetPickerDismissed,
+
     /// Execute a custom prompt script asynchronously.
     ExecuteScript {
         /// The custom prompt to execute.
