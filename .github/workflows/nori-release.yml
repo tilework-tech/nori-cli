@@ -356,7 +356,7 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           echo "Injecting version $VERSION into Cargo.toml"
-          sed -i "0,/^version = \"[^\"]*\"/s//version = \"$VERSION\"/" Cargo.toml
+          perl -i -pe 's/^version = "[^"]*"/version = "'"$VERSION"'"/ && ($done=1) unless $done' Cargo.toml
           grep '^version' Cargo.toml | head -1
 
       - name: Build release binaries
@@ -543,7 +543,7 @@ jobs:
           CARGO_CONTENT=$(gh api repos/${{ github.repository }}/contents/$CARGO_TOML_PATH?ref=$BASE_COMMIT --jq '.content' | base64 -d)
 
           # Update the version in Cargo.toml
-          UPDATED_CONTENT=$(echo "$CARGO_CONTENT" | sed "0,/^version = \"[^\"]*\"/s//version = \"$VERSION\"/")
+          UPDATED_CONTENT=$(echo "$CARGO_CONTENT" | perl -pe 's/^version = "[^"]*"/version = "'"$VERSION"'"/ && ($done=1) unless $done')
 
           # Create a blob with the updated content
           BLOB_SHA=$(echo "$UPDATED_CONTENT" | gh api repos/${{ github.repository }}/git/blobs -X POST -f content=@- -f encoding=utf-8 --jq '.sha')
