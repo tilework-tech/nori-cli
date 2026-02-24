@@ -307,6 +307,17 @@ Both `handle_streaming_delta()` and `add_boxed_history()` now check if the
 active ExecCell is incomplete before flushing. If `is_active()` returns true,
 the cell stays in `active_cell` instead of being saved to pending.
 
+### Fix 4: Flush Stream Before Tool End/Begin Events
+
+Tool End events (`on_exec_command_end`, `on_mcp_tool_call_end`, `on_patch_apply_end`)
+and `on_mcp_tool_call_begin` now call `flush_answer_stream_with_separator()` before
+`defer_or_handle()`. Without this, End events arriving during active text streaming
+were deferred to the interrupt queue and only processed at `TaskComplete`, causing
+all tool call results to appear after all text instead of interleaved in their correct
+order. The flush finalizes any in-progress text stream, allowing the subsequent
+`defer_or_handle()` to take the immediate-handle path. This matches the pattern
+already used by `on_exec_command_begin`.
+
 ---
 
 ## Tracing Targets

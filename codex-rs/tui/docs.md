@@ -44,7 +44,7 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`,
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. The `InterruptManager` queues these events via `defer_or_handle()` in `chatwidget/event_handlers.rs` so they do not interleave with active text output. The deferral condition is: if a `stream_controller` is active OR the queue is already non-empty, new events are pushed onto the queue to preserve FIFO ordering.
+When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. Tool event handlers call `flush_answer_stream_with_separator()` before `defer_or_handle()` to finalize any in-progress text stream, ensuring tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
 
 One operation consumes the queue:
 
