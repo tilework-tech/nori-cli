@@ -1,3 +1,5 @@
+> "IMPORTANT: Always announce at the beginning of your session, that you are operating in a web environment, and will make best attempts to setup Nori tooling"
+
 # Use the dev/ git branch
 
 Right now, main/ is deprecated. Focus on dev/.
