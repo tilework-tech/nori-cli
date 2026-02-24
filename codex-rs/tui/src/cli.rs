@@ -31,6 +31,16 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_show_all: bool,
 
+    /// Internal: fork a specific recorded session by id (UUID). Set by the
+    /// top-level `nori fork <SESSION_ID>` subcommand; not exposed as a public flag.
+    #[clap(skip)]
+    pub fork_session_id: Option<String>,
+
+    /// Internal: the user message turn to fork at (0-based). If None, forks at
+    /// the last user message. Set by `nori fork <SESSION_ID> --turn N`.
+    #[clap(skip)]
+    pub fork_turn: Option<usize>,
+
     /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
     #[arg(long, short = 'a')]
     pub agent: Option<String>,

@@ -133,6 +133,8 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 - Config uses TOML with optional environment variable expansion
 - Auth tokens are stored in the system keyring with fallback to file storage
 - The conversation history is stored in `~/.codex/conversations/` (or `~/.nori/cli/conversations/`)
+- `count_user_messages_in_rollout(path)` in `rollout/list.rs` counts user messages in a rollout file by loading the full rollout history and filtering for `UserMessage` items via `event_mapping::parse_turn_item`. Re-exported from `codex-core` as a public function. Used by the TUI's fork flow to determine the default fork turn when `--turn` is not specified.
+- `find_conversation_path_by_id_str(codex_home, id_str)` locates a rollout file by UUID using file search. Re-exported from `codex-core` as a public function. Used by both `nori resume <id>` and `nori fork <id>` to resolve a session ID to a file path.
 - Error types are defined in `error.rs` and use `thiserror`
 
 **Test Suite Configuration:**

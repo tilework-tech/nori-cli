@@ -29,6 +29,8 @@ This crate is the primary entry point that ties together the core crates:
 ```rust
 match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
+    Some(Subcommand::Resume(cmd)) => /* set TUI flags, run_main */ ,
+    Some(Subcommand::Fork(cmd)) => /* set TUI flags, run_main */ ,
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
@@ -36,6 +38,19 @@ match subcommand {
     // ... other subcommands
 }
 ```
+
+**ResumeCommand**: Resume a previous session via `nori resume`. Accepts:
+- An optional `SESSION_ID` positional argument to resume a specific session by UUID
+- `--last` to resume the most recent session
+- `--all` to show all sessions (disables working directory filtering)
+
+When no arguments are given, opens the interactive resume picker. The subcommand sets internal TUI flags (`resume_session_id`, `resume_last`, `resume_picker`, `resume_show_all`) on the `TuiCli` struct and delegates to `nori_tui::run_main()`.
+
+**ForkCommand**: Fork (branch off from) a previous session via `nori fork <SESSION_ID>`. Accepts:
+- A required `SESSION_ID` positional argument
+- `--turn N` to specify the 0-based user message turn to fork at (drops that turn and everything after). Defaults to the last user message.
+
+The subcommand sets `fork_session_id` and `fork_turn` on the `TuiCli` struct and delegates to `nori_tui::run_main()`. Fork reuses `ConversationManager::fork_conversation` -- the same codepath as TUI backtrack.
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 
@@ -112,6 +127,6 @@ On non-Windows, `wsl_paths.rs` normalizes paths for WSL environments to ensure c
 
 **Exit Handling:**
 
-`handle_app_exit()` prints token usage and session resume hints after TUI exits, then optionally runs update actions if the user requested an upgrade.
+`handle_app_exit()` prints token usage and session hints after TUI exits, then optionally runs update actions if the user requested an upgrade. When a `conversation_id` is present, exit messages include both a resume hint (`nori resume <id>`) and a fork hint (`nori fork <id>`), each rendered in cyan when color is supported.
 
 Created and maintained by Nori.

@@ -68,6 +68,12 @@ enum Subcommand {
     #[cfg(feature = "login")]
     Logout(LogoutCommand),
 
+    /// Resume a previous session.
+    Resume(ResumeCommand),
+
+    /// Fork (branch off from) a previous session at a specific turn.
+    Fork(ForkCommand),
+
     /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
@@ -85,6 +91,33 @@ enum Subcommand {
 
     /// Generate shell completion scripts.
     Completions(CompletionsCommand),
+}
+
+#[derive(Debug, Parser)]
+struct ResumeCommand {
+    /// Session ID (UUID) to resume. If omitted, shows an interactive picker.
+    #[arg(value_name = "SESSION_ID")]
+    session_id: Option<String>,
+
+    /// Resume the most recent session.
+    #[arg(long)]
+    last: bool,
+
+    /// Show all sessions (disables working directory filtering).
+    #[arg(long = "all")]
+    show_all: bool,
+}
+
+#[derive(Debug, Parser)]
+struct ForkCommand {
+    /// Session ID (UUID) to fork from.
+    #[arg(value_name = "SESSION_ID")]
+    session_id: String,
+
+    /// User message turn number to fork at (0-based). Forks before this turn,
+    /// dropping it and everything after. Defaults to the last user message.
+    #[arg(long)]
+    turn: Option<usize>,
 }
 
 #[derive(Debug, Parser)]
@@ -209,12 +242,14 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
 
     if let Some(session_id) = conversation_id {
         let resume_cmd = format!("nori resume {session_id}");
-        let command = if color_enabled {
-            resume_cmd.cyan().to_string()
+        let fork_cmd = format!("nori fork {session_id}");
+        let (resume_display, fork_display) = if color_enabled {
+            (resume_cmd.cyan().to_string(), fork_cmd.cyan().to_string())
         } else {
-            resume_cmd
+            (resume_cmd, fork_cmd)
         };
-        lines.push(format!("To continue this session, run {command}"));
+        lines.push(format!("To continue this session, run {resume_display}"));
+        lines.push(format!("To fork this session, run {fork_display}"));
     }
 
     lines
@@ -379,6 +414,32 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
+        Some(Subcommand::Resume(resume_cmd)) => {
+            prepend_config_flags(
+                &mut interactive.config_overrides,
+                root_config_overrides.clone(),
+            );
+            if let Some(id) = resume_cmd.session_id {
+                interactive.resume_session_id = Some(id);
+            } else if resume_cmd.last {
+                interactive.resume_last = true;
+            } else {
+                interactive.resume_picker = true;
+            }
+            interactive.resume_show_all = resume_cmd.show_all;
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            handle_app_exit(exit_info)?;
+        }
+        Some(Subcommand::Fork(fork_cmd)) => {
+            prepend_config_flags(
+                &mut interactive.config_overrides,
+                root_config_overrides.clone(),
+            );
+            interactive.fork_session_id = Some(fork_cmd.session_id);
+            interactive.fork_turn = fork_cmd.turn;
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            handle_app_exit(exit_info)?;
+        }
         #[cfg(feature = "login")]
         Some(Subcommand::Login(mut login_cli)) => {
             prepend_config_flags(
@@ -532,6 +593,8 @@ mod tests {
                 "Token usage: total=2 input=0 output=2".to_string(),
                 "To continue this session, run nori resume 123e4567-e89b-12d3-a456-426614174000"
                     .to_string(),
+                "To fork this session, run nori fork 123e4567-e89b-12d3-a456-426614174000"
+                    .to_string(),
             ]
         );
     }
@@ -540,8 +603,9 @@ mod tests {
     fn format_exit_messages_applies_color_when_enabled() {
         let exit_info = sample_exit_info(Some("123e4567-e89b-12d3-a456-426614174000"));
         let lines = format_exit_messages(exit_info, true);
-        assert_eq!(lines.len(), 2);
+        assert_eq!(lines.len(), 3);
         assert!(lines[1].contains("\u{1b}[36m"));
+        assert!(lines[2].contains("\u{1b}[36m"));
     }
 
     /// Binary name should be "nori" in help output
@@ -708,5 +772,149 @@ mod tests {
             }
             _ => panic!("expected Skillsets subcommand"),
         }
+    }
+
+    // --- Resume subcommand tests ---
+
+    /// "nori resume" with no args should parse as the Resume subcommand
+    #[test]
+    fn resume_without_args_parsed_as_subcommand() {
+        let cli = MultitoolCli::try_parse_from(["nori", "resume"]).expect("should parse");
+        assert!(
+            matches!(cli.subcommand, Some(Subcommand::Resume(_))),
+            "resume should be parsed as subcommand, got: {:?}",
+            cli.subcommand
+        );
+        assert!(
+            cli.interactive.prompt.is_none(),
+            "prompt should be None when resume subcommand is used"
+        );
+    }
+
+    /// "nori resume <uuid>" should parse with the session ID
+    #[test]
+    fn resume_with_session_id_parsed() {
+        let cli = MultitoolCli::try_parse_from([
+            "nori",
+            "resume",
+            "123e4567-e89b-12d3-a456-426614174000",
+        ])
+        .expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Resume(cmd)) => {
+                assert_eq!(
+                    cmd.session_id.as_deref(),
+                    Some("123e4567-e89b-12d3-a456-426614174000"),
+                );
+            }
+            _ => panic!("expected Resume subcommand"),
+        }
+    }
+
+    /// "nori resume --last" should set the last flag
+    #[test]
+    fn resume_with_last_flag() {
+        let cli = MultitoolCli::try_parse_from(["nori", "resume", "--last"]).expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Resume(cmd)) => {
+                assert!(cmd.last, "--last should be set");
+                assert!(cmd.session_id.is_none(), "session_id should be None");
+            }
+            _ => panic!("expected Resume subcommand"),
+        }
+    }
+
+    /// "nori resume --all" should set the show_all flag
+    #[test]
+    fn resume_with_all_flag() {
+        let cli = MultitoolCli::try_parse_from(["nori", "resume", "--all"]).expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Resume(cmd)) => {
+                assert!(cmd.show_all, "--all should be set");
+            }
+            _ => panic!("expected Resume subcommand"),
+        }
+    }
+
+    /// "resume" should appear in help output
+    #[test]
+    fn resume_subcommand_in_help() {
+        let help = MultitoolCli::command().render_help().to_string();
+        assert!(
+            help.contains("resume"),
+            "Help should show 'resume' subcommand, got: {help}"
+        );
+    }
+
+    // --- Fork subcommand tests ---
+
+    /// "nori fork <uuid>" should parse as the Fork subcommand
+    #[test]
+    fn fork_with_session_id_parsed() {
+        let cli =
+            MultitoolCli::try_parse_from(["nori", "fork", "123e4567-e89b-12d3-a456-426614174000"])
+                .expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Fork(cmd)) => {
+                assert_eq!(
+                    cmd.session_id.as_str(),
+                    "123e4567-e89b-12d3-a456-426614174000",
+                );
+                assert!(cmd.turn.is_none(), "turn should default to None");
+            }
+            _ => panic!("expected Fork subcommand"),
+        }
+    }
+
+    /// "nori fork <uuid> --turn 2" should parse with turn number
+    #[test]
+    fn fork_with_turn_number() {
+        let cli = MultitoolCli::try_parse_from([
+            "nori",
+            "fork",
+            "123e4567-e89b-12d3-a456-426614174000",
+            "--turn",
+            "2",
+        ])
+        .expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Fork(cmd)) => {
+                assert_eq!(
+                    cmd.session_id.as_str(),
+                    "123e4567-e89b-12d3-a456-426614174000",
+                );
+                assert_eq!(cmd.turn, Some(2));
+            }
+            _ => panic!("expected Fork subcommand"),
+        }
+    }
+
+    /// "nori fork" without session ID should produce a parse error
+    #[test]
+    fn fork_requires_session_id() {
+        let result = MultitoolCli::try_parse_from(["nori", "fork"]);
+        assert!(result.is_err(), "fork without a session ID should fail");
+    }
+
+    /// "fork" should appear in help output
+    #[test]
+    fn fork_subcommand_in_help() {
+        let help = MultitoolCli::command().render_help().to_string();
+        assert!(
+            help.contains("fork"),
+            "Help should show 'fork' subcommand, got: {help}"
+        );
+    }
+
+    /// Exit messages should include both resume and fork hints
+    #[test]
+    fn format_exit_messages_includes_fork_hint() {
+        let exit_info = sample_exit_info(Some("123e4567-e89b-12d3-a456-426614174000"));
+        let lines = format_exit_messages(exit_info, false);
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains("nori fork 123e4567-e89b-12d3-a456-426614174000"),
+            "exit messages should include fork hint, got: {joined}"
+        );
     }
 }

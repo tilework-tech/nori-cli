@@ -359,6 +359,28 @@ impl App {
                     resumed.session_configured,
                 )
             }
+            ResumeSelection::Fork {
+                path,
+                nth_user_message,
+            } => {
+                let forked = conversation_manager
+                    .fork_conversation(nth_user_message, config.clone(), path.clone())
+                    .await
+                    .wrap_err_with(|| format!("Failed to fork session from {}", path.display()))?;
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: app_event_tx.clone(),
+                    initial_prompt: initial_prompt.clone(),
+                    initial_images: initial_images.clone(),
+                    enhanced_keys_supported,
+                    auth_manager: auth_manager.clone(),
+                    vertical_footer,
+                    expected_agent: None,
+                    deferred_spawn: false,
+                };
+                ChatWidget::new_from_existing(init, forked.conversation, forked.session_configured)
+            }
         };
 
         chat_widget.maybe_prompt_windows_sandbox_enable();

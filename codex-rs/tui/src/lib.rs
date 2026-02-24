@@ -15,6 +15,7 @@ use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
+use codex_core::count_user_messages_in_rollout;
 use codex_core::find_conversation_path_by_id_str;
 use codex_core::get_platform_sandbox;
 use codex_core::protocol::AskForApproval;
@@ -450,8 +451,45 @@ async fn run_ratatui_app(
         initial_config
     };
 
-    // Determine resume behavior: explicit id, then resume last, then picker.
-    let resume_selection = if let Some(id_str) = cli.resume_session_id.as_deref() {
+    // Determine resume/fork behavior: fork takes priority, then explicit
+    // resume id, then resume last, then picker.
+    let resume_selection = if let Some(id_str) = cli.fork_session_id.as_deref() {
+        match find_conversation_path_by_id_str(&config.codex_home, id_str).await? {
+            Some(path) => {
+                let nth = match cli.fork_turn {
+                    Some(n) => n,
+                    None => {
+                        // Default: fork at the last user message.
+                        count_user_messages_in_rollout(&path)
+                            .await
+                            .unwrap_or(0)
+                            .saturating_sub(1)
+                    }
+                };
+                resume_picker::ResumeSelection::Fork {
+                    path,
+                    nth_user_message: nth,
+                }
+            }
+            None => {
+                error!("Error finding conversation path for fork: {id_str}");
+                restore();
+                session_log::log_session_end();
+                let _ = tui.terminal.clear();
+                if let Err(err) = writeln!(
+                    std::io::stdout(),
+                    "No saved session found with ID {id_str}."
+                ) {
+                    error!("Failed to write fork error message: {err}");
+                }
+                return Ok(AppExitInfo {
+                    token_usage: codex_core::protocol::TokenUsage::default(),
+                    conversation_id: None,
+                    update_action: None,
+                });
+            }
+        }
+    } else if let Some(id_str) = cli.resume_session_id.as_deref() {
         match find_conversation_path_by_id_str(&config.codex_home, id_str).await? {
             Some(path) => resume_picker::ResumeSelection::Resume(path),
             None => {
@@ -461,7 +499,7 @@ async fn run_ratatui_app(
                 let _ = tui.terminal.clear();
                 if let Err(err) = writeln!(
                     std::io::stdout(),
-                    "No saved session found with ID {id_str}. Run `codex resume` without an ID to choose from existing sessions."
+                    "No saved session found with ID {id_str}. Run `nori resume` without an ID to choose from existing sessions."
                 ) {
                     error!("Failed to write resume error message: {err}");
                 }

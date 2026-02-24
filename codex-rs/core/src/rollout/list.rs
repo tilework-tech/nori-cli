@@ -15,6 +15,8 @@ use uuid::Uuid;
 use super::SESSIONS_SUBDIR;
 use crate::protocol::EventMsg;
 use codex_file_search as file_search;
+use codex_protocol::items::TurnItem;
+use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::RolloutItem;
 use codex_protocol::protocol::RolloutLine;
 use codex_protocol::protocol::SessionSource;
@@ -588,4 +590,27 @@ pub async fn find_conversation_path_by_id_str(
         .into_iter()
         .next()
         .map(|m| root.join(m.path)))
+}
+
+/// Count the number of user messages in a rollout file.
+///
+/// This is used to determine the default fork turn when `--turn` is not
+/// specified (fork at the last user message).
+pub async fn count_user_messages_in_rollout(path: &Path) -> io::Result<usize> {
+    let history = super::recorder::RolloutRecorder::get_rollout_history(path).await?;
+    let items = history.get_rollout_items();
+    let count = items
+        .iter()
+        .filter(|item| {
+            if let RolloutItem::ResponseItem(item @ ResponseItem::Message { .. }) = item {
+                matches!(
+                    crate::event_mapping::parse_turn_item(item),
+                    Some(TurnItem::UserMessage(_))
+                )
+            } else {
+                false
+            }
+        })
+        .count();
+    Ok(count)
 }

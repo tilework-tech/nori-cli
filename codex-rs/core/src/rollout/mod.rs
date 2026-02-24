@@ -14,6 +14,7 @@ pub mod recorder;
 
 pub use codex_protocol::protocol::SessionMeta;
 pub(crate) use error::map_session_init_error;
+pub use list::count_user_messages_in_rollout;
 pub use list::find_conversation_path_by_id_str;
 pub use recorder::RolloutRecorder;
 pub use recorder::RolloutRecorderParams;

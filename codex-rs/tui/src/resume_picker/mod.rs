@@ -48,6 +48,10 @@ const LOAD_NEAR_THRESHOLD: usize = 5;
 pub enum ResumeSelection {
     StartFresh,
     Resume(PathBuf),
+    Fork {
+        path: PathBuf,
+        nth_user_message: usize,
+    },
     Exit,
 }
 

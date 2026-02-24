@@ -28,6 +28,10 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `codex_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/codex-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
 
+**Resume/Fork Selection in `run_ratatui_app()`:** After onboarding, `run_ratatui_app()` determines the resume selection based on CLI flags set by `nori resume` / `nori fork` subcommands (see `@/codex-rs/cli/docs.md`). Fork takes highest priority, followed by explicit session ID resume, resume-last, resume picker, and finally `StartFresh`. For fork, it resolves the session path via `find_conversation_path_by_id_str()`, then counts user messages via `count_user_messages_in_rollout()` to determine the default fork turn (last user message minus one) when `--turn` is not specified. The resulting `ResumeSelection` is passed into `App::run()`.
+
+The `ResumeSelection` enum has four variants: `StartFresh`, `Resume(PathBuf)`, `Fork { path, nth_user_message }`, and `Exit`. In `App::run()`, the `Fork` variant calls `ConversationManager::fork_conversation(nth_user_message, config, path)` -- the same codepath used by TUI backtrack -- and constructs a `ChatWidget::new_from_existing()` with the forked conversation state.
+
 The main event loop in `app/mod.rs` processes:
 
 1. **Terminal events** (keyboard input, resize) via `tui.rs`
