@@ -304,7 +304,8 @@ impl App {
 
         // When skillset_per_session is enabled, defer spawning the agent until
         // after the user picks a skillset and the switch writes
-        // `.claude/CLAUDE.md` to disk.
+        // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
+        // agent spawns without a skillset.
         #[cfg(feature = "nori-config")]
         let needs_deferred_spawn = {
             let nori_cfg = codex_acp::config::NoriConfig::load().unwrap_or_default();
@@ -431,7 +432,9 @@ impl App {
         // agent spawn was deferred so that `nori-skillsets switch` can write
         // `.claude/CLAUDE.md` before the agent reads it. Once the user picks a
         // skillset and the switch completes, `event_handling.rs` triggers
-        // `spawn_deferred_agent()`.
+        // `spawn_deferred_agent()`. If the user dismisses the picker, the
+        // `SkillsetPickerDismissed` event triggers the deferred spawn without a
+        // skillset.
         #[cfg(feature = "nori-config")]
         if nori_config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();

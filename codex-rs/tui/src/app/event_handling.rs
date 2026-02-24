@@ -822,6 +822,19 @@ impl App {
                     );
                 }
             }
+            AppEvent::SkillsetPickerDismissed => {
+                // The skillset picker was dismissed without selection. If the
+                // agent spawn was deferred, spawn it now without a skillset
+                // (behaves as if skillset_per_session is disabled).
+                #[cfg(feature = "nori-config")]
+                if let Some(server) = self.server_for_deferred_spawn.take() {
+                    self.chat_widget.spawn_deferred_agent(
+                        self.config.clone(),
+                        self.app_event_tx.clone(),
+                        server,
+                    );
+                }
+            }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
                 let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
