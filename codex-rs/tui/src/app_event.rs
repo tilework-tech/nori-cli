@@ -422,6 +422,15 @@ pub(crate) enum AppEvent {
         nori_home: PathBuf,
     },
 
+    /// Open the fork picker showing user messages from the current session.
+    OpenForkPicker,
+
+    /// Fork the current conversation at the specified user message turn.
+    ForkAtMessage {
+        /// 0-based index of the user message to fork before.
+        nth_user_message: usize,
+    },
+
     /// Resume a previous session via ACP session/load or client-side replay.
     ResumeSession {
         /// The NORI_HOME path

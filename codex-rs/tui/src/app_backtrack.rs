@@ -369,7 +369,7 @@ impl App {
     }
 }
 
-fn trim_transcript_cells_to_nth_user(
+pub(crate) fn trim_transcript_cells_to_nth_user(
     transcript_cells: &mut Vec<Arc<dyn crate::history_cell::HistoryCell>>,
     nth_user_message: usize,
 ) {
@@ -386,7 +386,7 @@ pub(crate) fn user_count(cells: &[Arc<dyn crate::history_cell::HistoryCell>]) ->
     user_positions_iter(cells).count()
 }
 
-fn nth_user_position(
+pub(crate) fn nth_user_position(
     cells: &[Arc<dyn crate::history_cell::HistoryCell>],
     nth: usize,
 ) -> Option<usize> {
@@ -395,7 +395,7 @@ fn nth_user_position(
         .find_map(|(i, idx)| (i == nth).then_some(idx))
 }
 
-fn user_positions_iter(
+pub(crate) fn user_positions_iter(
     cells: &[Arc<dyn crate::history_cell::HistoryCell>],
 ) -> impl Iterator<Item = usize> + '_ {
     let session_start_type = TypeId::of::<SessionInfoCell>();

@@ -907,6 +907,86 @@ impl App {
                 );
                 self.chat_widget.show_selection_view(params);
             }
+            AppEvent::OpenForkPicker => {
+                let user_messages: Vec<(usize, String)> =
+                    crate::app_backtrack::user_positions_iter(&self.transcript_cells)
+                        .enumerate()
+                        .filter_map(|(nth, cell_idx)| {
+                            self.transcript_cells
+                                .get(cell_idx)
+                                .and_then(|cell| {
+                                    cell.as_any()
+                                        .downcast_ref::<crate::history_cell::UserHistoryCell>()
+                                })
+                                .map(|c| (nth, c.message.clone()))
+                        })
+                        .collect();
+                if user_messages.is_empty() {
+                    self.chat_widget
+                        .add_error_message("No user messages to fork from.".to_string());
+                } else {
+                    let params = crate::nori::fork_picker::fork_picker_params(
+                        user_messages,
+                        self.app_event_tx.clone(),
+                    );
+                    self.chat_widget.show_selection_view(params);
+                }
+            }
+            AppEvent::ForkAtMessage { nth_user_message } => {
+                // Extract the selected user message text as composer prefill.
+                let prefill = crate::app_backtrack::nth_user_position(
+                    &self.transcript_cells,
+                    nth_user_message,
+                )
+                .and_then(|idx| self.transcript_cells.get(idx))
+                .and_then(|cell| {
+                    cell.as_any()
+                        .downcast_ref::<crate::history_cell::UserHistoryCell>()
+                })
+                .map(|c| c.message.clone())
+                .unwrap_or_default();
+
+                // Trim transcript to the fork point and render into scrollback.
+                crate::app_backtrack::trim_transcript_cells_to_nth_user(
+                    &mut self.transcript_cells,
+                    nth_user_message,
+                );
+                self.render_transcript_once(tui);
+
+                // Start a fresh ACP session (same as /new).
+                self.shutdown_current_conversation().await;
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: None,
+                    initial_images: Vec::new(),
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    vertical_footer: self.vertical_footer,
+                    expected_agent: None,
+                    deferred_spawn: false,
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
+                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                #[cfg(feature = "nori-config")]
+                self.chat_widget
+                    .set_loop_count_override(self.loop_count_override);
+
+                // Pre-fill the composer with the selected message.
+                if !prefill.is_empty() {
+                    self.chat_widget.set_composer_text(prefill);
+                }
+
+                let turn_label = nth_user_message + 1;
+                self.chat_widget.add_info_message(
+                    format!("Forked conversation at turn {turn_label}. Edit your message and press Enter to submit."),
+                    None,
+                );
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::ResumeSession {
                 nori_home,
                 project_id,

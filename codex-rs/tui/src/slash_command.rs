@@ -22,6 +22,7 @@ pub enum SlashCommand {
     Init,
     Compact,
     Undo,
+    Fork,
     Diff,
     Mention,
     Status,
@@ -48,6 +49,7 @@ impl SlashCommand {
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Undo => "ask Nori to undo a turn",
+            SlashCommand::Fork => "fork this conversation at a previous message",
             SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
@@ -82,6 +84,7 @@ impl SlashCommand {
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Undo
+            | SlashCommand::Fork
             | SlashCommand::Model
             | SlashCommand::Approvals
             | SlashCommand::Config
@@ -240,6 +243,33 @@ mod tests {
             !SlashCommand::SwitchSkillset.available_during_task(),
             "/switch-skillset should not be available while task is running"
         );
+    }
+
+    #[test]
+    fn fork_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_fork = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Fork);
+        assert!(has_fork, "/fork should be visible in commands list");
+    }
+
+    #[test]
+    fn fork_has_description() {
+        let desc = SlashCommand::Fork.description();
+        assert!(!desc.is_empty(), "/fork should have a description");
+    }
+
+    #[test]
+    fn fork_not_available_during_task() {
+        assert!(
+            !SlashCommand::Fork.available_during_task(),
+            "/fork should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn fork_parses_from_string() {
+        let cmd: SlashCommand = "fork".parse().expect("/fork should parse from string");
+        assert_eq!(cmd, SlashCommand::Fork);
     }
 
     #[test]

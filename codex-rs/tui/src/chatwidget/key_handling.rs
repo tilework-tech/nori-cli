@@ -175,6 +175,9 @@ impl ChatWidget {
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
+            SlashCommand::Fork => {
+                self.app_event_tx.send(AppEvent::OpenForkPicker);
+            }
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
                 let tx = self.app_event_tx.clone();
