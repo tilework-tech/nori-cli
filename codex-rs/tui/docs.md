@@ -100,9 +100,9 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 
 | Command | Description |
 |---------|-------------|
-| `/agent` | Switch between available ACP agents |
-| `/model` | Choose model (ACP model picker) |
-| `/approvals` | Choose what Nori can do without approval |
+| `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
+| `/model` | Choose model (dynamically shows current agent/model name) |
+| `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
@@ -120,6 +120,10 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/switch-skillset` | Switch between available skillsets |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
+
+**Slash Command Description Overrides:**
+
+`/agent`, `/model`, and `/approvals` show the current runtime value in parentheses in the slash command popup (e.g., `(current: Mock ACP)`). This is implemented via a `command_description_overrides: HashMap<SlashCommand, String>` that flows through `BottomPane` -> `ChatComposer` -> `CommandPopup`. `BottomPane::set_agent_display_name()` sets overrides for both `/agent` and `/model`; `BottomPane::set_approval_mode_label()` sets the override for `/approvals`. The agent override is populated at startup in `BottomPane::new()` and updated on agent switches. The approval override is set whenever the approval mode changes.
 
 **Undo Snapshot Picker (`/undo`):**
 

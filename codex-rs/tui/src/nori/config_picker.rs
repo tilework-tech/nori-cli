@@ -88,7 +88,7 @@ pub fn config_picker_params(
                 // No-op: cannot toggle while skillset_per_session is enabled
             })];
             SelectionItem {
-                name: "Auto Worktree (on, required by Per Session Skillsets)".to_string(),
+                name: "Auto Worktree (on, required)".to_string(),
                 description: Some(
                     "Cannot be disabled while Per Session Skillsets is enabled".to_string(),
                 ),
