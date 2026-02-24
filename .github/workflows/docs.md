@@ -11,8 +11,8 @@ Path: @/.github/workflows
 ### How it fits into the larger codebase
 
 - The release workflow builds Rust binaries from `@/codex-rs/` and packages them via the Node.js launcher in `@/nori-cli/`
-- Version detection delegates to `@/scripts/create_nori_release --get-next-version`, which is the single source of truth for version numbering
-- Stable releases use "synthetic commits" created by the `create_nori_release` script -- release tags point to commits that exist only for the release (not on any branch), with `Cargo.toml` updated to the release version, keeping the `dev` branch's `Cargo.toml` at a placeholder
+- Version detection delegates to `@/scripts/create_nori_release --get-next-version`, which queries git tags (via the GitHub API) as the single source of truth for version numbering
+- Stable releases use "synthetic commits" created by the `create_nori_release` script -- release tags point to commits that exist only for the release (not on any branch), with `Cargo.toml` updated to the release version, keeping the `dev` branch's `Cargo.toml` at a placeholder `0.0.0`
 - The `nori-release.yml` workflow publishes to npm under the package name `nori-ai-cli`, with stable releases tagged `@latest` and dev snapshots tagged `@next`
 
 ### Core Implementation
@@ -43,6 +43,13 @@ validate -> test -> build-native (matrix: 4 targets) -> stage-npm -> create-next
 - `publish-npm` -- publishes to npm with `--tag next` for pre-releases or `--tag latest` for stable
 - `create-release` -- creates a GitHub Release with native binary assets
 
+**Version injection into the compiled binary:** The `dev` branch keeps `Cargo.toml` at `version = "0.0.0"` as a placeholder. Different release types inject the real version differently:
+
+| Release type | How version reaches `Cargo.toml` before `cargo build` |
+|---|---|
+| Tag push (stable/alpha) | The tag points to a synthetic commit where `Cargo.toml` already has the correct version baked in |
+| `@next` dev snapshot | The `build-native` job runs a `sed` step to inject the version from `validate` outputs into `Cargo.toml` before building |
+
 **Job conditional pattern:** Downstream jobs that should run for both tag pushes and `@next` publishes use the pattern `needs.validate.outputs.is_tag_push == 'true' || (needs.validate.outputs.publish_next == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false))`. The `workflow_dispatch` guard is necessary because `inputs.dry_run` is undefined for push events.
 
 ### Things to Know
@@ -51,5 +58,6 @@ validate -> test -> build-native (matrix: 4 targets) -> stage-npm -> create-next
 - Dev branch `@next` publishes reuse the exact same version detection, tag creation, npm publish, and GitHub Release creation code paths as manual `publish_next` dispatches
 - The `dry_run` input only applies to `workflow_dispatch` -- tag pushes and dev branch pushes always publish for real
 - Build runners use Blacksmith (e.g., `blacksmith-4vcpu-ubuntu-2404`) for most jobs, with standard `ubuntu-24.04` for npm publish (which needs the `npm-publish` environment)
+- Git tags are the source of truth for all version numbering -- both the `validate` job (via `create_nori_release --get-next-version`) and the `create_nori_release` script's `determine_version()` function use `list_tags()` to enumerate existing versions; GitHub Releases are not consulted for version counting
 
 Created and maintained by Nori.
