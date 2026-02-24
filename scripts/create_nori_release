@@ -381,14 +381,12 @@ def determine_version(args: argparse.Namespace) -> str:
         # NOTE: This logic is mirrored in .github/workflows/nori-release.yml
         # Keep them in sync if changes are made
         next_prefix = f"{current_stable_version}-next."
-        releases = list_releases()
+        tags = list_tags()
         highest_next = 0
 
-        for release in releases:
-            tag = release.get("tag_name", "")
-            candidate = strip_tag_prefix(tag)
-            if candidate and candidate.startswith(next_prefix):
-                suffix = candidate[len(next_prefix) :]
+        for version in tags:
+            if version.startswith(next_prefix):
+                suffix = version[len(next_prefix):]
                 try:
                     next_number = int(suffix)
                 except ValueError:
@@ -399,15 +397,13 @@ def determine_version(args: argparse.Namespace) -> str:
 
     # For alpha releases, find the highest alpha number
     alpha_prefix = f"{next_minor_version}-alpha."
-    releases = list_releases()
+    tags = list_tags()
     highest_alpha = 0
     found_alpha = False
 
-    for release in releases:
-        tag = release.get("tag_name", "")
-        candidate = strip_tag_prefix(tag)
-        if candidate and candidate.startswith(alpha_prefix):
-            suffix = candidate[len(alpha_prefix) :]
+    for version in tags:
+        if version.startswith(alpha_prefix):
+            suffix = version[len(alpha_prefix):]
             try:
                 alpha_number = int(suffix)
             except ValueError:
@@ -473,26 +469,6 @@ def get_latest_release_version() -> str | None:
     # Find the highest version
     highest = max(stable_versions)
     return format_version(*highest)
-
-
-def list_releases() -> list[dict]:
-    """List all releases."""
-    try:
-        response = run_gh_api(f"/repos/{REPO}/releases?per_page=100")
-        if not isinstance(response, list):
-            return []
-        return response
-    except ReleaseError:
-        return []
-
-
-def strip_tag_prefix(tag: str | None) -> str | None:
-    """Remove the tag prefix from a tag name."""
-    if not tag:
-        return None
-    if not tag.startswith(TAG_PREFIX):
-        return None
-    return tag[len(TAG_PREFIX) :]
 
 
 def parse_semver(version: str) -> tuple[int, int, int]:

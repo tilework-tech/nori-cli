@@ -12,7 +12,7 @@ The ACP crate implements the Agent Client Protocol integration for Nori. It mana
 nori-tui
     |
     v
-codex-acp <---> ACP Agent subprocess (claude-code-acp, codex-acp, gemini-cli)
+codex-acp <---> ACP Agent subprocess (claude-agent-acp, codex-acp, gemini-cli)
     |
     v
 codex-protocol (internal event types)
