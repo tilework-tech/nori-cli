@@ -158,11 +158,8 @@ impl App {
 
     #[cfg(feature = "nori-config")]
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
-        let mut builder = ConfigEditsBuilder::new(&self.config.codex_home);
-        builder = builder.set_path(&["tui", "skillset_per_session"], toml_value(enabled));
-        if enabled {
-            builder = builder.set_path(&["tui", "auto_worktree"], toml_value(true));
-        }
+        let builder = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "skillset_per_session"], toml_value(enabled));
         if let Err(err) = builder.apply().await {
             tracing::error!(error = %err, "failed to persist skillset_per_session setting");
             self.chat_widget.add_error_message(format!(

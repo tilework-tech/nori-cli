@@ -182,15 +182,13 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
 
-The worktree context is detected by `handle_switch_skillset_command()`: if the cwd's parent directory is named `.worktrees`, the cwd is passed as `install_dir`. This enables per-worktree skillset installation.
+The worktree context is detected by `handle_switch_skillset_command()`: if the cwd's parent directory is named `.worktrees`, the cwd is passed as `install_dir`. When `skillset_per_session` is enabled, the cwd is used as `install_dir` even when not in a worktree. This enables per-worktree or per-session skillset installation.
 
-When `skillset_per_session` is enabled in `NoriConfig` and the session is in a worktree, the skillset picker is automatically triggered at startup in `App::run()`.
+When `skillset_per_session` is enabled in `NoriConfig`, the skillset picker is automatically triggered at startup in `App::run()`, regardless of whether the session is in a worktree.
 
-Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`), `AppEvent::InstallSkillset`, `AppEvent::SwitchSkillset`, `AppEvent::SkillsetInstallResult`, `AppEvent::SkillsetSwitchResult`
+Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`), `AppEvent::InstallSkillset`, `AppEvent::SwitchSkillset`, `AppEvent::SkillsetInstallResult`, `AppEvent::SkillsetSwitchResult`, `AppEvent::OpenSkillsetPerSessionWorktreeChoice`
 
-The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it emits `AppEvent::SetConfigSkillsetPerSession`, which is handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`. When per-session skillsets is enabled, the "Auto Worktree" item in the config picker is locked to "on (required)" and its toggle callback is a no-op, because `skillset_per_session` forces `auto_worktree = true` at the config resolution layer (see `@/codex-rs/acp/src/config/loader.rs`).
-
-As a defense-in-depth measure, the `SetConfigAutoWorktree(false)` handler in `app/event_handling.rs` also reloads the config and blocks the disable if `skillset_per_session` is currently enabled, displaying an info message to the user.
+The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it on emits `AppEvent::OpenSkillsetPerSessionWorktreeChoice`, which opens a worktree choice modal (`skillset_worktree_choice_params()`) letting the user choose between "With Auto Worktrees" and "Without Auto Worktrees". The choice determines whether `auto_worktree` is also enabled. Toggling it off emits `AppEvent::SetConfigSkillsetPerSession`, handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`. The "Auto Worktree" toggle is always independently toggleable regardless of the `skillset_per_session` state.
 
 The `session_skillset_name` field propagates through the widget hierarchy: `ChatWidget` -> `BottomPane` -> `ChatComposer` -> `Footer`. In the footer, `session_skillset_name` takes priority over `nori_profile` from `SystemInfo` for the skillset display segment.
 
