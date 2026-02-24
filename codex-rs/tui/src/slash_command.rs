@@ -25,6 +25,7 @@ pub enum SlashCommand {
     Diff,
     Mention,
     Status,
+    Memory,
     FirstPrompt,
     Mcp,
     Login,
@@ -51,6 +52,7 @@ impl SlashCommand {
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and context window usage",
+            SlashCommand::Memory => "show the contents of all active instruction files",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
@@ -89,6 +91,7 @@ impl SlashCommand {
             SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
+            | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Mcp
             | SlashCommand::Quit
