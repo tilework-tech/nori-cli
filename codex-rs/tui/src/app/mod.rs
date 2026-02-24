@@ -251,6 +251,12 @@ pub(crate) struct App {
 
     /// Guard to prevent showing the worktree cleanup warning more than once per session.
     worktree_warning_shown: bool,
+
+    /// Holds the ConversationManager when agent spawn is deferred (waiting for
+    /// a skillset switch to complete before starting the agent). Taken via
+    /// `.take()` once the switch succeeds and the agent is spawned.
+    #[cfg(feature = "nori-config")]
+    server_for_deferred_spawn: Option<Arc<ConversationManager>>,
 }
 
 #[derive(Clone, Debug)]
@@ -296,6 +302,18 @@ impl App {
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
 
+        // When skillset_per_session is enabled and we're in a worktree, defer
+        // spawning the agent until after the user picks a skillset and the switch
+        // writes `.claude/CLAUDE.md` to disk.
+        #[cfg(feature = "nori-config")]
+        let needs_deferred_spawn = {
+            let nori_cfg = codex_acp::config::NoriConfig::load().unwrap_or_default();
+            nori_cfg.skillset_per_session
+                && crate::system_info::extract_worktree_name(&config.cwd).is_some()
+        };
+        #[cfg(not(feature = "nori-config"))]
+        let needs_deferred_spawn = false;
+
         let mut chat_widget = match resume_selection {
             ResumeSelection::StartFresh | ResumeSelection::Exit => {
                 let init = crate::chatwidget::ChatWidgetInit {
@@ -308,6 +326,7 @@ impl App {
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
                     expected_agent: None, // No filtering for fresh sessions
+                    deferred_spawn: needs_deferred_spawn,
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
@@ -332,6 +351,7 @@ impl App {
                     auth_manager: auth_manager.clone(),
                     vertical_footer,
                     expected_agent: None, // No filtering for resumed sessions
+                    deferred_spawn: false,
                 };
                 ChatWidget::new_from_existing(
                     init,
@@ -357,7 +377,7 @@ impl App {
         );
 
         let mut app = Self {
-            server: conversation_manager,
+            server: conversation_manager.clone(),
             app_event_tx,
             chat_widget,
             auth_manager: auth_manager.clone(),
@@ -382,6 +402,12 @@ impl App {
             vim_mode_enabled: false,
             system_info_tx,
             worktree_warning_shown: false,
+            #[cfg(feature = "nori-config")]
+            server_for_deferred_spawn: if needs_deferred_spawn {
+                Some(conversation_manager)
+            } else {
+                None
+            },
         };
 
         // Load NoriConfig and propagate settings to the textarea.
@@ -402,37 +428,16 @@ impl App {
             );
         }
 
-        // If skillset_per_session is enabled and we're in a worktree, check if a
-        // skillset is already active. If so, load it; otherwise show the picker.
+        // If skillset_per_session is enabled and we're in a worktree, show the
+        // skillset picker. The agent spawn was deferred so that
+        // `nori-skillsets switch` can write `.claude/CLAUDE.md` before the agent
+        // reads it. Once the user picks a skillset and the switch completes,
+        // `event_handling.rs` triggers `spawn_deferred_agent()`.
         #[cfg(feature = "nori-config")]
-        if nori_config.skillset_per_session {
-            let is_in_worktree =
-                crate::system_info::extract_worktree_name(&app.config.cwd).is_some();
-            if is_in_worktree {
-                // Check if .nori-config.json already has an activeSkillset
-                let existing_skillset = app
-                    .config
-                    .cwd
-                    .join(".nori-config.json")
-                    .exists()
-                    .then(|| {
-                        std::fs::read_to_string(app.config.cwd.join(".nori-config.json"))
-                            .ok()
-                            .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-                            .and_then(|j| {
-                                j.get("activeSkillset")
-                                    .and_then(|v| v.as_str())
-                                    .map(String::from)
-                            })
-                    })
-                    .flatten();
-
-                if let Some(name) = existing_skillset {
-                    app.chat_widget.set_session_skillset_name(Some(name));
-                } else {
-                    app.chat_widget.handle_switch_skillset_command();
-                }
-            }
+        if nori_config.skillset_per_session
+            && crate::system_info::extract_worktree_name(&app.config.cwd).is_some()
+        {
+            app.chat_widget.handle_switch_skillset_command();
         }
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.

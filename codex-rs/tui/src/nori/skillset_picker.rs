@@ -169,9 +169,15 @@ pub fn skillset_picker_params(
         })
         .collect();
 
+    let subtitle = if let Some(ref dir) = install_dir {
+        format!("Switching skillset in {}", dir.display())
+    } else {
+        "Install a skillset to customize Nori's capabilities".to_string()
+    };
+
     SelectionViewParams {
         title: Some("Select Skillset".to_string()),
-        subtitle: Some("Install a skillset to customize Nori's capabilities".to_string()),
+        subtitle: Some(subtitle),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: true,

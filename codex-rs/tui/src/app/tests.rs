@@ -59,6 +59,8 @@ fn make_test_app() -> App {
         vim_mode_enabled: false,
         system_info_tx,
         worktree_warning_shown: false,
+        #[cfg(feature = "nori-config")]
+        server_for_deferred_spawn: None,
     }
 }
 
@@ -103,6 +105,8 @@ fn make_test_app_with_channels() -> (
             vim_mode_enabled: false,
             system_info_tx,
             worktree_warning_shown: false,
+            #[cfg(feature = "nori-config")]
+            server_for_deferred_spawn: None,
         },
         rx,
         op_rx,

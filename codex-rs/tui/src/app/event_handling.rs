@@ -66,6 +66,7 @@ impl App {
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
                     expected_agent: None, // No filtering for /new command
+                    deferred_spawn: false,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -575,6 +576,7 @@ impl App {
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
                     expected_agent: Some(agent_name.clone()),
+                    deferred_spawn: false,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -770,6 +772,7 @@ impl App {
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
                     expected_agent: None,
+                    deferred_spawn: false,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -815,6 +818,16 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_switch_result(&name, success, &message);
+                // If the agent spawn was deferred (waiting for skillset switch to
+                // complete), trigger it now that files are on disk.
+                #[cfg(feature = "nori-config")]
+                if success && let Some(server) = self.server_for_deferred_spawn.take() {
+                    self.chat_widget.spawn_deferred_agent(
+                        self.config.clone(),
+                        self.app_event_tx.clone(),
+                        server,
+                    );
+                }
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
@@ -927,6 +940,7 @@ impl App {
                             auth_manager: self.auth_manager.clone(),
                             vertical_footer: self.vertical_footer,
                             expected_agent: None,
+                            deferred_spawn: false,
                         };
                         self.chat_widget =
                             ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
