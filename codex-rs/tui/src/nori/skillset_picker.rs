@@ -174,8 +174,8 @@ pub fn skillset_picker_params(
         subtitle: Some("Install a skillset to customize Nori's capabilities".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
-        is_searchable: true,
-        search_placeholder: Some("Search skillsets...".to_string()),
+        // Search is disabled because skillset items don't populate `search_value`.
+        is_searchable: false,
         ..Default::default()
     }
 }
@@ -268,15 +268,6 @@ mod tests {
         let params = skillset_picker_params(names, None);
 
         assert!(params.items.is_empty());
-    }
-
-    #[test]
-    fn test_skillset_picker_is_searchable() {
-        let names = vec!["test".to_string()];
-        let params = skillset_picker_params(names, None);
-
-        assert!(params.is_searchable);
-        assert!(params.search_placeholder.is_some());
     }
 
     #[test]

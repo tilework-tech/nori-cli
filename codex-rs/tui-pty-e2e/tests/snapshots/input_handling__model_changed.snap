@@ -4,4 +4,4 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › /model
 
-  /model  choose what model and reasoning effort to use
+  /model  choose what model and reasoning effort to use (current: Mock ACP)

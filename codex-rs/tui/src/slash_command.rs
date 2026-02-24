@@ -54,7 +54,7 @@ impl SlashCommand {
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
-            SlashCommand::Config => "toggle TUI settings (vertical footer)",
+            SlashCommand::Config => "toggle config settings",
             SlashCommand::Mcp => "list configured MCP tools",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
