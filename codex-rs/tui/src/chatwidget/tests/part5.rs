@@ -869,22 +869,21 @@ fn late_mcp_tool_call_after_agent_message_is_discarded() {
     );
 }
 
-/// Issue 1 regression test: when ExecBegin events are deferred during streaming
-/// and then AgentMessage arrives, the deferred ExecBegin events should be
-/// discarded (not rendered below the agent's final message).
+/// Regression test: ExecEnd events arriving during streaming should flush the
+/// stream and be handled immediately (not deferred). This ensures tool call
+/// cells appear in the correct interleaved position between text blocks.
 ///
-/// `on_agent_message` uses `flush_completions_and_clear` to process pending End
-/// events while discarding stale Begin events. This prevents tool-call cells
-/// from appearing AFTER the agent's final response text.
+/// Previously, ExecEnd was deferred while streaming was active, causing tool
+/// cells to appear after all text on TaskComplete. Now, ExecEnd flushes the
+/// stream first (matching ExecBegin's behavior), so it is handled inline.
 ///
 /// Sequence:
 /// 1. Start task, begin an exec command (creates active exec cell)
 /// 2. Start streaming agent content (creates stream_controller)
-/// 3. ExecEnd arrives for the running command → deferred (stream_controller is Some)
-/// 4. New ExecBegin arrives → also deferred (queue is non-empty)
-/// 5. on_agent_message → should discard the new ExecBegin but process the ExecEnd
+/// 3. ExecEnd arrives → flushes stream, handles immediately (NOT deferred)
+/// 4. Interrupt queue stays empty
 #[test]
-fn agent_message_discards_deferred_exec_begin_events() {
+fn exec_end_flushes_stream_and_handles_immediately() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     // 1. Start a task and begin an exec command (before streaming starts)
@@ -900,95 +899,13 @@ fn agent_message_discards_deferred_exec_begin_events() {
         "stream_controller should exist after delta"
     );
 
-    // 3. ExecEnd arrives for the running command → deferred (stream_controller is Some)
-    let ExecCommandBeginEvent {
-        call_id,
-        process_id,
-        turn_id,
-        command,
-        cwd,
-        parsed_cmd,
-        source,
-        interaction_input,
-    } = first_begin;
-    chat.handle_codex_event(Event {
-        id: call_id.clone(),
-        msg: EventMsg::ExecCommandEnd(ExecCommandEndEvent {
-            call_id,
-            process_id,
-            turn_id,
-            command,
-            cwd,
-            parsed_cmd,
-            source,
-            interaction_input,
-            stdout: "first output".to_string(),
-            stderr: String::new(),
-            aggregated_output: "first output".to_string(),
-            exit_code: 0,
-            duration: std::time::Duration::from_millis(5),
-            formatted_output: "first output".to_string(),
-        }),
-    });
-    assert!(
-        !chat.interrupts.is_empty(),
-        "ExecEnd should be deferred while streaming"
-    );
+    // 3. ExecEnd arrives → should flush stream and handle immediately
+    end_exec(&mut chat, first_begin, "first output", "", 0);
 
-    // 4. New ExecBegin arrives → also deferred (queue is non-empty from ExecEnd)
-    let stale_begin = ExecCommandBeginEvent {
-        call_id: "stale-call".to_string(),
-        process_id: None,
-        turn_id: "turn-1".to_string(),
-        command: vec![
-            "bash".to_string(),
-            "-lc".to_string(),
-            "echo stale".to_string(),
-        ],
-        cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        parsed_cmd: vec![],
-        source: ExecCommandSource::Agent,
-        interaction_input: None,
-    };
-    chat.handle_codex_event(Event {
-        id: "stale-call".into(),
-        msg: EventMsg::ExecCommandBegin(stale_begin),
-    });
-
-    // 5. Drain any cells emitted so far
-    drain_insert_history(&mut rx);
-
-    // 6. AgentMessage arrives - should use flush_completions_and_clear:
-    //    - Process ExecEnd (completing the first command)
-    //    - Discard the new ExecBegin ("echo stale")
-    chat.on_agent_message("Here is my answer".to_string());
-
-    let cells = drain_insert_history(&mut rx);
-    let combined: String = cells
-        .iter()
-        .map(|lines| lines_to_single_string(lines))
-        .collect();
-
-    // The stale ExecBegin ("echo stale") should NOT appear in history
-    assert!(
-        !combined.contains("echo stale"),
-        "deferred ExecBegin should have been discarded by on_agent_message, \
-         but it was rendered: {combined:?}"
-    );
-
-    // Also verify the active_cell doesn't contain the stale exec
-    if let Some(ref cell) = chat.active_cell {
-        let active_text = lines_to_single_string(&cell.display_lines(80));
-        assert!(
-            !active_text.contains("echo stale"),
-            "deferred ExecBegin should not appear in active_cell: {active_text:?}"
-        );
-    }
-
-    // The interrupt queue should be empty after the flush
+    // The interrupt queue should be empty — ExecEnd was NOT deferred
     assert!(
         chat.interrupts.is_empty(),
-        "interrupt queue should be empty after on_agent_message flush"
+        "ExecEnd should NOT be deferred; it should flush stream and handle immediately"
     );
 }
 
@@ -1116,5 +1033,80 @@ fn compact_without_summary_shows_only_compacted_message() {
     assert!(
         !combined.contains("Nori CLI"),
         "should NOT show session header when summary is None: {combined:?}"
+    );
+}
+
+/// Regression test: tool call results should appear between text blocks, not
+/// after all text.
+///
+/// When the agent streams: text → tool_use → text, the ExecCommandEnd event
+/// must be handled in position (after flushing the first text block) rather
+/// than deferred until TaskComplete.
+///
+/// Sequence:
+/// 1. TaskStarted
+/// 2. Stream text ("Sure, let me check...\n")
+/// 3. ExecCommandBegin (tool call starts)
+/// 4. ExecCommandEnd (tool call completes with output)
+/// 5. Stream more text ("Done!\n")
+/// 6. TaskComplete
+/// 7. Assert: tool call cell appears BETWEEN the two text blocks
+#[test]
+fn exec_end_not_deferred_during_streaming() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // 1. Start a task
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    // 2. Stream first text block
+    chat.on_agent_message_delta("Sure, let me check...\n".to_string());
+    chat.on_commit_tick();
+    let first_text = drain_insert_history(&mut rx);
+    assert!(
+        !first_text.is_empty(),
+        "first text block should have been committed to history"
+    );
+
+    // 3. ExecCommandBegin — this flushes the stream and handles immediately
+    let begin_ev = begin_exec(&mut chat, "call-1", "git status");
+
+    // 4. ExecCommandEnd — previously this was deferred; now it should flush and handle
+    end_exec(&mut chat, begin_ev, "on branch main\n", "", 0);
+
+    // The exec cell should now be completed (not deferred)
+    assert!(
+        chat.interrupts.is_empty(),
+        "ExecCommandEnd should NOT be deferred; interrupt queue should be empty"
+    );
+
+    // 5. Stream second text block
+    chat.on_agent_message_delta("Done!\n".to_string());
+    chat.on_commit_tick();
+
+    // 6. TaskComplete
+    chat.on_task_complete(None);
+
+    // 7. Collect all history cells and verify ordering
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    // The tool call ("git status") should appear before "Done!"
+    let tool_pos = full.find("git status");
+    let done_pos = full.find("Done!");
+    assert!(
+        tool_pos.is_some(),
+        "tool call should appear in history: {full:?}"
+    );
+    assert!(
+        done_pos.is_some(),
+        "second text block should appear in history: {full:?}"
+    );
+    assert!(
+        tool_pos.unwrap() < done_pos.unwrap(),
+        "tool call should appear BEFORE second text block, but tool_pos={} >= done_pos={}\nfull output: {full:?}",
+        tool_pos.unwrap(),
+        done_pos.unwrap(),
     );
 }
