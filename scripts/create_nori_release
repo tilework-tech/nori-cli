@@ -2,7 +2,7 @@
 """
 Create a Nori release using synthetic commits.
 
-This script creates release tags without modifying the dev branch's Cargo.toml.
+This script creates release tags without modifying the main branch's Cargo.toml.
 Instead, it creates a synthetic commit (via GitHub API) that contains the
 version update, and tags that commit.
 
@@ -16,7 +16,7 @@ Usage:
     # Create next alpha release (for upcoming version)
     ./scripts/create_nori_release --publish-alpha
 
-    # Create next dev snapshot (for internal testing)
+    # Create next snapshot (for internal testing)
     ./scripts/create_nori_release --publish-next
 
     # Create specific version
@@ -32,7 +32,7 @@ import sys
 
 
 REPO = "tilework-tech/nori-cli"
-BRANCH_REF = "heads/dev"
+BRANCH_REF = "heads/main"
 CARGO_TOML_PATH = "codex-rs/Cargo.toml"
 TAG_PREFIX = "nori-v"
 
@@ -125,7 +125,7 @@ def main(argv: list[str]) -> int:
 
         if args.dry_run:
             print("\n[DRY RUN] Would perform the following:")
-            print(f"  1. Fetch dev branch head")
+            print(f"  1. Fetch main branch head")
             print(f"  2. Create synthetic commit with Cargo.toml version = {version}")
             print(f"  3. Create annotated tag {tag_name}")
             print(f"  4. Push tag to origin")
@@ -224,7 +224,7 @@ def tag_exists(tag_name: str) -> bool:
 
 
 def get_branch_head() -> str:
-    """Get the SHA of the dev branch head."""
+    """Get the SHA of the main branch head."""
     response = run_gh_api(f"/repos/{REPO}/git/refs/{BRANCH_REF}")
     try:
         return response["object"]["sha"]

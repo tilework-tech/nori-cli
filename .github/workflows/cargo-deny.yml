@@ -3,7 +3,7 @@ name: cargo-deny
 on:
   pull_request: {}
   push:
-    branches: [main, dev]
+    branches: [main]
 
 jobs:
   cargo-deny:

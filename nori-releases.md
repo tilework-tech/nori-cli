@@ -30,17 +30,16 @@ fork/upstream-sync ──────┴─────────────�
                 │                       │
                 │ merge                 │ merge
                 ▼                       ▼
-origin/dev ─────●────●────●────●────────●────●────●────────────→ (your ACP work)
+origin/main ────●────●────●────●────────●────●────●────────────→ (your ACP work)
 ```
 
 Branch Roles:
 
 | Branch             | Purpose                                       |
 | ------------------ | --------------------------------------------- |
-| origin/main        | Stable releases of your fork                  |
-| origin/dev         | Active development (ACP features)             |
+| origin/main        | Active development and releases                |
 | fork/upstream-main | Tracks upstream/main exactly (already exists) |
-| fork/upstream-sync | NEW: Sync point branch for merges             |
+| fork/upstream-sync | Sync point branch for merges                  |
 
 ## Automated Sync (CI)
 
@@ -55,7 +54,7 @@ upstream releases and creates draft PRs.
 2. Finds latest stable tag (X.Y.Z only, no alpha/beta)
 3. Updates `fork/upstream-sync` branch to point to the tag
 4. Creates `sync/upstream-vX.Y.Z` branch from the tag
-5. Opens a draft PR against `dev` with merge instructions
+5. Opens a draft PR against `main` with merge instructions
 
 **Manual trigger:**
 
@@ -91,10 +90,10 @@ git checkout -b sync/upstream-v0.63.0 rust-v0.63.0
 git push origin sync/upstream-v0.63.0
 ```
 
-3. Merge into dev with conflict resolution
+3. Merge into main with conflict resolution
 
 ```bash
-git checkout dev
+git checkout main
 git merge sync/upstream-v0.63.0 --no-ff -m "Sync upstream rust-v0.63.0"
 ```
 
@@ -103,7 +102,7 @@ git merge sync/upstream-v0.63.0 --no-ff -m "Sync upstream rust-v0.63.0"
 ```bash
 cd codex-rs && cargo test
 cargo insta review  # if snapshot tests need updating
-git push origin dev
+git push origin main
 ```
 
 ## Downstream Nori Releases
@@ -116,7 +115,7 @@ on upstream releases for our release tagging.
 Nori uses "synthetic commits" for releases, similar to upstream OpenAI/Codex:
 
 ```
-dev branch:  ──●──●──●──●──●──●──●──  (Cargo.toml = placeholder, e.g., "0.0.0")
+main branch: ──●──●──●──●──●──●──●──  (Cargo.toml = placeholder, e.g., "0.0.0")
                               │
                               │ script creates synthetic commit via GitHub API
                               ▼
@@ -128,7 +127,7 @@ dev branch:  ──●──●──●──●──●──●──●─�
 
 **Key benefits:**
 
-- The `dev` branch's `Cargo.toml` never needs manual version bumps
+- The `main` branch's `Cargo.toml` never needs manual version bumps
 - Release tags point to immutable snapshots with the correct version
 - No "version bump" PRs cluttering git history
 - Version is derived from existing releases automatically
@@ -147,7 +146,7 @@ Use the `create_nori_release` script to create releases:
 # Create next alpha release (for upcoming version, e.g., 0.3.0-alpha.1)
 ./scripts/create_nori_release --publish-alpha
 
-# Create a dev snapshot for internal testing (e.g., 0.2.0-next.1)
+# Create a snapshot for internal testing (e.g., 0.2.0-next.1)
 ./scripts/create_nori_release --publish-next
 
 # Create a specific version
@@ -163,7 +162,7 @@ Use the `create_nori_release` script to create releases:
 Releases). This is robust against incomplete release workflows where a tag exists
 but the GitHub Release was never created due to workflow cancellation or failure.
 
-### Creating Dev Snapshots (@next)
+### Creating Snapshots (@next)
 
 For internal testing before a stable release, use the `--publish-next` flag:
 
@@ -171,7 +170,7 @@ For internal testing before a stable release, use the `--publish-next` flag:
 # Preview what version would be created
 ./scripts/create_nori_release --dry-run --publish-next
 
-# Create and publish a dev snapshot
+# Create and publish a snapshot
 ./scripts/create_nori_release --publish-next
 ```
 
@@ -181,7 +180,7 @@ stable release. These are published to npm with the `next` tag.
 **From GitHub UI (no local tooling required):**
 
 ```bash
-# Publish a dev snapshot directly from GitHub Actions
+# Publish a snapshot directly from GitHub Actions
 gh workflow run nori-release.yml -f publish_next=true -f dry_run=false
 
 # Preview what version would be created (dry run)

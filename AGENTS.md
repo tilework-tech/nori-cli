@@ -1,7 +1,3 @@
-# Use the dev/ git branch
-
-Right now, main/ is deprecated. Focus on dev/.
-
 # We only care about the ACP backend
 
 We only care about the ACP backend and the code that compiles into the nori bin. We do not care about the default codex backend or the code that compiles into the codex bin. Make sure all changes and responses are aligned to this critical fact. For example, if I ask 'add notifications to the cli', you should assume I mean 'add notification support to the ACP backend for the nori cli'.

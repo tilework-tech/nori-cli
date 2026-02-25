@@ -4,19 +4,19 @@
 #
 # Triggers:
 #   1. Tag push (nori-v*.*.*) - created via the create_nori_release script
-#   2. Push to dev branch    - automatically publishes a @next dev snapshot
+#   2. Push to main branch   - automatically publishes a @next snapshot
 #   3. Manual workflow_dispatch
 #
 # The create_nori_release script creates "synthetic commits" - release tags
 # point to commits that exist only for the release (not on any branch), with
-# Cargo.toml updated to the release version. This keeps the dev branch's
+# Cargo.toml updated to the release version. This keeps the main branch's
 # Cargo.toml at a placeholder.
 #
 # Usage:
 #   # Create a release (from local machine with gh CLI authenticated)
 #   ./scripts/create_nori_release --publish-release      # stable release
 #   ./scripts/create_nori_release --publish-alpha        # alpha release
-#   ./scripts/create_nori_release --publish-next         # dev snapshot for testing
+#   ./scripts/create_nori_release --publish-next         # snapshot for testing
 #   ./scripts/create_nori_release --version 0.3.0        # specific version
 #   ./scripts/create_nori_release --dry-run --publish-release  # preview
 #
@@ -26,7 +26,7 @@
 #   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true
 #   gh workflow run nori-release.yml -f version=0.2.0 -f dry_run=true -f skip_tests=true
 #
-# For publishing a dev snapshot directly from GitHub UI:
+# For publishing a snapshot directly from GitHub UI:
 #   gh workflow run nori-release.yml -f publish_next=true
 #
 name: Nori Release
@@ -36,7 +36,7 @@ on:
     tags:
       - "nori-v*.*.*"
     branches:
-      - dev
+      - main
     paths:
       - "codex-rs/**"
       - "nori-cli/**"
@@ -49,7 +49,7 @@ on:
         required: false
         type: string
       publish_next:
-        description: "Publish a dev snapshot (@next) - auto-determines version"
+        description: "Publish a snapshot (@next) - auto-determines version"
         required: false
         default: false
         type: boolean
@@ -66,7 +66,7 @@ on:
 
 concurrency:
   group: nori-release-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/dev' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -93,7 +93,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: dev
+          ref: main
 
       - name: Validate version and determine refs
         id: validate
@@ -109,12 +109,12 @@ jobs:
             VERSION="${GITHUB_REF_NAME#${{ env.TAG_PREFIX }}}"
             TAG_NAME="${GITHUB_REF_NAME}"
             CHECKOUT_REF="${GITHUB_REF}"
-          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/dev") || \
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main") || \
                   "${{ inputs.publish_next }}" == "true" ]]; then
             PUBLISH_NEXT="true"
             # Auto-determine the next -next.N version using the Python script
             # as the single source of truth for version detection logic.
-            echo "Determining next dev snapshot version..."
+            echo "Determining next snapshot version..."
 
             VERSION=$(python3 scripts/create_nori_release --get-next-version)
 
@@ -124,7 +124,7 @@ jobs:
             fi
 
             TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
-            CHECKOUT_REF="dev"
+            CHECKOUT_REF="main"
 
             echo "Auto-determined version: $VERSION"
           else
@@ -134,8 +134,8 @@ jobs:
               exit 1
             fi
             TAG_NAME="${{ env.TAG_PREFIX }}${VERSION}"
-            # For dispatch dry run, checkout dev branch
-            CHECKOUT_REF="dev"
+            # For dispatch dry run, checkout main branch
+            CHECKOUT_REF="main"
           fi
 
           echo "is_tag_push=$IS_TAG_PUSH" >> "$GITHUB_OUTPUT"
@@ -505,7 +505,7 @@ jobs:
           retention-days: 7
 
   # ============================================================================
-  # CREATE TAG FOR PUBLISH_NEXT (for @next publishes: dev branch push or workflow_dispatch)
+  # CREATE TAG FOR PUBLISH_NEXT (for @next publishes: main branch push or workflow_dispatch)
   # ============================================================================
   create-next-tag:
     name: Create @next Tag
@@ -521,7 +521,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: dev
+          ref: main
 
       - name: Create synthetic commit and tag
         run: |
@@ -531,8 +531,8 @@ jobs:
 
           echo "Creating synthetic commit for version $VERSION"
 
-          # Get the dev branch head SHA
-          BASE_COMMIT=$(gh api repos/${{ github.repository }}/git/refs/heads/dev --jq '.object.sha')
+          # Get the main branch head SHA
+          BASE_COMMIT=$(gh api repos/${{ github.repository }}/git/refs/heads/main --jq '.object.sha')
           echo "Base commit: $BASE_COMMIT"
 
           # Get the tree SHA for the base commit
@@ -838,7 +838,7 @@ jobs:
           echo "| npm Tag | \`$([ \"$IS_PRERELEASE\" == \"true\" ] && echo \"next\" || echo \"latest\")\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pre-release | $IS_PRERELEASE |" >> "$GITHUB_STEP_SUMMARY"
           if [[ "$PUBLISH_NEXT" == "true" ]]; then
-            echo "| Mode | Dev Snapshot (@next) |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Mode | Snapshot (@next) |" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Staged Package" >> "$GITHUB_STEP_SUMMARY"
