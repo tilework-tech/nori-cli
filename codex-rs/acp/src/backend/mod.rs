@@ -66,6 +66,8 @@ pub enum AcpErrorCategory {
     Initialization,
     /// Prompt exceeds the agent's context window
     PromptTooLong,
+    /// API returned a server error (5xx)
+    ApiServerError,
     /// Unknown error (fallback)
     Unknown,
 }
@@ -107,6 +109,15 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
         AcpErrorCategory::Initialization
     } else if error_lower.contains("prompt is too long") {
         AcpErrorCategory::PromptTooLong
+    } else if error_lower.contains("500")
+        || error_lower.contains("502")
+        || error_lower.contains("503")
+        || error_lower.contains("504")
+        || error_lower.contains("server error")
+        || error_lower.contains("api_error")
+        || error_lower.contains("overloaded")
+    {
+        AcpErrorCategory::ApiServerError
     } else {
         AcpErrorCategory::Unknown
     }
@@ -141,6 +152,10 @@ pub fn enhanced_error_message(
         }
         AcpErrorCategory::PromptTooLong => {
             "Prompt is too long. Try using /compact to reduce context size, or start a new session."
+                .to_string()
+        }
+        AcpErrorCategory::ApiServerError => {
+            "The API returned a server error. This is usually temporary — please try again."
                 .to_string()
         }
         AcpErrorCategory::Unknown => original_error.to_string(),
