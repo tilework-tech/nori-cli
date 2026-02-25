@@ -1,0 +1,5 @@
+---
+source: tests/shimmer_snapshots.rs
+expression: terminal.backend()
+---
+"Processing a very long operation that takes time...         "

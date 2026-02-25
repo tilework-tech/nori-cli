@@ -1,0 +1,31 @@
+[package]
+name = "tui-components"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Reusable TUI components built on Ratatui"
+keywords = ["tui", "terminal", "ratatui", "components"]
+categories = ["command-line-interface"]
+
+[dependencies]
+ratatui = { version = "0.29", features = ["unstable-widget-ref"] }
+crossterm = { version = "0.28", features = ["bracketed-paste"] }
+textwrap = "0.16"
+unicode-width = "0.1"
+unicode-segmentation = "1.12"
+supports-color = "3"
+itertools = "0.13"
+
+# Optional features
+tree-sitter = { version = "0.25", optional = true }
+tree-sitter-highlight = { version = "0.25", optional = true }
+tree-sitter-bash = { version = "0.23", optional = true }
+
+[dev-dependencies]
+insta = "1.43"
+pretty_assertions = "1.4"
+color-eyre = "0.6"
+
+[features]
+default = []
+syntax-highlighting = ["tree-sitter", "tree-sitter-highlight", "tree-sitter-bash"]

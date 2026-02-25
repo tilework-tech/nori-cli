@@ -1,0 +1,5 @@
+---
+source: tests/selection_snapshots.rs
+expression: output
+---
+: 100. Hundredth Option

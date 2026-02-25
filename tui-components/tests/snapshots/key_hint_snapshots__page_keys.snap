@@ -1,0 +1,8 @@
+---
+source: tests/key_hint_snapshots.rs
+expression: "format!(\"{}\\n---\\n{}\", terminal1.backend(), terminal2.backend())"
+---
+"pgup      "
+
+---
+"pgdn      "

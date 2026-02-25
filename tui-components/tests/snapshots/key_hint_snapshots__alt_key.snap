@@ -1,0 +1,5 @@
+---
+source: tests/key_hint_snapshots.rs
+expression: terminal.backend()
+---
+"alt + f             "

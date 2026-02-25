@@ -1,59 +1,153 @@
-# Nori CLI
+# Nori CLI - Agent Router TUI
 
-[![CI](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml/badge.svg?branch=dev)](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml)
-[![npm version](https://img.shields.io/npm/v/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
-[![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/dev/LICENSE)
-[![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
-
-**One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and Codex. All from the same native CLI.
-
-![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/dev/assets/nori-cli_2026-01-13.png)
-
-## Install
-
-```bash
-npm install -g nori-ai-cli
-```
-
-Or download binaries from [GitHub Releases](https://github.com/tilework-tech/nori-cli/releases/latest).
-
-## Quick Start
-
-```bash
-nori
-```
-
-That's it. The agent you choose will rely on existing auth if you have previously been using Claude Code, Codex, or Gemini on this system (and if not, login instructions are below). Nori launches an interactive TUI where you can chat, run commands, and let the AI assist with your codebase.
-
-## Providers
-
-Each provider you plan to use needs to be authenticated separately before use. Then switch between AI providers with the `/agent` command.
-
-Currently each agent relies on an existing authenticated session on your system. If you're coming in from another CLI tool, great!
-You should be good to go. If not, first follow the authentication for your desired provider:
-
-| Provider | Authentication                                                                                                                                          |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude   | Run `npx @anthropic-ai/claude-code` in your terminal, then when the Claude CLI opens, type `/login` there.                                              |
-| Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                                      |
-| OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed.        |
+A terminal user interface (TUI) for routing prompts to different AI coding agents: Claude Code, GPT Codex, Gemini, and more.
 
 ## Features
 
-- **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
-- **Improved terminal interface**: Fast incremental renders in Ratatui, double buffered scrollback history, and built in Rust for performance
-- **Coming Soon!**
-  - **Sandboxed execution**: Commands run in OS-level security sandboxes
-  - **MCP integration**: Connect to Model Context Protocol servers for extended tools
-  - **Session persistence**: Save and resume conversations with `nori resume`
-  - **Multi-agent orchestration**: Alternate between multiple agent sessions
+- **Agent Selection**: Choose between Claude Code and GPT Codex
+- **Interactive Prompts**: Multi-line text input for complex prompts
+- **Streaming Responses**: Real-time display of agent responses as they stream
+- **Event Visibility**: See file changes, command executions, and agent messages
+- **Async Architecture**: Built with Tokio for responsive UI and concurrent subprocess management
 
-## Attribution
+## Prerequisites
 
-Nori CLI is built on the great work within [OpenAI Codex CLI](https://github.com/openai/codex).
+Before using nori-cli, you must have the following installed:
 
-Nori CLI is working with the great protocol led by [Zed Industries](https://github.com/agentclientprotocol/agent-client-protocol) for orchestrating agents.
+### Claude Code CLI
 
-## License
+Install from [code.claude.com](https://code.claude.com/)
 
-[Apache-2.0](LICENSE)
+Verify installation:
+```bash
+claude --version
+```
+
+### GPT Codex CLI
+
+Install from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli/)
+
+Verify installation:
+```bash
+codex --version
+```
+
+### Authentication
+
+- **Claude Code**: Set up your API key following [Claude Code authentication docs](https://code.claude.com/docs/en/setup)
+- **Codex**: Login with `codex login` or set `CODEX_API_KEY` environment variable
+
+## Installation
+
+```bash
+cargo build --release
+```
+
+The binary will be at `target/release/nori-cli`
+
+## Usage
+
+Run the TUI:
+```bash
+cargo run
+# or
+./target/release/nori-cli
+```
+
+### Navigation
+
+**Input Mode** (entering prompt):
+- Type your prompt (multi-line not supported - use Enter to submit)
+- `Enter`: Submit prompt to agent
+- Type slash commands for special actions (see below)
+
+**Agent Router Overlay** (when open):
+- `↑`/`↓` or `k`/`j`: Navigate agent list
+- `Enter`: Select agent
+- `Esc`: Close overlay
+
+**Streaming Mode** (viewing response):
+- Watch the streaming response
+- `Esc`: Return to input mode (interrupts current stream)
+
+### Slash Commands
+
+Nori CLI uses slash commands for special actions:
+
+- `/exit`: Quit the application
+- `/model`: Open the agent router to select a different model
+- Any unknown command will show an error with available commands
+
+### Response Format
+
+The TUI displays different event types from the agents:
+
+- `[agent_message]`: Text responses from the agent
+- `[file_change]`: File modifications made by the agent
+- `[command]`: Shell commands executed by the agent
+
+## Architecture
+
+### Tech Stack
+
+- **ratatui 0.29**: Terminal UI framework
+- **tokio**: Async runtime for subprocess management
+- **tui-textarea**: Multi-line text input widget
+- **crossterm**: Terminal manipulation
+- **serde_json**: JSON parsing for agent events
+
+### Design Pattern
+
+Uses The Elm Architecture (TEA):
+- `Model`: Application state
+- `Message`: Events/actions
+- `update()`: State transitions
+- `render()`: UI rendering
+
+### Subprocess Integration
+
+Agents run as child processes:
+- **Claude Code**: `claude --print --output-format stream-json`
+- **Codex**: `codex exec --json`
+
+Events are parsed from newline-delimited JSON (JSONL) output and streamed to the TUI in real-time.
+
+## Current Limitations
+
+- Session history is not persisted across runs
+- No conversation context between prompts (each prompt is independent)
+- Session resumption is prepared but not yet wired up
+- Error messages from subprocess failures need better formatting
+- No configuration file support (uses hardcoded defaults)
+
+## Future Enhancements
+
+- Persistent session resumption across TUI restarts
+- Multi-turn conversations with context
+- Configuration file for agent settings
+- Better error handling and recovery
+- Process cancellation (kill subprocess on Esc)
+- Scrollable response view for long outputs
+
+## Development
+
+Run tests:
+```bash
+cargo test
+```
+
+The test suite uses mock backends (subprocess with `printf`) to avoid requiring actual CLI installations during testing.
+
+## Troubleshooting
+
+**"No such file or directory" when selecting an agent:**
+- Ensure `claude` or `codex` is in your PATH
+- Verify CLI is installed with `which claude` or `which codex`
+
+**Empty response / no streaming:**
+- Check authentication (API keys)
+- Run the CLI directly to verify it works: `claude --print "test"` or `codex exec "test"`
+
+**TUI freezes:**
+- Press `Esc` to return to selection
+- If unresponsive, `Ctrl+C` to force quit

@@ -1,104 +1,129 @@
-# Noridoc: Nori CLI
+# Noridoc: agent-router-tui
 
 Path: @/
 
 ### Overview
 
-Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
+A terminal user interface (TUI) application that routes user prompts to different AI coding agent CLIs (Claude Code ACP, Codex ACP, Mock ACP Agent, and Gemini ACP). The application provides a chat-style interface where conversation history is always visible, with an overlay for agent selection and an input field at the bottom for natural interaction.
 
 ### How it fits into the larger codebase
 
-This is the root repository containing the Nori CLI project:
-
-- **`codex-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
-- **`nori-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
-- **`.github/`**: Build and CI configuration
-- **`.claude/`**: Skills and configuration for Claude-based development
-- **`scripts/`**: Development scripts
-
-The project was originally forked from OpenAI Codex CLI and has been adapted to support multiple AI providers through ACP integration. The `nori-cli` package provides the `nori` command via npm.
+- Standalone TUI application living in a git worktree for isolated development
+- Located at @/.worktrees/agent-router-tui, separated from the main repository to avoid polluting main branch history during development
+- Uses ratatui framework for terminal rendering, establishing a pattern for future TUI-based tools in the Nori ecosystem
+- Demonstrates subprocess integration pattern for wrapping existing CLI tools (claude, codex) with a better UX layer
+- Self-contained with no dependencies on other parts of the monorepo - all code lives within this worktree
 
 ### Core Implementation
 
-**Architecture:**
+**Entry Point**: @/src/main.rs contains the async main loop that:
+1. Initializes terminal with `ratatui::init_with_options()` using Viewport::Inline(8) and enables raw mode for immediate key capture
+2. Spawns an async event handling task that continuously reads keyboard events via crossterm's EventStream
+3. Runs a tokio::select! loop that handles both incoming messages (from event handler and subprocess) and periodic rendering at ~30 fps
+4. Delegates subprocess spawning to backend implementations when user submits a prompt
+5. Restores terminal on shutdown: moves cursor to next line, disables raw mode, calls `ratatui::restore()` - cursor positioning ensures shell prompt appears below TUI content instead of in the middle
 
+**Architecture Pattern**: The Elm Architecture (TEA)
+- Model (@/src/app.rs): Application state including overlay visibility (`show_agent_router`), selected agent, textarea content, and full conversation history in `response_events`
+- Message (@/src/app.rs): Enum of all possible events/actions (navigation, input, streaming, overlay toggle, errors)
+- Update (@/src/app.rs): `Model::update()` handles state transitions - navigation gated by overlay state, input blocked when overlay open
+- Render (@/src/ui.rs): Layered rendering with chat view as base and optional agent router overlay on top
+
+**UI Layout**: Chat-based interface with persistent conversation
 ```
-┌─────────────────────────────────────────────────┐
-│                   nori CLI                      │
-│         (codex-rs/tui - main binary)            │
-├─────────────────────────────────────────────────┤
-│                  nori-tui                       │
-│        Interactive Terminal Interface           │
-├────────────────────────┬────────────────────────┤
-│     codex-acp (acp/)   │   codex-core (core/)   │
-│  ACP Agent Connection  │  Config, Auth, Tools   │
-│  Subprocess Spawning   │  Sandbox, Utilities    │
-├────────────────────────┴────────────────────────┤
-│           codex-protocol (protocol/)            │
-│         Events, Operations, Types               │
-└─────────────────────────────────────────────────┘
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │   ACP Agent Process   │
-        │  (claude-code, etc.)  │
-        └───────────────────────┘
-```
+┌─ Title (selected agent) ─────────────┐
+│                                      │
+├─ Messages (conversation history) ────┤
+│ [user] What is the weather?          │
+│ The weather is...                    │
+│ [user] Tell me more                  │
+│ ...streaming response...             │
+├─ Input (textarea at bottom) ─────────┤
+│ Type your message here...            │
+├─ Agent Info ─────────────────────────┤
+│ Agent: Claude Code                   │
+├─ Shimmer (during streaming) ─────────┤
+│ Claude Code processing...            │
+├─ Instructions ───────────────────────┤
+│ /model: agents | /exit: quit  │
+└──────────────────────────────────────┘
 
-**Entry Points:**
-
-| Command           | Description        | Implementation        |
-| ----------------- | ------------------ | --------------------- |
-| `nori`            | Interactive TUI    | `codex-rs/tui`        |
-| `nori exec`       | Headless execution | `codex-rs/exec`       |
-| `nori mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
-| `nori login`      | Authentication     | `codex-rs/login`      |
-| `nori apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
-
-**Model Providers (via ACP):**
-
-- Claude Code (primary)
-- Codex
-- Gemini
-
-**Installation:**
-
-```bash
-npm i -g nori-ai-cli
+Alt+A overlays agent selector (60% width, 40% height centered)
 ```
 
-**Configuration:**
+**Subprocess Integration**:
+- Backend trait (@/src/backends.rs) defines `spawn_stream()` for launching agent CLIs and streaming events
+- Implementations spawn processes with stdout/stderr piped (@/src/backends/claude.rs for native CLI, @/src/backends/codex_acp.rs, @/src/backends/claude_code_acp.rs, and @/src/backends/gemini_acp.rs for ACP-based agents)
+- ACP-based backends wrap AcpAgentRunner (@/src/acp_runner.rs) to launch npm packages via bunx/npx
+- Backend persistence: Model stores current_backend and reuses it across prompts until agent changes (@/src/app.rs:ensure_backend_for_current_agent())
+- Agent subprocess persists across multiple conversational turns - only replaced when user switches agents and submits new prompt
+- Main loop in @/src/main.rs:spawn_and_stream() uses tokio::select! to multiplex stream consumption with cancellation
+- CancellationToken from tokio-util enables cooperative cancellation - when token fires, stream is dropped
+- Events are sent through mpsc channel as Message::StreamEvent to update UI in real-time
+- Both stdout (for JSON events) and stderr (for error messages) are captured concurrently
 
-Stored in `~/.nori/cli/`:
-
-- `config.toml`: Main configuration
-- `sessions/`: Saved conversations
-- `history.jsonl`: Message history
-
-**Session Management:**
-
-Conversations are recorded to `~/.nori/cli/sessions/` and can be resumed:
-
-```bash
-nori resume              # Show picker
-nori resume --last       # Most recent
-nori resume <SESSION_ID> # Specific session
-```
-
-**MCP Support:**
-
-Nori acts as both MCP client and server:
-
-- **Client**: Connects to MCP servers defined in config
-- **Server**: Exposes Nori tools via `nori mcp-server`
+**Dependencies** (@/Cargo.toml):
+- ratatui 0.29.0: TUI framework
+- tokio (full features): Async runtime for subprocess management and concurrent I/O
+- tokio-util: Provides CancellationToken for cooperative cancellation
+- crossterm 0.28.1 (event-stream feature): Terminal manipulation and async event handling
+- serde + serde_json: JSONL parsing
+- color-eyre: Error reporting
+- tui-components (path dependency): Reusable TUI components library, provides Shimmer loading animation widget and TextArea input widget
 
 ### Things to Know
 
-- The crate naming uses a `codex-` prefix (legacy from the OpenAI Codex fork), except for `nori-tui` and `nori-installed`
-- The `nori-config` feature flag enables Nori-specific configuration paths (`~/.nori/cli/`) instead of the legacy Codex paths (`~/.codex/`)
-- The `unstable` feature flag gates experimental ACP features like model switching
-- Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
-- Snapshot testing with `insta` is used extensively for TUI regression testing
-- The project uses `just` for build automation in `codex-rs` and `pnpm` for Node.js workspace management
+**Key Invariants**:
+- Terminal must be restored in correct order (cursor positioning -> disable raw mode -> ratatui::restore()) on any exit path to avoid broken terminal state or mispositioned cursor
+- Cursor must be moved to next line before disabling raw mode when using Viewport::Inline(8) to ensure shell prompt appears cleanly below TUI content
+- Event handler task receives mode updates via channel to prevent race conditions when converting events to messages
+- Conversation history (`response_events`) accumulates indefinitely - includes both UserMessage and assistant responses, never cleared
+- Navigation and text input are mutually exclusive based on `show_agent_router` flag - overlay blocks input, chat blocks navigation
+- Backend persists in Model.current_backend until agent changes AND new prompt submitted - enables efficient multi-turn conversations with same agent subprocess
+
+**Subprocess Lifecycle**:
+- Backend is created lazily on first prompt submission and stored in Model.current_backend
+- Backend persists across multiple prompts to the same agent - subprocess remains alive between turns
+- When user switches agents and submits prompt, old backend is dropped (killing its subprocess) and new one created
+- IMPORTANT: Merely changing agent selection (without submitting) does NOT drop the backend - allows safe browsing while stream is active
+- CancellationToken created and stored in Model when stream starts
+- stdout/stderr are read line-by-line in separate tokio tasks to avoid blocking
+- spawn_and_stream consumes the stream (not the backend) - backend stays in Model after stream completes
+- Pressing Esc during streaming triggers CancelStream message which calls token.cancel()
+- When cancel fires, stream is dropped, but backend persists for next prompt
+- Subprocess cleanup only happens when: (1) switching agents and submitting, (2) app exits (Drop on Model.current_backend)
+
+**JSONL Event Parsing** (@/src/main.rs:152-234):
+- Each line of stdout must be valid JSON with a "type" field
+- Supported event types: "agent_message" (text content), "file_change" (file path), "command_execution" (shell command)
+- Unknown event types are shown as raw JSON for debugging
+- Parse failures are silently skipped - line is not displayed
+
+**Error Handling**:
+- Non-zero exit status triggers Message::Error with helpful instructions
+- Error message is stored in Model::error_message and displayed in chat view
+- Application stays in Streaming mode when error occurs so user can read stderr output in conversation history
+- StderrOutput events render in red within conversation history for visibility
+- User must press Esc to return to Selection mode after error
+
+**Testing Strategy** (@/tests/):
+- State machine tests use Model::update() directly without subprocess spawning
+- Subprocess tests use MockBackend which wraps `printf` to output test JSONL
+- No integration tests with actual claude/codex CLIs to avoid authentication requirements in CI
+
+**Current Limitations**:
+- Session resumption fields exist (session_id, thread_id) but are not persisted between runs
+- Terminal scrolling handles long conversations - no custom scroll implementation yet
+- Ctrl+Enter keybinding doesn't work reliably across terminals, so Alt+Enter is used for submit
+- Conversation history grows indefinitely in memory - no pagination or pruning
+- Stream cancellation relies on Drop semantics - no explicit process.kill() called
+
+**UI/UX Design Decisions**:
+- Chat view always visible to maintain context across interactions
+- Input at bottom matches familiar chat application UX patterns
+- Agent router as overlay avoids disrupting conversation flow
+- UserMessage events added to history on submit, before agent response streams in
+- Alt+A for agent switching works globally without disrupting current input
+- Textarea clears immediately on submit (before streaming starts) to provide instant visual feedback and enable typing follow-up messages while waiting for response
 
 Created and maintained by Nori.

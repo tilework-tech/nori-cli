@@ -1,0 +1,14 @@
+---
+source: tests/key_hint_snapshots.rs
+expression: "outputs.join(\"\\n---\\n\")"
+---
+"↑         "
+
+---
+"↓         "
+
+---
+"←         "
+
+---
+"→         "

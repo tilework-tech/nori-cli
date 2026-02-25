@@ -1,0 +1,7 @@
+---
+source: tui-components/src/footer.rs
+expression: terminal.backend()
+---
+"  / for commands                                                                "
+"  @ for file paths                                                              "
+"  ctrl + c to exit                                                              "

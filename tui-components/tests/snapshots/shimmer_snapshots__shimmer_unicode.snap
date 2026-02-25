@@ -1,0 +1,5 @@
+---
+source: tests/shimmer_snapshots.rs
+expression: terminal.backend()
+---
+"Loading… 🚀         " Hidden by multi-width symbols: [(10, " ")]
