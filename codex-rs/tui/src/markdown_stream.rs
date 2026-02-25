@@ -52,6 +52,11 @@ impl MarkdownStreamCollector {
         }
 
         if self.committed_line_count >= complete_line_count {
+            // When the re-render produces fewer lines than previously committed
+            // (e.g., pulldown-cmark retroactively reclassified partial content
+            // as a link reference definition), adjust the counter so future
+            // commits are not permanently blocked.
+            self.committed_line_count = complete_line_count;
             return Vec::new();
         }
 
@@ -85,6 +90,7 @@ impl MarkdownStreamCollector {
         markdown::append_markdown(&source, self.width, &mut rendered);
 
         let out = if self.committed_line_count >= rendered.len() {
+            self.committed_line_count = rendered.len();
             Vec::new()
         } else {
             rendered[self.committed_line_count..].to_vec()
@@ -666,5 +672,93 @@ mod tests {
             "more stuff\n",
         ])
         .await;
+    }
+
+    #[tokio::test]
+    async fn link_ref_def_reclassification_does_not_freeze_output() {
+        // When partial text like "[foo\n" is parsed as paragraph content, and then
+        // the buffer grows to "[foo]: http://example.com\n" (a link reference
+        // definition that produces 0 rendered lines), committed_line_count can
+        // become stale. New content after the reclassification must still be emitted.
+        let mut c = MarkdownStreamCollector::new(None);
+
+        // Step 1: "[foo\n" looks like paragraph text.
+        c.push_delta("[foo\n");
+        let out1 = c.commit_complete_lines();
+        // pulldown-cmark renders "[foo" as paragraph text.
+        assert!(!out1.is_empty(), "partial link ref should render as text");
+
+        // Step 2: Complete the link ref def. This reclassifies the previous
+        // paragraph text as a non-rendered link reference definition.
+        c.push_delta("]: http://example.com\n");
+        let _ = c.commit_complete_lines();
+
+        // Step 3: Add new content after the reclassification.
+        c.push_delta("New paragraph.\n");
+        let out3 = c.commit_complete_lines();
+        let strings3 = lines_to_plain_strings(&out3);
+
+        // The key assertion: "New paragraph." must appear in the output.
+        // Without the fix, committed_line_count stays at 1 while the link ref def
+        // produces 0 lines, blocking all output.
+        assert!(
+            strings3.iter().any(|s| s.contains("New paragraph.")),
+            "new content after link ref reclassification must be emitted, got: {strings3:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn line_count_regression_does_not_block_subsequent_content() {
+        // Generic test: if a re-render ever produces fewer lines than previously
+        // committed, subsequent content should still be emitted.
+        let mut c = MarkdownStreamCollector::new(None);
+
+        // Stream a paragraph.
+        c.push_delta("Hello.\n");
+        let out1 = c.commit_complete_lines();
+        assert_eq!(out1.len(), 1);
+
+        // Stream an empty code fence (which may cause trailing blank trim to
+        // reduce effective line count).
+        c.push_delta("```\n```\n");
+        let _ = c.commit_complete_lines();
+
+        // Stream a heading after the empty fence.
+        c.push_delta("## Heading\n");
+        let out3 = c.commit_complete_lines();
+        let strings3 = lines_to_plain_strings(&out3);
+
+        // The heading must appear in the output regardless of any intermediate
+        // line count regression from the empty fence.
+        assert!(
+            strings3.iter().any(|s| s.contains("## Heading")),
+            "heading after empty fence must be emitted, got: {strings3:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn finalize_emits_content_after_line_count_regression() {
+        // Exercises finalize_and_drain() after a line count regression to ensure
+        // the counter adjustment works for the finalize path too.
+        let mut c = MarkdownStreamCollector::new(None);
+
+        c.push_delta("[foo\n");
+        let _ = c.commit_complete_lines();
+
+        // Reclassify as link ref def (0 lines).
+        c.push_delta("]: http://example.com\n");
+        let _ = c.commit_complete_lines();
+
+        // Partial line without trailing newline — commit won't emit it.
+        c.push_delta("Final text.");
+        assert!(c.commit_complete_lines().is_empty());
+
+        // finalize_and_drain should emit the remaining content.
+        let out = c.finalize_and_drain();
+        let strings = lines_to_plain_strings(&out);
+        assert!(
+            strings.iter().any(|s| s.contains("Final text.")),
+            "finalize should emit remaining content after regression, got: {strings:?}"
+        );
     }
 }
