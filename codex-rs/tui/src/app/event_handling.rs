@@ -723,8 +723,14 @@ impl App {
                 self.set_session_loop_count(value);
             }
             #[cfg(feature = "nori-config")]
-            AppEvent::SetConfigAutoWorktree(enabled) => {
-                self.persist_auto_worktree_setting(enabled).await;
+            AppEvent::OpenAutoWorktreePicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_auto_worktree_picker(nori_config.auto_worktree);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigAutoWorktree(value) => {
+                self.persist_auto_worktree_setting(value).await;
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigSkillsetPerSession(enabled) => {

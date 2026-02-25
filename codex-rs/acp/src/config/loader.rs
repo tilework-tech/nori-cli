@@ -122,7 +122,7 @@ impl NoriConfig {
         let agent = toml.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string());
 
         let skillset_per_session = toml.tui.skillset_per_session.unwrap_or(false);
-        let auto_worktree = toml.tui.auto_worktree.unwrap_or(false);
+        let auto_worktree = toml.tui.auto_worktree.unwrap_or_default();
 
         // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
         // Using agent as fallback ensures the persisted preference is honored at startup
@@ -378,7 +378,75 @@ notify_after_idle = "30s"
     }
 
     #[test]
-    fn test_auto_worktree_enabled_from_config() {
+    fn test_auto_worktree_automatic_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+auto_worktree = "automatic"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.auto_worktree,
+            super::super::types::AutoWorktree::Automatic
+        );
+    }
+
+    #[test]
+    fn test_auto_worktree_ask_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+auto_worktree = "ask"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.auto_worktree, super::super::types::AutoWorktree::Ask);
+    }
+
+    #[test]
+    fn test_auto_worktree_off_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+auto_worktree = "off"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.auto_worktree, super::super::types::AutoWorktree::Off);
+    }
+
+    #[test]
+    fn test_auto_worktree_defaults_to_off() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.auto_worktree, super::super::types::AutoWorktree::Off);
+    }
+
+    #[test]
+    fn test_auto_worktree_backwards_compat_true() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
 
@@ -392,18 +460,28 @@ auto_worktree = true
         .unwrap();
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
-        assert!(config.auto_worktree);
+        assert_eq!(
+            config.auto_worktree,
+            super::super::types::AutoWorktree::Automatic
+        );
     }
 
     #[test]
-    fn test_auto_worktree_defaults_to_false() {
+    fn test_auto_worktree_backwards_compat_false() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
 
-        std::fs::write(&config_path, "").unwrap();
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+auto_worktree = false
+"#,
+        )
+        .unwrap();
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
-        assert!(!config.auto_worktree);
+        assert_eq!(config.auto_worktree, super::super::types::AutoWorktree::Off);
     }
 
     // ========================================================================
@@ -767,9 +845,10 @@ skillset_per_session = true
             config.skillset_per_session,
             "skillset_per_session should be true when set in config"
         );
-        assert!(
-            !config.auto_worktree,
-            "auto_worktree should remain false (default) since the settings are independent"
+        assert_eq!(
+            config.auto_worktree,
+            super::super::types::AutoWorktree::Off,
+            "auto_worktree should remain off (default) since the settings are independent"
         );
     }
 
@@ -797,7 +876,7 @@ skillset_per_session = true
             r#"
 [tui]
 skillset_per_session = true
-auto_worktree = false
+auto_worktree = "off"
 "#,
         )
         .unwrap();
@@ -807,9 +886,10 @@ auto_worktree = false
             config.skillset_per_session,
             "skillset_per_session should be true"
         );
-        assert!(
-            !config.auto_worktree,
-            "auto_worktree should be false because the two settings are independent"
+        assert_eq!(
+            config.auto_worktree,
+            super::super::types::AutoWorktree::Off,
+            "auto_worktree should be off because the two settings are independent"
         );
     }
 

@@ -3,6 +3,7 @@
 //! This module provides the UI for modifying TUI configuration settings
 //! that are persisted to ~/.nori/cli/config.toml.
 
+use codex_acp::config::AutoWorktree;
 use codex_acp::config::FooterSegment;
 use codex_acp::config::FooterSegmentConfig;
 use codex_acp::config::NoriConfig;
@@ -82,18 +83,26 @@ pub fn config_picker_params(
                 }
             },
         ),
-        build_toggle_item(
-            "Auto Worktree",
-            "Automatically create a git worktree at session start",
-            config.auto_worktree,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !config.auto_worktree;
-                move || {
-                    tx.send(AppEvent::SetConfigAutoWorktree(new_value));
+        {
+            let current_mode = config.auto_worktree;
+            let display_name = format!(
+                "Auto Worktree ({})",
+                current_mode.display_name().to_lowercase()
+            );
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenAutoWorktreePicker);
                 }
-            },
-        ),
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some("Create a git worktree at session start".to_string()),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
         {
             let skillset_per_session = config.skillset_per_session;
             let status = if skillset_per_session { "on" } else { "off" };
@@ -244,7 +253,7 @@ pub fn skillset_worktree_choice_params(app_event_tx: AppEventSender) -> Selectio
             is_current: false,
             actions: vec![Box::new(move |_tx| {
                 tx_with.send(AppEvent::SetConfigSkillsetPerSession(true));
-                tx_with.send(AppEvent::SetConfigAutoWorktree(true));
+                tx_with.send(AppEvent::SetConfigAutoWorktree(AutoWorktree::Automatic));
             })],
             dismiss_on_select: true,
             ..Default::default()
@@ -296,6 +305,51 @@ where
         is_current: is_enabled,
         actions,
         dismiss_on_select: true,
+        ..Default::default()
+    }
+}
+
+/// Create selection view parameters for the auto-worktree sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently selected AutoWorktree variant
+/// * `app_event_tx` - The app event sender for triggering config change events
+pub fn auto_worktree_picker_params(
+    current: AutoWorktree,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = AutoWorktree::all_variants()
+        .iter()
+        .map(|&variant| {
+            let is_current = variant == current;
+            let description = match variant {
+                AutoWorktree::Automatic => {
+                    Some("Always create a worktree at session start".to_string())
+                }
+                AutoWorktree::Ask => Some("Prompt before creating a worktree".to_string()),
+                AutoWorktree::Off => Some("Never create a worktree automatically".to_string()),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::SetConfigAutoWorktree(variant));
+                }
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Auto Worktree".to_string()),
+        subtitle: Some("Create a git worktree at session start".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
         ..Default::default()
     }
 }
@@ -449,7 +503,7 @@ mod tests {
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             script_timeout: codex_acp::config::ScriptTimeout::default(),
             loop_count: None,
-            auto_worktree: false,
+            auto_worktree: codex_acp::config::AutoWorktree::Off,
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
@@ -512,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_eight_items() {
+    fn config_picker_returns_expected_item_count() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
@@ -933,12 +987,11 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_auto_worktree_toggleable_when_skillset_per_session() {
+    fn config_picker_auto_worktree_shows_current_mode_and_opens_picker() {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let mut config = make_test_config(false);
-        config.skillset_per_session = true;
-        config.auto_worktree = true;
+        config.auto_worktree = codex_acp::config::AutoWorktree::Automatic;
 
         let params = config_picker_params(&config, tx.clone());
 
@@ -947,26 +1000,62 @@ mod tests {
             .iter()
             .find(|item| item.name.contains("Auto Worktree"))
             .expect("should have Auto Worktree item");
-        // Auto Worktree should be a normal toggle, not locked
+        // Should show the current mode in the display name
         assert!(
-            auto_worktree_item.name.contains("(on)"),
-            "Auto Worktree should show '(on)' as a normal toggle, got: {}",
-            auto_worktree_item.name
-        );
-        assert!(
-            !auto_worktree_item.name.contains("required"),
-            "Auto Worktree should NOT show 'required', got: {}",
+            auto_worktree_item.name.contains("(automatic)"),
+            "Auto Worktree should show '(automatic)', got: {}",
             auto_worktree_item.name
         );
 
-        // Clicking it should send a toggle event, not be a no-op
+        // Clicking should open the sub-picker
         for action in &auto_worktree_item.actions {
             action(&tx);
         }
-        let event = rx.try_recv().expect("should receive toggle event");
+        let event = rx.try_recv().expect("should receive event");
         assert!(
-            matches!(event, AppEvent::SetConfigAutoWorktree(false)),
-            "expected SetConfigAutoWorktree(false), got: {event:?}"
+            matches!(event, AppEvent::OpenAutoWorktreePicker),
+            "expected OpenAutoWorktreePicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn auto_worktree_picker_lists_all_variants_and_sends_correct_events() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = auto_worktree_picker_params(codex_acp::config::AutoWorktree::Off, tx.clone());
+
+        // Should have 3 items: Automatic, Ask, Off
+        assert_eq!(params.items.len(), 3, "should have 3 auto worktree options");
+
+        // Off should be marked as current
+        let off_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Off"))
+            .expect("should have Off item");
+        assert!(off_item.is_current, "Off should be marked as current");
+
+        // Select "Automatic" - should send correct event
+        let auto_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Automatic"))
+            .expect("should have Automatic item");
+        assert!(
+            !auto_item.is_current,
+            "Automatic should not be marked as current"
+        );
+        for action in &auto_item.actions {
+            action(&tx);
+        }
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(
+                event,
+                AppEvent::SetConfigAutoWorktree(codex_acp::config::AutoWorktree::Automatic)
+            ),
+            "expected SetConfigAutoWorktree(Automatic), got: {event:?}"
         );
     }
 
@@ -1048,8 +1137,11 @@ mod tests {
             "expected SetConfigSkillsetPerSession(true), got: {event1:?}"
         );
         assert!(
-            matches!(event2, AppEvent::SetConfigAutoWorktree(true)),
-            "expected SetConfigAutoWorktree(true), got: {event2:?}"
+            matches!(
+                event2,
+                AppEvent::SetConfigAutoWorktree(codex_acp::config::AutoWorktree::Automatic)
+            ),
+            "expected SetConfigAutoWorktree(Automatic), got: {event2:?}"
         );
     }
 

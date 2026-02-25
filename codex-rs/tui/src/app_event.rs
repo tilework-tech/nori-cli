@@ -298,9 +298,13 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigLoopCount(Option<i32>),
 
+    /// Open the auto worktree sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenAutoWorktreePicker,
+
     /// Set the TUI auto worktree config setting.
     #[cfg(feature = "nori-config")]
-    SetConfigAutoWorktree(bool),
+    SetConfigAutoWorktree(codex_acp::config::AutoWorktree),
 
     /// Set the TUI skillset per session config setting.
     #[cfg(feature = "nori-config")]

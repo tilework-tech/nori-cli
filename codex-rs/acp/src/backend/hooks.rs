@@ -8,7 +8,7 @@ pub(super) async fn run_prompt_summary(
     agent_name: &str,
     cwd: &std::path::Path,
     user_prompt: &str,
-    auto_worktree: bool,
+    auto_worktree: crate::config::AutoWorktree,
     auto_worktree_repo_root: Option<&std::path::Path>,
 ) -> Result<()> {
     use tokio::time::Duration;
@@ -69,7 +69,9 @@ pub(super) async fn run_prompt_summary(
         // If auto_worktree is enabled, rename the branch based on the summary.
         // Only the branch is renamed; the directory stays unchanged so that
         // processes running inside the worktree are not disrupted.
-        if auto_worktree && let Some(repo_root) = auto_worktree_repo_root {
+        if auto_worktree.is_enabled()
+            && let Some(repo_root) = auto_worktree_repo_root
+        {
             let cwd_owned = cwd.to_path_buf();
             let repo_root = repo_root.to_path_buf();
             let summary_for_rename = summary.clone();

@@ -173,8 +173,8 @@ pub struct AcpBackendConfig {
     pub history_persistence: crate::config::HistoryPersistence,
     /// CLI version for transcript metadata
     pub cli_version: String,
-    /// Whether auto-worktree is enabled (worktree was created at startup)
-    pub auto_worktree: bool,
+    /// Auto-worktree mode (whether a worktree was created at startup)
+    pub auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming the worktree
     pub auto_worktree_repo_root: Option<PathBuf>,
     /// Scripts to run when a session starts
@@ -255,8 +255,8 @@ pub struct AcpBackend {
     is_first_prompt: Arc<Mutex<bool>>,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
-    /// Whether auto-worktree is enabled (worktree was created at startup)
-    auto_worktree: bool,
+    /// Auto-worktree mode (whether a worktree was created at startup)
+    auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming
     auto_worktree_repo_root: Option<PathBuf>,
     /// Scripts to run when a session ends

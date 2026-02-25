@@ -174,24 +174,38 @@ The setting is resolved in `loader.rs` by passing `toml.loop_count` directly. Th
 
 **Auto-Worktree Configuration** (`config/types/mod.rs`):
 
-The `auto_worktree` boolean controls whether the TUI automatically creates a git worktree at session start for process isolation. Stored under `[tui]` in `config.toml`:
+The `auto_worktree` field controls whether and how the TUI creates a git worktree at session start for process isolation. It is an `AutoWorktree` enum stored under `[tui]` in `config.toml`:
+
+| Variant | TOML Value | Behavior |
+|---------|------------|----------|
+| `Automatic` | `"automatic"` (or legacy `true`) | Always create a worktree at session start |
+| `Ask` | `"ask"` | Show a TUI popup at session start asking the user whether to create a worktree |
+| `Off` | `"off"` (or legacy `false`) | Never create a worktree automatically |
+
+The default is `Off`. The enum has a custom serde `Deserialize` implementation that accepts both string values (`"automatic"`, `"ask"`, `"off"`) and boolean values (`true` maps to `Automatic`, `false` maps to `Off`) for backwards compatibility with config files written before the enum existed. `Serialize` always writes the string form via `toml_value()`.
+
+Helper methods on `AutoWorktree`:
+- `display_name()` -- human-readable label for the TUI config picker (e.g. `"Automatic"`, `"Ask"`, `"Off"`)
+- `toml_value()` -- string written to config.toml (e.g. `"automatic"`, `"ask"`, `"off"`)
+- `all_variants()` -- returns all three variants in order, used to build the picker UI
+- `is_enabled()` -- returns `true` for `Automatic` and `Ask`, `false` for `Off`; used by the backend to gate worktree branch renaming
 
 | Field | TOML Key | Default | Controls |
 |-------|----------|---------|----------|
-| `auto_worktree` | `auto_worktree` | `false` | When enabled, the TUI creates a new git worktree in `<repo>/.worktrees/` and sets the session's working directory to it |
+| `auto_worktree` | `auto_worktree` | `Off` | Worktree creation behavior at session start |
 | `skillset_per_session` | `skillset_per_session` | `false` | When enabled, each session gets its own skillset. Independent of `auto_worktree` -- does not force it on |
 
-Both settings are resolved independently in `loader.rs`. `skillset_per_session` defaults to `false` and `auto_worktree` defaults to `false`; neither setting forces the other. The TUI layer (`@/codex-rs/tui/`) calls `setup_auto_worktree()` from the `auto_worktree` module when `auto_worktree` is enabled. The config layer only stores the booleans -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
+Both settings are resolved independently in `loader.rs`. The TUI layer (`@/codex-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
 
 **Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 
-When `auto_worktree` is enabled, the worktree is initially created with a random name (e.g., `auto/swift-oak-20260202-120000`). After the first user prompt's summary is generated, the git branch is renamed to reflect the summary (e.g., `auto/fix-auth-bug-20260202-120000`). The worktree directory path is left unchanged so that processes running inside it are not disrupted. This renaming is orchestrated inside `run_prompt_summary()` in `backend/mod.rs`:
+When auto-worktree is active (either via `Automatic` or the user confirming in `Ask` mode), the worktree is initially created with a random name (e.g., `auto/swift-oak-20260202-120000`). After the first user prompt's summary is generated, the git branch is renamed to reflect the summary (e.g., `auto/fix-auth-bug-20260202-120000`). The worktree directory path is left unchanged so that processes running inside it are not disrupted. This renaming is orchestrated inside `run_prompt_summary()` in `backend/mod.rs`:
 
 1. The prompt summary is generated via a separate ACP connection (same as before)
-2. If `auto_worktree` is true and `auto_worktree_repo_root` is set, `rename_auto_worktree_branch()` is called in a blocking task
+2. If `auto_worktree.is_enabled()` and `auto_worktree_repo_root` is set, `rename_auto_worktree_branch()` is called in a blocking task
 3. Only the branch is renamed via `git branch -m`; the directory stays at its original path
 
-The `AcpBackend` stores `auto_worktree: bool` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
+The `AcpBackend` stores `auto_worktree: AutoWorktree` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The `is_enabled()` method returns `true` for both `Automatic` and `Ask` variants, since in both cases a worktree was actually created. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
 
 **Default Models Configuration** (`config/types/mod.rs`, `backend/mod.rs`):
@@ -795,7 +809,7 @@ The summarization uses a completely separate ACP connection (`AcpConnection::spa
 1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
-4. If `auto_worktree` is enabled, renames the branch based on the summary (see Auto-Worktree Branch Renaming above) -- the directory is left unchanged
+4. If `auto_worktree.is_enabled()` (true for `Automatic` or `Ask`), renames the branch based on the summary (see Auto-Worktree Branch Renaming above) -- the directory is left unchanged
 5. Emits `EventMsg::PromptSummary(PromptSummaryEvent { summary })` through the shared `event_tx`
 
 State tracking: `AcpBackend` holds `is_first_prompt: Arc<Mutex<bool>>` which is set to `false` after the first prompt fires the summarization task. The `agent_name: String` field stores the agent name for spawning the separate connection.

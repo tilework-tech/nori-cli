@@ -222,21 +222,40 @@ pub async fn run_main(
     }
 
     #[cfg(feature = "nori-config")]
-    if nori_config.as_ref().is_some_and(|c| c.auto_worktree) {
-        if let Some(effective_cwd) = cwd.clone().or_else(|| std::env::current_dir().ok()) {
-            match codex_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
-                Ok(worktree_path) => {
-                    tracing::info!("Auto-worktree created at {}", worktree_path.display());
-                    cwd = Some(worktree_path);
+    let pending_worktree_ask = {
+        use codex_acp::config::AutoWorktree;
+        let auto_worktree = nori_config
+            .as_ref()
+            .map(|c| c.auto_worktree)
+            .unwrap_or_default();
+        match auto_worktree {
+            AutoWorktree::Automatic => {
+                if let Some(effective_cwd) = cwd.clone().or_else(|| std::env::current_dir().ok()) {
+                    match codex_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
+                        Ok(worktree_path) => {
+                            tracing::info!("Auto-worktree created at {}", worktree_path.display());
+                            cwd = Some(worktree_path);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Auto-worktree setup skipped: {e}");
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        "Auto-worktree setup skipped: could not determine working directory"
+                    );
                 }
-                Err(e) => {
-                    tracing::warn!("Auto-worktree setup skipped: {e}");
-                }
+                false
             }
-        } else {
-            tracing::warn!("Auto-worktree setup skipped: could not determine working directory");
+            AutoWorktree::Ask => {
+                // Defer to TUI popup after terminal init
+                true
+            }
+            AutoWorktree::Off => false,
         }
-    }
+    };
+    #[cfg(not(feature = "nori-config"))]
+    let pending_worktree_ask = false;
 
     let overrides = ConfigOverrides {
         model: agent,
@@ -352,11 +371,13 @@ pub async fn run_main(
         cli_kv_overrides,
         active_profile,
         vertical_footer,
+        pending_worktree_ask,
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_ratatui_app(
     cli: Cli,
     initial_config: Config,
@@ -364,6 +385,7 @@ async fn run_ratatui_app(
     cli_kv_overrides: Vec<(String, toml::Value)>,
     active_profile: Option<String>,
     vertical_footer: bool,
+    pending_worktree_ask: bool,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -412,7 +434,7 @@ async fn run_ratatui_app(
     let should_show_onboarding =
         should_show_onboarding(login_status, &initial_config, should_show_trust_screen);
 
-    let config = if should_show_onboarding {
+    let (config, overrides, cli_kv_overrides) = if should_show_onboarding {
         // Use Nori-branded onboarding flow
         let onboarding_result = run_nori_onboarding_app(
             NoriOnboardingScreenArgs {
@@ -442,12 +464,38 @@ async fn run_ratatui_app(
             .map(|d| d == TrustDirectorySelection::Trust)
             .unwrap_or(false)
         {
-            load_config_or_exit(cli_kv_overrides, overrides).await
+            let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
+            (config, overrides, cli_kv_overrides)
         } else {
-            initial_config
+            (initial_config, overrides, cli_kv_overrides)
         }
     } else {
-        initial_config
+        (initial_config, overrides, cli_kv_overrides)
+    };
+
+    // Auto-worktree "ask" mode: show a TUI popup asking the user.
+    // If they confirm, create the worktree and reload config with the new cwd.
+    let config = if pending_worktree_ask {
+        let effective_cwd = config.cwd.clone();
+        let user_wants_worktree = nori::worktree_ask::run_worktree_ask_popup(&mut tui).await?;
+        if user_wants_worktree {
+            match codex_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
+                Ok(worktree_path) => {
+                    tracing::info!("Auto-worktree created at {}", worktree_path.display());
+                    let mut new_overrides = overrides;
+                    new_overrides.cwd = Some(worktree_path);
+                    load_config_or_exit(cli_kv_overrides, new_overrides).await
+                }
+                Err(e) => {
+                    tracing::warn!("Auto-worktree setup skipped: {e}");
+                    config
+                }
+            }
+        } else {
+            config
+        }
+    } else {
+        config
     };
 
     // Determine resume behavior: explicit id, then resume last, then picker.

@@ -116,6 +116,16 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the auto-worktree sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_auto_worktree_picker(&mut self, current: codex_acp::config::AutoWorktree) {
+        let params = crate::nori::config_picker::auto_worktree_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the notify-after-idle sub-picker.
     #[cfg(feature = "nori-config")]
     pub(crate) fn open_notify_after_idle_picker(
