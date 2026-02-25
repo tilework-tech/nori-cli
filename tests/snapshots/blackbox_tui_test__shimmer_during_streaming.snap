@@ -7,7 +7,7 @@ expression: terminal.backend()
 "                                                                                                    "
 "Agent: Claude Code ACP                                                                              "
 "Claude Code ACP processing...                                                                       "
-"/model: agents | /exit: quit                                                                         "
+"/model: agents | /exit: quit                                                                        "
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "

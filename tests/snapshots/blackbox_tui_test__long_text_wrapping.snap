@@ -9,6 +9,6 @@ expression: terminal.backend()
 "                                        "
 "Agent: Claude Code ACP                  "
 "                                        "
-"/model: agents | /exit: quit             "
+"/model: agents | /exit: quit            "
 "                                        "
 "                                        "
