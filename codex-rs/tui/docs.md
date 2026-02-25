@@ -491,6 +491,28 @@ State fields on `ChatWidget`: `loop_remaining: Option<i32>` and `loop_total: Opt
 
 The loop is cancelled (both fields set to `None`) when an error occurs (`on_error()`) or the user interrupts (`on_interrupted_turn()`). The `/config` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/codex-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
 
+**History Insertion and Scrollback (`insert_history.rs`):**
+
+`insert_history_lines()` pushes content into the terminal's native scrollback buffer above the ratatui viewport without disturbing ratatui's diff-based renderer. It works by manipulating ANSI scroll regions (DECSTBM, `\x1b[Pt;Pbr`) directly against the crossterm backend writer, bypassing the normal ratatui render pass.
+
+The insertion algorithm:
+
+```
+1. If viewport is not at screen bottom: scroll viewport downward using RI (ESC M) inside
+   a temporary scroll region covering [viewport.top()+1 .. screen_height].
+2. Early return if area.top() == 0 (viewport fills the whole screen; no space above it).
+3. Set scroll region to [1 .. area.top()] (only the history area above the viewport).
+4. Write lines into that region with \r\n advancement.
+5. Reset scroll region to full screen.
+6. Restore cursor to its pre-call position.
+```
+
+The critical invariant: **DECSTBM `Pb=0` means "bottom of screen"**, not row 0. Calling `SetScrollRegion(1..0)` when `area.top() == 0` produces `\x1b[1;0r`, which sets the scroll region to the entire terminal rather than an empty region. Any subsequent writes then scroll through the viewport, corrupting ratatui's content in ways the diff-based renderer cannot detect. The `area.top() == 0` early return guards against this.
+
+Two crossterm `Command` implementations support the function:
+- `SetScrollRegion(Range<u16>)` — emits `\x1b[{start};{end}r`
+- `ResetScrollRegion` — emits `\x1b[r` (restores full-screen scrolling)
+
 ### Things to Know
 
 **Module Structure Convention:**

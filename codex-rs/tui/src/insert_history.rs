@@ -70,6 +70,12 @@ where
         area.top().saturating_sub(1)
     };
 
+    // No room above the viewport for history lines.
+    if area.top() == 0 {
+        let _ = writer;
+        return Ok(());
+    }
+
     // Limit the scroll region to the lines from the top of the screen to the
     // top of the viewport. With this in place, when we add lines inside this
     // area, only the lines in this area will be scrolled. We place the cursor
@@ -524,6 +530,111 @@ mod tests {
                 vt100::Color::Default,
                 "expected default color for 3rd-level content at row {row_idx} col {content_col}, got {:?}",
                 cell.fgcolor()
+            );
+        }
+    }
+
+    /// When the viewport occupies the entire screen (area.top() == 0), there is
+    /// no room above the viewport. insert_history_lines must not corrupt the
+    /// viewport content by writing through a degenerate scroll region.
+    #[test]
+    fn full_screen_viewport_does_not_corrupt_display() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport fills the entire screen: y=0, height=10
+        let viewport = Rect::new(0, 0, width, height);
+        term.set_viewport_area(viewport);
+
+        // Draw some known content into the viewport first
+        term.draw(|frame| {
+            let buf = frame.buffer_mut();
+            for y in 0..height {
+                let text = format!("Row {y}");
+                buf.set_string(0, y, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        // Flush the draw output so vt100 sees it
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // Capture the screen contents before insert_history_lines
+        let before: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        // Now try to insert history lines — there's no room above the viewport
+        let line = Line::from("This should not corrupt the display");
+        insert_history_lines(&mut term, vec![line]).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // The viewport content must be unchanged
+        let after: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        pretty_assertions::assert_eq!(
+            before,
+            after,
+            "viewport content was corrupted by insert_history_lines when area.top()==0"
+        );
+    }
+
+    /// When there IS room above the viewport, history lines should appear
+    /// above the viewport and the viewport content should be preserved.
+    #[test]
+    fn history_lines_inserted_above_viewport_with_room() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let viewport_y: usize = 5;
+        let viewport_h: usize = 5;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport at y=5 with height=5, leaving 5 rows above for history
+        let viewport = Rect::new(0, viewport_y as u16, width, viewport_h as u16);
+        term.set_viewport_area(viewport);
+
+        // Draw known viewport content
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // Insert a history line
+        let line = Line::from("History entry");
+        insert_history_lines(&mut term, vec![line]).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        // The history line should appear somewhere above the viewport
+        let history_row = rows
+            .iter()
+            .position(|r| r.contains("History entry"))
+            .unwrap_or_else(|| {
+                panic!("expected 'History entry' above viewport, got rows: {rows:?}")
+            });
+        assert!(
+            history_row < viewport_y,
+            "history line at row {history_row} should be above viewport at y={viewport_y}",
+        );
+
+        // Viewport content should still be intact — find it by searching for
+        // "Viewport row 0" and checking consecutive rows from there.
+        let vp_start = rows
+            .iter()
+            .position(|r| r.contains("Viewport row 0"))
+            .expect("could not find 'Viewport row 0' on screen");
+        for i in 0..viewport_h {
+            let row_text = &rows[vp_start + i];
+            assert!(
+                row_text.contains(&format!("Viewport row {i}")),
+                "viewport row {i} should contain 'Viewport row {i}', got: {row_text:?}"
             );
         }
     }
