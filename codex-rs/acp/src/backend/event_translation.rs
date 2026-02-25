@@ -43,16 +43,41 @@ pub(crate) fn get_event_msg_type(msg: &EventMsg) -> &'static str {
     }
 }
 
+/// Accumulated state for a tool call that was skipped on the initial ToolCall event
+/// (because it lacked useful display info) but may receive details in subsequent
+/// ToolCallUpdate events before completion.
+#[derive(Default)]
+pub(crate) struct AccumulatedToolCall {
+    pub title: Option<String>,
+    pub kind: Option<acp::ToolKind>,
+    pub raw_input: Option<serde_json::Value>,
+    pub meta_tool_name: Option<String>,
+}
+
+/// Extract the tool name from `_meta.claudeCode.toolName` if present.
+pub(crate) fn extract_meta_tool_name(meta: Option<&acp::Meta>) -> Option<String> {
+    meta?
+        .get("claudeCode")?
+        .get("toolName")?
+        .as_str()
+        .map(String::from)
+}
+
 /// Translate an ACP SessionUpdate to codex_protocol::EventMsg variants.
 ///
 /// The `pending_patch_changes` map stores FileChange data from ToolCall events
 /// so that it can be retrieved when ToolCallUpdate arrives (after approval).
+///
+/// The `pending_tool_calls` map accumulates title/kind/raw_input from skipped
+/// ToolCall events and intermediate (non-completed) ToolCallUpdate events,
+/// so the best available display name can be resolved on completion.
 pub(crate) fn translate_session_update_to_events(
     update: &acp::SessionUpdate,
     pending_patch_changes: &mut std::collections::HashMap<
         String,
         std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
     >,
+    pending_tool_calls: &mut std::collections::HashMap<String, AccumulatedToolCall>,
 ) -> Vec<EventMsg> {
     match update {
         acp::SessionUpdate::AgentMessageChunk(chunk) => {
@@ -114,6 +139,16 @@ pub(crate) fn translate_session_update_to_events(
                     has_raw_input = tool_call.raw_input.is_some(),
                     title_has_path = title_has_path,
                     "ACP: skipping generic ToolCall (no display args), waiting for detailed event"
+                );
+                // Store whatever data we have so it can be used on completion
+                pending_tool_calls.insert(
+                    tool_call.tool_call_id.to_string(),
+                    AccumulatedToolCall {
+                        title: Some(tool_call.title.clone()),
+                        kind: Some(tool_call.kind),
+                        raw_input: tool_call.raw_input.clone(),
+                        meta_tool_name: extract_meta_tool_name(tool_call.meta.as_ref()),
+                    },
                 );
                 return vec![];
             }
@@ -194,6 +229,7 @@ pub(crate) fn translate_session_update_to_events(
                 // This data was stored when we first saw the ToolCall, before approval.
                 let call_id = update.tool_call_id.to_string();
                 if let Some(changes) = pending_patch_changes.remove(&call_id) {
+                    pending_tool_calls.remove(&call_id);
                     debug!(
                         target: "acp_event_flow",
                         event_type = "ToolCallUpdate",
@@ -212,21 +248,58 @@ pub(crate) fn translate_session_update_to_events(
                     })];
                 }
 
+                // Resolve the best available title by merging accumulated data
+                // with whatever this completion update provides.
+                let accumulated = pending_tool_calls.remove(&call_id);
+                let meta_tool_name = extract_meta_tool_name(update.meta.as_ref())
+                    .or_else(|| accumulated.as_ref().and_then(|a| a.meta_tool_name.clone()));
+
+                // Title resolution: update fields > accumulated > meta toolName > kind display name
+                let resolved_title = if !title.is_empty() && !title_is_raw_id(&title) {
+                    title
+                } else if let Some(ref acc) = accumulated
+                    && let Some(ref acc_title) = acc.title
+                    && !acc_title.is_empty()
+                    && !title_is_raw_id(acc_title)
+                {
+                    acc_title.clone()
+                } else if let Some(ref meta_name) = meta_tool_name {
+                    meta_name.clone()
+                } else {
+                    // Last resort: use kind-based display name
+                    let kind = update
+                        .fields
+                        .kind
+                        .or_else(|| accumulated.as_ref().and_then(|a| a.kind));
+                    kind.map(kind_to_display_name).unwrap_or("Tool").to_string()
+                };
+
+                let resolved_kind = update
+                    .fields
+                    .kind
+                    .as_ref()
+                    .or_else(|| accumulated.as_ref().and_then(|a| a.kind.as_ref()));
+                let resolved_raw_input = update
+                    .fields
+                    .raw_input
+                    .as_ref()
+                    .or_else(|| accumulated.as_ref().and_then(|a| a.raw_input.as_ref()));
+
                 // Extract output from tool call content and raw_output
                 let aggregated_output = extract_tool_output(&update.fields);
-                let command = format_tool_call_command(&title, update.fields.raw_input.as_ref());
+                let command = format_tool_call_command(&resolved_title, resolved_raw_input);
                 // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
                 let parsed_cmd = classify_tool_to_parsed_command(
-                    &title,
-                    update.fields.kind.as_ref(),
-                    update.fields.raw_input.as_ref(),
+                    &resolved_title,
+                    resolved_kind,
+                    resolved_raw_input,
                 );
 
                 debug!(
                     target: "acp_event_flow",
                     event_type = "ToolCallUpdate",
                     call_id = %update.tool_call_id,
-                    title = %title,
+                    title = %resolved_title,
                     command = %command,
                     output_len = aggregated_output.len(),
                     "ACP -> TUI: ExecCommandEnd (tool call completed)"
@@ -250,6 +323,22 @@ pub(crate) fn translate_session_update_to_events(
                     },
                 )]
             } else {
+                // Non-completed update: accumulate title/kind/raw_input for later use
+                let call_id = update.tool_call_id.to_string();
+                let meta_tool_name = extract_meta_tool_name(update.meta.as_ref());
+                let acc = pending_tool_calls.entry(call_id).or_default();
+                if let Some(ref t) = update.fields.title {
+                    acc.title = Some(t.clone());
+                }
+                if let Some(k) = update.fields.kind {
+                    acc.kind = Some(k);
+                }
+                if let Some(ref ri) = update.fields.raw_input {
+                    acc.raw_input = Some(ri.clone());
+                }
+                if let Some(mn) = meta_tool_name {
+                    acc.meta_tool_name = Some(mn);
+                }
                 vec![]
             }
         }

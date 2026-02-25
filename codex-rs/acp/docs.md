@@ -726,9 +726,37 @@ For Edit/Write/Delete operations, ACP emits native patch events:
 | Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
 | Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
 
-**Tool Call Event Filtering:**
+**Tool Call Event Filtering and Title Accumulation:**
 
-The ACP backend filters `ToolCall` events that lack useful display information before emitting `ExecCommandBegin` events. The ACP protocol emits multiple `ToolCall` events for the same `call_id` -- first a generic event (e.g., title="Read File", empty `raw_input`), then a detailed event (e.g., title="Read /path/to/file.rs", populated `raw_input`). The backend skips the generic events and only emits the detailed ones. Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
+The ACP backend filters `ToolCall` events that lack useful display information before emitting `ExecCommandBegin` events. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
+
+1. `ToolCall` with a generic title and empty `raw_input` (skipped, but data stored in `pending_tool_calls`)
+2. `ToolCallUpdate` with the real title/kind/raw_input but not yet completed (accumulated into `pending_tool_calls`)
+3. `ToolCallUpdate` with `status: Completed` but typically no title/kind/raw_input
+
+The `pending_tool_calls` HashMap (keyed by `call_id`) in `event_translation.rs` accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2. On the completion event (step 3), `translate_session_update_to_events()` resolves the best available title using a fallback chain:
+
+```
+Title from completion update fields (if non-empty and not a raw ID)
+    |
+    v (fallback)
+Accumulated title from intermediate updates
+    |
+    v (fallback)
+_meta.claudeCode.toolName from the ACP adapter
+    |
+    v (fallback)
+kind_to_display_name() mapping (e.g., Read -> "Read", Execute -> "Terminal")
+    |
+    v (fallback)
+Hardcoded "Tool"
+```
+
+Raw Anthropic `tool_use` IDs (e.g., `toolu_015Xtg1GzAd6aPH6oiirx5us`) are detected by `title_is_raw_id()` in `tool_display.rs` and treated as empty titles, triggering the fallback chain. The `kind_to_display_name()` function maps `ToolKind` variants to human-readable strings (e.g., `Execute` -> `"Terminal"`, `SwitchMode` -> `"Switch Mode"`).
+
+The `pending_tool_calls` state is managed alongside the existing `pending_patch_changes` state -- both are passed as mutable references to `translate_session_update_to_events()` and maintained per-caller across the four call sites: `session.rs` (load_session replay), `spawn_and_relay.rs` (persistent relay), `submit_and_ops.rs` (compact/approval turns), and `user_input.rs` (main user turns). Patch completions clean up both maps; non-patch completions clean up only `pending_tool_calls`.
+
+Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 
 **Tool Classification System:**
 

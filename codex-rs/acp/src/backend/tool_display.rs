@@ -469,3 +469,28 @@ pub(crate) fn classify_tool_by_title(
         cmd: format_tool_call_command(title, raw_input),
     }]
 }
+
+/// Returns true if the title looks like a raw Anthropic tool_use ID
+/// (e.g., "toolu_015Xtg1GzAd6aPH6oiirx5us").
+pub(crate) fn title_is_raw_id(title: &str) -> bool {
+    title.starts_with("toolu_")
+        && title.len() > 10
+        && title[6..].bytes().all(|b| b.is_ascii_alphanumeric())
+}
+
+/// Maps a ToolKind to a human-readable display name for fallback use.
+pub(crate) fn kind_to_display_name(kind: acp::ToolKind) -> &'static str {
+    match kind {
+        acp::ToolKind::Read => "Read",
+        acp::ToolKind::Edit => "Edit",
+        acp::ToolKind::Delete => "Delete",
+        acp::ToolKind::Move => "Move",
+        acp::ToolKind::Search => "Search",
+        acp::ToolKind::Execute => "Terminal",
+        acp::ToolKind::Think => "Think",
+        acp::ToolKind::Fetch => "Fetch",
+        acp::ToolKind::SwitchMode => "Switch Mode",
+        acp::ToolKind::Other => "Tool",
+        _ => "Tool",
+    }
+}

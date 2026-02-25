@@ -316,9 +316,13 @@ impl AcpBackend {
         event_tx: mpsc::Sender<Event>,
     ) {
         let mut pending_patch_changes = HashMap::new();
+        let mut pending_tool_calls = HashMap::new();
         while let Some(update) = persistent_rx.recv().await {
-            let event_msgs =
-                translate_session_update_to_events(&update, &mut pending_patch_changes);
+            let event_msgs = translate_session_update_to_events(
+                &update,
+                &mut pending_patch_changes,
+                &mut pending_tool_calls,
+            );
             for msg in event_msgs {
                 let _ = event_tx
                     .send(Event {

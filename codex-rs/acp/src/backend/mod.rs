@@ -296,6 +296,8 @@ mod session;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
+#[cfg(test)]
+pub(crate) use event_translation::AccumulatedToolCall;
 use event_translation::get_event_msg_type;
 use event_translation::get_op_name;
 use event_translation::record_tool_events_to_transcript;
@@ -305,7 +307,9 @@ pub(crate) use tool_display::classify_tool_to_parsed_command;
 pub(crate) use tool_display::extract_display_args;
 pub(crate) use tool_display::extract_tool_output;
 pub(crate) use tool_display::format_tool_call_command;
+pub(crate) use tool_display::kind_to_display_name;
 pub(crate) use tool_display::title_contains_useful_info;
+pub(crate) use tool_display::title_is_raw_id;
 pub(crate) use tool_display::truncate_for_log;
 mod transcript;
 pub use transcript::transcript_to_replay_events;

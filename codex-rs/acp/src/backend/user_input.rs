@@ -238,6 +238,7 @@ impl AcpBackend {
                     String,
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
+                let mut pending_tool_calls = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
                     if has_agent_text
                         && matches!(
@@ -360,8 +361,11 @@ impl AcpBackend {
                         }
                     }
 
-                    let events =
-                        translate_session_update_to_events(&update, &mut pending_patch_changes);
+                    let events = translate_session_update_to_events(
+                        &update,
+                        &mut pending_patch_changes,
+                        &mut pending_tool_calls,
+                    );
                     for mut event_msg in events {
                         // Accumulate text for transcript
                         if let EventMsg::AgentMessageDelta(ref mut delta) = event_msg {

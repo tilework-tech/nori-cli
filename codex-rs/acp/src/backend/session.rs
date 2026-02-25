@@ -71,10 +71,14 @@ impl AcpBackend {
             // when the number of events exceeds the channel capacity.
             let collect_handle = tokio::spawn(async move {
                 let mut pending_patch_changes = std::collections::HashMap::new();
+                let mut pending_tool_calls = std::collections::HashMap::new();
                 let mut buffered_events = Vec::new();
                 while let Some(update) = update_rx.recv().await {
-                    let event_msgs =
-                        translate_session_update_to_events(&update, &mut pending_patch_changes);
+                    let event_msgs = translate_session_update_to_events(
+                        &update,
+                        &mut pending_patch_changes,
+                        &mut pending_tool_calls,
+                    );
                     for msg in event_msgs {
                         buffered_events.push(Event {
                             id: String::new(),

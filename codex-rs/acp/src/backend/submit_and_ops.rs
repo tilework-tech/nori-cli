@@ -314,6 +314,7 @@ impl AcpBackend {
                     String,
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
+                let mut pending_tool_calls = std::collections::HashMap::new();
 
                 while let Some(update) = update_rx.recv().await {
                     // Capture text from agent message chunks
@@ -324,8 +325,11 @@ impl AcpBackend {
                     }
 
                     // Translate and forward events to TUI for display
-                    let events =
-                        translate_session_update_to_events(&update, &mut pending_patch_changes);
+                    let events = translate_session_update_to_events(
+                        &update,
+                        &mut pending_patch_changes,
+                        &mut pending_tool_calls,
+                    );
                     for event_msg in events {
                         let _ = event_tx_clone
                             .send(Event {

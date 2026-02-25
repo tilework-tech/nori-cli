@@ -8,7 +8,8 @@ fn test_unsupported_updates_produce_no_events() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert!(events.is_empty());
 }
 
@@ -247,7 +248,8 @@ fn test_tool_call_read_generates_exploring_parsed_cmd() {
     );
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {

@@ -11,7 +11,8 @@ fn test_tool_call_execute_generates_command_parsed_cmd() {
     );
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {
@@ -41,7 +42,8 @@ fn test_tool_call_update_read_generates_exploring_parsed_cmd() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {

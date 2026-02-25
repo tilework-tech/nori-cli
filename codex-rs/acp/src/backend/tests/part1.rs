@@ -9,7 +9,8 @@ fn test_translate_agent_message_chunk_to_event() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {
@@ -91,7 +92,8 @@ fn test_translate_agent_thought_to_reasoning_event() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {
@@ -113,7 +115,8 @@ fn test_translate_tool_call_to_exec_command_begin() {
     );
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {
@@ -137,7 +140,8 @@ fn test_translate_tool_call_update_completed_to_exec_command_end() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {
@@ -162,7 +166,8 @@ fn test_extract_tool_output_from_content() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert_eq!(events.len(), 1);
 
     match &events[0] {
@@ -185,7 +190,8 @@ fn test_extract_tool_output_from_raw_output() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     match &events[0] {
         EventMsg::ExecCommandEnd(end) => {
             assert_eq!(end.aggregated_output, "Read 42 lines");
@@ -263,6 +269,7 @@ fn test_non_text_content_produces_no_events() {
     ));
 
     let mut pending = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending);
+    let mut pending_tool_calls = std::collections::HashMap::new();
+    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
     assert!(events.is_empty());
 }
