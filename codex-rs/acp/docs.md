@@ -857,8 +857,11 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 | `ExecutableNotFound` | "not found", "command not found" | "Could not find the {agent} CLI. Install with: npm install -g {package}" |
 | `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}" |
 | `PromptTooLong` | "prompt is too long" | "Prompt is too long. Try using /compact to reduce context size, or start a new session." |
+| `ApiServerError` | "500", "502", "503", "504", "server error", "api_error", "overloaded" | "The API returned a server error. This is usually temporary -- please try again." |
 
-Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to inspect the full error chain, while the user-facing `display_error` string uses `{e:#}` (alternate Display) in the prompt error handler to show the complete chain rather than just the outermost `.context()` wrapper.
+The priority chain is: Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown. Earlier categories take precedence when an error message matches multiple patterns (e.g., "500 authentication service unavailable" categorizes as `Authentication`, not `ApiServerError`).
+
+Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to inspect the full error chain, while the user-facing `display_error` string uses `{e:#}` (alternate Display) in the prompt error handler to show the complete chain rather than just the outermost `.context()` wrapper. Both error message paths (spawn errors via `enhanced_error_message()` in `backend/mod.rs` and prompt errors via the match block in `user_input.rs`) handle all categories.
 
 ### Things to Know
 

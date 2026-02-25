@@ -201,6 +201,101 @@ fn test_protocol_not_found_is_not_executable_not_found() {
     );
 }
 
+/// Test that API server errors (500, 502, etc.) are categorized as ApiServerError
+#[test]
+fn test_categorize_acp_error_api_server_error() {
+    // The exact error from the logs
+    assert_eq!(
+        categorize_acp_error(
+            r#"Internal error: API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}"#
+        ),
+        AcpErrorCategory::ApiServerError
+    );
+
+    // Various 5xx status codes
+    assert_eq!(
+        categorize_acp_error("HTTP 502: Bad Gateway"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("HTTP 503: Service Unavailable"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("HTTP 504: Gateway Timeout"),
+        AcpErrorCategory::ApiServerError
+    );
+
+    // Generic patterns
+    assert_eq!(
+        categorize_acp_error("internal server error"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("api_error"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("server error occurred"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("API is overloaded"),
+        AcpErrorCategory::ApiServerError
+    );
+}
+
+/// Test that errors containing both auth and server error patterns still categorize as auth
+/// (auth check comes first in the chain)
+#[test]
+fn test_categorize_acp_error_auth_takes_priority_over_server_error() {
+    assert_eq!(
+        categorize_acp_error("500 authentication service unavailable"),
+        AcpErrorCategory::Authentication
+    );
+}
+
+/// Test that a wrapped 500 error (through anyhow .context()) is still categorized correctly
+#[test]
+fn test_api_server_error_through_anyhow_context() {
+    let error_msg = r#"Internal error: API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}"#;
+    let inner = anyhow::anyhow!("{error_msg}");
+    let wrapped: anyhow::Error = inner.context("ACP prompt failed");
+
+    let error_string = format!("{wrapped:?}");
+    let category = categorize_acp_error(&error_string);
+
+    assert_eq!(
+        category,
+        AcpErrorCategory::ApiServerError,
+        "Debug-formatted error chain should be categorized as ApiServerError"
+    );
+}
+
+/// Test that enhanced_error_message for ApiServerError suggests retrying
+#[test]
+fn test_enhanced_error_message_api_server_error() {
+    use crate::registry::AgentKind;
+
+    let enhanced = enhanced_error_message(
+        AcpErrorCategory::ApiServerError,
+        "Internal error: API Error: 500",
+        "Claude Code",
+        AgentKind::ClaudeCode.auth_hint(),
+        AgentKind::ClaudeCode.display_name(),
+        AgentKind::ClaudeCode.npm_package(),
+    );
+
+    assert!(
+        enhanced.contains("try again"),
+        "ApiServerError message should suggest retrying, got: {enhanced}"
+    );
+    assert!(
+        enhanced.contains("temporary") || enhanced.contains("server error"),
+        "ApiServerError message should mention it's a server error, got: {enhanced}"
+    );
+}
+
 /// Test that enhanced_error_message produces actionable auth error messages
 #[test]
 fn test_enhanced_error_message_auth() {

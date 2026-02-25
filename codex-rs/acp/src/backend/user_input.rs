@@ -528,6 +528,10 @@ impl AcpBackend {
                         "Prompt is too long. Try using /compact to reduce context size, or start a new session."
                             .to_string()
                     }
+                    AcpErrorCategory::ApiServerError => {
+                        "The API returned a server error. This is usually temporary — please try again."
+                            .to_string()
+                    }
                     AcpErrorCategory::Unknown => {
                         format!("ACP prompt failed: {display_error}")
                     }
