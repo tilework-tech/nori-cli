@@ -40,6 +40,21 @@ pub(crate) const WHIMSICAL_STATUS_MESSAGES: &[&str] = &[
     "Feeding the hamsters that power the servers",
     "Composing a strongly-worded email to Clippy",
     "Updating my LinkedIn to 'AI Engineer'",
+    "Burning VC cash",
+    "Asking the magic 8-ball",
+    "Reticulating splines",
+    "Downloading more RAM",
+    "Negotiating with the garbage collector",
+    "Aligning the neural pathways",
+    "rm -rf-ing my doubts",
+    "sudo make me a sandwich",
+    "git push --force-ing my way through",
+    "Counting backwards from infinity",
+    "Warming up the GPUs",
+    "Refactoring the refactoring",
+    "Compiling War and Peace",
+    "Turning it off and on again",
+    "Awaiting further instructions from the void",
 ];
 
 pub(crate) fn random_status_message() -> String {
@@ -244,8 +259,8 @@ mod tests {
             seen.insert(random_status_message());
         }
         assert!(
-            seen.len() > 1,
-            "expected multiple distinct messages over 200 calls, got {}",
+            seen.len() >= 5,
+            "expected at least 5 distinct messages over 200 calls, got {}",
             seen.len()
         );
     }
