@@ -313,6 +313,14 @@ impl ChatWidget {
     ) {
         match (names, error) {
             (Some(names), None) if !names.is_empty() => {
+                // Determine whether to show "No Skillset" option and worktree warning.
+                // These are relevant when skillset_per_session is enabled (indicated
+                // by the on_dismiss callback being set, which only happens in the
+                // per-session startup flow).
+                let nori_cfg = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                let is_per_session = nori_cfg.skillset_per_session;
+                let auto_worktree_off = is_per_session && !nori_cfg.auto_worktree.is_enabled();
+
                 let on_dismiss: SelectionAction = Box::new(|tx| {
                     tx.send(AppEvent::SkillsetPickerDismissed);
                 });
@@ -320,6 +328,8 @@ impl ChatWidget {
                     names,
                     install_dir,
                     Some(on_dismiss),
+                    is_per_session,
+                    auto_worktree_off,
                 );
                 self.bottom_pane.show_selection_view(params);
             }
