@@ -269,6 +269,7 @@ Hotkey actions fall into two categories that are consumed at different layers:
 |----------|---------|-------------|
 | App-level | OpenTranscript, OpenEditor | `app/event_handling.rs::handle_key_event()` |
 | Editing | MoveBackwardChar, MoveForwardChar, MoveBeginningOfLine, MoveEndOfLine, MoveBackwardWord, MoveForwardWord, DeleteBackwardChar, DeleteForwardChar, DeleteBackwardWord, KillToEndOfLine, KillToBeginningOfLine, Yank | `textarea/mod.rs::input()` |
+| UI triggers | HistorySearch | `chat_composer/key_handling.rs` |
 
 Editing hotkeys are propagated from `App` down to the textarea via a `set_hotkey_config()` chain: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea. This propagation occurs at startup, after config changes via `persist_hotkey_setting()`, and when new sessions or agent switches create fresh ChatWidgets.
 
@@ -307,21 +308,33 @@ Normal mode supports standard vim keybindings:
 | Editing | `D`/`C` | Delete to end of line (`C` also enters Insert mode) |
 | Editing | `dd` | Delete current line |
 | Editing | `p` | Paste from kill buffer |
+| Undo/Redo | `u` | Undo last edit or insert session |
+| Undo/Redo | `Ctrl-R` | Redo last undone edit or insert session |
 
 Two-key sequences (`gg`, `dd`) use a `vim_pending_key: Option<char>` field on TextArea. Pressing `g` or `d` sets the pending key; the second keypress either completes the sequence or cancels it (non-matching keys are discarded).
+
+**Undo/Redo with Insert-Session Grouping:**
+
+The textarea maintains undo/redo stacks of `(text, cursor_pos)` snapshots, capped at 500 entries. In vim mode, all edits made during a single insert session (from entering Insert mode to pressing Escape) are grouped into a single undo unit. This matches standard vim behavior where `u` undoes the entire insert session rather than individual keystrokes.
+
+The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering Insert mode (via `i`, `a`, `A`, `I`, `o`, `O`, `C`, `S`) saves a snapshot and sets `in_undo_group = true`, suppressing per-keystroke snapshots. Pressing Escape to return to Normal mode calls `end_undo_group()`. Outside of vim mode (or when `in_undo_group` is false), each mutation via `insert_str_at()` or `replace_range_raw()` saves its own snapshot. `set_text()` clears both stacks since it represents a complete replacement of the buffer content (e.g., history navigation).
 
 The state machine is implemented in `textarea/mod.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer/mod.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
 
 Config changes emit `AppEvent::SetConfigVimMode`, handled in `app/config_persistence.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
 
 
-**History Search (Ctrl+R):**
+**History Search (Configurable Hotkey):**
 
-Ctrl+R opens a reverse-incremental-search popup for prompt history, following the same `ActivePopup` pattern as the slash command popup (`Command`) and file mention popup (`File`). The popup is implemented in `history_search_popup.rs` using the shared `ScrollState` and `MAX_POPUP_ROWS` infrastructure from `popup_consts.rs`.
+The history search hotkey is configurable via the `HotkeyAction::HistorySearch` binding (default: `Ctrl+R`). The `ChatComposer` key handler uses `matches_binding()` against the configured binding rather than a hardcoded key pattern. This allows users to remap history search when `Ctrl+R` conflicts with other bindings (e.g., vim redo).
+
+In vim Normal mode, `Ctrl+R` is handled by the textarea as redo before the composer's key handler runs, so the default `HistorySearch` binding does not fire. In Insert mode, the composer's key handler runs and opens history search as expected. Users who want history search accessible in Normal mode can rebind it to a different key.
+
+The history search popup follows the same `ActivePopup` pattern as the slash command popup (`Command`) and file mention popup (`File`). The popup is implemented in `history_search_popup.rs` using the shared `ScrollState` and `MAX_POPUP_ROWS` infrastructure from `popup_consts.rs`.
 
 Data flow:
 ```
-Ctrl+R pressed in ChatComposer
+History search hotkey pressed in ChatComposer
   -> Op::SearchHistoryRequest { max_results: 500 }
   -> AcpBackend spawns blocking read of history.jsonl via search_entries()
   -> EventMsg::SearchHistoryResponse

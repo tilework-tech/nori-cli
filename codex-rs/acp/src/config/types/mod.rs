@@ -516,6 +516,8 @@ pub enum HotkeyAction {
     KillToBeginningOfLine,
     /// Yank (paste) killed text.
     Yank,
+    /// Search prompt history (reverse search).
+    HistorySearch,
 }
 
 impl HotkeyAction {
@@ -536,6 +538,7 @@ impl HotkeyAction {
             Self::KillToEndOfLine => "Kill to Line End",
             Self::KillToBeginningOfLine => "Kill to Line Start",
             Self::Yank => "Yank",
+            Self::HistorySearch => "History Search",
         }
     }
 
@@ -556,6 +559,7 @@ impl HotkeyAction {
             Self::KillToEndOfLine => "Kill text to end of line",
             Self::KillToBeginningOfLine => "Kill text to beginning of line",
             Self::Yank => "Yank (paste) killed text",
+            Self::HistorySearch => "Search prompt history (reverse search)",
         }
     }
 
@@ -576,6 +580,7 @@ impl HotkeyAction {
             Self::KillToEndOfLine => "kill_to_end_of_line",
             Self::KillToBeginningOfLine => "kill_to_beginning_of_line",
             Self::Yank => "yank",
+            Self::HistorySearch => "history_search",
         }
     }
 
@@ -596,6 +601,7 @@ impl HotkeyAction {
             Self::KillToEndOfLine => "ctrl+k",
             Self::KillToBeginningOfLine => "ctrl+u",
             Self::Yank => "ctrl+y",
+            Self::HistorySearch => "ctrl+r",
         }
     }
 
@@ -616,6 +622,7 @@ impl HotkeyAction {
             Self::KillToEndOfLine,
             Self::KillToBeginningOfLine,
             Self::Yank,
+            Self::HistorySearch,
         ]
     }
 }
@@ -731,6 +738,8 @@ pub struct HotkeyConfigToml {
     pub kill_to_beginning_of_line: Option<HotkeyBinding>,
     /// Hotkey for yanking (pasting) killed text.
     pub yank: Option<HotkeyBinding>,
+    /// Hotkey for searching prompt history (reverse search).
+    pub history_search: Option<HotkeyBinding>,
 }
 
 /// Resolved hotkey configuration with defaults applied.
@@ -764,6 +773,8 @@ pub struct HotkeyConfig {
     pub kill_to_beginning_of_line: HotkeyBinding,
     /// Hotkey for yanking (pasting) killed text.
     pub yank: HotkeyBinding,
+    /// Hotkey for searching prompt history (reverse search).
+    pub history_search: HotkeyBinding,
 }
 
 impl Default for HotkeyConfig {
@@ -807,6 +818,7 @@ impl Default for HotkeyConfig {
                 HotkeyAction::KillToBeginningOfLine.default_binding(),
             ),
             yank: HotkeyBinding::from_str(HotkeyAction::Yank.default_binding()),
+            history_search: HotkeyBinding::from_str(HotkeyAction::HistorySearch.default_binding()),
         }
     }
 }
@@ -866,6 +878,10 @@ impl HotkeyConfig {
                 .clone()
                 .unwrap_or(defaults.kill_to_beginning_of_line),
             yank: toml.yank.clone().unwrap_or(defaults.yank),
+            history_search: toml
+                .history_search
+                .clone()
+                .unwrap_or(defaults.history_search),
         }
     }
 
@@ -886,6 +902,7 @@ impl HotkeyConfig {
             HotkeyAction::KillToEndOfLine => &self.kill_to_end_of_line,
             HotkeyAction::KillToBeginningOfLine => &self.kill_to_beginning_of_line,
             HotkeyAction::Yank => &self.yank,
+            HotkeyAction::HistorySearch => &self.history_search,
         }
     }
 
@@ -906,6 +923,7 @@ impl HotkeyConfig {
             HotkeyAction::KillToEndOfLine => self.kill_to_end_of_line = binding,
             HotkeyAction::KillToBeginningOfLine => self.kill_to_beginning_of_line = binding,
             HotkeyAction::Yank => self.yank = binding,
+            HotkeyAction::HistorySearch => self.history_search = binding,
         }
     }
 
@@ -932,6 +950,7 @@ impl HotkeyConfig {
                 &self.kill_to_beginning_of_line,
             ),
             (HotkeyAction::Yank, &self.yank),
+            (HotkeyAction::HistorySearch, &self.history_search),
         ]
     }
 }
