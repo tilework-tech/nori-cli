@@ -135,7 +135,7 @@ Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in
 
 | Type | Purpose |
 |------|---------|
-| `HotkeyAction` | Enum of bindable actions with display names, descriptions, TOML keys, and default bindings. Covers both app-level actions (OpenTranscript, OpenEditor) and emacs-style editing actions (cursor movement, deletion, kill/yank) used by the textarea |
+| `HotkeyAction` | Enum of bindable actions with display names, descriptions, TOML keys, and default bindings. Covers app-level actions (OpenTranscript, OpenEditor), emacs-style editing actions (cursor movement, deletion, kill/yank) used by the textarea, and UI trigger actions (HistorySearch) |
 | `HotkeyBinding` | String-based key representation (e.g. `"ctrl+t"`, `"alt+g"`, `"none"` for unbound). Serializes/deserializes via serde for TOML roundtripping |
 | `HotkeyConfigToml` | TOML deserialization struct with `Option<HotkeyBinding>` fields for each action |
 | `HotkeyConfig` | Resolved config with defaults applied via `from_toml()`. Provides `binding_for()`, `set_binding()`, and `all_bindings()` accessors |

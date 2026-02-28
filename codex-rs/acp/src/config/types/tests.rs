@@ -291,7 +291,7 @@ fn test_hotkey_action_default_bindings() {
 #[test]
 fn test_hotkey_action_all_actions() {
     let actions = HotkeyAction::all_actions();
-    assert_eq!(actions.len(), 14);
+    assert_eq!(actions.len(), 15);
     assert_eq!(actions[0], HotkeyAction::OpenTranscript);
     assert_eq!(actions[1], HotkeyAction::OpenEditor);
     assert_eq!(actions[2], HotkeyAction::MoveBackwardChar);
@@ -306,6 +306,7 @@ fn test_hotkey_action_all_actions() {
     assert_eq!(actions[11], HotkeyAction::KillToEndOfLine);
     assert_eq!(actions[12], HotkeyAction::KillToBeginningOfLine);
     assert_eq!(actions[13], HotkeyAction::Yank);
+    assert_eq!(actions[14], HotkeyAction::HistorySearch);
 }
 
 #[test]
@@ -383,7 +384,7 @@ fn test_hotkey_config_set_binding() {
 fn test_hotkey_config_all_bindings() {
     let config = HotkeyConfig::default();
     let bindings = config.all_bindings();
-    assert_eq!(bindings.len(), 14);
+    assert_eq!(bindings.len(), 15);
     assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
     assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
 }
@@ -615,6 +616,7 @@ fn test_hotkey_config_from_toml_editing_overrides() {
         kill_to_end_of_line: None,
         kill_to_beginning_of_line: None,
         yank: None,
+        history_search: None,
     };
     let config = HotkeyConfig::from_toml(&toml);
     assert_eq!(
@@ -654,6 +656,7 @@ fn test_hotkey_config_from_toml_editing_unbind() {
         kill_to_end_of_line: None,
         kill_to_beginning_of_line: None,
         yank: None,
+        history_search: None,
     };
     let config = HotkeyConfig::from_toml(&toml);
     assert!(config.move_backward_char.is_none());
@@ -665,7 +668,7 @@ fn test_hotkey_config_from_toml_editing_unbind() {
 fn test_hotkey_config_all_bindings_includes_editing() {
     let config = HotkeyConfig::default();
     let bindings = config.all_bindings();
-    assert_eq!(bindings.len(), 14);
+    assert_eq!(bindings.len(), 15);
     // First two are app-level actions
     assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
     assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
@@ -1285,4 +1288,39 @@ fn test_agent_distribution_resolve_bunx() {
     } else {
         panic!("Expected Bunx variant");
     }
+}
+
+// ========================================================================
+// HistorySearch Hotkey Action Tests
+// ========================================================================
+
+#[test]
+fn test_hotkey_config_from_toml_custom_history_search() {
+    use pretty_assertions::assert_eq;
+    let config: TuiConfigToml = toml::from_str(
+        r#"
+[hotkeys]
+history_search = "ctrl+s"
+"#,
+    )
+    .unwrap();
+    let resolved = HotkeyConfig::from_toml(&config.hotkeys);
+    assert_eq!(
+        resolved.binding_for(HotkeyAction::HistorySearch),
+        &HotkeyBinding::from_str("ctrl+s")
+    );
+}
+
+#[test]
+fn test_hotkey_config_set_binding_history_search() {
+    use pretty_assertions::assert_eq;
+    let mut config = HotkeyConfig::default();
+    config.set_binding(
+        HotkeyAction::HistorySearch,
+        HotkeyBinding::from_str("alt+r"),
+    );
+    assert_eq!(
+        config.binding_for(HotkeyAction::HistorySearch),
+        &HotkeyBinding::from_str("alt+r")
+    );
 }

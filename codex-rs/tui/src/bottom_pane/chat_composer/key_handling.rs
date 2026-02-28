@@ -1,4 +1,5 @@
 use super::*;
+use crate::bottom_pane::textarea::VimModeState;
 
 impl ChatComposer {
     /// Handle a key event coming from the main UI.
@@ -516,12 +517,16 @@ impl ChatComposer {
                 }
                 self.handle_input_basic(key_event)
             }
-            KeyEvent {
-                code: KeyCode::Char('r'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            } => {
+            key_event
+                if key_event.kind == KeyEventKind::Press
+                    && self.textarea.vim_mode_state_if_enabled() != Some(VimModeState::Normal)
+                    && matches_binding(
+                        self.textarea
+                            .hotkey_config()
+                            .binding_for(codex_acp::config::HotkeyAction::HistorySearch),
+                        &key_event,
+                    ) =>
+            {
                 let vim_mode = self.textarea.vim_mode_state_if_enabled().is_some();
                 self.active_popup = ActivePopup::HistorySearch(HistorySearchPopup::new(vim_mode));
                 self.app_event_tx.send(AppEvent::CodexOp(

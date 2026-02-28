@@ -38,6 +38,8 @@ pub(crate) enum VimModeState {
     Normal,
 }
 
+const UNDO_STACK_CAP: usize = 500;
+
 #[derive(Debug)]
 pub(crate) struct TextArea {
     text: String,
@@ -53,6 +55,13 @@ pub(crate) struct TextArea {
     vim_mode_state: VimModeState,
     /// Pending key for two-key vim sequences (e.g. 'g' for gg, 'd' for dd).
     vim_pending_key: Option<char>,
+    /// Undo stack: (text, cursor_pos) snapshots.
+    undo_stack: Vec<(String, usize)>,
+    /// Redo stack: (text, cursor_pos) snapshots.
+    redo_stack: Vec<(String, usize)>,
+    /// Whether we are inside a vim insert-session undo group.
+    /// While true, mutations do not push individual undo snapshots.
+    in_undo_group: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +89,9 @@ impl TextArea {
             vim_mode_enabled: false,
             vim_mode_state: VimModeState::default(),
             vim_pending_key: None,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            in_undo_group: false,
         }
     }
 
@@ -93,6 +105,7 @@ impl TextArea {
         if !enabled {
             self.vim_mode_state = VimModeState::Insert;
             self.vim_pending_key = None;
+            self.in_undo_group = false;
         }
     }
 
@@ -124,6 +137,55 @@ impl TextArea {
         }
     }
 
+    /// Returns a reference to the hotkey config.
+    pub fn hotkey_config(&self) -> &HotkeyConfig {
+        &self.hotkey_config
+    }
+
+    /// Save the current (text, cursor) state as an undo snapshot.
+    /// Clears the redo stack.
+    fn save_undo_snapshot(&mut self) {
+        if self.undo_stack.len() >= UNDO_STACK_CAP {
+            self.undo_stack.remove(0);
+        }
+        self.undo_stack.push((self.text.clone(), self.cursor_pos));
+        self.redo_stack.clear();
+    }
+
+    /// Begin a vim insert-session undo group.
+    /// Saves a snapshot and suppresses further snapshots until the group ends.
+    fn begin_undo_group(&mut self) {
+        self.save_undo_snapshot();
+        self.in_undo_group = true;
+    }
+
+    /// End the current vim insert-session undo group.
+    fn end_undo_group(&mut self) {
+        self.in_undo_group = false;
+    }
+
+    /// Undo the last edit (or insert session).
+    pub fn undo(&mut self) {
+        if let Some((text, cursor)) = self.undo_stack.pop() {
+            self.redo_stack.push((self.text.clone(), self.cursor_pos));
+            self.text = text;
+            self.cursor_pos = cursor;
+            self.wrap_cache.replace(None);
+            self.preferred_col = None;
+        }
+    }
+
+    /// Redo the last undone edit (or insert session).
+    pub fn redo(&mut self) {
+        if let Some((text, cursor)) = self.redo_stack.pop() {
+            self.undo_stack.push((self.text.clone(), self.cursor_pos));
+            self.text = text;
+            self.cursor_pos = cursor;
+            self.wrap_cache.replace(None);
+            self.preferred_col = None;
+        }
+    }
+
     pub fn set_text(&mut self, text: &str) {
         self.text = text.to_string();
         self.cursor_pos = self.cursor_pos.clamp(0, self.text.len());
@@ -131,6 +193,9 @@ impl TextArea {
         self.preferred_col = None;
         self.elements.clear();
         self.kill_buffer.clear();
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        self.in_undo_group = false;
     }
 
     pub fn text(&self) -> &str {
@@ -142,6 +207,9 @@ impl TextArea {
     }
 
     pub fn insert_str_at(&mut self, pos: usize, text: &str) {
+        if !self.in_undo_group {
+            self.save_undo_snapshot();
+        }
         let pos = self.clamp_pos_for_insertion(pos);
         self.text.insert_str(pos, text);
         self.wrap_cache.replace(None);
@@ -165,6 +233,9 @@ impl TextArea {
         let inserted_len = text.len();
         if removed_len == 0 && inserted_len == 0 {
             return;
+        }
+        if !self.in_undo_group {
+            self.save_undo_snapshot();
         }
         let diff = inserted_len as isize - removed_len as isize;
 
@@ -289,6 +360,7 @@ impl TextArea {
                             ..
                         }
                     ) {
+                        self.end_undo_group();
                         self.vim_mode_state = VimModeState::Normal;
                         // Vim moves cursor back one position when exiting insert mode,
                         // but never past the beginning of the current line.
@@ -465,6 +537,7 @@ impl TextArea {
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
+                            self.begin_undo_group();
                             self.vim_mode_state = VimModeState::Insert;
                         }
                         KeyEvent {
@@ -472,6 +545,7 @@ impl TextArea {
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
+                            self.begin_undo_group();
                             self.move_cursor_right();
                             self.vim_mode_state = VimModeState::Insert;
                         }
@@ -480,6 +554,7 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
+                            self.begin_undo_group();
                             self.move_cursor_to_end_of_line(false);
                             self.vim_mode_state = VimModeState::Insert;
                         }
@@ -488,6 +563,7 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
+                            self.begin_undo_group();
                             self.move_cursor_to_beginning_of_line(false);
                             self.vim_mode_state = VimModeState::Insert;
                         }
@@ -496,6 +572,7 @@ impl TextArea {
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
+                            self.begin_undo_group();
                             let eol = self.end_of_current_line();
                             self.set_cursor(eol);
                             self.insert_str("\n");
@@ -506,6 +583,7 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
+                            self.begin_undo_group();
                             let bol = self.beginning_of_current_line();
                             self.set_cursor(bol);
                             self.insert_str("\n");
@@ -530,6 +608,7 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
+                            self.begin_undo_group();
                             self.kill_to_end_of_line();
                             self.vim_mode_state = VimModeState::Insert;
                         }
@@ -560,6 +639,7 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
+                            self.begin_undo_group();
                             self.substitute_line();
                             self.vim_mode_state = VimModeState::Insert;
                         }
@@ -568,6 +648,18 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => self.yank_line(),
+
+                        // -- Undo/Redo --
+                        KeyEvent {
+                            code: KeyCode::Char('u'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => self.undo(),
+                        KeyEvent {
+                            code: KeyCode::Char('r'),
+                            modifiers: KeyModifiers::CONTROL,
+                            ..
+                        } => self.redo(),
 
                         _ => {
                             // Ignore other keys in Normal mode.

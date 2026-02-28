@@ -1,4 +1,5 @@
 use crate::key_hint::has_ctrl_or_alt;
+use crate::nori::hotkey_match::matches_binding;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
