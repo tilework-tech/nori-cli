@@ -446,8 +446,8 @@ pub(crate) enum AppEvent {
 
     /// Fork the conversation to just before the selected user message.
     ForkToMessage {
-        /// Which user message (0-indexed) in the current session segment.
-        nth_user_message: usize,
+        /// Index of the target user message cell in `transcript_cells`.
+        cell_index: usize,
         /// The text of the selected message, to prefill the composer.
         prefill: String,
     },

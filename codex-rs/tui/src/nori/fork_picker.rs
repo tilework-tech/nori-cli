@@ -29,7 +29,7 @@ fn truncate_preview(message: &str) -> String {
 /// Create selection view parameters for the fork picker.
 ///
 /// # Arguments
-/// * `messages` - List of `(nth_user_message, message_text)` tuples, ordered oldest-first
+/// * `messages` - List of `(cell_index, message_text)` tuples, ordered oldest-first
 /// * `app_event_tx` - The app event sender for triggering fork events
 ///
 /// Items are displayed newest-first (reversed from input order).
@@ -40,11 +40,11 @@ pub fn fork_picker_params(
     let items: Vec<SelectionItem> = messages
         .into_iter()
         .rev()
-        .map(|(nth, message)| {
+        .map(|(cell_index, message)| {
             let preview = truncate_preview(&message);
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
                 tx.send(AppEvent::ForkToMessage {
-                    nth_user_message: nth,
+                    cell_index,
                     prefill: message.clone(),
                 });
             })];
@@ -153,10 +153,10 @@ mod tests {
         let event = verify_rx.try_recv().expect("should have received event");
         match event {
             AppEvent::ForkToMessage {
-                nth_user_message,
+                cell_index,
                 prefill,
             } => {
-                assert_eq!(nth_user_message, 1);
+                assert_eq!(cell_index, 1);
                 assert_eq!(prefill, "second");
             }
             other => panic!("expected ForkToMessage, got {other:?}"),
@@ -177,10 +177,10 @@ mod tests {
         let event = verify_rx.try_recv().expect("should have received event");
         match event {
             AppEvent::ForkToMessage {
-                nth_user_message,
+                cell_index,
                 prefill,
             } => {
-                assert_eq!(nth_user_message, 0);
+                assert_eq!(cell_index, 0);
                 assert_eq!(prefill, "first");
             }
             other => panic!("expected ForkToMessage, got {other:?}"),

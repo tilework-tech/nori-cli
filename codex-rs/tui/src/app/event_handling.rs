@@ -135,11 +135,14 @@ impl App {
                 self.chat_widget.on_commit_tick();
             }
             AppEvent::CodexEvent(event) => {
-                if self.suppress_shutdown_complete
-                    && matches!(event.msg, EventMsg::ShutdownComplete)
-                {
-                    self.suppress_shutdown_complete = false;
-                    return Ok(true);
+                if self.suppress_shutdown_complete {
+                    if matches!(event.msg, EventMsg::ShutdownComplete) {
+                        self.suppress_shutdown_complete = false;
+                        return Ok(true);
+                    }
+                    if matches!(event.msg, EventMsg::TurnAborted(_)) {
+                        return Ok(true);
+                    }
                 }
                 self.chat_widget.handle_codex_event(event);
             }
@@ -977,7 +980,8 @@ impl App {
                 }
             }
             AppEvent::OpenForkPicker => {
-                let messages = crate::app_backtrack::collect_user_messages(&self.transcript_cells);
+                let messages =
+                    crate::app_backtrack::collect_all_user_messages(&self.transcript_cells);
                 if messages.is_empty() {
                     self.chat_widget
                         .add_info_message("No messages to fork from.".to_string(), None);
@@ -991,13 +995,11 @@ impl App {
                 tui.frame_requester().schedule_frame();
             }
             AppEvent::ForkToMessage {
-                nth_user_message,
+                cell_index,
                 prefill,
             } => {
-                let summary = crate::app_backtrack::build_fork_summary(
-                    &self.transcript_cells,
-                    nth_user_message,
-                );
+                let summary =
+                    crate::app_backtrack::build_fork_summary(&self.transcript_cells, cell_index);
                 let fork_context = if summary.is_empty() {
                     None
                 } else {
@@ -1027,10 +1029,8 @@ impl App {
                     .set_loop_count_override(self.loop_count_override);
 
                 // Trim transcript to preserve history before the fork point
-                crate::app_backtrack::trim_transcript_cells_to_nth_user(
-                    &mut self.transcript_cells,
-                    nth_user_message,
-                );
+                self.transcript_cells
+                    .truncate(cell_index.min(self.transcript_cells.len()));
                 self.render_transcript_once(tui);
 
                 if !prefill.is_empty() {
