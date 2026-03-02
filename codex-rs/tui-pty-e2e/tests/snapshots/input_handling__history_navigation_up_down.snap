@@ -4,11 +4,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › first message
 
-
-
-
 • Mock response
-
 
 › [DEFAULT_PROMPT]
 

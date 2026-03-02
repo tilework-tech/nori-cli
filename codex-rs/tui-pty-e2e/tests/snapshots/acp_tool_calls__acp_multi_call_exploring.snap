@@ -8,18 +8,12 @@ expression: normalize_for_input_snapshot(contents)
 
 • Reading multiple files...
 
-
-
-
-
-
 • Explored
   └ Read file1.rs, file2.rs, file3.rs
 
 ────────────────────────────────────────────────────────────────────────────────
 
 • Multi-call exploring done.
-
 
 › [DEFAULT_PROMPT]
 

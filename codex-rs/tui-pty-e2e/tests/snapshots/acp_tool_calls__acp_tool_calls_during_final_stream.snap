@@ -6,13 +6,6 @@ expression: normalize_for_input_snapshot(contents)
 
 • Here is my analysis of the codebase.
 
-
-
-
-
-
-
-
 • Explored
   └ Read SKILL.md
     Search undefined
@@ -21,7 +14,6 @@ expression: normalize_for_input_snapshot(contents)
 ────────────────────────────────────────────────────────────────────────────────
 
 • Let me know if you need anything else.
-
 
 › [DEFAULT_PROMPT]
 

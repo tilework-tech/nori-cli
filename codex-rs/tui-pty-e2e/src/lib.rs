@@ -1032,7 +1032,20 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
             normalized_lines.push(line.into());
         }
     }
-    let mut result = normalized_lines.join("\n");
+    // Collapse runs of consecutive blank lines into a single blank line.
+    // PTY timing can cause the exact number of blank lines between content
+    // to vary between runs, making snapshots flaky.
+    let mut collapsed: Vec<std::borrow::Cow<str>> = Vec::new();
+    let mut prev_blank = false;
+    for line in &normalized_lines {
+        let is_blank = line.trim().is_empty();
+        if is_blank && prev_blank {
+            continue;
+        }
+        collapsed.push(line.clone());
+        prev_blank = is_blank;
+    }
+    let mut result = collapsed.join("\n");
 
     // Restore trailing newline if original input had one
     if has_trailing_newline && !result.is_empty() {

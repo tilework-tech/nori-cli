@@ -4,7 +4,6 @@ expression: normalize_for_input_snapshot(contents)
 ---
 enhancements
 
-
 › [DEFAULT_PROMPT]
 
   ⎇ master

@@ -4,9 +4,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › testing!!!
 
-
 • [STATUS] (0s • esc to interrupt)
-
 
 › [DEFAULT_PROMPT]
 

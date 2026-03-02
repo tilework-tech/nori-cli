@@ -4,14 +4,9 @@ expression: normalize_for_input_snapshot(contents)
 ---
 › Test interleaved
 
-
 • Test message 1Test message 2
 
 ────────────────────────────────────────────────────────────────────────────────
-
-
-
-
 
 • Processing command...
 
@@ -21,7 +16,6 @@ expression: normalize_for_input_snapshot(contents)
 ────────────────────────────────────────────────────────────────────────────────
 
 • Interleaved test done.
-
 
 › [DEFAULT_PROMPT]
 

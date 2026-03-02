@@ -5,7 +5,7 @@ use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
-use tui_pty_e2e::normalize_for_snapshot;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 /// Test that exit message appears when quitting with Ctrl+D
 #[test]
@@ -62,7 +62,7 @@ fn test_exit_message_displays_on_ctrl_d() {
     // Snapshot the final screen
     assert_snapshot!(
         "exit_message_ctrl_d",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -121,6 +121,6 @@ fn test_exit_message_displays_on_slash_exit() {
     // Snapshot the final screen
     assert_snapshot!(
         "exit_message_slash_exit",
-        normalize_for_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
