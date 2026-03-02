@@ -2,6 +2,7 @@
 source: tui-pty-e2e/tests/startup.rs
 expression: "normalize_for_snapshot(header_lines.join(\"\\n\"))"
 ---
+╭────────────────────────────╮
 │  Nori CLI v0.0.0                      │
 │                                       │
 │  directory: [TMP_DIR]                 │

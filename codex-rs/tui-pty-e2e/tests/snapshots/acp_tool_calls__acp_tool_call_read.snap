@@ -7,6 +7,11 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • Test message 1Test message 2
 
+
+
+
+
+
 • Explored
   └ Read config.toml
 

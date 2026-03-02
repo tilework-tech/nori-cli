@@ -407,6 +407,13 @@ impl Tui {
                     .backend_mut()
                     .scroll_region_up(0..area.top(), area.bottom() - size.height)?;
                 area.y = size.height - area.height;
+            } else if area.bottom() < size.height {
+                // Viewport shrank — reposition to bottom of screen so
+                // insert_history_lines has room above the viewport.
+                // Without this, the viewport stays stuck at y=0 after a
+                // large widget (e.g., ExecCell with many tool calls) fills
+                // the screen and then shrinks.
+                area.y = size.height - area.height;
             }
             if area != terminal.viewport_area {
                 // TODO(nornagon): probably this could be collapsed with the clear + set_viewport_area above.
@@ -415,11 +422,20 @@ impl Tui {
             }
 
             if !self.pending_history_lines.is_empty() {
-                crate::insert_history::insert_history_lines(
+                // Cap pending lines to avoid unbounded growth if insertion
+                // is blocked for an extended period (e.g., full-screen widget).
+                const MAX_PENDING_LINES: usize = 1000;
+                if self.pending_history_lines.len() > MAX_PENDING_LINES {
+                    let excess = self.pending_history_lines.len() - MAX_PENDING_LINES;
+                    self.pending_history_lines.drain(..excess);
+                }
+                let inserted = crate::insert_history::insert_history_lines(
                     terminal,
                     self.pending_history_lines.clone(),
                 )?;
-                self.pending_history_lines.clear();
+                if inserted {
+                    self.pending_history_lines.clear();
+                }
             }
 
             // Update the y position for suspending so Ctrl-Z can place the cursor correctly.

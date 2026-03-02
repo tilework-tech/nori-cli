@@ -24,10 +24,13 @@ use ratatui::text::Span;
 
 /// Insert `lines` above the viewport using the terminal's backend writer
 /// (avoids direct stdout references).
+///
+/// Returns `true` if lines were actually inserted, `false` if there was no
+/// room above the viewport (area.top() == 0).
 pub fn insert_history_lines<B>(
     terminal: &mut crate::custom_terminal::Terminal<B>,
     lines: Vec<Line>,
-) -> io::Result<()>
+) -> io::Result<bool>
 where
     B: Backend + Write,
 {
@@ -72,8 +75,12 @@ where
 
     // No room above the viewport for history lines.
     if area.top() == 0 {
+        tracing::warn!(
+            "insert_history_lines: no room above viewport (area.top()==0), skipping {} lines",
+            lines.len()
+        );
         let _ = writer;
-        return Ok(());
+        return Ok(false);
     }
 
     // Limit the scroll region to the lines from the top of the screen to the
@@ -137,7 +144,7 @@ where
         terminal.set_viewport_area(area);
     }
 
-    Ok(())
+    Ok(true)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -575,6 +582,64 @@ mod tests {
             before,
             after,
             "viewport content was corrupted by insert_history_lines when area.top()==0"
+        );
+    }
+
+    /// insert_history_lines must return false when area.top() == 0
+    /// so callers know the lines were NOT inserted and can retain them.
+    #[test]
+    fn full_screen_viewport_returns_false() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport = Rect::new(0, 0, width, height);
+        term.set_viewport_area(viewport);
+
+        let line = Line::from("This line has no room");
+        let inserted = insert_history_lines(&mut term, vec![line]).expect("insert");
+        assert!(
+            !inserted,
+            "insert_history_lines should return false when area.top() == 0"
+        );
+    }
+
+    /// When viewport was at y=0 (full screen) and then shrinks, repositioning
+    /// the viewport to the bottom of the screen should restore the ability to
+    /// insert history lines.
+    #[test]
+    fn history_insertion_works_after_viewport_repositioned_from_y0() {
+        let width: u16 = 40;
+        let screen_height: u16 = 20;
+        let backend = VT100Backend::new(width, screen_height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Phase 1: viewport fills the entire screen (simulating large active cell)
+        let full_viewport = Rect::new(0, 0, width, screen_height);
+        term.set_viewport_area(full_viewport);
+
+        // Phase 2: widget shrinks (active cell completed/flushed).
+        // Simulate the fix: reposition viewport to bottom of screen.
+        let small_height: u16 = 8;
+        let repositioned = Rect::new(0, screen_height - small_height, width, small_height);
+        term.set_viewport_area(repositioned);
+
+        // Insert a history line — it should succeed now.
+        let line = Line::from("Recovered history entry");
+        let inserted =
+            insert_history_lines(&mut term, vec![line]).expect("insert after reposition");
+        assert!(
+            inserted,
+            "insert_history_lines should succeed after viewport repositioned"
+        );
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        let found = rows.iter().any(|r| r.contains("Recovered history entry"));
+        assert!(
+            found,
+            "history line should appear on screen after viewport recovery, got rows: {rows:?}"
         );
     }
 
