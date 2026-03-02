@@ -150,7 +150,7 @@ impl AcpBackend {
             history_persistence: config.history_persistence,
             conversation_id,
             approval_policy_tx,
-            pending_compact_summary: Arc::new(Mutex::new(None)),
+            pending_compact_summary: Arc::new(Mutex::new(config.initial_context.clone())),
             pending_hook_context: Arc::new(Mutex::new(None)),
             transcript_recorder,
             notify_after_idle: config.notify_after_idle,

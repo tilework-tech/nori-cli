@@ -57,6 +57,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
+        initial_context: None,
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)
@@ -213,6 +214,7 @@ async fn test_compact_not_in_unsupported_ops() {
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
+        initial_context: None,
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)

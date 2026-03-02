@@ -72,6 +72,7 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
+        initial_context: None,
     }
 }
 

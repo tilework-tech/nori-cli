@@ -614,6 +614,7 @@ Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes whe
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
+- `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
 
 **Re-exported Types:**
 

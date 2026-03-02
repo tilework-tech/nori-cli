@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::app::App;
+use crate::history_cell::AgentMessageCell;
 use crate::history_cell::SessionInfoCell;
 use crate::history_cell::UserHistoryCell;
 use crate::pager_overlay::Overlay;
@@ -349,6 +350,7 @@ impl App {
             vertical_footer: self.vertical_footer,
             expected_agent: None, // No filtering for backtracked conversations
             deferred_spawn: false,
+            fork_context: None,
         };
         self.chat_widget =
             crate::chatwidget::ChatWidget::new_from_existing(init, conv, session_configured);
@@ -369,7 +371,7 @@ impl App {
     }
 }
 
-fn trim_transcript_cells_to_nth_user(
+pub(crate) fn trim_transcript_cells_to_nth_user(
     transcript_cells: &mut Vec<Arc<dyn crate::history_cell::HistoryCell>>,
     nth_user_message: usize,
 ) {
@@ -386,7 +388,76 @@ pub(crate) fn user_count(cells: &[Arc<dyn crate::history_cell::HistoryCell>]) ->
     user_positions_iter(cells).count()
 }
 
-fn nth_user_position(
+/// Collect ALL user messages from the entire transcript (across all session segments).
+///
+/// Returns a list of `(cell_index, message_text)` tuples in chronological
+/// order (oldest first). The `cell_index` is the position in the `cells` slice.
+pub(crate) fn collect_all_user_messages(
+    cells: &[Arc<dyn crate::history_cell::HistoryCell>],
+) -> Vec<(usize, String)> {
+    let user_type = TypeId::of::<UserHistoryCell>();
+    cells
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, cell)| {
+            if cell.as_any().type_id() == user_type {
+                cell.as_any()
+                    .downcast_ref::<UserHistoryCell>()
+                    .map(|c| (idx, c.message.clone()))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Build a plain-text summary of the conversation up to (but not including)
+/// the cell at `cell_index`. This summary is injected via `pending_compact_summary`
+/// into a fresh ACP session so the agent has prior context.
+///
+/// All user and assistant messages before `cell_index` are included, regardless
+/// of session boundaries. `SessionInfoCell` markers are skipped.
+///
+/// Format:
+/// ```text
+/// User: <message>
+/// Assistant: <text from display lines>
+/// ```
+pub(crate) fn build_fork_summary(
+    cells: &[Arc<dyn crate::history_cell::HistoryCell>],
+    cell_index: usize,
+) -> String {
+    let cut_idx = cell_index.min(cells.len());
+    let mut summary = String::new();
+
+    for cell in &cells[..cut_idx] {
+        let any = cell.as_any();
+        if let Some(user) = any.downcast_ref::<UserHistoryCell>() {
+            summary.push_str(&format!("User: {}\n", user.message));
+        } else if any.downcast_ref::<AgentMessageCell>().is_some() {
+            // Extract plain text from the display lines
+            let lines = cell.display_lines(u16::MAX);
+            let text: String = lines
+                .iter()
+                .map(|line| {
+                    line.spans
+                        .iter()
+                        .map(|s| s.content.as_ref())
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                summary.push_str(&format!("Assistant: {trimmed}\n"));
+            }
+        }
+    }
+
+    summary
+}
+
+pub(crate) fn nth_user_position(
     cells: &[Arc<dyn crate::history_cell::HistoryCell>],
     nth: usize,
 ) -> Option<usize> {
@@ -512,5 +583,104 @@ mod tests {
             .map(|span| span.content.as_ref())
             .collect();
         assert_eq!(between_text, "  between");
+    }
+
+    #[test]
+    fn collect_all_user_messages_spans_session_boundaries() {
+        let cells: Vec<Arc<dyn HistoryCell>> = vec![
+            Arc::new(UserHistoryCell {
+                message: "before".to_string(),
+            }) as Arc<dyn HistoryCell>,
+            Arc::new(AgentMessageCell::new(vec![Line::from("reply")], true))
+                as Arc<dyn HistoryCell>,
+            Arc::new(SessionInfoCell::new(
+                crate::history_cell::CompositeHistoryCell::new(vec![]),
+            )) as Arc<dyn HistoryCell>,
+            Arc::new(UserHistoryCell {
+                message: "after".to_string(),
+            }) as Arc<dyn HistoryCell>,
+        ];
+        let messages = collect_all_user_messages(&cells);
+        assert_eq!(
+            messages,
+            vec![(0, "before".to_string()), (3, "after".to_string()),]
+        );
+    }
+
+    #[test]
+    fn collect_all_user_messages_empty_transcript() {
+        let cells: Vec<Arc<dyn HistoryCell>> = vec![];
+        let messages = collect_all_user_messages(&cells);
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn build_fork_summary_includes_content_before_cell_index() {
+        let cells: Vec<Arc<dyn HistoryCell>> = vec![
+            Arc::new(UserHistoryCell {
+                message: "hello".to_string(),
+            }) as Arc<dyn HistoryCell>,
+            Arc::new(AgentMessageCell::new(vec![Line::from("world")], true))
+                as Arc<dyn HistoryCell>,
+            Arc::new(UserHistoryCell {
+                message: "goodbye".to_string(),
+            }) as Arc<dyn HistoryCell>,
+        ];
+        // cell_index=2 is the "goodbye" user cell
+        let summary = build_fork_summary(&cells, 2);
+        assert!(summary.contains("User: hello"));
+        assert!(summary.contains("Assistant:"));
+        assert!(!summary.contains("goodbye"));
+    }
+
+    #[test]
+    fn build_fork_summary_at_first_cell_is_empty() {
+        let cells: Vec<Arc<dyn HistoryCell>> = vec![Arc::new(UserHistoryCell {
+            message: "hello".to_string(),
+        }) as Arc<dyn HistoryCell>];
+        let summary = build_fork_summary(&cells, 0);
+        assert!(summary.is_empty());
+    }
+
+    #[test]
+    fn build_fork_summary_beyond_end_includes_everything() {
+        let cells: Vec<Arc<dyn HistoryCell>> = vec![
+            Arc::new(UserHistoryCell {
+                message: "hello".to_string(),
+            }) as Arc<dyn HistoryCell>,
+            Arc::new(AgentMessageCell::new(vec![Line::from("reply")], true))
+                as Arc<dyn HistoryCell>,
+        ];
+        // cell_index=99 is beyond the number of cells, so include everything
+        let summary = build_fork_summary(&cells, 99);
+        assert!(summary.contains("User: hello"));
+        assert!(summary.contains("Assistant:"));
+    }
+
+    #[test]
+    fn build_fork_summary_spans_session_boundaries() {
+        let cells: Vec<Arc<dyn HistoryCell>> = vec![
+            Arc::new(UserHistoryCell {
+                message: "before session".to_string(),
+            }) as Arc<dyn HistoryCell>,
+            Arc::new(AgentMessageCell::new(vec![Line::from("reply1")], true))
+                as Arc<dyn HistoryCell>,
+            Arc::new(SessionInfoCell::new(
+                crate::history_cell::CompositeHistoryCell::new(vec![]),
+            )) as Arc<dyn HistoryCell>,
+            Arc::new(UserHistoryCell {
+                message: "after session".to_string(),
+            }) as Arc<dyn HistoryCell>,
+            Arc::new(AgentMessageCell::new(vec![Line::from("reply2")], true))
+                as Arc<dyn HistoryCell>,
+            Arc::new(UserHistoryCell {
+                message: "target".to_string(),
+            }) as Arc<dyn HistoryCell>,
+        ];
+        // cell_index=5 is the "target" user cell
+        let summary = build_fork_summary(&cells, 5);
+        assert!(summary.contains("User: before session"));
+        assert!(summary.contains("User: after session"));
+        assert!(!summary.contains("target"));
     }
 }

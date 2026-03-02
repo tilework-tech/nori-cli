@@ -35,6 +35,7 @@ pub enum SlashCommand {
     Rollout,
     TestApproval,
     SwitchSkillset,
+    Fork,
 }
 
 impl SlashCommand {
@@ -63,6 +64,7 @@ impl SlashCommand {
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
             SlashCommand::SwitchSkillset => "switch between available skillsets",
+            SlashCommand::Fork => "rewind conversation to a previous message",
         }
     }
 
@@ -87,7 +89,8 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Login
             | SlashCommand::Logout
-            | SlashCommand::SwitchSkillset => false,
+            | SlashCommand::SwitchSkillset
+            | SlashCommand::Fork => false,
             SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status

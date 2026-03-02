@@ -17,6 +17,7 @@ impl ChatWidget {
             vertical_footer,
             expected_agent,
             deferred_spawn,
+            fork_context,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -30,7 +31,12 @@ impl ChatWidget {
                 acp_handle: None,
             }
         } else {
-            spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager)
+            spawn_agent(
+                config.clone(),
+                app_event_tx.clone(),
+                conversation_manager,
+                fork_context,
+            )
         };
 
         let first_prompt_text = initial_prompt.clone();
@@ -123,6 +129,7 @@ impl ChatWidget {
             vertical_footer,
             expected_agent,
             deferred_spawn: _,
+            fork_context: _,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -223,6 +230,7 @@ impl ChatWidget {
             vertical_footer,
             expected_agent,
             deferred_spawn: _,
+            fork_context: _,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -327,7 +335,7 @@ impl ChatWidget {
         app_event_tx: AppEventSender,
         server: Arc<ConversationManager>,
     ) {
-        let spawn_result = spawn_agent(config, app_event_tx, server);
+        let spawn_result = spawn_agent(config, app_event_tx, server, None);
         self.codex_op_tx = spawn_result.op_tx;
         #[cfg(feature = "unstable")]
         {

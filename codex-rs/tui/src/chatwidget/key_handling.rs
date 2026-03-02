@@ -262,6 +262,9 @@ impl ChatWidget {
             SlashCommand::SwitchSkillset => {
                 self.handle_switch_skillset_command();
             }
+            SlashCommand::Fork => {
+                self.app_event_tx.send(AppEvent::OpenForkPicker);
+            }
         }
     }
 

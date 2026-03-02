@@ -327,6 +327,7 @@ impl App {
                     vertical_footer,
                     expected_agent: None, // No filtering for fresh sessions
                     deferred_spawn: needs_deferred_spawn,
+                    fork_context: None,
                 };
                 ChatWidget::new(init, conversation_manager.clone())
             }
@@ -352,6 +353,7 @@ impl App {
                     vertical_footer,
                     expected_agent: None, // No filtering for resumed sessions
                     deferred_spawn: false,
+                    fork_context: None,
                 };
                 ChatWidget::new_from_existing(
                     init,

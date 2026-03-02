@@ -440,4 +440,15 @@ pub(crate) enum AppEvent {
         /// Session identifier to resume
         session_id: String,
     },
+
+    /// Open the fork picker modal showing previous user messages.
+    OpenForkPicker,
+
+    /// Fork the conversation to just before the selected user message.
+    ForkToMessage {
+        /// Index of the target user message cell in `transcript_cells`.
+        cell_index: usize,
+        /// The text of the selected message, to prefill the composer.
+        prefill: String,
+    },
 }
