@@ -326,6 +326,9 @@ pub(crate) struct ChatWidgetInit {
     /// call `spawn_deferred_agent()` once pre-session setup (e.g., skillset
     /// switch) is complete.
     pub(crate) deferred_spawn: bool,
+    /// Optional conversation context to inject into the first prompt.
+    /// Used by `/fork` to pass prior conversation history to the new session.
+    pub(crate) fork_context: Option<String>,
 }
 
 pub(crate) struct ChatWidget {

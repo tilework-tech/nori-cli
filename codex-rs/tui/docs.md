@@ -128,6 +128,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
 | `/switch-skillset` | Switch between available skillsets |
+| `/fork` | Rewind conversation to a previous message |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
@@ -162,6 +163,23 @@ When the ACP backend sends a `ContextCompactedEvent` with a summary, `on_context
 4. Reprint the summary text as the first assistant message of the new session (temporarily clears `turn_finished` to allow streaming)
 
 When the event has no summary (core backend path), only the "Context compacted" info message is shown. This asymmetry exists because the core backend compacts history in-place without producing a summary for the TUI.
+
+**Fork Conversation (`/fork`) (`nori/fork_picker.rs`, `app_backtrack.rs`):**
+
+The `/fork` slash command lets users rewind to a previous user message and branch the conversation from that point. It is only available when no task is running (`available_during_task = false`). The flow:
+
+1. `SlashCommand::Fork` dispatches `AppEvent::OpenForkPicker`
+2. The handler calls `collect_user_messages()` in `app_backtrack.rs` to gather all user messages from the current session segment (messages after the last `SessionInfoCell`). If none exist, an info message is shown instead of the picker.
+3. `fork_picker_params()` in `nori/fork_picker.rs` builds a `SelectionViewParams` with items displayed newest-first (reversed from chronological order). Message previews are truncated to 80 characters; multiline messages show only the first line with an ellipsis.
+4. Selecting a message fires `AppEvent::ForkToMessage { nth_user_message, prefill }`
+5. The `ForkToMessage` handler:
+   - Calls `build_fork_summary()` to create a plain-text summary of the conversation up to (but not including) the selected message, formatted as `User: ...\nAssistant: ...\n` pairs
+   - Shuts down the current conversation
+   - Creates a new `ChatWidget` with `fork_context` set to the summary string
+   - Trims `transcript_cells` to the fork point via `trim_transcript_cells_to_nth_user()` so the TUI preserves visual history before the fork
+   - Prefills the composer with the selected message text
+
+The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 

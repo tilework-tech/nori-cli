@@ -228,6 +228,9 @@ pub struct AcpBackendConfig {
     pub script_timeout: std::time::Duration,
     /// Default model to apply on session start (from config.toml [default_models])
     pub default_model: Option<String>,
+    /// Optional initial context to inject into the first prompt.
+    /// Used by fork to provide conversation history as context to the new session.
+    pub initial_context: Option<String>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.

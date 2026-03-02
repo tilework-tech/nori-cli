@@ -445,6 +445,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
+        initial_context: None,
     };
 
     let result = AcpBackend::spawn(&config, event_tx).await;
@@ -645,6 +646,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         async_post_agent_response_hooks: vec![],
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
+        initial_context: None,
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)

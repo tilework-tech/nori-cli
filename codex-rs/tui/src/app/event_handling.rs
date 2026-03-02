@@ -67,6 +67,7 @@ impl App {
                     vertical_footer: self.vertical_footer,
                     expected_agent: None, // No filtering for /new command
                     deferred_spawn: false,
+                    fork_context: None,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -577,6 +578,7 @@ impl App {
                     vertical_footer: self.vertical_footer,
                     expected_agent: Some(agent_name.clone()),
                     deferred_spawn: false,
+                    fork_context: None,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -772,6 +774,7 @@ impl App {
                     vertical_footer: self.vertical_footer,
                     expected_agent: None,
                     deferred_spawn: false,
+                    fork_context: None,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -953,6 +956,7 @@ impl App {
                             vertical_footer: self.vertical_footer,
                             expected_agent: None,
                             deferred_spawn: false,
+                            fork_context: None,
                         };
                         self.chat_widget =
                             ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
@@ -971,6 +975,68 @@ impl App {
                             .add_error_message(format!("Failed to load session transcript: {e}"));
                     }
                 }
+            }
+            AppEvent::OpenForkPicker => {
+                let messages = crate::app_backtrack::collect_user_messages(&self.transcript_cells);
+                if messages.is_empty() {
+                    self.chat_widget
+                        .add_info_message("No messages to fork from.".to_string(), None);
+                } else {
+                    let params = crate::nori::fork_picker::fork_picker_params(
+                        messages,
+                        self.app_event_tx.clone(),
+                    );
+                    self.chat_widget.show_selection_view(params);
+                }
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::ForkToMessage {
+                nth_user_message,
+                prefill,
+            } => {
+                let summary = crate::app_backtrack::build_fork_summary(
+                    &self.transcript_cells,
+                    nth_user_message,
+                );
+                let fork_context = if summary.is_empty() {
+                    None
+                } else {
+                    Some(summary)
+                };
+
+                self.shutdown_current_conversation().await;
+                let init = crate::chatwidget::ChatWidgetInit {
+                    config: self.config.clone(),
+                    frame_requester: tui.frame_requester(),
+                    app_event_tx: self.app_event_tx.clone(),
+                    initial_prompt: None,
+                    initial_images: Vec::new(),
+                    enhanced_keys_supported: self.enhanced_keys_supported,
+                    auth_manager: self.auth_manager.clone(),
+                    vertical_footer: self.vertical_footer,
+                    expected_agent: None,
+                    deferred_spawn: false,
+                    fork_context,
+                };
+                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget
+                    .set_hotkey_config(self.hotkey_config.clone());
+                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                #[cfg(feature = "nori-config")]
+                self.chat_widget
+                    .set_loop_count_override(self.loop_count_override);
+
+                // Trim transcript to preserve history before the fork point
+                crate::app_backtrack::trim_transcript_cells_to_nth_user(
+                    &mut self.transcript_cells,
+                    nth_user_message,
+                );
+                self.render_transcript_once(tui);
+
+                if !prefill.is_empty() {
+                    self.chat_widget.set_composer_text(prefill);
+                }
+                tui.frame_requester().schedule_frame();
             }
         }
         Ok(true)
