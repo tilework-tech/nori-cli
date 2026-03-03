@@ -65,6 +65,14 @@ impl ChatWidget {
         }
         self.flush_answer_stream_with_separator();
 
+        // Finalize any incomplete ExecCell still in active_cell. In ACP, tool
+        // End events can race with the agent message on separate async channels.
+        // If the End event hasn't arrived yet, the incomplete cell would fill the
+        // viewport and block the agent's text from rendering. Mark it failed and
+        // flush to history so the viewport is freed.
+        self.finalize_active_cell_as_failed();
+        self.pending_exec_cells.drain_failed();
+
         // Close the gate BEFORE flushing: any tool events arriving after this
         // point are stale and should be silently discarded.
         self.turn_finished = true;
@@ -193,6 +201,11 @@ impl ChatWidget {
 
         // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
         self.pending_exec_cells.drain_failed();
+
+        // Safety net: finalize any incomplete ExecCell still stuck in active_cell.
+        // This can happen when tool End events are blocked by the turn_finished gate
+        // (ACP race condition) or when streaming text kept the cell in active_cell.
+        self.finalize_active_cell_as_failed();
 
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);

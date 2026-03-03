@@ -79,6 +79,28 @@ The ACP protocol has no end-of-turn synchronization guarantee -- `PromptResponse
 
 The gate is checked at the entry point of `on_exec_command_begin()`, `on_exec_command_end()`, `on_mcp_tool_call_begin()`, and `on_mcp_tool_call_end()`. When `turn_finished` is true, these methods return immediately without rendering any UI. This is complementary to the interrupt queue -- the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
 
+**Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
+
+Because the `turn_finished` gate blocks late-arriving End events, tool cells that began but never received their End event would remain stuck in `active_cell` or `pending_exec_cells`, filling the viewport and blocking the agent's text from rendering. Both `on_agent_message()` and `on_task_complete()` now explicitly finalize incomplete cells at turn boundaries:
+
+```
+on_agent_message():
+  1. flush_answer_stream_with_separator()    -- finalize any in-progress text stream
+  2. finalize_active_cell_as_failed()        -- mark stuck active_cell as failed, flush to history
+  3. pending_exec_cells.drain_failed()       -- drain any queued incomplete cells
+  4. turn_finished = true                    -- close the gate
+  5. flush_completions_and_clear()           -- process deferred End events, discard stale Begins
+
+on_task_complete():
+  1. flush_answer_stream_with_separator()
+  2. flush_completions_and_clear()
+  3. pending_exec_cells.drain_failed()
+  4. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
+  5. set_task_running(false)
+```
+
+`finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
+
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
 **System Info Collection** (`system_info.rs`):
