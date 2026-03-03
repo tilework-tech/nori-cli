@@ -307,6 +307,8 @@ impl ChatWidget {
     pub(super) fn finalize_turn(&mut self) {
         // Ensure any spinner is replaced by a red ✗ and flushed into history.
         self.finalize_active_cell_as_failed();
+        // Drain any incomplete ExecCells saved in pending_exec_cells.
+        self.pending_exec_cells.drain_failed();
         // Reset running state and clear streaming buffers.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();

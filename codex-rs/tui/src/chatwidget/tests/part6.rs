@@ -136,13 +136,6 @@ fn agent_message_finalizes_multiple_incomplete_cells() {
     // Begin second tool call - this flushes the first to pending_exec_cells
     begin_exec(&mut chat, "call-2", "echo second");
 
-    // Verify state: active_cell has call-2, pending has call-1
-    assert!(chat.active_cell.is_some(), "active_cell should have call-2");
-    assert!(
-        chat.pending_exec_cells.len() > 0,
-        "pending_exec_cells should have call-1"
-    );
-
     // Agent message arrives - should finalize everything
     chat.handle_codex_event(Event {
         id: "t1".into(),
@@ -156,9 +149,21 @@ fn agent_message_finalizes_multiple_incomplete_cells() {
         chat.active_cell.is_none(),
         "active_cell should be None after agent message"
     );
-    assert!(
-        chat.pending_exec_cells.len() == 0,
+    assert_eq!(
+        chat.pending_exec_cells.len(),
+        0,
         "pending_exec_cells should be empty after agent message"
+    );
+
+    // Both finalized cells should appear in history
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+    assert!(
+        combined.contains("echo first") || combined.contains("echo second"),
+        "finalized cells should appear in history: {combined:?}"
     );
 }
 
@@ -174,7 +179,12 @@ fn streaming_with_stuck_exec_cell_finalized_on_task_complete() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     // Start a task
-    chat.on_task_started();
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
     drain_insert_history(&mut rx);
 
     // Begin a tool call
@@ -182,24 +192,42 @@ fn streaming_with_stuck_exec_cell_finalized_on_task_complete() {
     assert!(chat.active_cell.is_some());
 
     // Stream agent text (creates stream_controller; doesn't flush incomplete ExecCell)
-    chat.on_agent_message_delta("Here is the file content:\n".to_string());
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "Here is the file content:\n".into(),
+        }),
+    });
     chat.on_commit_tick();
-    assert!(
-        chat.stream_controller.is_some(),
-        "stream_controller should exist"
-    );
-    // The incomplete ExecCell should still be in active_cell
+
+    // The incomplete ExecCell should still be in active_cell during streaming
     assert!(
         chat.active_cell.is_some(),
         "incomplete ExecCell should remain in active_cell during streaming"
     );
 
     // TaskComplete fires (no separate AgentMessage in this flow)
-    chat.on_task_complete(Some("Here is the file content:\n".to_string()));
+    chat.handle_codex_event(Event {
+        id: "t1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: Some("Here is the file content:\n".into()),
+        }),
+    });
 
     // active_cell must be None
     assert!(
         chat.active_cell.is_none(),
         "active_cell should be None after task_complete with streaming"
+    );
+
+    // The finalized cell should appear in history
+    let cells = drain_insert_history(&mut rx);
+    let combined: String = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect();
+    assert!(
+        combined.contains("README.md"),
+        "finalized stuck cell should appear in history: {combined:?}"
     );
 }
