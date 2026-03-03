@@ -314,6 +314,30 @@ fn preset_matching_ignores_extra_writable_roots() {
     );
 }
 
+#[tokio::test]
+async fn switch_skillset_with_name_intercepts_user_message() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+    // Submit "/switch-skillset foobar" as a user message.
+    chat.submit_user_message("/switch-skillset foobar".to_string().into());
+
+    // The message should NOT be sent to the model as a user input.
+    // This proves the interception worked — the text was routed to the
+    // skillset handler instead of being forwarded to the model.
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[test]
+fn switch_skillset_without_name_is_not_intercepted() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+    // Submit "/switch-skillset " (trailing space, no actual name) as a user message.
+    chat.submit_user_message("/switch-skillset ".to_string().into());
+
+    // This should NOT be intercepted — it should be sent to the model as text.
+    assert_matches!(op_rx.try_recv(), Ok(Op::UserInput { .. }));
+}
+
 #[test]
 fn full_access_confirmation_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
