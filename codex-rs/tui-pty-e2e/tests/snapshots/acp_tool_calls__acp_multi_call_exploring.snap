@@ -2,6 +2,8 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
+› Explore files
+
 • Test message 1Test message 2
 
 ────────────────────────────────────────────────────────────────────────────────

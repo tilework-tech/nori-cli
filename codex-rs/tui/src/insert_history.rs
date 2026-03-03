@@ -2,6 +2,7 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 
+use crate::wrapping::word_wrap_lines;
 use crate::wrapping::word_wrap_lines_borrowed;
 use crossterm::Command;
 use crossterm::cursor::MoveTo;
@@ -145,6 +146,98 @@ where
     }
 
     Ok(true)
+}
+
+/// Write pending history lines directly to terminal positions above the viewport,
+/// without using scroll regions. This avoids pushing stale content into the
+/// terminal scrollback when the viewport has just shrunk from full-screen.
+///
+/// Lines are bottom-aligned within the available rows: the last consumed line
+/// appears immediately above the viewport. Rows above the written lines are
+/// cleared.
+///
+/// Returns the number of screen rows written. Lines that were successfully
+/// written are drained from `lines`.
+pub fn write_pending_lines_directly<B>(
+    terminal: &mut crate::custom_terminal::Terminal<B>,
+    lines: &mut Vec<Line<'static>>,
+    available_rows: u16,
+) -> io::Result<u16>
+where
+    B: Backend + Write,
+{
+    if available_rows == 0 || lines.is_empty() {
+        return Ok(0);
+    }
+
+    let width = terminal.viewport_area.width.max(1) as usize;
+
+    // First pass: figure out how many original lines fit by wrapping each
+    // individually and counting screen rows.
+    let mut total_rows: u16 = 0;
+    let mut lines_consumed: usize = 0;
+    for line in lines.iter() {
+        let wrapped_count = word_wrap_lines(std::iter::once(line.clone()), width).len() as u16;
+        if total_rows + wrapped_count > available_rows {
+            break;
+        }
+        total_rows += wrapped_count;
+        lines_consumed += 1;
+    }
+
+    if lines_consumed == 0 {
+        return Ok(0);
+    }
+
+    // Drain consumed lines and wrap them as a batch for writing.
+    let consumed: Vec<Line<'static>> = lines.drain(..lines_consumed).collect();
+    let wrapped = word_wrap_lines(consumed, width);
+
+    // Bottom-align: start writing from (available_rows - total_rows).
+    let start_row = available_rows - total_rows;
+
+    let last_cursor_pos = terminal.last_known_cursor_pos;
+    let writer = terminal.backend_mut();
+
+    // Clear any stale rows above the written content.
+    for row in 0..start_row {
+        queue!(writer, MoveTo(0, row))?;
+        queue!(writer, Clear(ClearType::UntilNewLine))?;
+    }
+
+    // Write the wrapped lines directly to their target positions.
+    for (i, line) in wrapped.iter().enumerate() {
+        let row = start_row + i as u16;
+        queue!(writer, MoveTo(0, row))?;
+        queue!(
+            writer,
+            SetColors(Colors::new(
+                line.style
+                    .fg
+                    .map(std::convert::Into::into)
+                    .unwrap_or(CColor::Reset),
+                line.style
+                    .bg
+                    .map(std::convert::Into::into)
+                    .unwrap_or(CColor::Reset)
+            ))
+        )?;
+        queue!(writer, Clear(ClearType::UntilNewLine))?;
+        let merged_spans: Vec<Span> = line
+            .spans
+            .iter()
+            .map(|s| Span {
+                style: s.style.patch(line.style),
+                content: s.content.clone(),
+            })
+            .collect();
+        write_spans(writer, merged_spans.iter())?;
+    }
+
+    // Restore cursor position.
+    queue!(writer, MoveTo(last_cursor_pos.x, last_cursor_pos.y))?;
+
+    Ok(total_rows)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -702,5 +795,180 @@ mod tests {
                 "viewport row {i} should contain 'Viewport row {i}', got: {row_text:?}"
             );
         }
+    }
+
+    /// After a full-screen viewport shrinks and is repositioned, calling
+    /// write_pending_lines_directly should place history lines in the vacated
+    /// rows (above the viewport), NOT leave stale viewport content behind.
+    #[test]
+    fn direct_write_replaces_stale_content_after_viewport_shrink() {
+        let width: u16 = 40;
+        let screen_height: u16 = 20;
+        let backend = VT100Backend::new(width, screen_height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Phase 1: viewport fills the entire screen, draw stale content.
+        let full_viewport = Rect::new(0, 0, width, screen_height);
+        term.set_viewport_area(full_viewport);
+        term.draw(|frame| {
+            let buf = frame.buffer_mut();
+            for y in 0..screen_height {
+                buf.set_string(
+                    0,
+                    y,
+                    format!("Stale row {y}"),
+                    ratatui::style::Style::default(),
+                );
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // Phase 2: viewport shrinks, reposition to bottom.
+        let small_height: u16 = 8;
+        let new_y = screen_height - small_height;
+        let repositioned = Rect::new(0, new_y, width, small_height);
+        term.set_viewport_area(repositioned);
+
+        // Write pending history lines directly into the vacated area.
+        let mut pending = vec![
+            Line::from("History A"),
+            Line::from("History B"),
+            Line::from("History C"),
+        ];
+        let rows_written =
+            write_pending_lines_directly(&mut term, &mut pending, new_y).expect("direct write");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        pretty_assertions::assert_eq!(rows_written, 3, "should have written 3 rows");
+        pretty_assertions::assert_eq!(pending.len(), 0, "all lines should be consumed");
+
+        // Verify: the vacated area should contain history, not stale content.
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        let vacated = &rows[..new_y as usize];
+        for row_text in vacated {
+            assert!(
+                !row_text.contains("Stale"),
+                "vacated row should not contain stale content, got: {row_text:?}"
+            );
+        }
+        assert!(
+            vacated.iter().any(|r| r.contains("History A")),
+            "expected 'History A' in vacated area, got: {vacated:?}"
+        );
+        assert!(
+            vacated.iter().any(|r| r.contains("History B")),
+            "expected 'History B' in vacated area, got: {vacated:?}"
+        );
+        assert!(
+            vacated.iter().any(|r| r.contains("History C")),
+            "expected 'History C' in vacated area, got: {vacated:?}"
+        );
+    }
+
+    /// When there are more pending lines than available rows,
+    /// write_pending_lines_directly should write as many as fit
+    /// and leave the rest in the pending vector.
+    #[test]
+    fn direct_write_partial_when_more_lines_than_rows() {
+        let width: u16 = 40;
+        let screen_height: u16 = 10;
+        let backend = VT100Backend::new(width, screen_height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport at bottom with only 3 rows of vacated space above.
+        let viewport_height: u16 = 7;
+        let new_y = screen_height - viewport_height; // 3
+        let viewport = Rect::new(0, new_y, width, viewport_height);
+        term.set_viewport_area(viewport);
+
+        let mut pending = vec![
+            Line::from("Line 1"),
+            Line::from("Line 2"),
+            Line::from("Line 3"),
+            Line::from("Line 4"),
+            Line::from("Line 5"),
+        ];
+        let rows_written =
+            write_pending_lines_directly(&mut term, &mut pending, new_y).expect("direct write");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        pretty_assertions::assert_eq!(rows_written, 3, "should write exactly 3 rows");
+        pretty_assertions::assert_eq!(pending.len(), 2, "2 lines should remain unconsumed");
+        pretty_assertions::assert_eq!(pending[0], Line::from("Line 4"));
+        pretty_assertions::assert_eq!(pending[1], Line::from("Line 5"));
+
+        // Verify the first 3 lines appear in the vacated area.
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        assert!(rows[0].contains("Line 1"), "row 0: {}", rows[0]);
+        assert!(rows[1].contains("Line 2"), "row 1: {}", rows[1]);
+        assert!(rows[2].contains("Line 3"), "row 2: {}", rows[2]);
+    }
+
+    /// write_pending_lines_directly must handle word wrapping correctly:
+    /// a long line that wraps to multiple rows should count all wrapped
+    /// rows toward the available space.
+    #[test]
+    fn direct_write_accounts_for_word_wrapping() {
+        let width: u16 = 20;
+        let screen_height: u16 = 10;
+        let backend = VT100Backend::new(width, screen_height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport_height: u16 = 4;
+        let new_y = screen_height - viewport_height; // 6 rows available
+        let viewport = Rect::new(0, new_y, width, viewport_height);
+        term.set_viewport_area(viewport);
+
+        // "Short" fits in 1 row. The long line wraps to ~3 rows at width=20.
+        // Together they need ~4 rows, which fits in the 6 available.
+        let mut pending = vec![
+            Line::from("Short"),
+            Line::from("This is a long line that should wrap to multiple rows"),
+        ];
+        let rows_written =
+            write_pending_lines_directly(&mut term, &mut pending, new_y).expect("direct write");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // "Short" = 1 row + 53-char line wraps to 3 rows at width=20 = 4 total.
+        pretty_assertions::assert_eq!(rows_written, 4);
+        pretty_assertions::assert_eq!(pending.len(), 0, "all lines should be consumed");
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        let vacated = &rows[..new_y as usize];
+        assert!(
+            vacated.iter().any(|r| r.contains("Short")),
+            "expected 'Short' in vacated area, got: {vacated:?}"
+        );
+        assert!(
+            vacated.iter().any(|r| r.contains("long line")),
+            "expected part of wrapped line in vacated area, got: {vacated:?}"
+        );
+    }
+
+    /// When a single pending line wraps to more rows than available,
+    /// write_pending_lines_directly should not write it (it doesn't fit)
+    /// and return 0 rows written.
+    #[test]
+    fn direct_write_skips_line_too_tall_for_available_space() {
+        let width: u16 = 10;
+        let screen_height: u16 = 10;
+        let backend = VT100Backend::new(width, screen_height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport_height: u16 = 8;
+        let new_y = screen_height - viewport_height; // 2 rows available
+        let viewport = Rect::new(0, new_y, width, viewport_height);
+        term.set_viewport_area(viewport);
+
+        // This line wraps to way more than 2 rows at width=10.
+        let mut pending = vec![Line::from(
+            "This is a very long line that will wrap to many rows at width ten",
+        )];
+        let rows_written =
+            write_pending_lines_directly(&mut term, &mut pending, new_y).expect("direct write");
+
+        pretty_assertions::assert_eq!(rows_written, 0, "line too tall, nothing should be written");
+        pretty_assertions::assert_eq!(pending.len(), 1, "line should remain unconsumed");
     }
 }

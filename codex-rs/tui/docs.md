@@ -555,15 +555,24 @@ The draw loop manages viewport position bidirectionally to ensure the viewport s
 area.bottom() > size.height  --> viewport grew past screen bottom
                                   scroll history up, reposition viewport to bottom
 
-area.bottom() < size.height  --> viewport shrank away from screen bottom
-                                  reposition viewport to bottom (no scroll needed)
+area.y == 0 && height < size --> viewport was full-screen and has shrunk
+                                  write pending lines directly into vacated rows,
+                                  then reposition viewport to bottom
 ```
 
-Both branches set `area.y = size.height - area.height`. The shrink branch is necessary because viewport position is not automatically adjusted when widgets reduce in height. Without it, after a large widget (e.g., an `ExecCell` with many tool calls) pushes the viewport to `y=0` and then the widget shrinks, the viewport remains stuck at `y=0` with no room above it for history insertion.
+Both branches set `area.y = size.height - area.height`. The shrink branch guards on `area.y == 0` specifically because the stale-content problem only occurs when the viewport was at the top of the screen (full-screen). Normal height fluctuations where `area.y > 0` do not need repositioning because the viewport is already positioned with room above it.
+
+When the shrink branch fires, the rows above the new viewport position contain stale rendered widget content from when the viewport was full-screen. Using `insert_history_lines()` here would push that stale content into terminal scrollback via the DECSTBM scroll region mechanism. Instead, the draw loop calls `write_pending_lines_directly()` to overwrite those rows in-place. If there are no pending history lines, the vacated rows are cleared directly.
+
+**Direct Write for Vacated Rows (`insert_history.rs` `write_pending_lines_directly`):**
+
+`write_pending_lines_directly()` writes history lines to specific terminal positions using `MoveTo` commands without scroll regions. This prevents stale viewport content from leaking into terminal scrollback. It is only used during the viewport shrink-from-full-screen transition in `Tui::draw`.
+
+The function bottom-aligns content within the available rows (the last consumed line sits immediately above the viewport). It word-wraps each line individually to count screen rows, drains as many lines as fit from the input `Vec`, clears any remaining rows above the written content, then writes each wrapped line at its target position. Unconsumed lines remain in the `Vec` for later insertion via `insert_history_lines()`.
 
 **Pending History Lines Retry Semantics:**
 
-`Tui` holds a `pending_history_lines: Vec<Line>` buffer. On each draw, if the buffer is non-empty, `insert_history_lines()` is called. The buffer is only cleared when `insert_history_lines` returns `true` (lines were actually inserted). When it returns `false` (viewport at `y=0`, no room), the buffer is retained and insertion is retried on subsequent draws. This means once the viewport repositioning logic moves the viewport away from `y=0`, the retained lines will be inserted on the next frame.
+`Tui` holds a `pending_history_lines: Vec<Line>` buffer. On each draw, if the buffer is non-empty, `insert_history_lines()` is called. The buffer is only cleared when `insert_history_lines` returns `true` (lines were actually inserted). When it returns `false` (viewport at `y=0`, no room), the buffer is retained and insertion is retried on subsequent draws. This means once the viewport repositioning logic moves the viewport away from `y=0`, the retained lines will be inserted on the next frame. The buffer is capped at 1000 lines to prevent unbounded growth while the viewport is full-screen and insertion is blocked.
 
 ### Things to Know
 
