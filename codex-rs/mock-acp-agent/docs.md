@@ -44,6 +44,8 @@ This simulates the real-world race condition that the `InterruptManager.flush_co
 5. Tool B End deferred
 6. Turn ends -- `flush_completions_and_clear` must discard both Begin-B and End-B to avoid creating an orphan `ExecCell` with the raw `call_id` as the command name
 
+**Skipped-Begin / Generic Tool Call**: The `MOCK_AGENT_GENERIC_TOOL_CALL` env var triggers a scenario where a `ToolCall` is sent with a generic title ("Terminal") and no `raw_input`. The ACP translation layer in `@/codex-rs/acp/` skips emitting `ExecCommandBegin` for such calls (no useful display info). On completion, only `ExecCommandEnd` is emitted with the resolved title. This tests the TUI's `handle_exec_end_now` `None` branch -- that it uses `ev.command` from the End event instead of falling back to the raw `call_id`.
+
 **Client Requests**: Outbound requests to the client:
 - `ReadFile` - Request file contents
 - `WriteFile` - Request file write

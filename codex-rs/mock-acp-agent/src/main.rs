@@ -629,6 +629,48 @@ impl acp::Agent for MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
+        // Support generic tool call with no raw_input to test the "skipped Begin" path.
+        // When a ToolCall has a generic title and no raw_input, the ACP translation layer
+        // skips emitting ExecCommandBegin and only emits ExecCommandEnd on completion.
+        // This tests that the TUI correctly uses ev.command (not ev.call_id) for display.
+        if std::env::var("MOCK_AGENT_GENERIC_TOOL_CALL").is_ok() {
+            eprintln!("Mock agent: sending generic tool call (no raw_input)");
+
+            let tool_call_id = acp::ToolCallId::new("toolu_generic_test_001");
+
+            // Send ToolCall with generic title and NO raw_input
+            // This will be skipped by the translator (no useful display info)
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(tool_call_id.clone(), "Terminal")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(50)).await;
+
+            // Send completion directly (no intermediate update with better title)
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    tool_call_id.clone(),
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new("command output here")),
+                        ))])
+                        .raw_output(json!({"exit_code": 0, "stdout": "command output here"})),
+                ),
+            )
+            .await?;
+
+            self.send_text_chunk(session_id.clone(), "Generic tool call done.")
+                .await?;
+
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
             self.send_text_chunk(session_id.clone(), &response).await?;

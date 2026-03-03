@@ -1,0 +1,16 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› Run a command
+
+• Ran Terminal
+  └ command output here
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Generic tool call done.
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approvals: Agent · ? for shortcuts

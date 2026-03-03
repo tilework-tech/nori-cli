@@ -633,3 +633,70 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
         normalize_for_input_snapshot(contents)
     );
 }
+
+/// Test that a generic tool call (no raw_input) displays a resolved semantic name
+/// instead of the raw tool call ID.
+///
+/// ## The bug:
+/// When an ACP ToolCall has a generic title ("Terminal") and no raw_input, the
+/// translation layer skips emitting ExecCommandBegin (stores data for later).
+/// On completion, it emits ExecCommandEnd with the resolved title in `command`.
+/// But the TUI's handle_exec_end_now() ignores `ev.command` when there's no
+/// matching Begin event, falling back to `ev.call_id` (the raw `toolu_` ID).
+///
+/// ## Expected behavior:
+/// The TUI should use `ev.command` from the End event, showing "Terminal" or
+/// a similar resolved name instead of "toolu_generic_test_001".
+#[test]
+#[cfg(target_os = "linux")]
+fn test_acp_generic_tool_call_shows_resolved_name() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_GENERIC_TOOL_CALL", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the generic tool call
+    session.send_str("Run a command").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Wait for the final text which means the tool call has completed
+    session
+        .wait_for_text("Generic tool call done", Duration::from_secs(10))
+        .expect("Should receive completion response");
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // CRITICAL ASSERTION: The raw tool call ID must NOT appear in the output.
+    // If it does, the TUI is using ev.call_id instead of ev.command.
+    assert!(
+        !contents.contains("toolu_generic_test_001"),
+        "Raw tool call ID 'toolu_generic_test_001' should NOT appear in TUI output.\n\
+         The TUI should display the resolved tool name from ev.command instead.\n\
+         Screen contents:\n{contents}",
+    );
+
+    // The resolved name should be visible in the rendered output
+    assert!(
+        contents.contains("Ran Terminal"),
+        "Should display the resolved tool name 'Terminal' from ev.command.\n\
+         Screen contents:\n{contents}",
+    );
+
+    // Snapshot captures the exact rendering for regression detection
+    insta::assert_snapshot!(
+        "acp_generic_tool_call_resolved_name",
+        normalize_for_input_snapshot(contents)
+    );
+}
