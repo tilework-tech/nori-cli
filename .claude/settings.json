@@ -61,7 +61,9 @@
       }
     },
     "additionalDirectories": [
-      "~/.nori/profiles/"
+      "~/.nori/profiles/",
+      "/home/amol/.nori/profiles",
+      "/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills"
     ]
   }
 }
