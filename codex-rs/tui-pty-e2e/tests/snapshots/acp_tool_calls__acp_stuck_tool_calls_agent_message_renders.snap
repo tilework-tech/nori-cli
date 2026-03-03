@@ -1,0 +1,15 @@
+---
+source: tui-pty-e2e/tests/acp_tool_calls.rs
+assertion_line: 710
+expression: normalize_for_input_snapshot(contents)
+---
+› Analyze files
+
+• Analysis complete despite incomplete tool calls.
+
+• Explored
+  └ Read app.rs, config.rs, main.rs
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approvals: Agent · ? for shortcuts

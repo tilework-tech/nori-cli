@@ -634,6 +634,85 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
     );
 }
 
+/// Test that incomplete (stuck) tool calls don't block the agent's final message
+/// from rendering.
+///
+/// ## The bug being tested:
+/// When ACP tool call End events arrive on a separate async channel from the
+/// agent's PromptResponse, the `turn_finished` gate in `on_agent_message()`
+/// discards End events for already-started tool calls. This leaves incomplete
+/// ExecCells stuck in `active_cell`, filling the viewport and blocking
+/// `insert_history_lines()` from rendering the agent's text response.
+///
+/// The user would see many tool calls "frozen" on screen with no agent response,
+/// and only after manually interrupting would the previous message appear.
+///
+/// ## Scenario:
+/// 1. Agent sends 3 Read tool calls (Begin only, no completion)
+/// 2. Agent sends final text response
+/// 3. Turn ends without tool completions
+///
+/// ## Expected behavior (after fix):
+/// `finalize_active_cell_as_failed()` cleans up incomplete cells on agent message,
+/// freeing the viewport so the agent's text renders.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_stuck_tool_calls_dont_block_agent_message() {
+    let config = SessionConfig::new()
+        .with_model("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_STUCK_TOOL_CALLS", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
+
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Send a prompt to trigger the stuck tool call scenario
+    session.send_str("Analyze files").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // CRITICAL ASSERTION: The agent's final text MUST appear.
+    // If the bug is present, this will timeout because the stuck ExecCells
+    // block the viewport and prevent the agent text from rendering.
+    session
+        .wait_for_text(
+            "Analysis complete despite incomplete tool calls",
+            Duration::from_secs(10),
+        )
+        .expect(
+            "Agent message MUST render even when tool calls don't complete. \
+             If this times out, ExecCells are blocking the viewport.",
+        );
+
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let contents = session.screen_contents();
+
+    // The agent's response must be visible
+    assert!(
+        contents.contains("Analysis complete despite incomplete tool calls"),
+        "Agent message should be visible in the TUI output. Screen contents:\n{contents}",
+    );
+
+    // The prompt indicator should return (turn is over)
+    assert!(
+        contents.contains("›"),
+        "Prompt indicator should be visible after turn completes. Screen contents:\n{contents}",
+    );
+
+    // Snapshot for visual verification
+    insta::assert_snapshot!(
+        "acp_stuck_tool_calls_agent_message_renders",
+        normalize_for_input_snapshot(contents)
+    );
+}
+
 /// Test that a generic tool call (no raw_input) displays a resolved semantic name
 /// instead of the raw tool call ID.
 ///
