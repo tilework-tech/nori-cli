@@ -304,6 +304,33 @@ impl ChatWidget {
         });
     }
 
+    /// Handle `/switch-skillset <name>` — directly switch to a named skillset
+    /// without showing the picker menu.
+    pub(crate) fn handle_switch_skillset_command_with_name(&mut self, name: &str) {
+        use crate::nori::skillset_picker;
+
+        if !skillset_picker::is_nori_skillsets_available() {
+            self.add_info_message(skillset_picker::not_installed_message(), None);
+            return;
+        }
+
+        let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
+        let skillset_per_session = codex_acp::config::NoriConfig::load()
+            .map(|c| c.skillset_per_session)
+            .unwrap_or(false);
+        let install_dir = if is_in_worktree || skillset_per_session {
+            Some(self.config.cwd.clone())
+        } else {
+            None
+        };
+
+        if let Some(dir) = install_dir {
+            self.on_switch_skillset_request(name, &dir);
+        } else {
+            self.on_install_skillset_request(name);
+        }
+    }
+
     /// Handle the result of listing skillsets.
     pub(crate) fn on_skillset_list_result(
         &mut self,

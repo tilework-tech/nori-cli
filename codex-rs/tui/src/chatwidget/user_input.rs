@@ -75,6 +75,15 @@ impl ChatWidget {
             return;
         }
 
+        // Special-case: "/switch-skillset <name>" directly switches to the named skillset
+        // without showing the picker menu
+        if let Some(skillset_name) = text.strip_prefix("/switch-skillset ").map(str::trim)
+            && !skillset_name.is_empty()
+        {
+            self.handle_switch_skillset_command_with_name(skillset_name);
+            return;
+        }
+
         if self.first_prompt_text.is_none() {
             self.first_prompt_text = Some(text.clone());
 

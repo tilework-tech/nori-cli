@@ -127,7 +127,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/mcp` | List configured MCP tools |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
-| `/switch-skillset` | Switch between available skillsets |
+| `/switch-skillset [name]` | Switch between available skillsets (with optional direct name) |
 | `/fork` | Rewind conversation to a previous message |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
@@ -226,6 +226,8 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets --non-interactive switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets --non-interactive install <NAME>`. The `--non-interactive` flag is required because the TUI captures stdout/stderr via `.output()` and provides no stdin, so any interactive prompt would hang indefinitely.
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
+
+**Argument shortcut:** `/switch-skillset <name>` (e.g., `/switch-skillset foobar`) bypasses the picker entirely and directly triggers the install or switch. This is intercepted in `submit_user_message()` in `chatwidget/user_input.rs` before the text is sent to the model, following the same `strip_prefix` + early-return pattern used by `/login <agent>`. The handler `handle_switch_skillset_command_with_name()` in `chatwidget/pickers.rs` performs the same worktree/per-session detection as the picker flow but skips the async list step, calling `on_switch_skillset_request()` or `on_install_skillset_request()` directly. An empty name after the prefix (e.g., `/switch-skillset ` with trailing space only) is not intercepted and falls through to normal message submission.
 
 The worktree context is detected by `handle_switch_skillset_command()`: if the cwd's parent directory is named `.worktrees`, the cwd is passed as `install_dir`. When `skillset_per_session` is enabled, the cwd is used as `install_dir` even when not in a worktree. This enables per-worktree or per-session skillset installation.
 
