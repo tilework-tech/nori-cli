@@ -15,11 +15,13 @@
 - If there is any uncommitted work, you MUST stop and commit it with a work-in-progress message, before you proceed. After committing, do not stop, proceed with the remaining steps.
 - Read the APPLICATION-SPEC.md doc. If you cannot find it, STOP. Flag to me.
 - Read the CURRENT-PROGRESS.md doc.
+- Read the RESEARCH-NOTES.md doc.
 - Given the specification and current progress, determine an appropriate next commit to implement.
 - Write a paragraph description of what you intend to do. Output it to me. Do not wait for approval, just keep going after showing me.
 - Conduct research on how to best implement the task.
   - Search for relevant skills using Glob/Grep in `/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/`
   - Use nori-knowledge-researcher subagent at least once. You can run many in parallel.
+- Update the RESEARCH-NOTES.md doc.
 - Read and follow `/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/writing-plans/SKILL.md`. Write a detailed plan. Do not wait for approval, just keep going after showing me.
 - Iterate yourself if you need to do more research.
 <system-reminder> Do not stop here. Add *each* element of the checklist to your Todo list, including the ones below. </system-reminder>
@@ -78,18 +80,18 @@ Found 19 skills:
 /home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/writing-plans/SKILL.md
   Name: Writing-Plans
   Description: Use when design is complete and you need detailed implementation tasks for engineers with zero codebase context - creates comprehensive implementation plans with exact file paths, complete code examples, and verification steps assuming engineer has minimal domain knowledge
-/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/webapp-testing/SKILL.md
-  Name: webapp-testing
-  Description: Use this skill to build features or debug anything that uses a webapp frontend.
 /home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/using-skills/SKILL.md
   Name: Getting Started with Abilities
   Description: Describes how to use abilities. Read before any conversation.
-/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/using-git-worktrees/SKILL.md
-  Name: Using Git Worktrees
-  Description: Use this whenever you need to create an isolated workspace.
+/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/webapp-testing/SKILL.md
+  Name: webapp-testing
+  Description: Use this skill to build features or debug anything that uses a webapp frontend.
 /home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/updating-noridocs/SKILL.md
   Name: Updating Noridocs
   Description: Use this when you have finished making code changes and you are ready to update the documentation based on those changes.
+/home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/using-git-worktrees/SKILL.md
+  Name: Using Git Worktrees
+  Description: Use this whenever you need to create an isolated workspace.
 /home/amol/code/nori/nori-cli/.worktrees/fix-rows/.claude/skills/ui-ux-experimentation/SKILL.md
   Name: UI/UX Experimentation
   Description: Use when experimenting with different user interfaces or user experiences.
