@@ -1017,6 +1017,7 @@ fn status_card_with_tokens_renders_tokens_section() {
         input_tokens: 45000,
         output_tokens: 78000,
         cached_tokens: 32000,
+        last_context_tokens: None,
     };
 
     let status_output = new_nori_status_output(
@@ -1152,6 +1153,7 @@ fn status_card_with_zero_tokens_hides_tokens_section() {
         input_tokens: 0,
         output_tokens: 0,
         cached_tokens: 0,
+        last_context_tokens: None,
     };
 
     let status_output = new_nori_status_output(
@@ -1236,6 +1238,7 @@ fn status_card_full_snapshot() {
         input_tokens: 45000,
         output_tokens: 78000,
         cached_tokens: 32000,
+        last_context_tokens: None,
     };
 
     let status_output = new_nori_status_output(

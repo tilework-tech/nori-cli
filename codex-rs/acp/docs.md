@@ -439,9 +439,10 @@ The `parse_transcript_tokens()` function extracts token usage breakdown from tra
 
 ```rust
 pub struct TranscriptTokenUsage {
-    pub input_tokens: i64,    // Total input tokens
-    pub output_tokens: i64,   // Total output tokens
-    pub cached_tokens: i64,   // Cached input tokens (subset of input_tokens)
+    pub input_tokens: i64,            // Total input tokens
+    pub output_tokens: i64,           // Total output tokens
+    pub cached_tokens: i64,           // Cached input tokens (subset of input_tokens)
+    pub last_context_tokens: Option<i64>, // Context window fill from last main-chain message
 }
 ```
 

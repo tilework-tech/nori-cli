@@ -59,7 +59,15 @@ impl ChatComposer {
         let token_breakdown = transcript_location.and_then(|loc| loc.token_breakdown.as_ref());
         let context_window_size =
             transcript_location.map(|loc| loc.agent_kind.context_window_size());
-        let context_tokens = token_breakdown.map(codex_acp::TranscriptTokenUsage::total);
+        // Use last_context_tokens (input-side tokens from the most recent
+        // main-chain message) for context window fill display and percentage.
+        // Falls back to cumulative total() when last_context_tokens is not
+        // available (e.g., non-Claude agents).
+        let context_tokens = token_breakdown.and_then(|t| {
+            t.last_context_tokens
+                .or_else(|| Some(t.total()))
+                .filter(|&v| v > 0)
+        });
         let context_window_percent = self.context_window_percent.or_else(|| {
             context_window_size.and_then(|window_size| {
                 context_tokens.map(|tokens| {

@@ -35,6 +35,12 @@ pub struct TranscriptTokenUsage {
     pub output_tokens: i64,
     /// Cached input tokens (subset of input_tokens).
     pub cached_tokens: i64,
+    /// Context window fill: input-side tokens from the most recent main-chain
+    /// message (`input_tokens + cache_creation_input_tokens +
+    /// cache_read_input_tokens`). This represents how full the context window
+    /// is for the current turn. `None` when the transcript format does not
+    /// support this or no qualifying message was found.
+    pub last_context_tokens: Option<i64>,
 }
 
 impl TranscriptTokenUsage {
@@ -371,6 +377,12 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
     // For entries without message.id, accumulate directly (backwards compatibility)
     let mut no_message_id_usage = TranscriptTokenUsage::default();
 
+    // Track the last non-sidechain message's input-side tokens for context
+    // window fill. As we iterate through lines, we update this whenever we see
+    // a non-sidechain entry with usage. The final value represents the most
+    // recent main-chain message's context footprint.
+    let mut last_context_tokens: Option<i64> = None;
+
     for line in text.lines() {
         if line.trim().is_empty() {
             continue;
@@ -380,6 +392,16 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
+
+        // Skip sidechain and API error messages for context tracking
+        let is_sidechain = v
+            .get("isSidechain")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        let is_api_error = v
+            .get("isApiErrorMessage")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
 
         // Look for messages with usage field
         if let Some(message) = v.get("message")
@@ -407,7 +429,20 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
                 input_tokens: input_tokens.saturating_add(cache_creation),
                 output_tokens,
                 cached_tokens: cache_read,
+                last_context_tokens: None,
             };
+
+            // Track context window fill from the last non-sidechain message.
+            // input_tokens + cache_creation + cache_read = total input-side
+            // tokens, which equals how much of the context window this turn
+            // consumed.
+            if !is_sidechain && !is_api_error {
+                last_context_tokens = Some(
+                    input_tokens
+                        .saturating_add(cache_creation)
+                        .saturating_add(cache_read),
+                );
+            }
 
             if let Some(msg_id) = message.get("id").and_then(serde_json::Value::as_str) {
                 // For entries with message.id, REPLACE (keep last entry for each message)
@@ -444,6 +479,7 @@ fn parse_claude_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
             input_tokens: total_input,
             output_tokens: total_output,
             cached_tokens: total_cached,
+            last_context_tokens,
         })
     } else {
         None
@@ -494,6 +530,7 @@ fn parse_codex_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
                 input_tokens: input,
                 output_tokens: output,
                 cached_tokens: cached,
+                last_context_tokens: None,
             });
         }
     }
@@ -551,6 +588,7 @@ fn parse_gemini_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
             input_tokens: total_input,
             output_tokens: total_output,
             cached_tokens: total_cached,
+            last_context_tokens: None,
         })
     } else {
         None
@@ -1050,5 +1088,129 @@ mod tests {
         assert_eq!(usage.input_tokens, 22836);
         assert_eq!(usage.output_tokens, 523); // 325 + 198 (NOT 1 + 1 from first entries!)
         assert_eq!(usage.cached_tokens, 22285);
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_last_context_tokens_from_last_main_chain_message() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // First message (main chain): input=3, cache_creation=22285, cache_read=0
+            // Context fill = 3 + 22285 + 0 = 22288
+            writeln!(f, r#"{{"isSidechain": false, "message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 325}}}}}}"#).unwrap();
+            // Second message (main chain): input=1, cache_creation=547, cache_read=22285
+            // Context fill = 1 + 547 + 22285 = 22833
+            writeln!(f, r#"{{"isSidechain": false, "message": {{"id": "msg_002", "usage": {{"input_tokens": 1, "cache_creation_input_tokens": 547, "cache_read_input_tokens": 22285, "output_tokens": 198}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // last_context_tokens should be from the last main-chain message (msg_002):
+        // 1 + 547 + 22285 = 22833
+        assert_eq!(usage.last_context_tokens, Some(22833));
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_last_context_tokens_skips_sidechains() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Main chain message: context fill = 3 + 1000 + 0 = 1003
+            writeln!(f, r#"{{"isSidechain": false, "message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            // Sidechain message (should be ignored for context): fill = 5 + 500 + 1000 = 1505
+            writeln!(f, r#"{{"isSidechain": true, "message": {{"id": "msg_002", "usage": {{"input_tokens": 5, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 1000, "output_tokens": 25}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // last_context_tokens should be from msg_001 (last non-sidechain), not msg_002
+        assert_eq!(usage.last_context_tokens, Some(1003));
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_last_context_tokens_skips_api_errors() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Main chain message: context fill = 10 + 5000 + 2000 = 7010
+            writeln!(f, r#"{{"message": {{"id": "msg_001", "usage": {{"input_tokens": 10, "cache_creation_input_tokens": 5000, "cache_read_input_tokens": 2000, "output_tokens": 100}}}}}}"#).unwrap();
+            // API error message (should be ignored for context)
+            writeln!(f, r#"{{"isApiErrorMessage": true, "message": {{"id": "msg_err", "usage": {{"input_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // last_context_tokens should be from msg_001, not the error message
+        assert_eq!(usage.last_context_tokens, Some(7010));
+    }
+
+    #[test]
+    fn test_parse_claude_tokens_last_context_uses_final_streaming_delta() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Streaming deltas for same message - last one has the correct values
+            writeln!(f, r#"{{"isSidechain": false, "message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 1}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"isSidechain": false, "message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 50}}}}}}"#).unwrap();
+            writeln!(f, r#"{{"isSidechain": false, "message": {{"id": "msg_001", "usage": {{"input_tokens": 3, "cache_creation_input_tokens": 22285, "cache_read_input_tokens": 0, "output_tokens": 325}}}}}}"#).unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::ClaudeCode).unwrap();
+
+        // last_context_tokens should use the last streaming delta's values
+        // 3 + 22285 + 0 = 22288
+        assert_eq!(usage.last_context_tokens, Some(22288));
+    }
+
+    #[test]
+    fn test_parse_codex_tokens_has_no_last_context_tokens() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 300, "output_tokens": 200}}}}}}}}"#
+            )
+            .unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::Codex).unwrap();
+        assert_eq!(usage.last_context_tokens, None);
+    }
+
+    #[test]
+    fn test_parse_gemini_tokens_has_no_last_context_tokens() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.json");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"messages": [{{"tokens": {{"input": 200, "output": 100}}}}]}}"#
+            )
+            .unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::Gemini).unwrap();
+        assert_eq!(usage.last_context_tokens, None);
     }
 }
