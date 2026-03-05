@@ -835,14 +835,37 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
     Some(result)
 }
 
-/// Strip the git diff stats segment ("· +N -M") from a footer line.
+/// Check if a line is a standalone git stats line (vertical footer mode):
+/// just whitespace + "+N -M" + optional trailing whitespace.
+fn is_standalone_git_stats_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('+') {
+        return false;
+    }
+    let after_plus = &trimmed[1..];
+    let added_end = after_plus
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(after_plus.len());
+    if added_end == 0 {
+        return false;
+    }
+    let after_added = &after_plus[added_end..];
+    if let Some(rest) = after_added.strip_prefix(" -") {
+        let removed_end = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        return removed_end > 0 && rest[removed_end..].trim().is_empty();
+    }
+    false
+}
+
+/// Strip the git diff stats segment ("· +N -M") from a horizontal footer line.
 /// The stats vary based on repo state and would cause flaky snapshots.
 fn strip_git_stats_segment(line: &str) -> String {
-    // Look for "· +" pattern which starts the git stats segment
+    // Look for "· +" pattern which starts the git stats segment (horizontal footer)
     let marker = "· +";
     if let Some(marker_pos) = line.find(marker) {
         let after_marker = &line[marker_pos + marker.len()..];
-        // Digits for additions count
         let added_end = after_marker
             .find(|c: char| !c.is_ascii_digit())
             .unwrap_or(after_marker.len());
@@ -850,7 +873,6 @@ fn strip_git_stats_segment(line: &str) -> String {
             return line.to_string();
         }
         let after_added = &after_marker[added_end..];
-        // Expect " -" followed by digits for deletions
         if let Some(rest) = after_added.strip_prefix(" -") {
             let removed_end = rest
                 .find(|c: char| !c.is_ascii_digit())
@@ -932,6 +954,13 @@ pub fn normalize_for_snapshot(contents: String) -> String {
 
             line
         })
+        .collect();
+    normalized = lines.join("\n");
+
+    // Remove standalone git stats lines (vertical footer mode: "  +N -M" on its own line)
+    let lines: Vec<&str> = normalized
+        .lines()
+        .filter(|line| !is_standalone_git_stats_line(line))
         .collect();
     normalized = lines.join("\n");
 
@@ -1235,6 +1264,11 @@ mod tests {
         );
         // Stats at end of line
         assert_eq!(strip_git_stats_segment("  ⎇ master · +5 -2"), "  ⎇ master");
+        // Standalone stats line (vertical footer) — detected by separate helper
+        assert!(is_standalone_git_stats_line("  +44 -0"));
+        assert!(is_standalone_git_stats_line("  +10 -3  "));
+        assert!(!is_standalone_git_stats_line("  ⎇ master · +5 -2"));
+        assert!(!is_standalone_git_stats_line("  Approvals: Agent"));
     }
 
     #[test]
