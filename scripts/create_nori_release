@@ -204,7 +204,10 @@ def run_gh_api(
         json_payload = json.dumps(payload)
         command.extend(["-H", "Content-Type: application/json", "--input", "-"])
 
-    result = subprocess.run(command, text=True, capture_output=True, input=json_payload)
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, input=json_payload, timeout=30)
+    except subprocess.TimeoutExpired:
+        raise ReleaseError(f"gh api call timed out: {' '.join(command)}")
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "gh api call failed"
         raise ReleaseError(message)
@@ -418,27 +421,31 @@ def determine_version(args: argparse.Namespace) -> str:
 
 def list_tags() -> list[str]:
     """List all tags matching TAG_PREFIX, returning version strings."""
+    command = [
+        "gh", "api", "--paginate",
+        f"/repos/{REPO}/git/refs/tags",
+        "-H", "Accept: application/vnd.github+json",
+    ]
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise ReleaseError("gh api call timed out listing tags")
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or "gh api call failed"
+        raise ReleaseError(message)
+
+    try:
+        response = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+
     tags: list[str] = []
-    page = 1
-    while True:
-        try:
-            # The refs/tags endpoint returns all tag refs
-            response = run_gh_api(
-                f"/repos/{REPO}/git/refs/tags?per_page=100&page={page}"
-            )
-            if not isinstance(response, list) or not response:
-                break
-            for ref in response:
-                # ref["ref"] is like "refs/tags/nori-v0.4.1"
-                ref_name = ref.get("ref", "")
-                if ref_name.startswith(f"refs/tags/{TAG_PREFIX}"):
-                    version = ref_name[len(f"refs/tags/{TAG_PREFIX}"):]
-                    tags.append(version)
-            if len(response) < 100:
-                break
-            page += 1
-        except ReleaseError:
-            break
+    if isinstance(response, list):
+        for ref in response:
+            ref_name = ref.get("ref", "")
+            if ref_name.startswith(f"refs/tags/{TAG_PREFIX}"):
+                version = ref_name[len(f"refs/tags/{TAG_PREFIX}"):]
+                tags.append(version)
     return tags
 
 
