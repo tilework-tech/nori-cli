@@ -835,6 +835,42 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
     Some(result)
 }
 
+/// Strip the git diff stats segment ("· +N -M") from a footer line.
+/// The stats vary based on repo state and would cause flaky snapshots.
+fn strip_git_stats_segment(line: &str) -> String {
+    // Look for "· +" pattern which starts the git stats segment
+    let marker = "· +";
+    if let Some(marker_pos) = line.find(marker) {
+        let after_marker = &line[marker_pos + marker.len()..];
+        // Digits for additions count
+        let added_end = after_marker
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(after_marker.len());
+        if added_end == 0 {
+            return line.to_string();
+        }
+        let after_added = &after_marker[added_end..];
+        // Expect " -" followed by digits for deletions
+        if let Some(rest) = after_added.strip_prefix(" -") {
+            let removed_end = rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+            if removed_end > 0 {
+                let stats_end_offset =
+                    marker_pos + marker.len() + added_end + " -".len() + removed_end;
+                let after_stats = &line[stats_end_offset..];
+                // If followed by " · ", keep one separator between surrounding segments
+                if let Some(suffix) = after_stats.strip_prefix(" · ") {
+                    return format!("{}· {suffix}", &line[..marker_pos]);
+                }
+                // At end of line — strip the "· +N -M" segment
+                return line[..marker_pos].trim_end().to_string();
+            }
+        }
+    }
+    line.to_string()
+}
+
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = contents;
@@ -889,6 +925,10 @@ pub fn normalize_for_snapshot(contents: String) -> String {
             if let Some(result) = replace_after_marker(&line, "Session:", "[SESSION_ID]") {
                 line = result;
             }
+
+            // Git diff stats in footer: strip "· +N -M " segment
+            // The stats vary based on repo state and would cause flaky snapshots
+            line = strip_git_stats_segment(&line);
 
             line
         })
@@ -1174,6 +1214,27 @@ mod tests {
             normalize_for_input_snapshot(input_similar.to_string()),
             input_similar
         );
+    }
+
+    #[test]
+    fn test_strip_git_stats_from_footer() {
+        // Stats in middle of footer (between segments)
+        assert_eq!(
+            strip_git_stats_segment("  ⎇ master · +47 -0 · Approvals: Agent · ? for shortcuts"),
+            "  ⎇ master · Approvals: Agent · ? for shortcuts"
+        );
+        // Stats with both additions and deletions
+        assert_eq!(
+            strip_git_stats_segment("  ⎇ main · +10 -3 · model: gpt-4"),
+            "  ⎇ main · model: gpt-4"
+        );
+        // No stats present — unchanged
+        assert_eq!(
+            strip_git_stats_segment("  ⎇ master · Approvals: Agent"),
+            "  ⎇ master · Approvals: Agent"
+        );
+        // Stats at end of line
+        assert_eq!(strip_git_stats_segment("  ⎇ master · +5 -2"), "  ⎇ master");
     }
 
     #[test]
