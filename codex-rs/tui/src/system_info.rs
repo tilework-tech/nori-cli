@@ -249,9 +249,135 @@ fn get_nori_profile() -> Option<String> {
     None
 }
 
-fn get_git_stats(dir: Option<&std::path::Path>) -> (Option<i32>, Option<i32>) {
+/// Parse the output of `git symbolic-ref refs/remotes/origin/HEAD` to extract
+/// the default branch name. Returns `None` if the output is malformed.
+fn parse_origin_head(output: &str) -> Option<String> {
+    let trimmed = output.trim();
+    let suffix = trimmed.strip_prefix("ref: refs/remotes/origin/")?;
+    if suffix.is_empty() {
+        return None;
+    }
+    Some(suffix.to_string())
+}
+
+/// Count the number of lines in content (non-empty content).
+fn count_lines_in_content(content: &str) -> i32 {
+    if content.is_empty() {
+        return 0;
+    }
+    content.lines().count() as i32
+}
+
+/// Resolve the diff base ref to compare against.
+///
+/// Tries, in order:
+/// 1. `origin/HEAD` (via `git symbolic-ref`) to find the remote default branch
+/// 2. `main` branch exists
+/// 3. `master` branch exists
+/// 4. Falls back to `"HEAD"` (uncommitted changes only)
+///
+/// Once a default branch is found, computes the merge-base with HEAD so that
+/// the diff reflects what a PR would show.
+fn resolve_diff_base(dir: Option<&std::path::Path>) -> String {
+    // Try origin/HEAD first
+    if let Some(default_branch) = get_origin_head(dir)
+        && let Some(merge_base) = get_merge_base(dir, &format!("origin/{default_branch}")) {
+            return merge_base;
+        }
+
+    // Try common default branch names
+    for branch in &["main", "master"] {
+        if branch_exists(dir, branch)
+            && let Some(merge_base) = get_merge_base(dir, branch) {
+                return merge_base;
+            }
+    }
+
+    // Fallback: diff against HEAD (uncommitted changes only)
+    "HEAD".to_string()
+}
+
+fn get_origin_head(dir: Option<&std::path::Path>) -> Option<String> {
     let mut cmd = Command::new("git");
-    cmd.args(["diff", "HEAD", "--shortstat"]);
+    cmd.args(["symbolic-ref", "refs/remotes/origin/HEAD"]);
+    if let Some(d) = dir {
+        cmd.current_dir(d);
+    }
+    let output = cmd.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    parse_origin_head(&stdout)
+}
+
+fn branch_exists(dir: Option<&std::path::Path>, branch: &str) -> bool {
+    let mut cmd = Command::new("git");
+    cmd.args(["rev-parse", "--verify", branch]);
+    if let Some(d) = dir {
+        cmd.current_dir(d);
+    }
+    cmd.stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    cmd.status().is_ok_and(|s| s.success())
+}
+
+fn get_merge_base(dir: Option<&std::path::Path>, target: &str) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.args(["merge-base", "HEAD", target]);
+    if let Some(d) = dir {
+        cmd.current_dir(d);
+    }
+    let output = cmd.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8(output.stdout).ok()?;
+    let sha = sha.trim();
+    if sha.is_empty() {
+        return None;
+    }
+    Some(sha.to_string())
+}
+
+/// Count lines in untracked files (files not yet added to git).
+fn count_untracked_lines(dir: Option<&std::path::Path>) -> i32 {
+    let mut cmd = Command::new("git");
+    cmd.args(["ls-files", "--others", "--exclude-standard"]);
+    if let Some(d) = dir {
+        cmd.current_dir(d);
+    }
+
+    let output = match cmd.output() {
+        Ok(output) if output.status.success() => output,
+        _ => return 0,
+    };
+
+    let file_list = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+
+    let base_dir = dir
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    let mut total_lines = 0;
+    for file in file_list.lines().map(str::trim).filter(|s| !s.is_empty()) {
+        let path = base_dir.join(file);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            total_lines += count_lines_in_content(&content);
+        }
+        // Skip binary files / files that can't be read as UTF-8
+    }
+    total_lines
+}
+
+fn get_git_stats(dir: Option<&std::path::Path>) -> (Option<i32>, Option<i32>) {
+    let diff_base = resolve_diff_base(dir);
+
+    let mut cmd = Command::new("git");
+    cmd.args(["diff", &diff_base, "--shortstat"]);
     if let Some(d) = dir {
         cmd.current_dir(d);
     }
@@ -270,7 +396,17 @@ fn get_git_stats(dir: Option<&std::path::Path>) -> (Option<i32>, Option<i32>) {
         Err(_) => return (None, None),
     };
 
-    parse_git_shortstat(&stats)
+    let (added, removed) = parse_git_shortstat(&stats);
+
+    // Add untracked file lines to insertions
+    let untracked = count_untracked_lines(dir);
+    if untracked > 0 {
+        let added = Some(added.unwrap_or(0) + untracked);
+        let removed = Some(removed.unwrap_or(0));
+        return (added, removed);
+    }
+
+    (added, removed)
 }
 
 fn parse_git_shortstat(output: &str) -> (Option<i32>, Option<i32>) {
@@ -768,6 +904,49 @@ Filesystem     1024-blocks      Used Available Capacity Mounted on
         use std::path::Path;
         let path = Path::new("/tmp");
         assert_eq!(extract_worktree_name(path), None);
+    }
+
+    #[test]
+    fn test_get_default_branch_prefers_origin_head() {
+        // When origin/HEAD points to a branch, use that branch name
+        assert_eq!(
+            parse_origin_head("ref: refs/remotes/origin/develop"),
+            Some("develop".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_default_branch_parses_main() {
+        assert_eq!(
+            parse_origin_head("ref: refs/remotes/origin/main"),
+            Some("main".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_default_branch_parses_master() {
+        assert_eq!(
+            parse_origin_head("ref: refs/remotes/origin/master"),
+            Some("master".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_default_branch_handles_empty() {
+        assert_eq!(parse_origin_head(""), None);
+    }
+
+    #[test]
+    fn test_get_default_branch_handles_malformed() {
+        assert_eq!(parse_origin_head("not a valid ref"), None);
+    }
+
+    #[test]
+    fn test_count_lines_in_content() {
+        assert_eq!(count_lines_in_content("hello\nworld\n"), 2);
+        assert_eq!(count_lines_in_content("single line"), 1);
+        assert_eq!(count_lines_in_content(""), 0);
+        assert_eq!(count_lines_in_content("a\nb\nc"), 3);
     }
 
     #[test]
