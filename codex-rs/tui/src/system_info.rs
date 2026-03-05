@@ -281,16 +281,18 @@ fn count_lines_in_content(content: &str) -> i32 {
 fn resolve_diff_base(dir: Option<&std::path::Path>) -> String {
     // Try origin/HEAD first
     if let Some(default_branch) = get_origin_head(dir)
-        && let Some(merge_base) = get_merge_base(dir, &format!("origin/{default_branch}")) {
-            return merge_base;
-        }
+        && let Some(merge_base) = get_merge_base(dir, &format!("origin/{default_branch}"))
+    {
+        return merge_base;
+    }
 
     // Try common default branch names
     for branch in &["main", "master"] {
         if branch_exists(dir, branch)
-            && let Some(merge_base) = get_merge_base(dir, branch) {
-                return merge_base;
-            }
+            && let Some(merge_base) = get_merge_base(dir, branch)
+        {
+            return merge_base;
+        }
     }
 
     // Fallback: diff against HEAD (uncommitted changes only)
