@@ -15,17 +15,9 @@ description: Use when the user wants to register a custom ACP agent in Nori, or 
 
 # Overview
 
-Nori supports registering custom ACP (Agent Client Protocol) agents via `~/.nori/cli/config.toml`. Once registered, agents appear in the agent picker and can be used like any built-in agent. All ACP agents communicate over JSON-RPC 2.0 via stdin/stdout -- they are spawned as subprocesses.
+Nori supports registering custom ACP agents via `~/.nori/cli/config.toml`. All ACP agents communicate over JSON-RPC 2.0 via stdin/stdout (spawned as subprocesses).
 
-# Step 1: Determine What the User Wants
-
-Ask the user:
-
-> Would you like to:
-> 1. **Register your own custom agent** -- I'll walk you through the config fields
-> 2. **Try an example agent** -- Choose from elizacp, kimi-cli, or opencode
-
-# Step 2a: Custom Agent Setup
+# Custom Agent Setup
 
 Gather the following from the user:
 
@@ -42,55 +34,27 @@ Gather the following from the user:
 
 Exactly one must be specified:
 
-### Local Binary
-
 ```toml
+# Local binary (or anything in PATH)
 [agents.distribution.local]
-command = "/path/to/agent"   # or just "agent" if in PATH
-args = ["--acp"]             # optional arguments
-env = { "KEY" = "value" }    # optional environment variables
-```
+command = "/path/to/agent"
+args = ["--acp"]             # optional
+env = { "KEY" = "value" }    # optional
 
-### Package Manager Distributions
-
-```toml
-# npx (npm)
-[agents.distribution.npx]
-package = "@scope/agent-pkg"
-args = ["acp"]
-
-# bunx (bun)
-[agents.distribution.bunx]
-package = "@scope/agent-pkg"
-args = ["acp"]
-
-# pipx (Python)
-[agents.distribution.pipx]
-package = "agent-pkg"
-args = ["acp"]
-
-# uvx (uv/Python)
-[agents.distribution.uvx]
+# Package managers: npx, bunx, pipx, uvx (same shape)
+[agents.distribution.uvx]   # or .npx / .bunx / .pipx
 package = "agent-pkg"
 args = ["acp"]
 ```
 
-# Step 2b: Example Agent Walkthroughs
+# Example Agents
 
-Ask the user which example they want to try:
+## elizacp (Rust/Cargo)
 
-## Option A: elizacp (Rust/Cargo)
+Minimal Eliza chatbot. Install: `cargo install --git https://github.com/agentclientprotocol/symposium-acp elizacp`
 
-elizacp is a minimal Eliza chatbot that implements ACP. Great for testing.
+No `cargo` distribution variant exists -- use `local` since cargo puts binaries in PATH.
 
-**Install:**
-```bash
-cargo install --git https://github.com/agentclientprotocol/symposium-acp elizacp
-```
-
-> Note: There is no `cargo` distribution variant. Use `local` for cargo-installed binaries since they end up in your PATH.
-
-**Config to add to `~/.nori/cli/config.toml`:**
 ```toml
 [[agents]]
 name = "ElizACP"
@@ -100,15 +64,10 @@ slug = "elizacp"
 command = "elizacp"
 ```
 
-## Option B: kimi-cli (Python/uv)
+## kimi-cli (Python/uv)
 
-Moonshot AI's CLI coding agent with native ACP support.
+Moonshot AI's coding agent. No install needed -- `uvx` runs on-the-fly. First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login` and `/setup`.
 
-**First-time setup:** Before using kimi-cli through Nori, run `uvx --python 3.13 kimi-cli` in a terminal and use `/login` to authenticate, then `/setup` to initialize.
-
-The `uvx` distribution runs the package on-the-fly, so no separate install step is needed.
-
-**Config to add to `~/.nori/cli/config.toml`:**
 ```toml
 [[agents]]
 name = "Kimi"
@@ -121,23 +80,10 @@ package = "kimi-cli"
 args = ["acp"]
 ```
 
-## Option C: opencode (Local installer)
+## opencode
 
-An open-source AI coding agent with full ACP support.
+Install: `curl -fsSL https://opencode.ai/install | bash` (or `npm install -g opencode-ai` / `brew install anomalyco/tap/opencode`)
 
-**Install (pick one):**
-```bash
-# Quick install
-curl -fsSL https://opencode.ai/install | bash
-
-# Or via npm
-npm install -g opencode-ai
-
-# Or via Homebrew
-brew install anomalyco/tap/opencode
-```
-
-**Config to add to `~/.nori/cli/config.toml`:**
 ```toml
 [[agents]]
 name = "OpenCode"
