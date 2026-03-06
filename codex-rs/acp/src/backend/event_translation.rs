@@ -39,6 +39,7 @@ pub(crate) fn get_event_msg_type(msg: &EventMsg) -> &'static str {
         EventMsg::TurnAborted(_) => "TurnAborted",
         EventMsg::Error(_) => "Error",
         EventMsg::ShutdownComplete => "ShutdownComplete",
+        EventMsg::PlanUpdate(_) => "PlanUpdate",
         _ => "Other",
     }
 }
@@ -341,6 +342,39 @@ pub(crate) fn translate_session_update_to_events(
                 }
                 vec![]
             }
+        }
+        acp::SessionUpdate::Plan(plan) => {
+            let entries = plan
+                .entries
+                .iter()
+                .map(|entry| codex_protocol::plan_tool::PlanItemArg {
+                    step: entry.content.clone(),
+                    status: match entry.status {
+                        acp::PlanEntryStatus::Pending => {
+                            codex_protocol::plan_tool::StepStatus::Pending
+                        }
+                        acp::PlanEntryStatus::InProgress => {
+                            codex_protocol::plan_tool::StepStatus::InProgress
+                        }
+                        acp::PlanEntryStatus::Completed => {
+                            codex_protocol::plan_tool::StepStatus::Completed
+                        }
+                        _ => codex_protocol::plan_tool::StepStatus::Pending,
+                    },
+                })
+                .collect();
+            debug!(
+                target: "acp_event_flow",
+                event_type = "Plan",
+                num_entries = plan.entries.len(),
+                "ACP -> TUI: PlanUpdate"
+            );
+            vec![EventMsg::PlanUpdate(
+                codex_protocol::plan_tool::UpdatePlanArgs {
+                    explanation: None,
+                    plan: entries,
+                },
+            )]
         }
         // Other update types don't have direct event mappings
         other => {
