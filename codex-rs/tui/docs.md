@@ -135,6 +135,12 @@ Two collection methods are provided:
 
 The first-message is obtained from `ChatWidget::first_prompt_text()`, which stores the text of the first submitted prompt. This flows through `SystemInfoRefreshRequest` to the background worker, enabling accurate transcript matching when multiple sessions exist in the same project directory.
 
+**`/diff` Slash Command** (`get_git_diff.rs`):
+
+The `/diff` handler in `key_handling.rs` resolves the effective CWD from the `effective_cwd_tracker` (falling back to `config.cwd`) and passes it to `get_git_diff()`. This ensures `/diff` works correctly in git worktrees and directories different from the process launch directory. All git commands in `get_git_diff.rs` use `.current_dir()` when a directory is provided.
+
+`get_git_diff.rs` uses the same diff base resolution strategy as `system_info.rs` (`origin/HEAD` -> `main` -> `master` -> `HEAD` fallback), but implemented as async functions rather than the sync versions in `system_info.rs`. This duplication exists because the sync/async boundary makes sharing impractical. The result is that `/diff` output and the statusline diff stats are consistent -- both show PR-like diffs against the merge-base with the default branch.
+
 **Worktree Cleanup Warning:**
 
 During background system info collection on unix, `check_worktree_cleanup()` runs three checks in sequence: confirms the directory is a git repo via `git rev-parse --show-toplevel`, lists extra worktrees via `codex_git::list_worktrees()` (see `@/codex-rs/utils/git/`), and checks disk space via `df -Pk`. If worktrees exist and free disk space is below the `DISK_SPACE_LOW_PERCENT` threshold (10%), a `WorktreeCleanupWarning` is attached to the `SystemInfo` result. When the `App` event loop handles `SystemInfoRefreshed`, it checks for this warning and calls `chat_widget.add_warning_message()` to display a yellow warning cell in the chat history suggesting the user clean up unused worktrees. Non-unix platforms skip this check entirely.
@@ -153,7 +159,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/resume-viewonly` | View a previous session transcript (read-only) |
 | `/compact` | Summarize conversation to prevent context limit |
 | `/undo` | Open undo snapshot picker to select a restore point |
-| `/diff` | Show git diff (including untracked files) |
+| `/diff` | Show PR-like git diff (changes since merge-base with default branch, plus untracked files) |
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and context window usage |
 | `/first-prompt` | Show the first prompt from this session |

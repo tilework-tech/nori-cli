@@ -178,8 +178,13 @@ impl ChatWidget {
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
                 let tx = self.app_event_tx.clone();
+                let dir = self
+                    .effective_cwd_tracker
+                    .effective_cwd()
+                    .cloned()
+                    .unwrap_or_else(|| self.config.cwd.clone());
                 tokio::spawn(async move {
-                    let text = match get_git_diff().await {
+                    let text = match get_git_diff(Some(&dir)).await {
                         Ok((is_git_repo, diff_text)) => {
                             if is_git_repo {
                                 diff_text
