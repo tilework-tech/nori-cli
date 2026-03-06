@@ -756,6 +756,20 @@ impl App {
                 self.persist_footer_segment_setting(segment, enabled).await;
             }
             #[cfg(feature = "nori-config")]
+            AppEvent::BrowseFiles(fm) => {
+                self.browse_files(fm, tui);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigFileManager(value) => {
+                self.persist_file_manager_setting(value).await;
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::OpenFileManagerPicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_file_manager_picker(nori_config.file_manager);
+            }
+            #[cfg(feature = "nori-config")]
             AppEvent::LoopIteration {
                 prompt,
                 remaining,

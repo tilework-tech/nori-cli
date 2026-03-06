@@ -164,6 +164,7 @@ impl NoriConfig {
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
             skillset_per_session,
+            file_manager: toml.tui.file_manager,
             auto_worktree,
             footer_segment_config: super::types::FooterSegmentConfig::from_toml(
                 &toml.tui.footer_segments,
@@ -482,6 +483,109 @@ auto_worktree = false
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(config.auto_worktree, super::super::types::AutoWorktree::Off);
+    }
+
+    // ========================================================================
+    // File Manager Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_file_manager_loaded_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+file_manager = "vifm"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.file_manager,
+            Some(super::super::types::FileManager::Vifm)
+        );
+    }
+
+    #[test]
+    fn test_file_manager_ranger_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+file_manager = "ranger"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.file_manager,
+            Some(super::super::types::FileManager::Ranger)
+        );
+    }
+
+    #[test]
+    fn test_file_manager_defaults_to_none() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.file_manager, None);
+    }
+
+    #[test]
+    fn test_file_manager_chooser_args_vifm() {
+        use super::super::types::FileManager;
+        use std::path::Path;
+
+        let args = FileManager::Vifm.chooser_args(Path::new("/tmp/chooser.txt"));
+        assert_eq!(args, vec!["--choose-files", "/tmp/chooser.txt"]);
+    }
+
+    #[test]
+    fn test_file_manager_chooser_args_ranger() {
+        use super::super::types::FileManager;
+        use std::path::Path;
+
+        let args = FileManager::Ranger.chooser_args(Path::new("/tmp/chooser.txt"));
+        assert_eq!(args, vec!["--choosefile=/tmp/chooser.txt"]);
+    }
+
+    #[test]
+    fn test_file_manager_chooser_args_lf() {
+        use super::super::types::FileManager;
+        use std::path::Path;
+
+        let args = FileManager::Lf.chooser_args(Path::new("/tmp/chooser.txt"));
+        assert_eq!(args, vec!["-selection-path", "/tmp/chooser.txt"]);
+    }
+
+    #[test]
+    fn test_file_manager_chooser_args_nnn() {
+        use super::super::types::FileManager;
+        use std::path::Path;
+
+        let args = FileManager::Nnn.chooser_args(Path::new("/tmp/chooser.txt"));
+        assert_eq!(args, vec!["-p", "/tmp/chooser.txt"]);
+    }
+
+    #[test]
+    fn test_file_manager_command_names() {
+        use super::super::types::FileManager;
+
+        assert_eq!(FileManager::Vifm.command_name(), "vifm");
+        assert_eq!(FileManager::Ranger.command_name(), "ranger");
+        assert_eq!(FileManager::Lf.command_name(), "lf");
+        assert_eq!(FileManager::Nnn.command_name(), "nnn");
     }
 
     // ========================================================================

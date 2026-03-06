@@ -1215,6 +1215,9 @@ pub struct TuiConfigToml {
 
     /// Enable per-session skillset isolation.
     pub skillset_per_session: Option<bool>,
+
+    /// Terminal file manager for the `/browse` command.
+    pub file_manager: Option<FileManager>,
 }
 
 /// Resolved TUI configuration
@@ -1241,6 +1244,60 @@ impl Default for TuiConfig {
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
         }
+    }
+}
+
+/// Supported terminal file managers for the `/browse` command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileManager {
+    /// vifm — chooser flag: `--choose-files <path>`
+    Vifm,
+    /// ranger — chooser flag: `--choosefile=<path>`
+    Ranger,
+    /// lf — chooser flag: `-selection-path <path>`
+    Lf,
+    /// nnn — chooser flag: `-p <path>`
+    Nnn,
+}
+
+impl FileManager {
+    /// Returns the binary name to invoke.
+    pub fn command_name(self) -> &'static str {
+        match self {
+            Self::Vifm => "vifm",
+            Self::Ranger => "ranger",
+            Self::Lf => "lf",
+            Self::Nnn => "nnn",
+        }
+    }
+
+    /// Returns CLI arguments that put the file manager into chooser mode,
+    /// writing the selected file path(s) to `output_path`.
+    pub fn chooser_args(self, output_path: &std::path::Path) -> Vec<String> {
+        let path = output_path.display().to_string();
+        match self {
+            Self::Vifm => vec!["--choose-files".to_string(), path],
+            Self::Ranger => vec![format!("--choosefile={path}")],
+            Self::Lf => vec!["-selection-path".to_string(), path],
+            Self::Nnn => vec!["-p".to_string(), path],
+        }
+    }
+
+    /// Human-friendly name shown in the config picker.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Vifm => "vifm",
+            Self::Ranger => "ranger",
+            Self::Lf => "lf",
+            Self::Nnn => "nnn",
+        }
+    }
+}
+
+impl fmt::Display for FileManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.display_name())
     }
 }
 
@@ -1326,6 +1383,10 @@ pub struct NoriConfig {
 
     /// Enable per-session skillset isolation.
     pub skillset_per_session: bool,
+
+    /// Terminal file manager for the `/browse` command.
+    /// `None` means not configured.
+    pub file_manager: Option<FileManager>,
 
     /// Footer segment visibility configuration.
     pub footer_segment_config: FooterSegmentConfig,
@@ -1413,6 +1474,7 @@ impl Default for NoriConfig {
             loop_count: None,
             auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
+            file_manager: None,
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),

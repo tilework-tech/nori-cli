@@ -22,6 +22,7 @@ pub enum SlashCommand {
     Init,
     Compact,
     Undo,
+    Browse,
     Diff,
     Mention,
     Status,
@@ -50,6 +51,7 @@ impl SlashCommand {
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Undo => "ask Nori to undo a turn",
             SlashCommand::Quit | SlashCommand::Exit => "exit Nori",
+            SlashCommand::Browse => "open a file manager to browse and edit files",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and context window usage",
@@ -91,7 +93,8 @@ impl SlashCommand {
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset
             | SlashCommand::Fork => false,
-            SlashCommand::Diff
+            SlashCommand::Browse
+            | SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Memory
@@ -264,6 +267,33 @@ mod tests {
             !SlashCommand::Resume.available_during_task(),
             "/resume should not be available while task is running"
         );
+    }
+
+    #[test]
+    fn browse_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_browse = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Browse);
+        assert!(has_browse, "/browse should be visible in commands list");
+    }
+
+    #[test]
+    fn browse_has_description() {
+        let desc = SlashCommand::Browse.description();
+        assert!(!desc.is_empty(), "/browse should have a description");
+    }
+
+    #[test]
+    fn browse_available_during_task() {
+        assert!(
+            SlashCommand::Browse.available_during_task(),
+            "/browse should be available while task is running"
+        );
+    }
+
+    #[test]
+    fn browse_parses_from_string() {
+        let cmd: SlashCommand = "browse".parse().expect("/browse should parse from string");
+        assert_eq!(cmd, SlashCommand::Browse);
     }
 
     #[test]

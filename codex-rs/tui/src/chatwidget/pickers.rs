@@ -116,6 +116,19 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the file manager sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_file_manager_picker(
+        &mut self,
+        current: Option<codex_acp::config::FileManager>,
+    ) {
+        let params = crate::nori::config_picker::file_manager_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the auto-worktree sub-picker.
     #[cfg(feature = "nori-config")]
     pub(crate) fn open_auto_worktree_picker(&mut self, current: codex_acp::config::AutoWorktree) {

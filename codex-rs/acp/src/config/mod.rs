@@ -15,6 +15,7 @@ pub use types::AgentDistributionToml;
 pub use types::ApprovalPolicy;
 pub use types::AutoWorktree;
 pub use types::DEFAULT_AGENT;
+pub use types::FileManager;
 pub use types::FooterSegment;
 pub use types::FooterSegmentConfig;
 pub use types::FooterSegmentConfigToml;

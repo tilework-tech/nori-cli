@@ -194,8 +194,16 @@ Helper methods on `AutoWorktree`:
 |-------|----------|---------|----------|
 | `auto_worktree` | `auto_worktree` | `Off` | Worktree creation behavior at session start |
 | `skillset_per_session` | `skillset_per_session` | `false` | When enabled, each session gets its own skillset. Independent of `auto_worktree` -- does not force it on |
+| `file_manager` | `file_manager` | `None` | Terminal file manager for the `/browse` command |
 
-Both settings are resolved independently in `loader.rs`. The TUI layer (`@/codex-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
+The `FileManager` enum (`types/mod.rs`) represents supported terminal file managers for the `/browse` slash command. Stored under `[tui]` in `config.toml` as a kebab-case string. Variants: `Vifm`, `Ranger`, `Lf`, `Nnn`. Each variant provides:
+- `command_name()` -- binary name to invoke (e.g. `"vifm"`, `"ranger"`)
+- `chooser_args(output_path)` -- CLI arguments that put the file manager into chooser mode, writing the selected file path to a temp file. Each file manager uses a different flag convention (e.g. vifm uses `--choose-files`, ranger uses `--choosefile=`, lf uses `-selection-path`, nnn uses `-p`)
+- `display_name()` -- human-friendly label for the config picker
+
+The field defaults to `None` (no file manager configured). The TUI layer (`@/codex-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/config` to choose one. The `FileManager` type is re-exported from `codex_acp` for use by the TUI.
+
+Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/codex-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/codex-rs/acp/src/auto_worktree.rs` and `@/codex-rs/tui/src/lib.rs`.
 
 **Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 

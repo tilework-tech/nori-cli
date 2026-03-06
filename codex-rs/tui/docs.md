@@ -146,7 +146,8 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
 | `/model` | Choose model (dynamically shows current agent/model name) |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
+| `/browse` | Open a terminal file manager to browse and edit files |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
 | `/init` | Create an AGENTS.md file with instructions |
@@ -445,6 +446,21 @@ The external editor hotkey (default Ctrl-G, configurable via hotkeys) opens the 
 6. On success, reads the temp file content back into the composer; on failure or non-zero exit, discards changes
 
 This uses the same terminal suspend/resume pattern as job control in `lib.rs` (SIGTSTP handling).
+
+**File Browsing (`/browse`):**
+
+The `/browse` slash command launches a configurable terminal file manager in chooser mode, then opens the selected file in the user's editor. It is available during task execution. The flow in `app/session_setup.rs::browse_files()`:
+
+1. Creates a temp file (`nori-browse-*.txt`) for the file manager to write the chosen path into
+2. Suspends the TUI via `tui::restore()`
+3. Spawns the file manager with chooser-mode arguments (from `FileManager::chooser_args()` in `@/codex-rs/acp/src/config/types/mod.rs`)
+4. On success, reads the first line of the temp file as the selected path
+5. If the selected path is a file, opens it in the user's editor using the same `editor::resolve_editor()` / `editor::spawn_editor()` as Ctrl-G
+6. Re-enables the TUI via `tui::set_modes()`
+
+When `/browse` is invoked, `SlashCommand::Browse` dispatches by loading `NoriConfig` to check `file_manager`. If `None`, an error message directs the user to `/config`. If set, it sends `AppEvent::BrowseFiles(fm)`.
+
+The file manager setting is configurable via `/config` -> "File Manager" which opens a sub-picker (same pattern as auto worktree). The sub-picker is built by `file_manager_picker_params()` in `@/codex-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenFileManagerPicker` / `AppEvent::SetConfigFileManager` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_file_manager_setting()`.
 
 **View-Only Transcript Viewing:**
 The `/resume-viewonly` command allows viewing previous session transcripts without replaying the conversation. Implementation in `@/codex-rs/tui/src/`:
