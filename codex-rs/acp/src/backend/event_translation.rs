@@ -316,10 +316,10 @@ pub(crate) fn translate_session_update_to_events(
                         interaction_input: None,
                         stdout: String::new(),
                         stderr: String::new(),
+                        formatted_output: aggregated_output.clone(),
                         aggregated_output,
                         exit_code: 0,
                         duration: std::time::Duration::ZERO,
-                        formatted_output: String::new(),
                     },
                 )]
             } else {
