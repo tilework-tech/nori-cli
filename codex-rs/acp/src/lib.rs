@@ -22,6 +22,7 @@ pub mod undo;
 
 // Re-export config types for convenience
 pub use config::ApprovalPolicy;
+pub use config::FileManager;
 pub use config::HistoryPersistence;
 pub use config::NoriConfig;
 pub use config::NoriConfigOverrides;

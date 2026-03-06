@@ -441,6 +441,18 @@ pub(crate) enum AppEvent {
         session_id: String,
     },
 
+    /// Launch a terminal file manager to browse and optionally edit files.
+    #[cfg(feature = "nori-config")]
+    BrowseFiles(codex_acp::config::FileManager),
+
+    /// Set the configured file manager for the `/browse` command.
+    #[cfg(feature = "nori-config")]
+    SetConfigFileManager(codex_acp::config::FileManager),
+
+    /// Open the file manager sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenFileManagerPicker,
+
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
 

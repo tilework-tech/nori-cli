@@ -127,6 +127,105 @@ impl App {
         }
     }
 
+    /// Launch a terminal file manager in chooser mode, then open the selected
+    /// file in the user's editor.
+    #[cfg(feature = "nori-config")]
+    pub(super) fn browse_files(&mut self, fm: codex_acp::config::FileManager, tui: &mut tui::Tui) {
+        use crate::editor;
+
+        // Create a temp file for the file manager to write the chosen path into.
+        let chooser_output = match tempfile::Builder::new()
+            .prefix("nori-browse-")
+            .suffix(".txt")
+            .tempfile()
+        {
+            Ok(tmp) => match tmp.keep() {
+                Ok((_, path)) => path,
+                Err(e) => {
+                    self.chat_widget
+                        .add_error_message(format!("Failed to create temp file: {}", e.error));
+                    return;
+                }
+            },
+            Err(err) => {
+                self.chat_widget
+                    .add_error_message(format!("Failed to create temp file: {err}"));
+                return;
+            }
+        };
+
+        let chooser_args = fm.chooser_args(&chooser_output);
+
+        // Restore terminal to normal mode so the file manager can take over.
+        let _ = tui::restore();
+
+        // Loop: launch file manager → open selected file in editor → re-launch
+        // file manager. The user stays in the browse workflow until they exit
+        // the file manager without selecting a file (or it fails).
+        loop {
+            // Clear the chooser output so a stale selection from a previous
+            // iteration doesn't persist.
+            let _ = std::fs::write(&chooser_output, "");
+
+            let fm_status = std::process::Command::new(fm.command_name())
+                .args(&chooser_args)
+                .stdin(std::process::Stdio::inherit())
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit())
+                .status();
+
+            match fm_status {
+                Ok(exit_status) if exit_status.success() => {
+                    let chosen = std::fs::read_to_string(&chooser_output)
+                        .unwrap_or_default()
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
+
+                    if chosen.is_empty() {
+                        // User exited file manager without selecting a file.
+                        break;
+                    }
+
+                    let chosen_path = std::path::Path::new(&chosen);
+                    if chosen_path.is_file() {
+                        let editor_cmd = editor::resolve_editor();
+                        let editor_status = editor::spawn_editor(&editor_cmd, chosen_path);
+                        if let Err(err) = editor_status {
+                            self.chat_widget.add_error_message(format!(
+                                "Failed to launch editor '{editor_cmd}': {err}"
+                            ));
+                            break;
+                        }
+                        // After editor exits, loop back to re-launch the file manager.
+                    } else {
+                        self.chat_widget
+                            .add_error_message(format!("Selected path is not a file: {chosen}"));
+                        break;
+                    }
+                }
+                Ok(_) => {
+                    // File manager exited with non-zero status.
+                    break;
+                }
+                Err(err) => {
+                    self.chat_widget.add_error_message(format!(
+                        "Failed to launch {}: {err}. Is it installed?",
+                        fm.command_name()
+                    ));
+                    break;
+                }
+            }
+        }
+
+        // Always clean up temp file and restore TUI.
+        let _ = std::fs::remove_file(&chooser_output);
+        let _ = tui::set_modes();
+        tui.frame_requester().schedule_frame();
+    }
+
     #[cfg(target_os = "windows")]
     pub(super) fn spawn_world_writable_scan(
         cwd: PathBuf,

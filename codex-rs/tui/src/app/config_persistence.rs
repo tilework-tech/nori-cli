@@ -218,6 +218,28 @@ impl App {
             .replace_footer_segments_picker(&nori_config.footer_segment_config);
     }
 
+    #[cfg(feature = "nori-config")]
+    pub(super) async fn persist_file_manager_setting(
+        &mut self,
+        value: codex_acp::config::FileManager,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "file_manager"], toml_value(value.command_name()))
+            .apply()
+            .await
+        {
+            tracing::error!(error = %err, "failed to persist file_manager setting");
+            self.chat_widget
+                .add_error_message(format!("Failed to save file_manager setting: {err}"));
+            return;
+        }
+
+        self.chat_widget.add_info_message(
+            format!("File manager set to {}.", value.display_name()),
+            None,
+        );
+    }
+
     pub(super) async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
         let enum_value = if enabled { "enabled" } else { "disabled" };
 
