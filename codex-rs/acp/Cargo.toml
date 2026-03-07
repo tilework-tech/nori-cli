@@ -12,14 +12,14 @@ unstable = []
 workspace = true
 
 [dependencies]
-agent-client-protocol = { version = "0.9.4", features = ["unstable"] }
+agent-client-protocol-schema = { version = "0.10.8", features = ["unstable"] }
 anyhow = { workspace = true }
+sacp = { workspace = true }
 base64 = { workspace = true }
 codex-core = { workspace = true }
 codex-git = { workspace = true }
 codex-protocol = { path = "../protocol" }
 codex-utils-string = { workspace = true }
-async-trait = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

@@ -24,7 +24,7 @@ The ACP crate serves as a bridge between:
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
-- `connection.rs` - Subprocess spawning and JSON-RPC communication
+- `connection/` - SACP v10-based subprocess spawning and JSON-RPC communication
 - `translator.rs` - Bidirectional protocol translation: ACP session updates to Codex events, and Codex `UserInput` items to ACP `ContentBlock`s (including image conversion)
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -476,7 +476,31 @@ FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
     v
 Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
-**Connection Management** (`connection.rs`):
+**Connection Management** (`connection/`):
+
+The ACP connection layer uses SACP v10 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
+
+```
+┌─────────────────────────┐   SACP v10 (JSON-RPC)   ┌─────────────────────────┐
+│   Main Tokio Runtime    │◄────────────────────────►│  ACP Agent Subprocess   │
+│                         │   stdin/stdout           │  (spawned child process)│
+│   SacpConnection        │                          │                         │
+│   - spawn()             │                          │  Receives:              │
+│   - create_session()    │                          │  - InitializeRequest    │
+│   - load_session()      │                          │  - NewSessionRequest    │
+│   - prompt()            │                          │  - PromptRequest        │
+│   - cancel()            │                          │  - CancelNotification   │
+│   - set_model() [unst]  │                          │                         │
+└─────────────────────────┘                          └─────────────────────────┘
+```
+
+**Builder-based handler registration:** `SacpConnection::spawn()` uses `ClientToAgent::builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `run_until()` is called.
+
+**Connection initialization:** Inside `run_until()`, the connection sends `InitializeRequest` to the agent, validates the protocol version (minimum V1), and clones the `JrConnectionCx` out of the closure via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
+
+**Dynamic update channel routing:** Session notifications from the agent are routed via `Arc<Mutex<Option<Sender<SessionUpdate>>>>`. During a prompt, the sender is set to the caller's `update_tx`; between turns, it is `None` and notifications fall through to the persistent channel. This swap happens in `prompt()` and `load_session()`.
+
+**Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the `approval_tx` channel, and spawns a concurrent task via `cx.spawn()` to wait for the user's response. The spawn avoids blocking the SACP dispatch loop while the UI collects user input.
 
 ### Transcript Persistence
 
@@ -634,49 +658,25 @@ The `init_rolling_file_tracing()` function in `@/codex-rs/acp/src/tracing_setup.
 
 ### Core Implementation
 
-**Thread-Safe Connection Wrapper (`connection.rs`):**
-
-The ACP library uses `LocalBoxFuture` which is `!Send`.
-The solution is a thread-safe wrapper pattern:
-
-```
-┌─────────────────────────┐   mpsc channels     ┌─────────────────────────┐
-│   Main Tokio Runtime    │◄───────────────────►│  ACP Worker Thread      │
-│                         │  AcpCommand enum    │  (single-threaded RT)   │
-│   AcpConnection         │                     │                         │
-│   - spawn()             │  ────────────────►  │  AcpConnectionInner     │
-│   - create_session()    │  CreateSession      │  - ClientDelegate       │
-│   - load_session()      │  LoadSession        │                         │
-│   - prompt()            │  Prompt             │  - run_command_loop()   │
-│   - cancel()            │  Cancel             │  - model_state Arc      │
-│   - set_model() [unst]  │  SetModel [unstable]│                         │
-└─────────────────────────┘                     └─────────────────────────┘
-```
-
 **Subprocess Lifecycle Management:**
 
 Multi-layer cleanup strategy for robust process termination:
 
 1. **Process Group Isolation (Unix)**: Agent spawns in own process group via `setpgid(0, 0)`. Enables killing entire process tree with `killpg()`.
-
 2. **Kernel-Level Parent Death Signal (Linux)**: `PR_SET_PDEATHSIG` set to `SIGTERM`. Guarantees agent receives signal if parent crashes.
+3. **Process Group Kill**: On drop, `SIGKILL` is sent to the entire process group via `kill_child_process_group()`, ensuring grandchildren are terminated.
+4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process. No blocking wait is required because SACP v10's `ClientToAgent` is `Send + Sync` and runs as a regular tokio task.
 
-3. **IO Task Abort**: Explicit abort before killing child prevents hanging on orphaned file descriptors.
+**Environment Isolation** (`sacp_connection.rs`):
 
-4. **Process Group Kill**: `SIGKILL` to entire process group ensures grandchildren are terminated.
+`CODEX_HOME` is explicitly stripped from the subprocess environment via `.env_remove("CODEX_HOME")` in `SacpConnection::spawn()`. Nori sets `CODEX_HOME=~/.nori/cli` in its own process so its config loader finds the right directory. Third-party ACP agents inherit the parent environment and use the upstream Codex config parser, which cannot parse Nori-specific TOML fields like `[[agents]]` -- causing a parse error on startup. Stripping `CODEX_HOME` before spawn causes those agents to fall back to their own default config paths. Custom agents defined under `[[agents]]` in Nori's config are unaffected because they communicate via the ACP protocol, not by reading Nori's config files.
 
-5. **Synchronous Drop Cleanup**: `Drop` waits for completion signal (2-second timeout) before returning.
+**File Operation Security Boundaries** (`sacp_connection.rs`):
 
-**Environment Isolation (`worker.rs`):**
+File operation handlers are registered as `.on_receive_request()` handlers during connection setup:
 
-`CODEX_HOME` is explicitly stripped from the subprocess environment via `.env_remove("CODEX_HOME")` in `spawn_connection_internal()`. Nori sets `CODEX_HOME=~/.nori/cli` in its own process so its config loader finds the right directory. Third-party ACP agents (e.g. `@zed-industries/codex-acp`) inherit the parent environment and use the upstream Codex config parser, which cannot parse Nori-specific TOML fields like `[[agents]]` -- causing a parse error on startup. Stripping `CODEX_HOME` before spawn causes those agents to fall back to their own default config paths. Custom agents defined under `[[agents]]` in Nori's config are unaffected because they communicate via the ACP protocol, not by reading Nori's config files.
-
-**File Write Security Boundaries** (`ClientDelegate`):
-
-- Workspace writes: Any path within or under the workspace directory
-- Temporary writes: Any path under `/tmp` directory
-- System paths: All other paths are rejected
-- Path canonicalization prevents symlink-based directory traversal attacks
+- **WriteTextFileRequest**: Writes are restricted to the workspace directory (canonicalized cwd) or `/tmp`. Path canonicalization prevents symlink-based directory traversal. Parent directories are created if needed. A synthetic `ToolCall` `SessionUpdate` is emitted for TUI rendering.
+- **ReadTextFileRequest**: Reads are unrestricted -- relative paths are resolved against cwd. A synthetic `ToolCall` `SessionUpdate` is emitted for TUI rendering.
 
 **Session Transcript Parsing** (`session_parser.rs`):
 
@@ -743,12 +743,12 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 AcpBackend::resume_session(config, acp_session_id, transcript, event_tx)
     |
     v
-AcpConnection::spawn() -> check capabilities().load_session
+SacpConnection::spawn() -> check capabilities().load_session
     |
     ├── Agent supports session/load AND acp_session_id is Some:
     │       |
     │       v
-    │   AcpConnection::load_session(session_id, cwd, update_tx)
+    │   SacpConnection::load_session(session_id, cwd, update_tx)
     │       |
     │       ├── Success:
     │       │   Agent streams SessionUpdate notifications (history replay)
@@ -763,7 +763,7 @@ AcpConnection::spawn() -> check capabilities().load_session
     └── Otherwise (client-side replay fallback):
             |
             v
-        AcpConnection::create_session() (normal session/new)
+        SacpConnection::create_session() (normal session/new)
             |
             v
         transcript_to_replay_events() -> initial_messages (for TUI display)
@@ -779,7 +779,7 @@ SessionConfigured event sent to TUI (with initial_messages if client-side)
 Deferred replay relay spawned (sends buffered events to event_tx)
 ```
 
-**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the translated codex `Event`s into a `Vec` (using `translate_session_update_to_events()`). The `LoadSession` command in `connection.rs` registers the `update_tx` channel with the `ClientDelegate` before calling `load_session()`, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to `event_tx`. This deferred-relay pattern prevents a deadlock: the `event_tx` channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
+**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the translated codex `Event`s into a `Vec` (using `translate_session_update_to_events()`). `SacpConnection::load_session()` installs the `update_tx` channel into the shared `active_update_tx` slot before sending the request, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to `event_tx`. This deferred-relay pattern prevents a deadlock: the `event_tx` channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
 - `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history
@@ -791,7 +791,7 @@ A new `TranscriptRecorder` is created for the resumed session in all paths, pers
 
 On the first user prompt of a session, the ACP backend spawns a fire-and-forget task that generates a short summary of the prompt and emits it as a `PromptSummary` event for display in the TUI footer.
 
-The summarization uses a completely separate ACP connection (`AcpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/mod.rs` handles this:
+The summarization uses a completely separate ACP connection (`SacpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/mod.rs` handles this:
 1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
@@ -850,7 +850,7 @@ Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `event_translation.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `client_delegate.rs`, `public_api.rs`, `worker.rs`, `tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `event_translation.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1
