@@ -172,7 +172,8 @@ pub fn translate_session_update(update: acp::SessionUpdate) -> Vec<TranslatedEve
             vec![]
         }
         acp::SessionUpdate::Plan(_plan) => {
-            // Plans are agent-internal state
+            // Plans are handled by translate_session_update_to_events() in event_translation.rs
+            // which produces EventMsg::PlanUpdate. This simpler translator only handles text replay.
             vec![]
         }
         acp::SessionUpdate::UserMessageChunk(_) => {

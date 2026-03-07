@@ -776,6 +776,20 @@ Late-arriving tool events that race past the agent's final response are handled 
 | `Search` | `ParsedCommand::Search` | Exploring (compact, grouped) |
 | `Execute`, `Edit`, `Delete`, etc. | `ParsedCommand::Unknown` | Command (full display) |
 
+**Plan Event Translation:**
+
+ACP agents emit `SessionUpdate::Plan` events containing checklist/task entries. The `translate_session_update_to_events()` function in `event_translation.rs` maps these to `EventMsg::PlanUpdate(UpdatePlanArgs)`, enabling the TUI's existing `PlanUpdateCell` (in `@/codex-rs/tui/src/history_cell/mod.rs`) to render them as checkbox checklists.
+
+Each `acp::PlanEntry` is mapped to a `codex_protocol::plan_tool::PlanItemArg`:
+
+| ACP Field | Internal Field | Notes |
+|-----------|---------------|-------|
+| `PlanEntry.content` | `PlanItemArg.step` | Step description text |
+| `PlanEntry.status` | `PlanItemArg.status` | `Pending`/`InProgress`/`Completed` mapped 1:1; unknown variants default to `Pending` |
+| `PlanEntry.priority` | (dropped) | Not present in the internal `PlanItemArg` type |
+
+The simpler `translator.rs` `translate_session_update()` function (used only for text replay in its own module, not production event flow) still returns `vec![]` for Plan events since its `TranslatedEvent` enum only supports `TextDelta`/`Completed`.
+
 **Conversation Compaction:**
 
 Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
