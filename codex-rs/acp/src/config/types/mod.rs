@@ -299,6 +299,104 @@ impl NotifyAfterIdle {
 }
 
 // ============================================================================
+// Auto Worktree Configuration
+// ============================================================================
+
+/// Whether to automatically create a git worktree at session start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AutoWorktree {
+    /// Always create a worktree automatically.
+    Automatic,
+    /// Ask the user at session start whether to create a worktree.
+    Ask,
+    /// Never create a worktree automatically.
+    #[default]
+    Off,
+}
+
+impl AutoWorktree {
+    /// Human-readable name for display in the TUI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Automatic => "Automatic",
+            Self::Ask => "Ask",
+            Self::Off => "Off",
+        }
+    }
+
+    /// TOML string representation for persistence.
+    pub fn toml_value(&self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Ask => "ask",
+            Self::Off => "off",
+        }
+    }
+
+    /// All variants in order, for building picker UIs.
+    pub fn all_variants() -> &'static [AutoWorktree] {
+        &[Self::Automatic, Self::Ask, Self::Off]
+    }
+
+    /// Returns true if a worktree should be created (either automatically or
+    /// after asking and getting confirmation).
+    pub fn is_enabled(&self) -> bool {
+        matches!(self, Self::Automatic | Self::Ask)
+    }
+}
+
+impl Serialize for AutoWorktree {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.toml_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for AutoWorktree {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct AutoWorktreeVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for AutoWorktreeVisitor {
+            type Value = AutoWorktree;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a boolean or one of \"automatic\", \"ask\", \"off\"")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<AutoWorktree, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(if value {
+                    AutoWorktree::Automatic
+                } else {
+                    AutoWorktree::Off
+                })
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<AutoWorktree, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "automatic" => Ok(AutoWorktree::Automatic),
+                    "ask" => Ok(AutoWorktree::Ask),
+                    "off" => Ok(AutoWorktree::Off),
+                    _ => Err(E::unknown_variant(value, &["automatic", "ask", "off"])),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(AutoWorktreeVisitor)
+    }
+}
+
+// ============================================================================
 // Script Timeout Configuration
 // ============================================================================
 
@@ -1094,7 +1192,7 @@ pub struct TuiConfigToml {
     pub loop_count: Option<i32>,
 
     /// Automatically create a git worktree at session start.
-    pub auto_worktree: Option<bool>,
+    pub auto_worktree: Option<AutoWorktree>,
 
     /// Enable per-session skillset isolation.
     pub skillset_per_session: Option<bool>,
@@ -1205,7 +1303,7 @@ pub struct NoriConfig {
     pub loop_count: Option<i32>,
 
     /// Automatically create a git worktree at session start.
-    pub auto_worktree: bool,
+    pub auto_worktree: AutoWorktree,
 
     /// Enable per-session skillset isolation.
     pub skillset_per_session: bool,
@@ -1294,7 +1392,7 @@ impl Default for NoriConfig {
             hotkeys: HotkeyConfig::default(),
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
-            auto_worktree: false,
+            auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),

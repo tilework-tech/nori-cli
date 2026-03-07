@@ -133,9 +133,12 @@ pub async fn switch_skillset(name: &str, install_dir: &std::path::Path) -> Resul
 /// * `skillset_names` - List of available skillset names
 /// * `install_dir` - When `Some`, sends `SwitchSkillset` with the given directory;
 ///   when `None`, sends `InstallSkillset` for backward compatibility.
+/// * `on_dismiss` - Optional callback fired when the picker is dismissed without
+///   selection (e.g. via Escape or Ctrl-C).
 pub fn skillset_picker_params(
     skillset_names: Vec<String>,
     install_dir: Option<PathBuf>,
+    on_dismiss: Option<SelectionAction>,
 ) -> SelectionViewParams {
     let items: Vec<SelectionItem> = skillset_names
         .into_iter()
@@ -169,13 +172,20 @@ pub fn skillset_picker_params(
         })
         .collect();
 
+    let subtitle = if let Some(ref dir) = install_dir {
+        format!("Switching skillset in {}", dir.display())
+    } else {
+        "Install a skillset to customize Nori's capabilities".to_string()
+    };
+
     SelectionViewParams {
         title: Some("Select Skillset".to_string()),
-        subtitle: Some("Install a skillset to customize Nori's capabilities".to_string()),
+        subtitle: Some(subtitle),
         footer_hint: Some(standard_popup_hint_line()),
         items,
-        is_searchable: true,
-        search_placeholder: Some("Search skillsets...".to_string()),
+        // Search is disabled because skillset items don't populate `search_value`.
+        is_searchable: false,
+        on_dismiss,
         ..Default::default()
     }
 }
@@ -252,7 +262,7 @@ mod tests {
             "web-frontend".to_string(),
         ];
 
-        let params = skillset_picker_params(names, None);
+        let params = skillset_picker_params(names, None, None);
 
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Skillset"));
@@ -265,24 +275,15 @@ mod tests {
     #[test]
     fn test_skillset_picker_params_empty_list() {
         let names: Vec<String> = vec![];
-        let params = skillset_picker_params(names, None);
+        let params = skillset_picker_params(names, None, None);
 
         assert!(params.items.is_empty());
     }
 
     #[test]
-    fn test_skillset_picker_is_searchable() {
-        let names = vec!["test".to_string()];
-        let params = skillset_picker_params(names, None);
-
-        assert!(params.is_searchable);
-        assert!(params.search_placeholder.is_some());
-    }
-
-    #[test]
     fn test_skillset_picker_items_dismiss_on_select() {
         let names = vec!["test".to_string()];
-        let params = skillset_picker_params(names, None);
+        let params = skillset_picker_params(names, None, None);
 
         assert!(params.items[0].dismiss_on_select);
     }
@@ -290,7 +291,7 @@ mod tests {
     #[test]
     fn test_skillset_picker_action_sends_install_event() {
         let names = vec!["my-skillset".to_string()];
-        let params = skillset_picker_params(names, None);
+        let params = skillset_picker_params(names, None, None);
 
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -313,7 +314,7 @@ mod tests {
     fn test_skillset_picker_with_install_dir_sends_switch_event() {
         let names = vec!["my-skillset".to_string()];
         let dir = PathBuf::from("/tmp/worktree");
-        let params = skillset_picker_params(names, Some(dir));
+        let params = skillset_picker_params(names, Some(dir), None);
 
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -343,7 +344,7 @@ mod tests {
             "python-ml".to_string(),
             "web-frontend".to_string(),
         ];
-        let params = skillset_picker_params(names, None);
+        let params = skillset_picker_params(names, None, None);
 
         for item in &params.items {
             assert_eq!(
@@ -353,6 +354,37 @@ mod tests {
                 item.name
             );
         }
+    }
+
+    #[test]
+    fn test_skillset_picker_dismiss_sends_event() {
+        // When skillset_per_session is enabled and the user dismisses the
+        // skillset picker (Escape/Ctrl-C), a SkillsetPickerDismissed event
+        // should be sent so the deferred agent can spawn.
+        use crate::bottom_pane::BottomPaneView;
+        use crate::bottom_pane::ListSelectionView;
+
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let names = vec!["my-skillset".to_string()];
+        let on_dismiss: crate::bottom_pane::SelectionAction = Box::new(move |tx| {
+            tx.send(AppEvent::SkillsetPickerDismissed);
+        });
+        let params =
+            skillset_picker_params(names, Some(PathBuf::from("/tmp/test")), Some(on_dismiss));
+
+        let mut view = ListSelectionView::new(params, tx);
+
+        // Dismiss the picker
+        view.on_ctrl_c();
+
+        // Verify the SkillsetPickerDismissed event was sent
+        let event = rx.try_recv().expect("Should have received an event");
+        assert!(
+            matches!(event, AppEvent::SkillsetPickerDismissed),
+            "Expected SkillsetPickerDismissed event, got {event:?}"
+        );
     }
 
     #[test]

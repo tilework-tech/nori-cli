@@ -3,6 +3,7 @@
 //! This module provides the UI for modifying TUI configuration settings
 //! that are persisted to ~/.nori/cli/config.toml.
 
+use codex_acp::config::AutoWorktree;
 use codex_acp::config::FooterSegment;
 use codex_acp::config::FooterSegmentConfig;
 use codex_acp::config::NoriConfig;
@@ -82,34 +83,25 @@ pub fn config_picker_params(
                 }
             },
         ),
-        if config.skillset_per_session {
-            // Auto Worktree is locked on when Per Session Skillsets is enabled
-            let actions: Vec<SelectionAction> = vec![Box::new(|_tx| {
-                // No-op: cannot toggle while skillset_per_session is enabled
+        {
+            let current_mode = config.auto_worktree;
+            let display_name = format!(
+                "Auto Worktree ({})",
+                current_mode.display_name().to_lowercase()
+            );
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenAutoWorktreePicker);
+                }
             })];
             SelectionItem {
-                name: "Auto Worktree (on, required by Per Session Skillsets)".to_string(),
-                description: Some(
-                    "Cannot be disabled while Per Session Skillsets is enabled".to_string(),
-                ),
-                is_current: true,
+                name: display_name,
+                description: Some("Create a git worktree at session start".to_string()),
+                is_current: false,
                 actions,
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        } else {
-            build_toggle_item(
-                "Auto Worktree",
-                "Automatically create a git worktree at session start",
-                config.auto_worktree,
-                {
-                    let tx = app_event_tx.clone();
-                    let new_value = !config.auto_worktree;
-                    move || {
-                        tx.send(AppEvent::SetConfigAutoWorktree(new_value));
-                    }
-                },
-            )
         },
         {
             let skillset_per_session = config.skillset_per_session;
@@ -128,15 +120,13 @@ pub fn config_picker_params(
                         ),
                     )));
                 } else {
-                    // Toggle on
-                    tx.send(AppEvent::SetConfigSkillsetPerSession(true));
+                    // Open the worktree choice modal
+                    tx.send(AppEvent::OpenSkillsetPerSessionWorktreeChoice);
                 }
             })];
             SelectionItem {
                 name: display_name,
-                description: Some(
-                    "Use unique skillsets for each session (requires Auto Worktree)".to_string(),
-                ),
+                description: Some("Use unique skillsets for each session".to_string()),
                 is_current: skillset_per_session,
                 actions,
                 dismiss_on_select: true,
@@ -243,6 +233,55 @@ pub fn config_picker_params(
     }
 }
 
+/// Create selection view parameters for the skillset per-session worktree choice.
+///
+/// Presents two options: enable per-session skillsets with or without auto-worktrees.
+///
+/// # Arguments
+/// * `app_event_tx` - The app event sender for triggering config change events
+pub fn skillset_worktree_choice_params(app_event_tx: AppEventSender) -> SelectionViewParams {
+    let tx_with = app_event_tx.clone();
+    let tx_without = app_event_tx;
+
+    let items: Vec<SelectionItem> = vec![
+        SelectionItem {
+            name: "With Auto Worktrees".to_string(),
+            description: Some(
+                "Each session gets an isolated git worktree. Skillsets are installed per-worktree."
+                    .to_string(),
+            ),
+            is_current: false,
+            actions: vec![Box::new(move |_tx| {
+                tx_with.send(AppEvent::SetConfigSkillsetPerSession(true));
+                tx_with.send(AppEvent::SetConfigAutoWorktree(AutoWorktree::Automatic));
+            })],
+            dismiss_on_select: true,
+            ..Default::default()
+        },
+        SelectionItem {
+            name: "Without Auto Worktrees".to_string(),
+            description: Some(
+                "Skillsets are installed in the current directory. You are responsible for managing installed skillset files."
+                    .to_string(),
+            ),
+            is_current: false,
+            actions: vec![Box::new(move |_tx| {
+                tx_without.send(AppEvent::SetConfigSkillsetPerSession(true));
+            })],
+            dismiss_on_select: true,
+            ..Default::default()
+        },
+    ];
+
+    SelectionViewParams {
+        title: Some("Per Session Skillsets".to_string()),
+        subtitle: Some("Choose how skillsets are managed per session".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 /// Build a toggle-style selection item.
 fn build_toggle_item<F>(
     name: &str,
@@ -266,6 +305,51 @@ where
         is_current: is_enabled,
         actions,
         dismiss_on_select: true,
+        ..Default::default()
+    }
+}
+
+/// Create selection view parameters for the auto-worktree sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently selected AutoWorktree variant
+/// * `app_event_tx` - The app event sender for triggering config change events
+pub fn auto_worktree_picker_params(
+    current: AutoWorktree,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = AutoWorktree::all_variants()
+        .iter()
+        .map(|&variant| {
+            let is_current = variant == current;
+            let description = match variant {
+                AutoWorktree::Automatic => {
+                    Some("Always create a worktree at session start".to_string())
+                }
+                AutoWorktree::Ask => Some("Prompt before creating a worktree".to_string()),
+                AutoWorktree::Off => Some("Never create a worktree automatically".to_string()),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::SetConfigAutoWorktree(variant));
+                }
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Auto Worktree".to_string()),
+        subtitle: Some("Create a git worktree at session start".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
         ..Default::default()
     }
 }
@@ -419,7 +503,7 @@ mod tests {
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             script_timeout: codex_acp::config::ScriptTimeout::default(),
             loop_count: None,
-            auto_worktree: false,
+            auto_worktree: codex_acp::config::AutoWorktree::Off,
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
@@ -482,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_eight_items() {
+    fn config_picker_returns_expected_item_count() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
@@ -903,23 +987,208 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_auto_worktree_locked_when_skillset_per_session() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    fn config_picker_auto_worktree_shows_current_mode_and_opens_picker() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let mut config = make_test_config(false);
-        config.skillset_per_session = true;
+        config.auto_worktree = codex_acp::config::AutoWorktree::Automatic;
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx.clone());
 
         let auto_worktree_item = params
             .items
             .iter()
             .find(|item| item.name.contains("Auto Worktree"))
             .expect("should have Auto Worktree item");
+        // Should show the current mode in the display name
         assert!(
-            auto_worktree_item.name.contains("required"),
-            "Auto Worktree should show 'required' when skillset_per_session is true, got: {}",
+            auto_worktree_item.name.contains("(automatic)"),
+            "Auto Worktree should show '(automatic)', got: {}",
             auto_worktree_item.name
         );
+
+        // Clicking should open the sub-picker
+        for action in &auto_worktree_item.actions {
+            action(&tx);
+        }
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenAutoWorktreePicker),
+            "expected OpenAutoWorktreePicker event, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn auto_worktree_picker_lists_all_variants_and_sends_correct_events() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = auto_worktree_picker_params(codex_acp::config::AutoWorktree::Off, tx.clone());
+
+        // Should have 3 items: Automatic, Ask, Off
+        assert_eq!(params.items.len(), 3, "should have 3 auto worktree options");
+
+        // Off should be marked as current
+        let off_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Off"))
+            .expect("should have Off item");
+        assert!(off_item.is_current, "Off should be marked as current");
+
+        // Select "Automatic" - should send correct event
+        let auto_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Automatic"))
+            .expect("should have Automatic item");
+        assert!(
+            !auto_item.is_current,
+            "Automatic should not be marked as current"
+        );
+        for action in &auto_item.actions {
+            action(&tx);
+        }
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(
+                event,
+                AppEvent::SetConfigAutoWorktree(codex_acp::config::AutoWorktree::Automatic)
+            ),
+            "expected SetConfigAutoWorktree(Automatic), got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn config_picker_enabling_skillset_per_session_opens_worktree_choice() {
+        if !super::skillset_picker::is_nori_skillsets_available() {
+            // Skip: nori-skillsets not installed on this machine (e.g. CI).
+            return;
+        }
+
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let per_session_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Per Session Skillsets"))
+            .expect("should have Per Session Skillsets item");
+
+        // When skillset_per_session is off, clicking should open the worktree choice modal
+        for action in &per_session_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenSkillsetPerSessionWorktreeChoice),
+            "expected OpenSkillsetPerSessionWorktreeChoice, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn config_picker_disabling_skillset_per_session_sends_direct_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.skillset_per_session = true;
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let per_session_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Per Session Skillsets"))
+            .expect("should have Per Session Skillsets item");
+
+        // When skillset_per_session is on, clicking should directly toggle off
+        for action in &per_session_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::SetConfigSkillsetPerSession(false)),
+            "expected SetConfigSkillsetPerSession(false), got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn skillset_worktree_choice_with_worktrees_sends_both_events() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = skillset_worktree_choice_params(tx.clone());
+
+        // Select "With Auto Worktrees"
+        for action in &params.items[0].actions {
+            action(&tx);
+        }
+
+        let event1 = rx.try_recv().expect("should receive first event");
+        let event2 = rx.try_recv().expect("should receive second event");
+
+        assert!(
+            matches!(event1, AppEvent::SetConfigSkillsetPerSession(true)),
+            "expected SetConfigSkillsetPerSession(true), got: {event1:?}"
+        );
+        assert!(
+            matches!(
+                event2,
+                AppEvent::SetConfigAutoWorktree(codex_acp::config::AutoWorktree::Automatic)
+            ),
+            "expected SetConfigAutoWorktree(Automatic), got: {event2:?}"
+        );
+    }
+
+    #[test]
+    fn skillset_worktree_choice_without_worktrees_sends_only_skillset_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = skillset_worktree_choice_params(tx.clone());
+
+        // Select "Without Auto Worktrees"
+        for action in &params.items[1].actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::SetConfigSkillsetPerSession(true)),
+            "expected SetConfigSkillsetPerSession(true), got: {event:?}"
+        );
+
+        // No second event should be sent
+        assert!(
+            rx.try_recv().is_err(),
+            "should NOT receive a second event for auto_worktree"
+        );
+    }
+
+    #[test]
+    fn config_picker_per_session_description_does_not_say_requires() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx);
+
+        let per_session_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Per Session Skillsets"))
+            .expect("should have Per Session Skillsets item");
+
+        if let Some(desc) = &per_session_item.description {
+            assert!(
+                !desc.contains("requires Auto Worktree"),
+                "description should not say 'requires Auto Worktree', got: {desc}"
+            );
+        }
     }
 }

@@ -102,6 +102,7 @@ async fn helpers_are_available_and_do_not_panic() {
         auth_manager,
         vertical_footer: false,
         expected_agent: None,
+        deferred_spawn: false,
     };
     let mut w = ChatWidget::new(init, conversation_manager);
     // Basic construction sanity.

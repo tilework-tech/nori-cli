@@ -322,6 +322,10 @@ pub(crate) struct ChatWidgetInit {
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
     pub(crate) expected_agent: Option<String>,
+    /// When true, skip spawning the agent in `new()`. The caller must later
+    /// call `spawn_deferred_agent()` once pre-session setup (e.g., skillset
+    /// switch) is complete.
+    pub(crate) deferred_spawn: bool,
 }
 
 pub(crate) struct ChatWidget {

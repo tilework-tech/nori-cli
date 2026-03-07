@@ -7,12 +7,15 @@ expression: normalize_for_input_snapshot(contents)
 
 • Analyzing the code.
 
+• Ran 'Running tests(cargo test)'
+  └ Tests passed
+
+• Ran 'Running lint(cargo clippy)'
+  └ No files found
+
 ────────────────────────────────────────────────────────────────────────────────
 
 • Here is the final analysis result.
-
-• Ran 'Running tests(cargo test)'
-  └ Tests passed
 
 
 › [DEFAULT_PROMPT]

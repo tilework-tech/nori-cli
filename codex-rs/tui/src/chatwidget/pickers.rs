@@ -116,6 +116,16 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the auto-worktree sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_auto_worktree_picker(&mut self, current: codex_acp::config::AutoWorktree) {
+        let params = crate::nori::config_picker::auto_worktree_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the notify-after-idle sub-picker.
     #[cfg(feature = "nori-config")]
     pub(crate) fn open_notify_after_idle_picker(
@@ -159,6 +169,14 @@ impl ChatWidget {
             current,
             self.app_event_tx.clone(),
         );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the worktree choice picker for per-session skillsets.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_skillset_worktree_choice_picker(&mut self) {
+        let params =
+            crate::nori::config_picker::skillset_worktree_choice_params(self.app_event_tx.clone());
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -245,9 +263,17 @@ impl ChatWidget {
             return;
         }
 
-        // Detect if we're in a worktree and pass cwd as the install directory
-        let install_dir = crate::system_info::extract_worktree_name(&self.config.cwd)
-            .map(|_| self.config.cwd.clone());
+        // Detect if we're in a worktree or if skillset_per_session is enabled,
+        // and pass cwd as the install directory
+        let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
+        let skillset_per_session = codex_acp::config::NoriConfig::load()
+            .map(|c| c.skillset_per_session)
+            .unwrap_or(false);
+        let install_dir = if is_in_worktree || skillset_per_session {
+            Some(self.config.cwd.clone())
+        } else {
+            None
+        };
 
         // Spawn async task to list skillsets
         let tx = self.app_event_tx.clone();
@@ -287,8 +313,14 @@ impl ChatWidget {
     ) {
         match (names, error) {
             (Some(names), None) if !names.is_empty() => {
-                let params =
-                    crate::nori::skillset_picker::skillset_picker_params(names, install_dir);
+                let on_dismiss: SelectionAction = Box::new(|tx| {
+                    tx.send(AppEvent::SkillsetPickerDismissed);
+                });
+                let params = crate::nori::skillset_picker::skillset_picker_params(
+                    names,
+                    install_dir,
+                    Some(on_dismiss),
+                );
                 self.bottom_pane.show_selection_view(params);
             }
             (_, Some(error)) => {

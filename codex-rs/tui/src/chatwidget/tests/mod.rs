@@ -28,7 +28,6 @@ use codex_core::protocol::FileChange;
 use codex_core::protocol::Op;
 use codex_core::protocol::PatchApplyBeginEvent;
 use codex_core::protocol::PatchApplyEndEvent;
-use codex_core::protocol::RateLimitWindow;
 use codex_core::protocol::StreamErrorEvent;
 use codex_core::protocol::TaskCompleteEvent;
 use codex_core::protocol::TaskStartedEvent;
@@ -69,18 +68,6 @@ fn test_config() -> Config {
         std::env::temp_dir(),
     )
     .expect("config")
-}
-
-fn snapshot(percent: f64) -> RateLimitSnapshot {
-    RateLimitSnapshot {
-        primary: Some(RateLimitWindow {
-            used_percent: percent,
-            window_minutes: Some(60),
-            resets_at: None,
-        }),
-        secondary: None,
-        credits: None,
-    }
 }
 
 fn drain_insert_history(

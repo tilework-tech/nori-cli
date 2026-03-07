@@ -298,13 +298,21 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigLoopCount(Option<i32>),
 
+    /// Open the auto worktree sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenAutoWorktreePicker,
+
     /// Set the TUI auto worktree config setting.
     #[cfg(feature = "nori-config")]
-    SetConfigAutoWorktree(bool),
+    SetConfigAutoWorktree(codex_acp::config::AutoWorktree),
 
     /// Set the TUI skillset per session config setting.
     #[cfg(feature = "nori-config")]
     SetConfigSkillsetPerSession(bool),
+
+    /// Open the worktree choice modal when enabling per-session skillsets.
+    #[cfg(feature = "nori-config")]
+    OpenSkillsetPerSessionWorktreeChoice,
 
     /// Open the footer segments sub-picker.
     #[cfg(feature = "nori-config")]
@@ -369,6 +377,11 @@ pub(crate) enum AppEvent {
         /// Filtered output on success, or error message on failure.
         message: String,
     },
+
+    /// The skillset picker was dismissed without selection. When agent spawn was
+    /// deferred for skillset_per_session, this triggers spawning the agent
+    /// without a skillset (behaves as if the feature is disabled).
+    SkillsetPickerDismissed,
 
     /// Execute a custom prompt script asynchronously.
     ExecuteScript {

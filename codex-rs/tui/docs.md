@@ -26,7 +26,17 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 ### Core Implementation
 
-Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `codex_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/codex-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning). When `auto_worktree` is enabled in config, `run_main()` calls `codex_acp::auto_worktree::setup_auto_worktree()` and overrides the session's working directory to the new worktree path. On failure, it logs a warning and continues with the original cwd.
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `codex_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/codex-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
+
+The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/codex-rs/acp/docs.md`):
+
+| Variant | Timing | Behavior |
+|---------|--------|----------|
+| `Automatic` | Before TUI init, in `run_main()` | Calls `setup_auto_worktree()` immediately and overrides cwd |
+| `Ask` | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()` |
+| `Off` | N/A | Skips worktree creation entirely |
+
+The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen (same pattern as `update_prompt.rs`) that runs its own event loop before the main `App`. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
 
 The main event loop in `app/mod.rs` processes:
 
@@ -44,7 +54,7 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`,
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. The `InterruptManager` queues these events via `defer_or_handle()` in `chatwidget/event_handlers.rs` so they do not interleave with active text output. The deferral condition is: if a `stream_controller` is active OR the queue is already non-empty, new events are pushed onto the queue to preserve FIFO ordering.
+When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. Tool event handlers call `flush_answer_stream_with_separator()` before `defer_or_handle()` to finalize any in-progress text stream, ensuring tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
 
 One operation consumes the queue:
 
@@ -100,9 +110,9 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 
 | Command | Description |
 |---------|-------------|
-| `/agent` | Switch between available ACP agents |
-| `/model` | Choose model (ACP model picker) |
-| `/approvals` | Choose what Nori can do without approval |
+| `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
+| `/model` | Choose model (dynamically shows current agent/model name) |
+| `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
 | `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments) |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
@@ -120,6 +130,23 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/switch-skillset` | Switch between available skillsets |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
+
+**Slash Command Description Overrides:**
+
+`/agent`, `/model`, and `/approvals` show the current runtime value in parentheses in the slash command popup (e.g., `(current: Mock ACP)`). This is implemented via a `command_description_overrides: HashMap<SlashCommand, String>` that flows through `BottomPane` -> `ChatComposer` -> `CommandPopup`. `BottomPane::set_agent_display_name()` sets overrides for both `/agent` and `/model`; `BottomPane::set_approval_mode_label()` sets the override for `/approvals`. The agent override is populated at startup in `BottomPane::new()` and updated on agent switches. The approval override is set whenever the approval mode changes.
+
+**Selection Popup Row Layout (`bottom_pane/selection_popup_common.rs`):**
+
+`render_rows()` and `measure_rows_height()` are the shared rendering functions used by all selection popups (`ListSelectionView`, `CommandPopup`, `FileSearchPopup`). Each popup item has an optional description that appears alongside the item name. The layout engine chooses between two modes per-row via `wrap_row()`:
+
+| Mode | Condition | Layout |
+|------|-----------|--------|
+| Side-by-side | `total_width - desc_col >= MIN_DESC_COLUMNS` (12) | Description starts at `desc_col` on the same line as the name, wrapped lines indented to `desc_col` |
+| Stacked | `total_width - desc_col < MIN_DESC_COLUMNS` | Name on its own line(s), description on separate line(s) below with 4-space indent |
+
+The `desc_col` is computed once per render pass from the widest visible name plus 2 columns of padding. The stacked fallback prevents descriptions from being squeezed into 1-2 characters of horizontal space on narrow terminals. Because both `render_rows()` and `measure_rows_height()` call the same `wrap_row()` function, layout and height calculation are always consistent.
+
+`SelectionViewParams` supports an optional `on_dismiss: Option<SelectionAction>` callback that fires when the picker is dismissed without selection (Escape or Ctrl-C). The callback is invoked in `ListSelectionView::on_ctrl_c()` before marking the view as complete. It does not fire when the user makes a selection via `accept()`. This is used by the skillset picker to send `SkillsetPickerDismissed` when the deferred agent spawn needs a fallback trigger.
 
 **Undo Snapshot Picker (`/undo`):**
 
@@ -182,15 +209,15 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
 
-The worktree context is detected by `handle_switch_skillset_command()`: if the cwd's parent directory is named `.worktrees`, the cwd is passed as `install_dir`. This enables per-worktree skillset installation.
+The worktree context is detected by `handle_switch_skillset_command()`: if the cwd's parent directory is named `.worktrees`, the cwd is passed as `install_dir`. When `skillset_per_session` is enabled, the cwd is used as `install_dir` even when not in a worktree. This enables per-worktree or per-session skillset installation.
 
-When `skillset_per_session` is enabled in `NoriConfig` and the session is in a worktree, the skillset picker is automatically triggered at startup in `App::run()`.
+When `skillset_per_session` is enabled in `NoriConfig`, the skillset picker is automatically triggered at startup in `App::run()`, regardless of whether the session is in a worktree. The agent spawn is deferred (`ChatWidgetInit::deferred_spawn = true`) so that `nori-skillsets switch` can write `.claude/CLAUDE.md` to disk before the agent reads it. During the deferred period, a dummy channel is created in `constructors.rs` so the widget has a valid `op_tx`. The real agent spawns after the user picks a skillset (`SkillsetSwitchResult` triggers `spawn_deferred_agent()`). If the user dismisses the picker without selecting a skillset (Escape/Ctrl-C), the picker's `on_dismiss` callback sends `AppEvent::SkillsetPickerDismissed`, which also triggers `spawn_deferred_agent()` -- the agent starts without a skillset, behaving as if the feature were disabled. The `server_for_deferred_spawn` field on `App` holds the `ConversationManager` until one of these paths consumes it via `.take()`.
 
-Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`), `AppEvent::InstallSkillset`, `AppEvent::SwitchSkillset`, `AppEvent::SkillsetInstallResult`, `AppEvent::SkillsetSwitchResult`
+Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`), `AppEvent::InstallSkillset`, `AppEvent::SwitchSkillset`, `AppEvent::SkillsetInstallResult`, `AppEvent::SkillsetSwitchResult`, `AppEvent::SkillsetPickerDismissed`, `AppEvent::OpenSkillsetPerSessionWorktreeChoice`
 
-The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it emits `AppEvent::SetConfigSkillsetPerSession`, which is handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`. When per-session skillsets is enabled, the "Auto Worktree" item in the config picker is locked to "on (required)" and its toggle callback is a no-op, because `skillset_per_session` forces `auto_worktree = true` at the config resolution layer (see `@/codex-rs/acp/src/config/loader.rs`).
+The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it on emits `AppEvent::OpenSkillsetPerSessionWorktreeChoice`, which opens a worktree choice modal (`skillset_worktree_choice_params()`) letting the user choose between "With Auto Worktrees" (sets `auto_worktree` to `Automatic`) and "Without Auto Worktrees". Toggling it off emits `AppEvent::SetConfigSkillsetPerSession`, handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`.
 
-As a defense-in-depth measure, the `SetConfigAutoWorktree(false)` handler in `app/event_handling.rs` also reloads the config and blocks the disable if `skillset_per_session` is currently enabled, displaying an info message to the user.
+The "Auto Worktree" item in `/config` uses a sub-picker pattern (matching Notify After Idle / Script Timeout): selecting the config item emits `AppEvent::OpenAutoWorktreePicker`, which opens a second selection view listing all `AutoWorktree` variants (`Automatic`, `Ask`, `Off`) with radio-select style (current variant marked). The config item's display name shows the current mode in parentheses (e.g. "Auto Worktree (automatic)"). Selecting a variant emits `AppEvent::SetConfigAutoWorktree(variant)`, persisted via `persist_auto_worktree_setting()` which writes the string value (e.g. `"automatic"`, `"ask"`, `"off"`) to `[tui]` in `config.toml`.
 
 The `session_skillset_name` field propagates through the widget hierarchy: `ChatWidget` -> `BottomPane` -> `ChatComposer` -> `Footer`. In the footer, `session_skillset_name` takes priority over `nori_profile` from `SystemInfo` for the skillset display segment.
 
@@ -336,7 +363,7 @@ Token data flows from `TranscriptLocation.token_breakdown` (provided by `codex_a
 
 The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `footer_segments()` renderer.
 
-The TUI detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree` is enabled and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`). The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
+The TUI detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`). The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
 
 **External Editor Integration (`editor.rs`):**
 

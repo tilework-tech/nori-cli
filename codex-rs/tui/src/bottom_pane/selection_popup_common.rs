@@ -11,16 +11,26 @@ use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthChar;
 
 use crate::key_hint::KeyBinding;
+use crate::render::line_utils::line_to_static;
+use crate::wrapping::RtOptions;
+use crate::wrapping::word_wrap_line;
 
 use super::scroll_state::ScrollState;
+
+/// Minimum number of columns the description needs to be rendered side-by-side
+/// with the name. Below this threshold, the description is stacked below the
+/// name on its own line(s) instead.
+const MIN_DESC_COLUMNS: usize = 12;
+
+/// Indent used for description text when stacked below the name.
+const STACKED_DESC_INDENT: &str = "    ";
 
 /// A generic representation of a display row for selection popups.
 pub(crate) struct GenericDisplayRow {
     pub name: String,
     pub display_shortcut: Option<KeyBinding>,
     pub match_indices: Option<Vec<usize>>, // indices to bold (char positions)
-    pub is_current: bool,
-    pub description: Option<String>, // optional grey text after the name
+    pub description: Option<String>,       // optional grey text after the name
 }
 
 /// Compute a shared description-column start based on the widest visible name
@@ -47,14 +57,15 @@ fn compute_desc_col(
     desc_col
 }
 
-/// Build the full display line for a row with the description padded to start
-/// at `desc_col`. Applies fuzzy-match bolding when indices are present and
-/// dims the description.
-fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
-    // Enforce single-line name: allow at most desc_col - 2 cells for name,
-    // reserving two spaces before the description column.
-    let name_limit = desc_col.saturating_sub(2);
+/// Returns true if the description should be stacked below the name rather than
+/// placed side-by-side, because there isn't enough horizontal room.
+fn should_stack_description(desc_col: usize, total_width: usize) -> bool {
+    total_width.saturating_sub(desc_col) < MIN_DESC_COLUMNS
+}
 
+/// Build the name-only portion of a row (no description). Used for both
+/// side-by-side and stacked layouts.
+fn build_name_spans(row: &GenericDisplayRow, name_limit: usize) -> (Vec<Span<'static>>, bool) {
     let mut name_spans: Vec<Span> = Vec::with_capacity(row.name.len());
     let mut used_width = 0usize;
     let mut truncated = false;
@@ -89,10 +100,21 @@ fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
     }
 
     if truncated {
-        // If there is at least one cell available, add an ellipsis.
-        // When name_limit is 0, we still show an ellipsis to indicate truncation.
         name_spans.push("…".into());
     }
+
+    (name_spans, truncated)
+}
+
+/// Build the full display line for a row with the description padded to start
+/// at `desc_col`. Applies fuzzy-match bolding when indices are present and
+/// dims the description.
+fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
+    // Enforce single-line name: allow at most desc_col - 2 cells for name,
+    // reserving two spaces before the description column.
+    let name_limit = desc_col.saturating_sub(2);
+
+    let (name_spans, _truncated) = build_name_spans(row, name_limit);
 
     let this_name_width = Line::from(name_spans.clone()).width();
     let mut full_spans: Vec<Span> = name_spans;
@@ -109,6 +131,56 @@ fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
         full_spans.push(desc.clone().dim());
     }
     Line::from(full_spans)
+}
+
+/// Build a name-only line for stacked layout (no description appended).
+fn build_name_line(row: &GenericDisplayRow, width: usize) -> Line<'static> {
+    let name_limit = width.saturating_sub(1);
+    let (mut name_spans, _truncated) = build_name_spans(row, name_limit);
+    if let Some(display_shortcut) = row.display_shortcut {
+        name_spans.push(" (".into());
+        name_spans.push(display_shortcut.into());
+        name_spans.push(")".into());
+    }
+    Line::from(name_spans)
+}
+
+/// Wrap a single row into output lines, choosing stacked or side-by-side layout.
+fn wrap_row(row: &GenericDisplayRow, desc_col: usize, width: usize) -> Vec<Line<'static>> {
+    let stacked = row.description.is_some() && should_stack_description(desc_col, width);
+
+    if stacked {
+        let name_line = build_name_line(row, width);
+        let name_opts = RtOptions::new(width)
+            .initial_indent(Line::from(""))
+            .subsequent_indent("  ".into());
+        let mut lines: Vec<Line<'static>> = word_wrap_line(&name_line, name_opts)
+            .iter()
+            .map(line_to_static)
+            .collect();
+
+        if let Some(desc) = row.description.as_ref() {
+            let desc_line: Line<'static> = Line::from(desc.clone().dim());
+            let desc_opts = RtOptions::new(width)
+                .initial_indent(STACKED_DESC_INDENT.dim().into())
+                .subsequent_indent(STACKED_DESC_INDENT.dim().into());
+            lines.extend(
+                word_wrap_line(&desc_line, desc_opts)
+                    .iter()
+                    .map(line_to_static),
+            );
+        }
+        lines
+    } else {
+        let full_line = build_full_line(row, desc_col);
+        let options = RtOptions::new(width)
+            .initial_indent(Line::from(""))
+            .subsequent_indent(Line::from(" ".repeat(desc_col)));
+        word_wrap_line(&full_line, options)
+            .iter()
+            .map(line_to_static)
+            .collect()
+    }
 }
 
 /// Render a list of rows using the provided ScrollState, with shared styling
@@ -161,41 +233,16 @@ pub(crate) fn render_rows(
             break;
         }
 
-        let GenericDisplayRow {
-            name,
-            match_indices,
-            display_shortcut,
-            is_current: _is_current,
-            description,
-        } = row;
+        let mut wrapped = wrap_row(row, desc_col, area.width as usize);
 
-        let mut full_line = build_full_line(
-            &GenericDisplayRow {
-                name: name.clone(),
-                match_indices: match_indices.clone(),
-                display_shortcut: *display_shortcut,
-                is_current: *_is_current,
-                description: description.clone(),
-            },
-            desc_col,
-        );
         if Some(i) == state.selected_idx {
-            // Match previous behavior: cyan + bold for the selected row.
-            // Reset the style first to avoid inheriting dim from keyboard shortcuts.
-            full_line.spans.iter_mut().for_each(|span| {
-                span.style = Style::default().fg(Color::Cyan).bold();
-            });
+            for line in &mut wrapped {
+                line.spans.iter_mut().for_each(|span| {
+                    span.style = Style::default().fg(Color::Cyan).bold();
+                });
+            }
         }
 
-        // Wrap with subsequent indent aligned to the description column.
-        use crate::wrapping::RtOptions;
-        use crate::wrapping::word_wrap_line;
-        let options = RtOptions::new(area.width as usize)
-            .initial_indent(Line::from(""))
-            .subsequent_indent(Line::from(" ".repeat(desc_col)));
-        let wrapped = word_wrap_line(&full_line, options);
-
-        // Render the wrapped lines.
         for line in wrapped {
             if cur_y >= area.y + area.height {
                 break;
@@ -228,8 +275,6 @@ pub(crate) fn measure_rows_height(
         return 1; // placeholder "no matches" line
     }
 
-    let content_width = width.saturating_sub(1).max(1);
-
     let visible_items = max_results.min(rows_all.len());
     let mut start_idx = state.scroll_top.min(rows_all.len().saturating_sub(1));
     if let Some(sel) = state.selected_idx {
@@ -243,10 +288,8 @@ pub(crate) fn measure_rows_height(
         }
     }
 
-    let desc_col = compute_desc_col(rows_all, start_idx, visible_items, content_width);
+    let desc_col = compute_desc_col(rows_all, start_idx, visible_items, width);
 
-    use crate::wrapping::RtOptions;
-    use crate::wrapping::word_wrap_line;
     let mut total: u16 = 0;
     for row in rows_all
         .iter()
@@ -255,11 +298,7 @@ pub(crate) fn measure_rows_height(
         .take(visible_items)
         .map(|(_, r)| r)
     {
-        let full_line = build_full_line(row, desc_col);
-        let opts = RtOptions::new(content_width as usize)
-            .initial_indent(Line::from(""))
-            .subsequent_indent(Line::from(" ".repeat(desc_col)));
-        total = total.saturating_add(word_wrap_line(&full_line, opts).len() as u16);
+        total = total.saturating_add(wrap_row(row, desc_col, width as usize).len() as u16);
     }
     total.max(1)
 }

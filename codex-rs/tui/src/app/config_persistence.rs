@@ -134,9 +134,14 @@ impl App {
     }
 
     #[cfg(feature = "nori-config")]
-    pub(super) async fn persist_auto_worktree_setting(&mut self, enabled: bool) {
+    pub(super) async fn persist_auto_worktree_setting(
+        &mut self,
+        value: codex_acp::config::AutoWorktree,
+    ) {
+        let toml_str = value.toml_value();
+
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "auto_worktree"], toml_value(enabled))
+            .set_path(&["tui", "auto_worktree"], toml_value(toml_str))
             .apply()
             .await
         {
@@ -149,20 +154,19 @@ impl App {
             return;
         }
 
-        let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget.add_info_message(
-            format!("Auto worktree {status}. Changes will take effect on next session."),
+            format!(
+                "Auto worktree set to {}. Changes will take effect on next session.",
+                value.display_name()
+            ),
             None,
         );
     }
 
     #[cfg(feature = "nori-config")]
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
-        let mut builder = ConfigEditsBuilder::new(&self.config.codex_home);
-        builder = builder.set_path(&["tui", "skillset_per_session"], toml_value(enabled));
-        if enabled {
-            builder = builder.set_path(&["tui", "auto_worktree"], toml_value(true));
-        }
+        let builder = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "skillset_per_session"], toml_value(enabled));
         if let Err(err) = builder.apply().await {
             tracing::error!(error = %err, "failed to persist skillset_per_session setting");
             self.chat_widget.add_error_message(format!(

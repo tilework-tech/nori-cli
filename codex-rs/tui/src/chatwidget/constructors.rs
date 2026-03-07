@@ -1,3 +1,4 @@
+use super::agent::SpawnAgentResult;
 use super::*;
 
 impl ChatWidget {
@@ -15,10 +16,22 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             expected_agent,
+            deferred_spawn,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-        let spawn_result = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
+        let spawn_result = if deferred_spawn {
+            // Deferred spawn: create a dummy channel. The real agent will be
+            // spawned later via `spawn_deferred_agent()`.
+            let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
+            SpawnAgentResult {
+                op_tx,
+                #[cfg(feature = "unstable")]
+                acp_handle: None,
+            }
+        } else {
+            spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager)
+        };
 
         let first_prompt_text = initial_prompt.clone();
         let mut widget = Self {
@@ -109,6 +122,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             expected_agent,
+            deferred_spawn: _,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -208,6 +222,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             expected_agent,
+            deferred_spawn: _,
         } = common;
         let mut rng = rand::rng();
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
@@ -300,5 +315,23 @@ impl ChatWidget {
             agent_name,
             display_name,
         });
+    }
+
+    /// Spawn the agent that was deferred during construction.
+    ///
+    /// This should be called after pre-session setup (e.g., skillset switch)
+    /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
+    pub(crate) fn spawn_deferred_agent(
+        &mut self,
+        config: Config,
+        app_event_tx: AppEventSender,
+        server: Arc<ConversationManager>,
+    ) {
+        let spawn_result = spawn_agent(config, app_event_tx, server);
+        self.codex_op_tx = spawn_result.op_tx;
+        #[cfg(feature = "unstable")]
+        {
+            self.acp_handle = spawn_result.acp_handle;
+        }
     }
 }

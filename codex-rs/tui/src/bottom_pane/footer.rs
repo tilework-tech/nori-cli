@@ -973,8 +973,10 @@ mod tests {
 
     #[test]
     fn footer_with_worktree_name_disabled() {
-        let mut segment_config = FooterSegmentConfig::default();
-        segment_config.worktree_name = false;
+        let segment_config = FooterSegmentConfig {
+            worktree_name: false,
+            ..Default::default()
+        };
 
         snapshot_footer(
             "footer_with_worktree_name_disabled",
@@ -1021,8 +1023,10 @@ mod tests {
 
     #[test]
     fn footer_with_git_branch_disabled() {
-        let mut segment_config = FooterSegmentConfig::default();
-        segment_config.git_branch = false;
+        let segment_config = FooterSegmentConfig {
+            git_branch: false,
+            ..Default::default()
+        };
 
         snapshot_footer(
             "footer_with_git_branch_disabled",
@@ -1038,10 +1042,12 @@ mod tests {
 
     #[test]
     fn footer_with_multiple_segments_disabled() {
-        let mut segment_config = FooterSegmentConfig::default();
-        segment_config.git_branch = false;
-        segment_config.git_stats = false;
-        segment_config.token_usage = false;
+        let segment_config = FooterSegmentConfig {
+            git_branch: false,
+            git_stats: false,
+            token_usage: false,
+            ..Default::default()
+        };
 
         snapshot_footer(
             "footer_with_multiple_segments_disabled",
@@ -1063,17 +1069,18 @@ mod tests {
 
     #[test]
     fn footer_with_all_segments_disabled() {
-        let mut segment_config = FooterSegmentConfig::default();
-        segment_config.prompt_summary = false;
-        segment_config.vim_mode = false;
-        segment_config.git_branch = false;
-        segment_config.worktree_name = false;
-        segment_config.git_stats = false;
-        segment_config.context = false;
-        segment_config.approval_mode = false;
-        segment_config.nori_profile = false;
-        segment_config.nori_version = false;
-        segment_config.token_usage = false;
+        let segment_config = FooterSegmentConfig {
+            prompt_summary: false,
+            vim_mode: false,
+            git_branch: false,
+            worktree_name: false,
+            git_stats: false,
+            context: false,
+            approval_mode: false,
+            nori_profile: false,
+            nori_version: false,
+            token_usage: false,
+        };
 
         snapshot_footer(
             "footer_with_all_segments_disabled",
@@ -1098,9 +1105,11 @@ mod tests {
 
     #[test]
     fn footer_vertical_with_segments_disabled() {
-        let mut segment_config = FooterSegmentConfig::default();
-        segment_config.nori_profile = false;
-        segment_config.nori_version = false;
+        let segment_config = FooterSegmentConfig {
+            nori_profile: false,
+            nori_version: false,
+            ..Default::default()
+        };
 
         snapshot_footer(
             "footer_vertical_with_segments_disabled",

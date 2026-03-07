@@ -1101,6 +1101,104 @@ fn test_agent_switch_logs_correct_sequence() {
 // Test: Connecting Status During Slow Agent Startup
 // ============================================================================
 
+/// Test that the slash command popup shows the current agent name in the
+/// /agent description when the TUI first starts.
+///
+/// The /agent description should read:
+///   "switch between available ACP agents (current: Mock ACP)"
+///
+/// This verifies that the description override is set during initial
+/// construction, not just when switching agents.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_slash_popup_shows_current_agent_in_description() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Type '/a' to open the slash command popup (NOT '/agent' + Enter which
+    // opens the agent picker). The popup should show filtered commands
+    // including /agent with its description.
+    session.send_str("/a").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for the slash popup to render with the /agent command visible
+    session
+        .wait_for(|screen| screen.contains("/agent"), Duration::from_secs(5))
+        .expect("Slash popup should show /agent command");
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let screen = session.screen_contents();
+
+    // The description for /agent should include the current agent name
+    // in parentheses. mock-model has display name "Mock ACP".
+    assert!(
+        screen.contains("(current: Mock ACP)"),
+        "Slash popup /agent description should show current agent name.\n\
+         Expected to find '(current: Mock ACP)' in screen.\n\
+         Screen contents:\n{}",
+        screen
+    );
+}
+
+/// Test that the slash command popup shows the current approval mode in the
+/// /approvals description when the TUI first starts.
+///
+/// The /approvals description should include a parenthetical like:
+///   "choose what Nori can do without approval (current: Agent)"
+///
+/// This verifies that the approval mode description override is set during
+/// initial construction.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_slash_popup_shows_current_approval_mode_in_description() {
+    let config = SessionConfig::new().with_model("mock-model".to_string());
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    // Wait for startup
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Type '/ap' to open the slash command popup filtered to show /approvals
+    session.send_str("/ap").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Wait for the slash popup to render with the /approvals command visible
+    session
+        .wait_for(
+            |screen| screen.contains("/approvals"),
+            Duration::from_secs(5),
+        )
+        .expect("Slash popup should show /approvals command");
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+
+    let screen = session.screen_contents();
+
+    // The description for /approvals should include the current approval mode
+    // in parentheses. The exact mode depends on config defaults, but it should
+    // be one of the known preset labels.
+    let has_approval_mode = screen.contains("(current: Agent)")
+        || screen.contains("(current: Read Only)")
+        || screen.contains("(current: Full Access)");
+
+    assert!(
+        has_approval_mode,
+        "Slash popup /approvals description should show current approval mode.\n\
+         Expected to find '(current: Agent)' or '(current: Read Only)' or '(current: Full Access)' in screen.\n\
+         Screen contents:\n{}",
+        screen
+    );
+}
+
 /// Test that "Connecting to [Agent]" status appears during slow agent startup.
 ///
 /// When an ACP agent takes time to start (e.g., npx/bunx resolving dependencies),
