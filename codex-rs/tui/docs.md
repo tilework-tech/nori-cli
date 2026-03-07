@@ -40,6 +40,29 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - File search integration (`file_search.rs`)
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
+**Transcript Overlay (Ctrl+T) (`pager_overlay.rs`):**
+
+The transcript overlay (`TranscriptOverlay`) displays the full conversation history in a scrollable pager. Cells render truncated by default and expand when focused. Focus navigation uses j/k (or Up/Down arrows), with wrapping at both ends. The focused cell is indicated by a `›` chevron in cyan, rendered in a 2-character prefix column (`FOCUS_PREFIX_WIDTH`).
+
+`TranscriptOverlay` manages two independent cell-selection states:
+
+| State | Purpose | Navigation |
+|-------|---------|------------|
+| `focused_cell` | Controls which cell is expanded (showing full content) | j/k, Up/Down (wrapping) |
+| `highlight_cell` | Marks a cell for the "edit previous message" flow | Set externally via `set_highlight_cell()` |
+
+PgUp/PgDn/Home/End still perform viewport-level scrolling (delegated to the inner `PagerView`).
+
+The `HistoryCell` trait defines three rendering modes used across the inline scrollback and transcript contexts:
+
+| Method | Used By | Behavior |
+|--------|---------|----------|
+| `display_lines()` | Inline chat scrollback | Primary rendering, typically truncated for compactness |
+| `transcript_lines()` | Transcript overlay (focused/expanded cell) | Full untruncated content |
+| `transcript_lines_truncated()` | Transcript overlay (unfocused cell) | Defaults to `transcript_lines()` unless overridden |
+
+`ExecCell` overrides `transcript_lines_truncated()` to use middle-elision at 10 lines (`TRANSCRIPT_TRUNCATED_MAX_LINES`). `McpToolCallCell` overrides it to use the same truncation as `display_lines()`. Cell types that do not override it show their full `transcript_lines()` output even when unfocused.
+
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):

@@ -76,6 +76,8 @@ const KEY_ESC: KeyBinding = key_hint::plain(KeyCode::Esc);
 const KEY_ENTER: KeyBinding = key_hint::plain(KeyCode::Enter);
 const KEY_CTRL_T: KeyBinding = key_hint::ctrl(KeyCode::Char('t'));
 const KEY_CTRL_C: KeyBinding = key_hint::ctrl(KeyCode::Char('c'));
+const KEY_J: KeyBinding = key_hint::plain(KeyCode::Char('j'));
+const KEY_K: KeyBinding = key_hint::plain(KeyCode::Char('k'));
 
 // Common pager navigation hints rendered on the first line
 const PAGER_KEY_HINTS: &[(&[KeyBinding], &str)] = &[
@@ -356,17 +358,44 @@ impl Renderable for CachedRenderable {
 struct CellRenderable {
     cell: Arc<dyn HistoryCell>,
     style: Style,
+    expanded: bool,
+    focused: bool,
 }
+
+/// Width of the focus indicator column (chevron + space).
+const FOCUS_PREFIX_WIDTH: u16 = 2;
 
 impl Renderable for CellRenderable {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let p =
-            Paragraph::new(Text::from(self.cell.transcript_lines(area.width))).style(self.style);
-        p.render(area, buf);
+        let content_width = area.width.saturating_sub(FOCUS_PREFIX_WIDTH);
+        let lines = if self.expanded {
+            self.cell.transcript_lines(content_width)
+        } else {
+            self.cell.transcript_lines_truncated(content_width)
+        };
+
+        // Render the focus chevron on the first row of this cell.
+        if self.focused {
+            Span::from("› ").cyan().render_ref(area, buf);
+        }
+
+        let content_area = Rect::new(
+            area.x + FOCUS_PREFIX_WIDTH,
+            area.y,
+            content_width,
+            area.height,
+        );
+        let p = Paragraph::new(Text::from(lines)).style(self.style);
+        p.render(content_area, buf);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        self.cell.desired_transcript_height(width)
+        let content_width = width.saturating_sub(FOCUS_PREFIX_WIDTH);
+        if self.expanded {
+            self.cell.desired_transcript_height(content_width)
+        } else {
+            self.cell.desired_transcript_height_truncated(content_width)
+        }
     }
 }
 
@@ -374,6 +403,7 @@ pub(crate) struct TranscriptOverlay {
     view: PagerView,
     cells: Vec<Arc<dyn HistoryCell>>,
     highlight_cell: Option<usize>,
+    focused_cell: Option<usize>,
     is_done: bool,
 }
 
@@ -381,12 +411,13 @@ impl TranscriptOverlay {
     pub(crate) fn new(transcript_cells: Vec<Arc<dyn HistoryCell>>) -> Self {
         Self {
             view: PagerView::new(
-                Self::render_cells(&transcript_cells, None),
+                Self::render_cells(&transcript_cells, None, None),
                 "T R A N S C R I P T".to_string(),
                 usize::MAX,
             ),
             cells: transcript_cells,
             highlight_cell: None,
+            focused_cell: None,
             is_done: false,
         }
     }
@@ -394,12 +425,15 @@ impl TranscriptOverlay {
     fn render_cells(
         cells: &[Arc<dyn HistoryCell>],
         highlight_cell: Option<usize>,
+        focused_cell: Option<usize>,
     ) -> Vec<Box<dyn Renderable>> {
         cells
             .iter()
             .enumerate()
             .flat_map(|(i, c)| {
                 let mut v: Vec<Box<dyn Renderable>> = Vec::new();
+                let focused = focused_cell == Some(i);
+                let expanded = focused;
                 let mut cell_renderable = if c.as_any().is::<UserHistoryCell>() {
                     Box::new(CachedRenderable::new(CellRenderable {
                         cell: c.clone(),
@@ -408,11 +442,15 @@ impl TranscriptOverlay {
                         } else {
                             user_message_style()
                         },
+                        expanded,
+                        focused,
                     })) as Box<dyn Renderable>
                 } else {
                     Box::new(CachedRenderable::new(CellRenderable {
                         cell: c.clone(),
                         style: Style::default(),
+                        expanded,
+                        focused,
                     })) as Box<dyn Renderable>
                 };
                 if !c.is_stream_continuation() && i > 0 {
@@ -430,7 +468,7 @@ impl TranscriptOverlay {
     pub(crate) fn insert_cell(&mut self, cell: Arc<dyn HistoryCell>) {
         let follow_bottom = self.view.is_scrolled_to_bottom();
         self.cells.push(cell);
-        self.view.renderables = Self::render_cells(&self.cells, self.highlight_cell);
+        self.rebuild_renderables();
         if follow_bottom {
             self.view.scroll_offset = usize::MAX;
         }
@@ -438,16 +476,63 @@ impl TranscriptOverlay {
 
     pub(crate) fn set_highlight_cell(&mut self, cell: Option<usize>) {
         self.highlight_cell = cell;
-        self.view.renderables = Self::render_cells(&self.cells, self.highlight_cell);
+        self.rebuild_renderables();
         if let Some(idx) = self.highlight_cell {
             self.view.scroll_chunk_into_view(idx);
         }
     }
 
+    pub(crate) fn focused_cell(&self) -> Option<usize> {
+        self.focused_cell
+    }
+
+    pub(crate) fn set_focused_cell(&mut self, cell: Option<usize>) {
+        self.focused_cell = cell;
+        self.rebuild_renderables();
+        if let Some(idx) = self.focused_cell {
+            self.view.scroll_chunk_into_view(idx);
+        }
+    }
+
+    pub(crate) fn move_focus_down(&mut self) {
+        if self.cells.is_empty() {
+            return;
+        }
+        let next = match self.focused_cell {
+            None => 0,
+            Some(i) if i + 1 >= self.cells.len() => 0,
+            Some(i) => i + 1,
+        };
+        self.set_focused_cell(Some(next));
+    }
+
+    pub(crate) fn move_focus_up(&mut self) {
+        if self.cells.is_empty() {
+            return;
+        }
+        let next = match self.focused_cell {
+            None => self.cells.len() - 1,
+            Some(0) => self.cells.len() - 1,
+            Some(i) => i - 1,
+        };
+        self.set_focused_cell(Some(next));
+    }
+
+    fn rebuild_renderables(&mut self) {
+        self.view.renderables =
+            Self::render_cells(&self.cells, self.highlight_cell, self.focused_cell);
+    }
+
     fn render_hints(&self, area: Rect, buf: &mut Buffer) {
         let line1 = Rect::new(area.x, area.y, area.width, 1);
         let line2 = Rect::new(area.x, area.y.saturating_add(1), area.width, 1);
-        render_key_hints(line1, buf, PAGER_KEY_HINTS);
+
+        let nav_hints: &[(&[KeyBinding], &str)] = &[
+            (&[KEY_J, KEY_K], "to focus cell"),
+            (&[KEY_PAGE_UP, KEY_PAGE_DOWN], "to page"),
+            (&[KEY_HOME, KEY_END], "to jump"),
+        ];
+        render_key_hints(line1, buf, nav_hints);
 
         let mut pairs: Vec<(&[KeyBinding], &str)> =
             vec![(&[KEY_Q], "to quit"), (&[KEY_ESC], "to edit prev")];
@@ -472,6 +557,18 @@ impl TranscriptOverlay {
             TuiEvent::Key(key_event) => match key_event {
                 e if KEY_Q.is_press(e) || KEY_CTRL_C.is_press(e) || KEY_CTRL_T.is_press(e) => {
                     self.is_done = true;
+                    Ok(())
+                }
+                e if KEY_J.is_press(e) || KEY_DOWN.is_press(e) => {
+                    self.move_focus_down();
+                    tui.frame_requester()
+                        .schedule_frame_in(Duration::from_millis(16));
+                    Ok(())
+                }
+                e if KEY_K.is_press(e) || KEY_UP.is_press(e) => {
+                    self.move_focus_up();
+                    tui.frame_requester()
+                        .schedule_frame_in(Duration::from_millis(16));
                     Ok(())
                 }
                 other => self.view.handle_key_event(tui, other),
@@ -909,5 +1006,149 @@ mod tests {
             pv.is_scrolled_to_bottom(),
             "expected view to report at bottom after scrolling to end"
         );
+    }
+
+    /// Helper: create an ExecCell with a large output (many lines).
+    fn make_exec_cell_with_output(num_output_lines: usize) -> Arc<dyn HistoryCell> {
+        let output_text = (0..num_output_lines)
+            .map(|i| format!("output-line-{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut exec_cell = crate::exec_cell::new_active_exec_command(
+            "call-1".into(),
+            vec!["bash".into(), "-lc".into(), "some-long-command".into()],
+            vec![ParsedCommand::Unknown {
+                cmd: "some-long-command".into(),
+            }],
+            ExecCommandSource::Agent,
+            None,
+            false,
+        );
+        exec_cell.complete_call(
+            "call-1",
+            CommandOutput {
+                exit_code: 0,
+                aggregated_output: output_text.clone(),
+                formatted_output: output_text,
+            },
+            Duration::from_millis(100),
+        );
+        Arc::new(exec_cell)
+    }
+
+    #[test]
+    fn transcript_cells_render_truncated_by_default() {
+        // An ExecCell with 50 lines of output should be truncated in the
+        // transcript when no cell is focused.
+        let exec_cell = make_exec_cell_with_output(50);
+        let mut overlay = TranscriptOverlay::new(vec![exec_cell]);
+        // No focused cell — default state.
+
+        let area = Rect::new(0, 0, 80, 30);
+        let mut buf = Buffer::empty(area);
+        overlay.view.scroll_offset = 0;
+        overlay.render(area, &mut buf);
+        let rendered = buffer_to_text(&buf, area);
+
+        // The full output has 50 lines. In truncated mode we should see an
+        // ellipsis indicating omitted lines, not all 50 output lines.
+        assert!(
+            rendered.contains("output-line-0"),
+            "truncated view should show the first output line"
+        );
+        assert!(
+            !rendered.contains("output-line-25"),
+            "truncated view should NOT show middle output lines"
+        );
+        assert!(
+            rendered.contains("… +"),
+            "truncated view should show an omitted-lines ellipsis"
+        );
+    }
+
+    #[test]
+    fn focused_cell_renders_expanded() {
+        // When a cell is focused, it should show full transcript_lines output.
+        let exec_cell = make_exec_cell_with_output(30);
+        let user_cell: Arc<dyn HistoryCell> =
+            Arc::new(crate::history_cell::new_user_prompt("hello".into()));
+        let mut overlay = TranscriptOverlay::new(vec![user_cell, exec_cell]);
+
+        // Focus on the exec cell (index 1).
+        overlay.set_focused_cell(Some(1));
+
+        // Render into a buffer tall enough to show all content.
+        let area = Rect::new(0, 0, 80, 80);
+        let mut buf = Buffer::empty(area);
+        overlay.view.scroll_offset = 0;
+        overlay.render(area, &mut buf);
+        let rendered = buffer_to_text(&buf, area);
+
+        // The focused cell should show the chevron indicator.
+        assert!(
+            rendered.contains('›'),
+            "focused cell should show the › chevron indicator"
+        );
+
+        // The focused cell should show full output including middle lines.
+        assert!(
+            rendered.contains("output-line-15"),
+            "focused cell should show full output, including line 15"
+        );
+        assert!(
+            rendered.contains("output-line-0"),
+            "focused cell should show first output line"
+        );
+        assert!(
+            rendered.contains("output-line-29"),
+            "focused cell should show last output line"
+        );
+    }
+
+    #[test]
+    fn focus_navigation_moves_between_cells() {
+        let cells: Vec<Arc<dyn HistoryCell>> = (0..5)
+            .map(|i| {
+                Arc::new(TestCell {
+                    lines: vec![Line::from(format!("cell-{i}"))],
+                }) as Arc<dyn HistoryCell>
+            })
+            .collect();
+        let mut overlay = TranscriptOverlay::new(cells);
+
+        // Initially no focus.
+        assert_eq!(overlay.focused_cell(), None);
+
+        // Move down should set focus to first cell.
+        overlay.move_focus_down();
+        assert_eq!(overlay.focused_cell(), Some(0));
+
+        // Move down again.
+        overlay.move_focus_down();
+        assert_eq!(overlay.focused_cell(), Some(1));
+
+        // Move up.
+        overlay.move_focus_up();
+        assert_eq!(overlay.focused_cell(), Some(0));
+
+        // Move up from first cell wraps to last.
+        overlay.move_focus_up();
+        assert_eq!(overlay.focused_cell(), Some(4));
+
+        // Move down from last cell wraps to first.
+        overlay.move_focus_down();
+        assert_eq!(overlay.focused_cell(), Some(0));
+    }
+
+    #[test]
+    fn focus_navigation_empty_transcript() {
+        let mut overlay = TranscriptOverlay::new(vec![]);
+
+        // Should be no-ops on empty transcript.
+        overlay.move_focus_down();
+        assert_eq!(overlay.focused_cell(), None);
+
+        overlay.move_focus_up();
+        assert_eq!(overlay.focused_cell(), None);
     }
 }

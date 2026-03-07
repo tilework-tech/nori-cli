@@ -71,6 +71,7 @@ fn test_config() -> Config {
     .expect("config")
 }
 
+#[allow(dead_code)]
 fn snapshot(percent: f64) -> RateLimitSnapshot {
     RateLimitSnapshot {
         primary: Some(RateLimitWindow {

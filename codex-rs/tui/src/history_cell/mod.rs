@@ -75,6 +75,30 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
         self.display_lines(width)
     }
 
+    /// Truncated version of `transcript_lines` for the transcript overlay
+    /// when this cell is not focused. Defaults to full `transcript_lines`.
+    fn transcript_lines_truncated(&self, width: u16) -> Vec<Line<'static>> {
+        self.transcript_lines(width)
+    }
+
+    fn desired_transcript_height_truncated(&self, width: u16) -> u16 {
+        let lines = self.transcript_lines_truncated(width);
+        if let [line] = &lines[..]
+            && line
+                .spans
+                .iter()
+                .all(|s| s.content.chars().all(char::is_whitespace))
+        {
+            return 1;
+        }
+
+        Paragraph::new(Text::from(lines))
+            .wrap(Wrap { trim: false })
+            .line_count(width)
+            .try_into()
+            .unwrap_or(0)
+    }
+
     fn desired_transcript_height(&self, width: u16) -> u16 {
         let lines = self.transcript_lines(width);
         // Workaround for ratatui bug: if there's only one line and it's whitespace-only, ratatui gives 2 lines.
@@ -890,8 +914,10 @@ impl McpToolCallCell {
     }
 }
 
-impl HistoryCell for McpToolCallCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+impl McpToolCallCell {
+    /// Render the header and invocation line shared by all display modes.
+    /// Returns (lines, inline_invocation) so callers know the prefix style.
+    fn render_header(&self, width: u16) -> (Vec<Line<'static>>, bool) {
         let mut lines: Vec<Line<'static>> = Vec::new();
         let status = self.success();
         let bullet = match status {
@@ -927,17 +953,24 @@ impl HistoryCell for McpToolCallCell {
             let body_lines: Vec<Line<'static>> = wrapped.iter().map(line_to_static).collect();
             lines.extend(prefix_lines(body_lines, "  └ ".dim(), "    ".into()));
         }
+        (lines, inline_invocation)
+    }
 
-        let mut detail_lines: Vec<Line<'static>> = Vec::new();
-        // Reserve four columns for the tree prefix ("  └ "/"    ") and ensure the wrapper still has at least one cell to work with.
+    /// Render result content blocks, optionally truncated.
+    fn render_result_lines(&self, width: u16, truncate: bool) -> Vec<Line<'static>> {
         let detail_wrap_width = (width as usize).saturating_sub(4).max(1);
+        let mut detail_lines: Vec<Line<'static>> = Vec::new();
 
         if let Some(result) = &self.result {
             match result {
                 Ok(mcp_types::CallToolResult { content, .. }) => {
                     if !content.is_empty() {
                         for block in content {
-                            let text = Self::render_content_block(block, detail_wrap_width);
+                            let text = if truncate {
+                                Self::render_content_block(block, detail_wrap_width)
+                            } else {
+                                Self::render_content_block_full(block)
+                            };
                             for segment in text.split('\n') {
                                 let line = Line::from(segment.to_string().dim());
                                 let wrapped = word_wrap_line(
@@ -952,11 +985,15 @@ impl HistoryCell for McpToolCallCell {
                     }
                 }
                 Err(err) => {
-                    let err_text = format_and_truncate_tool_result(
-                        &format!("Error: {err}"),
-                        TOOL_CALL_MAX_LINES,
-                        width as usize,
-                    );
+                    let err_text = if truncate {
+                        format_and_truncate_tool_result(
+                            &format!("Error: {err}"),
+                            TOOL_CALL_MAX_LINES,
+                            width as usize,
+                        )
+                    } else {
+                        format!("Error: {err}")
+                    };
                     let err_line = Line::from(err_text.dim());
                     let wrapped = word_wrap_line(
                         &err_line,
@@ -968,6 +1005,20 @@ impl HistoryCell for McpToolCallCell {
                 }
             }
         }
+        detail_lines
+    }
+
+    /// Render a content block without truncation.
+    fn render_content_block_full(block: &mcp_types::ContentBlock) -> String {
+        match block {
+            mcp_types::ContentBlock::TextContent(text) => text.text.clone(),
+            other => Self::render_content_block(other, 80),
+        }
+    }
+
+    fn build_lines(&self, width: u16, truncate: bool) -> Vec<Line<'static>> {
+        let (mut lines, inline_invocation) = self.render_header(width);
+        let detail_lines = self.render_result_lines(width, truncate);
 
         if !detail_lines.is_empty() {
             let initial_prefix: Span<'static> = if inline_invocation {
@@ -979,6 +1030,20 @@ impl HistoryCell for McpToolCallCell {
         }
 
         lines
+    }
+}
+
+impl HistoryCell for McpToolCallCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.build_lines(width, true)
+    }
+
+    fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.build_lines(width, false)
+    }
+
+    fn transcript_lines_truncated(&self, width: u16) -> Vec<Line<'static>> {
+        self.build_lines(width, true)
     }
 }
 

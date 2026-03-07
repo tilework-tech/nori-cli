@@ -26,6 +26,7 @@ use unicode_width::UnicodeWidthStr;
 pub(crate) const TOOL_CALL_MAX_LINES: usize = 5;
 const USER_SHELL_TOOL_CALL_MAX_LINES: usize = 50;
 const MAX_INTERACTION_PREVIEW_CHARS: usize = 80;
+const TRANSCRIPT_TRUNCATED_MAX_LINES: usize = 10;
 
 pub(crate) struct OutputLinesParams {
     pub(crate) line_limit: usize,
@@ -202,6 +203,27 @@ impl HistoryCell for ExecCell {
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.transcript_lines_inner(width, None)
+    }
+
+    fn transcript_lines_truncated(&self, width: u16) -> Vec<Line<'static>> {
+        self.transcript_lines_inner(width, Some(TRANSCRIPT_TRUNCATED_MAX_LINES))
+    }
+
+    fn desired_transcript_height_truncated(&self, width: u16) -> u16 {
+        self.transcript_lines_truncated(width).len() as u16
+    }
+}
+
+impl ExecCell {
+    /// Shared implementation for transcript rendering.
+    /// When `max_output_lines` is `None`, all output lines are shown.
+    /// When `Some(n)`, output is truncated with middle-elision to `n` lines.
+    fn transcript_lines_inner(
+        &self,
+        width: u16,
+        max_output_lines: Option<usize>,
+    ) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = vec![];
         for (i, call) in self.iter_calls().enumerate() {
             if i > 0 {
@@ -219,7 +241,19 @@ impl HistoryCell for ExecCell {
 
             if let Some(output) = call.output.as_ref() {
                 if !call.is_unified_exec_interaction() {
-                    lines.extend(output.formatted_output.lines().map(ansi_escape_line));
+                    let output_lines: Vec<Line<'static>> = output
+                        .formatted_output
+                        .lines()
+                        .map(ansi_escape_line)
+                        .collect();
+                    match max_output_lines {
+                        Some(max) if output_lines.len() > max => {
+                            lines.extend(Self::truncate_lines_middle(&output_lines, max, None));
+                        }
+                        _ => {
+                            lines.extend(output_lines);
+                        }
+                    }
                 }
                 let duration = call
                     .duration
@@ -239,9 +273,7 @@ impl HistoryCell for ExecCell {
         }
         lines
     }
-}
 
-impl ExecCell {
     fn exploring_display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut out: Vec<Line<'static>> = Vec::new();
         out.push(Line::from(vec![
