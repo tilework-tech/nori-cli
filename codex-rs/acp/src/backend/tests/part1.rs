@@ -173,6 +173,10 @@ fn test_extract_tool_output_from_content() {
     match &events[0] {
         EventMsg::ExecCommandEnd(end) => {
             assert_eq!(end.aggregated_output, "File contents here");
+            assert_eq!(
+                end.formatted_output, end.aggregated_output,
+                "formatted_output should match aggregated_output for ACP tool calls"
+            );
         }
         _ => panic!("Expected ExecCommandEnd event"),
     }
@@ -195,6 +199,10 @@ fn test_extract_tool_output_from_raw_output() {
     match &events[0] {
         EventMsg::ExecCommandEnd(end) => {
             assert_eq!(end.aggregated_output, "Read 42 lines");
+            assert_eq!(
+                end.formatted_output, end.aggregated_output,
+                "formatted_output should match aggregated_output for ACP tool calls"
+            );
         }
         _ => panic!("Expected ExecCommandEnd event"),
     }
