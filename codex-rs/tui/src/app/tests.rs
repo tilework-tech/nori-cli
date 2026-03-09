@@ -56,7 +56,7 @@ fn make_test_app() -> App {
         #[cfg(feature = "nori-config")]
         loop_count_override: None,
         hotkey_config: codex_acp::config::HotkeyConfig::default(),
-        vim_mode_enabled: false,
+        vim_mode: codex_acp::config::VimEnterBehavior::Off,
         system_info_tx,
         worktree_warning_shown: false,
         #[cfg(feature = "nori-config")]
@@ -102,7 +102,7 @@ fn make_test_app_with_channels() -> (
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
-            vim_mode_enabled: false,
+            vim_mode: codex_acp::config::VimEnterBehavior::Off,
             system_info_tx,
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]

@@ -144,13 +144,15 @@ The binding string format is kept terminal-agnostic (no crossterm dependency in 
 
 **Vim Mode Configuration** (`config/types/mod.rs`):
 
-The `vim_mode` boolean in `TuiConfigToml` and `NoriConfig` enables vim-style navigation in the textarea. Stored under `[tui]` in `config.toml`:
+The `vim_mode` field in `TuiConfigToml` and `NoriConfig` uses the `VimEnterBehavior` enum, which doubles as both the vim mode on/off switch and the Enter key behavior selector. Stored under `[tui]` in `config.toml`:
 
 | Field | TOML Key | Default | Controls |
 |-------|----------|---------|----------|
-| `vim_mode` | `vim_mode` | `false` | When enabled, textarea supports vim-style Insert/Normal mode with navigation, editing, and two-key sequences |
+| `vim_mode` | `vim_mode` | `"off"` | Vim mode and Enter key behavior: `"newline"` (Enter inserts newline in INSERT, submits in NORMAL), `"submit"` (Enter submits in INSERT, inserts newline in NORMAL), or `"off"` (vim disabled) |
 
-The setting is resolved in `loader.rs` with a default of `false`. Unlike hotkeys which are string bindings, vim mode is a simple boolean toggle. The TUI layer (`@/codex-rs/tui/`) handles the vim mode state machine and propagation.
+`VimEnterBehavior` has a custom `Deserialize` implementation that accepts both booleans and strings for backwards compatibility: `true` maps to `Submit`, `false` maps to `Off`. New string values are `"newline"`, `"submit"`, `"off"`. Serialization always writes the string form. The enum provides `is_enabled()` (returns `true` for any variant except `Off`), `display_name()` for TUI display, `toml_value()` for persistence, and `all_variants()` for building picker UIs.
+
+The TUI layer (`@/codex-rs/tui/`) handles the vim mode state machine and propagation. The `VimEnterBehavior` flows through the config pipeline: `NoriConfig` -> `App` -> `ChatWidget` -> `BottomPane` -> `ChatComposer`, where it controls how Enter key presses are routed in the key handler.
 
 **Script Timeout Configuration** (`config/types/mod.rs`):
 

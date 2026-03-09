@@ -159,7 +159,7 @@ impl NoriConfig {
                 .tui
                 .notify_after_idle
                 .unwrap_or(super::types::NotifyAfterIdle::FiveSeconds),
-            vim_mode: toml.tui.vim_mode.unwrap_or(false),
+            vim_mode: toml.tui.vim_mode.unwrap_or_default(),
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
@@ -1066,6 +1066,6 @@ vim_mode = true
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(config.agent, "gemini");
         assert_eq!(config.default_models.get("claude-code").unwrap(), "haiku");
-        assert!(config.vim_mode);
+        assert_eq!(config.vim_mode, crate::config::VimEnterBehavior::Submit);
     }
 }

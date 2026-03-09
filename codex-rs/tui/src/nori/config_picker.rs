@@ -11,6 +11,7 @@ use codex_acp::config::NotifyAfterIdle;
 use codex_acp::config::OsNotifications;
 use codex_acp::config::ScriptTimeout;
 use codex_acp::config::TerminalNotifications;
+use codex_acp::config::VimEnterBehavior;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -71,18 +72,26 @@ pub fn config_picker_params(
                 }
             },
         ),
-        build_toggle_item(
-            "Vim Mode",
-            "Enable vim-style navigation in the textarea (Escape enters normal mode)",
-            config.vim_mode,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !config.vim_mode;
-                move || {
-                    tx.send(AppEvent::SetConfigVimMode(new_value));
+        {
+            let current_mode = config.vim_mode;
+            let display_name = format!("Vim Mode ({})", current_mode.display_name().to_lowercase());
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::OpenVimModePicker);
                 }
-            },
-        ),
+            })];
+            SelectionItem {
+                name: display_name,
+                description: Some(
+                    "Enable vim-style navigation in the textarea (Escape enters normal mode)"
+                        .to_string(),
+                ),
+                is_current: current_mode.is_enabled(),
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        },
         {
             let current_mode = config.auto_worktree;
             let display_name = format!(
@@ -329,6 +338,53 @@ where
     }
 }
 
+/// Create selection view parameters for the vim mode sub-picker.
+///
+/// # Arguments
+/// * `current` - The currently selected VimEnterBehavior variant
+/// * `_app_event_tx` - The app event sender for triggering config change events
+pub fn vim_mode_picker_params(
+    current: VimEnterBehavior,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = VimEnterBehavior::all_variants()
+        .iter()
+        .map(|&variant| {
+            let is_current = variant == current;
+            let description = match variant {
+                VimEnterBehavior::Newline => Some(
+                    "Enter inserts a newline in INSERT mode, submits in NORMAL mode".to_string(),
+                ),
+                VimEnterBehavior::Submit => Some(
+                    "Enter submits in INSERT mode, inserts a newline in NORMAL mode".to_string(),
+                ),
+                VimEnterBehavior::Off => Some("Disable vim mode".to_string()),
+            };
+            let actions: Vec<SelectionAction> = vec![Box::new({
+                move |tx| {
+                    tx.send(AppEvent::SetConfigVimMode(variant));
+                }
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description,
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Vim Mode".to_string()),
+        subtitle: Some("Choose Enter key behavior for vim mode".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 /// Create selection view parameters for the auto-worktree sub-picker.
 ///
 /// # Arguments
@@ -564,7 +620,7 @@ mod tests {
             os_notifications: OsNotifications::Enabled,
             vertical_footer,
             notify_after_idle: codex_acp::config::NotifyAfterIdle::FiveSeconds,
-            vim_mode: false,
+            vim_mode: VimEnterBehavior::Off,
             hotkeys: codex_acp::config::HotkeyConfig::default(),
             script_timeout: codex_acp::config::ScriptTimeout::default(),
             loop_count: None,
@@ -828,7 +884,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let mut config = make_test_config(false);
-        config.vim_mode = true;
+        config.vim_mode = VimEnterBehavior::Submit;
 
         let params = config_picker_params(&config, tx);
 
@@ -838,17 +894,17 @@ mod tests {
             .find(|item| item.name.contains("Vim Mode"))
             .expect("should have vim mode item");
         assert!(
-            vim_mode_item.name.contains("(on)"),
-            "vim mode should show (on) when enabled"
+            vim_mode_item.name.contains("enter is submit"),
+            "vim mode should show current behavior when enabled, got: {}",
+            vim_mode_item.name
         );
     }
 
     #[test]
-    fn config_picker_vim_mode_action_sends_correct_event() {
+    fn config_picker_vim_mode_action_opens_picker() {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let mut config = make_test_config(false);
-        config.vim_mode = false;
+        let config = make_test_config(false);
 
         let params = config_picker_params(&config, tx.clone());
 
@@ -864,13 +920,10 @@ mod tests {
         }
 
         let event = rx.try_recv().expect("should receive event");
-        match event {
-            AppEvent::SetConfigVimMode(value) => {
-                // Was false, should toggle to true
-                assert!(value, "vim_mode was off, should toggle to on");
-            }
-            _ => panic!("expected SetConfigVimMode event, got: {event:?}"),
-        }
+        assert!(
+            matches!(event, AppEvent::OpenVimModePicker),
+            "vim mode action should open picker, got: {event:?}"
+        );
     }
 
     #[test]
@@ -1305,7 +1358,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params = file_manager_picker_params(None, tx.clone());
+        let params = file_manager_picker_params(None, tx);
 
         for item in &params.items {
             assert!(

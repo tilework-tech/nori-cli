@@ -244,8 +244,8 @@ pub(crate) struct App {
     /// Configurable hotkey bindings loaded from NoriConfig.
     pub(crate) hotkey_config: codex_acp::config::HotkeyConfig,
 
-    /// Vim mode enabled setting loaded from NoriConfig.
-    vim_mode_enabled: bool,
+    /// Vim mode and Enter key behavior loaded from NoriConfig.
+    vim_mode: codex_acp::config::VimEnterBehavior,
 
     system_info_tx: mpsc::Sender<SystemInfoRefreshRequest>,
 
@@ -401,7 +401,7 @@ impl App {
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
-            vim_mode_enabled: false,
+            vim_mode: codex_acp::config::VimEnterBehavior::Off,
             system_info_tx,
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
@@ -415,13 +415,13 @@ impl App {
         // Load NoriConfig and propagate settings to the textarea.
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         app.hotkey_config = nori_config.hotkeys;
-        app.vim_mode_enabled = nori_config.vim_mode;
+        app.vim_mode = nori_config.vim_mode;
 
         // Propagate initial hotkey config to the textarea so editing bindings
         // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
         app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
         // Propagate initial vim mode setting.
-        app.chat_widget.set_vim_mode_enabled(app.vim_mode_enabled);
+        app.chat_widget.set_vim_mode(app.vim_mode);
         // Propagate initial footer segment config.
         for segment in codex_acp::config::FooterSegment::all_variants() {
             app.chat_widget.set_footer_segment_enabled(

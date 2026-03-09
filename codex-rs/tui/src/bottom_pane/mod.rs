@@ -416,8 +416,8 @@ impl BottomPane {
         self.composer.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
-        self.composer.set_vim_mode_enabled(enabled);
+    pub(crate) fn set_vim_mode(&mut self, value: codex_acp::config::VimEnterBehavior) {
+        self.composer.set_vim_mode(value);
     }
 
     /// Set a footer segment's enabled state.

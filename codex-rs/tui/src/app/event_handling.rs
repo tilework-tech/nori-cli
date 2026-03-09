@@ -72,7 +72,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                self.chat_widget.set_vim_mode(self.vim_mode);
                 #[cfg(feature = "nori-config")]
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
@@ -586,7 +586,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                self.chat_widget.set_vim_mode(self.vim_mode);
                 #[cfg(feature = "nori-config")]
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
@@ -728,6 +728,11 @@ impl App {
                 self.set_session_loop_count(value);
             }
             #[cfg(feature = "nori-config")]
+            AppEvent::OpenVimModePicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget.open_vim_mode_picker(nori_config.vim_mode);
+            }
+            #[cfg(feature = "nori-config")]
             AppEvent::OpenAutoWorktreePicker => {
                 let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
@@ -796,7 +801,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                self.chat_widget.set_vim_mode(self.vim_mode);
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
                 self.chat_widget.set_loop_state(remaining, total);
@@ -979,7 +984,7 @@ impl App {
                             ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
                         self.chat_widget
                             .set_hotkey_config(self.hotkey_config.clone());
-                        self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                        self.chat_widget.set_vim_mode(self.vim_mode);
 
                         self.chat_widget.add_info_message(
                             format!("Resuming session with {display_name}..."),
@@ -1037,7 +1042,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode_enabled(self.vim_mode_enabled);
+                self.chat_widget.set_vim_mode(self.vim_mode);
                 #[cfg(feature = "nori-config")]
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);

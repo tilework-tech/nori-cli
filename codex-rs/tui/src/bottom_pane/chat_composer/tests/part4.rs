@@ -348,7 +348,7 @@ fn vim_mode_escape_enters_normal_mode_with_content() {
     );
 
     // Enable vim mode
-    composer.set_vim_mode_enabled(true);
+    composer.set_vim_mode(codex_acp::config::VimEnterBehavior::Submit);
 
     // Verify we start in Insert mode
     assert_eq!(composer.vim_mode_state(), VimModeState::Insert);
@@ -382,7 +382,7 @@ fn vim_mode_hjkl_navigation_in_normal_mode() {
         true,
     );
 
-    composer.set_vim_mode_enabled(true);
+    composer.set_vim_mode(codex_acp::config::VimEnterBehavior::Submit);
     composer.insert_str("hello");
 
     // Enter Normal mode

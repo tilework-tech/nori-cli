@@ -121,6 +121,7 @@ pub(crate) struct ChatComposer {
     system_info: Option<crate::system_info::SystemInfo>,
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
+    vim_enter_behavior: codex_acp::config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
     session_skillset_name: Option<String>,
@@ -177,6 +178,7 @@ impl ChatComposer {
             context_window_percent: None,
             system_info: None,
             approval_mode_label: None,
+            vim_enter_behavior: codex_acp::config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
             session_skillset_name: None,
@@ -206,8 +208,9 @@ impl ChatComposer {
         self.textarea.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
-        self.textarea.set_vim_mode_enabled(enabled);
+    pub(crate) fn set_vim_mode(&mut self, value: codex_acp::config::VimEnterBehavior) {
+        self.vim_enter_behavior = value;
+        self.textarea.set_vim_mode_enabled(value.is_enabled());
     }
 
     /// Set a footer segment's enabled state.

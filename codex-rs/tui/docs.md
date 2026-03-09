@@ -152,7 +152,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
 | `/model` | Choose model (dynamically shows current agent/model name) |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
+| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
 | `/browse` | Open a terminal file manager to browse and edit files |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
@@ -341,12 +341,22 @@ The hotkey picker (`@/codex-rs/tui/src/nori/hotkey_picker.rs`) implements `Botto
 
 **Vim Mode:**
 
-The textarea supports an optional vim-style navigation mode, toggled via `/config` ("Vim Mode" item) and persisted to `config.toml` under `[tui]`:
+The textarea supports an optional vim-style navigation mode, configured via `/config` ("Vim Mode" item) which opens a sub-picker (like Auto Worktree) showing three options. The setting is persisted to `config.toml` under `[tui]`:
 
 ```toml
 [tui]
-vim_mode = true
+vim_mode = "newline"  # or "submit" or "off"
 ```
+
+The `VimEnterBehavior` enum (from `@/codex-rs/acp/src/config/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
+
+| Variant | Enter in INSERT | Enter in NORMAL | Vim Enabled |
+|---------|----------------|-----------------|-------------|
+| `Newline` | Inserts newline | Submits prompt | Yes |
+| `Submit` | Submits prompt | Inserts newline | Yes |
+| `Off` | N/A (vim disabled) | N/A | No |
+
+The `ChatComposer` stores a `vim_enter_behavior: VimEnterBehavior` field alongside the textarea's own `vim_mode_enabled: bool`. The textarea only cares about on/off (for the vim state machine), while the composer uses the full enum to route Enter key presses at the top of its Enter handler in `key_handling.rs`.
 
 When enabled, the textarea operates in two modes:
 
@@ -383,7 +393,7 @@ The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering 
 
 The state machine is implemented in `textarea/mod.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer/mod.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
 
-Config changes emit `AppEvent::SetConfigVimMode`, handled in `app/config_persistence.rs` via `persist_vim_mode_setting()`. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea via `set_vim_mode_enabled()`. When vim mode is disabled, the state resets to Insert mode.
+Config changes use two app events: `AppEvent::OpenVimModePicker` opens the sub-picker, and `AppEvent::SetConfigVimMode(VimEnterBehavior)` applies the selection. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer via `set_vim_mode()`. The ChatComposer updates both its `vim_enter_behavior` field and calls `set_vim_mode_enabled()` on the textarea (passing `is_enabled()`). When vim mode is disabled, the textarea state resets to Insert mode. Persistence is handled by `persist_vim_mode_setting()` in `app/config_persistence.rs`, which writes the `toml_value()` string to the `[tui]` section.
 
 
 **History Search (Configurable Hotkey):**

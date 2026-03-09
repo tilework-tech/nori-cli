@@ -1,5 +1,6 @@
 use super::*;
 use crate::bottom_pane::textarea::VimModeState;
+use codex_acp::config::VimEnterBehavior;
 
 impl ChatComposer {
     /// Handle a key event coming from the main UI.
@@ -539,6 +540,22 @@ impl ChatComposer {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
+                // Vim enter behavior: route based on mode and configured behavior.
+                if let Some(vim_state) = self.textarea.vim_mode_state_if_enabled() {
+                    match (self.vim_enter_behavior, vim_state) {
+                        // "Enter is Newline": INSERT mode Enter inserts a newline.
+                        (VimEnterBehavior::Newline, VimModeState::Insert) => {
+                            return self.handle_input_basic(key_event);
+                        }
+                        // "Enter is Submit": NORMAL mode Enter inserts a newline.
+                        (VimEnterBehavior::Submit, VimModeState::Normal) => {
+                            self.textarea.insert_str("\n");
+                            return (InputResult::None, true);
+                        }
+                        _ => {} // fall through to submit
+                    }
+                }
+
                 // If the first line is a bare built-in slash command (no args),
                 // dispatch it even when the slash popup isn't visible. This preserves
                 // the workflow: type a prefix ("/di"), press Tab to complete to

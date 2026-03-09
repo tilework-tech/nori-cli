@@ -129,6 +129,14 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the vim mode sub-picker.
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn open_vim_mode_picker(&mut self, current: codex_acp::config::VimEnterBehavior) {
+        let params =
+            crate::nori::config_picker::vim_mode_picker_params(current, self.app_event_tx.clone());
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the auto-worktree sub-picker.
     #[cfg(feature = "nori-config")]
     pub(crate) fn open_auto_worktree_picker(&mut self, current: codex_acp::config::AutoWorktree) {
@@ -256,8 +264,8 @@ impl ChatWidget {
         self.bottom_pane.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode_enabled(&mut self, enabled: bool) {
-        self.bottom_pane.set_vim_mode_enabled(enabled);
+    pub(crate) fn set_vim_mode(&mut self, value: codex_acp::config::VimEnterBehavior) {
+        self.bottom_pane.set_vim_mode(value);
     }
 
     pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {

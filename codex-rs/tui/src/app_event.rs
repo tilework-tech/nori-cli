@@ -268,8 +268,12 @@ pub(crate) enum AppEvent {
     /// Set the TUI OS notifications config setting.
     SetConfigOsNotifications(bool),
 
+    /// Open the vim mode sub-picker.
+    #[cfg(feature = "nori-config")]
+    OpenVimModePicker,
+
     /// Set the TUI vim mode config setting.
-    SetConfigVimMode(bool),
+    SetConfigVimMode(codex_acp::config::VimEnterBehavior),
 
     /// Open the notify-after-idle sub-picker.
     #[cfg(feature = "nori-config")]
