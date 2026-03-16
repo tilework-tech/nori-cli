@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "noriSessionName": "nori-aqua-bream-dcdc",
+  "claudeSessionId": "b464e989-967b-4a1b-837c-a93b3e2f2a35",
+  "timestamp": 1773693114,
+  "baseSha": "ceb13d077585431e21ac195514e06193a2194785",
+  "baseBranch": "main",
+  "repoUrl": "https://github.com/tilework-tech/nori-cli",
+  "agentType": "claude-code",
+  "hasWorkspacePatch": false,
+  "hasUntrackedFiles": false
+}
