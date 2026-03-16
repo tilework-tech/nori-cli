@@ -67,6 +67,6 @@ should ignore other tests entirely until it works.
 
 # Emulators for testing
 
-Web servers or web apps: use playwright (read the /home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/webapp-testing/SKILL.md)
+Web servers or web apps: use playwright (read the /home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/webapp-testing/SKILL.md)
 TUI tools: use tmux with screen capture
 CLI tools: use bash

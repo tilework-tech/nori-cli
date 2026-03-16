@@ -19,7 +19,7 @@ description: Use when implementing any feature or bugfix, before writing impleme
 <system-reminder>If you have more than one test that you need to write, you should write all of them before moving to the GREEN phase.</system-reminder>
 4. Write the minimal amount of code necessary to make the test pass (GREEN phase)
 5. Verify the test now passes due to the behavior of the application.
-    - If you go through three loops without making progress, switch to running `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/creating-debug-tests-and-iterating`
+    - If you go through three loops without making progress, switch to running `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/creating-debug-tests-and-iterating`
 6. Refactor the code to clean it up.
 7. Verify tests still pass.
 </required>

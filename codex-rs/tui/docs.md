@@ -189,6 +189,25 @@ The `desc_col` is computed once per render pass from the widest visible name plu
 
 `SelectionViewParams` supports an optional `on_dismiss: Option<SelectionAction>` callback that fires when the picker is dismissed without selection (Escape or Ctrl-C). The callback is invoked in `ListSelectionView::on_ctrl_c()` before marking the view as complete. It does not fire when the user makes a selection via `accept()`. This is used by the skillset picker to send `SkillsetPickerDismissed` when the deferred agent spawn needs a fallback trigger.
 
+**ListSelectionView Vim-Mode-Aware Search:**
+
+`ListSelectionView` supports a `vim_mode: bool` field (alongside `is_searchable`) that changes how key input is routed. When a searchable view is created, `BottomPane::show_selection_view()` automatically injects the current `vim_mode_enabled` state into `SelectionViewParams`, so individual callers (skillset picker, config picker, etc.) do not need to pass vim mode explicitly.
+
+The view operates as a state machine with three key-handling branches:
+
+| Config | Sub-state | Key behavior |
+|--------|-----------|-------------|
+| `vim_mode=true`, `is_searchable=true` | `search_active=false` | `j`/`k` navigate, `/` activates search, digits 1-9 select directly, Esc dismisses |
+| `vim_mode=true`, `is_searchable=true` | `search_active=true` | Characters filter the list, Backspace edits query, Esc exits search (clears query, returns to nav mode) without dismissing the popup |
+| `vim_mode=false`, `is_searchable=true` | N/A | All characters immediately filter the list (no explicit search activation needed) |
+| `is_searchable=false` | N/A | `j`/`k` navigate, digits 1-9 select directly (unchanged legacy behavior) |
+
+The `show_search_row()` method controls whether the search input row renders: in vim mode, it only appears when `search_active=true`. In non-vim mode, it always appears for searchable views.
+
+The `effective_footer_hint()` method generates context-sensitive footer hints reflecting the current state (vim nav mode, vim search mode, or non-vim search mode). If a static `footer_hint` was provided in `SelectionViewParams`, it takes precedence over the generated hint.
+
+Number prefixes (e.g. "1. Item Name") are shown on rows when digits can be used for direct selection: either `is_searchable=false`, or `vim_mode=true` with `search_active=false`. When the search input is active (either non-vim searchable or vim search mode), number prefixes are hidden since digits go to the search query.
+
 **Undo Snapshot Picker (`/undo`):**
 
 The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backend. When the backend responds with `UndoListResult`, the TUI opens a `ListSelectionView` modal (the same pattern used by the approvals popup, etc.) displaying all available snapshots. Each item shows `[short_id] truncated_label` where the label is truncated to 60 characters. Selecting a snapshot dispatches `Op::UndoTo { index }` to restore to that point. If no snapshots are available, an info message is displayed instead of the modal.
@@ -262,7 +281,7 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 1. Checks if `nori-skillsets` is available in PATH
 2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
 3. If available, runs `nori-skillsets list` to get available skillsets
-4. On success (exit code 0), displays a picker with skillset names. Each `SelectionItem` sets `search_value` to the skillset name so the picker's search filtering can match against it. When `skillset_per_session` is enabled, a "No Skillset" option is prepended to the list; selecting it sends `AppEvent::SkillsetPickerDismissed` (same as Escape/Ctrl-C dismiss), giving users an explicit way to skip skillset selection.
+4. On success (exit code 0), displays a searchable picker (`is_searchable: true`) with skillset names. Each `SelectionItem` sets `search_value` to the skillset name so the picker's search filtering can match against it. In vim mode, users press `/` to start filtering; in non-vim mode, typing immediately filters. When `skillset_per_session` is enabled, a "No Skillset" option is prepended to the list; selecting it sends `AppEvent::SkillsetPickerDismissed` (same as Escape/Ctrl-C dismiss), giving users an explicit way to skip skillset selection.
 5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets --non-interactive switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets --non-interactive install <NAME>`. The `--non-interactive` flag is required because the TUI captures stdout/stderr via `.output()` and provides no stdin, so any interactive prompt would hang indefinitely.
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
@@ -394,6 +413,8 @@ The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering 
 The state machine is implemented in `textarea/mod.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer/mod.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
 
 Config changes use two app events: `AppEvent::OpenVimModePicker` opens the sub-picker, and `AppEvent::SetConfigVimMode(VimEnterBehavior)` applies the selection. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer via `set_vim_mode()`. The ChatComposer updates both its `vim_enter_behavior` field and calls `set_vim_mode_enabled()` on the textarea (passing `is_enabled()`). When vim mode is disabled, the textarea state resets to Insert mode. Persistence is handled by `persist_vim_mode_setting()` in `app/config_persistence.rs`, which writes the `toml_value()` string to the `[tui]` section.
+
+`BottomPane` also stores `vim_mode_enabled: bool` (set by `set_vim_mode()`), which it injects into `SelectionViewParams` whenever `show_selection_view()` is called for a searchable view. This means vim mode affects both the textarea input and the selection popup key handling (see "ListSelectionView Vim-Mode-Aware Search" above).
 
 
 **History Search (Configurable Hotkey):**
