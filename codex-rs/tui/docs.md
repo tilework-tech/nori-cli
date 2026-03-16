@@ -110,11 +110,11 @@ Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one 
 | History cells | `false` (default) | Each plan update creates a `PlanUpdateCell` in scrollback history, scrolling away as new content arrives |
 | Pinned drawer | `true` | The latest plan state is held in `ChatWidget.pinned_plan` and rendered as a fixed `PinnedPlanDrawer` widget in the viewport |
 
-The branching happens in `on_plan_update()`: when the drawer is enabled, the `UpdatePlanArgs` is stored in `pinned_plan` and a redraw is requested; otherwise, a history cell is created via the existing `new_plan_update()` path.
+The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of whether the drawer is currently enabled. In `on_plan_update()`, the `UpdatePlanArgs` is stored in `pinned_plan` on every event; when the drawer is disabled, the update is also cloned and added to history as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next `PlanUpdate` event. The rendering in `as_renderable()` is gated on the `pinned_plan_drawer` boolean -- the drawer only appears when both the boolean is true and `pinned_plan` is `Some`.
 
 The `PinnedPlanDrawer` widget implements `Renderable` and is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0). When no plan has been received, the drawer contributes zero height. Both `PinnedPlanDrawer` and `PlanUpdateCell` share the same `render_plan_lines()` function (extracted to `history_cell/mod.rs`) to ensure visual consistency -- plan steps render as a checkbox checklist with status-dependent styling (completed: strikethrough/dim, in-progress: cyan/bold, pending: dim).
 
-The config follows the standard toggle pattern: `NoriConfig.pinned_plan_drawer` -> `App` propagates at startup via `set_pinned_plan_drawer()` -> `AppEvent::SetConfigPinnedPlanDrawer` for runtime toggles -> `persist_pinned_plan_drawer_setting()` writes to `[tui]` in `config.toml`. Toggling off clears `pinned_plan` so the drawer disappears immediately.
+The config follows the standard toggle pattern: `NoriConfig.pinned_plan_drawer` -> `App` propagates at startup via `set_pinned_plan_drawer()` -> `AppEvent::SetConfigPinnedPlanDrawer` for runtime toggles -> `persist_pinned_plan_drawer_setting()` writes to `[tui]` in `config.toml`. Toggling off hides the drawer immediately but retains the plan state so re-enabling shows it without delay.
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 

@@ -442,7 +442,8 @@ impl ChatWidget {
             self.pinned_plan = Some(update);
             self.request_redraw();
         } else {
-            self.add_to_history(history_cell::new_plan_update(update));
+            self.add_to_history(history_cell::new_plan_update(update.clone()));
+            self.pinned_plan = Some(update);
         }
     }
 

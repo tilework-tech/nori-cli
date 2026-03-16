@@ -414,8 +414,9 @@ pub(crate) struct ChatWidget {
     pub(crate) session_skillset_name: Option<String>,
     /// Whether plan updates are rendered in a pinned drawer instead of history cells.
     pinned_plan_drawer: bool,
-    /// Latest plan state for the pinned plan drawer. Only populated when
-    /// `pinned_plan_drawer` is enabled.
+    /// Latest plan state, always updated on every plan event. Used by the
+    /// pinned plan drawer when enabled; retained when disabled so toggling
+    /// the drawer on shows the most recent plan immediately.
     pinned_plan: Option<UpdatePlanArgs>,
 }
 
