@@ -105,6 +105,8 @@ impl ChatWidget {
             loop_count_override: None,
             turn_finished: false,
             session_skillset_name: None,
+            pinned_plan_drawer: false,
+            pinned_plan: None,
         };
 
         widget.prefetch_rate_limits();
@@ -205,6 +207,8 @@ impl ChatWidget {
             loop_count_override: None,
             turn_finished: false,
             session_skillset_name: None,
+            pinned_plan_drawer: false,
+            pinned_plan: None,
         };
 
         widget.prefetch_rate_limits();
@@ -307,6 +311,8 @@ impl ChatWidget {
             loop_count_override: None,
             turn_finished: false,
             session_skillset_name: None,
+            pinned_plan_drawer: false,
+            pinned_plan: None,
         };
 
         widget.prefetch_rate_limits();

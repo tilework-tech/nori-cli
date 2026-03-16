@@ -319,6 +319,117 @@ fn plan_update_renders_history_cell() {
 }
 
 #[test]
+fn plan_update_routes_to_pinned_drawer_when_enabled() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_pinned_plan_drawer(true);
+    let update = UpdatePlanArgs {
+        explanation: Some("Starting work".to_string()),
+        plan: vec![
+            PlanItemArg {
+                step: "Research".into(),
+                status: StepStatus::Completed,
+            },
+            PlanItemArg {
+                step: "Implement".into(),
+                status: StepStatus::InProgress,
+            },
+        ],
+    };
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(update),
+    });
+    // No history cell should be created when the pinned drawer is enabled.
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "plan update should not create history cells when pinned drawer is enabled"
+    );
+    // The plan content should be visible in the rendered viewport.
+    let rendered = render_bottom_popup(&chat, 60);
+    assert!(
+        rendered.contains("Research"),
+        "rendered viewport should contain plan step text: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Implement"),
+        "rendered viewport should contain plan step text: {rendered:?}"
+    );
+}
+
+#[test]
+fn plan_update_routes_to_history_when_drawer_disabled() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    // pinned_plan_drawer defaults to false
+    let update = UpdatePlanArgs {
+        explanation: None,
+        plan: vec![PlanItemArg {
+            step: "Do something".into(),
+            status: StepStatus::Pending,
+        }],
+    };
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(update),
+    });
+    // History cell should be created when drawer is disabled.
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        !cells.is_empty(),
+        "plan update should create a history cell when pinned drawer is disabled"
+    );
+    // The plan content should NOT appear in the rendered viewport (it went to history/scrollback).
+    let rendered = render_bottom_popup(&chat, 60);
+    assert!(
+        !rendered.contains("Do something"),
+        "rendered viewport should not contain plan text when drawer is disabled: {rendered:?}"
+    );
+}
+
+#[test]
+fn toggling_pinned_drawer_off_routes_next_update_to_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_pinned_plan_drawer(true);
+    // First update goes to the drawer.
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![PlanItemArg {
+                step: "Task A".into(),
+                status: StepStatus::InProgress,
+            }],
+        }),
+    });
+    let _ = drain_insert_history(&mut rx); // clear channel
+
+    // Toggle off — drawer content should disappear from the viewport.
+    chat.set_pinned_plan_drawer(false);
+    let rendered = render_bottom_popup(&chat, 60);
+    assert!(
+        !rendered.contains("Task A"),
+        "plan content should disappear from viewport after toggling drawer off: {rendered:?}"
+    );
+
+    // Next update should go to history, not the drawer.
+    chat.handle_codex_event(Event {
+        id: "sub-2".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![PlanItemArg {
+                step: "Task B".into(),
+                status: StepStatus::Pending,
+            }],
+        }),
+    });
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        !cells.is_empty(),
+        "plan update should create a history cell after drawer is toggled off"
+    );
+}
+
+#[test]
 fn stream_error_updates_status_indicator() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     chat.bottom_pane.set_task_running(true);

@@ -314,6 +314,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigSkillsetPerSession(bool),
 
+    /// Set the TUI pinned plan drawer config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigPinnedPlanDrawer(bool),
+
     /// Open the worktree choice modal when enabling per-session skillsets.
     #[cfg(feature = "nori-config")]
     OpenSkillsetPerSessionWorktreeChoice,

@@ -101,6 +101,21 @@ on_task_complete():
 
 `finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
 
+**Pinned Plan Drawer** (`pinned_plan_drawer.rs`, `chatwidget/event_handlers.rs`, `chatwidget/helpers.rs`):
+
+Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one of two ways, controlled by the `pinned_plan_drawer` config setting:
+
+| Mode | Config Value | Behavior |
+|------|-------------|----------|
+| History cells | `false` (default) | Each plan update creates a `PlanUpdateCell` in scrollback history, scrolling away as new content arrives |
+| Pinned drawer | `true` | The latest plan state is held in `ChatWidget.pinned_plan` and rendered as a fixed `PinnedPlanDrawer` widget in the viewport |
+
+The branching happens in `on_plan_update()`: when the drawer is enabled, the `UpdatePlanArgs` is stored in `pinned_plan` and a redraw is requested; otherwise, a history cell is created via the existing `new_plan_update()` path.
+
+The `PinnedPlanDrawer` widget implements `Renderable` and is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0). When no plan has been received, the drawer contributes zero height. Both `PinnedPlanDrawer` and `PlanUpdateCell` share the same `render_plan_lines()` function (extracted to `history_cell/mod.rs`) to ensure visual consistency -- plan steps render as a checkbox checklist with status-dependent styling (completed: strikethrough/dim, in-progress: cyan/bold, pending: dim).
+
+The config follows the standard toggle pattern: `NoriConfig.pinned_plan_drawer` -> `App` propagates at startup via `set_pinned_plan_drawer()` -> `AppEvent::SetConfigPinnedPlanDrawer` for runtime toggles -> `persist_pinned_plan_drawer_setting()` writes to `[tui]` in `config.toml`. Toggling off clears `pinned_plan` so the drawer disappears immediately.
+
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
 **System Info Collection** (`system_info.rs`):
@@ -152,7 +167,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
 | `/model` | Choose model (dynamically shows current agent/model name) |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
+| `/config` | Toggle TUI settings (pinned plan drawer, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
 | `/browse` | Open a terminal file manager to browse and edit files |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |

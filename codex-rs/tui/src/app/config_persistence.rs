@@ -167,6 +167,26 @@ impl App {
     }
 
     #[cfg(feature = "nori-config")]
+    pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
+        self.pinned_plan_drawer = enabled;
+        self.chat_widget.set_pinned_plan_drawer(enabled);
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "pinned_plan_drawer"], toml_value(enabled))
+            .apply()
+            .await
+        {
+            tracing::error!(error = %err, "failed to persist pinned_plan_drawer setting");
+            self.chat_widget
+                .add_error_message(format!("Failed to save pinned_plan_drawer setting: {err}"));
+            return;
+        }
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("Pinned plan drawer {status}."), None);
+    }
+
+    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
         let builder = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "skillset_per_session"], toml_value(enabled));

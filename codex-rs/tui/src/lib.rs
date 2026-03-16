@@ -62,6 +62,7 @@ mod model_migration;
 mod nori;
 pub mod onboarding;
 mod pager_overlay;
+mod pinned_plan_drawer;
 pub mod public_widgets;
 mod render;
 mod resume_picker;

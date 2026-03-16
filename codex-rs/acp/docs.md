@@ -197,6 +197,7 @@ Helper methods on `AutoWorktree`:
 | `auto_worktree` | `auto_worktree` | `Off` | Worktree creation behavior at session start |
 | `skillset_per_session` | `skillset_per_session` | `false` | When enabled, each session gets its own skillset. Independent of `auto_worktree` -- does not force it on |
 | `file_manager` | `file_manager` | `None` | Terminal file manager for the `/browse` command |
+| `pinned_plan_drawer` | `pinned_plan_drawer` | `false` | When enabled, plan updates render in a pinned viewport drawer instead of scrollable history cells |
 
 The `FileManager` enum (`types/mod.rs`) represents supported terminal file managers for the `/browse` slash command. Stored under `[tui]` in `config.toml` as a kebab-case string. Variants: `Vifm`, `Ranger`, `Lf`, `Nnn`. Each variant provides:
 - `command_name()` -- binary name to invoke (e.g. `"vifm"`, `"ranger"`)

@@ -1320,6 +1320,9 @@ pub struct TuiConfigToml {
 
     /// Terminal file manager for the `/browse` command.
     pub file_manager: Option<FileManager>,
+
+    /// Pin plan updates to a drawer in the viewport instead of history cells.
+    pub pinned_plan_drawer: Option<bool>,
 }
 
 /// Resolved TUI configuration
@@ -1490,6 +1493,9 @@ pub struct NoriConfig {
     /// `None` means not configured.
     pub file_manager: Option<FileManager>,
 
+    /// Pin plan updates to a drawer in the viewport instead of history cells.
+    pub pinned_plan_drawer: bool,
+
     /// Footer segment visibility configuration.
     pub footer_segment_config: FooterSegmentConfig,
 
@@ -1577,6 +1583,7 @@ impl Default for NoriConfig {
             auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
             file_manager: None,
+            pinned_plan_drawer: false,
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),

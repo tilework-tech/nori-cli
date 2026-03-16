@@ -17,6 +17,15 @@ impl ChatWidget {
         self.bottom_pane.set_vertical_footer(enabled);
     }
 
+    /// Enable or disable the pinned plan drawer. When disabled, any stored
+    /// plan state is cleared so the drawer disappears immediately.
+    pub(crate) fn set_pinned_plan_drawer(&mut self, enabled: bool) {
+        self.pinned_plan_drawer = enabled;
+        if !enabled {
+            self.pinned_plan = None;
+        }
+    }
+
     /// Update the agent display name shown in approval dialogs.
     /// Used when ACP agent switch completes successfully.
     #[cfg(feature = "unstable")]
@@ -206,6 +215,19 @@ impl ChatWidget {
         };
         let mut flex = FlexRenderable::new();
         flex.push(1, active_cell_renderable);
+        // Pinned plan drawer: renders the latest plan state between the active
+        // cell and the bottom pane. When no plan has been received yet, this
+        // contributes zero height. See `pinned_plan_drawer.rs` for the widget
+        // and future collapsible mode TODO.
+        if let Some(plan) = &self.pinned_plan {
+            flex.push(
+                0,
+                RenderableItem::Owned(Box::new(crate::pinned_plan_drawer::PinnedPlanDrawer::new(
+                    plan,
+                )))
+                .inset(Insets::tlbr(1, 0, 0, 0)),
+            );
+        }
         flex.push(
             0,
             RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(1, 0, 0, 0)),
