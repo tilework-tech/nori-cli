@@ -65,12 +65,12 @@ impl AgentKind {
     /// Get the context window size (in tokens) for this agent.
     ///
     /// These are approximate values based on typical model configurations:
-    /// - Claude Code: 200K tokens
-    /// - Codex: 258K tokens  
+    /// - Claude Code: 1M tokens
+    /// - Codex: 258K tokens
     /// - Gemini: 1M tokens
     pub fn context_window_size(&self) -> i64 {
         match self {
-            AgentKind::ClaudeCode => 200_000,
+            AgentKind::ClaudeCode => 1_000_000,
             AgentKind::Codex => 258_000,
             AgentKind::Gemini => 1_000_000,
         }
@@ -1416,6 +1416,11 @@ mod tests {
         initialize_registry(vec![custom]).unwrap();
         assert_eq!(get_agent_display_name("my-custom"), "My Custom Agent");
         reset_registry();
+    }
+
+    #[test]
+    fn test_claude_code_context_window_is_1m() {
+        assert_eq!(AgentKind::ClaudeCode.context_window_size(), 1_000_000);
     }
 
     #[test]
