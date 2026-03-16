@@ -198,6 +198,9 @@ impl ChatWidget {
             SlashCommand::Status => {
                 self.add_status_output();
             }
+            SlashCommand::Memory => {
+                self.add_memory_output();
+            }
             SlashCommand::FirstPrompt => {
                 if let Some(text) = &self.first_prompt_text {
                     self.add_info_message(text.clone(), None);

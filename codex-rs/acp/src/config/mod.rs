@@ -13,6 +13,7 @@ pub use loader::find_nori_home;
 pub use types::AgentConfigToml;
 pub use types::AgentDistributionToml;
 pub use types::ApprovalPolicy;
+pub use types::AutoWorktree;
 pub use types::DEFAULT_AGENT;
 pub use types::FooterSegment;
 pub use types::FooterSegmentConfig;

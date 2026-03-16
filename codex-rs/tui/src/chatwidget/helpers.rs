@@ -69,6 +69,31 @@ impl ChatWidget {
         self.open_agent_popup();
     }
 
+    pub(crate) fn add_memory_output(&mut self) {
+        let files = crate::nori::session_header::active_instruction_file_contents(
+            &self.config.model,
+            &self.config.cwd,
+        );
+
+        if files.is_empty() {
+            self.add_info_message("No active instruction files found.".to_string(), None);
+            return;
+        }
+
+        let mut lines: Vec<Line<'static>> = vec!["/memory".magenta().into()];
+
+        for (path, contents) in files {
+            let display_path = crate::nori::session_header::format_instruction_path(&path);
+            lines.push(Line::from(""));
+            lines.push(Line::from(display_path.bold()));
+            for line in contents.lines() {
+                lines.push(Line::from(line.to_string().dim()));
+            }
+        }
+
+        self.add_plain_history_lines(lines);
+    }
+
     pub(crate) fn add_mcp_output(&mut self) {
         if self.config.mcp_servers.is_empty() {
             self.add_to_history(history_cell::empty_mcp_output());

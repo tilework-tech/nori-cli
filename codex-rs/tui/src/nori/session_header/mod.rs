@@ -605,6 +605,29 @@ fn truncate_summary(summary: &str, max_len: usize) -> String {
     }
 }
 
+/// Format an instruction file path for display, relativizing to the home directory.
+pub(crate) fn format_instruction_path(path: &Path) -> String {
+    format_directory(path, None)
+}
+
+/// Discover and return all active instruction files for the given agent and directory.
+///
+/// Each returned tuple contains the file path and its contents.
+/// Files that cannot be read are silently skipped.
+pub(crate) fn active_instruction_file_contents(agent: &str, cwd: &Path) -> Vec<(PathBuf, String)> {
+    let agent_kind = detect_agent_kind(agent);
+    let files = discover_all_instruction_files(cwd, agent_kind);
+    files
+        .into_iter()
+        .filter(|f| f.active)
+        .filter_map(|f| {
+            std::fs::read_to_string(&f.path)
+                .ok()
+                .map(|contents| (f.path, contents))
+        })
+        .collect()
+}
+
 /// Create the Nori status output cell for the /status command.
 ///
 /// This displays a simplified version of the session header showing:

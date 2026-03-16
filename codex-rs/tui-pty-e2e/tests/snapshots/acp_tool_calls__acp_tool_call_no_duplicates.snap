@@ -11,10 +11,13 @@ expression: normalize_for_input_snapshot(contents)
 ────────────────────────────────────────────────────────────────────────────────
 
 • Processing command...
-  Interleaved test done.
 
 • Ran 'Executing interleaved command(test)'
   └ Command completed
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Interleaved test done.
 
 
 › [DEFAULT_PROMPT]

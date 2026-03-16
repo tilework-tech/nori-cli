@@ -66,6 +66,7 @@ impl App {
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
                     expected_agent: None, // No filtering for /new command
+                    deferred_spawn: false,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -575,6 +576,7 @@ impl App {
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
                     expected_agent: Some(agent_name.clone()),
+                    deferred_spawn: false,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -721,23 +723,22 @@ impl App {
                 self.set_session_loop_count(value);
             }
             #[cfg(feature = "nori-config")]
-            AppEvent::SetConfigAutoWorktree(enabled) => {
-                if !enabled
-                    && let Ok(current) = codex_acp::config::NoriConfig::load()
-                    && current.skillset_per_session
-                {
-                    self.chat_widget.add_info_message(
-                        "Auto Worktree cannot be disabled while Per Session Skillsets is enabled."
-                            .to_string(),
-                        None,
-                    );
-                    return Ok(true);
-                }
-                self.persist_auto_worktree_setting(enabled).await;
+            AppEvent::OpenAutoWorktreePicker => {
+                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+                self.chat_widget
+                    .open_auto_worktree_picker(nori_config.auto_worktree);
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigAutoWorktree(value) => {
+                self.persist_auto_worktree_setting(value).await;
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigSkillsetPerSession(enabled) => {
                 self.persist_skillset_per_session_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::OpenSkillsetPerSessionWorktreeChoice => {
+                self.chat_widget.open_skillset_worktree_choice_picker();
             }
             #[cfg(feature = "nori-config")]
             AppEvent::OpenFooterSegmentsPicker => {
@@ -770,6 +771,7 @@ impl App {
                     auth_manager: self.auth_manager.clone(),
                     vertical_footer: self.vertical_footer,
                     expected_agent: None,
+                    deferred_spawn: false,
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.chat_widget
@@ -815,6 +817,29 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_switch_result(&name, success, &message);
+                // If the agent spawn was deferred (waiting for skillset switch to
+                // complete), trigger it now that files are on disk.
+                #[cfg(feature = "nori-config")]
+                if success && let Some(server) = self.server_for_deferred_spawn.take() {
+                    self.chat_widget.spawn_deferred_agent(
+                        self.config.clone(),
+                        self.app_event_tx.clone(),
+                        server,
+                    );
+                }
+            }
+            AppEvent::SkillsetPickerDismissed => {
+                // The skillset picker was dismissed without selection. If the
+                // agent spawn was deferred, spawn it now without a skillset
+                // (behaves as if skillset_per_session is disabled).
+                #[cfg(feature = "nori-config")]
+                if let Some(server) = self.server_for_deferred_spawn.take() {
+                    self.chat_widget.spawn_deferred_agent(
+                        self.config.clone(),
+                        self.app_event_tx.clone(),
+                        server,
+                    );
+                }
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
@@ -927,6 +952,7 @@ impl App {
                             auth_manager: self.auth_manager.clone(),
                             vertical_footer: self.vertical_footer,
                             expected_agent: None,
+                            deferred_spawn: false,
                         };
                         self.chat_widget =
                             ChatWidget::new_resumed_acp(init, acp_session_id, transcript);

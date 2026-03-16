@@ -53,6 +53,9 @@ pub(crate) struct SelectionViewParams {
     pub search_placeholder: Option<String>,
     pub header: Box<dyn Renderable>,
     pub initial_selected_idx: Option<usize>,
+    /// Optional callback fired when the picker is dismissed without selection
+    /// (e.g. via Escape or Ctrl-C).
+    pub on_dismiss: Option<SelectionAction>,
 }
 
 impl Default for SelectionViewParams {
@@ -66,6 +69,7 @@ impl Default for SelectionViewParams {
             search_placeholder: None,
             header: Box::new(()),
             initial_selected_idx: None,
+            on_dismiss: None,
         }
     }
 }
@@ -83,6 +87,7 @@ pub(crate) struct ListSelectionView {
     last_selected_actual_idx: Option<usize>,
     header: Box<dyn Renderable>,
     initial_selected_idx: Option<usize>,
+    on_dismiss: Option<SelectionAction>,
 }
 
 impl ListSelectionView {
@@ -114,6 +119,7 @@ impl ListSelectionView {
             last_selected_actual_idx: None,
             header,
             initial_selected_idx: params.initial_selected_idx,
+            on_dismiss: params.on_dismiss,
         };
         s.apply_filter();
         s
@@ -207,7 +213,6 @@ impl ListSelectionView {
                         name: display_name,
                         display_shortcut: item.display_shortcut,
                         match_indices: None,
-                        is_current: item.is_current,
                         description,
                     }
                 })
@@ -332,6 +337,9 @@ impl BottomPaneView for ListSelectionView {
     }
 
     fn on_ctrl_c(&mut self) -> CancellationEvent {
+        if let Some(cb) = self.on_dismiss.take() {
+            cb(&self.app_event_tx);
+        }
         self.complete = true;
         CancellationEvent::Handled
     }
@@ -343,12 +351,7 @@ impl Renderable for ListSelectionView {
         // Build the same display rows used by the renderer so wrapping math matches.
         let rows = self.build_rows();
         let rows_width = Self::rows_width(width);
-        let rows_height = measure_rows_height(
-            &rows,
-            &self.state,
-            MAX_POPUP_ROWS,
-            rows_width.saturating_add(1),
-        );
+        let rows_height = measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, rows_width);
 
         // Subtract 4 for the padding on the left and right of the header.
         let mut height = self.header.desired_height(width.saturating_sub(4));
@@ -383,12 +386,7 @@ impl Renderable for ListSelectionView {
             .desired_height(content_area.width.saturating_sub(4));
         let rows = self.build_rows();
         let rows_width = Self::rows_width(content_area.width);
-        let rows_height = measure_rows_height(
-            &rows,
-            &self.state,
-            MAX_POPUP_ROWS,
-            rows_width.saturating_add(1),
-        );
+        let rows_height = measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, rows_width);
         let [header_area, _, search_area, list_area] = Layout::vertical([
             Constraint::Max(header_height),
             Constraint::Max(1),
@@ -619,6 +617,71 @@ mod tests {
     }
 
     #[test]
+    fn on_dismiss_callback_fires_on_ctrl_c() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let dismissed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dismissed_clone = dismissed.clone();
+        let items = vec![SelectionItem {
+            name: "Option A".to_string(),
+            dismiss_on_select: true,
+            ..Default::default()
+        }];
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items,
+                on_dismiss: Some(Box::new(move |_tx| {
+                    dismissed_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                })),
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Dismiss via Ctrl-C
+        view.on_ctrl_c();
+
+        assert!(
+            dismissed.load(std::sync::atomic::Ordering::SeqCst),
+            "on_dismiss callback should fire when picker is dismissed via Ctrl-C"
+        );
+        assert!(view.is_complete(), "view should be complete after dismiss");
+    }
+
+    #[test]
+    fn on_dismiss_callback_not_fired_on_accept() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let dismissed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dismissed_clone = dismissed.clone();
+        let items = vec![SelectionItem {
+            name: "Option A".to_string(),
+            dismiss_on_select: true,
+            ..Default::default()
+        }];
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items,
+                on_dismiss: Some(Box::new(move |_tx| {
+                    dismissed_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                })),
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Accept via Enter (should NOT fire on_dismiss)
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(
+            !dismissed.load(std::sync::atomic::Ordering::SeqCst),
+            "on_dismiss callback should NOT fire when an item is selected"
+        );
+    }
+
+    #[test]
     fn narrow_width_keeps_all_rows_visible() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -840,5 +903,88 @@ mod tests {
         view.search_query.clear();
         view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
         assert_eq!(view.search_query, "k", "k should be added to search query");
+    }
+
+    #[test]
+    fn narrow_terminal_no_single_char_description_lines() {
+        // Reproduce the bug: on a narrow terminal, descriptions that are pushed
+        // to a high desc_col wrap with huge indent, producing one-char-per-line.
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Vertical Footer (on)".to_string(),
+                description: Some(
+                    "Stack footer segments vertically instead of horizontally".to_string(),
+                ),
+                is_current: true,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Terminal Notifications (on)".to_string(),
+                description: Some("Send OSC 9 escape sequences to notify the terminal".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Configuration".to_string()),
+                items,
+                ..Default::default()
+            },
+            tx,
+        );
+        let rendered = render_lines_with_width(&view, 30);
+
+        // The rendered output should NOT have lines that are just whitespace + a
+        // single visible character. That pattern is the telltale sign of the
+        // one-char-per-line wrapping bug.
+        for (line_num, line) in rendered.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.len() == 1 && trimmed != "›" {
+                panic!(
+                    "line {} has single-char content '{trimmed}', \
+                     indicating broken description wrapping:\n{rendered}",
+                    line_num + 1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_very_narrow_config_popup() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Vertical Footer (on)".to_string(),
+                description: Some(
+                    "Stack footer segments vertically instead of horizontally".to_string(),
+                ),
+                is_current: true,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "OS Notifications (off)".to_string(),
+                description: Some("Send native desktop notifications on events".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Configuration".to_string()),
+                items,
+                ..Default::default()
+            },
+            tx,
+        );
+        assert_snapshot!(
+            "list_selection_very_narrow_config",
+            render_lines_with_width(&view, 30)
+        );
     }
 }

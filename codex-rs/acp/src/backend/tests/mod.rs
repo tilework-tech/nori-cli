@@ -52,7 +52,7 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         history_persistence: crate::config::HistoryPersistence::SaveAll,
         cli_version: "test".to_string(),
         notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
-        auto_worktree: false,
+        auto_worktree: crate::config::AutoWorktree::Off,
         auto_worktree_repo_root: None,
         session_start_hooks: vec![],
         session_end_hooks: vec![],

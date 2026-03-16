@@ -23,7 +23,7 @@ impl AcpBackend {
         debug!("Spawning ACP backend for agent: {}", config.agent);
 
         // Spawn the ACP connection with enhanced error handling
-        let connection_result = AcpConnection::spawn(&agent_config, &cwd).await;
+        let connection_result = SacpConnection::spawn(&agent_config, &cwd).await;
 
         let mut connection = match connection_result {
             Ok(conn) => conn,

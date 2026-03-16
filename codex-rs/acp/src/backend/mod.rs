@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_client_protocol as acp;
 use anyhow::Result;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
@@ -30,6 +29,7 @@ use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
+use sacp::schema as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
@@ -37,10 +37,10 @@ use tokio::sync::watch;
 use tracing::debug;
 use tracing::warn;
 
-use crate::connection::AcpConnection;
 use crate::connection::AcpModelState;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
+use crate::connection::sacp_connection::SacpConnection;
 use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
@@ -173,8 +173,8 @@ pub struct AcpBackendConfig {
     pub history_persistence: crate::config::HistoryPersistence,
     /// CLI version for transcript metadata
     pub cli_version: String,
-    /// Whether auto-worktree is enabled (worktree was created at startup)
-    pub auto_worktree: bool,
+    /// Auto-worktree mode (whether a worktree was created at startup)
+    pub auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming the worktree
     pub auto_worktree_repo_root: Option<PathBuf>,
     /// Scripts to run when a session starts
@@ -217,11 +217,11 @@ pub struct AcpBackendConfig {
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
 ///
-/// This struct wraps an `AcpConnection` and translates between:
+/// This struct wraps a `SacpConnection` and translates between:
 /// - Codex `Op` submissions → ACP protocol calls
 /// - ACP `SessionUpdate` events → `codex_protocol::Event`
 pub struct AcpBackend {
-    connection: Arc<AcpConnection>,
+    connection: Arc<SacpConnection>,
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
     event_tx: mpsc::Sender<Event>,
@@ -255,8 +255,8 @@ pub struct AcpBackend {
     is_first_prompt: Arc<Mutex<bool>>,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
-    /// Whether auto-worktree is enabled (worktree was created at startup)
-    auto_worktree: bool,
+    /// Auto-worktree mode (whether a worktree was created at startup)
+    auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming
     auto_worktree_repo_root: Option<PathBuf>,
     /// Scripts to run when a session ends
