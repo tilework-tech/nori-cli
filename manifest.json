@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "noriSessionName": "nori-azure-tang-c739",
+  "claudeSessionId": "d397dae8-2d79-45db-90b9-23041d8c737a",
+  "timestamp": 1773751830,
+  "baseSha": "f5a102ad7a9a7a4a3e8de3ce600cb74c8558fcfb",
+  "baseBranch": "main",
+  "repoUrl": "https://github.com/tilework-tech/nori-cli",
+  "agentType": "claude-code",
+  "hasWorkspacePatch": false,
+  "hasUntrackedFiles": false
+}
