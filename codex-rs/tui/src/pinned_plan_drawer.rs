@@ -114,7 +114,7 @@ fn build_collapsed_line(
         spans.push(sep.dim());
         spans.push(prefix_marker.into());
         if !label.is_empty() {
-            spans.push(Span::from(label.to_string()));
+            spans.push(label.into());
         }
 
         let budget = width.saturating_sub(fixed_prefix_width);

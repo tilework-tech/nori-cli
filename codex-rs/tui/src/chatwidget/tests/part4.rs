@@ -667,7 +667,7 @@ fn toggle_with_no_plan_is_safe() {
 }
 
 #[test]
-fn collapsed_all_done_shows_green_text() {
+fn collapsed_all_done_shows_completion_summary() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     chat.set_plan_drawer_mode(PlanDrawerMode::Collapsed);
     chat.handle_codex_event(Event {
