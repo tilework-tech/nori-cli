@@ -438,7 +438,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_plan_update(&mut self, update: UpdatePlanArgs) {
-        if self.pinned_plan_drawer {
+        if self.plan_drawer_mode != PlanDrawerMode::Off {
             self.pinned_plan = Some(update);
             self.request_redraw();
         } else {

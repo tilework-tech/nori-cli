@@ -168,8 +168,13 @@ impl App {
 
     #[cfg(feature = "nori-config")]
     pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
-        self.pinned_plan_drawer = enabled;
-        self.chat_widget.set_pinned_plan_drawer(enabled);
+        let mode = if enabled {
+            crate::chatwidget::PlanDrawerMode::Expanded
+        } else {
+            crate::chatwidget::PlanDrawerMode::Off
+        };
+        self.plan_drawer_mode = mode;
+        self.chat_widget.set_plan_drawer_mode(mode);
 
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "pinned_plan_drawer"], toml_value(enabled))

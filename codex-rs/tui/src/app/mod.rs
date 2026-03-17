@@ -247,8 +247,8 @@ pub(crate) struct App {
     /// Vim mode and Enter key behavior loaded from NoriConfig.
     vim_mode: codex_acp::config::VimEnterBehavior,
 
-    /// Whether the pinned plan drawer is enabled.
-    pinned_plan_drawer: bool,
+    /// Plan drawer visibility mode.
+    plan_drawer_mode: crate::chatwidget::PlanDrawerMode,
 
     system_info_tx: mpsc::Sender<SystemInfoRefreshRequest>,
 
@@ -405,7 +405,7 @@ impl App {
             loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode: codex_acp::config::VimEnterBehavior::Off,
-            pinned_plan_drawer: false,
+            plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
@@ -427,9 +427,13 @@ impl App {
         // Propagate initial vim mode setting.
         app.chat_widget.set_vim_mode(app.vim_mode);
         // Propagate initial pinned plan drawer setting.
-        app.pinned_plan_drawer = nori_config.pinned_plan_drawer;
-        app.chat_widget
-            .set_pinned_plan_drawer(nori_config.pinned_plan_drawer);
+        let plan_mode = if nori_config.pinned_plan_drawer {
+            crate::chatwidget::PlanDrawerMode::Expanded
+        } else {
+            crate::chatwidget::PlanDrawerMode::Off
+        };
+        app.plan_drawer_mode = plan_mode;
+        app.chat_widget.set_plan_drawer_mode(plan_mode);
         // Propagate initial footer segment config.
         for segment in codex_acp::config::FooterSegment::all_variants() {
             app.chat_widget.set_footer_segment_enabled(

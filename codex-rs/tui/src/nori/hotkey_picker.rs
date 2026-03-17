@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn picker_starts_with_default_bindings() {
         let (picker, _rx) = make_picker();
-        assert_eq!(picker.entries().len(), 15);
+        assert_eq!(picker.entries().len(), 16);
         assert_eq!(picker.entries()[0].0, HotkeyAction::OpenTranscript);
         assert_eq!(picker.entries()[0].1, HotkeyBinding::from_str("ctrl+t"));
         assert_eq!(picker.entries()[1].0, HotkeyAction::OpenEditor);

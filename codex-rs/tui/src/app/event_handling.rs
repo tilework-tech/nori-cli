@@ -73,8 +73,7 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget
-                    .set_pinned_plan_drawer(self.pinned_plan_drawer);
+                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
                 #[cfg(feature = "nori-config")]
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
@@ -589,8 +588,7 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget
-                    .set_pinned_plan_drawer(self.pinned_plan_drawer);
+                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
                 #[cfg(feature = "nori-config")]
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
@@ -810,8 +808,7 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget
-                    .set_pinned_plan_drawer(self.pinned_plan_drawer);
+                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
                 self.chat_widget.set_loop_state(remaining, total);
@@ -995,8 +992,7 @@ impl App {
                         self.chat_widget
                             .set_hotkey_config(self.hotkey_config.clone());
                         self.chat_widget.set_vim_mode(self.vim_mode);
-                        self.chat_widget
-                            .set_pinned_plan_drawer(self.pinned_plan_drawer);
+                        self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
 
                         self.chat_widget.add_info_message(
                             format!("Resuming session with {display_name}..."),
@@ -1055,8 +1051,7 @@ impl App {
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget
-                    .set_pinned_plan_drawer(self.pinned_plan_drawer);
+                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
                 #[cfg(feature = "nori-config")]
                 self.chat_widget
                     .set_loop_count_override(self.loop_count_override);
@@ -1094,6 +1089,16 @@ impl App {
             let editor_binding = self.hotkey_config.binding_for(HotkeyAction::OpenEditor);
             if matches_binding(editor_binding, &key_event) {
                 self.open_external_editor(tui);
+                return;
+            }
+
+            let plan_binding = self
+                .hotkey_config
+                .binding_for(HotkeyAction::TogglePlanDrawer);
+            if matches_binding(plan_binding, &key_event) {
+                self.chat_widget.toggle_plan_drawer();
+                self.plan_drawer_mode = self.chat_widget.plan_drawer_mode();
+                tui.frame_requester().schedule_frame();
                 return;
             }
         }

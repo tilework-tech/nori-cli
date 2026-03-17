@@ -311,7 +311,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         loop_count_override: None,
         turn_finished: false,
         session_skillset_name: None,
-        pinned_plan_drawer: false,
+        plan_drawer_mode: PlanDrawerMode::Off,
         pinned_plan: None,
     };
     (widget, rx, op_rx)

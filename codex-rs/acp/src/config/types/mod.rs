@@ -619,6 +619,8 @@ pub enum HotkeyAction {
     Yank,
     /// Search prompt history (reverse search).
     HistorySearch,
+    /// Toggle the pinned plan drawer between collapsed and expanded.
+    TogglePlanDrawer,
 }
 
 impl HotkeyAction {
@@ -640,6 +642,7 @@ impl HotkeyAction {
             Self::KillToBeginningOfLine => "Kill to Line Start",
             Self::Yank => "Yank",
             Self::HistorySearch => "History Search",
+            Self::TogglePlanDrawer => "Toggle Plan Drawer",
         }
     }
 
@@ -661,6 +664,9 @@ impl HotkeyAction {
             Self::KillToBeginningOfLine => "Kill text to beginning of line",
             Self::Yank => "Yank (paste) killed text",
             Self::HistorySearch => "Search prompt history (reverse search)",
+            Self::TogglePlanDrawer => {
+                "Toggle the pinned plan drawer between collapsed and expanded"
+            }
         }
     }
 
@@ -682,6 +688,7 @@ impl HotkeyAction {
             Self::KillToBeginningOfLine => "kill_to_beginning_of_line",
             Self::Yank => "yank",
             Self::HistorySearch => "history_search",
+            Self::TogglePlanDrawer => "toggle_plan_drawer",
         }
     }
 
@@ -703,6 +710,7 @@ impl HotkeyAction {
             Self::KillToBeginningOfLine => "ctrl+u",
             Self::Yank => "ctrl+y",
             Self::HistorySearch => "ctrl+r",
+            Self::TogglePlanDrawer => "ctrl+o",
         }
     }
 
@@ -724,6 +732,7 @@ impl HotkeyAction {
             Self::KillToBeginningOfLine,
             Self::Yank,
             Self::HistorySearch,
+            Self::TogglePlanDrawer,
         ]
     }
 }
@@ -841,6 +850,8 @@ pub struct HotkeyConfigToml {
     pub yank: Option<HotkeyBinding>,
     /// Hotkey for searching prompt history (reverse search).
     pub history_search: Option<HotkeyBinding>,
+    /// Hotkey for toggling the pinned plan drawer.
+    pub toggle_plan_drawer: Option<HotkeyBinding>,
 }
 
 /// Resolved hotkey configuration with defaults applied.
@@ -876,6 +887,8 @@ pub struct HotkeyConfig {
     pub yank: HotkeyBinding,
     /// Hotkey for searching prompt history (reverse search).
     pub history_search: HotkeyBinding,
+    /// Hotkey for toggling the pinned plan drawer.
+    pub toggle_plan_drawer: HotkeyBinding,
 }
 
 impl Default for HotkeyConfig {
@@ -920,6 +933,9 @@ impl Default for HotkeyConfig {
             ),
             yank: HotkeyBinding::from_str(HotkeyAction::Yank.default_binding()),
             history_search: HotkeyBinding::from_str(HotkeyAction::HistorySearch.default_binding()),
+            toggle_plan_drawer: HotkeyBinding::from_str(
+                HotkeyAction::TogglePlanDrawer.default_binding(),
+            ),
         }
     }
 }
@@ -983,6 +999,10 @@ impl HotkeyConfig {
                 .history_search
                 .clone()
                 .unwrap_or(defaults.history_search),
+            toggle_plan_drawer: toml
+                .toggle_plan_drawer
+                .clone()
+                .unwrap_or(defaults.toggle_plan_drawer),
         }
     }
 
@@ -1004,6 +1024,7 @@ impl HotkeyConfig {
             HotkeyAction::KillToBeginningOfLine => &self.kill_to_beginning_of_line,
             HotkeyAction::Yank => &self.yank,
             HotkeyAction::HistorySearch => &self.history_search,
+            HotkeyAction::TogglePlanDrawer => &self.toggle_plan_drawer,
         }
     }
 
@@ -1025,6 +1046,7 @@ impl HotkeyConfig {
             HotkeyAction::KillToBeginningOfLine => self.kill_to_beginning_of_line = binding,
             HotkeyAction::Yank => self.yank = binding,
             HotkeyAction::HistorySearch => self.history_search = binding,
+            HotkeyAction::TogglePlanDrawer => self.toggle_plan_drawer = binding,
         }
     }
 
@@ -1052,6 +1074,7 @@ impl HotkeyConfig {
             ),
             (HotkeyAction::Yank, &self.yank),
             (HotkeyAction::HistorySearch, &self.history_search),
+            (HotkeyAction::TogglePlanDrawer, &self.toggle_plan_drawer),
         ]
     }
 }

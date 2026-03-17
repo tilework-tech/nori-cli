@@ -321,7 +321,7 @@ fn plan_update_renders_history_cell() {
 #[test]
 fn plan_update_routes_to_pinned_drawer_when_enabled() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-    chat.set_pinned_plan_drawer(true);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);
     let update = UpdatePlanArgs {
         explanation: Some("Starting work".to_string()),
         plan: vec![
@@ -360,7 +360,7 @@ fn plan_update_routes_to_pinned_drawer_when_enabled() {
 #[test]
 fn plan_update_routes_to_history_when_drawer_disabled() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-    // pinned_plan_drawer defaults to false
+    // plan_drawer_mode defaults to Off
     let update = UpdatePlanArgs {
         explanation: None,
         plan: vec![PlanItemArg {
@@ -389,7 +389,7 @@ fn plan_update_routes_to_history_when_drawer_disabled() {
 #[test]
 fn toggling_pinned_drawer_off_routes_next_update_to_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-    chat.set_pinned_plan_drawer(true);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);
     // First update goes to the drawer.
     chat.handle_codex_event(Event {
         id: "sub-1".into(),
@@ -404,7 +404,7 @@ fn toggling_pinned_drawer_off_routes_next_update_to_history() {
     let _ = drain_insert_history(&mut rx); // clear channel
 
     // Toggle off — drawer content should disappear from the viewport.
-    chat.set_pinned_plan_drawer(false);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Off);
     let rendered = render_bottom_popup(&chat, 60);
     assert!(
         !rendered.contains("Task A"),
@@ -452,7 +452,7 @@ fn toggling_pinned_drawer_on_shows_existing_plan() {
     let _ = drain_insert_history(&mut rx); // consume history cell
 
     // Now toggle the drawer on — the latest plan should appear in the viewport.
-    chat.set_pinned_plan_drawer(true);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);
     let rendered = render_bottom_popup(&chat, 60);
     assert!(
         rendered.contains("Step Alpha"),
@@ -467,7 +467,7 @@ fn toggling_pinned_drawer_on_shows_existing_plan() {
 #[test]
 fn toggling_pinned_drawer_off_then_on_preserves_plan() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-    chat.set_pinned_plan_drawer(true);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);
     // Send a plan while drawer is on.
     chat.handle_codex_event(Event {
         id: "sub-1".into(),
@@ -482,12 +482,218 @@ fn toggling_pinned_drawer_off_then_on_preserves_plan() {
     let _ = drain_insert_history(&mut rx);
 
     // Toggle off, then back on — plan should reappear.
-    chat.set_pinned_plan_drawer(false);
-    chat.set_pinned_plan_drawer(true);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Off);
+    chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);
     let rendered = render_bottom_popup(&chat, 60);
     assert!(
         rendered.contains("Persistent Task"),
         "plan should survive toggle off/on cycle: {rendered:?}"
+    );
+}
+
+#[test]
+fn collapsed_drawer_renders_one_line_summary() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.set_plan_drawer_mode(PlanDrawerMode::Collapsed);
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![
+                PlanItemArg {
+                    step: "Explore codebase".into(),
+                    status: StepStatus::Completed,
+                },
+                PlanItemArg {
+                    step: "Implement feature".into(),
+                    status: StepStatus::InProgress,
+                },
+                PlanItemArg {
+                    step: "Write tests".into(),
+                    status: StepStatus::Pending,
+                },
+            ],
+        }),
+    });
+    let rendered = render_bottom_popup(&chat, 80);
+    assert!(
+        rendered.contains("1/3 completed"),
+        "collapsed drawer should show progress count: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Implement feature"),
+        "collapsed drawer should show current step: {rendered:?}"
+    );
+}
+
+#[test]
+fn toggle_from_off_enters_collapsed() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    // Send a plan while drawer is off.
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![PlanItemArg {
+                step: "Task One".into(),
+                status: StepStatus::InProgress,
+            }],
+        }),
+    });
+    assert_eq!(chat.plan_drawer_mode(), PlanDrawerMode::Off);
+    chat.toggle_plan_drawer();
+    assert_eq!(chat.plan_drawer_mode(), PlanDrawerMode::Collapsed);
+
+    let rendered = render_bottom_popup(&chat, 80);
+    // Collapsed summary should be visible.
+    assert!(
+        rendered.contains("0/1 completed"),
+        "toggling from Off should show collapsed summary: {rendered:?}"
+    );
+}
+
+#[test]
+fn toggle_from_collapsed_enters_expanded() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.set_plan_drawer_mode(PlanDrawerMode::Collapsed);
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: Some("Starting".into()),
+            plan: vec![
+                PlanItemArg {
+                    step: "Step A".into(),
+                    status: StepStatus::Completed,
+                },
+                PlanItemArg {
+                    step: "Step B".into(),
+                    status: StepStatus::InProgress,
+                },
+            ],
+        }),
+    });
+    chat.toggle_plan_drawer();
+    assert_eq!(chat.plan_drawer_mode(), PlanDrawerMode::Expanded);
+
+    let rendered = render_bottom_popup(&chat, 80);
+    // Expanded view should show the full "Updated Plan" header and individual steps.
+    assert!(
+        rendered.contains("Updated Plan"),
+        "expanded drawer should show full plan header: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Step A"),
+        "expanded drawer should show step details: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Step B"),
+        "expanded drawer should show step details: {rendered:?}"
+    );
+}
+
+#[test]
+fn toggle_from_expanded_enters_collapsed() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![
+                PlanItemArg {
+                    step: "Alpha".into(),
+                    status: StepStatus::Completed,
+                },
+                PlanItemArg {
+                    step: "Beta".into(),
+                    status: StepStatus::InProgress,
+                },
+                PlanItemArg {
+                    step: "Gamma".into(),
+                    status: StepStatus::Pending,
+                },
+            ],
+        }),
+    });
+    chat.toggle_plan_drawer();
+    assert_eq!(chat.plan_drawer_mode(), PlanDrawerMode::Collapsed);
+
+    let rendered = render_bottom_popup(&chat, 80);
+    // Collapsed should show summary, not "Updated Plan" header.
+    assert!(
+        !rendered.contains("Updated Plan"),
+        "collapsed drawer should not show expanded header: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("1/3 completed"),
+        "collapsed drawer should show progress: {rendered:?}"
+    );
+}
+
+#[test]
+fn collapsed_drawer_routes_updates_to_drawer_not_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_plan_drawer_mode(PlanDrawerMode::Collapsed);
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![PlanItemArg {
+                step: "Some task".into(),
+                status: StepStatus::Pending,
+            }],
+        }),
+    });
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "plan update should not create history cells when drawer is in Collapsed mode"
+    );
+}
+
+#[test]
+fn toggle_with_no_plan_is_safe() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    // No plan sent. Toggle should still work without panic.
+    chat.toggle_plan_drawer();
+    assert_eq!(chat.plan_drawer_mode(), PlanDrawerMode::Collapsed);
+
+    let rendered = render_bottom_popup(&chat, 60);
+    // No plan data, so nothing plan-related should be in the viewport.
+    assert!(
+        !rendered.contains("Plan:"),
+        "collapsed drawer with no plan should not render: {rendered:?}"
+    );
+}
+
+#[test]
+fn collapsed_all_done_shows_green_text() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.set_plan_drawer_mode(PlanDrawerMode::Collapsed);
+    chat.handle_codex_event(Event {
+        id: "sub-1".into(),
+        msg: EventMsg::PlanUpdate(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![
+                PlanItemArg {
+                    step: "Done one".into(),
+                    status: StepStatus::Completed,
+                },
+                PlanItemArg {
+                    step: "Done two".into(),
+                    status: StepStatus::Completed,
+                },
+            ],
+        }),
+    });
+    let rendered = render_bottom_popup(&chat, 80);
+    assert!(
+        rendered.contains("2/2 completed"),
+        "all-completed should show full progress: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("All done"),
+        "all-completed should show 'All done': {rendered:?}"
     );
 }
 

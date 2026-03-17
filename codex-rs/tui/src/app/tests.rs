@@ -57,7 +57,7 @@ fn make_test_app() -> App {
         loop_count_override: None,
         hotkey_config: codex_acp::config::HotkeyConfig::default(),
         vim_mode: codex_acp::config::VimEnterBehavior::Off,
-        pinned_plan_drawer: false,
+        plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
         system_info_tx,
         worktree_warning_shown: false,
         #[cfg(feature = "nori-config")]
@@ -104,7 +104,7 @@ fn make_test_app_with_channels() -> (
             loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode: codex_acp::config::VimEnterBehavior::Off,
-            pinned_plan_drawer: false,
+            plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
