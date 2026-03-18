@@ -110,7 +110,9 @@ pub(crate) fn default_approval_requirement(
 ) -> ApprovalRequirement {
     let needs_approval = match policy {
         AskForApproval::Never | AskForApproval::OnFailure => false,
-        AskForApproval::OnRequest => !matches!(sandbox_policy, SandboxPolicy::DangerFullAccess),
+        AskForApproval::OnRequest | AskForApproval::AllowEdits => {
+            !matches!(sandbox_policy, SandboxPolicy::DangerFullAccess)
+        }
         AskForApproval::UnlessTrusted => true,
     };
 

@@ -1439,6 +1439,8 @@ pub enum ApprovalPolicy {
     /// Ask on potentially dangerous operations
     #[default]
     OnRequest,
+    /// Auto-approve file edits, ask for shell commands
+    AllowEdits,
     /// Never ask (dangerous)
     Never,
 }

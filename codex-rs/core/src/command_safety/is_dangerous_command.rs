@@ -20,7 +20,7 @@ pub fn requires_initial_appoval(
     }
     match policy {
         AskForApproval::Never | AskForApproval::OnFailure => false,
-        AskForApproval::OnRequest => {
+        AskForApproval::OnRequest | AskForApproval::AllowEdits => {
             // In DangerFullAccess, only prompt if the command looks dangerous.
             if matches!(sandbox_policy, SandboxPolicy::DangerFullAccess) {
                 return command_might_be_dangerous(command);

@@ -13,6 +13,9 @@ fn test_approval_policy_deserialize() {
     let w: Wrapper = toml::from_str(r#"policy = "on-request""#).unwrap();
     assert_eq!(w.policy, ApprovalPolicy::OnRequest);
 
+    let w: Wrapper = toml::from_str(r#"policy = "allow-edits""#).unwrap();
+    assert_eq!(w.policy, ApprovalPolicy::AllowEdits);
+
     let w: Wrapper = toml::from_str(r#"policy = "never""#).unwrap();
     assert_eq!(w.policy, ApprovalPolicy::Never);
 }

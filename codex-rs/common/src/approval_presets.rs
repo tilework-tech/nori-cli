@@ -29,6 +29,13 @@ pub fn builtin_approval_presets() -> Vec<ApprovalPreset> {
             sandbox: SandboxPolicy::ReadOnly,
         },
         ApprovalPreset {
+            id: "allow-edits",
+            label: "Allow Edits",
+            description: "File edits are auto-approved. Shell commands still require approval.",
+            approval: AskForApproval::AllowEdits,
+            sandbox: SandboxPolicy::new_workspace_write_policy(),
+        },
+        ApprovalPreset {
             id: "auto",
             label: "Agent",
             description: "Read and edit files, and run commands.",
@@ -59,11 +66,10 @@ pub fn approval_mode_label(approval: AskForApproval, sandbox: &SandboxPolicy) ->
         .into_iter()
         .find(|preset| preset.approval == approval && sandbox_matches(&preset.sandbox, sandbox))
         .map(|preset| {
-            // Simplify "Agent (full access)" to "Full Access"
-            if preset.id == "full-access" {
-                "Full Access".to_string()
-            } else {
-                preset.label.to_string()
+            match preset.id {
+                // Simplify "Agent (full access)" to "Full Access"
+                "full-access" => "Full Access".to_string(),
+                _ => preset.label.to_string(),
             }
         })
 }
@@ -94,6 +100,13 @@ mod tests {
     fn approval_mode_label_returns_read_only_for_read_only_preset() {
         let label = approval_mode_label(AskForApproval::OnRequest, &SandboxPolicy::ReadOnly);
         assert_eq!(label, Some("Read Only".to_string()));
+    }
+
+    #[test]
+    fn approval_mode_label_returns_allow_edits_for_allow_edits_preset() {
+        let sandbox = SandboxPolicy::new_workspace_write_policy();
+        let label = approval_mode_label(AskForApproval::AllowEdits, &sandbox);
+        assert_eq!(label, Some("Allow Edits".to_string()));
     }
 
     #[test]

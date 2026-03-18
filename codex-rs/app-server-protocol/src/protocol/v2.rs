@@ -122,7 +122,7 @@ impl From<CoreCodexErrorInfo> for CodexErrorInfo {
 
 v2_enum_from_core!(
     pub enum AskForApproval from codex_protocol::protocol::AskForApproval {
-        UnlessTrusted, OnFailure, OnRequest, Never
+        UnlessTrusted, OnFailure, OnRequest, AllowEdits, Never
     }
 );
 

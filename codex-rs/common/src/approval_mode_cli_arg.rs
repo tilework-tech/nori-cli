@@ -21,6 +21,9 @@ pub enum ApprovalModeCliArg {
     /// The model decides when to ask the user for approval.
     OnRequest,
 
+    /// Auto-approve file edits but ask for shell commands.
+    AllowEdits,
+
     /// Never ask for user approval
     /// Execution failures are immediately returned to the model.
     Never,
@@ -32,6 +35,7 @@ impl From<ApprovalModeCliArg> for AskForApproval {
             ApprovalModeCliArg::Untrusted => AskForApproval::UnlessTrusted,
             ApprovalModeCliArg::OnFailure => AskForApproval::OnFailure,
             ApprovalModeCliArg::OnRequest => AskForApproval::OnRequest,
+            ApprovalModeCliArg::AllowEdits => AskForApproval::AllowEdits,
             ApprovalModeCliArg::Never => AskForApproval::Never,
         }
     }

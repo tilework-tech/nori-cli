@@ -261,6 +261,10 @@ pub enum AskForApproval {
     #[default]
     OnRequest,
 
+    /// File edits (patches) are auto‑approved without prompting the user, but
+    /// shell command execution still requires approval.
+    AllowEdits,
+
     /// Never ask the user to approve commands. Failures are immediately returned
     /// to the model, and never escalated to the user for approval.
     Never,

@@ -258,6 +258,20 @@ impl AcpBackend {
                 continue;
             }
 
+            // If approval_policy is AllowEdits, auto-approve patch (file edit) requests
+            // but still prompt for exec (shell command) requests.
+            if current_policy == AskForApproval::AllowEdits
+                && matches!(&request.event, ApprovalEventType::Patch(_))
+            {
+                debug!(
+                    target: "acp_event_flow",
+                    call_id = %request.event.call_id(),
+                    "Auto-approving patch request (approval_policy=AllowEdits)"
+                );
+                let _ = request.response_tx.send(ReviewDecision::Approved);
+                continue;
+            }
+
             // Send the appropriate approval request event to TUI based on operation type.
             // Use the call_id as the event wrapper ID so that the TUI can
             // correctly route the user's decision back to this pending request.
