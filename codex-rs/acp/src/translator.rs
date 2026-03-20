@@ -6,11 +6,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agent_client_protocol as acp;
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::FileChange;
+use sacp::schema as acp;
 
 /// Convert codex ResponseItems to ACP ContentBlocks for prompting.
 ///

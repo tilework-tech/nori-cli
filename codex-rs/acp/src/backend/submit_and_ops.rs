@@ -468,7 +468,7 @@ impl AcpBackend {
     /// Get a reference to the underlying ACP connection.
     ///
     /// This provides access to low-level ACP operations like model switching.
-    pub fn connection(&self) -> &Arc<AcpConnection> {
+    pub fn connection(&self) -> &Arc<SacpConnection> {
         &self.connection
     }
 

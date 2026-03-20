@@ -15,7 +15,7 @@ pub(super) async fn run_prompt_summary(
     use tokio::time::timeout;
 
     let agent_config = get_agent_config(agent_name)?;
-    let connection = AcpConnection::spawn(&agent_config, cwd).await?;
+    let connection = SacpConnection::spawn(&agent_config, cwd).await?;
     let session_id = connection.create_session(cwd).await?;
 
     let summarization_prompt = format!(
@@ -46,9 +46,8 @@ pub(super) async fn run_prompt_summary(
     )
     .await;
 
-    // Drop the connection on a blocking thread to avoid blocking the async
-    // runtime (AcpConnection::drop does a synchronous recv_timeout).
-    tokio::task::spawn_blocking(move || drop(connection));
+    // Drop the connection to clean up the subprocess.
+    drop(connection);
 
     match prompt_result {
         Ok(Ok(_)) => {}
