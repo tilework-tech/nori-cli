@@ -526,11 +526,21 @@ fn parse_codex_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
                 .and_then(serde_json::Value::as_i64)
                 .unwrap_or(0);
 
+            // Extract last_token_usage.input_tokens as context window fill.
+            // Unlike total_token_usage (cumulative billing counter that grows
+            // unboundedly), last_token_usage.input_tokens represents the actual
+            // number of input tokens sent in the most recent API call — i.e.,
+            // how full the context window is.
+            let last_context_tokens = info
+                .get("last_token_usage")
+                .and_then(|lt| lt.get("input_tokens"))
+                .and_then(serde_json::Value::as_i64);
+
             last_usage = Some(TranscriptTokenUsage {
                 input_tokens: input,
                 output_tokens: output,
                 cached_tokens: cached,
-                last_context_tokens: None,
+                last_context_tokens,
             });
         }
     }
@@ -1180,6 +1190,8 @@ mod tests {
 
     #[test]
     fn test_parse_codex_tokens_has_no_last_context_tokens() {
+        use pretty_assertions::assert_eq;
+
         let temp_dir = TempDir::new().unwrap();
         let transcript_file = temp_dir.path().join("session.jsonl");
 
@@ -1193,7 +1205,118 @@ mod tests {
         }
 
         let usage = parse_transcript_tokens(&transcript_file, AgentKind::Codex).unwrap();
-        assert_eq!(usage.last_context_tokens, None);
+        assert_eq!(
+            usage,
+            TranscriptTokenUsage {
+                input_tokens: 300,
+                output_tokens: 200,
+                cached_tokens: 0,
+                last_context_tokens: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_codex_tokens_extracts_last_context_tokens_from_last_token_usage() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Realistic codex token_count event with both total_token_usage and last_token_usage
+            writeln!(
+                f,
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 38450, "cached_input_tokens": 18176, "output_tokens": 961, "reasoning_output_tokens": 413, "total_tokens": 39411}}, "last_token_usage": {{"input_tokens": 24195, "cached_input_tokens": 14720, "output_tokens": 377, "reasoning_output_tokens": 76, "total_tokens": 24572}}, "model_context_window": 258400}}}}}}"#
+            )
+            .unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::Codex).unwrap();
+
+        // last_context_tokens = last_token_usage.input_tokens (context window fill)
+        // Cumulative totals from total_token_usage for the "Tokens" segment
+        assert_eq!(
+            usage,
+            TranscriptTokenUsage {
+                input_tokens: 38450,
+                output_tokens: 961,
+                cached_tokens: 18176,
+                last_context_tokens: Some(24195),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_codex_tokens_uses_last_event_for_last_context_tokens() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // First token_count event (earlier turn)
+            writeln!(
+                f,
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 14255, "output_tokens": 584}}, "last_token_usage": {{"input_tokens": 14255, "output_tokens": 584}}}}}}}}"#
+            )
+            .unwrap();
+            // Second token_count event (later turn - should be used)
+            writeln!(
+                f,
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 38450, "output_tokens": 961}}, "last_token_usage": {{"input_tokens": 24195, "output_tokens": 377}}}}}}}}"#
+            )
+            .unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::Codex).unwrap();
+
+        // Should use the LAST event's last_token_usage, not the first
+        assert_eq!(
+            usage,
+            TranscriptTokenUsage {
+                input_tokens: 38450,
+                output_tokens: 961,
+                cached_tokens: 0,
+                last_context_tokens: Some(24195),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_codex_tokens_gold_standard_real_session() {
+        use pretty_assertions::assert_eq;
+
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            // Gold standard data from a real 22-turn codex session:
+            // total_token_usage.input_tokens = 995,726 (cumulative billing, NOT context fill)
+            // last_token_usage.input_tokens = 69,246 (actual context window fill = 26.8%)
+            // model_context_window = 258,400
+            writeln!(
+                f,
+                r#"{{"type": "event_msg", "payload": {{"type": "token_count", "info": {{"total_token_usage": {{"input_tokens": 995726, "cached_input_tokens": 500000, "output_tokens": 8452, "reasoning_output_tokens": 2000, "total_tokens": 1004178}}, "last_token_usage": {{"input_tokens": 69246, "cached_input_tokens": 45000, "output_tokens": 1200, "reasoning_output_tokens": 300, "total_tokens": 70446}}, "model_context_window": 258400}}}}}}"#
+            )
+            .unwrap();
+        }
+
+        let usage = parse_transcript_tokens(&transcript_file, AgentKind::Codex).unwrap();
+
+        // last_context_tokens = 69,246 (actual context fill, NOT 995,726 or 1,004,178)
+        assert_eq!(
+            usage,
+            TranscriptTokenUsage {
+                input_tokens: 995726,
+                output_tokens: 8452,
+                cached_tokens: 500000,
+                last_context_tokens: Some(69246),
+            }
+        );
     }
 
     #[test]

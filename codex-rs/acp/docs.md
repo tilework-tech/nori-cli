@@ -462,8 +462,19 @@ Each agent format requires different parsing:
 | Agent | Format | Token Fields |
 |-------|--------|--------------|
 | Claude Code | JSONL | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` in `message.usage` |
-| Codex | JSONL | `input_tokens`, `output_tokens`, `cached_input_tokens` from last `token_count` event |
+| Codex | JSONL | `total_token_usage.input_tokens`, `total_token_usage.output_tokens`, `total_token_usage.cached_input_tokens` from last `token_count` event; `last_token_usage.input_tokens` as `last_context_tokens` for context window fill |
 | Gemini | JSON | `input`, `output`, `thoughts`, `cached` from each message's `tokens` object |
+
+**Codex Token Semantics:**
+
+Codex `token_count` events contain two token usage objects with different semantics:
+
+| Object | Meaning | Used For |
+|--------|---------|----------|
+| `total_token_usage` | Cumulative billing counter across ALL API calls in the session; grows unboundedly | `input_tokens`, `output_tokens`, `cached_tokens` fields (the "Tokens" footer segment) |
+| `last_token_usage` | Tokens from the most recent API call only; represents actual context window fill | `last_context_tokens` field (the "Context: XK (Y%)" footer segment) |
+
+Using `total_token_usage.input_tokens` for context window percentage would produce nonsensical results (e.g., 995K tokens for a 258K context window) because the cumulative counter sums across all turns. The `last_token_usage.input_tokens` correctly reflects how full the context window is for the current turn. When `last_token_usage` is absent (older transcript formats), `last_context_tokens` is `None` and the context percentage is not displayed.
 
 **Claude Code Streaming Deduplication:**
 

@@ -101,20 +101,26 @@ on_task_complete():
 
 `finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
 
-**Pinned Plan Drawer** (`pinned_plan_drawer.rs`, `chatwidget/event_handlers.rs`, `chatwidget/helpers.rs`):
+**Pinned Plan Drawer** (`pinned_plan_drawer.rs`, `chatwidget/mod.rs`, `chatwidget/event_handlers.rs`, `chatwidget/helpers.rs`):
 
-Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one of two ways, controlled by the `pinned_plan_drawer` config setting:
+Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one of two ways, controlled by the `PlanDrawerMode` enum on `ChatWidget`:
 
-| Mode | Config Value | Behavior |
-|------|-------------|----------|
-| History cells | `false` (default) | Each plan update creates a `PlanUpdateCell` in scrollback history, scrolling away as new content arrives |
-| Pinned drawer | `true` | The latest plan state is held in `ChatWidget.pinned_plan` and rendered as a fixed `PinnedPlanDrawer` widget in the viewport |
+| Mode | `PlanDrawerMode` | Behavior |
+|------|-------------------|----------|
+| History cells | `Off` (default) | Each plan update creates a `PlanUpdateCell` in scrollback history |
+| Collapsed drawer | `Collapsed` | One-line progress summary: `Plan: X/Y completed  *  > Current: step_name` |
+| Expanded drawer | `Expanded` | Full plan checklist (same as the previous boolean `true` behavior) |
 
-The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of whether the drawer is currently enabled. In `on_plan_update()`, the `UpdatePlanArgs` is stored in `pinned_plan` on every event; when the drawer is disabled, the update is also cloned and added to history as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next `PlanUpdate` event. The rendering in `as_renderable()` is gated on the `pinned_plan_drawer` boolean -- the drawer only appears when both the boolean is true and `pinned_plan` is `Some`.
+The toggle cycle (bound to `Ctrl+O` via `HotkeyAction::TogglePlanDrawer`) is: `Off -> Collapsed -> Expanded -> Collapsed -> ...`. Once the drawer enters a visible mode, it cycles between Collapsed and Expanded without returning to Off. The `toggle_plan_drawer()` method on `ChatWidget` implements this state machine. The `App` layer intercepts the hotkey binding in `handle_key_event()` and updates both the widget and its own `plan_drawer_mode` field.
 
-The `PinnedPlanDrawer` widget implements `Renderable` and is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0). When no plan has been received, the drawer contributes zero height. Both `PinnedPlanDrawer` and `PlanUpdateCell` share the same `render_plan_lines()` function (extracted to `history_cell/mod.rs`) to ensure visual consistency -- plan steps render as a checkbox checklist with status-dependent styling (completed: strikethrough/dim, in-progress: cyan/bold, pending: dim).
+The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of the current mode. In `on_plan_update()`, the `UpdatePlanArgs` is stored in `pinned_plan` on every event; when the mode is `Off`, the update is also cloned and added to history as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next `PlanUpdate` event.
 
-The config follows the standard toggle pattern: `NoriConfig.pinned_plan_drawer` -> `App` propagates at startup via `set_pinned_plan_drawer()` -> `AppEvent::SetConfigPinnedPlanDrawer` for runtime toggles -> `persist_pinned_plan_drawer_setting()` writes to `[tui]` in `config.toml`. Toggling off hides the drawer immediately but retains the plan state so re-enabling shows it without delay.
+The drawer is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0):
+- `Collapsed` renders `PinnedPlanDrawerCollapsed` (1 line, shows progress count and current/next step with truncation)
+- `Expanded` renders `PinnedPlanDrawer` (full checklist via `render_plan_lines()`)
+- `Off` contributes zero height
+
+The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. At startup, `true` maps to `Expanded` and `false` maps to `Off`. Runtime toggling via Ctrl+O does not persist -- only the `/config` toggle persists.
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
@@ -363,7 +369,7 @@ Hotkey actions fall into two categories that are consumed at different layers:
 
 | Category | Actions | Consumed By |
 |----------|---------|-------------|
-| App-level | OpenTranscript, OpenEditor | `app/event_handling.rs::handle_key_event()` |
+| App-level | OpenTranscript, OpenEditor, TogglePlanDrawer | `app/event_handling.rs::handle_key_event()` |
 | Editing | MoveBackwardChar, MoveForwardChar, MoveBeginningOfLine, MoveEndOfLine, MoveBackwardWord, MoveForwardWord, DeleteBackwardChar, DeleteForwardChar, DeleteBackwardWord, KillToEndOfLine, KillToBeginningOfLine, Yank | `textarea/mod.rs::input()` |
 | UI triggers | HistorySearch | `chat_composer/key_handling.rs` |
 

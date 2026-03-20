@@ -62,7 +62,7 @@ impl ChatComposer {
         // Use last_context_tokens (input-side tokens from the most recent
         // main-chain message) for context window fill display and percentage.
         // Falls back to cumulative total() when last_context_tokens is not
-        // available (e.g., non-Claude agents).
+        // available (e.g., Gemini).
         let context_tokens = token_breakdown.and_then(|t| {
             t.last_context_tokens
                 .or_else(|| Some(t.total()))
