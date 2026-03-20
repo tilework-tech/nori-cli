@@ -6,6 +6,7 @@ pub(super) async fn spawn_connection_internal(
     cwd: &Path,
     approval_tx: mpsc::Sender<ApprovalRequest>,
     persistent_tx: mpsc::Sender<acp::SessionUpdate>,
+    session_config_options: Arc<RwLock<Vec<acp::SessionConfigOption>>>,
 ) -> Result<(AcpConnectionInner, acp::AgentCapabilities)> {
     debug!(
         "Spawning ACP agent: {} {:?} in {}",
@@ -88,7 +89,7 @@ pub(super) async fn spawn_connection_internal(
     });
 
     // Create client delegate for handling agent requests
-    let delegate = ClientDelegate::new(cwd.to_path_buf(), approval_tx);
+    let delegate = ClientDelegate::new(cwd.to_path_buf(), approval_tx, session_config_options);
     delegate.set_persistent_listener(persistent_tx);
     let client_delegate = Rc::new(delegate);
 
@@ -154,6 +155,7 @@ pub(super) async fn run_command_loop(
     mut inner: AcpConnectionInner,
     mut command_rx: mpsc::Receiver<AcpCommand>,
     model_state: Arc<RwLock<AcpModelState>>,
+    session_config_options: Arc<RwLock<Vec<acp::SessionConfigOption>>>,
     shutdown_complete_tx: std::sync::mpsc::Sender<()>,
 ) {
     use acp::Agent;
@@ -188,6 +190,12 @@ pub(super) async fn run_command_loop(
                     );
                 }
 
+                if let Ok(ref response) = result
+                    && let Ok(mut state) = session_config_options.write()
+                {
+                    *state = response.config_options.clone().unwrap_or_default();
+                }
+
                 let result = result
                     .map(|r| r.session_id)
                     .context("Failed to create ACP session");
@@ -218,6 +226,12 @@ pub(super) async fn run_command_loop(
                     && let Ok(mut state) = model_state.write()
                 {
                     *state = AcpModelState::from_session_model_state(models);
+                }
+
+                if let Ok(ref response) = result
+                    && let Ok(mut state) = session_config_options.write()
+                {
+                    *state = response.config_options.clone().unwrap_or_default();
                 }
 
                 // Unregister the session so the update channel is closed,
@@ -335,6 +349,30 @@ pub(super) async fn run_command_loop(
                 }
 
                 let result = result.map(|_| ()).context("Failed to set ACP model");
+                let _ = response_tx.send(result);
+            }
+            AcpCommand::SetConfigOption {
+                session_id,
+                config_id,
+                value,
+                response_tx,
+            } => {
+                let result = inner
+                    .connection
+                    .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+                        session_id, config_id, value,
+                    ))
+                    .await;
+
+                if let Ok(ref response) = result
+                    && let Ok(mut state) = session_config_options.write()
+                {
+                    *state = response.config_options.clone();
+                }
+
+                let result = result
+                    .map(|_| ())
+                    .context("Failed to set ACP session config option");
                 let _ = response_tx.send(result);
             }
         }

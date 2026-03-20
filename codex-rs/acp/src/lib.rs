@@ -87,8 +87,19 @@ pub use agent_client_protocol::NewSessionRequest;
 pub use agent_client_protocol::NewSessionResponse;
 pub use agent_client_protocol::PromptRequest;
 pub use agent_client_protocol::PromptResponse;
+pub use agent_client_protocol::SessionConfigId;
+pub use agent_client_protocol::SessionConfigKind;
+pub use agent_client_protocol::SessionConfigOption;
+pub use agent_client_protocol::SessionConfigOptionCategory;
+pub use agent_client_protocol::SessionConfigSelect;
+pub use agent_client_protocol::SessionConfigSelectGroup;
+pub use agent_client_protocol::SessionConfigSelectOption;
+pub use agent_client_protocol::SessionConfigSelectOptions;
+pub use agent_client_protocol::SessionConfigValueId;
 pub use agent_client_protocol::SessionNotification;
 pub use agent_client_protocol::SessionUpdate;
+pub use agent_client_protocol::SetSessionConfigOptionRequest;
+pub use agent_client_protocol::SetSessionConfigOptionResponse;
 
 // Re-export model-related types (unstable feature)
 #[cfg(feature = "unstable")]

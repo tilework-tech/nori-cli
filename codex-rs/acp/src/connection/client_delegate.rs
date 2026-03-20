@@ -1,12 +1,17 @@
 use super::*;
 
 impl ClientDelegate {
-    pub(super) fn new(cwd: PathBuf, approval_tx: mpsc::Sender<ApprovalRequest>) -> Self {
+    pub(super) fn new(
+        cwd: PathBuf,
+        approval_tx: mpsc::Sender<ApprovalRequest>,
+        session_config_options: Arc<RwLock<Vec<acp::SessionConfigOption>>>,
+    ) -> Self {
         Self {
             sessions: RefCell::new(HashMap::new()),
             persistent_tx: RefCell::new(None),
             cwd,
             approval_tx,
+            session_config_options,
         }
     }
 
@@ -228,6 +233,12 @@ impl acp::Client for ClientDelegate {
         &self,
         notification: acp::SessionNotification,
     ) -> acp::Result<()> {
+        if let acp::SessionUpdate::ConfigOptionUpdate(update) = &notification.update
+            && let Ok(mut state) = self.session_config_options.write()
+        {
+            *state = update.config_options.clone();
+        }
+
         let sessions = self.sessions.borrow();
         if let Some(tx) = sessions.get(&notification.session_id) {
             // Non-blocking send - if channel is full or closed, we log and drop the update

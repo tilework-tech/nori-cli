@@ -142,6 +142,12 @@ enum AcpCommand {
         model_id: acp::ModelId,
         response_tx: oneshot::Sender<Result<()>>,
     },
+    SetConfigOption {
+        session_id: acp::SessionId,
+        config_id: acp::SessionConfigId,
+        value: acp::SessionConfigValueId,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
 }
 
 /// Timeout for waiting for worker thread cleanup during Drop.
@@ -170,6 +176,10 @@ pub struct AcpConnection {
     /// Thread-safe model state shared between the main thread and worker thread.
     /// Updated when sessions are created or models are switched.
     model_state: Arc<RwLock<AcpModelState>>,
+    /// Thread-safe session config snapshot shared between the main thread and worker thread.
+    /// Updated when sessions are created, loaded, config options are changed, or the
+    /// agent emits ConfigOptionUpdate notifications.
+    session_config_options: Arc<RwLock<Vec<acp::SessionConfigOption>>>,
     /// Worker thread handle. Stored as Option inside Mutex to allow taking in Drop.
     worker_thread: Mutex<Option<thread::JoinHandle<()>>>,
     /// Synchronous channel to receive notification when worker thread cleanup is complete.
@@ -210,4 +220,6 @@ pub struct ClientDelegate {
     cwd: PathBuf,
     /// Channel to send approval requests to the UI layer
     approval_tx: mpsc::Sender<ApprovalRequest>,
+    /// Shared session config snapshot updated from `ConfigOptionUpdate`.
+    session_config_options: Arc<RwLock<Vec<acp::SessionConfigOption>>>,
 }

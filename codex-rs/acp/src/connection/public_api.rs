@@ -30,6 +30,8 @@ impl AcpConnection {
         // Create shared model state - accessible from both main thread and worker
         let model_state = Arc::new(RwLock::new(AcpModelState::new()));
         let model_state_for_worker = Arc::clone(&model_state);
+        let session_config_options = Arc::new(RwLock::new(Vec::new()));
+        let session_config_options_for_worker = Arc::clone(&session_config_options);
 
         // Create synchronous channel for shutdown completion notification.
         // This allows Drop to wait for worker thread cleanup to complete.
@@ -55,6 +57,7 @@ impl AcpConnection {
                             &cwd,
                             approval_tx,
                             persistent_tx,
+                            Arc::clone(&session_config_options_for_worker),
                         )
                         .await
                         {
@@ -64,6 +67,7 @@ impl AcpConnection {
                                     inner,
                                     command_rx,
                                     model_state_for_worker,
+                                    session_config_options_for_worker,
                                     shutdown_complete_tx,
                                 )
                                 .await;
@@ -90,6 +94,7 @@ impl AcpConnection {
             approval_rx,
             persistent_rx,
             model_state,
+            session_config_options,
             worker_thread: Mutex::new(Some(worker_thread)),
             shutdown_complete_rx: Mutex::new(Some(shutdown_complete_rx)),
         })
@@ -215,6 +220,22 @@ impl AcpConnection {
             .clone()
     }
 
+    /// Get the current ACP session config snapshot.
+    ///
+    /// This returns the latest full `configOptions` set known for the session.
+    /// The snapshot is replaced wholesale from session setup responses,
+    /// `session/set_config_option` responses, and `ConfigOptionUpdate` notifications.
+    pub fn config_options(&self) -> Vec<acp::SessionConfigOption> {
+        #[expect(
+            clippy::expect_used,
+            reason = "RwLock poisoning indicates a bug elsewhere"
+        )]
+        self.session_config_options
+            .read()
+            .expect("Session config state lock poisoned")
+            .clone()
+    }
+
     /// Switch to a different model for the given session.
     ///
     /// This sends a `session/set_model` request to the ACP agent. The model state
@@ -240,6 +261,26 @@ impl AcpConnection {
             .send(AcpCommand::SetModel {
                 session_id: session_id.clone(),
                 model_id: model_id.clone(),
+                response_tx,
+            })
+            .await
+            .context("ACP worker thread died")?;
+        response_rx.await.context("ACP worker thread died")?
+    }
+
+    /// Set the value of a session config option.
+    pub async fn set_config_option(
+        &self,
+        session_id: &acp::SessionId,
+        config_id: &acp::SessionConfigId,
+        value: &acp::SessionConfigValueId,
+    ) -> Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpCommand::SetConfigOption {
+                session_id: session_id.clone(),
+                config_id: config_id.clone(),
+                value: value.clone(),
                 response_tx,
             })
             .await

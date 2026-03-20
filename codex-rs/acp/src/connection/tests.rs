@@ -78,7 +78,11 @@ async fn test_read_text_file_emits_tool_call_event() {
 
     // Create ClientDelegate with a session registered
     let (approval_tx, _approval_rx) = mpsc::channel(16);
-    let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+    let delegate = ClientDelegate::new(
+        temp_dir.path().to_path_buf(),
+        approval_tx,
+        Arc::new(RwLock::new(Vec::new())),
+    );
 
     // Register a session and capture updates
     let session_id = acp::SessionId::from("test-session-123".to_string());
@@ -130,7 +134,11 @@ async fn test_write_text_file_emits_tool_call_event() {
 
     // Create ClientDelegate with a session registered
     let (approval_tx, _approval_rx) = mpsc::channel(16);
-    let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+    let delegate = ClientDelegate::new(
+        temp_dir.path().to_path_buf(),
+        approval_tx,
+        Arc::new(RwLock::new(Vec::new())),
+    );
 
     // Register a session and capture updates
     let session_id = acp::SessionId::from("test-session-456".to_string());
@@ -264,7 +272,11 @@ async fn test_persistent_listener_receives_inter_turn_notifications() {
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let (approval_tx, _approval_rx) = mpsc::channel(16);
-    let delegate = ClientDelegate::new(temp_dir.path().to_path_buf(), approval_tx);
+    let delegate = ClientDelegate::new(
+        temp_dir.path().to_path_buf(),
+        approval_tx,
+        Arc::new(RwLock::new(Vec::new())),
+    );
 
     // Set up a persistent listener
     let (persistent_tx, mut persistent_rx) = mpsc::channel(32);
@@ -301,4 +313,127 @@ async fn test_persistent_listener_receives_inter_turn_notifications() {
         }
         other => panic!("Expected AgentMessageChunk, got: {other:?}"),
     }
+}
+
+#[tokio::test]
+#[serial]
+async fn test_create_session_captures_initial_config_options() {
+    let config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+
+    if !std::path::Path::new(&config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let conn = AcpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("Failed to spawn ACP connection");
+
+    conn.create_session(temp_dir.path())
+        .await
+        .expect("Failed to create session");
+
+    let config_options = conn.config_options();
+    assert!(
+        config_options
+            .iter()
+            .any(|option| option.id.to_string() == "model"),
+        "expected model config option in initial session config"
+    );
+    assert!(
+        config_options
+            .iter()
+            .any(|option| option.id.to_string() == "thought_level"),
+        "expected thought_level config option in initial session config"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_set_config_option_replaces_connection_state() {
+    let config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+
+    if !std::path::Path::new(&config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let conn = AcpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("Failed to spawn ACP connection");
+
+    let session_id = conn
+        .create_session(temp_dir.path())
+        .await
+        .expect("Failed to create session");
+
+    conn.set_config_option(
+        &session_id,
+        &acp::SessionConfigId::from("model".to_string()),
+        &acp::SessionConfigValueId::from("mock-model-fast"),
+    )
+    .await
+    .expect("Failed to set config option");
+
+    let config_options = conn.config_options();
+    assert!(
+        config_options
+            .iter()
+            .any(|option| option.id.to_string() == "speed"),
+        "expected speed config option after switching to fast model"
+    );
+    assert!(
+        !config_options
+            .iter()
+            .any(|option| option.id.to_string() == "thought_level"),
+        "thought_level should be removed when fast model is selected"
+    );
+}
+
+#[tokio::test]
+async fn test_config_option_update_replaces_session_config_state() {
+    use acp::Client;
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let shared_state = Arc::new(RwLock::new(Vec::new()));
+    let (approval_tx, _approval_rx) = mpsc::channel(16);
+    let delegate = ClientDelegate::new(
+        temp_dir.path().to_path_buf(),
+        approval_tx,
+        Arc::clone(&shared_state),
+    );
+
+    let update = acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![
+        acp::SessionConfigOption::select(
+            "thought_level",
+            "Thought Level",
+            "high",
+            vec![
+                acp::SessionConfigSelectOption::new("low", "Low"),
+                acp::SessionConfigSelectOption::new("high", "High"),
+            ],
+        ),
+    ]));
+
+    delegate
+        .session_notification(acp::SessionNotification::new("sess-1", update))
+        .await
+        .expect("session_notification should succeed");
+
+    let stored = shared_state
+        .read()
+        .expect("config state lock poisoned")
+        .clone();
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].id.to_string(), "thought_level");
 }

@@ -458,6 +458,11 @@ impl AcpBackend {
         self.connection.model_state()
     }
 
+    /// Get the current ACP session config snapshot.
+    pub fn config_options(&self) -> Vec<acp::SessionConfigOption> {
+        self.connection.config_options()
+    }
+
     /// Get the current session ID.
     ///
     /// Note: This clones the session ID since it may be replaced during /compact.
@@ -467,7 +472,7 @@ impl AcpBackend {
 
     /// Get a reference to the underlying ACP connection.
     ///
-    /// This provides access to low-level ACP operations like model switching.
+    /// This provides access to low-level ACP operations like session control.
     pub fn connection(&self) -> &Arc<AcpConnection> {
         &self.connection
     }
@@ -488,5 +493,17 @@ impl AcpBackend {
     pub async fn set_model(&self, model_id: &acp::ModelId) -> Result<()> {
         let session_id = self.session_id.read().await;
         self.connection.set_model(&session_id, model_id).await
+    }
+
+    /// Set the value of a session config option for the current session.
+    pub async fn set_config_option(
+        &self,
+        config_id: &acp::SessionConfigId,
+        value: &acp::SessionConfigValueId,
+    ) -> Result<()> {
+        let session_id = self.session_id.read().await;
+        self.connection
+            .set_config_option(&session_id, config_id, value)
+            .await
     }
 }
