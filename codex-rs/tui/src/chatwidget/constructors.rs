@@ -27,7 +27,6 @@ impl ChatWidget {
             let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
             SpawnAgentResult {
                 op_tx,
-                #[cfg(feature = "unstable")]
                 acp_handle: None,
             }
         } else {
@@ -94,7 +93,6 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
@@ -196,7 +194,6 @@ impl ChatWidget {
             // For existing conversations, we've already received SessionConfigured
             session_configured_received: true,
             // No ACP handle for existing conversations (they are HTTP mode only)
-            #[cfg(feature = "unstable")]
             acp_handle: None,
             session_stats: SessionStats::new(),
             login_handler: None,
@@ -300,7 +297,6 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
@@ -343,9 +339,6 @@ impl ChatWidget {
     ) {
         let spawn_result = spawn_agent(config, app_event_tx, server, None);
         self.codex_op_tx = spawn_result.op_tx;
-        #[cfg(feature = "unstable")]
-        {
-            self.acp_handle = spawn_result.acp_handle;
-        }
+        self.acp_handle = spawn_result.acp_handle;
     }
 }

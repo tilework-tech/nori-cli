@@ -512,6 +512,21 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the ACP session-config popup.
+    pub(crate) fn open_session_config_popup(&mut self) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            tokio::spawn(async move {
+                let config_options = handle.get_session_config().await.unwrap_or_default();
+                app_event_tx.send(AppEvent::OpenAcpSessionConfigPicker { config_options });
+            });
+            return;
+        }
+
+        let params = crate::nori::session_config_picker::acp_session_config_picker_params(&[]);
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the ACP model picker with fetched models.
     #[cfg(feature = "unstable")]
     pub(crate) fn open_acp_model_picker(
@@ -523,6 +538,26 @@ impl ChatWidget {
             &models,
             current_model_id.as_deref(),
         );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the top-level ACP session-config picker.
+    pub(crate) fn open_acp_session_config_picker(
+        &mut self,
+        config_options: Vec<codex_acp::SessionConfigOption>,
+    ) {
+        let params =
+            crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the value picker for a specific ACP session config option.
+    pub(crate) fn open_acp_session_config_value_picker(
+        &mut self,
+        option: codex_acp::SessionConfigOption,
+    ) {
+        let params =
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -557,6 +592,47 @@ impl ChatWidget {
         } else {
             self.add_info_message(
                 "No ACP agent handle available for model switching".to_string(),
+                None,
+            );
+        }
+    }
+
+    /// Set an ACP session config option via the agent handle.
+    pub(crate) fn set_acp_session_config_option(
+        &mut self,
+        config_id: String,
+        value: String,
+        option_name: String,
+        value_name: String,
+    ) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            let option_name_for_task = option_name.clone();
+            let value_name_for_task = value_name.clone();
+            tokio::spawn(async move {
+                match handle.set_session_config_option(config_id, value).await {
+                    Ok(()) => {
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: true,
+                            option_name: option_name_for_task,
+                            value_name: value_name_for_task,
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: false,
+                            option_name: option_name_for_task,
+                            value_name: value_name_for_task,
+                            error: Some(e.to_string()),
+                        });
+                    }
+                }
+            });
+            self.add_info_message(format!("Updating {option_name} to: {value_name}..."), None);
+        } else {
+            self.add_info_message(
+                "No ACP agent handle available for session config".to_string(),
                 None,
             );
         }

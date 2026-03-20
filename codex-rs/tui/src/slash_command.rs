@@ -14,6 +14,7 @@ pub enum SlashCommand {
     // more frequently used commands should be listed first.
     Agent,
     Model,
+    SessionConfig,
     Approvals,
     Config,
     New,
@@ -57,7 +58,8 @@ impl SlashCommand {
             SlashCommand::Status => "show current session configuration and context window usage",
             SlashCommand::Memory => "show the contents of all active instruction files",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
-            SlashCommand::Model => "choose what model and reasoning effort to use",
+            SlashCommand::Model => "choose what model to use",
+            SlashCommand::SessionConfig => "configure ACP session settings exposed by the agent",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Config => "toggle config settings",
             SlashCommand::Mcp => "list configured MCP tools",
@@ -87,6 +89,7 @@ impl SlashCommand {
             | SlashCommand::Compact
             | SlashCommand::Undo
             | SlashCommand::Model
+            | SlashCommand::SessionConfig
             | SlashCommand::Approvals
             | SlashCommand::Config
             | SlashCommand::Login

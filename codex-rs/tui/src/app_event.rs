@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use codex_acp::SessionConfigOption;
 use codex_common::approval_presets::ApprovalPreset;
 use codex_core::protocol::ConversationPathResponseEvent;
 use codex_core::protocol::Event;
@@ -229,6 +230,42 @@ pub(crate) enum AppEvent {
         model_id: String,
         /// The display name for UI feedback
         display_name: String,
+        /// Error message on failure
+        error: Option<String>,
+    },
+
+    /// Open the ACP session config picker popup with the current config snapshot.
+    OpenAcpSessionConfigPicker {
+        /// Full current ACP session config snapshot
+        config_options: Vec<SessionConfigOption>,
+    },
+
+    /// Open the value picker for a specific ACP session config option.
+    OpenAcpSessionConfigValuePicker {
+        /// The ACP session config option to edit
+        option: SessionConfigOption,
+    },
+
+    /// Set an ACP session config option value.
+    SetAcpSessionConfigOption {
+        /// ACP config option identifier
+        config_id: String,
+        /// Selected ACP value identifier
+        value: String,
+        /// Human-readable option label for UI feedback
+        option_name: String,
+        /// Human-readable selected value label for UI feedback
+        value_name: String,
+    },
+
+    /// Result of setting an ACP session config option.
+    AcpSessionConfigSetResult {
+        /// Whether the config option was set successfully
+        success: bool,
+        /// Human-readable option label
+        option_name: String,
+        /// Human-readable selected value label
+        value_name: String,
         /// Error message on failure
         error: Option<String>,
     },

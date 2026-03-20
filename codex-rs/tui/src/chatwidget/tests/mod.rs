@@ -300,7 +300,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         pending_agent: None,
         expected_agent: None,
         session_configured_received: false,
-        #[cfg(feature = "unstable")]
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,

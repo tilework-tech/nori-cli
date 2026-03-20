@@ -638,7 +638,12 @@ pub(crate) fn new_session_info_codex(
             Line::from(vec![
                 "  ".into(),
                 "/model".into(),
-                " - choose what model and reasoning effort to use".dim(),
+                " - choose what model to use".dim(),
+            ]),
+            Line::from(vec![
+                "  ".into(),
+                "/session-config".into(),
+                " - configure ACP session settings exposed by the agent".dim(),
             ]),
         ];
 

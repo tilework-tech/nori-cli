@@ -1132,6 +1132,68 @@ fn blackbox_model_picker_snapshot() {
     assert_snapshot!("blackbox_model_picker_open", terminal.backend());
 }
 
+/// Blackbox test: open the ACP session-config picker and snapshot the result.
+#[test]
+fn blackbox_session_config_picker_snapshot() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    let config_options = vec![
+        codex_acp::SessionConfigOption::select(
+            "model",
+            "Model",
+            "mock-model-default",
+            vec![
+                codex_acp::SessionConfigSelectGroup::new(
+                    "openai",
+                    "OpenAI",
+                    vec![
+                        codex_acp::SessionConfigSelectOption::new(
+                            "mock-model-default",
+                            "Mock Default Model",
+                        ),
+                        codex_acp::SessionConfigSelectOption::new(
+                            "mock-model-fast",
+                            "Mock Fast Model",
+                        ),
+                    ],
+                ),
+                codex_acp::SessionConfigSelectGroup::new(
+                    "anthropic",
+                    "Anthropic",
+                    vec![codex_acp::SessionConfigSelectOption::new(
+                        "mock-model-powerful",
+                        "Mock Powerful Model",
+                    )],
+                ),
+            ],
+        )
+        .category(codex_acp::SessionConfigOptionCategory::Model),
+        codex_acp::SessionConfigOption::select(
+            "thought_level",
+            "Thought Level",
+            "medium",
+            vec![
+                codex_acp::SessionConfigSelectOption::new("low", "Low"),
+                codex_acp::SessionConfigSelectOption::new("medium", "Medium"),
+                codex_acp::SessionConfigSelectOption::new("high", "High"),
+            ],
+        )
+        .category(codex_acp::SessionConfigOptionCategory::ThoughtLevel),
+    ];
+
+    chat.open_acp_session_config_picker(config_options);
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with session config picker");
+
+    assert_snapshot!("blackbox_session_config_picker_open", terminal.backend());
+}
+
 /// ACP agents stream text responses character-by-character. This test verifies
 /// that streamed text from an ACP agent renders correctly in the chat history.
 #[test]
