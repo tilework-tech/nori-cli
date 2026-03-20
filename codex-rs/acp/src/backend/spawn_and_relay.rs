@@ -102,6 +102,7 @@ impl AcpBackend {
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
+        let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -174,6 +175,7 @@ impl AcpBackend {
             async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
+            pending_tool_calls: Arc::clone(&pending_tool_calls),
         };
 
         // Execute session_start hooks
@@ -223,10 +225,15 @@ impl AcpBackend {
             Arc::clone(&user_notifier),
             cwd.clone(),
             approval_policy_rx,
+            Arc::clone(&pending_tool_calls),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
-        tokio::spawn(Self::run_persistent_relay(persistent_rx, event_tx.clone()));
+        tokio::spawn(Self::run_persistent_relay(
+            persistent_rx,
+            event_tx.clone(),
+            Arc::clone(&pending_tool_calls),
+        ));
 
         Ok(backend)
     }
@@ -242,8 +249,43 @@ impl AcpBackend {
         user_notifier: Arc<codex_core::UserNotifier>,
         cwd: PathBuf,
         approval_policy_rx: watch::Receiver<AskForApproval>,
+        pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
+            // Store tool call metadata from the permission request so the
+            // event translator can resolve proper titles when the subsequent
+            // ToolCallUpdate(completed) arrives (often with empty fields from
+            // Gemini agents).
+            if let Some(ref metadata) = request.tool_call_metadata {
+                let call_id = request.event.call_id().to_string();
+                let cleaned_title = metadata
+                    .title
+                    .as_ref()
+                    .map(|t| extract_command_from_permission_title(t));
+                let new_entry = AccumulatedToolCall {
+                    title: cleaned_title,
+                    kind: metadata.kind,
+                    raw_input: metadata.raw_input.clone(),
+                    meta_tool_name: None,
+                };
+                let mut map = pending_tool_calls.lock().await;
+                let entry = map.entry(call_id).or_insert_with(|| AccumulatedToolCall {
+                    title: None,
+                    kind: None,
+                    raw_input: None,
+                    meta_tool_name: None,
+                });
+                if new_entry.title.is_some() {
+                    entry.title = new_entry.title;
+                }
+                if new_entry.kind.is_some() {
+                    entry.kind = new_entry.kind;
+                }
+                if new_entry.raw_input.is_some() {
+                    entry.raw_input = new_entry.raw_input;
+                }
+            }
+
             // Check current approval policy (may have changed via OverrideTurnContext)
             let current_policy = *approval_policy_rx.borrow();
 
@@ -314,15 +356,18 @@ impl AcpBackend {
     pub(super) async fn run_persistent_relay(
         mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
         event_tx: mpsc::Sender<Event>,
+        pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
     ) {
         let mut pending_patch_changes = HashMap::new();
-        let mut pending_tool_calls = HashMap::new();
         while let Some(update) = persistent_rx.recv().await {
-            let event_msgs = translate_session_update_to_events(
-                &update,
-                &mut pending_patch_changes,
-                &mut pending_tool_calls,
-            );
+            let event_msgs = {
+                let mut tool_calls = pending_tool_calls.lock().await;
+                translate_session_update_to_events(
+                    &update,
+                    &mut pending_patch_changes,
+                    &mut tool_calls,
+                )
+            };
             for msg in event_msgs {
                 let _ = event_tx
                     .send(Event {

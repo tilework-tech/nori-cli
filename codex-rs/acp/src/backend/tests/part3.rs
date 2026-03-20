@@ -494,6 +494,7 @@ async fn test_approval_policy_dynamic_update() {
     let (policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
 
     // Spawn the approval handler with the watch receiver
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
     tokio::spawn(AcpBackend::run_approval_handler(
         approval_rx,
         event_tx.clone(),
@@ -501,6 +502,7 @@ async fn test_approval_policy_dynamic_update() {
         Arc::clone(&user_notifier),
         cwd.clone(),
         policy_rx,
+        Arc::clone(&pending_tool_calls),
     ));
 
     // Create a mock approval request
@@ -517,6 +519,7 @@ async fn test_approval_policy_dynamic_update() {
         }),
         options: vec![],
         response_tx: response_tx1,
+        tool_call_metadata: None,
     };
 
     // Send first request - should be forwarded to TUI (not auto-approved)
@@ -567,6 +570,7 @@ async fn test_approval_policy_dynamic_update() {
         }),
         options: vec![],
         response_tx: response_tx2,
+        tool_call_metadata: None,
     };
 
     approval_tx.send(request2).await.unwrap();

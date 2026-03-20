@@ -191,6 +191,7 @@ impl AcpBackend {
         let async_post_agent_response_hooks = self.async_post_agent_response_hooks.clone();
         let hook_timeout = self.script_timeout;
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
+        let pending_tool_calls = Arc::clone(&self.pending_tool_calls);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -238,7 +239,6 @@ impl AcpBackend {
                     String,
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
-                let mut pending_tool_calls = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
                     if has_agent_text
                         && matches!(
@@ -361,11 +361,13 @@ impl AcpBackend {
                         }
                     }
 
+                    let mut tool_calls = pending_tool_calls.lock().await;
                     let events = translate_session_update_to_events(
                         &update,
                         &mut pending_patch_changes,
-                        &mut pending_tool_calls,
+                        &mut tool_calls,
                     );
+                    drop(tool_calls);
                     for mut event_msg in events {
                         // Accumulate text for transcript
                         if let EventMsg::AgentMessageDelta(ref mut delta) = event_msg {

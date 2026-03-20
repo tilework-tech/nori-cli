@@ -470,6 +470,27 @@ pub(crate) fn classify_tool_by_title(
     }]
 }
 
+/// Extract the actual shell command from a Gemini permission request title.
+///
+/// Gemini's `run_shell_command` permission request titles follow the pattern:
+///   `<command> [current working directory <path>] (<description>)`
+///
+/// Examples:
+///   `echo "hello" [current working directory /home/user/project] (Running echo)`
+///     → `echo "hello"`
+///   `date [current working directory /home/user]`
+///     → `date`
+///   `git status`
+///     → `git status`
+pub(crate) fn extract_command_from_permission_title(title: &str) -> String {
+    // Look for " [current working directory " marker
+    if let Some(cwd_start) = title.find(" [current working directory ") {
+        title[..cwd_start].trim().to_string()
+    } else {
+        title.to_string()
+    }
+}
+
 /// Returns true if the title looks like a raw Anthropic tool_use ID
 /// (e.g., "toolu_015Xtg1GzAd6aPH6oiirx5us").
 pub(crate) fn title_is_raw_id(title: &str) -> bool {
