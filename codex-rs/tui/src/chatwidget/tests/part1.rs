@@ -88,9 +88,6 @@ async fn helpers_are_available_and_do_not_panic() {
     let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
     let tx = AppEventSender::new(tx_raw);
     let cfg = test_config();
-    let conversation_manager = Arc::new(ConversationManager::with_auth(CodexAuth::from_api_key(
-        "test",
-    )));
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test"));
     let init = ChatWidgetInit {
         config: cfg,
@@ -105,7 +102,7 @@ async fn helpers_are_available_and_do_not_panic() {
         deferred_spawn: false,
         fork_context: None,
     };
-    let mut w = ChatWidget::new(init, conversation_manager);
+    let mut w = ChatWidget::new(init);
     // Basic construction sanity.
     let _ = &mut w;
 }

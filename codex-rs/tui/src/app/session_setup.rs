@@ -1,11 +1,10 @@
 use super::*;
 
 impl App {
-    pub(super) async fn shutdown_current_conversation(&mut self) {
-        if let Some(conversation_id) = self.chat_widget.conversation_id() {
+    pub(super) fn shutdown_current_conversation(&mut self) {
+        if self.chat_widget.conversation_id().is_some() {
             self.suppress_shutdown_complete = true;
             self.chat_widget.submit_op(Op::Shutdown);
-            self.server.remove_conversation(&conversation_id).await;
         }
     }
 

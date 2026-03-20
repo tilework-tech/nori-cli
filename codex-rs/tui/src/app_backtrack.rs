@@ -1,5 +1,4 @@
 use std::any::TypeId;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::app::App;
@@ -280,7 +279,7 @@ impl App {
 
     /// Handle a ConversationHistory response while a backtrack is pending.
     /// If it matches the primed base session, fork and switch to the new conversation.
-    pub(crate) async fn on_conversation_history_for_backtrack(
+    pub(crate) fn on_conversation_history_for_backtrack(
         &mut self,
         tui: &mut tui::Tui,
         ev: ConversationPathResponseEvent,
@@ -289,56 +288,36 @@ impl App {
             && ev.conversation_id == *base_id
             && let Some((_, nth_user_message, prefill)) = self.backtrack.pending.take()
         {
-            self.fork_and_switch_to_new_conversation(tui, ev, nth_user_message, prefill)
-                .await;
+            self.fork_and_switch_to_new_conversation(tui, ev, nth_user_message, prefill);
         }
         Ok(())
     }
 
     /// Fork the conversation using provided history and switch UI/state accordingly.
-    async fn fork_and_switch_to_new_conversation(
+    ///
+    /// Builds a summary of prior conversation turns up to the selected user
+    /// message, then spawns a fresh ACP session with the summary injected as
+    /// context (via `fork_context`).
+    fn fork_and_switch_to_new_conversation(
         &mut self,
         tui: &mut tui::Tui,
-        ev: ConversationPathResponseEvent,
+        _ev: ConversationPathResponseEvent,
         nth_user_message: usize,
         prefill: String,
     ) {
         let cfg = self.chat_widget.config_ref().clone();
-        // Perform the fork via a thin wrapper for clarity/testability.
-        let result = self
-            .perform_fork(ev.path.clone(), nth_user_message, cfg.clone())
-            .await;
-        match result {
-            Ok(new_conv) => {
-                self.install_forked_conversation(tui, cfg, new_conv, nth_user_message, &prefill)
-            }
-            Err(e) => tracing::error!("error forking conversation: {e:#}"),
-        }
-    }
 
-    /// Thin wrapper around ConversationManager::fork_conversation.
-    async fn perform_fork(
-        &self,
-        path: PathBuf,
-        nth_user_message: usize,
-        cfg: codex_core::config::Config,
-    ) -> codex_core::error::Result<codex_core::NewConversation> {
-        self.server
-            .fork_conversation(nth_user_message, cfg, path)
-            .await
-    }
+        // Build a plain-text summary of the conversation prior to the
+        // selected user message to inject as context into the new session.
+        let cell_index = nth_user_position(&self.transcript_cells, nth_user_message)
+            .unwrap_or(self.transcript_cells.len());
+        let fork_summary = build_fork_summary(&self.transcript_cells, cell_index);
+        let fork_context = if fork_summary.is_empty() {
+            None
+        } else {
+            Some(fork_summary)
+        };
 
-    /// Install a forked conversation into the ChatWidget and update UI to reflect selection.
-    fn install_forked_conversation(
-        &mut self,
-        tui: &mut tui::Tui,
-        cfg: codex_core::config::Config,
-        new_conv: codex_core::NewConversation,
-        nth_user_message: usize,
-        prefill: &str,
-    ) {
-        let conv = new_conv.conversation;
-        let session_configured = new_conv.session_configured;
         let init = crate::chatwidget::ChatWidgetInit {
             config: cfg,
             frame_requester: tui.frame_requester(),
@@ -348,19 +327,18 @@ impl App {
             enhanced_keys_supported: self.enhanced_keys_supported,
             auth_manager: self.auth_manager.clone(),
             vertical_footer: self.vertical_footer,
-            expected_agent: None, // No filtering for backtracked conversations
+            expected_agent: None,
             deferred_spawn: false,
-            fork_context: None,
+            fork_context,
         };
-        self.chat_widget =
-            crate::chatwidget::ChatWidget::new_from_existing(init, conv, session_configured);
+        self.chat_widget = crate::chatwidget::ChatWidget::new(init);
         self.chat_widget
             .set_hotkey_config(self.hotkey_config.clone());
         // Trim transcript up to the selected user message and re-render it.
         self.trim_transcript_for_backtrack(nth_user_message);
         self.render_transcript_once(tui);
         if !prefill.is_empty() {
-            self.chat_widget.set_composer_text(prefill.to_string());
+            self.chat_widget.set_composer_text(prefill);
         }
         tui.frame_requester().schedule_frame();
     }

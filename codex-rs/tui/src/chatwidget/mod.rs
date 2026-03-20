@@ -122,7 +122,6 @@ mod agent;
 pub(crate) use self::agent::AcpAgentHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
-use self::agent::spawn_agent_from_existing;
 mod session_header;
 
 mod approvals;
@@ -143,7 +142,6 @@ use codex_common::approval_presets::builtin_approval_presets;
 use codex_core::AuthManager;
 #[allow(unused_imports)]
 use codex_core::CodexAuth;
-use codex_core::ConversationManager;
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
