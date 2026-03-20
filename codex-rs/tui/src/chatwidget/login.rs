@@ -320,7 +320,7 @@ impl ChatWidget {
             if success {
                 handler.oauth_complete();
                 self.add_info_message(
-                    "Successfully authenticated with OpenAI!\n\nYou can now use Codex.".to_string(),
+                    "Successfully authenticated with OpenAI!\n\nYou can now use Nori.".to_string(),
                     None,
                 );
             } else {

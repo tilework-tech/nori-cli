@@ -45,13 +45,13 @@ impl WidgetRef for &TrustDirectoryWidget {
 
         column.push(Line::from(vec![
             "> ".into(),
-            "You are running Codex in ".bold(),
+            "You are running Nori in ".bold(),
             self.cwd.to_string_lossy().to_string().into(),
         ]));
         column.push("");
 
         let guidance = if self.is_git_repo {
-            "Since this folder is version controlled, you may wish to allow Codex to work in this folder without asking for approval."
+            "Since this folder is version controlled, you may wish to allow Nori to work in this folder without asking for approval."
         } else {
             "Since this folder is not version controlled, we recommend requiring approval of all edits and commands."
         };
@@ -66,7 +66,7 @@ impl WidgetRef for &TrustDirectoryWidget {
         let mut options: Vec<(&str, TrustDirectorySelection)> = Vec::new();
         if self.is_git_repo {
             options.push((
-                "Yes, allow Codex to work in this folder without asking for approval",
+                "Yes, allow Nori to work in this folder without asking for approval",
                 TrustDirectorySelection::Trust,
             ));
             options.push((
@@ -75,7 +75,7 @@ impl WidgetRef for &TrustDirectoryWidget {
             ));
         } else {
             options.push((
-                "Allow Codex to work in this folder without asking for approval",
+                "Allow Nori to work in this folder without asking for approval",
                 TrustDirectorySelection::Trust,
             ));
             options.push((

@@ -255,7 +255,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         frame_requester: FrameRequester::test_dummy(),
         has_input_focus: true,
         enhanced_keys_supported: false,
-        placeholder_text: "Ask Codex to do anything".to_string(),
+        placeholder_text: "Ask Nori to do anything".to_string(),
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
         vertical_footer: false,

@@ -1,12 +1,11 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
-assertion_line: 524
 expression: render_lines(&view)
 ---
                                                 
   Select Approval Mode                          
                                                 
-› 1. Read Only (current)  Codex can read files  
-  2. Full Access          Codex can edit files  
+› 1. Read Only (current)  Nori can read files   
+  2. Full Access          Nori can edit files   
                                                 
   ↑/k ↓/j to navigate, enter to confirm, esc to

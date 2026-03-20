@@ -93,7 +93,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
             id: "gpt-5.1-codex-max",
             model: "gpt-5.1-codex-max",
             display_name: "gpt-5.1-codex-max",
-            description: "Latest Codex-optimized flagship for deep and fast reasoning.",
+            description: "Latest flagship for deep and fast reasoning.",
             default_reasoning_effort: ReasoningEffort::Medium,
             supported_reasoning_efforts: &[
                 ReasoningEffortPreset {
