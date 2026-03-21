@@ -329,6 +329,17 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) fork_context: Option<String>,
 }
 
+/// Controls the pinned plan drawer visibility and display mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlanDrawerMode {
+    /// Drawer is hidden; plan updates go to history cells.
+    Off,
+    /// Drawer shows a single-line progress summary.
+    Collapsed,
+    /// Drawer shows the full plan checklist.
+    Expanded,
+}
+
 pub(crate) struct ChatWidget {
     app_event_tx: AppEventSender,
     codex_op_tx: UnboundedSender<Op>,
@@ -410,6 +421,13 @@ pub(crate) struct ChatWidget {
     turn_finished: bool,
     /// Session-local skillset name (used when per-session skillsets are active).
     pub(crate) session_skillset_name: Option<String>,
+    /// Whether and how plan updates are rendered in a pinned drawer instead of
+    /// history cells.
+    plan_drawer_mode: PlanDrawerMode,
+    /// Latest plan state, always updated on every plan event. Used by the
+    /// pinned plan drawer when enabled; retained when disabled so toggling
+    /// the drawer on shows the most recent plan immediately.
+    pinned_plan: Option<UpdatePlanArgs>,
 }
 
 /// Information about a pending agent switch in ChatWidget.

@@ -438,7 +438,13 @@ impl ChatWidget {
     }
 
     pub(super) fn on_plan_update(&mut self, update: UpdatePlanArgs) {
-        self.add_to_history(history_cell::new_plan_update(update));
+        if self.plan_drawer_mode != PlanDrawerMode::Off {
+            self.pinned_plan = Some(update);
+            self.request_redraw();
+        } else {
+            self.add_to_history(history_cell::new_plan_update(update.clone()));
+            self.pinned_plan = Some(update);
+        }
     }
 
     pub(super) fn on_exec_approval_request(&mut self, id: String, ev: ExecApprovalRequestEvent) {

@@ -201,6 +201,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
     let mut open_editor = Line::from("");
     let mut quit = Line::from("");
     let mut show_transcript = Line::from("");
+    let mut toggle_plan_drawer = Line::from("");
 
     for descriptor in SHORTCUTS {
         if let Some(text) = descriptor.overlay_entry(state) {
@@ -213,6 +214,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
                 ShortcutId::OpenEditor => open_editor = text,
                 ShortcutId::Quit => quit = text,
                 ShortcutId::ShowTranscript => show_transcript = text,
+                ShortcutId::TogglePlanDrawer => toggle_plan_drawer = text,
             }
         }
     }
@@ -225,6 +227,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
         edit_previous,
         open_editor,
         quit,
+        toggle_plan_drawer,
         Line::from(""),
         show_transcript,
     ];
@@ -462,6 +465,7 @@ enum ShortcutId {
     OpenEditor,
     Quit,
     ShowTranscript,
+    TogglePlanDrawer,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -604,6 +608,15 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
         }],
         prefix: "",
         label: " to view transcript",
+    },
+    ShortcutDescriptor {
+        id: ShortcutId::TogglePlanDrawer,
+        bindings: &[ShortcutBinding {
+            key: key_hint::ctrl(KeyCode::Char('o')),
+            condition: DisplayCondition::Always,
+        }],
+        prefix: "",
+        label: " to toggle plan drawer",
     },
 ];
 

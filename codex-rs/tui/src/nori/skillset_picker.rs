@@ -12,7 +12,6 @@ use crate::app_event::AppEvent;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
-use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 
 /// The command name for the nori-skillsets CLI.
 const NORI_SKILLSETS_CMD: &str = "nori-skillsets";
@@ -206,10 +205,10 @@ pub fn skillset_picker_params(
     SelectionViewParams {
         title: Some("Select Skillset".to_string()),
         subtitle: Some(subtitle),
-        footer_hint: Some(standard_popup_hint_line()),
+        footer_hint: None,
         items,
-        // Search is disabled because skillset items don't populate `search_value`.
-        is_searchable: false,
+        is_searchable: true,
+        search_placeholder: Some("Type to filter".to_string()),
         on_dismiss,
         ..Default::default()
     }

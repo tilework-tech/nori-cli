@@ -82,7 +82,7 @@ gh pr create --title "<title>" --body "$(cat <<'EOF'
 ## Test Plan
 - [ ] <verification steps>
 
-Share Nori with your team: https://www.npmjs.com/package/nori-skillsets
+Share Nori with your team: https://www.npmjs.com/package/nori-ai
 EOF
 )"
 ```

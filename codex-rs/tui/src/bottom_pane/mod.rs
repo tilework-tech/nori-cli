@@ -76,6 +76,8 @@ pub(crate) struct BottomPane {
     context_window_percent: Option<i64>,
     /// Display name of the current agent for use in approval dialogs.
     agent_display_name: String,
+    /// Whether vim mode is enabled, used to configure selection view behavior.
+    vim_mode_enabled: bool,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -139,6 +141,7 @@ impl BottomPane {
             animations_enabled,
             context_window_percent: None,
             agent_display_name,
+            vim_mode_enabled: false,
         };
 
         // Set description overrides for the slash command popup so that
@@ -417,6 +420,7 @@ impl BottomPane {
     }
 
     pub(crate) fn set_vim_mode(&mut self, value: codex_acp::config::VimEnterBehavior) {
+        self.vim_mode_enabled = value.is_enabled();
         self.composer.set_vim_mode(value);
     }
 
@@ -431,7 +435,15 @@ impl BottomPane {
     }
 
     /// Show a generic list selection view with the provided items.
-    pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
+    pub(crate) fn show_selection_view(
+        &mut self,
+        mut params: list_selection_view::SelectionViewParams,
+    ) {
+        // Automatically inject vim mode for searchable views so all callers
+        // get the correct behavior without having to pass it explicitly.
+        if params.is_searchable {
+            params.vim_mode = self.vim_mode_enabled;
+        }
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
         self.push_view(Box::new(view));
     }

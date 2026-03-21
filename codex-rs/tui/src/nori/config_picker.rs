@@ -34,8 +34,21 @@ pub fn config_picker_params(
     let terminal_notifications_enabled =
         config.terminal_notifications == TerminalNotifications::Enabled;
     let os_notifications_enabled = config.os_notifications == OsNotifications::Enabled;
+    let pinned_plan_drawer_enabled = config.pinned_plan_drawer;
 
     let items: Vec<SelectionItem> = vec![
+        build_toggle_item(
+            "Pinned Plan Drawer",
+            "Pin plan updates to a drawer in the viewport instead of history",
+            pinned_plan_drawer_enabled,
+            {
+                let tx = app_event_tx.clone();
+                let new_value = !pinned_plan_drawer_enabled;
+                move || {
+                    tx.send(AppEvent::SetConfigPinnedPlanDrawer(new_value));
+                }
+            },
+        ),
         build_toggle_item(
             "Vertical Footer",
             "Stack footer segments vertically instead of horizontally",
@@ -649,6 +662,7 @@ mod tests {
             agents: vec![],
             skillset_per_session: false,
             file_manager: None,
+            pinned_plan_drawer: false,
         }
     }
 
@@ -660,7 +674,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 12);
+        assert_eq!(params.items.len(), 13);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -673,7 +687,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert!(params.items[0].name.contains("(on)"));
+        // Vertical Footer is at index 1 (Pinned Plan Drawer is at index 0)
+        assert!(params.items[1].name.contains("(on)"));
     }
 
     #[test]
@@ -684,7 +699,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert!(params.items[0].name.contains("(off)"));
+        // Vertical Footer is at index 1 (Pinned Plan Drawer is at index 0)
+        assert!(params.items[1].name.contains("(off)"));
     }
 
     #[test]
@@ -695,21 +711,23 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 12);
-        // The 4th item should be Vim Mode
-        assert!(params.items[3].name.contains("Vim Mode"));
-        // The 5th item should be Auto Worktree
-        assert!(params.items[4].name.contains("Auto Worktree"));
-        // The 6th item should be Per Session Skillsets
-        assert!(params.items[5].name.contains("Per Session Skillsets"));
-        // The 7th item should be Notify After Idle
-        assert!(params.items[6].name.contains("Notify After Idle"));
-        // The 8th item should be Hotkeys
-        assert!(params.items[7].name.contains("Hotkeys"));
-        // The 9th item should be Script Timeout
-        assert!(params.items[8].name.contains("Script Timeout"));
-        // The 10th item should be Loop Count
-        assert!(params.items[9].name.contains("Loop Count"));
+        assert_eq!(params.items.len(), 13);
+        // The 1st item should be Pinned Plan Drawer
+        assert!(params.items[0].name.contains("Pinned Plan Drawer"));
+        // The 5th item should be Vim Mode
+        assert!(params.items[4].name.contains("Vim Mode"));
+        // The 6th item should be Auto Worktree
+        assert!(params.items[5].name.contains("Auto Worktree"));
+        // The 7th item should be Per Session Skillsets
+        assert!(params.items[6].name.contains("Per Session Skillsets"));
+        // The 8th item should be Notify After Idle
+        assert!(params.items[7].name.contains("Notify After Idle"));
+        // The 9th item should be Hotkeys
+        assert!(params.items[8].name.contains("Hotkeys"));
+        // The 10th item should be Script Timeout
+        assert!(params.items[9].name.contains("Script Timeout"));
+        // The 11th item should be Loop Count
+        assert!(params.items[10].name.contains("Loop Count"));
     }
 
     #[test]
@@ -721,7 +739,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[6];
+        let idle_item = &params.items[7];
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -737,8 +755,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the notify after idle action (7th item, index 6)
-        let idle_item = &params.items[6];
+        // Trigger the notify after idle action (8th item, index 7)
+        let idle_item = &params.items[7];
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -758,8 +776,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the vertical footer toggle action (first item)
-        let vertical_footer_item = &params.items[0];
+        // Trigger the vertical footer toggle action (second item)
+        let vertical_footer_item = &params.items[1];
         assert!(vertical_footer_item.name.contains("Vertical Footer"));
         for action in &vertical_footer_item.actions {
             action(&tx);
@@ -784,8 +802,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the hotkeys action (8th item, index 7)
-        let hotkeys_item = &params.items[7];
+        // Trigger the hotkeys action (9th item, index 8)
+        let hotkeys_item = &params.items[8];
         assert!(hotkeys_item.name.contains("Hotkeys"));
         for action in &hotkeys_item.actions {
             action(&tx);
@@ -866,8 +884,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Should now have 11 items (includes vim mode, auto worktree, per session skillsets, script timeout, and loop count)
-        assert_eq!(params.items.len(), 12);
+        // Should now have 13 items (includes pinned plan drawer, vim mode, auto worktree, per session skillsets, script timeout, and loop count)
+        assert_eq!(params.items.len(), 13);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -935,7 +953,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has 30s timeout
-        let timeout_item = &params.items[8];
+        let timeout_item = &params.items[9];
         assert!(
             timeout_item.name.contains("30s"),
             "Expected '30s' in name, got: {}",
@@ -951,8 +969,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the script timeout action (9th item, index 8)
-        let timeout_item = &params.items[8];
+        // Trigger the script timeout action (10th item, index 9)
+        let timeout_item = &params.items[9];
         assert!(timeout_item.name.contains("Script Timeout"));
         for action in &timeout_item.actions {
             action(&tx);

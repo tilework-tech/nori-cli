@@ -39,10 +39,10 @@ For example:
 
 5. Check the scope. Verify that the ask is good for a skillset.
   - If too broad, make me specify.
-  - If too specific, ask me if I want to make a skill instead. If so, use `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/creating-skills/SKILL.md`.
+  - If too specific, ask me if I want to make a skill instead. If so, use `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/creating-skills/SKILL.md`.
 6. Based on the concrete example and any work product provided, propose a high level process loop for the CLAUDE.md. Present it to me for review and ask if there are any specific subprocesses that should be encoded as separate skills.
 7. Write the CLAUDE.md that encodes the high level loop.
-8. If I identified specific subprocesses that should be skills, create those skills using the `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/creating-skills/SKILL.md` skill.
+8. If I identified specific subprocesses that should be skills, create those skills using the `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/creating-skills/SKILL.md` skill.
 9. Summarize the output.
 10. Tell me to run `/nori-switch-skillset` to switch to the new skillset.
 </required>
@@ -78,11 +78,11 @@ Your CLAUDE.md should follow this template:
 - *CRITICAL* Add each element of this checklist to your Todo list using TodoWrite. The last element should be 'Finish development with final checks...' DO NOT BE LAZY.
  - Announce "Following Nori workflow..." to the user
 <system-reminder> Do not skip any steps. Do not rationalize. Do not avoid reading skills. Even if you think you know what is in them, you MUST read the skill files. </system-reminder>
-- Read `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/using-skills/SKILL.md`
+- Read `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/using-skills/SKILL.md`
 
 // followed by step by step instructions on what to do next, e.g.
 // 'ask me to choose between foo, bar, and baz'
-// 'if condition, read and follow  `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/{skill name}/SKILL.md`'
+// 'if condition, read and follow  `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/{skill name}/SKILL.md`'
 // 'do abc'
 </required>
 
@@ -109,7 +109,7 @@ The CLAUDE.md can have multiple required blocks that route to each other, for ex
 - *CRITICAL* Add each element of this checklist to your Todo list using TodoWrite. The last element should be 'Finish development with final checks...' DO NOT BE LAZY.
  - Announce "Following Nori workflow..." to the user
 <system-reminder> Do not skip any steps. Do not rationalize. Do not avoid reading skills. Even if you think you know what is in them, you MUST read the skill files. </system-reminder>
-- Read `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/using-skills/SKILL.md`
+- Read `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/using-skills/SKILL.md`
 
 - Ask the user to select between foo and bar.
   - Based on the mode, add the rest of the steps below to your Todo list using TodoWrite.

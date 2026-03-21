@@ -23,7 +23,7 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let mut connection = AcpConnection::spawn(&agent_config, &cwd)
+        let mut connection = SacpConnection::spawn(&agent_config, &cwd)
             .await
             .map_err(|e| {
                 let error_string = format!("{e:?}");

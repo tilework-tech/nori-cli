@@ -193,7 +193,7 @@ You MUST complete each phase before proceeding to the next.
    - Automated test if possible
    - One-off test script if no framework
    - MUST have before fixing
-   - See /home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/test-driven-development for writing proper failing tests
+   - See /home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/test-driven-development for writing proper failing tests
 
 2. **Implement Single Fix**
 

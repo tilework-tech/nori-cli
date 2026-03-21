@@ -101,6 +101,27 @@ on_task_complete():
 
 `finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
 
+**Pinned Plan Drawer** (`pinned_plan_drawer.rs`, `chatwidget/mod.rs`, `chatwidget/event_handlers.rs`, `chatwidget/helpers.rs`):
+
+Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one of two ways, controlled by the `PlanDrawerMode` enum on `ChatWidget`:
+
+| Mode | `PlanDrawerMode` | Behavior |
+|------|-------------------|----------|
+| History cells | `Off` (default) | Each plan update creates a `PlanUpdateCell` in scrollback history |
+| Collapsed drawer | `Collapsed` | One-line progress summary: `Plan: X/Y completed  *  > Current: step_name` |
+| Expanded drawer | `Expanded` | Full plan checklist (same as the previous boolean `true` behavior) |
+
+The toggle cycle (bound to `Ctrl+O` via `HotkeyAction::TogglePlanDrawer`) is: `Off -> Collapsed -> Expanded -> Collapsed -> ...`. Once the drawer enters a visible mode, it cycles between Collapsed and Expanded without returning to Off. The `toggle_plan_drawer()` method on `ChatWidget` implements this state machine. The `App` layer intercepts the hotkey binding in `handle_key_event()` and updates both the widget and its own `plan_drawer_mode` field.
+
+The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of the current mode. In `on_plan_update()`, the `UpdatePlanArgs` is stored in `pinned_plan` on every event; when the mode is `Off`, the update is also cloned and added to history as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next `PlanUpdate` event.
+
+The drawer is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0):
+- `Collapsed` renders `PinnedPlanDrawerCollapsed` (1 line, shows progress count and current/next step with truncation)
+- `Expanded` renders `PinnedPlanDrawer` (full checklist via `render_plan_lines()`)
+- `Off` contributes zero height
+
+The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. At startup, `true` maps to `Expanded` and `false` maps to `Off`. Runtime toggling via Ctrl+O does not persist -- only the `/config` toggle persists.
+
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
 
 **System Info Collection** (`system_info.rs`):
@@ -152,7 +173,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
 | `/model` | Choose model (dynamically shows current agent/model name) |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
-| `/config` | Toggle TUI settings (vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
+| `/config` | Toggle TUI settings (pinned plan drawer, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
 | `/browse` | Open a terminal file manager to browse and edit files |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
@@ -188,6 +209,25 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 The `desc_col` is computed once per render pass from the widest visible name plus 2 columns of padding. The stacked fallback prevents descriptions from being squeezed into 1-2 characters of horizontal space on narrow terminals. Because both `render_rows()` and `measure_rows_height()` call the same `wrap_row()` function, layout and height calculation are always consistent.
 
 `SelectionViewParams` supports an optional `on_dismiss: Option<SelectionAction>` callback that fires when the picker is dismissed without selection (Escape or Ctrl-C). The callback is invoked in `ListSelectionView::on_ctrl_c()` before marking the view as complete. It does not fire when the user makes a selection via `accept()`. This is used by the skillset picker to send `SkillsetPickerDismissed` when the deferred agent spawn needs a fallback trigger.
+
+**ListSelectionView Vim-Mode-Aware Search:**
+
+`ListSelectionView` supports a `vim_mode: bool` field (alongside `is_searchable`) that changes how key input is routed. When a searchable view is created, `BottomPane::show_selection_view()` automatically injects the current `vim_mode_enabled` state into `SelectionViewParams`, so individual callers (skillset picker, config picker, etc.) do not need to pass vim mode explicitly.
+
+The view operates as a state machine with three key-handling branches:
+
+| Config | Sub-state | Key behavior |
+|--------|-----------|-------------|
+| `vim_mode=true`, `is_searchable=true` | `search_active=false` | `j`/`k` navigate, `/` activates search, digits 1-9 select directly, Esc dismisses |
+| `vim_mode=true`, `is_searchable=true` | `search_active=true` | Characters filter the list, Backspace edits query, Esc exits search (clears query, returns to nav mode) without dismissing the popup |
+| `vim_mode=false`, `is_searchable=true` | N/A | All characters immediately filter the list (no explicit search activation needed) |
+| `is_searchable=false` | N/A | `j`/`k` navigate, digits 1-9 select directly (unchanged legacy behavior) |
+
+The `show_search_row()` method controls whether the search input row renders: in vim mode, it only appears when `search_active=true`. In non-vim mode, it always appears for searchable views.
+
+The `effective_footer_hint()` method generates context-sensitive footer hints reflecting the current state (vim nav mode, vim search mode, or non-vim search mode). If a static `footer_hint` was provided in `SelectionViewParams`, it takes precedence over the generated hint.
+
+Number prefixes (e.g. "1. Item Name") are shown on rows when digits can be used for direct selection: either `is_searchable=false`, or `vim_mode=true` with `search_active=false`. When the search input is active (either non-vim searchable or vim search mode), number prefixes are hidden since digits go to the search query.
 
 **Undo Snapshot Picker (`/undo`):**
 
@@ -262,7 +302,7 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 1. Checks if `nori-skillsets` is available in PATH
 2. If not available, shows a message prompting the user to install it with `npm i -g nori-skillsets`
 3. If available, runs `nori-skillsets list` to get available skillsets
-4. On success (exit code 0), displays a picker with skillset names. Each `SelectionItem` sets `search_value` to the skillset name so the picker's search filtering can match against it. When `skillset_per_session` is enabled, a "No Skillset" option is prepended to the list; selecting it sends `AppEvent::SkillsetPickerDismissed` (same as Escape/Ctrl-C dismiss), giving users an explicit way to skip skillset selection.
+4. On success (exit code 0), displays a searchable picker (`is_searchable: true`) with skillset names. Each `SelectionItem` sets `search_value` to the skillset name so the picker's search filtering can match against it. In vim mode, users press `/` to start filtering; in non-vim mode, typing immediately filters. When `skillset_per_session` is enabled, a "No Skillset" option is prepended to the list; selecting it sends `AppEvent::SkillsetPickerDismissed` (same as Escape/Ctrl-C dismiss), giving users an explicit way to skip skillset selection.
 5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets --non-interactive switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets --non-interactive install <NAME>`. The `--non-interactive` flag is required because the TUI captures stdout/stderr via `.output()` and provides no stdin, so any interactive prompt would hang indefinitely.
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
 7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
@@ -329,7 +369,7 @@ Hotkey actions fall into two categories that are consumed at different layers:
 
 | Category | Actions | Consumed By |
 |----------|---------|-------------|
-| App-level | OpenTranscript, OpenEditor | `app/event_handling.rs::handle_key_event()` |
+| App-level | OpenTranscript, OpenEditor, TogglePlanDrawer | `app/event_handling.rs::handle_key_event()` |
 | Editing | MoveBackwardChar, MoveForwardChar, MoveBeginningOfLine, MoveEndOfLine, MoveBackwardWord, MoveForwardWord, DeleteBackwardChar, DeleteForwardChar, DeleteBackwardWord, KillToEndOfLine, KillToBeginningOfLine, Yank | `textarea/mod.rs::input()` |
 | UI triggers | HistorySearch | `chat_composer/key_handling.rs` |
 
@@ -394,6 +434,8 @@ The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering 
 The state machine is implemented in `textarea/mod.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer/mod.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
 
 Config changes use two app events: `AppEvent::OpenVimModePicker` opens the sub-picker, and `AppEvent::SetConfigVimMode(VimEnterBehavior)` applies the selection. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer via `set_vim_mode()`. The ChatComposer updates both its `vim_enter_behavior` field and calls `set_vim_mode_enabled()` on the textarea (passing `is_enabled()`). When vim mode is disabled, the textarea state resets to Insert mode. Persistence is handled by `persist_vim_mode_setting()` in `app/config_persistence.rs`, which writes the `toml_value()` string to the `[tui]` section.
+
+`BottomPane` also stores `vim_mode_enabled: bool` (set by `set_vim_mode()`), which it injects into `SelectionViewParams` whenever `show_selection_view()` is called for a searchable view. This means vim mode affects both the textarea input and the selection popup key handling (see "ListSelectionView Vim-Mode-Aware Search" above).
 
 
 **History Search (Configurable Hotkey):**

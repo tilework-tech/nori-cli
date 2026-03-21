@@ -17,6 +17,26 @@ impl ChatWidget {
         self.bottom_pane.set_vertical_footer(enabled);
     }
 
+    /// Set the plan drawer mode. The latest plan state is always retained so
+    /// that switching to a visible mode shows the most recent plan immediately.
+    pub(crate) fn set_plan_drawer_mode(&mut self, mode: PlanDrawerMode) {
+        self.plan_drawer_mode = mode;
+    }
+
+    /// Cycle the plan drawer: Off -> Collapsed -> Expanded -> Collapsed -> ...
+    pub(crate) fn toggle_plan_drawer(&mut self) {
+        self.plan_drawer_mode = match self.plan_drawer_mode {
+            PlanDrawerMode::Off => PlanDrawerMode::Collapsed,
+            PlanDrawerMode::Collapsed => PlanDrawerMode::Expanded,
+            PlanDrawerMode::Expanded => PlanDrawerMode::Collapsed,
+        };
+    }
+
+    /// Return the current plan drawer mode.
+    pub(crate) fn plan_drawer_mode(&self) -> PlanDrawerMode {
+        self.plan_drawer_mode
+    }
+
     /// Update the agent display name shown in approval dialogs.
     /// Used when ACP agent switch completes successfully.
     #[cfg(feature = "unstable")]
@@ -206,6 +226,33 @@ impl ChatWidget {
         };
         let mut flex = FlexRenderable::new();
         flex.push(1, active_cell_renderable);
+        // Pinned plan drawer: renders the latest plan state between the active
+        // cell and the bottom pane. When no plan has been received yet, the
+        // guard on `pinned_plan` being `Some` means the drawer contributes
+        // zero height.
+        if let Some(plan) = &self.pinned_plan {
+            match self.plan_drawer_mode {
+                PlanDrawerMode::Collapsed => {
+                    flex.push(
+                        0,
+                        RenderableItem::Owned(Box::new(
+                            crate::pinned_plan_drawer::PinnedPlanDrawerCollapsed::new(plan),
+                        ))
+                        .inset(Insets::tlbr(1, 0, 0, 0)),
+                    );
+                }
+                PlanDrawerMode::Expanded => {
+                    flex.push(
+                        0,
+                        RenderableItem::Owned(Box::new(
+                            crate::pinned_plan_drawer::PinnedPlanDrawer::new(plan),
+                        ))
+                        .inset(Insets::tlbr(1, 0, 0, 0)),
+                    );
+                }
+                PlanDrawerMode::Off => {}
+            }
+        }
         flex.push(
             0,
             RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(1, 0, 0, 0)),

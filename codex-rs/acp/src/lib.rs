@@ -39,9 +39,9 @@ pub use message_history::search_entries;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
-pub use connection::AcpConnection;
 pub use connection::AcpModelState;
 pub use connection::ApprovalRequest;
+pub use connection::sacp_connection::SacpConnection;
 pub use registry::AcpAgentConfig;
 pub use registry::AcpAgentInfo;
 pub use registry::AcpProviderInfo;
@@ -77,27 +77,24 @@ pub use transcript::Transcript;
 pub use transcript::TranscriptLoader;
 pub use transcript::TranscriptRecorder;
 
-// Re-export commonly used types from agent-client-protocol
-pub use agent_client_protocol::Agent;
-pub use agent_client_protocol::Client;
-pub use agent_client_protocol::ClientSideConnection;
-pub use agent_client_protocol::InitializeRequest;
-pub use agent_client_protocol::InitializeResponse;
-pub use agent_client_protocol::NewSessionRequest;
-pub use agent_client_protocol::NewSessionResponse;
-pub use agent_client_protocol::PromptRequest;
-pub use agent_client_protocol::PromptResponse;
-pub use agent_client_protocol::SessionNotification;
-pub use agent_client_protocol::SessionUpdate;
+// Re-export commonly used types from the ACP schema
+pub use sacp::schema::InitializeRequest;
+pub use sacp::schema::InitializeResponse;
+pub use sacp::schema::NewSessionRequest;
+pub use sacp::schema::NewSessionResponse;
+pub use sacp::schema::PromptRequest;
+pub use sacp::schema::PromptResponse;
+pub use sacp::schema::SessionNotification;
+pub use sacp::schema::SessionUpdate;
 
 // Re-export model-related types (unstable feature)
 #[cfg(feature = "unstable")]
-pub use agent_client_protocol::ModelId;
+pub use sacp::schema::ModelId;
 #[cfg(feature = "unstable")]
-pub use agent_client_protocol::ModelInfo;
+pub use sacp::schema::ModelInfo;
 #[cfg(feature = "unstable")]
-pub use agent_client_protocol::SessionModelState;
+pub use sacp::schema::SessionModelState;
 #[cfg(feature = "unstable")]
-pub use agent_client_protocol::SetSessionModelRequest;
+pub use sacp::schema::SetSessionModelRequest;
 #[cfg(feature = "unstable")]
-pub use agent_client_protocol::SetSessionModelResponse;
+pub use sacp::schema::SetSessionModelResponse;

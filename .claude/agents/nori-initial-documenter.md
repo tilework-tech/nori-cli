@@ -62,11 +62,11 @@ This step ensures comprehensive and accurate documentation by working from leaf 
 
 # Step 4: Sync Remote docs.md Files
 
-- Check if the 'nori-sync-docs' skill exists at `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/nori-sync-docs/SKILL.md`.
+- Check if the 'nori-sync-docs' skill exists at `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/nori-sync-docs/SKILL.md`.
   - If it does not exist, skip this step.
 - Ask the user if they want to sync all docs.md files to the remote server.
   - If the user declines, skip this step.
-- Read and follow `/home/amol/code/nori/nori-cli/.worktrees/vast-pen-20260309-211245/.claude/skills/nori-sync-docs/SKILL.md` to sync all noridocs to the remote server.
+- Read and follow `/home/amol/code/nori/nori-cli/.worktrees/safe-gem-20260316-184606/.claude/skills/nori-sync-docs/SKILL.md` to sync all noridocs to the remote server.
 
 </required>
 
