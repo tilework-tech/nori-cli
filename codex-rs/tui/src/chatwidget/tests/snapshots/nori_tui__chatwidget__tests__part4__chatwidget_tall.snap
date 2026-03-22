@@ -22,6 +22,6 @@ expression: term.backend().vt100().screen().contents()
   ↳ Hello, world! 16
 
 
-› Ask Codex to do anything
+› Ask Nori to do anything
 
   ? for shortcuts

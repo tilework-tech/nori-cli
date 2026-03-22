@@ -185,6 +185,7 @@ impl AcpBackend {
         let persistent_rx = connection.take_persistent_receiver();
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
+        let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -249,6 +250,7 @@ impl AcpBackend {
             async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
+            pending_tool_calls: Arc::clone(&pending_tool_calls),
         };
 
         // Execute session_start hooks
@@ -312,10 +314,15 @@ impl AcpBackend {
             Arc::clone(&user_notifier),
             cwd.clone(),
             approval_policy_rx,
+            Arc::clone(&pending_tool_calls),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
-        tokio::spawn(Self::run_persistent_relay(persistent_rx, event_tx.clone()));
+        tokio::spawn(Self::run_persistent_relay(
+            persistent_rx,
+            event_tx.clone(),
+            Arc::clone(&pending_tool_calls),
+        ));
 
         // Spawn the replay relay *after* all setup events (SessionConfigured,
         // Warning, etc.) have been sent.  Spawning it earlier causes a

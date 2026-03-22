@@ -16,7 +16,7 @@ fn make_composer() -> ChatComposer {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         true, // disable_paste_burst
     )
 }

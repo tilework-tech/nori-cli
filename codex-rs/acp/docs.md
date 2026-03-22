@@ -739,6 +739,8 @@ Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` comm
 
 `run_approval_handler()` in `backend/mod.rs` enforces a strict ordering invariant: the approval event is sent to the TUI (`event_tx.send()`) and the request is pushed into `pending_approvals` **before** the OS notification fires (`user_notifier.notify()`). This ordering is critical because `notify-rust`'s `notif.show()` blocks synchronously on some platforms (macOS), so if the notification were sent first, the TUI would never receive the approval overlay.
 
+The `ApprovalRequest` struct (`connection/mod.rs`) carries an optional `tool_call_metadata: Option<ToolCallMetadata>` field. `ToolCallMetadata` holds the title, kind, and raw_input extracted from the ACP permission request's tool call fields. This metadata is populated in `ClientDelegate::request_permission()` (`connection/client_delegate.rs`) and consumed by the approval handler to seed the shared `pending_tool_calls` map, bridging the gap between the permission request path and the event translation path.
+
 **Patch Event Translation:**
 
 For Edit/Write/Delete operations, ACP emits native patch events:
@@ -758,7 +760,9 @@ The ACP backend filters `ToolCall` events that lack useful display information b
 2. `ToolCallUpdate` with the real title/kind/raw_input but not yet completed (accumulated into `pending_tool_calls`)
 3. `ToolCallUpdate` with `status: Completed` but typically no title/kind/raw_input
 
-The `pending_tool_calls` HashMap (keyed by `call_id`) in `event_translation.rs` accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2. On the completion event (step 3), `translate_session_update_to_events()` resolves the best available title using a fallback chain:
+Some agents (notably Gemini) route shell commands through the `request_permission` ACP path (`client_delegate.rs`) instead of emitting standard `ToolCall` events with populated fields. In this path, the permission request carries full metadata (title, kind, raw_input) via `ToolCallMetadata` on the `ApprovalRequest`. The approval handler in `run_approval_handler()` extracts this metadata and populates `pending_tool_calls` before processing the approval, so that when the subsequent `ToolCallUpdate(completed)` arrives with empty fields, the event translator can resolve the actual command name. Gemini's permission request titles follow a compound format (`command [current working directory path] (description)`), which is stripped by `extract_command_from_permission_title()` in `tool_display.rs` to extract just the command portion.
+
+The `pending_tool_calls` HashMap (keyed by `call_id`) in `event_translation.rs` accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2 (and from permission request metadata for the Gemini path). On the completion event (step 3), `translate_session_update_to_events()` resolves the best available title using a fallback chain:
 
 ```
 Title from completion update fields (if non-empty and not a raw ID)
@@ -778,7 +782,7 @@ Hardcoded "Tool"
 
 Raw Anthropic `tool_use` IDs (e.g., `toolu_015Xtg1GzAd6aPH6oiirx5us`) are detected by `title_is_raw_id()` in `tool_display.rs` and treated as empty titles, triggering the fallback chain. The `kind_to_display_name()` function maps `ToolKind` variants to human-readable strings (e.g., `Execute` -> `"Terminal"`, `SwitchMode` -> `"Switch Mode"`).
 
-The `pending_tool_calls` state is managed alongside the existing `pending_patch_changes` state -- both are passed as mutable references to `translate_session_update_to_events()` and maintained per-caller across the four call sites: `session.rs` (load_session replay), `spawn_and_relay.rs` (persistent relay), `submit_and_ops.rs` (compact/approval turns), and `user_input.rs` (main user turns). Patch completions clean up both maps; non-patch completions clean up only `pending_tool_calls`.
+The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. The `pending_patch_changes` state remains local to each relay caller since patch events do not flow through the permission request path. Patch completions clean up both maps; non-patch completions clean up only `pending_tool_calls`.
 
 Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 

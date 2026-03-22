@@ -28,7 +28,7 @@ where
         true,
         sender,
         enhanced_keys_supported,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
     setup(&mut composer);

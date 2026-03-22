@@ -9,7 +9,7 @@ fn custom_prompt_missing_required_args_reports_error() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -63,7 +63,7 @@ fn selecting_custom_prompt_with_args_expands_placeholders() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -101,7 +101,7 @@ fn numeric_prompt_positional_args_does_not_error() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -133,7 +133,7 @@ fn selecting_custom_prompt_with_no_args_inserts_template() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -170,7 +170,7 @@ fn selecting_custom_prompt_preserves_literal_dollar_dollar() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -208,7 +208,7 @@ fn selecting_custom_prompt_reuses_cached_arguments_join() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -247,7 +247,7 @@ fn burst_paste_fast_small_buffers_and_flushes_on_stop() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -290,7 +290,7 @@ fn burst_paste_fast_large_inserts_placeholder_on_flush() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -321,7 +321,7 @@ fn humanlike_typing_1000_chars_appears_live_no_placeholder() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -343,7 +343,7 @@ fn vim_mode_escape_enters_normal_mode_with_content() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         true, // disable_paste_burst to avoid timing issues
     );
 
@@ -378,7 +378,7 @@ fn vim_mode_hjkl_navigation_in_normal_mode() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         true,
     );
 

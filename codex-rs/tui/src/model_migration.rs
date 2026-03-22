@@ -250,7 +250,7 @@ impl WidgetRef for &ModelMigrationScreen {
         if self.copy.can_opt_out {
             column.push(Line::from(""));
             column.push(
-                Paragraph::new("Choose how you'd like Codex to proceed.")
+                Paragraph::new("Choose how you'd like Nori to proceed.")
                     .wrap(Wrap { trim: false })
                     .inset(Insets::tlbr(0, 2, 0, 0)),
             );
@@ -285,10 +285,10 @@ impl WidgetRef for &ModelMigrationScreen {
 
 fn gpt_5_1_codex_max_migration_copy() -> ModelMigrationCopy {
     ModelMigrationCopy {
-        heading: vec!["Codex just got an upgrade. Introducing gpt-5.1-codex-max".bold()],
+        heading: vec!["Nori just got an upgrade. Introducing gpt-5.1-codex-max".bold()],
         content: vec![
             Line::from(
-                "Codex is now powered by gpt-5.1-codex-max, our latest frontier agentic coding model. It is smarter and faster than its predecessors and capable of long-running project-scale work.",
+                "Nori is now powered by gpt-5.1-codex-max, the latest frontier agentic coding model. It is smarter and faster than its predecessors and capable of long-running project-scale work.",
             ),
             Line::from(vec![
                 "Learn more at ".into(),
@@ -305,7 +305,7 @@ fn gpt5_migration_copy() -> ModelMigrationCopy {
         heading: vec!["Introducing our gpt-5.1 models".bold()],
         content: vec![
             Line::from(
-                "We've upgraded our family of models supported in Codex to gpt-5.1, gpt-5.1-codex and gpt-5.1-codex-mini.",
+                "We've upgraded our family of models supported in Nori to gpt-5.1, gpt-5.1-codex and gpt-5.1-codex-mini.",
             ),
             Line::from(
                 "You can continue using legacy models by specifying them directly with the -m option or in your config.toml.",

@@ -14,7 +14,7 @@ fn edit_clears_pending_paste() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -55,7 +55,7 @@ fn ui_snapshots() {
             true,
             sender.clone(),
             false,
-            "Ask Codex to do anything".to_string(),
+            "Ask Nori to do anything".to_string(),
             false,
         );
 
@@ -98,7 +98,7 @@ fn slash_popup_model_first_for_mo_ui() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -126,7 +126,7 @@ fn slash_popup_model_first_for_mo_logic() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
     type_chars_humanlike(&mut composer, &['/', 'm', 'o']);
@@ -157,7 +157,7 @@ fn slash_init_dispatches_command_and_does_not_submit_literal_text() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -266,7 +266,7 @@ fn slash_mention_dispatches_command_and_inserts_at() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -301,7 +301,7 @@ fn test_multiple_pastes_submission() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -379,7 +379,7 @@ fn test_placeholder_deletion() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -451,7 +451,7 @@ fn test_partial_placeholder_deletion() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 

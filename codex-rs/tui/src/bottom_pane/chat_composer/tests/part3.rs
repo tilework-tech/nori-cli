@@ -9,7 +9,7 @@ fn attach_image_and_submit_includes_image_paths() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
     let path = PathBuf::from("/tmp/image1.png");
@@ -32,7 +32,7 @@ fn attach_image_without_text_submits_empty_text_and_images() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
     let path = PathBuf::from("/tmp/image2.png");
@@ -56,7 +56,7 @@ fn image_placeholder_backspace_behaves_like_text_placeholder() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
     let path = PathBuf::from("/tmp/image3.png");
@@ -97,7 +97,7 @@ fn backspace_with_multibyte_text_before_placeholder_does_not_panic() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -128,7 +128,7 @@ fn deleting_one_of_duplicate_image_placeholders_removes_matching_entry() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -185,7 +185,7 @@ fn pasting_filepath_attaches_image() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -212,7 +212,7 @@ fn selecting_custom_prompt_without_args_submits_content() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -249,7 +249,7 @@ fn custom_prompt_submission_expands_arguments() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -284,7 +284,7 @@ fn custom_prompt_submission_accepts_quoted_values() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -323,7 +323,7 @@ fn custom_prompt_with_large_paste_expands_correctly() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -388,7 +388,7 @@ fn slash_path_input_submits_without_command_error() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -424,7 +424,7 @@ fn slash_with_leading_space_submits_as_text() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -454,7 +454,7 @@ fn custom_prompt_invalid_args_reports_error() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 

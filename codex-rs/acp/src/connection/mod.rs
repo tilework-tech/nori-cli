@@ -50,6 +50,26 @@ pub struct ApprovalRequest {
     pub options: Vec<acp::PermissionOption>,
     /// Channel to send the user's decision back
     pub response_tx: oneshot::Sender<ReviewDecision>,
+    /// Tool call metadata from the permission request, used to populate
+    /// pending_tool_calls so that the subsequent ToolCallUpdate(completed)
+    /// can resolve a proper title instead of falling back to "Tool".
+    pub tool_call_metadata: Option<ToolCallMetadata>,
+}
+
+/// Metadata extracted from an ACP permission request's tool call.
+///
+/// This is stored by the approval handler so that when the corresponding
+/// `ToolCallUpdate(completed)` arrives (often with empty title/kind fields,
+/// especially from Gemini agents), the event translator can resolve the
+/// proper command name and classification.
+#[derive(Debug, Clone)]
+pub struct ToolCallMetadata {
+    /// The tool call title (may contain the command and cwd info)
+    pub title: Option<String>,
+    /// The tool kind (Read, Execute, Edit, etc.)
+    pub kind: Option<acp::ToolKind>,
+    /// The raw input arguments (command, path, etc.)
+    pub raw_input: Option<serde_json::Value>,
 }
 
 /// Model state captured from the ACP session.

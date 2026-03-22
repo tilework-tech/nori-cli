@@ -9,7 +9,7 @@ fn footer_hint_row_is_separated_from_composer() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -117,7 +117,7 @@ fn esc_hint_stays_hidden_with_draft_content() {
         true,
         sender,
         true,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -142,7 +142,7 @@ fn clear_for_ctrl_c_records_cleared_draft() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -168,7 +168,7 @@ fn question_mark_only_toggles_on_first_char() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -209,7 +209,7 @@ fn shortcut_overlay_persists_while_task_running() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -383,7 +383,7 @@ fn ascii_prefix_survives_non_ascii_followup() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -411,7 +411,7 @@ fn handle_paste_small_inserts_text() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -439,7 +439,7 @@ fn empty_enter_returns_none() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 
@@ -466,7 +466,7 @@ fn handle_paste_large_uses_placeholder_and_replaces_on_submit() {
         true,
         sender,
         false,
-        "Ask Codex to do anything".to_string(),
+        "Ask Nori to do anything".to_string(),
         false,
     );
 

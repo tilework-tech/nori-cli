@@ -725,7 +725,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -748,7 +748,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -779,7 +779,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -831,7 +831,7 @@ mod tests {
             for x in 0..area.width {
                 row.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
             }
-            if row.contains("Ask Codex") {
+            if row.contains("Ask Nori") {
                 found_composer = true;
                 break;
             }
@@ -851,7 +851,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -881,7 +881,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -914,7 +914,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -943,7 +943,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
@@ -972,7 +972,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,

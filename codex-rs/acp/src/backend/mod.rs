@@ -307,6 +307,11 @@ pub struct AcpBackend {
     async_post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
+    /// Shared map of accumulated tool call metadata, populated by the approval
+    /// handler when permission requests carry tool call info (e.g. Gemini shell
+    /// commands). The prompt relay and persistent relay use this to resolve
+    /// proper titles on `ToolCallUpdate(completed)`.
+    pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
 }
 
 mod event_translation;
@@ -314,7 +319,6 @@ mod session;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
-#[cfg(test)]
 pub(crate) use event_translation::AccumulatedToolCall;
 use event_translation::get_event_msg_type;
 use event_translation::get_op_name;
@@ -322,6 +326,7 @@ use event_translation::record_tool_events_to_transcript;
 pub(crate) use event_translation::translate_session_update_to_events;
 mod tool_display;
 pub(crate) use tool_display::classify_tool_to_parsed_command;
+pub(crate) use tool_display::extract_command_from_permission_title;
 pub(crate) use tool_display::extract_display_args;
 pub(crate) use tool_display::extract_tool_output;
 pub(crate) use tool_display::format_tool_call_command;

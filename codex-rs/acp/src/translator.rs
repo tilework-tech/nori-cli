@@ -340,6 +340,31 @@ fn extract_command_from_shell_wrapper(shell_cmd: &str) -> Option<String> {
     }
 }
 
+/// Extract the actual command from a tool call title.
+///
+/// Gemini agents embed the command in the title with a compound format:
+///   `echo "hello" [current working directory /path] (description)`
+/// This function strips the `[current working directory ...]` suffix and
+/// any trailing `(description)` to return just the command.
+///
+/// Returns `None` if the title is a generic placeholder like "Tool".
+fn extract_command_from_title(title: &str) -> Option<String> {
+    if title == "Tool" || title.is_empty() {
+        return None;
+    }
+    // Strip Gemini's "[current working directory ...]" suffix
+    let cmd = if let Some(cwd_start) = title.find(" [current working directory ") {
+        title[..cwd_start].trim()
+    } else {
+        title.trim()
+    };
+    if cmd.is_empty() {
+        None
+    } else {
+        Some(cmd.to_string())
+    }
+}
+
 /// Extract parsed_cmd array from Codex rawInput for command metadata.
 ///
 /// Codex provides a `parsed_cmd` array with command metadata:
@@ -383,10 +408,12 @@ fn format_write_command(raw_input: Option<&serde_json::Value>) -> Vec<String> {
 }
 
 /// Format an Execute command: "Execute: command"
-fn format_execute_command(_title: &str, raw_input: Option<&serde_json::Value>) -> Vec<String> {
-    // Try parsed_cmd first (Codex metadata), then extract from command field
+fn format_execute_command(title: &str, raw_input: Option<&serde_json::Value>) -> Vec<String> {
+    // Try parsed_cmd first (Codex metadata), then extract from command field,
+    // then fall back to title (Gemini puts the command in the title).
     let cmd = extract_parsed_cmd_string(raw_input)
         .or_else(|| extract_command_string(raw_input))
+        .or_else(|| extract_command_from_title(title))
         .unwrap_or_else(|| "command".to_string());
 
     vec![format!("Execute: {}", cmd)]
@@ -501,9 +528,11 @@ fn extract_reason_from_tool_call(tool_call: &acp::ToolCallUpdate) -> Option<Stri
             format!("Delete {short_path}")
         }
         Some(acp::ToolKind::Execute) => {
-            // Try parsed_cmd first (Codex metadata), then extract from command field
+            // Try parsed_cmd first (Codex metadata), then extract from command field,
+            // then fall back to title (Gemini puts the command in the title).
             let cmd = extract_parsed_cmd_string(raw_input)
                 .or_else(|| extract_command_string(raw_input))
+                .or_else(|| extract_command_from_title(title))
                 .unwrap_or_else(|| "command".to_string());
             let truncated = truncate_str(&cmd, 60);
             format!("Execute: {truncated}")
@@ -1473,5 +1502,55 @@ mod tests {
             }
             _ => panic!("Expected FileChange::Delete"),
         }
+    }
+
+    #[test]
+    fn test_extract_command_from_title_gemini_format() {
+        let result = extract_command_from_title(
+            r#"echo "hello" [current working directory /home/user/project] (Running echo)"#,
+        );
+        assert_eq!(result, Some(r#"echo "hello""#.to_string()));
+    }
+
+    #[test]
+    fn test_extract_command_from_title_no_cwd() {
+        let result = extract_command_from_title("git status");
+        assert_eq!(result, Some("git status".to_string()));
+    }
+
+    #[test]
+    fn test_extract_command_from_title_generic_tool() {
+        assert_eq!(extract_command_from_title("Tool"), None);
+        assert_eq!(extract_command_from_title(""), None);
+    }
+
+    /// When raw_input has no command field but the title contains a Gemini
+    /// command, the approval event should use the title-extracted command.
+    #[test]
+    fn test_permission_request_approval_uses_title_for_gemini_execute() {
+        let tool_call = acp::ToolCallUpdate::new(
+            acp::ToolCallId::from("run_shell-1".to_string()),
+            acp::ToolCallUpdateFields::new()
+                .title("uname -a [current working directory /home/user]")
+                .kind(acp::ToolKind::Execute),
+        );
+
+        let request = acp::RequestPermissionRequest::new(
+            acp::SessionId::from("session-1".to_string()),
+            tool_call,
+            vec![],
+        );
+
+        let cwd = std::path::Path::new("/home/user");
+        let event = permission_request_to_approval_event(&request, cwd);
+        let cmd_str = event.command.join(" ");
+        assert!(
+            cmd_str.contains("uname -a"),
+            "Command should contain 'uname -a', got: {cmd_str}"
+        );
+        assert!(
+            !cmd_str.contains("command"),
+            "Command should not fall back to generic 'command', got: {cmd_str}"
+        );
     }
 }

@@ -38,7 +38,7 @@ pub fn builtin_approval_presets() -> Vec<ApprovalPreset> {
         ApprovalPreset {
             id: "full-access",
             label: "Agent (full access)",
-            description: "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+            description: "Can edit files outside this workspace and run commands with network access. Exercise caution when using.",
             approval: AskForApproval::Never,
             sandbox: SandboxPolicy::DangerFullAccess,
         },
@@ -127,5 +127,17 @@ mod tests {
         // A config that doesn't match any preset (e.g., Never approval with ReadOnly sandbox)
         let label = approval_mode_label(AskForApproval::Never, &SandboxPolicy::ReadOnly);
         assert_eq!(label, None);
+    }
+
+    #[test]
+    fn preset_descriptions_do_not_contain_codex_branding() {
+        for preset in builtin_approval_presets() {
+            assert!(
+                !preset.description.contains("Codex"),
+                "Preset '{}' description should not contain Codex branding: {}",
+                preset.id,
+                preset.description
+            );
+        }
     }
 }
