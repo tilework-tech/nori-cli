@@ -46,12 +46,20 @@ pub fn prefix_lines(
         .into_iter()
         .enumerate()
         .map(|(i, l)| {
-            let mut spans = Vec::with_capacity(l.spans.len() + 1);
-            spans.push(if i == 0 {
+            let prefix = if i == 0 {
                 initial_prefix.clone()
             } else {
                 subsequent_prefix.clone()
-            });
+            };
+            // Propagate the line's background color onto the prefix span so
+            // that diff background tints extend through the leading indent.
+            let prefix = if let Some(bg) = l.style.bg {
+                Span::styled(prefix.content, prefix.style.bg(bg))
+            } else {
+                prefix
+            };
+            let mut spans = Vec::with_capacity(l.spans.len() + 1);
+            spans.push(prefix);
             spans.extend(l.spans);
             Line::from(spans).style(l.style)
         })

@@ -284,7 +284,15 @@ fn render_changes_block(rows: Vec<Row>, wrap_cols: usize, cwd: &Path) -> Vec<RtL
         }
 
         let mut lines = vec![];
-        render_change(&r.change, &mut lines, wrap_cols - 4);
+        let prefix_width = 4;
+        let ctx = DiffRenderStyleContext::new();
+        render_change_with_ctx(
+            &r.change,
+            &mut lines,
+            wrap_cols - prefix_width,
+            prefix_width,
+            &ctx,
+        );
         out.extend(prefix_lines(lines, "    ".into(), "    ".into()));
     }
 
@@ -292,13 +300,14 @@ fn render_changes_block(rows: Vec<Row>, wrap_cols: usize, cwd: &Path) -> Vec<RtL
 }
 
 fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usize) {
-    render_change_with_ctx(change, out, width, &DiffRenderStyleContext::new());
+    render_change_with_ctx(change, out, width, 0, &DiffRenderStyleContext::new());
 }
 
 fn render_change_with_ctx(
     change: &FileChange,
     out: &mut Vec<RtLine<'static>>,
     width: usize,
+    outer_pad: usize,
     ctx: &DiffRenderStyleContext,
 ) {
     match change {
@@ -311,6 +320,7 @@ fn render_change_with_ctx(
                     raw,
                     width,
                     line_number_width,
+                    outer_pad,
                     ctx,
                 ));
             }
@@ -324,6 +334,7 @@ fn render_change_with_ctx(
                     raw,
                     width,
                     line_number_width,
+                    outer_pad,
                     ctx,
                 ));
             }
@@ -374,6 +385,7 @@ fn render_change_with_ctx(
                                     s,
                                     width,
                                     line_number_width,
+                                    outer_pad,
                                     ctx,
                                 ));
                                 new_ln += 1;
@@ -386,6 +398,7 @@ fn render_change_with_ctx(
                                     s,
                                     width,
                                     line_number_width,
+                                    outer_pad,
                                     ctx,
                                 ));
                                 old_ln += 1;
@@ -398,6 +411,7 @@ fn render_change_with_ctx(
                                     s,
                                     width,
                                     line_number_width,
+                                    outer_pad,
                                     ctx,
                                 ));
                                 old_ln += 1;
@@ -449,6 +463,7 @@ fn push_wrapped_diff_line(
     text: &str,
     width: usize,
     line_number_width: usize,
+    outer_pad: usize,
     ctx: &DiffRenderStyleContext,
 ) -> Vec<RtLine<'static>> {
     let ln_str = line_number.to_string();
@@ -511,7 +526,7 @@ fn push_wrapped_diff_line(
                 RtSpan::styled(gutter_span, gutter_style),
                 RtSpan::styled(content_span, content_style),
             ];
-            let pad = width.saturating_sub(used_cols);
+            let pad = (width + outer_pad).saturating_sub(used_cols);
             if pad > 0 {
                 spans.push(RtSpan::styled(" ".repeat(pad), bg_style));
             }
@@ -620,6 +635,7 @@ mod tests {
             long_line,
             80,
             line_number_width(1),
+            0,
             &ctx,
         );
 
@@ -863,13 +879,23 @@ mod tests {
             add_bg: Some(Color::Rgb(33, 58, 43)),
             del_bg: Some(Color::Rgb(74, 34, 29)),
         };
-        let render_width: usize = 40;
-        let lines = push_wrapped_diff_line(1, DiffLineType::Insert, "hello", render_width, 1, &ctx);
+        let content_width: usize = 36;
+        let outer_pad: usize = 4;
+        let total_width = content_width + outer_pad;
+        let lines = push_wrapped_diff_line(
+            1,
+            DiffLineType::Insert,
+            "hello",
+            content_width,
+            1,
+            outer_pad,
+            &ctx,
+        );
         assert_eq!(lines.len(), 1);
         let total_chars: usize = lines[0].spans.iter().map(|s| s.content.len()).sum();
         assert_eq!(
-            total_chars, render_width,
-            "expected line to fill {render_width} columns, got {total_chars}"
+            total_chars, total_width,
+            "expected line to fill {total_width} columns (content {content_width} + pad {outer_pad}), got {total_chars}"
         );
         // The line-level style should also carry the background
         assert!(
