@@ -488,28 +488,41 @@ fn push_wrapped_diff_line(
         let (chunk, rest) = remaining_text.split_at(split_at_byte_index);
         remaining_text = rest;
 
-        let mut line = if first {
-            // Build gutter (right-aligned line number plus spacer) as a dimmed span
+        let (gutter_span, content_span, used_cols) = if first {
             let gutter = format!("{ln_str:>gutter_width$} ");
-            // Content with a sign ('+'/'-'/' ') styled per diff kind
             let content = format!("{sign_char}{chunk}");
+            let cols = gutter.len() + content.len();
             first = false;
-            RtLine::from(vec![
-                RtSpan::styled(gutter, style_gutter()),
-                RtSpan::styled(content, line_style),
-            ])
+            (gutter, content, cols)
         } else {
-            // Continuation lines keep a space for the sign column so content aligns
             let gutter = format!("{:gutter_width$}  ", "");
+            let content = chunk.to_string();
+            let cols = gutter.len() + content.len();
+            (gutter, content, cols)
+        };
+
+        // When a background tint is active, apply it to every span (including
+        // gutter) and pad with trailing spaces so the color fills the complete
+        // terminal width from left edge to right edge.
+        let line = if let Some(bg_style) = line_bg_style {
+            let gutter_style = style_gutter().patch(bg_style);
+            let content_style = line_style.patch(bg_style);
+            let mut spans = vec![
+                RtSpan::styled(gutter_span, gutter_style),
+                RtSpan::styled(content_span, content_style),
+            ];
+            let pad = width.saturating_sub(used_cols);
+            if pad > 0 {
+                spans.push(RtSpan::styled(" ".repeat(pad), bg_style));
+            }
+            RtLine::from(spans).style(bg_style)
+        } else {
             RtLine::from(vec![
-                RtSpan::styled(gutter, style_gutter()),
-                RtSpan::styled(chunk.to_string(), line_style),
+                RtSpan::styled(gutter_span, style_gutter()),
+                RtSpan::styled(content_span, line_style),
             ])
         };
 
-        if let Some(bg_style) = line_bg_style {
-            line = line.style(bg_style);
-        }
         lines.push(line);
 
         if remaining_text.is_empty() {
@@ -839,5 +852,34 @@ mod tests {
         // In test environments, default_bg() returns None, so diff_theme()
         // should fall back to Dark.
         assert_eq!(diff_theme(), DiffTheme::Dark);
+    }
+
+    #[test]
+    fn diff_bg_fills_full_width() {
+        // With a truecolor context, each diff line's spans should cover the
+        // full requested width so the background tint extends edge-to-edge.
+        #[allow(clippy::disallowed_methods)]
+        let ctx = DiffRenderStyleContext {
+            add_bg: Some(Color::Rgb(33, 58, 43)),
+            del_bg: Some(Color::Rgb(74, 34, 29)),
+        };
+        let render_width: usize = 40;
+        let lines = push_wrapped_diff_line(1, DiffLineType::Insert, "hello", render_width, 1, &ctx);
+        assert_eq!(lines.len(), 1);
+        let total_chars: usize = lines[0].spans.iter().map(|s| s.content.len()).sum();
+        assert_eq!(
+            total_chars, render_width,
+            "expected line to fill {render_width} columns, got {total_chars}"
+        );
+        // The line-level style should also carry the background
+        assert!(
+            lines[0].style.bg.is_some(),
+            "expected line-level background style"
+        );
+        // Gutter span (first) should also have the background
+        assert!(
+            lines[0].spans[0].style.bg.is_some(),
+            "expected gutter span to have background"
+        );
     }
 }

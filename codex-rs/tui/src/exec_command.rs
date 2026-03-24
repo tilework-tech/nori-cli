@@ -13,6 +13,12 @@ pub(crate) fn strip_bash_lc_and_escape(command: &[String]) -> String {
     if let Some((_, script)) = extract_shell_command(command) {
         return script.to_string();
     }
+    // A single-element command is already a complete shell string (e.g. from
+    // ACP "df -h --total | tail -1").  Return it verbatim so the syntax
+    // highlighter sees real bash tokens instead of a shlex-quoted string.
+    if command.len() == 1 {
+        return command[0].clone();
+    }
     escape_command(command)
 }
 
@@ -66,5 +72,33 @@ mod tests {
         let args = vec!["/bin/bash".into(), "-lc".into(), "echo hello".into()];
         let cmdline = strip_bash_lc_and_escape(&args);
         assert_eq!(cmdline, "echo hello");
+    }
+
+    #[test]
+    fn single_element_command_with_metacharacters_not_quoted() {
+        // ACP sends shell commands as a single string; it should NOT be
+        // wrapped in quotes by shlex, or the syntax highlighter will treat
+        // the entire command as a quoted string (one color).
+        let args = vec!["df -h --total 2>/dev/null | tail -1".into()];
+        let cmdline = strip_bash_lc_and_escape(&args);
+        assert_eq!(cmdline, "df -h --total 2>/dev/null | tail -1");
+    }
+
+    #[test]
+    fn single_element_simple_command_returned_as_is() {
+        let args = vec!["uptime".into()];
+        let cmdline = strip_bash_lc_and_escape(&args);
+        assert_eq!(cmdline, "uptime");
+    }
+
+    #[test]
+    fn multi_element_command_still_escaped() {
+        let args = vec!["git".into(), "status".into()];
+        let cmdline = strip_bash_lc_and_escape(&args);
+        assert_eq!(cmdline, "git status");
+
+        let args = vec!["foo".into(), "bar baz".into()];
+        let cmdline = strip_bash_lc_and_escape(&args);
+        assert_eq!(cmdline, "foo 'bar baz'");
     }
 }

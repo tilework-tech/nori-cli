@@ -211,4 +211,22 @@ mod tests {
         // with "\n" does not reproduce a trailing newline from the original input.
         assert_eq!(text, "echo \"hello world\"\nls -la");
     }
+
+    #[test]
+    fn highlight_piped_command_produces_multiple_colors() {
+        // A piped shell command like "df -h --total 2>/dev/null | tail -1"
+        // should produce spans with at least two distinct foreground colors,
+        // confirming that the highlighter treats different tokens differently.
+        let lines = highlight_bash_to_lines("df -h --total 2>/dev/null | tail -1");
+        let distinct_colors: std::collections::HashSet<_> = lines
+            .iter()
+            .flat_map(|l| l.spans.iter())
+            .filter_map(|sp| sp.style.fg)
+            .collect();
+        assert!(
+            distinct_colors.len() >= 2,
+            "expected at least 2 distinct fg colors for a piped command, got {}: {distinct_colors:?}",
+            distinct_colors.len(),
+        );
+    }
 }
