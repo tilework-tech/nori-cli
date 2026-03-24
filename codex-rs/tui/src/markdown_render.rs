@@ -1,6 +1,10 @@
+use std::path::Path;
+use std::path::PathBuf;
+
+use crate::render::highlight::highlight_code_to_lines;
 use crate::render::line_utils::line_to_static;
 use crate::wrapping::RtOptions;
-use crate::wrapping::word_wrap_line;
+use crate::wrapping::adaptive_wrap_line;
 use pulldown_cmark::CodeBlockKind;
 use pulldown_cmark::CowStr;
 use pulldown_cmark::Event;
@@ -71,15 +75,38 @@ impl IndentContext {
     }
 }
 
+#[derive(Clone, Debug)]
+struct LinkState {
+    destination: String,
+    show_destination: bool,
+    local_target_display: Option<String>,
+}
+
+fn is_local_path_like_link(dest: &str) -> bool {
+    dest.starts_with("file://")
+        || dest.starts_with('/')
+        || dest.starts_with("~/")
+        || dest.starts_with("./")
+        || dest.starts_with("../")
+}
+
 pub fn render_markdown_text(input: &str) -> Text<'static> {
     render_markdown_text_with_width(input, None)
 }
 
 pub(crate) fn render_markdown_text_with_width(input: &str, width: Option<usize>) -> Text<'static> {
+    render_markdown_text_with_width_and_cwd(input, width, None)
+}
+
+pub(crate) fn render_markdown_text_with_width_and_cwd(
+    input: &str,
+    width: Option<usize>,
+    cwd: Option<&Path>,
+) -> Text<'static> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     let parser = Parser::new_ext(input, options);
-    let mut w = Writer::new(parser, width);
+    let mut w = Writer::new(parser, width, cwd.map(Path::to_path_buf));
     w.run();
     w.text
 }
@@ -94,7 +121,7 @@ where
     inline_styles: Vec<Style>,
     indent_stack: Vec<IndentContext>,
     list_indices: Vec<Option<u64>>,
-    link: Option<String>,
+    link: Option<LinkState>,
     needs_newline: bool,
     pending_marker_line: bool,
     in_paragraph: bool,
@@ -105,13 +132,16 @@ where
     current_subsequent_indent: Vec<Span<'static>>,
     current_line_style: Style,
     current_line_in_code_block: bool,
+    cwd: Option<PathBuf>,
+    code_block_lang: Option<String>,
+    code_block_buffer: String,
 }
 
 impl<'a, I> Writer<'a, I>
 where
     I: Iterator<Item = Event<'a>>,
 {
-    fn new(iter: I, wrap_width: Option<usize>) -> Self {
+    fn new(iter: I, wrap_width: Option<usize>, cwd: Option<PathBuf>) -> Self {
         Self {
             iter,
             text: Text::default(),
@@ -130,6 +160,9 @@ where
             current_subsequent_indent: Vec::new(),
             current_line_style: Style::default(),
             current_line_in_code_block: false,
+            cwd,
+            code_block_lang: None,
+            code_block_buffer: String::new(),
         }
     }
 
@@ -274,6 +307,11 @@ where
     }
 
     fn text(&mut self, text: CowStr<'a>) {
+        // Buffer text for syntax-highlighted code blocks.
+        if self.in_code_block && self.code_block_lang.is_some() {
+            self.code_block_buffer.push_str(&text);
+            return;
+        }
         if self.pending_marker_line {
             self.push_line(Line::default());
         }
@@ -394,12 +432,25 @@ where
         self.needs_newline = false;
     }
 
-    fn start_codeblock(&mut self, _lang: Option<String>, indent: Option<Span<'static>>) {
+    fn start_codeblock(&mut self, lang: Option<String>, indent: Option<Span<'static>>) {
         self.flush_current_line();
         if !self.text.lines.is_empty() {
             self.push_blank_line();
         }
         self.in_code_block = true;
+
+        // Parse info string: split on `,`, ` `, `\t`, take first non-empty token.
+        let parsed_lang = lang.and_then(|s| {
+            s.split(&[',', ' ', '\t'][..])
+                .find(|tok| !tok.is_empty())
+                .map(String::from)
+        });
+        // Only set code_block_lang if there is a non-empty language token.
+        if parsed_lang.as_ref().is_some_and(|l| !l.is_empty()) {
+            self.code_block_lang = parsed_lang;
+            self.code_block_buffer.clear();
+        }
+
         self.indent_stack.push(IndentContext::new(
             vec![indent.unwrap_or_default()],
             None,
@@ -409,6 +460,22 @@ where
     }
 
     fn end_codeblock(&mut self) {
+        if let Some(lang) = self.code_block_lang.take() {
+            let code = std::mem::take(&mut self.code_block_buffer);
+            let mut highlighted = highlight_code_to_lines(&code, &lang);
+            // Trim trailing empty lines that the highlighter may produce.
+            while highlighted.last().is_some_and(|l| {
+                l.spans.is_empty() || (l.spans.len() == 1 && l.spans[0].content.is_empty())
+            }) {
+                highlighted.pop();
+            }
+            for hl_line in highlighted {
+                self.push_line(Line::default());
+                for span in hl_line.spans {
+                    self.push_span(span);
+                }
+            }
+        }
         self.needs_newline = true;
         self.in_code_block = false;
         self.indent_stack.pop();
@@ -425,14 +492,40 @@ where
     }
 
     fn push_link(&mut self, dest_url: String) {
-        self.link = Some(dest_url);
+        let is_local = is_local_path_like_link(&dest_url);
+        let local_target_display = if is_local {
+            let raw_path = dest_url.strip_prefix("file://").unwrap_or(&dest_url);
+            if let Some(cwd) = &self.cwd {
+                let target = PathBuf::from(raw_path);
+                pathdiff::diff_paths(&target, cwd)
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .or_else(|| Some(raw_path.to_string()))
+            } else {
+                Some(raw_path.to_string())
+            }
+        } else {
+            None
+        };
+        self.link = Some(LinkState {
+            destination: dest_url,
+            show_destination: true,
+            local_target_display,
+        });
     }
 
     fn pop_link(&mut self) {
-        if let Some(link) = self.link.take() {
-            self.push_span(" (".into());
-            self.push_span(Span::styled(link, self.styles.link));
-            self.push_span(")".into());
+        if let Some(link_state) = self.link.take() {
+            if let Some(display) = link_state.local_target_display {
+                // For local links, show only the resolved path in cyan.
+                use ratatui::style::Stylize;
+                self.push_span(" (".into());
+                self.push_span(display.cyan());
+                self.push_span(")".into());
+            } else if link_state.show_destination {
+                self.push_span(" (".into());
+                self.push_span(Span::styled(link_state.destination, self.styles.link));
+                self.push_span(")".into());
+            }
         }
     }
 
@@ -446,7 +539,7 @@ where
                 let opts = RtOptions::new(width)
                     .initial_indent(self.current_initial_indent.clone().into())
                     .subsequent_indent(self.current_subsequent_indent.clone().into());
-                for wrapped in word_wrap_line(&line, opts) {
+                for wrapped in adaptive_wrap_line(&line, opts) {
                     let owned = line_to_static(&wrapped).style(style);
                     self.text.lines.push(owned);
                 }

@@ -21,6 +21,104 @@ use crate::render::renderable::Renderable;
 use codex_core::git_info::get_git_repo_root;
 use codex_core::protocol::FileChange;
 
+// ---------------------------------------------------------------------------
+// Color-level and theme detection
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiffColorLevel {
+    TrueColor,
+    Ansi256,
+    Ansi16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiffTheme {
+    Dark,
+    Light,
+}
+
+// Hardcoded palette constants
+const DARK_TC_ADD_BG: (u8, u8, u8) = (33, 58, 43);
+const DARK_TC_DEL_BG: (u8, u8, u8) = (74, 34, 29);
+const LIGHT_TC_ADD_BG: (u8, u8, u8) = (218, 251, 225);
+const LIGHT_TC_DEL_BG: (u8, u8, u8) = (255, 235, 233);
+
+const DARK_256_ADD_BG: u8 = 22;
+const DARK_256_DEL_BG: u8 = 52;
+const LIGHT_256_ADD_BG: u8 = 194;
+const LIGHT_256_DEL_BG: u8 = 224;
+
+fn diff_color_level() -> DiffColorLevel {
+    let Some(level) = supports_color::on_cached(supports_color::Stream::Stdout) else {
+        return DiffColorLevel::Ansi16;
+    };
+    if level.has_16m {
+        DiffColorLevel::TrueColor
+    } else if level.has_256 {
+        DiffColorLevel::Ansi256
+    } else {
+        DiffColorLevel::Ansi16
+    }
+}
+
+fn diff_theme() -> DiffTheme {
+    match crate::terminal_palette::default_bg() {
+        Some(bg) if crate::color::is_light(bg) => DiffTheme::Light,
+        _ => DiffTheme::Dark,
+    }
+}
+
+fn resolve_bg(theme: DiffTheme, level: DiffColorLevel, is_add: bool) -> Option<Color> {
+    match level {
+        DiffColorLevel::TrueColor => {
+            let (r, g, b) = match (theme, is_add) {
+                (DiffTheme::Dark, true) => DARK_TC_ADD_BG,
+                (DiffTheme::Dark, false) => DARK_TC_DEL_BG,
+                (DiffTheme::Light, true) => LIGHT_TC_ADD_BG,
+                (DiffTheme::Light, false) => LIGHT_TC_DEL_BG,
+            };
+            #[allow(clippy::disallowed_methods)]
+            Some(Color::Rgb(r, g, b))
+        }
+        DiffColorLevel::Ansi256 => {
+            let idx = match (theme, is_add) {
+                (DiffTheme::Dark, true) => DARK_256_ADD_BG,
+                (DiffTheme::Dark, false) => DARK_256_DEL_BG,
+                (DiffTheme::Light, true) => LIGHT_256_ADD_BG,
+                (DiffTheme::Light, false) => LIGHT_256_DEL_BG,
+            };
+            #[allow(clippy::disallowed_methods)]
+            Some(Color::Indexed(idx))
+        }
+        DiffColorLevel::Ansi16 => None,
+    }
+}
+
+struct DiffRenderStyleContext {
+    add_bg: Option<Color>,
+    del_bg: Option<Color>,
+}
+
+impl DiffRenderStyleContext {
+    fn new() -> Self {
+        let theme = diff_theme();
+        let level = diff_color_level();
+        Self {
+            add_bg: resolve_bg(theme, level, true),
+            del_bg: resolve_bg(theme, level, false),
+        }
+    }
+
+    #[cfg(test)]
+    fn ansi16() -> Self {
+        Self {
+            add_bg: None,
+            del_bg: None,
+        }
+    }
+}
+
 // Internal representation for diff line rendering
 enum DiffLineType {
     Insert,
@@ -194,6 +292,15 @@ fn render_changes_block(rows: Vec<Row>, wrap_cols: usize, cwd: &Path) -> Vec<RtL
 }
 
 fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usize) {
+    render_change_with_ctx(change, out, width, &DiffRenderStyleContext::new());
+}
+
+fn render_change_with_ctx(
+    change: &FileChange,
+    out: &mut Vec<RtLine<'static>>,
+    width: usize,
+    ctx: &DiffRenderStyleContext,
+) {
     match change {
         FileChange::Add { content } => {
             let line_number_width = line_number_width(content.lines().count());
@@ -204,6 +311,7 @@ fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usi
                     raw,
                     width,
                     line_number_width,
+                    ctx,
                 ));
             }
         }
@@ -216,6 +324,7 @@ fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usi
                     raw,
                     width,
                     line_number_width,
+                    ctx,
                 ));
             }
         }
@@ -265,6 +374,7 @@ fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usi
                                     s,
                                     width,
                                     line_number_width,
+                                    ctx,
                                 ));
                                 new_ln += 1;
                             }
@@ -276,6 +386,7 @@ fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usi
                                     s,
                                     width,
                                     line_number_width,
+                                    ctx,
                                 ));
                                 old_ln += 1;
                             }
@@ -287,6 +398,7 @@ fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usi
                                     s,
                                     width,
                                     line_number_width,
+                                    ctx,
                                 ));
                                 old_ln += 1;
                                 new_ln += 1;
@@ -337,6 +449,7 @@ fn push_wrapped_diff_line(
     text: &str,
     width: usize,
     line_number_width: usize,
+    ctx: &DiffRenderStyleContext,
 ) -> Vec<RtLine<'static>> {
     let ln_str = line_number.to_string();
     let mut remaining_text: &str = text;
@@ -348,10 +461,18 @@ fn push_wrapped_diff_line(
 
     let mut first = true;
     let (sign_char, line_style) = match kind {
-        DiffLineType::Insert => ('+', style_add()),
-        DiffLineType::Delete => ('-', style_del()),
+        DiffLineType::Insert => ('+', style_add(ctx)),
+        DiffLineType::Delete => ('-', style_del(ctx)),
         DiffLineType::Context => (' ', style_context()),
     };
+
+    // Build a line-level background style so the bg extends edge-to-edge.
+    let line_bg_style = match kind {
+        DiffLineType::Insert => ctx.add_bg.map(|bg| Style::default().bg(bg)),
+        DiffLineType::Delete => ctx.del_bg.map(|bg| Style::default().bg(bg)),
+        DiffLineType::Context => None,
+    };
+
     let mut lines: Vec<RtLine<'static>> = Vec::new();
 
     loop {
@@ -367,24 +488,30 @@ fn push_wrapped_diff_line(
         let (chunk, rest) = remaining_text.split_at(split_at_byte_index);
         remaining_text = rest;
 
-        if first {
+        let mut line = if first {
             // Build gutter (right-aligned line number plus spacer) as a dimmed span
             let gutter = format!("{ln_str:>gutter_width$} ");
             // Content with a sign ('+'/'-'/' ') styled per diff kind
             let content = format!("{sign_char}{chunk}");
-            lines.push(RtLine::from(vec![
+            first = false;
+            RtLine::from(vec![
                 RtSpan::styled(gutter, style_gutter()),
                 RtSpan::styled(content, line_style),
-            ]));
-            first = false;
+            ])
         } else {
             // Continuation lines keep a space for the sign column so content aligns
             let gutter = format!("{:gutter_width$}  ", "");
-            lines.push(RtLine::from(vec![
+            RtLine::from(vec![
                 RtSpan::styled(gutter, style_gutter()),
                 RtSpan::styled(chunk.to_string(), line_style),
-            ]));
+            ])
+        };
+
+        if let Some(bg_style) = line_bg_style {
+            line = line.style(bg_style);
         }
+        lines.push(line);
+
         if remaining_text.is_empty() {
             break;
         }
@@ -408,12 +535,20 @@ fn style_context() -> Style {
     Style::default()
 }
 
-fn style_add() -> Style {
-    Style::default().fg(Color::Green)
+fn style_add(ctx: &DiffRenderStyleContext) -> Style {
+    let mut s = Style::default().fg(Color::Green);
+    if let Some(bg) = ctx.add_bg {
+        s = s.bg(bg);
+    }
+    s
 }
 
-fn style_del() -> Style {
-    Style::default().fg(Color::Red)
+fn style_del(ctx: &DiffRenderStyleContext) -> Style {
+    let mut s = Style::default().fg(Color::Red);
+    if let Some(bg) = ctx.del_bg {
+        s = s.bg(bg);
+    }
+    s
 }
 
 #[cfg(test)]
@@ -463,10 +598,17 @@ mod tests {
     fn ui_snapshot_wrap_behavior_insert() {
         // Narrow width to force wrapping within our diff line rendering
         let long_line = "this is a very long line that should wrap across multiple terminal columns and continue";
+        let ctx = DiffRenderStyleContext::ansi16();
 
         // Call the wrapping function directly so we can precisely control the width
-        let lines =
-            push_wrapped_diff_line(1, DiffLineType::Insert, long_line, 80, line_number_width(1));
+        let lines = push_wrapped_diff_line(
+            1,
+            DiffLineType::Insert,
+            long_line,
+            80,
+            line_number_width(1),
+            &ctx,
+        );
 
         // Render into a small terminal to capture the visual layout
         snapshot_lines("wrap_behavior_insert", lines, 90, 8);
@@ -669,5 +811,33 @@ mod tests {
         let lines = create_diff_summary(&changes, &cwd, 80);
 
         snapshot_lines("apply_update_block_relativizes_path", lines, 80, 10);
+    }
+
+    #[test]
+    fn diff_style_add_has_green_fg() {
+        let ctx = DiffRenderStyleContext::ansi16();
+        let style = style_add(&ctx);
+        assert_eq!(style.fg, Some(Color::Green));
+    }
+
+    #[test]
+    fn diff_style_del_has_red_fg() {
+        let ctx = DiffRenderStyleContext::ansi16();
+        let style = style_del(&ctx);
+        assert_eq!(style.fg, Some(Color::Red));
+    }
+
+    #[test]
+    fn diff_color_level_detection() {
+        // Just verify it returns without panicking; the actual value depends on
+        // the test runner's terminal capabilities.
+        let _level = diff_color_level();
+    }
+
+    #[test]
+    fn diff_theme_defaults_to_dark() {
+        // In test environments, default_bg() returns None, so diff_theme()
+        // should fall back to Dark.
+        assert_eq!(diff_theme(), DiffTheme::Dark);
     }
 }

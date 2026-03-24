@@ -652,10 +652,18 @@ fn link() {
 }
 
 #[test]
-fn code_block_unhighlighted() {
+fn code_block_with_lang_preserves_text_content() {
     let text = render_markdown_text("```rust\nfn main() {}\n```\n");
-    let expected = Text::from_iter([Line::from_iter(["", "fn main() {}"])]);
-    assert_eq!(text, expected);
+    let content: String = text
+        .lines
+        .iter()
+        .flat_map(|l| l.spans.iter())
+        .map(|s| s.content.clone())
+        .collect::<String>();
+    assert!(
+        content.contains("fn main() {}"),
+        "expected code text to be preserved, got: {content}"
+    );
 }
 
 #[test]
@@ -721,11 +729,13 @@ Here is a code block that shows another fenced block:
                 .collect::<String>()
         })
         .collect();
+    // When the lang is recognized by the highlighter, the blank line in the
+    // code block content is emitted as a separate line.
     assert_eq!(
         lines,
         vec![
             "Here is a code block that shows another fenced block:".to_string(),
-            String::new(),
+            "".to_string(),
             "```md".to_string(),
             "# Inside fence".to_string(),
             "- bullet".to_string(),
@@ -992,4 +1002,125 @@ fn nested_item_continuation_paragraph_is_indented() {
         Line::from_iter(["2. ".light_blue(), "C".into()]),
     ]);
     assert_eq!(text, expected);
+}
+
+#[test]
+fn code_block_known_lang_has_syntax_colors() {
+    let md = "```rust\nfn main() {}\n```\n";
+    let text = render_markdown_text(md);
+    // At least one span in the code block line should have a non-default fg color.
+    let has_color = text
+        .lines
+        .iter()
+        .flat_map(|l| l.spans.iter())
+        .any(|span| {
+            span.style.fg.is_some()
+                && span.style.fg != Some(ratatui::style::Color::Reset)
+                && !span.content.trim().is_empty()
+        });
+    assert!(
+        has_color,
+        "expected at least one span with non-default fg for highlighted Rust code, got: {text:?}"
+    );
+}
+
+#[test]
+fn code_block_unknown_lang_plain() {
+    let md = "```zzz_fake\ncode\n```\n";
+    let text = render_markdown_text(md);
+    // No spans should have non-default fg color for unknown languages.
+    for line in &text.lines {
+        for span in &line.spans {
+            if !span.content.trim().is_empty() {
+                assert_eq!(
+                    span.style,
+                    ratatui::style::Style::default(),
+                    "expected default style for unknown language span: {span:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn code_block_no_lang_plain() {
+    let md = "```\ncode\n```\n";
+    let text = render_markdown_text(md);
+    // Code block without lang tag should NOT be highlighted.
+    for line in &text.lines {
+        for span in &line.spans {
+            if !span.content.trim().is_empty() {
+                assert_eq!(
+                    span.style,
+                    ratatui::style::Style::default(),
+                    "expected default style for no-lang code block span: {span:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fenced_code_info_string_with_metadata() {
+    let md = "```rust,no_run\nfn main() {}\n```\n";
+    let text = render_markdown_text(md);
+    // Should extract "rust" from "rust,no_run" and highlight.
+    let has_color = text
+        .lines
+        .iter()
+        .flat_map(|l| l.spans.iter())
+        .any(|span| {
+            span.style.fg.is_some()
+                && span.style.fg != Some(ratatui::style::Color::Reset)
+                && !span.content.trim().is_empty()
+        });
+    assert!(
+        has_color,
+        "expected syntax highlighting for 'rust,no_run' info string, got: {text:?}"
+    );
+}
+
+#[test]
+fn local_file_link_shows_relative_path() {
+    use std::path::PathBuf;
+    let md = "[label](/some/path/file.rs)";
+    let text = crate::markdown_render::render_markdown_text_with_width_and_cwd(
+        md,
+        None,
+        Some(&PathBuf::from("/some")),
+    );
+    let content: String = text
+        .lines
+        .iter()
+        .flat_map(|l| l.spans.iter())
+        .map(|s| s.content.clone())
+        .collect::<Vec<_>>()
+        .join("");
+    assert!(
+        content.contains("path/file.rs"),
+        "expected relative path in output, got: {content}"
+    );
+}
+
+#[test]
+fn does_not_wrap_url_like_token() {
+    let md = "Check https://example.com/very/long/path/that/should/not/be/split/across/lines please";
+    let text = crate::markdown_render::render_markdown_text_with_width(md, Some(40));
+    let lines: Vec<String> = text
+        .lines
+        .iter()
+        .map(|l| {
+            l.spans
+                .iter()
+                .map(|s| s.content.clone())
+                .collect::<String>()
+        })
+        .collect();
+    // The URL should appear intact in one of the lines.
+    let url = "https://example.com/very/long/path/that/should/not/be/split/across/lines";
+    let url_intact = lines.iter().any(|line| line.contains(url));
+    assert!(
+        url_intact,
+        "expected URL to remain intact on a single line, got: {lines:?}"
+    );
 }

@@ -1,153 +1,137 @@
+use ratatui::style::Color;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
-use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use std::sync::OnceLock;
-use tree_sitter_highlight::Highlight;
-use tree_sitter_highlight::HighlightConfiguration;
-use tree_sitter_highlight::HighlightEvent;
-use tree_sitter_highlight::Highlighter;
+use syntect::highlighting::FontStyle;
+use syntect::highlighting::Theme;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 
-// Ref: https://github.com/tree-sitter/tree-sitter-bash/blob/master/queries/highlights.scm
-#[derive(Copy, Clone)]
-enum BashHighlight {
-    Comment,
-    Constant,
-    Embedded,
-    Function,
-    Keyword,
-    Number,
-    Operator,
-    Property,
-    String,
+/// Maximum input size (512 KB) before we fall back to plain text.
+const MAX_INPUT_BYTES: i64 = 512 * 1024;
+
+/// Maximum number of lines before we fall back to plain text.
+const MAX_INPUT_LINES: i64 = 10_000;
+
+fn syntax_set() -> &'static SyntaxSet {
+    use std::sync::OnceLock;
+    static SS: OnceLock<SyntaxSet> = OnceLock::new();
+    SS.get_or_init(two_face::syntax::extra_newlines)
 }
 
-impl BashHighlight {
-    const ALL: [Self; 9] = [
-        Self::Comment,
-        Self::Constant,
-        Self::Embedded,
-        Self::Function,
-        Self::Keyword,
-        Self::Number,
-        Self::Operator,
-        Self::Property,
-        Self::String,
-    ];
-
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::Comment => "comment",
-            Self::Constant => "constant",
-            Self::Embedded => "embedded",
-            Self::Function => "function",
-            Self::Keyword => "keyword",
-            Self::Number => "number",
-            Self::Operator => "operator",
-            Self::Property => "property",
-            Self::String => "string",
-        }
-    }
-
-    fn style(self) -> Style {
-        match self {
-            Self::Comment | Self::Operator | Self::String => Style::default().dim(),
-            _ => Style::default(),
-        }
-    }
-}
-
-static HIGHLIGHT_CONFIG: OnceLock<HighlightConfiguration> = OnceLock::new();
-
-fn highlight_names() -> &'static [&'static str] {
-    static NAMES: OnceLock<[&'static str; BashHighlight::ALL.len()]> = OnceLock::new();
-    NAMES
-        .get_or_init(|| BashHighlight::ALL.map(BashHighlight::as_str))
-        .as_slice()
-}
-
-fn highlight_config() -> &'static HighlightConfiguration {
-    HIGHLIGHT_CONFIG.get_or_init(|| {
-        let language = tree_sitter_bash::LANGUAGE.into();
-        #[expect(clippy::expect_used)]
-        let mut config = HighlightConfiguration::new(
-            language,
-            "bash",
-            tree_sitter_bash::HIGHLIGHT_QUERY,
-            "",
-            "",
-        )
-        .expect("load bash highlight query");
-        config.configure(highlight_names());
-        config
+fn current_theme() -> &'static Theme {
+    use std::sync::OnceLock;
+    static THEME: OnceLock<Theme> = OnceLock::new();
+    THEME.get_or_init(|| {
+        let ts = ThemeSet::from(two_face::theme::extra());
+        ts.themes
+            .get("Catppuccin Mocha")
+            .cloned()
+            .unwrap_or_else(|| ts.themes.into_values().next().unwrap_or_default())
     })
 }
 
-fn highlight_for(highlight: Highlight) -> BashHighlight {
-    BashHighlight::ALL[highlight.0]
-}
-
-fn push_segment(lines: &mut Vec<Line<'static>>, segment: &str, style: Option<Style>) {
-    for (i, part) in segment.split('\n').enumerate() {
-        if i > 0 {
-            lines.push(Line::from(""));
-        }
-        if part.is_empty() {
-            continue;
-        }
-        let span = match style {
-            Some(style) => Span::styled(part.to_string(), style),
-            None => part.to_string().into(),
-        };
-        if let Some(last) = lines.last_mut() {
-            last.spans.push(span);
-        }
+#[allow(clippy::disallowed_methods)]
+fn syntect_color_to_ratatui(c: syntect::highlighting::Color) -> Color {
+    if c.a == 0x01 {
+        // Terminal default
+        Color::default()
+    } else if c.a == 0x00 {
+        // ANSI palette index stored in red component
+        Color::Indexed(c.r)
+    } else {
+        // True RGB color
+        Color::Rgb(c.r, c.g, c.b)
     }
 }
 
-/// Convert a bash script into per-line styled content using tree-sitter's
-/// bash highlight query. The highlighter is streamed so multi-line content is
-/// split into `Line`s while preserving style boundaries.
-pub(crate) fn highlight_bash_to_lines(script: &str) -> Vec<Line<'static>> {
-    let mut highlighter = Highlighter::new();
-    let iterator =
-        match highlighter.highlight(highlight_config(), script.as_bytes(), None, |_| None) {
-            Ok(iter) => iter,
-            Err(_) => return vec![script.to_string().into()],
+fn syntect_style_to_ratatui(style: syntect::highlighting::Style) -> Style {
+    let fg = syntect_color_to_ratatui(style.foreground);
+    let mut ratatui_style = Style::default().fg(fg);
+    if style.font_style.contains(FontStyle::BOLD) {
+        ratatui_style = ratatui_style.add_modifier(Modifier::BOLD);
+    }
+    // Suppress italic and underline per requirements.
+    ratatui_style
+}
+
+fn plain_lines(text: &str) -> Vec<Line<'static>> {
+    text.lines()
+        .map(|l| Line::from(l.to_string()))
+        .chain(text.ends_with('\n').then(|| Line::from("")))
+        .collect()
+}
+
+fn is_too_large(input: &str) -> bool {
+    input.len() as i64 > MAX_INPUT_BYTES || input.lines().count() as i64 > MAX_INPUT_LINES
+}
+
+/// Highlight source code in the given language into styled ratatui `Line`s.
+///
+/// Falls back to plain unstyled text if the language is unknown, or if
+/// the input exceeds safety limits (512 KB or 10 000 lines).
+pub(crate) fn highlight_code_to_lines(code: &str, lang: &str) -> Vec<Line<'static>> {
+    if code.is_empty() {
+        return vec![Line::from("")];
+    }
+
+    if is_too_large(code) {
+        return plain_lines(code);
+    }
+
+    let ss = syntax_set();
+    let syntax = match ss.find_syntax_by_token(lang) {
+        Some(s) => s,
+        None => return plain_lines(code),
+    };
+
+    let theme = current_theme();
+    let mut highlighter = syntect::easy::HighlightLines::new(syntax, theme);
+
+    let mut result: Vec<Line<'static>> = Vec::new();
+
+    for line_str in syntect::util::LinesWithEndings::from(code) {
+        let regions = match highlighter.highlight_line(line_str, ss) {
+            Ok(r) => r,
+            Err(_) => return plain_lines(code),
         };
 
-    let mut lines: Vec<Line<'static>> = vec![Line::from("")];
-    let mut highlight_stack: Vec<Highlight> = Vec::new();
-
-    for event in iterator {
-        match event {
-            Ok(HighlightEvent::HighlightStart(highlight)) => highlight_stack.push(highlight),
-            Ok(HighlightEvent::HighlightEnd) => {
-                highlight_stack.pop();
-            }
-            Ok(HighlightEvent::Source { start, end }) => {
-                if start == end {
-                    continue;
+        let spans: Vec<Span<'static>> = regions
+            .into_iter()
+            .map(|(style, text)| {
+                let ratatui_style = syntect_style_to_ratatui(style);
+                // Strip trailing newline from each region since Line represents a single line
+                let text = text.strip_suffix('\n').unwrap_or(text);
+                if text.is_empty() {
+                    return Span::from("".to_string());
                 }
-                let style = highlight_stack.last().map(|h| highlight_for(*h).style());
-                push_segment(&mut lines, &script[start..end], style);
-            }
-            Err(_) => return vec![script.to_string().into()],
-        }
+                Span::styled(text.to_string(), ratatui_style)
+            })
+            .filter(|s| !s.content.is_empty())
+            .collect();
+
+        result.push(Line::from(spans));
     }
 
-    if lines.is_empty() {
+    if result.is_empty() {
         vec![Line::from("")]
     } else {
-        lines
+        result
     }
+}
+
+/// Highlight a bash script into styled ratatui `Line`s.
+///
+/// This is a convenience wrapper around [`highlight_code_to_lines`].
+pub(crate) fn highlight_bash_to_lines(script: &str) -> Vec<Line<'static>> {
+    highlight_code_to_lines(script, "bash")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use ratatui::style::Modifier;
 
     fn reconstructed(lines: &[Line<'static>]) -> String {
         lines
@@ -162,75 +146,69 @@ mod tests {
             .join("\n")
     }
 
-    fn dimmed_tokens(lines: &[Line<'static>]) -> Vec<String> {
+    fn has_non_default_fg(lines: &[Line<'static>]) -> bool {
         lines
             .iter()
             .flat_map(|l| l.spans.iter())
-            .filter(|sp| sp.style.add_modifier.contains(Modifier::DIM))
-            .map(|sp| sp.content.clone().into_owned())
-            .map(|token| token.trim().to_string())
-            .filter(|token| !token.is_empty())
-            .collect()
+            .any(|sp| sp.style.fg.is_some() && sp.style.fg != Some(Color::default()))
     }
 
     #[test]
-    fn dims_expected_bash_operators() {
-        let s = "echo foo && bar || baz | qux & (echo hi)";
-        let lines = highlight_bash_to_lines(s);
-        assert_eq!(reconstructed(&lines), s);
-
-        let dimmed = dimmed_tokens(&lines);
-        assert!(dimmed.contains(&"&&".to_string()));
-        assert!(dimmed.contains(&"|".to_string()));
-        assert!(!dimmed.contains(&"echo".to_string()));
+    fn highlight_bash_produces_colored_spans() {
+        let lines = highlight_bash_to_lines("echo hello");
+        assert!(
+            has_non_default_fg(&lines),
+            "expected at least one span with a non-default fg color, got: {lines:?}"
+        );
     }
 
     #[test]
-    fn dims_redirects_and_strings() {
-        let s = "echo \"hi\" > out.txt; echo 'ok'";
-        let lines = highlight_bash_to_lines(s);
-        assert_eq!(reconstructed(&lines), s);
-
-        let dimmed = dimmed_tokens(&lines);
-        assert!(dimmed.contains(&">".to_string()));
-        assert!(dimmed.contains(&"\"hi\"".to_string()));
-        assert!(dimmed.contains(&"'ok'".to_string()));
-    }
-
-    #[test]
-    fn highlights_command_and_strings() {
-        let s = "echo \"hi\"";
-        let lines = highlight_bash_to_lines(s);
-        let mut echo_style = None;
-        let mut string_style = None;
-        for span in &lines[0].spans {
-            let text = span.content.as_ref();
-            if text == "echo" {
-                echo_style = Some(span.style);
-            }
-            if text == "\"hi\"" {
-                string_style = Some(span.style);
+    fn highlight_unknown_lang_returns_plain() {
+        let lines = highlight_code_to_lines("some random text", "zzz_nonexistent");
+        for line in &lines {
+            for span in &line.spans {
+                assert_eq!(
+                    span.style,
+                    Style::default(),
+                    "expected default style for unknown language, got: {span:?}"
+                );
             }
         }
-        let echo_style = echo_style.expect("echo span missing");
-        let string_style = string_style.expect("string span missing");
-        assert!(echo_style.fg.is_none());
-        assert!(!echo_style.add_modifier.contains(Modifier::DIM));
-        assert!(string_style.add_modifier.contains(Modifier::DIM));
     }
 
     #[test]
-    fn highlights_heredoc_body_as_string() {
-        let s = "cat <<EOF\nheredoc body\nEOF";
-        let lines = highlight_bash_to_lines(s);
-        let body_line = &lines[1];
-        let mut body_style = None;
-        for span in &body_line.spans {
-            if span.content.as_ref() == "heredoc body" {
-                body_style = Some(span.style);
+    fn highlight_code_to_lines_rust() {
+        let lines = highlight_code_to_lines("fn main() {}", "rust");
+        assert!(
+            has_non_default_fg(&lines),
+            "expected colored output for Rust code, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn highlight_large_input_returns_plain() {
+        // Create input that exceeds 512KB
+        let big = "x".repeat(512 * 1024 + 1);
+        let lines = highlight_code_to_lines(&big, "bash");
+        // All spans should have default style (plain text)
+        for line in &lines {
+            for span in &line.spans {
+                assert_eq!(
+                    span.style,
+                    Style::default(),
+                    "expected plain text for large input, got styled span: {span:?}"
+                );
             }
         }
-        let body_style = body_style.expect("missing heredoc span");
-        assert!(body_style.add_modifier.contains(Modifier::DIM));
+    }
+
+    #[test]
+    fn highlight_bash_to_lines_preserves_text() {
+        let input = "echo \"hello world\"\nls -la\n";
+        let lines = highlight_bash_to_lines(input);
+        let text = reconstructed(&lines);
+        // Each Line represents a line without its trailing newline, so joining
+        // with "\n" does not reproduce a trailing newline from the original input.
+        assert_eq!(text, "echo \"hello world\"\nls -la");
     }
 }

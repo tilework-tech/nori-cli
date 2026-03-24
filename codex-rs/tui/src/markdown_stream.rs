@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use ratatui::text::Line;
 
 use crate::markdown;
@@ -8,6 +10,7 @@ pub(crate) struct MarkdownStreamCollector {
     buffer: String,
     committed_line_count: usize,
     width: Option<usize>,
+    cwd: Option<PathBuf>,
 }
 
 impl MarkdownStreamCollector {
@@ -16,6 +19,17 @@ impl MarkdownStreamCollector {
             buffer: String::new(),
             committed_line_count: 0,
             width,
+            cwd: None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn new_with_cwd(width: Option<usize>, cwd: PathBuf) -> Self {
+        Self {
+            buffer: String::new(),
+            committed_line_count: 0,
+            width,
+            cwd: Some(cwd),
         }
     }
 
@@ -41,7 +55,7 @@ impl MarkdownStreamCollector {
             return Vec::new();
         };
         let mut rendered: Vec<Line<'static>> = Vec::new();
-        markdown::append_markdown(&source, self.width, &mut rendered);
+        markdown::append_markdown_with_cwd(&source, self.width, self.cwd.as_deref(), &mut rendered);
         let mut complete_line_count = rendered.len();
         if complete_line_count > 0
             && crate::render::line_utils::is_blank_line_spaces_only(
@@ -82,7 +96,7 @@ impl MarkdownStreamCollector {
         tracing::trace!("markdown finalize (raw source):\n---\n{source}\n---");
 
         let mut rendered: Vec<Line<'static>> = Vec::new();
-        markdown::append_markdown(&source, self.width, &mut rendered);
+        markdown::append_markdown_with_cwd(&source, self.width, self.cwd.as_deref(), &mut rendered);
 
         let out = if self.committed_line_count >= rendered.len() {
             Vec::new()

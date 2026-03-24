@@ -360,6 +360,35 @@ where
     out
 }
 
+/// Adaptive wrapping: if a line contains URL-like tokens, use character-level
+/// wrapping (break_words=false) to avoid splitting URLs. Otherwise delegates to
+/// `word_wrap_line`.
+#[must_use]
+pub(crate) fn adaptive_wrap_line<'a, O>(line: &'a Line<'a>, width_or_options: O) -> Vec<Line<'a>>
+where
+    O: Into<RtOptions<'a>>,
+{
+    let opts: RtOptions<'a> = width_or_options.into();
+
+    // Check if any span contains a URL-like token.
+    let has_url = line.spans.iter().any(|s| {
+        let c = s.content.as_ref();
+        c.contains("://") || c.starts_with("www.")
+    });
+
+    if has_url {
+        // Disable word-breaking, hyphen splitting, and use ASCII-only word
+        // separation so URLs (which contain `/`, `-`, etc.) stay intact.
+        let opts = opts
+            .break_words(false)
+            .word_splitter(textwrap::WordSplitter::NoHyphenation)
+            .word_separator(textwrap::WordSeparator::AsciiSpace);
+        word_wrap_line(line, opts)
+    } else {
+        word_wrap_line(line, opts)
+    }
+}
+
 fn slice_line_spans<'a>(
     original: &'a Line<'a>,
     span_bounds: &[(Range<usize>, ratatui::style::Style)],
