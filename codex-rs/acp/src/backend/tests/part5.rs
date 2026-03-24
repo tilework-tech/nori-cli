@@ -1,4 +1,5 @@
 use super::*;
+use codex_protocol::protocol::FileChange;
 use pretty_assertions::assert_eq;
 
 /// Test that when a ToolCall is skipped (generic title, no useful raw_input)
@@ -176,6 +177,165 @@ fn test_kind_based_fallback_when_no_title() {
             );
         }
         _ => panic!("Expected ExecCommandEnd event"),
+    }
+}
+
+#[test]
+fn test_completion_with_patch_raw_input_emits_patch_apply_begin() {
+    let mut pending_patches = std::collections::HashMap::new();
+    let mut pending_tool_calls = std::collections::HashMap::new();
+
+    let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        acp::ToolCallId::from("call-edit-complete".to_string()),
+        acp::ToolCallUpdateFields::new()
+            .status(acp::ToolCallStatus::Completed)
+            .title("Edit")
+            .kind(acp::ToolKind::Edit)
+            .raw_input(serde_json::json!({
+                "file_path": "/repo/src/main.rs",
+                "old_string": "fn old() {}\n",
+                "new_string": "fn new() {}\n",
+            })),
+    ));
+
+    let events =
+        translate_session_update_to_events(&update, &mut pending_patches, &mut pending_tool_calls);
+    assert_eq!(events.len(), 1, "Completion should emit exactly one event");
+
+    match &events[0] {
+        EventMsg::PatchApplyBegin(begin) => {
+            assert_eq!(begin.call_id, "call-edit-complete");
+            assert_eq!(begin.changes.len(), 1);
+            match begin.changes.get(&PathBuf::from("/repo/src/main.rs")) {
+                Some(FileChange::Update { .. }) => {}
+                other => panic!("Expected FileChange::Update, got {other:?}"),
+            }
+        }
+        other => panic!("Expected PatchApplyBegin event, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_skipped_generic_patch_call_can_still_emit_patch_apply_begin_on_completion() {
+    let mut pending_patches = std::collections::HashMap::new();
+    let mut pending_tool_calls = std::collections::HashMap::new();
+
+    let tool_call = acp::SessionUpdate::ToolCall(
+        acp::ToolCall::new(acp::ToolCallId::from("call-edit-late".to_string()), "Edit")
+            .kind(acp::ToolKind::Edit)
+            .status(acp::ToolCallStatus::Pending),
+    );
+    let events = translate_session_update_to_events(
+        &tool_call,
+        &mut pending_patches,
+        &mut pending_tool_calls,
+    );
+    assert!(events.is_empty(), "Generic edit ToolCall should be skipped");
+
+    let detailed_update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        acp::ToolCallId::from("call-edit-late".to_string()),
+        acp::ToolCallUpdateFields::new()
+            .kind(acp::ToolKind::Edit)
+            .raw_input(serde_json::json!({
+                "file_path": "/repo/tests/example.rs",
+                "old_string": "before\n",
+                "new_string": "after\n",
+            })),
+    ));
+    let events = translate_session_update_to_events(
+        &detailed_update,
+        &mut pending_patches,
+        &mut pending_tool_calls,
+    );
+    assert!(
+        events.is_empty(),
+        "Intermediate update should only accumulate state"
+    );
+
+    let completion = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        acp::ToolCallId::from("call-edit-late".to_string()),
+        acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed),
+    ));
+    let events = translate_session_update_to_events(
+        &completion,
+        &mut pending_patches,
+        &mut pending_tool_calls,
+    );
+    assert_eq!(events.len(), 1, "Completion should emit exactly one event");
+
+    match &events[0] {
+        EventMsg::PatchApplyBegin(begin) => {
+            assert_eq!(begin.call_id, "call-edit-late");
+            assert!(
+                begin
+                    .changes
+                    .contains_key(&PathBuf::from("/repo/tests/example.rs"))
+            );
+        }
+        other => panic!("Expected PatchApplyBegin event, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_transcript_recording_uses_completion_fallback_patch_metadata() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let recorder = crate::transcript::TranscriptRecorder::new(
+        temp_dir.path(),
+        temp_dir.path(),
+        None,
+        "0.1.0",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        acp::ToolCallId::from("call-record-fallback".to_string()),
+        acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed),
+    ));
+    let mut recorded_call_ids = std::collections::HashSet::new();
+    let pending_patch_changes = std::collections::HashMap::new();
+    let pending_tool_calls = std::collections::HashMap::from([(
+        "call-record-fallback".to_string(),
+        AccumulatedToolCall {
+            title: Some("Edit".to_string()),
+            kind: Some(acp::ToolKind::Edit),
+            raw_input: Some(serde_json::json!({
+                "file_path": "/repo/src/lib.rs",
+                "old_string": "before\n",
+                "new_string": "after\n",
+            })),
+            meta_tool_name: None,
+        },
+    )]);
+
+    record_tool_events_to_transcript(
+        &update,
+        &recorder,
+        &mut recorded_call_ids,
+        &pending_patch_changes,
+        &pending_tool_calls,
+    )
+    .await;
+    recorder.flush().await.unwrap();
+    recorder.shutdown().await.unwrap();
+
+    let content = tokio::fs::read_to_string(recorder.transcript_path())
+        .await
+        .unwrap();
+    let lines: Vec<&str> = content.lines().collect();
+    assert_eq!(lines.len(), 2, "SessionMeta + PatchApply");
+
+    let line: crate::transcript::TranscriptLine = serde_json::from_str(lines[1]).unwrap();
+    match line.entry {
+        crate::transcript::TranscriptEntry::PatchApply(patch) => {
+            assert_eq!(patch.call_id, "call-record-fallback");
+            assert_eq!(patch.operation, crate::transcript::PatchOperationType::Edit);
+            assert_eq!(patch.path, PathBuf::from("/repo/src/lib.rs"));
+            assert!(patch.success);
+            assert_eq!(patch.error, None);
+        }
+        other => panic!("Expected PatchApply entry, got {other:?}"),
     }
 }
 

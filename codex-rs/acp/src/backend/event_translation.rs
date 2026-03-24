@@ -55,6 +55,67 @@ pub(crate) struct AccumulatedToolCall {
     pub meta_tool_name: Option<String>,
 }
 
+struct ResolvedCompletedToolCall {
+    title: String,
+    kind: Option<acp::ToolKind>,
+    raw_input: Option<serde_json::Value>,
+}
+
+fn resolve_completed_tool_call(
+    update: &acp::ToolCallUpdate,
+    pending_tool_calls: &std::collections::HashMap<String, AccumulatedToolCall>,
+) -> ResolvedCompletedToolCall {
+    let title = update.fields.title.clone().unwrap_or_default();
+    let call_id = update.tool_call_id.to_string();
+    let accumulated = pending_tool_calls.get(&call_id);
+    let meta_tool_name = extract_meta_tool_name(update.meta.as_ref())
+        .or_else(|| accumulated.and_then(|a| a.meta_tool_name.clone()));
+    let kind = update
+        .fields
+        .kind
+        .or_else(|| accumulated.and_then(|a| a.kind));
+    let raw_input = update
+        .fields
+        .raw_input
+        .clone()
+        .or_else(|| accumulated.and_then(|a| a.raw_input.clone()));
+
+    let title = if !title.is_empty() && !title_is_raw_id(&title) {
+        title
+    } else if let Some(acc_title) = accumulated
+        .and_then(|a| a.title.as_ref())
+        .filter(|acc_title| !acc_title.is_empty() && !title_is_raw_id(acc_title))
+    {
+        acc_title.clone()
+    } else if let Some(meta_name) = meta_tool_name {
+        meta_name
+    } else {
+        kind.map(kind_to_display_name).unwrap_or("Tool").to_string()
+    };
+
+    ResolvedCompletedToolCall {
+        title,
+        kind,
+        raw_input,
+    }
+}
+
+fn patch_operation_from_change(
+    change: &codex_protocol::protocol::FileChange,
+) -> crate::transcript::PatchOperationType {
+    match change {
+        codex_protocol::protocol::FileChange::Add { .. } => {
+            crate::transcript::PatchOperationType::Write
+        }
+        codex_protocol::protocol::FileChange::Delete { .. } => {
+            crate::transcript::PatchOperationType::Delete
+        }
+        codex_protocol::protocol::FileChange::Update { .. } => {
+            crate::transcript::PatchOperationType::Edit
+        }
+    }
+}
+
 /// Extract the tool name from `_meta.claudeCode.toolName` if present.
 pub(crate) fn extract_meta_tool_name(meta: Option<&acp::Meta>) -> Option<String> {
     meta?
@@ -226,9 +287,11 @@ pub(crate) fn translate_session_update_to_events(
                 "ACP: tool call update received"
             );
             if status == Some(acp::ToolCallStatus::Completed) {
+                let call_id = update.tool_call_id.to_string();
+                let resolved = resolve_completed_tool_call(update, pending_tool_calls);
+
                 // Check if we have stored patch changes from the original ToolCall event.
                 // This data was stored when we first saw the ToolCall, before approval.
-                let call_id = update.tool_call_id.to_string();
                 if let Some(changes) = pending_patch_changes.remove(&call_id) {
                     pending_tool_calls.remove(&call_id);
                     debug!(
@@ -249,58 +312,49 @@ pub(crate) fn translate_session_update_to_events(
                     })];
                 }
 
-                // Resolve the best available title by merging accumulated data
-                // with whatever this completion update provides.
-                let accumulated = pending_tool_calls.remove(&call_id);
-                let meta_tool_name = extract_meta_tool_name(update.meta.as_ref())
-                    .or_else(|| accumulated.as_ref().and_then(|a| a.meta_tool_name.clone()));
-
-                // Title resolution: update fields > accumulated > meta toolName > kind display name
-                let resolved_title = if !title.is_empty() && !title_is_raw_id(&title) {
-                    title
-                } else if let Some(ref acc) = accumulated
-                    && let Some(ref acc_title) = acc.title
-                    && !acc_title.is_empty()
-                    && !title_is_raw_id(acc_title)
+                if is_patch_operation(
+                    resolved.kind.as_ref(),
+                    &resolved.title,
+                    resolved.raw_input.as_ref(),
+                ) && let Some((path, change)) =
+                    tool_call_to_file_change(resolved.kind.as_ref(), resolved.raw_input.as_ref())
                 {
-                    acc_title.clone()
-                } else if let Some(ref meta_name) = meta_tool_name {
-                    meta_name.clone()
-                } else {
-                    // Last resort: use kind-based display name
-                    let kind = update
-                        .fields
-                        .kind
-                        .or_else(|| accumulated.as_ref().and_then(|a| a.kind));
-                    kind.map(kind_to_display_name).unwrap_or("Tool").to_string()
-                };
+                    pending_tool_calls.remove(&call_id);
+                    let mut changes = std::collections::HashMap::new();
+                    changes.insert(path, change);
 
-                let resolved_kind = update
-                    .fields
-                    .kind
-                    .as_ref()
-                    .or_else(|| accumulated.as_ref().and_then(|a| a.kind.as_ref()));
-                let resolved_raw_input = update
-                    .fields
-                    .raw_input
-                    .as_ref()
-                    .or_else(|| accumulated.as_ref().and_then(|a| a.raw_input.as_ref()));
+                    debug!(
+                        target: "acp_event_flow",
+                        event_type = "ToolCallUpdate",
+                        call_id = %call_id,
+                        title = %resolved.title,
+                        "ACP -> TUI: PatchApplyBegin (derived from completed tool update)"
+                    );
+                    return vec![EventMsg::PatchApplyBegin(PatchApplyBeginEvent {
+                        call_id,
+                        turn_id: String::new(),
+                        auto_approved: true,
+                        changes,
+                    })];
+                }
 
                 // Extract output from tool call content and raw_output
+                pending_tool_calls.remove(&call_id);
                 let aggregated_output = extract_tool_output(&update.fields);
-                let command = format_tool_call_command(&resolved_title, resolved_raw_input);
+                let command =
+                    format_tool_call_command(&resolved.title, resolved.raw_input.as_ref());
                 // Classify the tool call to enable proper TUI rendering (Exploring vs Command mode)
                 let parsed_cmd = classify_tool_to_parsed_command(
-                    &resolved_title,
-                    resolved_kind,
-                    resolved_raw_input,
+                    &resolved.title,
+                    resolved.kind.as_ref(),
+                    resolved.raw_input.as_ref(),
                 );
 
                 debug!(
                     target: "acp_event_flow",
                     event_type = "ToolCallUpdate",
                     call_id = %update.tool_call_id,
-                    title = %resolved_title,
+                    title = %resolved.title,
                     command = %command,
                     output_len = aggregated_output.len(),
                     "ACP -> TUI: ExecCommandEnd (tool call completed)"
@@ -398,6 +452,11 @@ pub(crate) async fn record_tool_events_to_transcript(
     update: &acp::SessionUpdate,
     recorder: &TranscriptRecorder,
     recorded_call_ids: &mut std::collections::HashSet<String>,
+    pending_patch_changes: &std::collections::HashMap<
+        String,
+        std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
+    >,
+    pending_tool_calls: &std::collections::HashMap<String, AccumulatedToolCall>,
 ) {
     match update {
         acp::SessionUpdate::ToolCall(tool_call) => {
@@ -436,46 +495,41 @@ pub(crate) async fn record_tool_events_to_transcript(
             }
 
             let call_id = update.tool_call_id.to_string();
-            let title = update.fields.title.clone().unwrap_or_default();
-            let kind = update.fields.kind;
+            let resolved = resolve_completed_tool_call(update, pending_tool_calls);
 
             // Check if this is a patch operation
-            if is_patch_operation(kind.as_ref(), &title, update.fields.raw_input.as_ref()) {
-                // Record as patch operation
-                let operation = match kind {
-                    Some(acp::ToolKind::Edit) => crate::transcript::PatchOperationType::Edit,
-                    Some(acp::ToolKind::Delete) => crate::transcript::PatchOperationType::Delete,
-                    _ => {
-                        // Default to Write for other kinds (including None)
-                        crate::transcript::PatchOperationType::Write
-                    }
-                };
-
-                // Extract path from raw_input or locations
-                let path = update
-                    .fields
-                    .raw_input
-                    .as_ref()
-                    .and_then(|input| {
-                        input
-                            .get("file_path")
-                            .or_else(|| input.get("path"))
-                            .and_then(|v| v.as_str())
-                            .map(PathBuf::from)
-                    })
-                    .or_else(|| {
-                        update
-                            .fields
-                            .locations
-                            .as_ref()
-                            .and_then(|locs| locs.first())
-                            .map(|loc| loc.path.clone())
-                    })
-                    .unwrap_or_else(|| PathBuf::from("unknown"));
-
-                // Completed status means success (Failed status handled separately)
+            if let Some((path, change)) = pending_patch_changes
+                .get(&call_id)
+                .and_then(|changes| changes.iter().next())
+            {
                 if let Err(e) = recorder
-                    .record_patch_apply(&call_id, operation, &path, true, None)
+                    .record_patch_apply(
+                        &call_id,
+                        patch_operation_from_change(change),
+                        path,
+                        true,
+                        None,
+                    )
+                    .await
+                {
+                    warn!("Failed to record patch apply to transcript: {e}");
+                }
+            } else if is_patch_operation(
+                resolved.kind.as_ref(),
+                &resolved.title,
+                resolved.raw_input.as_ref(),
+            ) && let Some((path, change)) =
+                tool_call_to_file_change(resolved.kind.as_ref(), resolved.raw_input.as_ref())
+            {
+                // Record as patch operation
+                if let Err(e) = recorder
+                    .record_patch_apply(
+                        &call_id,
+                        patch_operation_from_change(&change),
+                        &path,
+                        true,
+                        None,
+                    )
                     .await
                 {
                     warn!("Failed to record patch apply to transcript: {e}");

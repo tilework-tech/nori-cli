@@ -743,7 +743,7 @@ The `ApprovalRequest` struct (`connection/mod.rs`) carries an optional `tool_cal
 
 **Patch Event Translation:**
 
-For Edit/Write/Delete operations, ACP emits native patch events:
+For Edit/Write/Delete operations, the ACP backend keeps file mutations on the patch event path so the TUI can render them with diff-aware patch cells instead of generic command cells. There are two sources for the `PatchApplyBegin` event emitted by `translate_session_update_to_events()` in `backend/event_translation.rs`:
 
 | Operation | Approval Event | Result Event |
 |-----------|----------------|--------------|
@@ -751,6 +751,12 @@ For Edit/Write/Delete operations, ACP emits native patch events:
 | Write (content only) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Add` |
 | Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
 | Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
+
+The first path is the eager path: when the initial `ToolCall` already contains enough file-change metadata, the translator stores a `HashMap<PathBuf, FileChange>` in `pending_patch_changes` and re-emits it as `PatchApplyBegin` when the matching `ToolCallUpdate(completed)` arrives after approval.
+
+The second path is the completion-derived fallback used by the ACP/TUI live transcript fix: if `pending_patch_changes` is empty for a completed tool call, the translator still merges the best available `title`, `kind`, and `raw_input` from the completion update, accumulated intermediate updates, and permission-request metadata. When that merged state still identifies an Edit/Write/Delete operation, `tool_call_to_file_change()` synthesizes the `FileChange` directly from the resolved `raw_input`, and the translator emits `PatchApplyBegin` instead of falling back to `ExecCommandEnd`. This keeps late-resolved edit/write calls on the same patch rendering path used by approvals and transcript history.
+
+The transcript recorder reuses that same completion-resolution logic when deciding whether a completed tool update should be persisted as `patch_apply` versus `tool_result`. That keeps persisted transcript shape aligned with the live UI path: a completion that renders as a patch block in the TUI is also recorded as a patch operation instead of drifting into a generic tool result.
 
 **Tool Call Event Filtering and Title Accumulation:**
 
@@ -782,7 +788,9 @@ Hardcoded "Tool"
 
 Raw Anthropic `tool_use` IDs (e.g., `toolu_015Xtg1GzAd6aPH6oiirx5us`) are detected by `title_is_raw_id()` in `tool_display.rs` and treated as empty titles, triggering the fallback chain. The `kind_to_display_name()` function maps `ToolKind` variants to human-readable strings (e.g., `Execute` -> `"Terminal"`, `SwitchMode` -> `"Switch Mode"`).
 
-The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. The `pending_patch_changes` state remains local to each relay caller since patch events do not flow through the permission request path. Patch completions clean up both maps; non-patch completions clean up only `pending_tool_calls`.
+The same merged completion state is also used to decide whether a completed tool update should stay on the patch path. In practice this means a generic `ToolCall("Edit")` or a completion that arrives without `pending_patch_changes` can still become `PatchApplyBegin` if the resolved `kind`/`raw_input` identifies a file edit. Only non-patch operations continue down the `ExecCommandEnd` fallback path.
+
+The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. The `pending_patch_changes` state remains local to each relay caller because it only stores already-materialized `FileChange` values captured inside the relay path. Completed patch operations remove any stored `pending_patch_changes` entry and also consume the shared `pending_tool_calls` metadata used for title/raw-input resolution; non-patch completions consume only `pending_tool_calls`.
 
 Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 

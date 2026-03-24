@@ -253,16 +253,6 @@ impl AcpBackend {
                     {
                         needs_agent_separator = true;
                     }
-                    // Record tool calls and results to transcript
-                    if let Some(ref recorder) = transcript_recorder_for_updates {
-                        record_tool_events_to_transcript(
-                            &update,
-                            recorder,
-                            &mut recorded_tool_call_ids,
-                        )
-                        .await;
-                    }
-
                     // Execute pre_agent_response hooks on first agent message chunk
                     if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
                         && !has_fired_pre_agent_response
@@ -362,6 +352,16 @@ impl AcpBackend {
                     }
 
                     let mut tool_calls = pending_tool_calls.lock().await;
+                    if let Some(ref recorder) = transcript_recorder_for_updates {
+                        record_tool_events_to_transcript(
+                            &update,
+                            recorder,
+                            &mut recorded_tool_call_ids,
+                            &pending_patch_changes,
+                            &tool_calls,
+                        )
+                        .await;
+                    }
                     let events = translate_session_update_to_events(
                         &update,
                         &mut pending_patch_changes,

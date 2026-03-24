@@ -50,7 +50,7 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - File search integration (`file_search.rs`)
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
-The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review.
+The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. This matters for ACP patch events because `PatchApplyBegin` feeds the existing `PatchHistoryCell` path, so approval history, normal transcript history, and late-resolved live patch updates all reuse the same diff-style transcript rendering.
 
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
 
@@ -68,7 +68,9 @@ The selective flush ensures tool cells that are already visible transition from 
 
 **Begin/End Pairing in `flush_completions_and_clear`**: Begin and End events for the same tool call are always paired in the FIFO queue (Begin precedes its End). When `flush_completions_and_clear` discards a Begin event, it records the `call_id` in a `HashSet`. When it encounters an End event, it checks whether the corresponding Begin was discarded. If so, the End is also discarded. Without this pairing, processing an End whose Begin was discarded causes `handle_exec_end_now` to create an orphan `ExecCell` with the raw `call_id` as the command name (e.g. "Ran toolu_01Lt49..."). This cascade deferral scenario arises when a tool Begin arrives while the queue is non-empty (even if the stream is no longer active), causing the Begin to be deferred and later discarded at task completion.
 
-**End-Without-Begin Fallback in `handle_exec_end_now`**: When `handle_exec_end_now` receives an `ExecCommandEndEvent` with no matching entry in `running_commands` (the `None` branch), it falls back to the End event's own `ev.command`, `ev.parsed_cmd`, and `ev.source` fields. This handles the case where the ACP translation layer in `@/codex-rs/acp/` intentionally skips emitting `ExecCommandBegin` -- for example, when a `ToolCall` has a generic title and no `raw_input`, the translator defers until the `ToolCallUpdate` with `Completed` status arrives, at which point it resolves the title and populates the End event's fields directly. The TUI then displays the resolved name (e.g. "Terminal") rather than the raw tool call ID.
+**End-Without-Begin Fallback in `handle_exec_end_now`**: When `handle_exec_end_now` receives an `ExecCommandEndEvent` with no matching entry in `running_commands` (the `None` branch), it falls back to the End event's own `ev.command`, `ev.parsed_cmd`, and `ev.source` fields. This handles late-resolved non-patch tool calls from the ACP translation layer in `@/codex-rs/acp/`: if a `ToolCall` was skipped because its initial title was generic and it never entered `running_commands`, the later `ToolCallUpdate(completed)` can still populate the End event directly, and the TUI renders the resolved name (for example, "Terminal") rather than the raw tool call ID.
+
+Late-resolved patch operations do not use this exec fallback anymore. When the ACP backend can resolve Edit/Write/Delete metadata from the completed update, it emits `PatchApplyBegin` instead, and `on_patch_apply_begin()` routes that event into the same `PatchHistoryCell` rendering path used for approvals and transcript history.
 
 **Turn-Finished Gate** (`chatwidget/event_handlers.rs`):
 
