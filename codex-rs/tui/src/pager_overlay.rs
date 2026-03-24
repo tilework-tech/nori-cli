@@ -76,6 +76,7 @@ const KEY_ESC: KeyBinding = key_hint::plain(KeyCode::Esc);
 const KEY_ENTER: KeyBinding = key_hint::plain(KeyCode::Enter);
 const KEY_CTRL_T: KeyBinding = key_hint::ctrl(KeyCode::Char('t'));
 const KEY_CTRL_C: KeyBinding = key_hint::ctrl(KeyCode::Char('c'));
+const TRANSCRIPT_HISTORY_MAX_LINES: usize = 20;
 
 // Common pager navigation hints rendered on the first line
 const PAGER_KEY_HINTS: &[(&[KeyBinding], &str)] = &[
@@ -358,15 +359,42 @@ struct CellRenderable {
     style: Style,
 }
 
+fn transcript_overlay_lines(cell: &dyn HistoryCell, width: u16) -> Vec<Line<'static>> {
+    if cell.as_any().is::<crate::history_cell::PatchHistoryCell>() {
+        return cell.transcript_lines(width);
+    }
+
+    let mut lines = cell.transcript_lines(width);
+    if lines.len() <= TRANSCRIPT_HISTORY_MAX_LINES {
+        return lines;
+    }
+
+    let omitted = lines.len() - (TRANSCRIPT_HISTORY_MAX_LINES - 1);
+    lines.truncate(TRANSCRIPT_HISTORY_MAX_LINES - 1);
+    lines.push(Line::from(format!("… {omitted} more lines")).dim());
+    lines
+}
+
+fn transcript_overlay_height(cell: &dyn HistoryCell, width: u16) -> u16 {
+    if cell.as_any().is::<crate::history_cell::PatchHistoryCell>() {
+        cell.desired_transcript_height(width)
+    } else {
+        transcript_overlay_lines(cell, width).len() as u16
+    }
+}
+
 impl Renderable for CellRenderable {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let p =
-            Paragraph::new(Text::from(self.cell.transcript_lines(area.width))).style(self.style);
+        let p = Paragraph::new(Text::from(transcript_overlay_lines(
+            self.cell.as_ref(),
+            area.width,
+        )))
+        .style(self.style);
         p.render(area, buf);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        self.cell.desired_transcript_height(width)
+        transcript_overlay_height(self.cell.as_ref(), width)
     }
 }
 
@@ -664,6 +692,49 @@ mod tests {
         term.draw(|f| overlay.render(f.area(), f.buffer_mut()))
             .expect("draw");
         assert_snapshot!(term.backend());
+    }
+
+    #[test]
+    fn transcript_overlay_truncates_non_patch_cells_to_twenty_lines() {
+        let mut overlay = TranscriptOverlay::new(vec![Arc::new(TestCell {
+            lines: (0..25)
+                .map(|i| Line::from(format!("non-patch-row-{i:02}")))
+                .collect(),
+        })]);
+        let area = Rect::new(0, 0, 80, 30);
+        let mut buf = Buffer::empty(area);
+
+        overlay.render(area, &mut buf);
+
+        let rendered = buffer_to_text(&buf, area);
+        assert!(rendered.contains("non-patch-row-18"));
+        assert!(!rendered.contains("non-patch-row-19"));
+        assert!(rendered.contains("… 6 more lines"));
+    }
+
+    #[test]
+    fn transcript_overlay_keeps_patch_cells_untruncated() {
+        let cwd = PathBuf::from("/repo");
+        let mut changes = HashMap::new();
+        changes.insert(
+            PathBuf::from("src/main.rs"),
+            FileChange::Add {
+                content: (0..25)
+                    .map(|i| format!("patch-row-{i:02}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            },
+        );
+
+        let mut overlay = TranscriptOverlay::new(vec![Arc::new(new_patch_event(changes, &cwd))]);
+        let area = Rect::new(0, 0, 100, 50);
+        let mut buf = Buffer::empty(area);
+
+        overlay.render(area, &mut buf);
+
+        let rendered = buffer_to_text(&buf, area);
+        assert!(rendered.contains("patch-row-24"));
+        assert!(!rendered.contains("… "));
     }
 
     fn buffer_to_text(buf: &Buffer, area: Rect) -> String {

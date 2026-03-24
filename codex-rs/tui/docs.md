@@ -50,6 +50,8 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - File search integration (`file_search.rs`)
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
+The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review.
+
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
