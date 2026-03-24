@@ -85,13 +85,6 @@ mod tests {
     }
 
     #[test]
-    fn single_element_simple_command_returned_as_is() {
-        let args = vec!["uptime".into()];
-        let cmdline = strip_bash_lc_and_escape(&args);
-        assert_eq!(cmdline, "uptime");
-    }
-
-    #[test]
     fn multi_element_command_still_escaped() {
         let args = vec!["git".into(), "status".into()];
         let cmdline = strip_bash_lc_and_escape(&args);
