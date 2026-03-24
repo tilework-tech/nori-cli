@@ -55,7 +55,7 @@ impl App {
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
                 );
-                self.shutdown_current_conversation().await;
+                self.shutdown_current_conversation();
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: self.config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -69,7 +69,7 @@ impl App {
                     deferred_spawn: false,
                     fork_context: None,
                 };
-                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget = ChatWidget::new(init);
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
@@ -148,7 +148,7 @@ impl App {
                 self.chat_widget.handle_codex_event(event);
             }
             AppEvent::ConversationHistory(ev) => {
-                self.on_conversation_history_for_backtrack(tui, ev).await?;
+                self.on_conversation_history_for_backtrack(tui, ev)?;
             }
             AppEvent::ExitRequest => {
                 // Create and insert exit message cell before exiting
@@ -567,7 +567,7 @@ impl App {
                 }
 
                 // Shutdown current conversation
-                self.shutdown_current_conversation().await;
+                self.shutdown_current_conversation();
 
                 // Create the new chat widget with the new config and the message as initial prompt
                 // Set expected_agent to filter events from the OLD agent until SessionConfigured
@@ -584,7 +584,7 @@ impl App {
                     deferred_spawn: false,
                     fork_context: None,
                 };
-                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget = ChatWidget::new(init);
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
@@ -789,7 +789,7 @@ impl App {
                 let iteration = total - remaining;
                 tracing::info!("Loop iteration {iteration}/{total} (remaining: {remaining})");
 
-                self.shutdown_current_conversation().await;
+                self.shutdown_current_conversation();
 
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: self.config.clone(),
@@ -804,7 +804,7 @@ impl App {
                     deferred_spawn: false,
                     fork_context: None,
                 };
-                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget = ChatWidget::new(init);
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);
@@ -852,12 +852,10 @@ impl App {
                 // If the agent spawn was deferred (waiting for skillset switch to
                 // complete), trigger it now that files are on disk.
                 #[cfg(feature = "nori-config")]
-                if success && let Some(server) = self.server_for_deferred_spawn.take() {
-                    self.chat_widget.spawn_deferred_agent(
-                        self.config.clone(),
-                        self.app_event_tx.clone(),
-                        server,
-                    );
+                if success && self.deferred_spawn_pending {
+                    self.deferred_spawn_pending = false;
+                    self.chat_widget
+                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
                 }
             }
             AppEvent::SkillsetPickerDismissed => {
@@ -865,12 +863,10 @@ impl App {
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
                 #[cfg(feature = "nori-config")]
-                if let Some(server) = self.server_for_deferred_spawn.take() {
-                    self.chat_widget.spawn_deferred_agent(
-                        self.config.clone(),
-                        self.app_event_tx.clone(),
-                        server,
-                    );
+                if self.deferred_spawn_pending {
+                    self.deferred_spawn_pending = false;
+                    self.chat_widget
+                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {
@@ -972,7 +968,7 @@ impl App {
                                 .map(|info| info.display_name)
                                 .unwrap_or_else(|| self.config.model.clone());
 
-                        self.shutdown_current_conversation().await;
+                        self.shutdown_current_conversation();
 
                         let init = crate::chatwidget::ChatWidgetInit {
                             config: self.config.clone(),
@@ -1033,7 +1029,7 @@ impl App {
                     Some(summary)
                 };
 
-                self.shutdown_current_conversation().await;
+                self.shutdown_current_conversation();
                 let init = crate::chatwidget::ChatWidgetInit {
                     config: self.config.clone(),
                     frame_requester: tui.frame_requester(),
@@ -1047,7 +1043,7 @@ impl App {
                     deferred_spawn: false,
                     fork_context,
                 };
-                self.chat_widget = ChatWidget::new(init, self.server.clone());
+                self.chat_widget = ChatWidget::new(init);
                 self.chat_widget
                     .set_hotkey_config(self.hotkey_config.clone());
                 self.chat_widget.set_vim_mode(self.vim_mode);

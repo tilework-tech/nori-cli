@@ -25,7 +25,6 @@ use codex_common::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
 use codex_common::model_presets::ModelUpgrade;
 use codex_common::model_presets::all_model_presets;
 use codex_core::AuthManager;
-use codex_core::ConversationManager;
 use codex_core::config::Config;
 use codex_core::config::edit::ConfigEditsBuilder;
 use codex_core::config::edit::toml_value;
@@ -35,12 +34,10 @@ use codex_core::model_family::find_family_for_model;
 use codex_core::protocol::EventMsg;
 use codex_core::protocol::FinalOutput;
 use codex_core::protocol::Op;
-use codex_core::protocol::SessionSource;
 use codex_core::protocol::TokenUsage;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::ConversationId;
 use color_eyre::eyre::Result;
-use color_eyre::eyre::WrapErr;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -196,7 +193,6 @@ async fn handle_model_migration_prompt_if_needed(
 }
 
 pub(crate) struct App {
-    pub(crate) server: Arc<ConversationManager>,
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) chat_widget: ChatWidget,
     pub(crate) auth_manager: Arc<AuthManager>,
@@ -255,11 +251,11 @@ pub(crate) struct App {
     /// Guard to prevent showing the worktree cleanup warning more than once per session.
     worktree_warning_shown: bool,
 
-    /// Holds the ConversationManager when agent spawn is deferred (waiting for
-    /// a skillset switch to complete before starting the agent). Taken via
-    /// `.take()` once the switch succeeds and the agent is spawned.
+    /// True when the initial agent spawn was deferred (waiting for a skillset
+    /// switch). Cleared on the first successful skillset switch or picker
+    /// dismissal. Guards against re-spawning the agent on later switches.
     #[cfg(feature = "nori-config")]
-    server_for_deferred_spawn: Option<Arc<ConversationManager>>,
+    deferred_spawn_pending: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -287,6 +283,13 @@ impl App {
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
+        if matches!(resume_selection, ResumeSelection::Resume(_)) {
+            tracing::warn!(
+                "Startup resume via --resume is not supported with ACP backend. \
+                 Use the /resume command within a session instead."
+            );
+        }
+
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 
@@ -297,11 +300,6 @@ impl App {
         if let Some(exit_info) = exit_info {
             return Ok(exit_info);
         }
-
-        let conversation_manager = Arc::new(ConversationManager::new(
-            auth_manager.clone(),
-            SessionSource::Cli,
-        ));
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
 
@@ -317,53 +315,21 @@ impl App {
         #[cfg(not(feature = "nori-config"))]
         let needs_deferred_spawn = false;
 
-        let mut chat_widget = match resume_selection {
-            ResumeSelection::StartFresh | ResumeSelection::Exit => {
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: app_event_tx.clone(),
-                    initial_prompt: initial_prompt.clone(),
-                    initial_images: initial_images.clone(),
-                    enhanced_keys_supported,
-                    auth_manager: auth_manager.clone(),
-                    vertical_footer,
-                    expected_agent: None, // No filtering for fresh sessions
-                    deferred_spawn: needs_deferred_spawn,
-                    fork_context: None,
-                };
-                ChatWidget::new(init, conversation_manager.clone())
-            }
-            ResumeSelection::Resume(path) => {
-                let resumed = conversation_manager
-                    .resume_conversation_from_rollout(
-                        config.clone(),
-                        path.clone(),
-                        auth_manager.clone(),
-                    )
-                    .await
-                    .wrap_err_with(|| {
-                        format!("Failed to resume session from {}", path.display())
-                    })?;
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: app_event_tx.clone(),
-                    initial_prompt: initial_prompt.clone(),
-                    initial_images: initial_images.clone(),
-                    enhanced_keys_supported,
-                    auth_manager: auth_manager.clone(),
-                    vertical_footer,
-                    expected_agent: None, // No filtering for resumed sessions
-                    deferred_spawn: false,
-                    fork_context: None,
-                };
-                ChatWidget::new_from_existing(
-                    init,
-                    resumed.conversation,
-                    resumed.session_configured,
-                )
-            }
+        let mut chat_widget = {
+            let init = crate::chatwidget::ChatWidgetInit {
+                config: config.clone(),
+                frame_requester: tui.frame_requester(),
+                app_event_tx: app_event_tx.clone(),
+                initial_prompt: initial_prompt.clone(),
+                initial_images: initial_images.clone(),
+                enhanced_keys_supported,
+                auth_manager: auth_manager.clone(),
+                vertical_footer,
+                expected_agent: None,
+                deferred_spawn: needs_deferred_spawn,
+                fork_context: None,
+            };
+            ChatWidget::new(init)
         };
 
         chat_widget.maybe_prompt_windows_sandbox_enable();
@@ -382,7 +348,6 @@ impl App {
         );
 
         let mut app = Self {
-            server: conversation_manager.clone(),
             app_event_tx,
             chat_widget,
             auth_manager: auth_manager.clone(),
@@ -409,11 +374,7 @@ impl App {
             system_info_tx,
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
-            server_for_deferred_spawn: if needs_deferred_spawn {
-                Some(conversation_manager)
-            } else {
-                None
-            },
+            deferred_spawn_pending: needs_deferred_spawn,
         };
 
         // Load NoriConfig and propagate settings to the textarea.

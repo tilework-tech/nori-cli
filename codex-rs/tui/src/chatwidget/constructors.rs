@@ -2,10 +2,7 @@ use super::agent::SpawnAgentResult;
 use super::*;
 
 impl ChatWidget {
-    pub(crate) fn new(
-        common: ChatWidgetInit,
-        conversation_manager: Arc<ConversationManager>,
-    ) -> Self {
+    pub(crate) fn new(common: ChatWidgetInit) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -31,12 +28,7 @@ impl ChatWidget {
                 acp_handle: None,
             }
         } else {
-            spawn_agent(
-                config.clone(),
-                app_event_tx.clone(),
-                conversation_manager,
-                fork_context,
-            )
+            spawn_agent(config.clone(), app_event_tx.clone(), fork_context)
         };
 
         let first_prompt_text = initial_prompt.clone();
@@ -96,108 +88,6 @@ impl ChatWidget {
             session_configured_received: false,
             #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
-            session_stats: SessionStats::new(),
-            login_handler: None,
-            first_prompt_text,
-            loop_remaining: None,
-            loop_total: None,
-            #[cfg(feature = "nori-config")]
-            loop_count_override: None,
-            turn_finished: false,
-            session_skillset_name: None,
-            plan_drawer_mode: PlanDrawerMode::Off,
-            pinned_plan: None,
-        };
-
-        widget.prefetch_rate_limits();
-
-        widget
-    }
-
-    /// Create a ChatWidget attached to an existing conversation (e.g., a fork).
-    pub(crate) fn new_from_existing(
-        common: ChatWidgetInit,
-        conversation: std::sync::Arc<codex_core::CodexConversation>,
-        session_configured: codex_core::protocol::SessionConfiguredEvent,
-    ) -> Self {
-        let ChatWidgetInit {
-            config,
-            frame_requester,
-            app_event_tx,
-            initial_prompt,
-            initial_images,
-            enhanced_keys_supported,
-            auth_manager,
-            vertical_footer,
-            expected_agent,
-            deferred_spawn: _,
-            fork_context: _,
-        } = common;
-        let mut rng = rand::rng();
-        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
-
-        let codex_op_tx =
-            spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
-
-        let first_prompt_text = initial_prompt.clone();
-        let mut widget = Self {
-            app_event_tx: app_event_tx.clone(),
-            frame_requester: frame_requester.clone(),
-            codex_op_tx,
-            bottom_pane: BottomPane::new(BottomPaneParams {
-                frame_requester,
-                app_event_tx,
-                has_input_focus: true,
-                enhanced_keys_supported,
-                placeholder_text: placeholder,
-                disable_paste_burst: config.disable_paste_burst,
-                animations_enabled: config.animations,
-                vertical_footer,
-                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
-            }),
-            active_cell: None,
-            config: config.clone(),
-            auth_manager,
-            session_header: SessionHeader::new(config.model),
-            initial_user_message: create_initial_user_message(
-                initial_prompt.unwrap_or_default(),
-                initial_images,
-            ),
-            token_info: None,
-            rate_limit_snapshot: None,
-            rate_limit_warnings: RateLimitWarningState::default(),
-
-            rate_limit_poller: None,
-            stream_controller: None,
-            running_commands: HashMap::new(),
-            suppressed_exec_calls: HashSet::new(),
-            last_unified_wait: None,
-            task_complete_pending: false,
-            mcp_startup_status: None,
-            interrupts: InterruptManager::new(),
-            reasoning_buffer: String::new(),
-            full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::random_status_message(),
-            retry_status_header: None,
-            conversation_id: None,
-            queued_user_messages: VecDeque::new(),
-            show_welcome_banner: true,
-            suppress_session_configured_redraw: true,
-            pending_notification: None,
-            needs_final_message_separator: false,
-            last_rendered_width: std::cell::Cell::new(None),
-            current_rollout_path: None,
-            pending_exec_cells: PendingExecCellTracker::new(),
-            effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
-            pending_agent: None,
-            expected_agent,
-            // For existing conversations, we've already received SessionConfigured
-            session_configured_received: true,
-            // No ACP handle for existing conversations (they are HTTP mode only)
-            #[cfg(feature = "unstable")]
-            acp_handle: None,
             session_stats: SessionStats::new(),
             login_handler: None,
             first_prompt_text,
@@ -335,13 +225,8 @@ impl ChatWidget {
     ///
     /// This should be called after pre-session setup (e.g., skillset switch)
     /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
-    pub(crate) fn spawn_deferred_agent(
-        &mut self,
-        config: Config,
-        app_event_tx: AppEventSender,
-        server: Arc<ConversationManager>,
-    ) {
-        let spawn_result = spawn_agent(config, app_event_tx, server, None);
+    pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
+        let spawn_result = spawn_agent(config, app_event_tx, None);
         self.codex_op_tx = spawn_result.op_tx;
         #[cfg(feature = "unstable")]
         {

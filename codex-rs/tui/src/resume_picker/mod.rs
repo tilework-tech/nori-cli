@@ -47,6 +47,10 @@ const LOAD_NEAR_THRESHOLD: usize = 5;
 #[derive(Debug, Clone)]
 pub enum ResumeSelection {
     StartFresh,
+    /// Previously used for HTTP-backend resume. The PathBuf is still
+    /// constructed by the resume picker but no longer consumed by
+    /// `App::run()` because ACP resume goes through a different path.
+    #[allow(dead_code)]
     Resume(PathBuf),
     Exit,
 }

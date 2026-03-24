@@ -10,7 +10,6 @@ use crate::history_cell::UserHistoryCell;
 use crate::history_cell::new_session_info;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
-use codex_core::ConversationManager;
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::Event;
 use codex_core::protocol::EventMsg;
@@ -26,15 +25,11 @@ use std::sync::mpsc;
 fn make_test_app() -> App {
     let (chat_widget, app_event_tx, _rx, _op_rx) = make_chatwidget_manual_with_sender();
     let config = chat_widget.config_ref().clone();
-    let server = Arc::new(ConversationManager::with_auth(CodexAuth::from_api_key(
-        "Test API Key",
-    )));
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
     let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
 
     let (system_info_tx, _system_info_rx) = mpsc::channel();
     App {
-        server,
         app_event_tx,
         chat_widget,
         auth_manager,
@@ -61,7 +56,7 @@ fn make_test_app() -> App {
         system_info_tx,
         worktree_warning_shown: false,
         #[cfg(feature = "nori-config")]
-        server_for_deferred_spawn: None,
+        deferred_spawn_pending: false,
     }
 }
 
@@ -72,16 +67,12 @@ fn make_test_app_with_channels() -> (
 ) {
     let (chat_widget, app_event_tx, rx, op_rx) = make_chatwidget_manual_with_sender();
     let config = chat_widget.config_ref().clone();
-    let server = Arc::new(ConversationManager::with_auth(CodexAuth::from_api_key(
-        "Test API Key",
-    )));
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
     let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
 
     let (system_info_tx, _system_info_rx) = mpsc::channel();
     (
         App {
-            server,
             app_event_tx,
             chat_widget,
             auth_manager,
@@ -108,7 +99,7 @@ fn make_test_app_with_channels() -> (
             system_info_tx,
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
-            server_for_deferred_spawn: None,
+            deferred_spawn_pending: false,
         },
         rx,
         op_rx,
@@ -264,7 +255,7 @@ async fn new_session_requests_shutdown_for_previous_conversation() {
     while app_event_rx.try_recv().is_ok() {}
     while op_rx.try_recv().is_ok() {}
 
-    app.shutdown_current_conversation().await;
+    app.shutdown_current_conversation();
 
     match op_rx.try_recv() {
         Ok(Op::Shutdown) => {}

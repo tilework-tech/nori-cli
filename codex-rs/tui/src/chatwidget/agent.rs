@@ -10,8 +10,6 @@ use codex_acp::find_nori_home;
 use codex_acp::get_agent_config;
 use codex_acp::get_agent_display_name;
 use codex_acp::list_available_agents;
-use codex_core::CodexConversation;
-use codex_core::ConversationManager;
 use codex_core::config::Config;
 use codex_core::protocol::Op;
 use tokio::sync::mpsc;
@@ -120,34 +118,16 @@ pub(crate) struct SpawnAgentResult {
 /// Spawn the agent bootstrapper and op forwarding loop, returning a result
 /// that includes the Op sender and optionally an ACP handle for model control.
 ///
-/// This function detects whether to use ACP mode or HTTP mode based on:
-/// 1. If the agent is registered in the ACP registry, use ACP mode
-/// 2. If the agent is NOT registered and `acp_allow_http_fallback` is true, use HTTP mode
-/// 3. If the agent is NOT registered and `acp_allow_http_fallback` is false (default), error
+/// Looks up the agent in the ACP registry. If found, spawns an ACP agent.
+/// Otherwise, emits an error and opens the agent picker.
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
-    server: Arc<ConversationManager>,
     fork_context: Option<String>,
 ) -> SpawnAgentResult {
-    let acp_agent_result = get_agent_config(&config.model);
-
-    match (acp_agent_result.is_ok(), config.acp_allow_http_fallback) {
-        // Agent is registered in ACP registry -> use ACP
-        (true, _) => spawn_acp_agent(config, app_event_tx, fork_context),
-
-        // Agent NOT registered, but HTTP fallback is allowed -> use HTTP
-        (false, true) => {
-            let op_tx = spawn_http_agent(config, app_event_tx, server);
-            SpawnAgentResult {
-                op_tx,
-                #[cfg(feature = "unstable")]
-                acp_handle: None,
-            }
-        }
-
-        // Agent NOT registered and HTTP fallback NOT allowed -> error
-        (false, false) => {
+    match get_agent_config(&config.model) {
+        Ok(_) => spawn_acp_agent(config, app_event_tx, fork_context),
+        Err(_) => {
             let agent_name = config.model;
             let known: Vec<String> = list_available_agents()
                 .iter()
@@ -155,7 +135,6 @@ pub(crate) fn spawn_agent(
                 .collect();
             let error_msg = format!(
                 "Agent '{agent_name}' is not registered as an ACP agent. \
-                 Set acp.allow_http_fallback = true to allow HTTP providers. \
                  Known ACP agents: {}",
                 known.join(", ")
             );
@@ -524,117 +503,4 @@ pub(crate) fn spawn_acp_agent_resume(
         #[cfg(feature = "unstable")]
         acp_handle,
     }
-}
-
-/// Spawn an HTTP agent (the original implementation).
-///
-/// This uses `codex_core` to communicate with LLM providers via HTTP APIs.
-fn spawn_http_agent(
-    config: Config,
-    app_event_tx: AppEventSender,
-    server: Arc<ConversationManager>,
-) -> UnboundedSender<Op> {
-    let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
-
-    // Clone agent name before config is moved
-    let agent_name = config.model.clone();
-    let app_event_tx_clone = app_event_tx;
-    tokio::spawn(async move {
-        // Race backend init against shutdown requests and a timeout.
-        let (conversation, session_configured) = tokio::select! {
-            result = server.new_conversation(config) => {
-                match result {
-                    Ok(v) => (v.conversation, v.session_configured),
-                    #[allow(clippy::print_stderr)]
-                    Err(err) => {
-                        let message = err.to_string();
-                        eprintln!("{message}");
-                        drop(codex_op_rx);
-                        app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                            agent_name,
-                            error: format!("Failed to initialize HTTP agent: {err}"),
-                        });
-                        tracing::error!("failed to initialize codex: {err}");
-                        return;
-                    }
-                }
-            }
-            () = drain_until_shutdown(&mut codex_op_rx) => {
-                tracing::info!("shutdown requested while HTTP backend was connecting");
-                drop(codex_op_rx);
-                app_event_tx_clone.send(AppEvent::ExitRequest);
-                return;
-            }
-            () = spawn_timeout_sequence(&app_event_tx_clone) => {
-                tracing::warn!("HTTP backend connection timed out");
-                drop(codex_op_rx);
-                app_event_tx_clone.send(AppEvent::AgentSpawnFailed {
-                    agent_name,
-                    error: "Connection timed out. The agent did not respond.".to_string(),
-                });
-                return;
-            }
-        };
-
-        // Forward the captured `SessionConfigured` event so it can be rendered in the UI.
-        let ev = codex_core::protocol::Event {
-            // The `id` does not matter for rendering, so we can use a fake value.
-            id: "".to_string(),
-            msg: codex_core::protocol::EventMsg::SessionConfigured(session_configured),
-        };
-        app_event_tx_clone.send(AppEvent::CodexEvent(ev));
-
-        let conversation_clone = conversation.clone();
-        tokio::spawn(async move {
-            while let Some(op) = codex_op_rx.recv().await {
-                let id = conversation_clone.submit(op).await;
-                if let Err(e) = id {
-                    tracing::error!("failed to submit op: {e}");
-                }
-            }
-        });
-
-        while let Ok(event) = conversation.next_event().await {
-            app_event_tx_clone.send(AppEvent::CodexEvent(event));
-        }
-    });
-
-    codex_op_tx
-}
-
-/// Spawn agent loops for an existing conversation (e.g., a forked conversation).
-/// Sends the provided `SessionConfiguredEvent` immediately, then forwards subsequent
-/// events and accepts Ops for submission.
-pub(crate) fn spawn_agent_from_existing(
-    conversation: std::sync::Arc<CodexConversation>,
-    session_configured: codex_core::protocol::SessionConfiguredEvent,
-    app_event_tx: AppEventSender,
-) -> UnboundedSender<Op> {
-    let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
-
-    let app_event_tx_clone = app_event_tx;
-    tokio::spawn(async move {
-        // Forward the captured `SessionConfigured` event so it can be rendered in the UI.
-        let ev = codex_core::protocol::Event {
-            id: "".to_string(),
-            msg: codex_core::protocol::EventMsg::SessionConfigured(session_configured),
-        };
-        app_event_tx_clone.send(AppEvent::CodexEvent(ev));
-
-        let conversation_clone = conversation.clone();
-        tokio::spawn(async move {
-            while let Some(op) = codex_op_rx.recv().await {
-                let id = conversation_clone.submit(op).await;
-                if let Err(e) = id {
-                    tracing::error!("failed to submit op: {e}");
-                }
-            }
-        });
-
-        while let Ok(event) = conversation.next_event().await {
-            app_event_tx_clone.send(AppEvent::CodexEvent(event));
-        }
-    });
-
-    codex_op_tx
 }
