@@ -6,10 +6,10 @@ expression: normalize_for_input_snapshot(contents)
 
 • Analyzing the code.
 
-• Ran 'Running tests(cargo test)'
+• Ran Running tests(cargo test)
   └ Tests passed
 
-• Ran 'Running lint(cargo clippy)'
+• Ran Running lint(cargo clippy)
   └ No files found
 
 ────────────────────────────────────────────────────────────────────────────────
