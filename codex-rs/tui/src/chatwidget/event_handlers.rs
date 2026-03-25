@@ -1249,13 +1249,13 @@ fn exec_begin_event_from_client_snapshot(
     cwd: &std::path::Path,
     snapshot: &nori_protocol::ToolSnapshot,
 ) -> Option<ExecCommandBeginEvent> {
-    let (command, parsed_cmd) = match snapshot.invocation.as_ref()? {
-        nori_protocol::Invocation::Command { command } => {
+    let (command, parsed_cmd) = match snapshot.invocation.as_ref() {
+        Some(nori_protocol::Invocation::Command { command }) => {
             let command_vec = vec!["bash".to_string(), "-lc".to_string(), command.clone()];
             let parsed_cmd = codex_core::parse_command::parse_command(&command_vec);
             (command_vec, parsed_cmd)
         }
-        nori_protocol::Invocation::Read { path } => {
+        Some(nori_protocol::Invocation::Read { path }) => {
             let name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
@@ -1269,7 +1269,7 @@ fn exec_begin_event_from_client_snapshot(
                 }],
             )
         }
-        nori_protocol::Invocation::Search { query, path } => (
+        Some(nori_protocol::Invocation::Search { query, path }) => (
             vec![snapshot.title.clone()],
             vec![ParsedCommand::Search {
                 cmd: snapshot.title.clone(),
@@ -1277,14 +1277,22 @@ fn exec_begin_event_from_client_snapshot(
                 path: path.as_ref().map(|value| value.display().to_string()),
             }],
         ),
-        nori_protocol::Invocation::ListFiles { path } => (
+        Some(nori_protocol::Invocation::ListFiles { path }) => (
             vec![snapshot.title.clone()],
             vec![ParsedCommand::ListFiles {
                 cmd: snapshot.title.clone(),
                 path: path.as_ref().map(|value| value.display().to_string()),
             }],
         ),
-        _ => return None,
+        Some(_) => return None,
+        None if snapshot.kind == nori_protocol::ToolKind::Execute => {
+            let command_text = generic_execute_command_text(snapshot);
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
+        }
+        None => return None,
     };
 
     Some(ExecCommandBeginEvent {
@@ -1297,6 +1305,21 @@ fn exec_begin_event_from_client_snapshot(
         source: ExecCommandSource::Agent,
         interaction_input: None,
     })
+}
+
+fn generic_execute_command_text(snapshot: &nori_protocol::ToolSnapshot) -> String {
+    match snapshot.raw_input.as_ref() {
+        Some(raw_input)
+            if !raw_input.is_null() && !raw_input.as_object().is_some_and(serde_json::Map::is_empty) =>
+        {
+            format!("{} {}", snapshot.title, compact_json(raw_input))
+        }
+        _ => snapshot.title.clone(),
+    }
+}
+
+fn compact_json(value: &serde_json::Value) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| value.to_string())
 }
 
 fn exec_end_event_from_client_snapshot(

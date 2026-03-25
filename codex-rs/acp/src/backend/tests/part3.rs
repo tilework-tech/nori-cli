@@ -974,6 +974,79 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
     }
 }
 
+#[tokio::test]
+async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+    ));
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new("toolu_generic_test_001", "Terminal")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::Pending),
+        ))
+        .await
+        .expect("send generic tool call");
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCallUpdate(
+            acp::ToolCallUpdate::new(
+                "toolu_generic_test_001",
+                acp::ToolCallUpdateFields::new()
+                    .status(acp::ToolCallStatus::Completed)
+                    .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                        acp::ContentBlock::Text(acp::TextContent::new("command output here")),
+                    ))])
+                    .raw_output(
+                        serde_json::json!({"exit_code": 0, "stdout": "command output here"}),
+                    ),
+            ),
+        ))
+        .await
+        .expect("send generic tool call update");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            call_id: "toolu_generic_test_001".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "command output here".into(),
+            }],
+            raw_input: None,
+            raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": "command output here"}),),
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "completed generic execute snapshots should not emit the legacy exec end event once the client-event path exists",
+    );
+}
+
 /// Test that Op::Compact sends the summarization prompt to the agent and emits
 /// the expected events: TaskStarted, agent message streaming, ContextCompacted,
 /// Warning, and TaskComplete.

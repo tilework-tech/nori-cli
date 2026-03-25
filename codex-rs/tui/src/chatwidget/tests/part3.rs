@@ -870,3 +870,39 @@ fn completed_list_files_tool_snapshot_renders_exploring_history_cell() {
         "expected list target in exploring cell: {blob:?}"
     );
 }
+
+#[test]
+fn completed_generic_execute_tool_snapshot_renders_exec_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_generic_test_001".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "command output here".into(),
+            }],
+            raw_input: None,
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "command output here",
+            })),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one exec history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Ran Terminal"),
+        "expected resolved generic tool title in history cell: {blob:?}"
+    );
+    assert!(
+        !blob.contains("toolu_generic_test_001"),
+        "raw call id should not be rendered in history cell: {blob:?}"
+    );
+}
