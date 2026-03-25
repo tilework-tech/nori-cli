@@ -3805,6 +3805,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-protocol"
+version = "0.0.0"
+dependencies = [
+ "pretty_assertions",
+ "sacp",
+ "serde_json",
+]
+
+[[package]]
 name = "nori-tui"
 version = "0.0.0"
 dependencies = [
