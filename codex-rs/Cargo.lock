@@ -3851,6 +3851,7 @@ dependencies = [
  "libc",
  "mcp-types",
  "nori-installed",
+ "nori-protocol",
  "opentelemetry-appender-tracing",
  "pathdiff",
  "pretty_assertions",

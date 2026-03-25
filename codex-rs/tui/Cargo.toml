@@ -53,6 +53,7 @@ codex-common = { workspace = true, features = [
 codex-core = { workspace = true }
 codex-git = { workspace = true }
 nori-installed = { workspace = true }
+nori-protocol = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true, optional = true }
 codex-protocol = { workspace = true }
