@@ -1189,12 +1189,14 @@ impl ChatWidget {
                 self.handle_client_edit_tool_snapshot(tool_snapshot);
             }
             nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Read
+            | nori_protocol::ToolKind::Search
                 if matches!(
                     tool_snapshot.phase,
                     nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
                 ) =>
             {
-                self.handle_client_execute_tool_snapshot(tool_snapshot);
+                self.handle_client_exec_like_tool_snapshot(tool_snapshot);
             }
             _ => {}
         }
@@ -1214,7 +1216,10 @@ impl ChatWidget {
         self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
     }
 
-    fn handle_client_execute_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+    fn handle_client_exec_like_tool_snapshot(
+        &mut self,
+        tool_snapshot: nori_protocol::ToolSnapshot,
+    ) {
         if self.turn_finished
             || self
                 .completed_client_tool_calls
@@ -1244,18 +1249,51 @@ fn exec_begin_event_from_client_snapshot(
     cwd: &std::path::Path,
     snapshot: &nori_protocol::ToolSnapshot,
 ) -> Option<ExecCommandBeginEvent> {
-    let nori_protocol::Invocation::Command { command } = snapshot.invocation.as_ref()? else {
-        return None;
+    let (command, parsed_cmd) = match snapshot.invocation.as_ref()? {
+        nori_protocol::Invocation::Command { command } => {
+            let command_vec = vec!["bash".to_string(), "-lc".to_string(), command.clone()];
+            let parsed_cmd = codex_core::parse_command::parse_command(&command_vec);
+            (command_vec, parsed_cmd)
+        }
+        nori_protocol::Invocation::Read { path } => {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.display().to_string());
+            (
+                vec![snapshot.title.clone()],
+                vec![ParsedCommand::Read {
+                    cmd: snapshot.title.clone(),
+                    name,
+                    path: path.clone(),
+                }],
+            )
+        }
+        nori_protocol::Invocation::Search { query, path } => (
+            vec![snapshot.title.clone()],
+            vec![ParsedCommand::Search {
+                cmd: snapshot.title.clone(),
+                query: query.clone(),
+                path: path.as_ref().map(|value| value.display().to_string()),
+            }],
+        ),
+        nori_protocol::Invocation::ListFiles { path } => (
+            vec![snapshot.title.clone()],
+            vec![ParsedCommand::ListFiles {
+                cmd: snapshot.title.clone(),
+                path: path.as_ref().map(|value| value.display().to_string()),
+            }],
+        ),
+        _ => return None,
     };
 
-    let command_vec = vec!["bash".to_string(), "-lc".to_string(), command.clone()];
     Some(ExecCommandBeginEvent {
         call_id: snapshot.call_id.clone(),
         process_id: None,
         turn_id: String::new(),
-        command: command_vec.clone(),
+        command,
         cwd: cwd.to_path_buf(),
-        parsed_cmd: codex_core::parse_command::parse_command(&command_vec),
+        parsed_cmd,
         source: ExecCommandSource::Agent,
         interaction_input: None,
     })

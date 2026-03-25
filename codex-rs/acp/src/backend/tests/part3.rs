@@ -851,6 +851,129 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     );
 }
 
+#[tokio::test]
+async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let cases = vec![
+        (
+            acp::ToolCallUpdate::new(
+                "call-read-complete",
+                acp::ToolCallUpdateFields::new()
+                    .title("Read Cargo.toml")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({"path": "Cargo.toml"}))
+                    .raw_output(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+            ),
+            nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-read-complete".into(),
+                title: "Read Cargo.toml".into(),
+                kind: nori_protocol::ToolKind::Read,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Read {
+                    path: PathBuf::from("Cargo.toml"),
+                }),
+                artifacts: vec![nori_protocol::Artifact::Text {
+                    text: "[package]\nname = \"nori\"\n".into(),
+                }],
+                raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
+                raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+            }),
+        ),
+        (
+            acp::ToolCallUpdate::new(
+                "call-search-complete",
+                acp::ToolCallUpdateFields::new()
+                    .title("Search src")
+                    .kind(acp::ToolKind::Search)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({"pattern": "TODO", "path": "src"}))
+                    .raw_output(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+            ),
+            nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-search-complete".into(),
+                title: "Search src".into(),
+                kind: nori_protocol::ToolKind::Search,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Search {
+                    query: Some("TODO".into()),
+                    path: Some(PathBuf::from("src")),
+                }),
+                artifacts: vec![nori_protocol::Artifact::Text {
+                    text: "src/main.rs:12:// TODO\n".into(),
+                }],
+                raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
+                raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+            }),
+        ),
+        (
+            acp::ToolCallUpdate::new(
+                "call-list-complete",
+                acp::ToolCallUpdateFields::new()
+                    .title("List src")
+                    .kind(acp::ToolKind::Search)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({"path": "src"}))
+                    .raw_output(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+            ),
+            nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-list-complete".into(),
+                title: "List src".into(),
+                kind: nori_protocol::ToolKind::Search,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::ListFiles {
+                    path: Some(PathBuf::from("src")),
+                }),
+                artifacts: vec![nori_protocol::Artifact::Text {
+                    text: "src/main.rs\nsrc/lib.rs\n".into(),
+                }],
+                raw_input: Some(serde_json::json!({"path": "src"})),
+                raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+            }),
+        ),
+    ];
+
+    for (update, expected_client_event) in cases {
+        let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+        let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+        let (client_event_tx, mut client_event_rx) =
+            mpsc::channel::<nori_protocol::ClientEvent>(16);
+        let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+        tokio::spawn(AcpBackend::run_persistent_relay(
+            persistent_rx,
+            event_tx,
+            Some(client_event_tx),
+            Arc::clone(&pending_tool_calls),
+            Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+        ));
+
+        persistent_tx
+            .send(acp::SessionUpdate::ToolCallUpdate(update))
+            .await
+            .expect("send tool call update");
+
+        let client_event =
+            tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+                .await
+                .expect("client event timeout")
+                .expect("client event missing");
+        assert_eq!(client_event, expected_client_event);
+
+        let event =
+            tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+        assert!(
+            event.is_err(),
+            "completed normalized exploring snapshots should not emit legacy exec events once the client-event path exists",
+        );
+    }
+}
+
 /// Test that Op::Compact sends the summarization prompt to the agent and emits
 /// the expected events: TaskStarted, agent message streaming, ContextCompacted,
 /// Warning, and TaskComplete.

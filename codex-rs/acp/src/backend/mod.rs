@@ -429,6 +429,21 @@ pub(crate) fn client_event_handles_live_tool_snapshot(client_events: &[ClientEve
                         tool_snapshot.invocation,
                         Some(nori_protocol::Invocation::Command { .. })
                     )
+        ) || matches!(
+            client_event,
+            ClientEvent::ToolSnapshot(tool_snapshot)
+                if matches!(
+                    tool_snapshot.kind,
+                    nori_protocol::ToolKind::Read | nori_protocol::ToolKind::Search
+                ) && matches!(
+                    tool_snapshot.phase,
+                    nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+                ) && matches!(
+                    tool_snapshot.invocation,
+                    Some(nori_protocol::Invocation::Read { .. })
+                        | Some(nori_protocol::Invocation::Search { .. })
+                        | Some(nori_protocol::Invocation::ListFiles { .. })
+                )
         )
     })
 }

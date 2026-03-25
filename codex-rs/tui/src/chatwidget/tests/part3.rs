@@ -766,3 +766,107 @@ fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
         done_pos.unwrap(),
     );
 }
+
+#[test]
+fn completed_read_tool_snapshot_renders_exploring_history_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-read-complete".into(),
+            title: "Read Cargo.toml".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("Cargo.toml"),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "[package]\nname = \"nori\"\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
+            raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Explored"),
+        "expected exploring summary header: {blob:?}"
+    );
+    assert!(
+        blob.contains("Cargo.toml"),
+        "expected read target in exploring cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_search_tool_snapshot_renders_exploring_history_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-search-complete".into(),
+            title: "Search src".into(),
+            kind: nori_protocol::ToolKind::Search,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some(PathBuf::from("src")),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "src/main.rs:12:// TODO\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
+            raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Explored"),
+        "expected exploring summary header: {blob:?}"
+    );
+    assert!(
+        blob.contains("TODO"),
+        "expected search query in exploring cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("src"),
+        "expected search path in exploring cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_list_files_tool_snapshot_renders_exploring_history_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-list-complete".into(),
+            title: "List src".into(),
+            kind: nori_protocol::ToolKind::Search,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::ListFiles {
+                path: Some(PathBuf::from("src")),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "src/main.rs\nsrc/lib.rs\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"path": "src"})),
+            raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Explored"),
+        "expected exploring summary header: {blob:?}"
+    );
+    assert!(
+        blob.contains("src"),
+        "expected list target in exploring cell: {blob:?}"
+    );
+}
