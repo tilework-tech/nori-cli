@@ -335,16 +335,17 @@ fn spawn_acp_agent(
         let mut client_events_open = true;
         while codex_events_open || client_events_open {
             tokio::select! {
-                event = event_rx.recv(), if codex_events_open => {
-                    match event {
-                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
-                        None => codex_events_open = false,
-                    }
-                }
+                biased;
                 client_event = client_event_rx.recv(), if client_events_open => {
                     match client_event {
                         Some(client_event) => app_event_tx.send(AppEvent::ClientEvent(client_event)),
                         None => client_events_open = false,
+                    }
+                }
+                event = event_rx.recv(), if codex_events_open => {
+                    match event {
+                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
+                        None => codex_events_open = false,
                     }
                 }
             }
@@ -518,16 +519,17 @@ pub(crate) fn spawn_acp_agent_resume(
         let mut client_events_open = true;
         while codex_events_open || client_events_open {
             tokio::select! {
-                event = event_rx.recv(), if codex_events_open => {
-                    match event {
-                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
-                        None => codex_events_open = false,
-                    }
-                }
+                biased;
                 client_event = client_event_rx.recv(), if client_events_open => {
                     match client_event {
                         Some(client_event) => app_event_tx.send(AppEvent::ClientEvent(client_event)),
                         None => client_events_open = false,
+                    }
+                }
+                event = event_rx.recv(), if codex_events_open => {
+                    match event {
+                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
+                        None => codex_events_open = false,
                     }
                 }
             }
