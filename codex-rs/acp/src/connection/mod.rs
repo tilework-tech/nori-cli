@@ -46,6 +46,8 @@ impl ApprovalEventType {
 pub struct ApprovalRequest {
     /// The translated Codex approval event (either exec or patch)
     pub event: ApprovalEventType,
+    /// The original ACP permission request.
+    pub acp_request: acp::RequestPermissionRequest,
     /// The original ACP permission options for translating the response
     pub options: Vec<acp::PermissionOption>,
     /// Channel to send the user's decision back

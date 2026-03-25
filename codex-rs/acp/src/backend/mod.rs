@@ -31,6 +31,7 @@ use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
+use nori_protocol::ClientEventNormalizer;
 use sacp::schema as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -318,6 +319,9 @@ pub struct AcpBackend {
     /// commands). The prompt relay and persistent relay use this to resolve
     /// proper titles on `ToolCallUpdate(completed)`.
     pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+    /// ACP-native normalized event accumulator that runs alongside the legacy
+    /// event translation path.
+    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     /// MCP server configuration for listing via /mcp command
     mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
@@ -348,6 +352,37 @@ mod transcript;
 pub use transcript::transcript_to_replay_events;
 pub use transcript::transcript_to_summary;
 mod hooks;
+
+pub(crate) async fn normalize_permission_request(
+    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
+    request: &crate::connection::ApprovalRequest,
+) {
+    let mut normalizer = normalizer.lock().await;
+    let events = normalizer.push_permission_request(&request.acp_request);
+    if !events.is_empty() {
+        debug!(
+            target: "acp_normalized_event_flow",
+            event_count = events.len(),
+            call_id = %request.event.call_id(),
+            "Normalized ACP permission request"
+        );
+    }
+}
+
+pub(crate) async fn normalize_session_update(
+    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
+    update: &acp::SessionUpdate,
+) {
+    let mut normalizer = normalizer.lock().await;
+    let events = normalizer.push_session_update(update);
+    if !events.is_empty() {
+        debug!(
+            target: "acp_normalized_event_flow",
+            event_count = events.len(),
+            "Normalized ACP session update"
+        );
+    }
+}
 use hooks::commands_dir;
 use hooks::generate_id;
 use hooks::route_hook_results;

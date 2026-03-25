@@ -192,6 +192,7 @@ impl AcpBackend {
         let hook_timeout = self.script_timeout;
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
         let pending_tool_calls = Arc::clone(&self.pending_tool_calls);
+        let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -240,6 +241,7 @@ impl AcpBackend {
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
+                    normalize_session_update(&client_event_normalizer, &update).await;
                     if has_agent_text
                         && matches!(
                             update,

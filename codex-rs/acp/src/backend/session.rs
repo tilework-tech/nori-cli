@@ -72,8 +72,10 @@ impl AcpBackend {
             let collect_handle = tokio::spawn(async move {
                 let mut pending_patch_changes = std::collections::HashMap::new();
                 let mut pending_tool_calls = std::collections::HashMap::new();
+                let mut client_event_normalizer = nori_protocol::ClientEventNormalizer::default();
                 let mut buffered_events = Vec::new();
                 while let Some(update) = update_rx.recv().await {
+                    let _ = client_event_normalizer.push_session_update(&update);
                     let event_msgs = translate_session_update_to_events(
                         &update,
                         &mut pending_patch_changes,
@@ -186,6 +188,7 @@ impl AcpBackend {
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
+        let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -251,6 +254,7 @@ impl AcpBackend {
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             pending_tool_calls: Arc::clone(&pending_tool_calls),
+            client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
@@ -317,6 +321,7 @@ impl AcpBackend {
             cwd.clone(),
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
@@ -324,6 +329,7 @@ impl AcpBackend {
             persistent_rx,
             event_tx.clone(),
             Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
         ));
 
         // Spawn the replay relay *after* all setup events (SessionConfigured,

@@ -103,6 +103,7 @@ impl AcpBackend {
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
+        let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -176,6 +177,7 @@ impl AcpBackend {
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             pending_tool_calls: Arc::clone(&pending_tool_calls),
+            client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
@@ -228,6 +230,7 @@ impl AcpBackend {
             cwd.clone(),
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
@@ -235,6 +238,7 @@ impl AcpBackend {
             persistent_rx,
             event_tx.clone(),
             Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
         ));
 
         Ok(backend)
@@ -244,6 +248,7 @@ impl AcpBackend {
     ///
     /// When `approval_policy` is `AskForApproval::Never` (yolo mode), requests
     /// are auto-approved without prompting the user.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn run_approval_handler(
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
         event_tx: mpsc::Sender<Event>,
@@ -252,8 +257,10 @@ impl AcpBackend {
         cwd: PathBuf,
         approval_policy_rx: watch::Receiver<AskForApproval>,
         pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+        client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
+            normalize_permission_request(&client_event_normalizer, &request).await;
             // Store tool call metadata from the permission request so the
             // event translator can resolve proper titles when the subsequent
             // ToolCallUpdate(completed) arrives (often with empty fields from
@@ -359,9 +366,11 @@ impl AcpBackend {
         mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
         event_tx: mpsc::Sender<Event>,
         pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+        client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     ) {
         let mut pending_patch_changes = HashMap::new();
         while let Some(update) = persistent_rx.recv().await {
+            normalize_session_update(&client_event_normalizer, &update).await;
             let event_msgs = {
                 let mut tool_calls = pending_tool_calls.lock().await;
                 translate_session_update_to_events(

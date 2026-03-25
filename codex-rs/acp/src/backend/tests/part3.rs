@@ -482,6 +482,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
 #[tokio::test]
 async fn test_approval_policy_dynamic_update() {
     use codex_protocol::approvals::ExecApprovalRequestEvent;
+    use sacp::schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
 
@@ -505,6 +506,7 @@ async fn test_approval_policy_dynamic_update() {
         cwd.clone(),
         policy_rx,
         Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     ));
 
     // Create a mock approval request
@@ -519,6 +521,11 @@ async fn test_approval_policy_dynamic_update() {
             risk: None,
             parsed_cmd: vec![],
         }),
+        acp_request: acp::RequestPermissionRequest::new(
+            "session-1",
+            acp::ToolCallUpdate::new("call-1", acp::ToolCallUpdateFields::new()),
+            vec![],
+        ),
         options: vec![],
         response_tx: response_tx1,
         tool_call_metadata: None,
@@ -570,6 +577,11 @@ async fn test_approval_policy_dynamic_update() {
             risk: None,
             parsed_cmd: vec![],
         }),
+        acp_request: acp::RequestPermissionRequest::new(
+            "session-1",
+            acp::ToolCallUpdate::new("call-2", acp::ToolCallUpdateFields::new()),
+            vec![],
+        ),
         options: vec![],
         response_tx: response_tx2,
         tool_call_metadata: None,
