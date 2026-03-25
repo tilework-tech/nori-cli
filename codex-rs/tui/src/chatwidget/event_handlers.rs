@@ -1152,8 +1152,13 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_client_event(&mut self, event: nori_protocol::ClientEvent) {
-        if let nori_protocol::ClientEvent::ApprovalRequest(approval) = event {
-            self.handle_client_approval_request(approval);
+        match event {
+            nori_protocol::ClientEvent::ApprovalRequest(approval) => {
+                self.handle_client_approval_request(approval);
+            }
+            nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => {
+                self.handle_client_tool_snapshot(tool_snapshot);
+            }
         }
     }
 
@@ -1171,6 +1176,26 @@ impl ChatWidget {
             cwd: self.config.cwd.clone(),
             changes: changed_paths,
         });
+    }
+
+    fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        if tool_snapshot.kind != nori_protocol::ToolKind::Edit
+            || tool_snapshot.phase != nori_protocol::ToolPhase::Completed
+        {
+            return;
+        }
+
+        let Some(changes) = file_changes_from_snapshot(&tool_snapshot) else {
+            return;
+        };
+
+        if self.turn_finished {
+            return;
+        }
+
+        self.session_stats.record_tool_call("Edit");
+        self.observe_directories_from_changes(&changes);
+        self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
     }
 }
 

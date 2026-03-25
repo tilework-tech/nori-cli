@@ -363,11 +363,15 @@ impl AcpBackend {
                     }
 
                     // Translate and forward events to TUI for display
-                    let events = translate_session_update_to_events(
-                        &update,
-                        &mut pending_patch_changes,
-                        &mut pending_tool_calls,
-                    );
+                    let events = if client_event_handles_live_tool_snapshot(&client_events) {
+                        Vec::new()
+                    } else {
+                        translate_session_update_to_events(
+                            &update,
+                            &mut pending_patch_changes,
+                            &mut pending_tool_calls,
+                        )
+                    };
                     for event_msg in events {
                         let _ = event_tx_clone
                             .send(Event {

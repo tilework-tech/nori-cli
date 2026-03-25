@@ -578,7 +578,7 @@ Session filtering: `load_resumable_sessions()` in `@/codex-rs/tui/src/nori/resum
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/codex-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. Both spawn paths now allocate two backend-to-TUI channels: the legacy `Event` stream and a parallel `nori_protocol::ClientEvent` stream used for ACP-native UI migration. The spawned task structure (op forwarding, legacy event forwarding, normalized client-event forwarding, agent command handling) is otherwise identical.
+`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. Both spawn paths now allocate two backend-to-TUI channels: the legacy `Event` stream and a parallel `nori_protocol::ClientEvent` stream used for ACP-native UI migration. The normalized path is currently live for ACP edit approvals and completed edit snapshots; other ACP tool rendering still falls back to the legacy `EventMsg` adapter. The spawned task structure (op forwarding, legacy event forwarding, normalized client-event forwarding, agent command handling) is otherwise identical.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 

@@ -829,7 +829,7 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 
-`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, the legacy `event_tx`, and an optional normalized `client_event_tx`, then selects between two resume strategies based on agent capabilities:
+`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, the legacy `event_tx`, and an optional normalized `client_event_tx`, then selects between two resume strategies based on agent capabilities. The normalized channel is now used for live ACP edit approvals and completed edit snapshots while the remaining ACP UI still consumes translated legacy events:
 
 ```
 AcpBackend::resume_session(config, acp_session_id, transcript, event_tx, client_event_tx)

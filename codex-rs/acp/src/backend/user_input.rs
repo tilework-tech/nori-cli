@@ -364,11 +364,15 @@ impl AcpBackend {
                             }
                         }
                     }
-                    let events = translate_session_update_to_events(
-                        &update,
-                        &mut pending_patch_changes,
-                        &mut tool_calls,
-                    );
+                    let events = if client_event_handles_live_tool_snapshot(&client_events) {
+                        Vec::new()
+                    } else {
+                        translate_session_update_to_events(
+                            &update,
+                            &mut pending_patch_changes,
+                            &mut tool_calls,
+                        )
+                    };
                     drop(tool_calls);
                     for mut event_msg in events {
                         // Accumulate text for transcript

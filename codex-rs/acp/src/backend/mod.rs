@@ -409,6 +409,17 @@ pub(crate) fn client_event_handles_live_approval(client_events: &[ClientEvent]) 
         )
     })
 }
+
+pub(crate) fn client_event_handles_live_tool_snapshot(client_events: &[ClientEvent]) -> bool {
+    client_events.iter().any(|client_event| {
+        matches!(
+            client_event,
+            ClientEvent::ToolSnapshot(tool_snapshot)
+                if tool_snapshot.kind == nori_protocol::ToolKind::Edit
+                    && tool_snapshot.phase == nori_protocol::ToolPhase::Completed
+        )
+    })
+}
 use hooks::commands_dir;
 use hooks::generate_id;
 use hooks::route_hook_results;

@@ -396,6 +396,9 @@ impl AcpBackend {
         while let Some(update) = persistent_rx.recv().await {
             let client_events = normalize_session_update(&client_event_normalizer, &update).await;
             forward_client_events(&client_event_tx, &client_events).await;
+            if client_event_handles_live_tool_snapshot(&client_events) {
+                continue;
+            }
             let event_msgs = {
                 let mut tool_calls = pending_tool_calls.lock().await;
                 translate_session_update_to_events(

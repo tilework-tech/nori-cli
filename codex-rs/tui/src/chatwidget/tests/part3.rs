@@ -633,3 +633,37 @@ fn apply_patch_manual_approval_adjusts_header() {
         "expected apply summary header for foo.txt: {blob:?}"
     );
 }
+
+#[test]
+fn completed_edit_tool_snapshot_renders_patch_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-complete".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileChanges {
+                changes: vec![nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                }],
+            }),
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: None,
+                new_text: "hello\nworld\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert_snapshot!("completed_edit_tool_snapshot", blob);
+}
