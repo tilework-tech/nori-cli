@@ -316,6 +316,7 @@ impl AcpBackend {
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
         let notify_after_idle = self.notify_after_idle;
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
+        let client_event_tx = self.client_event_tx.clone();
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -339,6 +340,7 @@ impl AcpBackend {
             let id_for_updates = id_clone.clone();
             let pending_summary_for_capture = Arc::clone(&pending_compact_summary);
             let client_event_normalizer = Arc::clone(&client_event_normalizer);
+            let client_event_tx_for_updates = client_event_tx.clone();
 
             let update_handler = tokio::spawn(async move {
                 let mut summary_text = String::new();
@@ -349,7 +351,9 @@ impl AcpBackend {
                 let mut pending_tool_calls = std::collections::HashMap::new();
 
                 while let Some(update) = update_rx.recv().await {
-                    let _ = normalize_session_update(&client_event_normalizer, &update).await;
+                    let client_events =
+                        normalize_session_update(&client_event_normalizer, &update).await;
+                    forward_client_events(&client_event_tx_for_updates, &client_events).await;
 
                     // Capture text from agent message chunks
                     if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update

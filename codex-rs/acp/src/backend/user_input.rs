@@ -193,6 +193,7 @@ impl AcpBackend {
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
         let pending_tool_calls = Arc::clone(&self.pending_tool_calls);
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
+        let client_event_tx = self.client_event_tx.clone();
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -223,6 +224,7 @@ impl AcpBackend {
             let async_pre_tool_call_hooks_for_updates = async_pre_tool_call_hooks.clone();
             let async_post_tool_call_hooks_for_updates = async_post_tool_call_hooks.clone();
             let async_pre_agent_response_hooks_for_updates = async_pre_agent_response_hooks.clone();
+            let client_event_tx_for_updates = client_event_tx.clone();
             let update_handler = tokio::spawn(async move {
                 let mut event_sequence: u64 = 0;
                 // Accumulate assistant text for transcript recording
@@ -240,6 +242,7 @@ impl AcpBackend {
                 while let Some(update) = update_rx.recv().await {
                     let client_events =
                         normalize_session_update(&client_event_normalizer, &update).await;
+                    forward_client_events(&client_event_tx_for_updates, &client_events).await;
                     if has_agent_text
                         && matches!(
                             update,

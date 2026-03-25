@@ -31,6 +31,7 @@ use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
+use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use sacp::schema as acp;
 use tokio::sync::Mutex;
@@ -250,6 +251,7 @@ pub struct AcpBackend {
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
     event_tx: mpsc::Sender<Event>,
+    client_event_tx: Option<mpsc::Sender<ClientEvent>>,
     /// Working directory for the session
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
@@ -355,7 +357,7 @@ mod hooks;
 pub(crate) async fn normalize_permission_request(
     normalizer: &Arc<Mutex<ClientEventNormalizer>>,
     request: &crate::connection::ApprovalRequest,
-) -> Vec<nori_protocol::ClientEvent> {
+) -> Vec<ClientEvent> {
     let mut normalizer = normalizer.lock().await;
     let events = normalizer.push_permission_request(&request.acp_request);
     if !events.is_empty() {
@@ -372,7 +374,7 @@ pub(crate) async fn normalize_permission_request(
 pub(crate) async fn normalize_session_update(
     normalizer: &Arc<Mutex<ClientEventNormalizer>>,
     update: &acp::SessionUpdate,
-) -> Vec<nori_protocol::ClientEvent> {
+) -> Vec<ClientEvent> {
     let mut normalizer = normalizer.lock().await;
     let events = normalizer.push_session_update(update);
     if !events.is_empty() {
@@ -383,6 +385,29 @@ pub(crate) async fn normalize_session_update(
         );
     }
     events
+}
+
+pub(crate) async fn forward_client_events(
+    client_event_tx: &Option<mpsc::Sender<ClientEvent>>,
+    client_events: &[ClientEvent],
+) {
+    let Some(client_event_tx) = client_event_tx else {
+        return;
+    };
+
+    for client_event in client_events {
+        let _ = client_event_tx.send(client_event.clone()).await;
+    }
+}
+
+pub(crate) fn client_event_handles_live_approval(client_events: &[ClientEvent]) -> bool {
+    client_events.iter().any(|client_event| {
+        matches!(
+            client_event,
+            ClientEvent::ApprovalRequest(approval)
+                if approval.kind == nori_protocol::ToolKind::Edit
+        )
+    })
 }
 use hooks::commands_dir;
 use hooks::generate_id;

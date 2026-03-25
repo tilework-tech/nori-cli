@@ -62,7 +62,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let backend = AcpBackend::spawn(&config, event_tx)
+    let backend = AcpBackend::spawn(&config, event_tx, None)
         .await
         .expect("Failed to spawn ACP backend");
 
@@ -221,7 +221,7 @@ async fn test_compact_not_in_unsupported_ops() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let backend = AcpBackend::spawn(&config, event_tx)
+    let backend = AcpBackend::spawn(&config, event_tx, None)
         .await
         .expect("Failed to spawn ACP backend");
 
@@ -713,9 +713,14 @@ async fn test_resume_session_falls_back_on_load_session_failure() {
     let config = build_test_config(temp_dir.path());
     let transcript = build_test_transcript();
 
-    let result =
-        AcpBackend::resume_session(&config, Some("acp-session-42"), Some(&transcript), event_tx)
-            .await;
+    let result = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-42"),
+        Some(&transcript),
+        event_tx,
+        None,
+    )
+    .await;
 
     // SAFETY: Cleaning up the environment variables we set above.
     unsafe {
@@ -820,7 +825,13 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
     // detects the deadlock: if resume_session hangs, it times out.
     let result = tokio::time::timeout(
         Duration::from_secs(10),
-        AcpBackend::resume_session(&config, Some("acp-session-42"), Some(&transcript), event_tx),
+        AcpBackend::resume_session(
+            &config,
+            Some("acp-session-42"),
+            Some(&transcript),
+            event_tx,
+            None,
+        ),
     )
     .await;
 
@@ -889,9 +900,14 @@ async fn test_resume_session_uses_server_side_when_load_session_succeeds() {
     let config = build_test_config(temp_dir.path());
     let transcript = build_test_transcript();
 
-    let result =
-        AcpBackend::resume_session(&config, Some("acp-session-42"), Some(&transcript), event_tx)
-            .await;
+    let result = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-42"),
+        Some(&transcript),
+        event_tx,
+        None,
+    )
+    .await;
 
     // SAFETY: Cleaning up the environment variable we set above.
     unsafe {

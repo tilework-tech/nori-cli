@@ -234,6 +234,54 @@ fn approval_modal_patch_snapshot() {
 }
 
 #[test]
+fn approval_modal_patch_from_client_event_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.approval_policy = AskForApproval::OnRequest;
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ApprovalRequest(
+        nori_protocol::ApprovalRequest {
+            call_id: "call-approve-patch-client-event".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-approve-patch-client-event".into(),
+                title: "Write README.md".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: PathBuf::from("README.md"),
+                        old_text: None,
+                        new_text: "hello\nworld\n".into(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        },
+    ));
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw patch approval modal");
+    assert_snapshot!(
+        "approval_modal_patch_from_client_event",
+        terminal.backend().vt100().screen().contents()
+    );
+}
+
+#[test]
 fn interrupt_restores_queued_messages_into_composer() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
 

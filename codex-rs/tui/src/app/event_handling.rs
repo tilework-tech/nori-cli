@@ -147,6 +147,9 @@ impl App {
                 }
                 self.chat_widget.handle_codex_event(event);
             }
+            AppEvent::ClientEvent(event) => {
+                self.chat_widget.handle_client_event(event);
+            }
             AppEvent::ConversationHistory(ev) => {
                 self.on_conversation_history_for_backtrack(tui, ev)?;
             }

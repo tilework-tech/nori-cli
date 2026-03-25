@@ -195,6 +195,7 @@ fn spawn_acp_agent(
     tokio::spawn(async move {
         // Create event channel for backend → TUI
         let (event_tx, mut event_rx) = mpsc::channel(32);
+        let (client_event_tx, mut client_event_rx) = mpsc::channel(32);
 
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
@@ -260,7 +261,7 @@ fn spawn_acp_agent(
         // Race backend init against shutdown requests and a timeout.
         // This ensures the user can always exit even if the backend hangs.
         let backend = tokio::select! {
-            result = AcpBackend::spawn(&acp_config, event_tx) => {
+            result = AcpBackend::spawn(&acp_config, event_tx, Some(client_event_tx)) => {
                 match result {
                     Ok(b) => Arc::new(b),
                     Err(e) => {
@@ -331,6 +332,13 @@ fn spawn_acp_agent(
         drop(backend);
 
         // Forward events to TUI
+        let app_event_tx_for_client_events = app_event_tx.clone();
+        tokio::spawn(async move {
+            while let Some(client_event) = client_event_rx.recv().await {
+                app_event_tx_for_client_events.send(AppEvent::ClientEvent(client_event));
+            }
+        });
+
         while let Some(event) = event_rx.recv().await {
             app_event_tx.send(AppEvent::CodexEvent(event));
         }
@@ -368,6 +376,7 @@ pub(crate) fn spawn_acp_agent_resume(
 
     tokio::spawn(async move {
         let (event_tx, mut event_rx) = mpsc::channel(32);
+        let (client_event_tx, mut client_event_rx) = mpsc::channel(32);
 
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
@@ -432,6 +441,7 @@ pub(crate) fn spawn_acp_agent_resume(
                 acp_session_id.as_deref(),
                 Some(&transcript),
                 event_tx,
+                Some(client_event_tx),
             ) => {
                 match result {
                     Ok(b) => Arc::new(b),
@@ -496,6 +506,13 @@ pub(crate) fn spawn_acp_agent_resume(
         }
 
         drop(backend);
+
+        let app_event_tx_for_client_events = app_event_tx.clone();
+        tokio::spawn(async move {
+            while let Some(client_event) = client_event_rx.recv().await {
+                app_event_tx_for_client_events.send(AppEvent::ClientEvent(client_event));
+            }
+        });
 
         while let Some(event) = event_rx.recv().await {
             app_event_tx.send(AppEvent::CodexEvent(event));

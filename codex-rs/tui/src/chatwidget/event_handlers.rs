@@ -1150,4 +1150,82 @@ impl ChatWidget {
         // Forward to bottom pane so the slash popup can show them now.
         self.bottom_pane.set_custom_prompts(ev.custom_prompts);
     }
+
+    pub(crate) fn handle_client_event(&mut self, event: nori_protocol::ClientEvent) {
+        if let nori_protocol::ClientEvent::ApprovalRequest(approval) = event {
+            self.handle_client_approval_request(approval);
+        }
+    }
+
+    fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
+        let Some((request, changed_paths)) =
+            approval_request_from_client_event(&self.config.cwd, approval)
+        else {
+            return;
+        };
+
+        self.flush_answer_stream_with_separator();
+        self.bottom_pane.push_approval_request(request);
+        self.request_redraw();
+        self.notify(Notification::EditApprovalRequested {
+            cwd: self.config.cwd.clone(),
+            changes: changed_paths,
+        });
+    }
+}
+
+fn approval_request_from_client_event(
+    cwd: &std::path::Path,
+    approval: nori_protocol::ApprovalRequest,
+) -> Option<(ApprovalRequest, Vec<PathBuf>)> {
+    let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
+    if snapshot.kind != nori_protocol::ToolKind::Edit {
+        return None;
+    }
+
+    let changes = file_changes_from_snapshot(&snapshot)?;
+    let changed_paths = changes.keys().cloned().collect();
+
+    Some((
+        ApprovalRequest::ApplyPatch {
+            id: approval.call_id,
+            reason: None,
+            cwd: cwd.to_path_buf(),
+            changes,
+        },
+        changed_paths,
+    ))
+}
+
+fn file_changes_from_snapshot(
+    snapshot: &nori_protocol::ToolSnapshot,
+) -> Option<HashMap<PathBuf, codex_core::protocol::FileChange>> {
+    let changes = match &snapshot.invocation {
+        Some(nori_protocol::Invocation::FileChanges { changes }) => changes,
+        _ => return None,
+    };
+
+    let file_changes = changes
+        .iter()
+        .map(|change| (change.path.clone(), file_change_from_nori_change(change)))
+        .collect::<HashMap<_, _>>();
+    if file_changes.is_empty() {
+        None
+    } else {
+        Some(file_changes)
+    }
+}
+
+fn file_change_from_nori_change(
+    change: &nori_protocol::FileChange,
+) -> codex_core::protocol::FileChange {
+    match &change.old_text {
+        None => codex_core::protocol::FileChange::Add {
+            content: change.new_text.clone(),
+        },
+        Some(old_text) => codex_core::protocol::FileChange::Update {
+            unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+            move_path: None,
+        },
+    }
 }

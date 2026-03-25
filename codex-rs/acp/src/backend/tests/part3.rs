@@ -450,7 +450,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let result = AcpBackend::spawn(&config, event_tx).await;
+    let result = AcpBackend::spawn(&config, event_tx, None).await;
 
     // Clean up env var
     // SAFETY: Cleaning up the environment variable we set above.
@@ -501,6 +501,7 @@ async fn test_approval_policy_dynamic_update() {
     tokio::spawn(AcpBackend::run_approval_handler(
         approval_rx,
         event_tx.clone(),
+        None,
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
         cwd.clone(),
@@ -608,6 +609,115 @@ async fn test_approval_policy_dynamic_update() {
     );
 }
 
+#[tokio::test]
+async fn test_patch_approval_emits_normalized_client_event() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+    use tokio::sync::oneshot;
+    use tokio::sync::watch;
+
+    let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let cwd = PathBuf::from("/tmp/test");
+    let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_approval_handler(
+        approval_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_approvals),
+        Arc::clone(&user_notifier),
+        cwd,
+        policy_rx,
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+        None,
+    ));
+
+    let mut changes = HashMap::new();
+    changes.insert(
+        PathBuf::from("README.md"),
+        codex_protocol::protocol::FileChange::Add {
+            content: "hello\nworld\n".into(),
+        },
+    );
+    let tool_call = acp::ToolCallUpdate::new(
+        "call-patch",
+        acp::ToolCallUpdateFields::new()
+            .title("Write README.md")
+            .kind(acp::ToolKind::Edit)
+            .content(vec![acp::ToolCallContent::Diff(acp::Diff::new(
+                PathBuf::from("README.md"),
+                "hello\nworld\n",
+            ))]),
+    );
+    let (response_tx, _response_rx) = oneshot::channel();
+    approval_tx
+        .send(ApprovalRequest {
+            event: ApprovalEventType::Patch(
+                codex_protocol::approvals::ApplyPatchApprovalRequestEvent {
+                    call_id: "call-patch".into(),
+                    turn_id: String::new(),
+                    changes,
+                    reason: Some("Write README.md (2 lines)".into()),
+                    grant_root: None,
+                },
+            ),
+            acp_request: acp::RequestPermissionRequest::new("session-1", tool_call, vec![]),
+            options: vec![],
+            response_tx,
+            tool_call_metadata: None,
+        })
+        .await
+        .expect("send approval request");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::ApprovalRequest(nori_protocol::ApprovalRequest {
+            call_id: "call-patch".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-patch".into(),
+                title: "Write README.md".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: PathBuf::from("README.md"),
+                        old_text: None,
+                        new_text: "hello\nworld\n".into(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "edit approvals should not be emitted on the legacy event channel once the client-event path exists",
+    );
+}
+
 /// Test that Op::Compact sends the summarization prompt to the agent and emits
 /// the expected events: TaskStarted, agent message streaming, ContextCompacted,
 /// Warning, and TaskComplete.
@@ -670,7 +780,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let backend = AcpBackend::spawn(&config, event_tx)
+    let backend = AcpBackend::spawn(&config, event_tx, None)
         .await
         .expect("Failed to spawn ACP backend");
 

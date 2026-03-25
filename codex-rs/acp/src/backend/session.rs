@@ -14,6 +14,7 @@ impl AcpBackend {
         acp_session_id: Option<&str>,
         transcript: Option<&crate::transcript::Transcript>,
         event_tx: mpsc::Sender<Event>,
+        client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
     ) -> Result<Self> {
         let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
@@ -221,6 +222,7 @@ impl AcpBackend {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
             event_tx: event_tx.clone(),
+            client_event_tx: client_event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
             user_notifier: Arc::clone(&user_notifier),
@@ -316,6 +318,7 @@ impl AcpBackend {
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
             event_tx.clone(),
+            client_event_tx.clone(),
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             cwd.clone(),
@@ -329,6 +332,7 @@ impl AcpBackend {
         tokio::spawn(Self::run_persistent_relay(
             persistent_rx,
             event_tx.clone(),
+            client_event_tx,
             Arc::clone(&pending_tool_calls),
             Arc::clone(&client_event_normalizer),
         ));

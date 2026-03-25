@@ -30,6 +30,7 @@ pub(crate) struct AcpModelInfo {
 #[derive(Debug)]
 pub(crate) enum AppEvent {
     CodexEvent(Event),
+    ClientEvent(nori_protocol::ClientEvent),
 
     /// Start a new session.
     NewSession,
