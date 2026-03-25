@@ -8,7 +8,7 @@ use codex_acp::transcript::Transcript;
 use codex_acp::transcript::TranscriptEntry;
 
 /// A simplified entry for display in the view-only transcript viewer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewonlyEntry {
     /// User message
     User { content: String },
@@ -84,18 +84,88 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
 
 fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
     match event {
-        nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => Some(format!(
-            "Tool [{}]: {} ({})",
-            format_tool_phase(&tool_snapshot.phase),
-            tool_snapshot.title,
-            format_tool_kind(&tool_snapshot.kind)
+        nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => Some(format_tool_event(
+            format!(
+                "Tool [{}]: {} ({})",
+                format_tool_phase(&tool_snapshot.phase),
+                tool_snapshot.title,
+                format_tool_kind(&tool_snapshot.kind)
+            ),
+            &tool_snapshot.invocation,
+            &tool_snapshot.artifacts,
         )),
-        nori_protocol::ClientEvent::ApprovalRequest(approval) => Some(format!(
-            "Approval requested: {} ({})",
-            approval.title,
-            format_tool_kind(&approval.kind)
-        )),
+        nori_protocol::ClientEvent::ApprovalRequest(approval) => {
+            let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = &approval.subject;
+            Some(format_tool_event(
+                format!(
+                    "Approval requested: {} ({})",
+                    approval.title,
+                    format_tool_kind(&approval.kind)
+                ),
+                &snapshot.invocation,
+                &snapshot.artifacts,
+            ))
+        }
     }
+}
+
+fn format_tool_event(
+    header: String,
+    invocation: &Option<nori_protocol::Invocation>,
+    artifacts: &[nori_protocol::Artifact],
+) -> String {
+    let mut lines = vec![header];
+
+    if let Some(line) = format_invocation(invocation) {
+        lines.push(line);
+    }
+
+    lines.extend(format_artifacts(artifacts));
+
+    lines.join("\n")
+}
+
+fn format_invocation(invocation: &Option<nori_protocol::Invocation>) -> Option<String> {
+    match invocation.as_ref()? {
+        nori_protocol::Invocation::FileChanges { changes } => {
+            Some(format!("Files changed: {}", format_change_paths(changes)))
+        }
+        nori_protocol::Invocation::Command { command } => Some(format!("Command: {command}")),
+        nori_protocol::Invocation::Read { path } => Some(format!("Read: {}", path.display())),
+        nori_protocol::Invocation::Search { query, path } => match (query, path) {
+            (Some(query), Some(path)) => Some(format!("Search: {query} in {}", path.display())),
+            (Some(query), None) => Some(format!("Search: {query}")),
+            (None, Some(path)) => Some(format!("Search in {}", path.display())),
+            (None, None) => None,
+        },
+        nori_protocol::Invocation::ListFiles { path } => path
+            .as_ref()
+            .map(|path| format!("List files: {}", path.display()))
+            .or_else(|| Some("List files".to_string())),
+        nori_protocol::Invocation::RawJson(value) => Some(format!("Input: {value}")),
+    }
+}
+
+fn format_change_paths(changes: &[nori_protocol::FileChange]) -> String {
+    changes
+        .iter()
+        .map(|change| change.path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_artifacts(artifacts: &[nori_protocol::Artifact]) -> Vec<String> {
+    artifacts
+        .iter()
+        .filter_map(|artifact| match artifact {
+            nori_protocol::Artifact::Diff(_) => None,
+            nori_protocol::Artifact::Text { text } if text.is_empty() => None,
+            nori_protocol::Artifact::Text { text } if text.contains('\n') => {
+                Some(format!("Output:\n{text}"))
+            }
+            nori_protocol::Artifact::Text { text } => Some(format!("Output: {text}")),
+        })
+        .collect()
 }
 
 fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
@@ -140,6 +210,7 @@ mod tests {
     use codex_acp::transcript::Transcript;
     use codex_acp::transcript::TranscriptLine;
     use codex_acp::transcript::UserEntry;
+    use pretty_assertions::assert_eq;
     use std::path::PathBuf;
 
     fn make_session_meta() -> SessionMetaEntry {
@@ -349,6 +420,122 @@ mod tests {
         assert!(matches!(&entries[0], ViewonlyEntry::Info { .. }));
         assert!(
             matches!(&entries[1], ViewonlyEntry::Info { content } if content == "Tool [completed]: Edit /tmp/main.rs (edit)")
+        );
+    }
+
+    #[test]
+    fn test_transcript_to_entries_renders_command_snapshot_details() {
+        let transcript = make_transcript(vec![TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-exec-001".to_string(),
+                title: "Run date".to_string(),
+                kind: nori_protocol::ToolKind::Execute,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Command {
+                    command: "date".to_string(),
+                }),
+                artifacts: vec![nori_protocol::Artifact::Text {
+                    text: "Thu Mar 27 12:00:00 UTC 2025".to_string(),
+                }],
+                raw_input: None,
+                raw_output: None,
+            }),
+        })]);
+
+        let entries = transcript_to_entries(&transcript);
+
+        assert_eq!(
+            entries,
+            vec![
+                ViewonlyEntry::Info {
+                    content: "Session from 2025-01-27 12:00 (test-ses)".to_string(),
+                },
+                ViewonlyEntry::Info {
+                    content: "Tool [completed]: Run date (execute)\nCommand: date\nOutput: Thu Mar 27 12:00:00 UTC 2025".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_transcript_to_entries_renders_structured_read_search_and_list_details() {
+        let transcript = make_transcript(vec![
+            TranscriptEntry::ClientEvent(ClientEventEntry {
+                event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                    call_id: "call-read-001".to_string(),
+                    title: "Read Cargo.toml".to_string(),
+                    kind: nori_protocol::ToolKind::Read,
+                    phase: nori_protocol::ToolPhase::Completed,
+                    locations: vec![],
+                    invocation: Some(nori_protocol::Invocation::Read {
+                        path: PathBuf::from("/repo/Cargo.toml"),
+                    }),
+                    artifacts: vec![nori_protocol::Artifact::Text {
+                        text: "Read 42 lines".to_string(),
+                    }],
+                    raw_input: None,
+                    raw_output: None,
+                }),
+            }),
+            TranscriptEntry::ClientEvent(ClientEventEntry {
+                event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                    call_id: "call-search-001".to_string(),
+                    title: "Search src".to_string(),
+                    kind: nori_protocol::ToolKind::Search,
+                    phase: nori_protocol::ToolPhase::Completed,
+                    locations: vec![],
+                    invocation: Some(nori_protocol::Invocation::Search {
+                        query: Some("TODO".to_string()),
+                        path: Some(PathBuf::from("/repo/src")),
+                    }),
+                    artifacts: vec![nori_protocol::Artifact::Text {
+                        text: "3 matches".to_string(),
+                    }],
+                    raw_input: None,
+                    raw_output: None,
+                }),
+            }),
+            TranscriptEntry::ClientEvent(ClientEventEntry {
+                event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                    call_id: "call-list-001".to_string(),
+                    title: "List src".to_string(),
+                    kind: nori_protocol::ToolKind::Search,
+                    phase: nori_protocol::ToolPhase::Completed,
+                    locations: vec![],
+                    invocation: Some(nori_protocol::Invocation::ListFiles {
+                        path: Some(PathBuf::from("/repo/src")),
+                    }),
+                    artifacts: vec![],
+                    raw_input: None,
+                    raw_output: None,
+                }),
+            }),
+        ]);
+
+        let entries = transcript_to_entries(&transcript);
+
+        assert_eq!(
+            entries,
+            vec![
+                ViewonlyEntry::Info {
+                    content: "Session from 2025-01-27 12:00 (test-ses)".to_string(),
+                },
+                ViewonlyEntry::Info {
+                    content:
+                        "Tool [completed]: Read Cargo.toml (read)\nRead: /repo/Cargo.toml\nOutput: Read 42 lines"
+                            .to_string(),
+                },
+                ViewonlyEntry::Info {
+                    content:
+                        "Tool [completed]: Search src (search)\nSearch: TODO in /repo/src\nOutput: 3 matches"
+                            .to_string(),
+                },
+                ViewonlyEntry::Info {
+                    content:
+                        "Tool [completed]: List src (search)\nList files: /repo/src".to_string(),
+                },
+            ]
         );
     }
 
