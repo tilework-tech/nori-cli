@@ -58,6 +58,7 @@ pub fn transcript_to_replay_events(transcript: &crate::transcript::Transcript) -
 /// exceeds the model's context window, the agent will reject it with a
 /// "prompt too long" error, which is handled gracefully by the caller.
 pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> String {
+    let mut seen_tool_calls = std::collections::HashSet::new();
     let mut summary = String::new();
 
     for line in &transcript.entries {
@@ -81,6 +82,16 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
             }
             crate::transcript::TranscriptEntry::ToolCall(tool) => {
                 summary.push_str(&format!("[Tool: {}]\n", tool.name));
+            }
+            crate::transcript::TranscriptEntry::ClientEvent(client_event) => {
+                match &client_event.event {
+                    nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot)
+                        if seen_tool_calls.insert(tool_snapshot.call_id.clone()) =>
+                    {
+                        summary.push_str(&format!("[Tool: {}]\n", tool_snapshot.title));
+                    }
+                    _ => {}
+                }
             }
             _ => {}
         }

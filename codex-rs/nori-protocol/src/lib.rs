@@ -2,14 +2,18 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use sacp::schema as acp;
+use serde::Deserialize;
+use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event_type", rename_all = "snake_case")]
 pub enum ClientEvent {
     ToolSnapshot(ToolSnapshot),
     ApprovalRequest(ApprovalRequest),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ToolSnapshot {
     pub call_id: String,
     pub title: String,
@@ -22,7 +26,8 @@ pub struct ToolSnapshot {
     pub raw_output: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ApprovalRequest {
     pub call_id: String,
     pub title: String,
@@ -31,19 +36,22 @@ pub struct ApprovalRequest {
     pub subject: ApprovalSubject,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "subject_type", rename_all = "snake_case")]
 pub enum ApprovalSubject {
     ToolSnapshot(ToolSnapshot),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ApprovalOption {
     pub option_id: String,
     pub name: String,
     pub kind: ApprovalOptionKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ApprovalOptionKind {
     AllowAlways,
     AllowOnce,
@@ -51,7 +59,8 @@ pub enum ApprovalOptionKind {
     Other(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToolKind {
     Read,
     Search,
@@ -63,7 +72,8 @@ pub enum ToolKind {
     Other(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToolPhase {
     Pending,
     PendingApproval,
@@ -72,24 +82,28 @@ pub enum ToolPhase {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ToolLocation {
     pub path: PathBuf,
     pub line: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "invocation_type", rename_all = "snake_case")]
 pub enum Invocation {
     FileChanges { changes: Vec<FileChange> },
     RawJson(serde_json::Value),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "artifact_type", rename_all = "snake_case")]
 pub enum Artifact {
     Diff(FileChange),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct FileChange {
     pub path: PathBuf,
     pub old_text: Option<String>,
@@ -438,5 +452,38 @@ mod tests {
             })
         );
         assert_eq!(approval.options.len(), 2);
+    }
+
+    #[test]
+    fn client_event_round_trips_through_serde() {
+        let event = ClientEvent::ToolSnapshot(ToolSnapshot {
+            call_id: "tool-1".to_string(),
+            title: "Edit /repo/README.md".to_string(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![ToolLocation {
+                path: PathBuf::from("/repo/README.md"),
+                line: Some(12),
+            }],
+            invocation: Some(Invocation::FileChanges {
+                changes: vec![FileChange {
+                    path: PathBuf::from("/repo/README.md"),
+                    old_text: Some("before\n".to_string()),
+                    new_text: "after\n".to_string(),
+                }],
+            }),
+            artifacts: vec![Artifact::Diff(FileChange {
+                path: PathBuf::from("/repo/README.md"),
+                old_text: Some("before\n".to_string()),
+                new_text: "after\n".to_string(),
+            })],
+            raw_input: Some(serde_json::json!({"path": "/repo/README.md"})),
+            raw_output: None,
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
+        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed, event);
     }
 }

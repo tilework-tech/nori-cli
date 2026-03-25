@@ -507,6 +507,7 @@ async fn test_approval_policy_dynamic_update() {
         policy_rx,
         Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+        None,
     ));
 
     // Create a mock approval request

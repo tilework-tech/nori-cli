@@ -100,6 +100,7 @@ fn resolve_completed_tool_call(
     }
 }
 
+#[cfg(test)]
 fn patch_operation_from_change(
     change: &codex_protocol::protocol::FileChange,
 ) -> crate::transcript::PatchOperationType {
@@ -448,6 +449,7 @@ pub(crate) fn translate_session_update_to_events(
 /// and patch operations (as PatchApply entries). Patch operations (Edit/Write/Delete)
 /// are recorded separately because they represent file modifications rather than
 /// generic tool invocations.
+#[cfg(test)]
 pub(crate) async fn record_tool_events_to_transcript(
     update: &acp::SessionUpdate,
     recorder: &TranscriptRecorder,

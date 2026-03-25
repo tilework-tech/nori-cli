@@ -231,9 +231,6 @@ impl AcpBackend {
                 let mut has_fired_pre_agent_response = false;
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
-                // Track call_ids that have already been recorded to the transcript.
-                let mut recorded_tool_call_ids: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
                 // Track pending patch operations: store FileChange data from ToolCall events
                 // so we can emit PatchApplyBegin on ToolCallUpdate (after approval).
                 let mut pending_patch_changes: std::collections::HashMap<
@@ -241,7 +238,8 @@ impl AcpBackend {
                     std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
                 > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
-                    normalize_session_update(&client_event_normalizer, &update).await;
+                    let client_events =
+                        normalize_session_update(&client_event_normalizer, &update).await;
                     if has_agent_text
                         && matches!(
                             update,
@@ -355,14 +353,13 @@ impl AcpBackend {
 
                     let mut tool_calls = pending_tool_calls.lock().await;
                     if let Some(ref recorder) = transcript_recorder_for_updates {
-                        record_tool_events_to_transcript(
-                            &update,
-                            recorder,
-                            &mut recorded_tool_call_ids,
-                            &pending_patch_changes,
-                            &tool_calls,
-                        )
-                        .await;
+                        for client_event in &client_events {
+                            if let Err(e) = recorder.record_client_event(client_event).await {
+                                warn!(
+                                    "Failed to record normalized client event to transcript: {e}"
+                                );
+                            }
+                        }
                     }
                     let events = translate_session_update_to_events(
                         &update,

@@ -349,7 +349,7 @@ impl AcpBackend {
                 let mut pending_tool_calls = std::collections::HashMap::new();
 
                 while let Some(update) = update_rx.recv().await {
-                    normalize_session_update(&client_event_normalizer, &update).await;
+                    let _ = normalize_session_update(&client_event_normalizer, &update).await;
 
                     // Capture text from agent message chunks
                     if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update

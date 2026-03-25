@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use chrono::SecondsFormat;
 use chrono::Utc;
+use nori_protocol::ClientEvent as NoriClientEvent;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -16,7 +17,7 @@ pub fn now_iso8601() -> String {
 }
 
 /// Current schema version for forward compatibility.
-pub const SCHEMA_VERSION: u8 = 1;
+pub const SCHEMA_VERSION: u8 = 2;
 
 /// Wrapper for each line in the transcript JSONL file.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -40,12 +41,21 @@ pub enum TranscriptEntry {
     User(UserEntry),
     /// Complete assistant turn
     Assistant(AssistantEntry),
+    /// Normalized ACP-native client event
+    ClientEvent(ClientEventEntry),
     /// Tool execution (stored like core rollout for consistency)
     ToolCall(ToolCallEntry),
     /// Tool result
     ToolResult(ToolResultEntry),
     /// Patch operation (file edit/write/delete)
     PatchApply(PatchApplyEntry),
+}
+
+/// Normalized client event entry.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClientEventEntry {
+    /// ACP-native normalized event payload.
+    pub event: NoriClientEvent,
 }
 
 /// Git repository information captured at session start.

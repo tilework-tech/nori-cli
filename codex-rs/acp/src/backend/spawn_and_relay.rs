@@ -231,6 +231,7 @@ impl AcpBackend {
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
             Arc::clone(&client_event_normalizer),
+            backend.transcript_recorder.clone(),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
@@ -258,9 +259,18 @@ impl AcpBackend {
         approval_policy_rx: watch::Receiver<AskForApproval>,
         pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
         client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+        transcript_recorder: Option<Arc<TranscriptRecorder>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
-            normalize_permission_request(&client_event_normalizer, &request).await;
+            let client_events =
+                normalize_permission_request(&client_event_normalizer, &request).await;
+            if let Some(ref recorder) = transcript_recorder {
+                for client_event in &client_events {
+                    if let Err(e) = recorder.record_client_event(client_event).await {
+                        warn!("Failed to record normalized approval event to transcript: {e}");
+                    }
+                }
+            }
             // Store tool call metadata from the permission request so the
             // event translator can resolve proper titles when the subsequent
             // ToolCallUpdate(completed) arrives (often with empty fields from

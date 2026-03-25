@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::event_translation::record_tool_events_to_transcript;
 use codex_protocol::protocol::FileChange;
 use pretty_assertions::assert_eq;
 

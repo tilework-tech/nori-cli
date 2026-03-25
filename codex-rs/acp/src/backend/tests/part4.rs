@@ -608,6 +608,49 @@ fn transcript_to_summary_preserves_large_content_without_truncation() {
 }
 
 #[test]
+fn transcript_to_summary_includes_normalized_tool_snapshots() {
+    use crate::transcript::*;
+
+    let entries = vec![
+        TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
+            session_id: "s1".into(),
+            project_id: "p1".into(),
+            started_at: "2025-01-01T00:00:00.000Z".into(),
+            cwd: PathBuf::from("/tmp"),
+            agent: None,
+            cli_version: "0.1.0".into(),
+            git: None,
+            acp_session_id: None,
+        })),
+        TranscriptLine::new(TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-001".into(),
+                title: "Edit /tmp/main.rs".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: None,
+                artifacts: vec![],
+                raw_input: None,
+                raw_output: None,
+            }),
+        })),
+    ];
+
+    let transcript = crate::transcript::Transcript {
+        meta: match &entries[0].entry {
+            TranscriptEntry::SessionMeta(m) => m.clone(),
+            _ => unreachable!(),
+        },
+        entries,
+    };
+
+    let summary = transcript_to_summary(&transcript);
+
+    assert!(summary.contains("[Tool: Edit /tmp/main.rs]"));
+}
+
+#[test]
 fn truncate_for_log_with_multibyte_does_not_panic() {
     // ─ (U+2500) is 3 bytes in UTF-8 (0xE2 0x94 0x80).
     // Place it so that a naive byte slice at max_len would land

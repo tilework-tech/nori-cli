@@ -336,7 +336,6 @@ mod user_input;
 pub(crate) use event_translation::AccumulatedToolCall;
 use event_translation::get_event_msg_type;
 use event_translation::get_op_name;
-use event_translation::record_tool_events_to_transcript;
 pub(crate) use event_translation::translate_session_update_to_events;
 mod tool_display;
 pub(crate) use tool_display::classify_tool_to_parsed_command;
@@ -356,7 +355,7 @@ mod hooks;
 pub(crate) async fn normalize_permission_request(
     normalizer: &Arc<Mutex<ClientEventNormalizer>>,
     request: &crate::connection::ApprovalRequest,
-) {
+) -> Vec<nori_protocol::ClientEvent> {
     let mut normalizer = normalizer.lock().await;
     let events = normalizer.push_permission_request(&request.acp_request);
     if !events.is_empty() {
@@ -367,12 +366,13 @@ pub(crate) async fn normalize_permission_request(
             "Normalized ACP permission request"
         );
     }
+    events
 }
 
 pub(crate) async fn normalize_session_update(
     normalizer: &Arc<Mutex<ClientEventNormalizer>>,
     update: &acp::SessionUpdate,
-) {
+) -> Vec<nori_protocol::ClientEvent> {
     let mut normalizer = normalizer.lock().await;
     let events = normalizer.push_session_update(update);
     if !events.is_empty() {
@@ -382,6 +382,7 @@ pub(crate) async fn normalize_session_update(
             "Normalized ACP session update"
         );
     }
+    events
 }
 use hooks::commands_dir;
 use hooks::generate_id;

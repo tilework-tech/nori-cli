@@ -322,6 +322,7 @@ impl AcpBackend {
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
             Arc::clone(&client_event_normalizer),
+            backend.transcript_recorder.clone(),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications

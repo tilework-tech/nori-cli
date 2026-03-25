@@ -68,7 +68,8 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
             }
             // Skip tool calls, tool results, and patch operations
             // to keep the view-only display focused on the conversation
-            TranscriptEntry::ToolCall(_)
+            TranscriptEntry::ClientEvent(_)
+            | TranscriptEntry::ToolCall(_)
             | TranscriptEntry::ToolResult(_)
             | TranscriptEntry::PatchApply(_) => {}
         }
