@@ -92,7 +92,22 @@ pub struct ToolLocation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "invocation_type", rename_all = "snake_case")]
 pub enum Invocation {
-    FileChanges { changes: Vec<FileChange> },
+    FileChanges {
+        changes: Vec<FileChange>,
+    },
+    Command {
+        command: String,
+    },
+    Read {
+        path: PathBuf,
+    },
+    Search {
+        query: Option<String>,
+        path: Option<PathBuf>,
+    },
+    ListFiles {
+        path: Option<PathBuf>,
+    },
     RawJson(serde_json::Value),
 }
 
@@ -100,6 +115,7 @@ pub enum Invocation {
 #[serde(tag = "artifact_type", rename_all = "snake_case")]
 pub enum Artifact {
     Diff(FileChange),
+    Text { text: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,8 +274,9 @@ fn invocation_from_tool_call(
 ) -> Option<Invocation> {
     let diff_changes: Vec<FileChange> = artifacts
         .iter()
-        .map(|artifact| match artifact {
-            Artifact::Diff(change) => change.clone(),
+        .filter_map(|artifact| match artifact {
+            Artifact::Diff(change) => Some(change.clone()),
+            Artifact::Text { .. } => None,
         })
         .collect();
 
@@ -269,11 +286,15 @@ fn invocation_from_tool_call(
         });
     }
 
+    if let Some(invocation) = structured_invocation_from_tool_call(tool_call) {
+        return Some(invocation);
+    }
+
     tool_call.raw_input.clone().map(Invocation::RawJson)
 }
 
 fn artifacts_from_tool_call(tool_call: &acp::ToolCall) -> Vec<Artifact> {
-    tool_call
+    let mut artifacts = tool_call
         .content
         .iter()
         .filter_map(|content| match content {
@@ -282,9 +303,111 @@ fn artifacts_from_tool_call(tool_call: &acp::ToolCall) -> Vec<Artifact> {
                 old_text: diff.old_text.clone(),
                 new_text: diff.new_text.clone(),
             })),
+            acp::ToolCallContent::Content(content) => match &content.content {
+                acp::ContentBlock::Text(text) if !text.text.is_empty() => Some(Artifact::Text {
+                    text: text.text.clone(),
+                }),
+                _ => None,
+            },
             _ => None,
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    if !artifacts
+        .iter()
+        .any(|artifact| matches!(artifact, Artifact::Text { .. }))
+        && let Some(text) = raw_output_text(tool_call.raw_output.as_ref())
+    {
+        artifacts.push(Artifact::Text { text });
+    }
+
+    artifacts
+}
+
+fn structured_invocation_from_tool_call(tool_call: &acp::ToolCall) -> Option<Invocation> {
+    let raw_input = tool_call.raw_input.as_ref()?;
+    match tool_call.kind {
+        acp::ToolKind::Execute => {
+            let command = raw_input
+                .get("command")
+                .or_else(|| raw_input.get("cmd"))
+                .and_then(serde_json::Value::as_str)?;
+            Some(Invocation::Command {
+                command: command.to_string(),
+            })
+        }
+        acp::ToolKind::Read => {
+            let path = raw_input
+                .get("path")
+                .or_else(|| raw_input.get("file_path"))
+                .or_else(|| raw_input.get("file"))
+                .and_then(serde_json::Value::as_str)?;
+            Some(Invocation::Read {
+                path: PathBuf::from(path),
+            })
+        }
+        acp::ToolKind::Search => {
+            let path = raw_input
+                .get("path")
+                .or_else(|| raw_input.get("directory"))
+                .and_then(serde_json::Value::as_str)
+                .map(PathBuf::from);
+            let query = raw_input
+                .get("pattern")
+                .or_else(|| raw_input.get("query"))
+                .or_else(|| raw_input.get("glob"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+
+            if query.is_none() && title_looks_like_listing(&tool_call.title) {
+                Some(Invocation::ListFiles { path })
+            } else {
+                Some(Invocation::Search { query, path })
+            }
+        }
+        _ => None,
+    }
+}
+
+fn raw_output_text(raw_output: Option<&serde_json::Value>) -> Option<String> {
+    let raw_output = raw_output?;
+
+    if let Some(stdout) = raw_output.get("stdout").and_then(serde_json::Value::as_str)
+        && !stdout.is_empty()
+    {
+        return Some(stdout.to_string());
+    }
+
+    if let Some(formatted) = raw_output
+        .get("formatted_output")
+        .and_then(serde_json::Value::as_str)
+        && !formatted.is_empty()
+    {
+        return Some(formatted.to_string());
+    }
+
+    if let Some(aggregated) = raw_output
+        .get("aggregated_output")
+        .and_then(serde_json::Value::as_str)
+        && !aggregated.is_empty()
+    {
+        return Some(aggregated.to_string());
+    }
+
+    if let Some(lines) = raw_output.get("lines").and_then(serde_json::Value::as_i64) {
+        return Some(format!("Read {lines} lines"));
+    }
+
+    if let Some(count) = raw_output.get("count").and_then(serde_json::Value::as_i64) {
+        return Some(format!("{count} matches"));
+    }
+
+    None
+}
+
+fn title_looks_like_listing(title: &str) -> bool {
+    let title = title.to_lowercase();
+    title.contains("list") || title.contains("glob") || title.contains("ls")
 }
 
 #[cfg(test)]
@@ -452,6 +575,75 @@ mod tests {
             })
         );
         assert_eq!(approval.options.len(), 2);
+    }
+
+    #[test]
+    fn normalizer_extracts_execute_invocation_and_output_text() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-exec"),
+            acp::ToolCallUpdateFields::new()
+                .title("Terminal")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "command": "cargo test -p nori-tui",
+                }))
+                .raw_output(serde_json::json!({
+                    "stdout": "all green\n",
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Command {
+                command: "cargo test -p nori-tui".into(),
+            })
+        );
+        assert_eq!(
+            snapshot.artifacts,
+            vec![Artifact::Text {
+                text: "all green\n".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_read_invocation_path() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-read"),
+            acp::ToolCallUpdateFields::new()
+                .title("Read File")
+                .kind(acp::ToolKind::Read)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "path": "Cargo.toml",
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Read {
+                path: PathBuf::from("Cargo.toml"),
+            })
+        );
     }
 
     #[test]
