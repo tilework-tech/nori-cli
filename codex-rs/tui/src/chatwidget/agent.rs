@@ -331,16 +331,23 @@ fn spawn_acp_agent(
         // which drops event_tx, allowing event_rx to return None and this task to exit.
         drop(backend);
 
-        // Forward events to TUI
-        let app_event_tx_for_client_events = app_event_tx.clone();
-        tokio::spawn(async move {
-            while let Some(client_event) = client_event_rx.recv().await {
-                app_event_tx_for_client_events.send(AppEvent::ClientEvent(client_event));
+        let mut codex_events_open = true;
+        let mut client_events_open = true;
+        while codex_events_open || client_events_open {
+            tokio::select! {
+                event = event_rx.recv(), if codex_events_open => {
+                    match event {
+                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
+                        None => codex_events_open = false,
+                    }
+                }
+                client_event = client_event_rx.recv(), if client_events_open => {
+                    match client_event {
+                        Some(client_event) => app_event_tx.send(AppEvent::ClientEvent(client_event)),
+                        None => client_events_open = false,
+                    }
+                }
             }
-        });
-
-        while let Some(event) = event_rx.recv().await {
-            app_event_tx.send(AppEvent::CodexEvent(event));
         }
     });
 
@@ -507,15 +514,23 @@ pub(crate) fn spawn_acp_agent_resume(
 
         drop(backend);
 
-        let app_event_tx_for_client_events = app_event_tx.clone();
-        tokio::spawn(async move {
-            while let Some(client_event) = client_event_rx.recv().await {
-                app_event_tx_for_client_events.send(AppEvent::ClientEvent(client_event));
+        let mut codex_events_open = true;
+        let mut client_events_open = true;
+        while codex_events_open || client_events_open {
+            tokio::select! {
+                event = event_rx.recv(), if codex_events_open => {
+                    match event {
+                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
+                        None => codex_events_open = false,
+                    }
+                }
+                client_event = client_event_rx.recv(), if client_events_open => {
+                    match client_event {
+                        Some(client_event) => app_event_tx.send(AppEvent::ClientEvent(client_event)),
+                        None => client_events_open = false,
+                    }
+                }
             }
-        });
-
-        while let Some(event) = event_rx.recv().await {
-            app_event_tx.send(AppEvent::CodexEvent(event));
         }
     });
 

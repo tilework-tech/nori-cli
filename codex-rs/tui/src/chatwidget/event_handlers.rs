@@ -181,6 +181,7 @@ impl ChatWidget {
         self.set_status_header(crate::status_indicator_widget::random_status_message());
         self.full_reasoning_buffer.clear();
         self.reasoning_buffer.clear();
+        self.completed_client_tool_calls.clear();
         self.turn_finished = false;
         self.request_redraw();
     }
@@ -211,6 +212,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
         self.suppressed_exec_calls.clear();
+        self.completed_client_tool_calls.clear();
         self.last_unified_wait = None;
         self.request_redraw();
 
@@ -313,6 +315,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
         self.suppressed_exec_calls.clear();
+        self.completed_client_tool_calls.clear();
         self.last_unified_wait = None;
         self.stream_controller = None;
     }
@@ -1179,12 +1182,25 @@ impl ChatWidget {
     }
 
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        if tool_snapshot.kind != nori_protocol::ToolKind::Edit
-            || tool_snapshot.phase != nori_protocol::ToolPhase::Completed
-        {
-            return;
+        match tool_snapshot.kind {
+            nori_protocol::ToolKind::Edit
+                if tool_snapshot.phase == nori_protocol::ToolPhase::Completed =>
+            {
+                self.handle_client_edit_tool_snapshot(tool_snapshot);
+            }
+            nori_protocol::ToolKind::Execute
+                if matches!(
+                    tool_snapshot.phase,
+                    nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+                ) =>
+            {
+                self.handle_client_execute_tool_snapshot(tool_snapshot);
+            }
+            _ => {}
         }
+    }
 
+    fn handle_client_edit_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         let Some(changes) = file_changes_from_snapshot(&tool_snapshot) else {
             return;
         };
@@ -1196,6 +1212,95 @@ impl ChatWidget {
         self.session_stats.record_tool_call("Edit");
         self.observe_directories_from_changes(&changes);
         self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
+    }
+
+    fn handle_client_execute_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        if self.turn_finished
+            || self
+                .completed_client_tool_calls
+                .contains(&tool_snapshot.call_id)
+        {
+            return;
+        }
+
+        let Some(begin_event) =
+            exec_begin_event_from_client_snapshot(&self.config.cwd, &tool_snapshot)
+        else {
+            return;
+        };
+        let end_event =
+            exec_end_event_from_client_snapshot(&self.config.cwd, &tool_snapshot, &begin_event);
+
+        if !self.running_commands.contains_key(&tool_snapshot.call_id) {
+            self.on_exec_command_begin(begin_event);
+        }
+        self.on_exec_command_end(end_event);
+        self.completed_client_tool_calls
+            .insert(tool_snapshot.call_id);
+    }
+}
+
+fn exec_begin_event_from_client_snapshot(
+    cwd: &std::path::Path,
+    snapshot: &nori_protocol::ToolSnapshot,
+) -> Option<ExecCommandBeginEvent> {
+    let nori_protocol::Invocation::Command { command } = snapshot.invocation.as_ref()? else {
+        return None;
+    };
+
+    let command_vec = vec!["bash".to_string(), "-lc".to_string(), command.clone()];
+    Some(ExecCommandBeginEvent {
+        call_id: snapshot.call_id.clone(),
+        process_id: None,
+        turn_id: String::new(),
+        command: command_vec.clone(),
+        cwd: cwd.to_path_buf(),
+        parsed_cmd: codex_core::parse_command::parse_command(&command_vec),
+        source: ExecCommandSource::Agent,
+        interaction_input: None,
+    })
+}
+
+fn exec_end_event_from_client_snapshot(
+    cwd: &std::path::Path,
+    snapshot: &nori_protocol::ToolSnapshot,
+    begin_event: &ExecCommandBeginEvent,
+) -> ExecCommandEndEvent {
+    let output = snapshot
+        .artifacts
+        .iter()
+        .find_map(|artifact| match artifact {
+            nori_protocol::Artifact::Text { text } if !text.is_empty() => Some(text.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let exit_code = if snapshot.phase == nori_protocol::ToolPhase::Failed {
+        snapshot
+            .raw_output
+            .as_ref()
+            .and_then(|raw| raw.get("exit_code"))
+            .and_then(serde_json::Value::as_i64)
+            .and_then(|code| i32::try_from(code).ok())
+            .unwrap_or(1)
+    } else {
+        0
+    };
+
+    ExecCommandEndEvent {
+        call_id: snapshot.call_id.clone(),
+        process_id: None,
+        turn_id: String::new(),
+        command: begin_event.command.clone(),
+        cwd: cwd.to_path_buf(),
+        parsed_cmd: begin_event.parsed_cmd.clone(),
+        source: ExecCommandSource::Agent,
+        interaction_input: None,
+        stdout: output.clone(),
+        stderr: String::new(),
+        aggregated_output: output.clone(),
+        exit_code,
+        duration: Duration::from_millis(0),
+        formatted_output: output,
     }
 }
 

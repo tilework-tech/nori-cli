@@ -667,3 +667,102 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
     let blob = lines_to_single_string(cells.first().unwrap());
     assert_snapshot!("completed_edit_tool_snapshot", blob);
 }
+
+#[test]
+fn completed_execute_tool_snapshot_renders_exec_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-complete".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch main\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one exec history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("git status"),
+        "expected command in history cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("On branch main"),
+        "expected output in history cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    chat.on_agent_message_delta("Sure, let me check...\n".to_string());
+    chat.on_commit_tick();
+    let first_text = drain_insert_history(&mut rx);
+    assert!(
+        !first_text.is_empty(),
+        "first text block should have been committed to history"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-complete".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch main\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+        },
+    ));
+
+    assert!(
+        chat.interrupts.is_empty(),
+        "completed execute client snapshot should not be deferred"
+    );
+
+    chat.on_agent_message_delta("Done!\n".to_string());
+    chat.on_commit_tick();
+    chat.on_task_complete(None);
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    let tool_pos = full.find("git status");
+    let done_pos = full.find("Done!");
+    assert!(
+        tool_pos.is_some(),
+        "tool call should appear in history: {full:?}"
+    );
+    assert!(
+        done_pos.is_some(),
+        "second text block should appear in history: {full:?}"
+    );
+    assert!(
+        tool_pos.unwrap() < done_pos.unwrap(),
+        "tool call should appear before second text block, but tool_pos={} >= done_pos={}\nfull output: {full:?}",
+        tool_pos.unwrap(),
+        done_pos.unwrap(),
+    );
+}

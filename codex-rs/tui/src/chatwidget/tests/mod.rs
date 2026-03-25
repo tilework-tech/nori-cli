@@ -278,6 +278,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         stream_controller: None,
         running_commands: HashMap::new(),
         suppressed_exec_calls: HashSet::new(),
+        completed_client_tool_calls: HashSet::new(),
         last_unified_wait: None,
         task_complete_pending: false,
         mcp_startup_status: None,

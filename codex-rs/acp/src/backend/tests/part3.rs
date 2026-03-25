@@ -787,6 +787,70 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     );
 }
 
+#[tokio::test]
+async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+    ));
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCallUpdate(
+            acp::ToolCallUpdate::new(
+                "call-exec-complete",
+                acp::ToolCallUpdateFields::new()
+                    .title("Terminal")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({"command": "git status"}))
+                    .raw_output(serde_json::json!({"stdout": "On branch main\n"})),
+            ),
+        ))
+        .await
+        .expect("send tool call update");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            call_id: "call-exec-complete".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch main\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "completed execute snapshots should not emit the legacy exec end event once the client-event path exists",
+    );
+}
+
 /// Test that Op::Compact sends the summarization prompt to the agent and emits
 /// the expected events: TaskStarted, agent message streaming, ContextCompacted,
 /// Warning, and TaskComplete.
