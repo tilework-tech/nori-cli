@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "noriSessionName": "nori-mauve-loach-3a7f",
+  "claudeSessionId": "ca1f8771-065c-4265-90c6-3aba3a6f2827",
+  "timestamp": 1774548158,
+  "baseSha": "1f4762a4c8892627795c458bc4c379e0cced6761",
+  "baseBranch": "main",
+  "repoUrl": "https://github.com/tilework-tech/nori-cli",
+  "agentType": "claude-code",
+  "hasWorkspacePatch": false,
+  "hasUntrackedFiles": false
+}
