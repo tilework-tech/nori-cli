@@ -135,7 +135,7 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | Field | Source |
 |-------|--------|
 | `git_branch` | Git repository branch name |
-| `nori_profile` | Active Nori profile from `.nori-config.json` (reads `activeSkillset` first, then `agents.claude-code.profile.baseProfile`, then `profile.baseProfile`) |
+| `active_skillsets` | Active skillsets from `nori-skillsets list-active` (one name per line; returns all skillsets active for the current directory). Empty vec if the command is unavailable or fails. |
 | `git_lines_added` / `git_lines_removed` | Git diff statistics relative to the merge-base with the default branch (PR-like stats) |
 | `is_worktree` | Whether CWD is a git worktree |
 | `worktree_name` | Last path component of CWD when parent directory is `.worktrees`; used to display the immutable worktree directory identifier in the footer |
@@ -309,7 +309,7 @@ The `/switch-skillset` command integrates with the external `nori-skillsets` CLI
 4. On success (exit code 0), displays a searchable picker (`is_searchable: true`) with skillset names. Each `SelectionItem` sets `search_value` to the skillset name so the picker's search filtering can match against it. In vim mode, users press `/` to start filtering; in non-vim mode, typing immediately filters. When `skillset_per_session` is enabled, a "No Skillset" option is prepended to the list; selecting it sends `AppEvent::SkillsetPickerDismissed` (same as Escape/Ctrl-C dismiss), giving users an explicit way to skip skillset selection.
 5. On selection, if an `install_dir` is set (worktree context), runs `nori-skillsets --non-interactive switch <NAME> --install-dir <path>`; otherwise runs `nori-skillsets --non-interactive install <NAME>`. The `--non-interactive` flag is required because the TUI captures stdout/stderr via `.output()` and provides no stdin, so any interactive prompt would hang indefinitely.
 6. Shows the install output as a confirmation message (for long output, extracts the last section after double newlines)
-7. On successful switch/install, updates `ChatWidget.session_skillset_name` which flows to the footer
+7. On successful switch/install, triggers a system info refresh (via `request_system_info_refresh()`) so the footer updates with the new active skillset list from `nori-skillsets list-active`
 
 **Argument shortcut:** `/switch-skillset <name>` (e.g., `/switch-skillset foobar`) bypasses the picker entirely and directly triggers the install or switch. This is intercepted in `submit_user_message()` in `chatwidget/user_input.rs` before the text is sent to the model, following the same `strip_prefix` + early-return pattern used by `/login <agent>`. The handler `handle_switch_skillset_command_with_name()` in `chatwidget/pickers.rs` performs the same worktree/per-session detection as the picker flow but skips the async list step, calling `on_switch_skillset_request()` or `on_install_skillset_request()` directly. An empty name after the prefix (e.g., `/switch-skillset ` with trailing space only) is not intercepted and falls through to normal message submission.
 
@@ -325,7 +325,7 @@ The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.
 
 The "Auto Worktree" item in `/config` uses a sub-picker pattern (matching Notify After Idle / Script Timeout): selecting the config item emits `AppEvent::OpenAutoWorktreePicker`, which opens a second selection view listing all `AutoWorktree` variants (`Automatic`, `Ask`, `Off`) with radio-select style (current variant marked). The config item's display name shows the current mode in parentheses (e.g. "Auto Worktree (automatic)"). Selecting a variant emits `AppEvent::SetConfigAutoWorktree(variant)`, persisted via `persist_auto_worktree_setting()` which writes the string value (e.g. `"automatic"`, `"ask"`, `"off"`) to `[tui]` in `config.toml`.
 
-The `session_skillset_name` field propagates through the widget hierarchy: `ChatWidget` -> `BottomPane` -> `ChatComposer` -> `Footer`. In the footer, `session_skillset_name` takes priority over `nori_profile` from `SystemInfo` for the skillset display segment.
+Active skillset display in the footer is driven entirely by `SystemInfo.active_skillsets`, which is populated by shelling out to `nori-skillsets list-active`. After a successful skillset switch or install, `request_system_info_refresh()` triggers a background re-collection so the footer reflects the updated state. There is no in-memory override -- `nori-skillsets list-active` is the single source of truth.
 
 
 **Notification Configuration:**
@@ -477,7 +477,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Git Stats | `git_stats` | Lines added/removed in current session |
 | Context Window | `context` | "Context: 34K (27%)" when running within an agent environment |
 | Approval Mode | `approval_mode` | "Approvals: Agent/Full Access/Read Only" |
-| Nori Profile | `nori_profile` | "Skillset: <name>" (prefers session_skillset_name when set) |
+| Nori Profile | `nori_profile` | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
 | Nori Version | `nori_version` | "Skillsets v<version>" |
 | Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
 

@@ -841,6 +841,13 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_install_result(&name, success, &message);
+                if success {
+                    self.request_system_info_refresh(
+                        self.config.cwd.clone(),
+                        self.config.model.clone().into(),
+                        self.chat_widget.first_prompt_text(),
+                    );
+                }
             }
             AppEvent::SkillsetSwitchResult {
                 name,
@@ -856,6 +863,13 @@ impl App {
                     self.deferred_spawn_pending = false;
                     self.chat_widget
                         .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+                }
+                if success {
+                    self.request_system_info_refresh(
+                        self.config.cwd.clone(),
+                        self.config.model.clone().into(),
+                        self.chat_widget.first_prompt_text(),
+                    );
                 }
             }
             AppEvent::SkillsetPickerDismissed => {

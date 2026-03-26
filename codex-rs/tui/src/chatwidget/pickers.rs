@@ -268,11 +268,6 @@ impl ChatWidget {
         self.bottom_pane.set_vim_mode(value);
     }
 
-    pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {
-        self.bottom_pane.set_session_skillset_name(name.clone());
-        self.session_skillset_name = name;
-    }
-
     /// Handle the /switch-skillset command.
     /// Checks if nori-skillsets is available and lists available skillsets.
     pub(crate) fn handle_switch_skillset_command(&mut self) {
@@ -456,7 +451,6 @@ impl ChatWidget {
     /// Handle the result of switching a skillset.
     pub(crate) fn on_skillset_switch_result(&mut self, name: &str, success: bool, message: &str) {
         if success {
-            self.set_session_skillset_name(Some(name.to_string()));
             self.add_to_history(history_cell::new_skillset_switched_event(name));
             self.request_redraw();
         } else {
