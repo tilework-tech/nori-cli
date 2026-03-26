@@ -810,6 +810,85 @@ async fn test_exec_approval_emits_normalized_client_event() {
 }
 
 #[tokio::test]
+async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_event() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+    use tokio::sync::oneshot;
+    use tokio::sync::watch;
+
+    let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let cwd = PathBuf::from("/tmp/test");
+    let (_policy_tx, policy_rx) = watch::channel(AskForApproval::Never);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_approval_handler(
+        approval_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_approvals),
+        Arc::clone(&user_notifier),
+        cwd,
+        policy_rx,
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+        None,
+    ));
+
+    let tool_call = acp::ToolCallUpdate::new(
+        "call-auto-approved",
+        acp::ToolCallUpdateFields::new()
+            .title("Terminal")
+            .kind(acp::ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "git status"})),
+    );
+    let (response_tx, response_rx) = oneshot::channel();
+    approval_tx
+        .send(ApprovalRequest {
+            event: ApprovalEventType::Exec(codex_protocol::approvals::ExecApprovalRequestEvent {
+                call_id: "call-auto-approved".into(),
+                turn_id: String::new(),
+                command: vec!["bash".into(), "-lc".into(), "git status".into()],
+                cwd: PathBuf::from("/tmp/test"),
+                reason: Some("Execute: git status".into()),
+                risk: None,
+                parsed_cmd: vec![],
+            }),
+            acp_request: acp::RequestPermissionRequest::new("session-1", tool_call, vec![]),
+            options: vec![],
+            response_tx,
+            tool_call_metadata: None,
+        })
+        .await
+        .expect("send approval request");
+
+    let decision = tokio::time::timeout(std::time::Duration::from_secs(1), response_rx)
+        .await
+        .expect("approval response timeout")
+        .expect("approval response missing");
+    assert_eq!(decision, ReviewDecision::Approved);
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "auto-approved execute approvals should not be emitted on the legacy event channel",
+    );
+
+    let client_event = tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        client_event_rx.recv(),
+    )
+    .await;
+    assert!(
+        client_event.is_err(),
+        "auto-approved execute approvals should not emit normalized approval events",
+    );
+}
+
+#[tokio::test]
 async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;

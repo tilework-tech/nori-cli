@@ -271,16 +271,6 @@ impl AcpBackend {
         transcript_recorder: Option<Arc<TranscriptRecorder>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
-            let client_events =
-                normalize_permission_request(&client_event_normalizer, &request).await;
-            forward_client_events(&client_event_tx, &client_events).await;
-            if let Some(ref recorder) = transcript_recorder {
-                for client_event in &client_events {
-                    if let Err(e) = recorder.record_client_event(client_event).await {
-                        warn!("Failed to record normalized approval event to transcript: {e}");
-                    }
-                }
-            }
             // Store tool call metadata from the permission request so the
             // event translator can resolve proper titles when the subsequent
             // ToolCallUpdate(completed) arrives (often with empty fields from
@@ -327,6 +317,17 @@ impl AcpBackend {
                 );
                 let _ = request.response_tx.send(ReviewDecision::Approved);
                 continue;
+            }
+
+            let client_events =
+                normalize_permission_request(&client_event_normalizer, &request).await;
+            forward_client_events(&client_event_tx, &client_events).await;
+            if let Some(ref recorder) = transcript_recorder {
+                for client_event in &client_events {
+                    if let Err(e) = recorder.record_client_event(client_event).await {
+                        warn!("Failed to record normalized approval event to transcript: {e}");
+                    }
+                }
             }
 
             // Send the appropriate approval request event to TUI based on operation type.
