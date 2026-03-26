@@ -1284,6 +1284,19 @@ impl ChatWidget {
             | nori_protocol::ToolKind::Other(_)
                 if matches!(
                     tool_snapshot.phase,
+                    nori_protocol::ToolPhase::Pending | nori_protocol::ToolPhase::InProgress
+                ) =>
+            {
+                self.handle_client_exec_like_tool_begin_snapshot(tool_snapshot);
+            }
+            nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Read
+            | nori_protocol::ToolKind::Search
+            | nori_protocol::ToolKind::Fetch
+            | nori_protocol::ToolKind::Think
+            | nori_protocol::ToolKind::Other(_)
+                if matches!(
+                    tool_snapshot.phase,
                     nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
                 ) =>
             {
@@ -1291,6 +1304,28 @@ impl ChatWidget {
             }
             _ => {}
         }
+    }
+
+    fn handle_client_exec_like_tool_begin_snapshot(
+        &mut self,
+        tool_snapshot: nori_protocol::ToolSnapshot,
+    ) {
+        if self.turn_finished
+            || self
+                .completed_client_tool_calls
+                .contains(&tool_snapshot.call_id)
+            || self.running_commands.contains_key(&tool_snapshot.call_id)
+        {
+            return;
+        }
+
+        let Some(begin_event) =
+            exec_begin_event_from_client_snapshot(&self.config.cwd, &tool_snapshot)
+        else {
+            return;
+        };
+
+        self.on_exec_command_begin(begin_event);
     }
 
     fn handle_client_edit_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
@@ -1341,10 +1376,19 @@ fn exec_begin_event_from_client_snapshot(
     snapshot: &nori_protocol::ToolSnapshot,
 ) -> Option<ExecCommandBeginEvent> {
     let (command, parsed_cmd) = match snapshot.invocation.as_ref() {
-        Some(nori_protocol::Invocation::Command { command }) => {
-            let command_vec = vec!["bash".to_string(), "-lc".to_string(), command.clone()];
-            let parsed_cmd = codex_core::parse_command::parse_command(&command_vec);
-            (command_vec, parsed_cmd)
+        Some(nori_protocol::Invocation::Command {
+            command: actual_command,
+        }) => {
+            let command_text = formatted_client_tool_command_text(
+                &snapshot.title,
+                snapshot.raw_input.as_ref(),
+                Some(actual_command),
+            )
+            .unwrap_or_else(|| actual_command.clone());
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
         }
         Some(nori_protocol::Invocation::Read { path }) => {
             let name = path
@@ -1428,19 +1472,41 @@ fn exec_begin_event_from_client_snapshot(
 }
 
 fn generic_execute_command_text(snapshot: &nori_protocol::ToolSnapshot) -> String {
-    match snapshot.raw_input.as_ref() {
-        Some(raw_input)
-            if !raw_input.is_null()
-                && !raw_input.as_object().is_some_and(serde_json::Map::is_empty) =>
-        {
-            format!("{} {}", snapshot.title, compact_json(raw_input))
-        }
-        _ => snapshot.title.clone(),
-    }
+    formatted_client_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), None)
+        .unwrap_or_else(|| snapshot.title.clone())
 }
 
 fn compact_json(value: &serde_json::Value) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| value.to_string())
+}
+
+fn formatted_client_tool_command_text(
+    title: &str,
+    raw_input: Option<&serde_json::Value>,
+    fallback_arg: Option<&str>,
+) -> Option<String> {
+    let args = raw_input
+        .and_then(extract_client_tool_display_args)
+        .or_else(|| fallback_arg.map(str::to_string));
+
+    match args {
+        Some(args) if !args.is_empty() && !title.contains(&args) => {
+            Some(format!("{title}({args})"))
+        }
+        Some(_) => Some(title.to_string()),
+        None => None,
+    }
+}
+
+fn extract_client_tool_display_args(input: &serde_json::Value) -> Option<String> {
+    input
+        .get("command")
+        .or_else(|| input.get("cmd"))
+        .or_else(|| input.get("path"))
+        .or_else(|| input.get("query"))
+        .or_else(|| input.get("pattern"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
 }
 
 fn generic_tool_command_text(

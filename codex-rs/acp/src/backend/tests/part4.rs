@@ -104,6 +104,109 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SEND_TOOL_CALL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, event_tx, Some(client_event_tx))
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = tokio::time::timeout(Duration::from_secs(2), event_rx.recv())
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Do a tool call".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut client_events = Vec::new();
+    while start.elapsed() < timeout {
+        match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
+            Ok(Some(client_event)) => {
+                let done = matches!(
+                    client_event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                );
+                client_events.push(client_event);
+                if done {
+                    break;
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SEND_TOOL_CALL");
+    }
+
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(event, nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot)
+            if matches!(
+                tool_snapshot.phase,
+                nori_protocol::ToolPhase::Pending
+                    | nori_protocol::ToolPhase::InProgress
+                    | nori_protocol::ToolPhase::Completed
+            ))
+        }),
+        "expected normalized tool snapshot events: {client_events:?}"
+    );
+
+    let mut legacy_events = Vec::new();
+    while let Ok(Some(event)) =
+        tokio::time::timeout(Duration::from_millis(100), event_rx.recv()).await
+    {
+        legacy_events.push(event);
+    }
+
+    assert!(
+        !legacy_events.iter().any(|event| {
+            matches!(
+                event.msg,
+                EventMsg::ExecCommandBegin(_)
+                    | EventMsg::ExecCommandEnd(_)
+                    | EventMsg::AgentMessageDelta(_)
+                    | EventMsg::TaskStarted(_)
+                    | EventMsg::TaskComplete(_)
+            )
+        }),
+        "legacy ACP live tool/text/lifecycle events should be suppressed when normalized client events are present: {legacy_events:?}"
+    );
+}
+
 /// Test that after Op::Compact, subsequent Op::UserInput prompts have the
 /// summary prefix prepended to the user's message.
 ///

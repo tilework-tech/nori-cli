@@ -912,6 +912,37 @@ fn completed_execute_tool_snapshot_renders_exec_history_cell() {
 }
 
 #[test]
+fn pending_execute_tool_snapshot_renders_running_exec_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-pending".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Pending,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Running"),
+        "expected running exec cell from normalized pending snapshot: {blob:?}"
+    );
+    assert!(
+        blob.contains("git status"),
+        "expected command in running exec cell: {blob:?}"
+    );
+}
+
+#[test]
 fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 

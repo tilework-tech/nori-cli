@@ -354,9 +354,7 @@ impl AcpBackend {
                 ),
             };
 
-            let legacy_event_needed =
-                client_event_tx.is_none() || !client_event_handles_live_approval(&client_events);
-            if legacy_event_needed {
+            if client_event_tx.is_none() {
                 // Send the approval event to the TUI first, then notify.
                 // Notification must come after event delivery because
                 // notif.show() can block on some platforms (e.g. macOS),
@@ -398,9 +396,7 @@ impl AcpBackend {
         while let Some(update) = persistent_rx.recv().await {
             let client_events = normalize_session_update(&client_event_normalizer, &update).await;
             forward_client_events(&client_event_tx, &client_events).await;
-            if client_event_tx.is_some()
-                && client_event_handles_live_session_update(&update, &client_events)
-            {
+            if client_event_tx.is_some() {
                 continue;
             }
             let event_msgs = {
