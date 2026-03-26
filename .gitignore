@@ -1,7 +1,6 @@
 # cli tools
 # CLAUDE.md
-# .claude/agents/
-# .claude/skills/
+.claude/
 
 .nori-config.json
 .nori-installed-version
