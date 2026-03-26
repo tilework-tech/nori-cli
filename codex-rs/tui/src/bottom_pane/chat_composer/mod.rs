@@ -124,7 +124,6 @@ pub(crate) struct ChatComposer {
     vim_enter_behavior: codex_acp::config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
-    session_skillset_name: Option<String>,
     footer_segment_config: codex_acp::config::FooterSegmentConfig,
 }
 
@@ -181,7 +180,6 @@ impl ChatComposer {
             vim_enter_behavior: codex_acp::config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
-            session_skillset_name: None,
             footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
         };
         // Apply configuration via the setter to keep side-effects centralized.
@@ -365,10 +363,6 @@ impl ChatComposer {
 
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.prompt_summary = summary;
-    }
-
-    pub(crate) fn set_session_skillset_name(&mut self, name: Option<String>) {
-        self.session_skillset_name = name;
     }
 
     pub(crate) fn set_command_description_override(&mut self, cmd: SlashCommand, desc: String) {

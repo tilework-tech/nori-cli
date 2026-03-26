@@ -30,7 +30,7 @@ pub(crate) struct FooterProps {
     pub(crate) git_branch: Option<String>,
     /// The approval mode label to display (e.g., "Read Only", "Agent", "Full Access").
     pub(crate) approval_mode_label: Option<String>,
-    pub(crate) nori_profile: Option<String>,
+    pub(crate) active_skillsets: Vec<String>,
     pub(crate) nori_version: Option<String>,
     /// The source of the version detection (affects display label).
     pub(crate) nori_version_source: Option<NoriVersionSource>,
@@ -51,8 +51,6 @@ pub(crate) struct FooterProps {
     pub(crate) prompt_summary: Option<String>,
     /// The worktree directory name (e.g., "good-ash-20260205-204831") when in a worktree.
     pub(crate) worktree_name: Option<String>,
-    /// Session-local skillset name, overrides nori_profile when set.
-    pub(crate) session_skillset_name: Option<String>,
     /// Configuration for which footer segments to show.
     pub(crate) footer_segment_config: FooterSegmentConfig,
 }
@@ -388,17 +386,16 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add nori profile if available and enabled: "Skillset: name" (cyan)
-    // Prefer session_skillset_name (set during per-session skillset selection) over nori_profile
-    if config.is_enabled(FooterSegment::NoriProfile)
-        && let Some(profile) = props
-            .session_skillset_name
-            .as_ref()
-            .or(props.nori_profile.as_ref())
-    {
+    // Add active skillsets if available and enabled: "Skillset: name" or "Skillsets: a, b" (cyan)
+    if config.is_enabled(FooterSegment::NoriProfile) && !props.active_skillsets.is_empty() {
+        let label = if props.active_skillsets.len() == 1 {
+            "Skillset: "
+        } else {
+            "Skillsets: "
+        };
         segments.push(Line::from(vec![
-            Span::from("Skillset: ").cyan(),
-            Span::from(profile.clone()).cyan(),
+            Span::from(label).cyan(),
+            Span::from(props.active_skillsets.join(", ")).cyan(),
         ]));
     }
 
@@ -638,7 +635,7 @@ mod tests {
             context_tokens: None,
             git_branch: None,
             approval_mode_label: None,
-            nori_profile: None,
+            active_skillsets: Vec::new(),
             nori_version: None,
             nori_version_source: None,
             git_lines_added: None,
@@ -650,7 +647,6 @@ mod tests {
             vim_mode_state: None,
             prompt_summary: None,
             worktree_name: None,
-            session_skillset_name: None,
             footer_segment_config: FooterSegmentConfig::default(),
         }
     }
@@ -732,7 +728,7 @@ mod tests {
             FooterProps {
                 context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
@@ -751,7 +747,7 @@ mod tests {
                 context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
                 approval_mode_label: Some("Agent".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
@@ -793,7 +789,7 @@ mod tests {
             FooterProps {
                 context_window_percent: Some(72),
                 git_branch: Some("feature/worktree-branch".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(5),
@@ -812,7 +808,7 @@ mod tests {
                 context_window_percent: Some(72),
                 git_branch: Some("feature/test".to_string()),
                 approval_mode_label: Some("Agent".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
@@ -856,7 +852,7 @@ mod tests {
                 context_window_percent: Some(72),
                 context_tokens: Some(123456),
                 git_branch: Some("feature/test".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 nori_version_source: Some(NoriVersionSource::Skillsets),
                 git_lines_added: Some(10),
@@ -978,7 +974,7 @@ mod tests {
                 git_branch: Some("auto/fix-auth-bug-20260205".to_string()),
                 is_worktree: true,
                 worktree_name: Some("good-ash-20260205-204831".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 ..default_props()
             },
         );
@@ -997,7 +993,7 @@ mod tests {
                 git_branch: Some("auto/fix-auth-bug-20260205".to_string()),
                 is_worktree: true,
                 worktree_name: Some("good-ash-20260205-204831".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 footer_segment_config: segment_config,
                 ..default_props()
             },
@@ -1005,26 +1001,37 @@ mod tests {
     }
 
     #[test]
-    fn footer_session_skillset_overrides_nori_profile() {
+    fn footer_with_multiple_active_skillsets() {
         snapshot_footer(
-            "footer_session_skillset_overrides_profile",
+            "footer_with_multiple_active_skillsets",
             FooterProps {
                 git_branch: Some("auto/my-branch-20260220".to_string()),
                 is_worktree: true,
-                nori_profile: Some("clifford".to_string()),
-                session_skillset_name: Some("rust-dev".to_string()),
+                active_skillsets: vec!["clifford".to_string(), "rust-dev".to_string()],
                 ..default_props()
             },
         );
     }
 
     #[test]
-    fn footer_session_skillset_without_nori_profile() {
+    fn footer_with_single_active_skillset() {
         snapshot_footer(
-            "footer_session_skillset_no_profile",
+            "footer_with_single_active_skillset",
             FooterProps {
                 git_branch: Some("main".to_string()),
-                session_skillset_name: Some("python-ml".to_string()),
+                active_skillsets: vec!["python-ml".to_string()],
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_no_active_skillsets() {
+        snapshot_footer(
+            "footer_with_no_active_skillsets",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                active_skillsets: Vec::new(),
                 ..default_props()
             },
         );
@@ -1104,7 +1111,7 @@ mod tests {
                 context_tokens: Some(34000),
                 context_window_percent: Some(27),
                 approval_mode_label: Some("Agent".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 input_tokens: Some(20000),
                 output_tokens: Some(14000),
@@ -1132,7 +1139,7 @@ mod tests {
                 context_tokens: Some(34000),
                 context_window_percent: Some(27),
                 approval_mode_label: Some("Agent".to_string()),
-                nori_profile: Some("clifford".to_string()),
+                active_skillsets: vec!["clifford".to_string()],
                 nori_version: Some("19.1.1".to_string()),
                 footer_segment_config: segment_config,
                 ..default_props()

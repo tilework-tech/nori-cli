@@ -33,7 +33,7 @@ impl ChatComposer {
     pub(super) fn footer_props(&self) -> FooterProps {
         let (
             git_branch,
-            nori_profile,
+            active_skillsets,
             nori_version,
             nori_version_source,
             git_lines_added,
@@ -41,14 +41,14 @@ impl ChatComposer {
         ) = if let Some(ref info) = self.system_info {
             (
                 info.git_branch.clone(),
-                info.nori_profile.clone(),
+                info.active_skillsets.clone(),
                 info.nori_version.clone(),
                 info.nori_version_source,
                 info.git_lines_added,
                 info.git_lines_removed,
             )
         } else {
-            (None, None, None, None, None, None)
+            (None, Vec::new(), None, None, None, None)
         };
 
         // Extract token breakdown and agent kind from transcript location
@@ -90,7 +90,7 @@ impl ChatComposer {
             context_tokens,
             git_branch,
             approval_mode_label: self.approval_mode_label.clone(),
-            nori_profile,
+            active_skillsets,
             nori_version,
             nori_version_source,
             git_lines_added,
@@ -109,7 +109,6 @@ impl ChatComposer {
                 .system_info
                 .as_ref()
                 .and_then(|s| s.worktree_name.clone()),
-            session_skillset_name: self.session_skillset_name.clone(),
             footer_segment_config: self.footer_segment_config.clone(),
         }
     }

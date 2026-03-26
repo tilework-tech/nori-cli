@@ -1,7 +1,6 @@
 use codex_acp::AgentKind;
 use codex_acp::TranscriptLocation;
 use std::env;
-use std::fs;
 use std::process::Command;
 
 /// Indicates which command was used to detect the Nori version.
@@ -28,7 +27,7 @@ impl NoriVersionSource {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SystemInfo {
     pub(crate) git_branch: Option<String>,
-    pub(crate) nori_profile: Option<String>,
+    pub(crate) active_skillsets: Vec<String>,
     pub(crate) nori_version: Option<String>,
     /// Indicates which command was used to detect the version (affects UI display).
     pub(crate) nori_version_source: Option<NoriVersionSource>,
@@ -130,7 +129,7 @@ impl SystemInfo {
 
         Self {
             git_branch: get_git_branch(dir),
-            nori_profile: get_nori_profile(), // Profile search still uses process CWD
+            active_skillsets: get_active_skillsets(dir),
             nori_version,
             nori_version_source,
             git_lines_added,
@@ -204,43 +203,90 @@ fn parse_nori_version(output: &str) -> Option<String> {
     }
 }
 
+/// Parse the stdout of `nori-skillsets list-active` into a list of skillset names.
+///
+/// Expects one skillset name per line. Trims whitespace and skips blank lines.
+fn parse_active_skillsets(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+/// Get active skillsets by running `nori-skillsets list-active`.
+///
+/// Falls back to reading `.nori-config.json` if `list-active` is not supported
+/// (older versions of nori-skillsets). Returns an empty vec if no skillsets are
+/// active or nori-skillsets is not installed.
+fn get_active_skillsets(dir: Option<&std::path::Path>) -> Vec<String> {
+    let mut cmd = Command::new("nori-skillsets");
+    cmd.arg("list-active");
+    if let Some(d) = dir {
+        cmd.current_dir(d);
+    }
+    match cmd.output() {
+        Ok(output) if output.status.success() => String::from_utf8(output.stdout)
+            .ok()
+            .map(|s| parse_active_skillsets(&s))
+            .unwrap_or_default(),
+        Ok(output) => {
+            // Non-zero exit. Distinguish "no active skillsets" (known command,
+            // no results) from "unknown subcommand" (old nori-skillsets version).
+            // When the subcommand is unknown, the CLI framework writes to stderr.
+            let has_stderr = output.stderr.iter().any(|&b| !b.is_ascii_whitespace());
+            if has_stderr {
+                // Likely an old version that doesn't support list-active.
+                // Fall back to reading .nori-config.json directly.
+                get_nori_profile().into_iter().collect()
+            } else {
+                // Known command, just no active skillsets.
+                Vec::new()
+            }
+        }
+        // nori-skillsets not installed at all.
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Read the active skillset from `.nori-config.json` by walking parent directories.
+///
+/// This is the legacy fallback for older versions of nori-skillsets that don't
+/// support the `list-active` subcommand.
 fn get_nori_profile() -> Option<String> {
-    // Search for .nori-config.json in current directory and parent directories
     let mut current_dir = env::current_dir().ok()?;
 
     loop {
         let config_path = current_dir.join(".nori-config.json");
-        if config_path.exists() {
-            // Try to read and parse the config file
-            if let Ok(contents) = fs::read_to_string(&config_path)
-                && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+        if config_path.exists()
+            && let Ok(contents) = std::fs::read_to_string(&config_path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+        {
+            // Try new format: activeSkillset
+            if let Some(profile) = json.get("activeSkillset").and_then(|v| v.as_str()) {
+                return Some(profile.to_string());
+            }
+            // Fall back to old format: agents.claude-code.profile.baseProfile
+            if let Some(profile) = json
+                .get("agents")
+                .and_then(|a| a.get("claude-code"))
+                .and_then(|c| c.get("profile"))
+                .and_then(|p| p.get("baseProfile"))
+                .and_then(|b| b.as_str())
             {
-                // Try new format: activeSkillset
-                if let Some(profile) = json.get("activeSkillset").and_then(|v| v.as_str()) {
-                    return Some(profile.to_string());
-                }
-                // Fall back to old format: agents.claude-code.profile.baseProfile
-                if let Some(profile) = json
-                    .get("agents")
-                    .and_then(|a| a.get("claude-code"))
-                    .and_then(|c| c.get("profile"))
-                    .and_then(|p| p.get("baseProfile"))
-                    .and_then(|b| b.as_str())
-                {
-                    return Some(profile.to_string());
-                }
-                // Fall back to oldest format: profile.baseProfile
-                if let Some(profile) = json
-                    .get("profile")
-                    .and_then(|p| p.get("baseProfile"))
-                    .and_then(|b| b.as_str())
-                {
-                    return Some(profile.to_string());
-                }
+                return Some(profile.to_string());
+            }
+            // Fall back to oldest format: profile.baseProfile
+            if let Some(profile) = json
+                .get("profile")
+                .and_then(|p| p.get("baseProfile"))
+                .and_then(|b| b.as_str())
+            {
+                return Some(profile.to_string());
             }
         }
 
-        // Move to parent directory
         if !current_dir.pop() {
             break;
         }
@@ -949,6 +995,41 @@ Filesystem     1024-blocks      Used Available Capacity Mounted on
         assert_eq!(count_lines_in_content("single line"), 1);
         assert_eq!(count_lines_in_content(""), 0);
         assert_eq!(count_lines_in_content("a\nb\nc"), 3);
+    }
+
+    #[test]
+    fn test_parse_active_skillsets_multiple_lines() {
+        let output = "amol\nrust-dev\n";
+        let result = parse_active_skillsets(output);
+        assert_eq!(result, vec!["amol", "rust-dev"]);
+    }
+
+    #[test]
+    fn test_parse_active_skillsets_single_line() {
+        let output = "amol\n";
+        let result = parse_active_skillsets(output);
+        assert_eq!(result, vec!["amol"]);
+    }
+
+    #[test]
+    fn test_parse_active_skillsets_empty() {
+        let output = "";
+        let result = parse_active_skillsets(output);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_active_skillsets_trims_whitespace() {
+        let output = "  amol  \n  rust-dev  \n";
+        let result = parse_active_skillsets(output);
+        assert_eq!(result, vec!["amol", "rust-dev"]);
+    }
+
+    #[test]
+    fn test_parse_active_skillsets_skips_blank_lines() {
+        let output = "amol\n\n\nrust-dev\n";
+        let result = parse_active_skillsets(output);
+        assert_eq!(result, vec!["amol", "rust-dev"]);
     }
 
     #[test]
