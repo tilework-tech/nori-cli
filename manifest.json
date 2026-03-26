@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "noriSessionName": "nori-wheat-marlin-3846",
+  "claudeSessionId": "39296948-2a0a-40c3-9ab8-9b69b5e1e1d0",
+  "timestamp": 1774548258,
+  "baseSha": "1f4762a4c8892627795c458bc4c379e0cced6761",
+  "baseBranch": "main",
+  "repoUrl": "https://github.com/tilework-tech/nori-cli",
+  "agentType": "claude-code",
+  "hasWorkspacePatch": false,
+  "hasUntrackedFiles": false
+}
