@@ -365,7 +365,7 @@ impl AcpBackend {
                         }
                     }
                     let events = if client_event_tx_for_updates.is_some()
-                        && client_event_handles_live_tool_snapshot(&client_events)
+                        && client_event_handles_live_session_update(&update, &client_events)
                     {
                         Vec::new()
                     } else {

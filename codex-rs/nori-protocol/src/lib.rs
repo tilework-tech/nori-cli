@@ -10,6 +10,43 @@ use serde::Serialize;
 pub enum ClientEvent {
     ToolSnapshot(ToolSnapshot),
     ApprovalRequest(ApprovalRequest),
+    MessageDelta(MessageDelta),
+    PlanSnapshot(PlanSnapshot),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct MessageDelta {
+    pub stream: MessageStream,
+    pub delta: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageStream {
+    Answer,
+    Reasoning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PlanSnapshot {
+    pub entries: Vec<PlanEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PlanEntry {
+    pub step: String,
+    pub status: PlanStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanStatus {
+    Pending,
+    InProgress,
+    Completed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -166,6 +203,21 @@ pub struct ClientEventNormalizer {
 impl ClientEventNormalizer {
     pub fn push_session_update(&mut self, update: &acp::SessionUpdate) -> Vec<ClientEvent> {
         match update {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                message_delta_from_chunk(chunk, MessageStream::Answer)
+                    .into_iter()
+                    .map(ClientEvent::MessageDelta)
+                    .collect()
+            }
+            acp::SessionUpdate::AgentThoughtChunk(chunk) => {
+                message_delta_from_chunk(chunk, MessageStream::Reasoning)
+                    .into_iter()
+                    .map(ClientEvent::MessageDelta)
+                    .collect()
+            }
+            acp::SessionUpdate::Plan(plan) => {
+                vec![ClientEvent::PlanSnapshot(plan_snapshot_from_acp(plan))]
+            }
             acp::SessionUpdate::ToolCall(tool_call) => {
                 let call_id = tool_call.tool_call_id.to_string();
                 self.tool_calls.insert(call_id, tool_call.clone());
@@ -266,6 +318,17 @@ impl ApprovalOption {
                 acp::PermissionOptionKind::RejectOnce => ApprovalOptionKind::RejectOnce,
                 other => ApprovalOptionKind::Other(format!("{other:?}")),
             },
+        }
+    }
+}
+
+impl PlanStatus {
+    fn from_acp(status: acp::PlanEntryStatus) -> Self {
+        match status {
+            acp::PlanEntryStatus::Pending => PlanStatus::Pending,
+            acp::PlanEntryStatus::InProgress => PlanStatus::InProgress,
+            acp::PlanEntryStatus::Completed => PlanStatus::Completed,
+            _ => PlanStatus::Pending,
         }
     }
 }
@@ -522,6 +585,32 @@ fn title_looks_like_listing(title: &str) -> bool {
     title.contains("list") || title.contains("glob") || title.contains("ls")
 }
 
+fn message_delta_from_chunk(
+    chunk: &acp::ContentChunk,
+    stream: MessageStream,
+) -> Option<MessageDelta> {
+    match &chunk.content {
+        acp::ContentBlock::Text(text) if !text.text.is_empty() => Some(MessageDelta {
+            stream,
+            delta: text.text.clone(),
+        }),
+        _ => None,
+    }
+}
+
+fn plan_snapshot_from_acp(plan: &acp::Plan) -> PlanSnapshot {
+    PlanSnapshot {
+        entries: plan
+            .entries
+            .iter()
+            .map(|entry| PlanEntry {
+                step: entry.content.clone(),
+                status: PlanStatus::from_acp(entry.status.clone()),
+            })
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
@@ -755,6 +844,86 @@ mod tests {
             Some(Invocation::Read {
                 path: PathBuf::from("Cargo.toml"),
             })
+        );
+    }
+
+    #[test]
+    fn normalizer_emits_answer_message_delta_from_agent_message_chunk() {
+        let mut normalizer = ClientEventNormalizer::default();
+        let update = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("Hello from ACP")),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+
+        assert_eq!(
+            events,
+            vec![ClientEvent::MessageDelta(MessageDelta {
+                stream: MessageStream::Answer,
+                delta: "Hello from ACP".into(),
+            })]
+        );
+    }
+
+    #[test]
+    fn normalizer_emits_reasoning_message_delta_from_agent_thought_chunk() {
+        let mut normalizer = ClientEventNormalizer::default();
+        let update = acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("**Analyzing** the repo")),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+
+        assert_eq!(
+            events,
+            vec![ClientEvent::MessageDelta(MessageDelta {
+                stream: MessageStream::Reasoning,
+                delta: "**Analyzing** the repo".into(),
+            })]
+        );
+    }
+
+    #[test]
+    fn normalizer_emits_plan_snapshot_from_plan_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+        let update = acp::SessionUpdate::Plan(acp::Plan::new(vec![
+            acp::PlanEntry::new(
+                "Research ACP",
+                acp::PlanEntryPriority::High,
+                acp::PlanEntryStatus::Completed,
+            ),
+            acp::PlanEntry::new(
+                "Implement normalized flow",
+                acp::PlanEntryPriority::Medium,
+                acp::PlanEntryStatus::InProgress,
+            ),
+            acp::PlanEntry::new(
+                "Delete legacy translation",
+                acp::PlanEntryPriority::Low,
+                acp::PlanEntryStatus::Pending,
+            ),
+        ]));
+
+        let events = normalizer.push_session_update(&update);
+
+        assert_eq!(
+            events,
+            vec![ClientEvent::PlanSnapshot(PlanSnapshot {
+                entries: vec![
+                    PlanEntry {
+                        step: "Research ACP".into(),
+                        status: PlanStatus::Completed,
+                    },
+                    PlanEntry {
+                        step: "Implement normalized flow".into(),
+                        status: PlanStatus::InProgress,
+                    },
+                    PlanEntry {
+                        step: "Delete legacy translation".into(),
+                        status: PlanStatus::Pending,
+                    },
+                ],
+            })]
         );
     }
 

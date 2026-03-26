@@ -67,9 +67,7 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
                 }
             }
             TranscriptEntry::ClientEvent(client_event) => {
-                if let Some(content) = format_client_event(&client_event.event) {
-                    entries.push(ViewonlyEntry::Info { content });
-                }
+                entries.extend(viewonly_entries_from_client_event(&client_event.event));
             }
             // Skip legacy tool calls, tool results, and patch operations.
             // Normalized client_event entries are the preferred transcript form.
@@ -82,8 +80,44 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
     entries
 }
 
+fn viewonly_entries_from_client_event(event: &nori_protocol::ClientEvent) -> Vec<ViewonlyEntry> {
+    match event {
+        nori_protocol::ClientEvent::MessageDelta(message_delta) => match message_delta.stream {
+            nori_protocol::MessageStream::Answer => vec![ViewonlyEntry::Assistant {
+                content: message_delta.delta.clone(),
+            }],
+            nori_protocol::MessageStream::Reasoning => vec![ViewonlyEntry::Thinking {
+                content: message_delta.delta.clone(),
+            }],
+        },
+        _ => format_client_event(event)
+            .map(|content| vec![ViewonlyEntry::Info { content }])
+            .unwrap_or_default(),
+    }
+}
+
 fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
     match event {
+        nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => Some(
+            format_tool_event("Updated Plan".to_string(), &None, &[])
+                + &if plan_snapshot.entries.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "\n{}",
+                        plan_snapshot
+                            .entries
+                            .iter()
+                            .map(|entry| format!(
+                                "- {} ({})",
+                                entry.step,
+                                format_plan_status(&entry.status)
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
+                },
+        ),
         nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => Some(format_tool_event(
             format!(
                 "Tool [{}]: {} ({})",
@@ -106,6 +140,15 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
                 &snapshot.artifacts,
             ))
         }
+        nori_protocol::ClientEvent::MessageDelta(_) => None,
+    }
+}
+
+fn format_plan_status(status: &nori_protocol::PlanStatus) -> &'static str {
+    match status {
+        nori_protocol::PlanStatus::Pending => "pending",
+        nori_protocol::PlanStatus::InProgress => "in_progress",
+        nori_protocol::PlanStatus::Completed => "completed",
     }
 }
 

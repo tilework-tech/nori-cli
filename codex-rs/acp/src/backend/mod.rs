@@ -412,6 +412,32 @@ pub(crate) fn client_event_handles_live_tool_snapshot(client_events: &[ClientEve
     })
 }
 
+pub(crate) fn client_event_handles_live_session_update(
+    update: &acp::SessionUpdate,
+    client_events: &[ClientEvent],
+) -> bool {
+    match update {
+        acp::SessionUpdate::AgentMessageChunk(_) => client_events.iter().any(|client_event| {
+            matches!(
+                client_event,
+                ClientEvent::MessageDelta(message_delta)
+                    if message_delta.stream == nori_protocol::MessageStream::Answer
+            )
+        }),
+        acp::SessionUpdate::AgentThoughtChunk(_) => client_events.iter().any(|client_event| {
+            matches!(
+                client_event,
+                ClientEvent::MessageDelta(message_delta)
+                    if message_delta.stream == nori_protocol::MessageStream::Reasoning
+            )
+        }),
+        acp::SessionUpdate::Plan(_) => client_events
+            .iter()
+            .any(|client_event| matches!(client_event, ClientEvent::PlanSnapshot(_))),
+        _ => client_event_handles_live_tool_snapshot(client_events),
+    }
+}
+
 fn client_tool_snapshot_is_live_handled(tool_snapshot: &nori_protocol::ToolSnapshot) -> bool {
     match tool_snapshot.phase {
         nori_protocol::ToolPhase::Completed => match tool_snapshot.kind {

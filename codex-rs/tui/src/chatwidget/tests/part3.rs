@@ -234,6 +234,38 @@ fn approval_modal_patch_snapshot() {
 }
 
 #[test]
+fn normalized_answer_message_delta_starts_streaming_controller() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "Here is the normalized answer.\n".into(),
+        },
+    ));
+
+    assert!(
+        chat.stream_controller.is_some(),
+        "normalized answer deltas should start the live streaming controller"
+    );
+}
+
+#[test]
+fn normalized_reasoning_message_delta_updates_status_header() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Reasoning,
+            delta: "**Analyzing** the live ACP flow".into(),
+        },
+    ));
+
+    assert_eq!(chat.current_status_header, "Analyzing");
+}
+
+#[test]
 fn approval_modal_patch_from_client_event_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     chat.config.approval_policy = AskForApproval::OnRequest;

@@ -1,4 +1,6 @@
 use super::*;
+use codex_protocol::plan_tool::PlanItemArg;
+use codex_protocol::plan_tool::StepStatus;
 
 impl ChatWidget {
     pub(super) fn flush_answer_stream_with_separator(&mut self) {
@@ -1162,7 +1164,28 @@ impl ChatWidget {
             nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => {
                 self.handle_client_tool_snapshot(tool_snapshot);
             }
+            nori_protocol::ClientEvent::MessageDelta(message_delta) => {
+                self.handle_client_message_delta(message_delta);
+            }
+            nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => {
+                self.handle_client_plan_snapshot(plan_snapshot);
+            }
         }
+    }
+
+    fn handle_client_message_delta(&mut self, message_delta: nori_protocol::MessageDelta) {
+        match message_delta.stream {
+            nori_protocol::MessageStream::Answer => {
+                self.on_agent_message_delta(message_delta.delta)
+            }
+            nori_protocol::MessageStream::Reasoning => {
+                self.on_agent_reasoning_delta(message_delta.delta);
+            }
+        }
+    }
+
+    fn handle_client_plan_snapshot(&mut self, plan_snapshot: nori_protocol::PlanSnapshot) {
+        self.on_plan_update(plan_snapshot_to_update_plan_args(plan_snapshot));
     }
 
     fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
@@ -1563,5 +1586,23 @@ fn file_change_from_nori_change(
             unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
             move_path: None,
         },
+    }
+}
+
+fn plan_snapshot_to_update_plan_args(plan_snapshot: nori_protocol::PlanSnapshot) -> UpdatePlanArgs {
+    UpdatePlanArgs {
+        explanation: None,
+        plan: plan_snapshot
+            .entries
+            .into_iter()
+            .map(|entry| PlanItemArg {
+                step: entry.step,
+                status: match entry.status {
+                    nori_protocol::PlanStatus::Pending => StepStatus::Pending,
+                    nori_protocol::PlanStatus::InProgress => StepStatus::InProgress,
+                    nori_protocol::PlanStatus::Completed => StepStatus::Completed,
+                },
+            })
+            .collect(),
     }
 }

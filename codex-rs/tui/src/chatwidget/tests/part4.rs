@@ -387,6 +387,39 @@ fn plan_update_routes_to_history_when_drawer_disabled() {
 }
 
 #[test]
+fn normalized_plan_snapshot_routes_to_history_when_drawer_disabled() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::PlanSnapshot(
+        nori_protocol::PlanSnapshot {
+            entries: vec![
+                nori_protocol::PlanEntry {
+                    step: "Research normalized plan handling".into(),
+                    status: nori_protocol::PlanStatus::Completed,
+                },
+                nori_protocol::PlanEntry {
+                    step: "Delete legacy plan translation".into(),
+                    status: nori_protocol::PlanStatus::Pending,
+                },
+            ],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        !cells.is_empty(),
+        "normalized plan snapshots should create a history cell when the pinned drawer is disabled"
+    );
+    let blob = lines_to_single_string(cells.last().unwrap());
+    assert!(
+        blob.contains("Updated Plan"),
+        "missing plan header: {blob:?}"
+    );
+    assert!(blob.contains("Research normalized plan handling"));
+    assert!(blob.contains("Delete legacy plan translation"));
+}
+
+#[test]
 fn toggling_pinned_drawer_off_routes_next_update_to_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     chat.set_plan_drawer_mode(PlanDrawerMode::Expanded);

@@ -1167,6 +1167,115 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
 }
 
 #[tokio::test]
+async fn test_agent_message_chunk_emits_normalized_message_delta() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+    ));
+
+    persistent_tx
+        .send(acp::SessionUpdate::AgentMessageChunk(
+            acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(
+                "hello from the agent",
+            ))),
+        ))
+        .await
+        .expect("send message chunk");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "hello from the agent".into(),
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "message chunks should not emit legacy agent message deltas once the client-event path exists",
+    );
+}
+
+#[tokio::test]
+async fn test_plan_update_emits_normalized_plan_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+    ));
+
+    persistent_tx
+        .send(acp::SessionUpdate::Plan(acp::Plan::new(vec![
+            acp::PlanEntry::new(
+                "Research current flow",
+                acp::PlanEntryPriority::High,
+                acp::PlanEntryStatus::Completed,
+            ),
+            acp::PlanEntry::new(
+                "Wire client events",
+                acp::PlanEntryPriority::Medium,
+                acp::PlanEntryStatus::InProgress,
+            ),
+        ])))
+        .await
+        .expect("send plan update");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::PlanSnapshot(nori_protocol::PlanSnapshot {
+            entries: vec![
+                nori_protocol::PlanEntry {
+                    step: "Research current flow".into(),
+                    status: nori_protocol::PlanStatus::Completed,
+                },
+                nori_protocol::PlanEntry {
+                    step: "Wire client events".into(),
+                    status: nori_protocol::PlanStatus::InProgress,
+                },
+            ],
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "plan updates should not emit legacy plan events once the client-event path exists",
+    );
+}
+
+#[tokio::test]
 async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;

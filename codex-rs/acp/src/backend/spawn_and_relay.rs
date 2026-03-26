@@ -398,7 +398,8 @@ impl AcpBackend {
         while let Some(update) = persistent_rx.recv().await {
             let client_events = normalize_session_update(&client_event_normalizer, &update).await;
             forward_client_events(&client_event_tx, &client_events).await;
-            if client_event_tx.is_some() && client_event_handles_live_tool_snapshot(&client_events)
+            if client_event_tx.is_some()
+                && client_event_handles_live_session_update(&update, &client_events)
             {
                 continue;
             }
