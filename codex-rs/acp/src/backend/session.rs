@@ -61,6 +61,7 @@ impl AcpBackend {
             is_first_prompt_val,
             used_fallback,
             deferred_replay_events,
+            deferred_replay_client_events,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
 
@@ -71,25 +72,12 @@ impl AcpBackend {
             // resume_session returns, so sending directly would deadlock
             // when the number of events exceeds the channel capacity.
             let collect_handle = tokio::spawn(async move {
-                let mut pending_patch_changes = std::collections::HashMap::new();
-                let mut pending_tool_calls = std::collections::HashMap::new();
                 let mut client_event_normalizer = nori_protocol::ClientEventNormalizer::default();
                 let mut buffered_events = Vec::new();
                 while let Some(update) = update_rx.recv().await {
-                    let _ = client_event_normalizer.push_session_update(&update);
-                    let event_msgs = translate_session_update_to_events(
-                        &update,
-                        &mut pending_patch_changes,
-                        &mut pending_tool_calls,
-                    );
-                    for msg in event_msgs {
-                        buffered_events.push(Event {
-                            id: String::new(),
-                            msg,
-                        });
-                    }
+                    buffered_events.extend(client_event_normalizer.push_session_update(&update));
                 }
-                buffered_events
+                client_events_to_replay_client_events(buffered_events)
             });
 
             match connection.load_session(sid, &cwd, update_tx).await {
@@ -98,15 +86,23 @@ impl AcpBackend {
                     // because the collect task buffers into a Vec (no
                     // backpressure) and update_rx closes when load_session
                     // completes (the worker thread drops update_tx).
-                    let buffered_events = collect_handle.await.unwrap_or_default();
-                    if !buffered_events.is_empty() {
+                    let buffered_client_events = collect_handle.await.unwrap_or_default();
+                    if !buffered_client_events.is_empty() {
                         debug!(
-                            "ACP session/load produced {} replay events (deferred until after setup)",
-                            buffered_events.len()
+                            "ACP session/load produced {} replay client events (deferred until after setup)",
+                            buffered_client_events.len()
                         );
                     }
                     debug!("ACP session resumed via session/load: {sid}");
-                    (session_id, None, None, false, None, buffered_events)
+                    (
+                        session_id,
+                        None,
+                        None,
+                        false,
+                        None,
+                        Vec::new(),
+                        buffered_client_events,
+                    )
                 }
                 Err(e) => {
                     warn!(
@@ -129,25 +125,31 @@ impl AcpBackend {
                     })?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
-                        let events = transcript_to_replay_events(t);
+                        let events = if client_event_tx.is_some() {
+                            None
+                        } else {
+                            Some(transcript_to_replay_events(t))
+                        };
+                        let client_events = transcript_to_replay_client_events(t);
                         let summary_text = transcript_to_summary(t);
                         let summary_opt = if summary_text.is_empty() {
                             None
                         } else {
                             Some(summary_text)
                         };
-                        (Some(events), summary_opt)
+                        ((events, client_events), summary_opt)
                     } else {
-                        (None, None)
+                        ((None, Vec::new()), None)
                     };
 
                     (
                         session_id,
-                        replay_events,
+                        replay_events.0,
                         summary,
                         true,
                         Some(e.to_string()),
                         Vec::new(),
+                        replay_events.1,
                     )
                 }
             }
@@ -169,19 +171,32 @@ impl AcpBackend {
             })?;
 
             let (replay_events, summary) = if let Some(t) = transcript {
-                let events = transcript_to_replay_events(t);
+                let events = if client_event_tx.is_some() {
+                    None
+                } else {
+                    Some(transcript_to_replay_events(t))
+                };
+                let client_events = transcript_to_replay_client_events(t);
                 let summary_text = transcript_to_summary(t);
                 let summary_opt = if summary_text.is_empty() {
                     None
                 } else {
                     Some(summary_text)
                 };
-                (Some(events), summary_opt)
+                ((events, client_events), summary_opt)
             } else {
-                (None, None)
+                ((None, Vec::new()), None)
             };
 
-            (session_id, replay_events, summary, true, None, Vec::new())
+            (
+                session_id,
+                replay_events.0,
+                summary,
+                true,
+                None,
+                Vec::new(),
+                replay_events.1,
+            )
         };
 
         let approval_rx = connection.take_approval_receiver();
@@ -343,9 +358,20 @@ impl AcpBackend {
         // resume_session from sending its own events while nobody is
         // consuming from event_rx yet.
         if !deferred_replay_events.is_empty() {
+            let event_tx = event_tx.clone();
             tokio::spawn(async move {
                 for event in deferred_replay_events {
                     let _ = event_tx.send(event).await;
+                }
+            });
+        }
+
+        if !deferred_replay_client_events.is_empty()
+            && let Some(client_event_tx) = backend.client_event_tx.clone()
+        {
+            tokio::spawn(async move {
+                for client_event in deferred_replay_client_events {
+                    let _ = client_event_tx.send(client_event).await;
                 }
             });
         }

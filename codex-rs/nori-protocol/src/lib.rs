@@ -12,6 +12,35 @@ pub enum ClientEvent {
     ApprovalRequest(ApprovalRequest),
     MessageDelta(MessageDelta),
     PlanSnapshot(PlanSnapshot),
+    TurnLifecycle(TurnLifecycle),
+    ReplayEntry(ReplayEntry),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnLifecycle {
+    Started,
+    Completed { last_agent_message: Option<String> },
+    Aborted { reason: TurnAbortReason },
+    ContextCompacted { summary: Option<String> },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnAbortReason {
+    Interrupted,
+    Replaced,
+    Other(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "replay_type", rename_all = "snake_case")]
+pub enum ReplayEntry {
+    UserMessage { text: String },
+    AssistantMessage { text: String },
+    ReasoningMessage { text: String },
+    PlanSnapshot { snapshot: PlanSnapshot },
+    ToolSnapshot { snapshot: Box<ToolSnapshot> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -952,6 +981,30 @@ mod tests {
             })],
             raw_input: Some(serde_json::json!({"path": "/repo/README.md"})),
             raw_output: None,
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
+        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn turn_lifecycle_event_round_trips_through_serde() {
+        let event = ClientEvent::TurnLifecycle(TurnLifecycle::ContextCompacted {
+            summary: Some("Compact summary".into()),
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
+        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn replay_entry_event_round_trips_through_serde() {
+        let event = ClientEvent::ReplayEntry(ReplayEntry::AssistantMessage {
+            text: "Replayed answer".into(),
         });
 
         let json = serde_json::to_string(&event).unwrap();

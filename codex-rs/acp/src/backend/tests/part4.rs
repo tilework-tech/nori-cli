@@ -1,5 +1,109 @@
 use super::*;
 
+#[tokio::test]
+#[serial]
+async fn test_user_input_emits_normalized_turn_lifecycle_events() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, event_tx, Some(client_event_tx))
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = tokio::time::timeout(Duration::from_secs(2), event_rx.recv())
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Say hello".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut client_events = Vec::new();
+    while start.elapsed() < timeout {
+        match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
+            Ok(Some(client_event)) => {
+                let done = matches!(
+                    client_event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                );
+                client_events.push(client_event);
+                if done {
+                    break;
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(
+                event,
+                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
+            )
+        }),
+        "expected normalized turn started event: {client_events:?}"
+    );
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(
+                event,
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed { .. }
+                )
+            )
+        }),
+        "expected normalized turn completed event: {client_events:?}"
+    );
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(event, nori_protocol::ClientEvent::MessageDelta(message_delta) if message_delta.stream == nori_protocol::MessageStream::Answer)
+        }),
+        "expected normalized answer delta event: {client_events:?}"
+    );
+
+    let mut legacy_events = Vec::new();
+    while let Ok(Some(event)) =
+        tokio::time::timeout(Duration::from_millis(100), event_rx.recv()).await
+    {
+        legacy_events.push(event);
+    }
+    assert!(
+        !legacy_events.iter().any(|event| {
+            matches!(
+                event.msg,
+                EventMsg::TaskStarted(_)
+                    | EventMsg::TaskComplete(_)
+                    | EventMsg::AgentMessageDelta(_)
+            )
+        }),
+        "legacy ACP turn/text events should be suppressed when normalized client events are present: {legacy_events:?}"
+    );
+}
+
 /// Test that after Op::Compact, subsequent Op::UserInput prompts have the
 /// summary prefix prepended to the user's message.
 ///
@@ -817,6 +921,7 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(64);
     let config = build_test_config(temp_dir.path());
     let transcript = build_test_transcript();
 
@@ -830,7 +935,7 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
             Some("acp-session-42"),
             Some(&transcript),
             event_tx,
-            None,
+            Some(client_event_tx),
         ),
     )
     .await;
@@ -855,19 +960,33 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
         backend_result.err()
     );
 
-    // Drain events and verify we received the replayed notifications
-    let mut notification_count = 0;
+    // Drain normalized replay events and verify that server-side replay still
+    // reaches the client even though resume_session had to buffer the updates.
+    let mut replay_event_count = 0;
     while let Ok(Some(event)) =
-        tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await
+        tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await
     {
-        if matches!(event.msg, EventMsg::AgentMessageDelta(_)) {
-            notification_count += 1;
+        if matches!(event, nori_protocol::ClientEvent::ReplayEntry(_)) {
+            replay_event_count += 1;
         }
     }
 
     assert!(
-        notification_count >= 100,
-        "Expected at least 100 replayed notification events, got {notification_count}"
+        replay_event_count > 0,
+        "Expected normalized replay events after buffered server-side load_session notifications"
+    );
+
+    let mut legacy_replay_count = 0;
+    while let Ok(Some(event)) =
+        tokio::time::timeout(Duration::from_millis(100), event_rx.recv()).await
+    {
+        if matches!(event.msg, EventMsg::AgentMessageDelta(_)) {
+            legacy_replay_count += 1;
+        }
+    }
+    assert_eq!(
+        legacy_replay_count, 0,
+        "server-side replay should no longer emit legacy agent replay deltas"
     );
 }
 

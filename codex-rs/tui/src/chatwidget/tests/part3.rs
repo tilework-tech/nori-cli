@@ -266,6 +266,69 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
+fn normalized_turn_started_sets_task_running() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
+        nori_protocol::TurnLifecycle::Started,
+    ));
+
+    assert!(chat.bottom_pane.is_task_running());
+}
+
+#[test]
+fn normalized_turn_aborted_restores_queued_messages_into_composer() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.bottom_pane.set_task_running(true);
+    chat.queued_user_messages
+        .push_back(UserMessage::from("first queued".to_string()));
+    chat.queued_user_messages
+        .push_back(UserMessage::from("second queued".to_string()));
+    chat.refresh_queued_user_messages();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
+        nori_protocol::TurnLifecycle::Aborted {
+            reason: nori_protocol::TurnAbortReason::Interrupted,
+        },
+    ));
+
+    assert_eq!(
+        chat.bottom_pane.composer_text(),
+        "first queued\nsecond queued"
+    );
+    assert!(chat.queued_user_messages.is_empty());
+    assert!(
+        op_rx.try_recv().is_err(),
+        "unexpected outbound op after interrupt"
+    );
+
+    let _ = drain_insert_history(&mut rx);
+}
+
+#[test]
+fn replay_entry_user_and_assistant_render_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ReplayEntry(
+        nori_protocol::ReplayEntry::UserMessage {
+            text: "Resume the session".into(),
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::ReplayEntry(
+        nori_protocol::ReplayEntry::AssistantMessage {
+            text: "Resuming now.".into(),
+        },
+    ));
+
+    let history = drain_insert_history(&mut rx);
+    assert!(
+        history.len() >= 2,
+        "replay entries should produce visible history output"
+    );
+}
+
+#[test]
 fn approval_modal_patch_from_client_event_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     chat.config.approval_policy = AskForApproval::OnRequest;

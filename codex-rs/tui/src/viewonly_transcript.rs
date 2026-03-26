@@ -90,9 +90,40 @@ fn viewonly_entries_from_client_event(event: &nori_protocol::ClientEvent) -> Vec
                 content: message_delta.delta.clone(),
             }],
         },
+        nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
+            viewonly_entries_from_replay_entry(replay_entry)
+        }
         _ => format_client_event(event)
             .map(|content| vec![ViewonlyEntry::Info { content }])
             .unwrap_or_default(),
+    }
+}
+
+fn viewonly_entries_from_replay_entry(
+    replay_entry: &nori_protocol::ReplayEntry,
+) -> Vec<ViewonlyEntry> {
+    match replay_entry {
+        nori_protocol::ReplayEntry::UserMessage { text } => vec![ViewonlyEntry::User {
+            content: text.clone(),
+        }],
+        nori_protocol::ReplayEntry::AssistantMessage { text } => vec![ViewonlyEntry::Assistant {
+            content: text.clone(),
+        }],
+        nori_protocol::ReplayEntry::ReasoningMessage { text } => vec![ViewonlyEntry::Thinking {
+            content: text.clone(),
+        }],
+        nori_protocol::ReplayEntry::PlanSnapshot { snapshot } => vec![ViewonlyEntry::Info {
+            content: format_client_event(&nori_protocol::ClientEvent::PlanSnapshot(
+                snapshot.clone(),
+            ))
+            .unwrap_or_default(),
+        }],
+        nori_protocol::ReplayEntry::ToolSnapshot { snapshot } => vec![ViewonlyEntry::Info {
+            content: format_client_event(&nori_protocol::ClientEvent::ToolSnapshot(
+                snapshot.as_ref().clone(),
+            ))
+            .unwrap_or_default(),
+        }],
     }
 }
 
@@ -140,7 +171,9 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
                 &snapshot.artifacts,
             ))
         }
-        nori_protocol::ClientEvent::MessageDelta(_) => None,
+        nori_protocol::ClientEvent::MessageDelta(_)
+        | nori_protocol::ClientEvent::ReplayEntry(_)
+        | nori_protocol::ClientEvent::TurnLifecycle(_) => None,
     }
 }
 

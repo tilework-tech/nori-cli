@@ -24,16 +24,27 @@ impl AcpBackend {
                 self.connection
                     .cancel(&*self.session_id.read().await)
                     .await?;
-                // Send TurnAborted event to notify the TUI that the turn was interrupted
-                let _ = self
-                    .event_tx
-                    .send(Event {
-                        id: id.clone(),
-                        msg: EventMsg::TurnAborted(TurnAbortedEvent {
-                            reason: TurnAbortReason::Interrupted,
-                        }),
-                    })
-                    .await;
+                let client_event_sent = emit_client_event(
+                    &self.client_event_tx,
+                    self.transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Aborted {
+                            reason: nori_protocol::TurnAbortReason::Interrupted,
+                        },
+                    ),
+                )
+                .await;
+                if !client_event_sent {
+                    let _ = self
+                        .event_tx
+                        .send(Event {
+                            id: id.clone(),
+                            msg: EventMsg::TurnAborted(TurnAbortedEvent {
+                                reason: TurnAbortReason::Interrupted,
+                            }),
+                        })
+                        .await;
+                }
             }
             Op::ExecApproval {
                 id: call_id,
@@ -317,6 +328,7 @@ impl AcpBackend {
         let notify_after_idle = self.notify_after_idle;
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let client_event_tx = self.client_event_tx.clone();
+        let transcript_recorder = self.transcript_recorder.clone();
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -326,14 +338,22 @@ impl AcpBackend {
             }
 
             // Send TaskStarted event (inside spawned task for consistency)
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone.clone(),
-                    msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
-                        model_context_window: None,
-                    }),
-                })
-                .await;
+            let task_started_sent = emit_client_event(
+                &client_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
+            )
+            .await;
+            if !task_started_sent {
+                let _ = event_tx
+                    .send(Event {
+                        id: id_clone.clone(),
+                        msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
+                            model_context_window: None,
+                        }),
+                    })
+                    .await;
+            }
 
             // Spawn update consumer task to capture the agent's response
             let event_tx_clone = event_tx.clone();
@@ -430,14 +450,26 @@ impl AcpBackend {
                 // Send ContextCompacted event to notify TUI, including the
                 // summary text so the TUI can reprint it under a new session header.
                 let compact_summary = pending_compact_summary.lock().await.clone();
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::ContextCompacted(ContextCompactedEvent {
-                            summary: compact_summary,
-                        }),
-                    })
-                    .await;
+                let compacted_sent = emit_client_event(
+                    &client_event_tx,
+                    transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::ContextCompacted {
+                            summary: compact_summary.clone(),
+                        },
+                    ),
+                )
+                .await;
+                if !compacted_sent {
+                    let _ = event_tx
+                        .send(Event {
+                            id: id_clone.clone(),
+                            msg: EventMsg::ContextCompacted(ContextCompactedEvent {
+                                summary: compact_summary,
+                            }),
+                        })
+                        .await;
+                }
 
                 // Send warning about long conversations
                 let _ = event_tx
@@ -451,14 +483,26 @@ impl AcpBackend {
             }
 
             // Send TaskComplete event
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone,
-                    msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+            let task_complete_sent = emit_client_event(
+                &client_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed {
                         last_agent_message: None,
-                    }),
-                })
-                .await;
+                    },
+                ),
+            )
+            .await;
+            if !task_complete_sent {
+                let _ = event_tx
+                    .send(Event {
+                        id: id_clone,
+                        msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+                            last_agent_message: None,
+                        }),
+                    })
+                    .await;
+            }
 
             // Start idle timer if configured
             if let Some(duration) = notify_after_idle.as_duration() {

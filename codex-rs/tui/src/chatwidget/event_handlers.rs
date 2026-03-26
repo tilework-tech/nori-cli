@@ -1170,6 +1170,12 @@ impl ChatWidget {
             nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => {
                 self.handle_client_plan_snapshot(plan_snapshot);
             }
+            nori_protocol::ClientEvent::TurnLifecycle(turn_lifecycle) => {
+                self.handle_client_turn_lifecycle(turn_lifecycle);
+            }
+            nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
+                self.handle_client_replay_entry(replay_entry);
+            }
         }
     }
 
@@ -1186,6 +1192,54 @@ impl ChatWidget {
 
     fn handle_client_plan_snapshot(&mut self, plan_snapshot: nori_protocol::PlanSnapshot) {
         self.on_plan_update(plan_snapshot_to_update_plan_args(plan_snapshot));
+    }
+
+    fn handle_client_turn_lifecycle(&mut self, turn_lifecycle: nori_protocol::TurnLifecycle) {
+        match turn_lifecycle {
+            nori_protocol::TurnLifecycle::Started => self.on_task_started(),
+            nori_protocol::TurnLifecycle::Completed { last_agent_message } => {
+                self.on_task_complete(last_agent_message)
+            }
+            nori_protocol::TurnLifecycle::Aborted { reason } => match reason {
+                nori_protocol::TurnAbortReason::Interrupted => {
+                    self.on_interrupted_turn(TurnAbortReason::Interrupted)
+                }
+                nori_protocol::TurnAbortReason::Replaced => {
+                    self.on_error("Turn aborted: replaced by a new task".to_owned())
+                }
+                nori_protocol::TurnAbortReason::Other(reason) => {
+                    self.on_error(format!("Turn aborted: {reason}"))
+                }
+            },
+            nori_protocol::TurnLifecycle::ContextCompacted { summary } => {
+                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
+            }
+        }
+    }
+
+    fn handle_client_replay_entry(&mut self, replay_entry: nori_protocol::ReplayEntry) {
+        match replay_entry {
+            nori_protocol::ReplayEntry::UserMessage { text } => {
+                self.add_to_history(history_cell::new_user_prompt(text));
+            }
+            nori_protocol::ReplayEntry::AssistantMessage { text } => {
+                self.handle_streaming_delta(text);
+                self.flush_answer_stream_with_separator();
+            }
+            nori_protocol::ReplayEntry::ReasoningMessage { text } => {
+                let cell = history_cell::new_reasoning_summary_block(text, &self.config);
+                self.add_boxed_history(cell);
+            }
+            nori_protocol::ReplayEntry::PlanSnapshot { snapshot } => {
+                self.add_to_history(history_cell::new_plan_update(
+                    plan_snapshot_to_update_plan_args(snapshot),
+                ));
+            }
+            nori_protocol::ReplayEntry::ToolSnapshot { snapshot } => {
+                self.handle_client_tool_snapshot(*snapshot);
+            }
+        }
+        self.request_redraw();
     }
 
     fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {

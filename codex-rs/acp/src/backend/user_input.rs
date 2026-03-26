@@ -205,14 +205,22 @@ impl AcpBackend {
             }
 
             // Send TaskStarted event
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone.clone(),
-                    msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
-                        model_context_window: None,
-                    }),
-                })
-                .await;
+            let task_started_sent = emit_client_event(
+                &client_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
+            )
+            .await;
+            if !task_started_sent {
+                let _ = event_tx
+                    .send(Event {
+                        id: id_clone.clone(),
+                        msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
+                            model_context_window: None,
+                        }),
+                    })
+                    .await;
+            }
 
             // Spawn update consumer task that returns accumulated text for transcript
             let event_tx_clone = event_tx.clone();
@@ -576,14 +584,26 @@ impl AcpBackend {
             }
 
             // Send TaskComplete event (always, to end the turn)
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone,
-                    msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+            let task_complete_sent = emit_client_event(
+                &client_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed {
                         last_agent_message: None,
-                    }),
-                })
-                .await;
+                    },
+                ),
+            )
+            .await;
+            if !task_complete_sent {
+                let _ = event_tx
+                    .send(Event {
+                        id: id_clone,
+                        msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+                            last_agent_message: None,
+                        }),
+                    })
+                    .await;
+            }
 
             // Start idle timer if configured
             if let Some(duration) = notify_after_idle.as_duration() {

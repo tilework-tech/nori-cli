@@ -350,6 +350,8 @@ pub(crate) use tool_display::title_contains_useful_info;
 pub(crate) use tool_display::title_is_raw_id;
 pub(crate) use tool_display::truncate_for_log;
 mod transcript;
+pub use transcript::client_events_to_replay_client_events;
+pub use transcript::transcript_to_replay_client_events;
 pub use transcript::transcript_to_replay_events;
 pub use transcript::transcript_to_summary;
 mod hooks;
@@ -398,6 +400,24 @@ pub(crate) async fn forward_client_events(
     for client_event in client_events {
         let _ = client_event_tx.send(client_event.clone()).await;
     }
+}
+
+pub(crate) async fn emit_client_event(
+    client_event_tx: &Option<mpsc::Sender<ClientEvent>>,
+    transcript_recorder: Option<&Arc<TranscriptRecorder>>,
+    client_event: ClientEvent,
+) -> bool {
+    let Some(client_event_tx) = client_event_tx else {
+        return false;
+    };
+
+    let _ = client_event_tx.send(client_event.clone()).await;
+    if let Some(recorder) = transcript_recorder
+        && let Err(e) = recorder.record_client_event(&client_event).await
+    {
+        warn!("Failed to record normalized client event: {e}");
+    }
+    true
 }
 
 pub(crate) fn client_event_handles_live_approval(client_events: &[ClientEvent]) -> bool {
