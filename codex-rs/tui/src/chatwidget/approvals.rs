@@ -83,17 +83,10 @@ impl ChatWidget {
         sandbox: SandboxPolicy,
     ) -> Vec<SelectionAction> {
         vec![Box::new(move |tx| {
-            let sandbox_clone = sandbox.clone();
-            tx.send(AppEvent::CodexOp(Op::OverrideTurnContext {
-                cwd: None,
-                approval_policy: Some(approval),
-                sandbox_policy: Some(sandbox_clone.clone()),
-                model: None,
-                effort: None,
-                summary: None,
-            }));
-            tx.send(AppEvent::UpdateAskForApprovalPolicy(approval));
-            tx.send(AppEvent::UpdateSandboxPolicy(sandbox_clone));
+            tx.send(AppEvent::ApplyApprovalPreset {
+                approval,
+                sandbox: sandbox.clone(),
+            });
         })]
     }
 

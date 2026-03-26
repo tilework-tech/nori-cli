@@ -44,6 +44,31 @@ impl App {
         Ok(true)
     }
 
+    pub(super) fn apply_approval_preset(
+        &mut self,
+        approval: AskForApproval,
+        sandbox: SandboxPolicy,
+    ) {
+        self.config.approval_policy = approval;
+        self.config.sandbox_policy = sandbox.clone();
+        #[cfg(target_os = "windows")]
+        if !matches!(sandbox, codex_core::protocol::SandboxPolicy::ReadOnly)
+            || codex_core::get_platform_sandbox().is_some()
+        {
+            self.config.forced_auto_mode_downgraded_on_windows = false;
+        }
+        self.chat_widget.set_approval_policy(approval);
+        self.chat_widget.set_sandbox_policy(sandbox.clone());
+        self.chat_widget.submit_op(Op::OverrideTurnContext {
+            cwd: None,
+            approval_policy: Some(approval),
+            sandbox_policy: Some(sandbox),
+            model: None,
+            effort: None,
+            summary: None,
+        });
+    }
+
     pub(super) async fn handle_event(
         &mut self,
         tui: &mut tui::Tui,
@@ -298,20 +323,10 @@ impl App {
                                     },
                                 );
                             } else {
-                                self.app_event_tx.send(AppEvent::CodexOp(
-                                    Op::OverrideTurnContext {
-                                        cwd: None,
-                                        approval_policy: Some(preset.approval),
-                                        sandbox_policy: Some(preset.sandbox.clone()),
-                                        model: None,
-                                        effort: None,
-                                        summary: None,
-                                    },
-                                ));
-                                self.app_event_tx
-                                    .send(AppEvent::UpdateAskForApprovalPolicy(preset.approval));
-                                self.app_event_tx
-                                    .send(AppEvent::UpdateSandboxPolicy(preset.sandbox.clone()));
+                                self.app_event_tx.send(AppEvent::ApplyApprovalPreset {
+                                    approval: preset.approval,
+                                    sandbox: preset.sandbox.clone(),
+                                });
                                 self.chat_widget.add_info_message(
                                     "Enabled experimental Windows sandbox.".to_string(),
                                     None,
@@ -377,25 +392,15 @@ impl App {
                     }
                 }
             }
-            AppEvent::UpdateAskForApprovalPolicy(policy) => {
-                self.chat_widget.set_approval_policy(policy);
-            }
-            AppEvent::UpdateSandboxPolicy(policy) => {
+            AppEvent::ApplyApprovalPreset { approval, sandbox } => {
                 #[cfg(target_os = "windows")]
-                let policy_is_workspace_write_or_ro = matches!(
-                    policy,
+                let sandbox_is_workspace_write_or_ro = matches!(
+                    sandbox,
                     codex_core::protocol::SandboxPolicy::WorkspaceWrite { .. }
                         | codex_core::protocol::SandboxPolicy::ReadOnly
                 );
 
-                self.config.sandbox_policy = policy.clone();
-                #[cfg(target_os = "windows")]
-                if !matches!(policy, codex_core::protocol::SandboxPolicy::ReadOnly)
-                    || codex_core::get_platform_sandbox().is_some()
-                {
-                    self.config.forced_auto_mode_downgraded_on_windows = false;
-                }
-                self.chat_widget.set_sandbox_policy(policy);
+                self.apply_approval_preset(approval, sandbox);
 
                 // If sandbox policy becomes workspace-write or read-only, run the Windows world-writable scan.
                 #[cfg(target_os = "windows")]
@@ -407,7 +412,7 @@ impl App {
                     }
 
                     let should_check = codex_core::get_platform_sandbox().is_some()
-                        && policy_is_workspace_write_or_ro
+                        && sandbox_is_workspace_write_or_ro
                         && !self.chat_widget.world_writable_warning_hidden();
                     if should_check {
                         let cwd = self.config.cwd.clone();

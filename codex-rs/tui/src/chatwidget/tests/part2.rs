@@ -292,6 +292,28 @@ fn approvals_selection_popup_snapshot() {
 }
 
 #[test]
+fn approval_preset_actions_emit_a_single_atomic_app_event() {
+    let (_chat, app_event_tx, mut rx, _op_rx) = make_chatwidget_manual_with_sender();
+    let preset = builtin_approval_presets()
+        .into_iter()
+        .find(|preset| preset.id == "auto")
+        .expect("agent preset");
+    let actions = ChatWidget::approval_preset_actions(preset.approval, preset.sandbox.clone());
+
+    assert_eq!(actions.len(), 1);
+    actions[0](&app_event_tx);
+
+    match rx.try_recv().expect("approval preset event") {
+        AppEvent::ApplyApprovalPreset { approval, sandbox } => {
+            assert_eq!(approval, preset.approval);
+            assert_eq!(sandbox, preset.sandbox);
+        }
+        other => panic!("expected ApplyApprovalPreset event, got {other:?}"),
+    }
+    assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[test]
 fn preset_matching_ignores_extra_writable_roots() {
     let preset = builtin_approval_presets()
         .into_iter()
