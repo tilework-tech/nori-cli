@@ -1118,7 +1118,7 @@ pub(crate) fn new_mcp_tools_output(
         "".into(),
     ];
 
-    if tools.is_empty() {
+    if tools.is_empty() && config.mcp_servers.is_empty() {
         lines.push("  • No MCP tools available.".italic().into());
         lines.push("".into());
         return PlainHistoryCell { lines };

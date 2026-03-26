@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
+use codex_core::config::types::McpServerConfig;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
@@ -29,6 +30,7 @@ use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
+use codex_rmcp_client::OAuthCredentialsStoreMode;
 use sacp::schema as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -231,6 +233,10 @@ pub struct AcpBackendConfig {
     /// Optional initial context to inject into the first prompt.
     /// Used by fork to provide conversation history as context to the new session.
     pub initial_context: Option<String>,
+    /// MCP server configuration for listing via /mcp command
+    pub mcp_servers: HashMap<String, McpServerConfig>,
+    /// OAuth credentials store mode for MCP auth status computation
+    pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -312,6 +318,10 @@ pub struct AcpBackend {
     /// commands). The prompt relay and persistent relay use this to resolve
     /// proper titles on `ToolCallUpdate(completed)`.
     pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+    /// MCP server configuration for listing via /mcp command
+    mcp_servers: HashMap<String, McpServerConfig>,
+    /// OAuth credentials store mode for MCP auth status computation
+    mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
 mod event_translation;

@@ -38,6 +38,12 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 - Verifying that generic tool calls with no `raw_input` (the `MOCK_AGENT_GENERIC_TOOL_CALL` scenario) display a resolved semantic name from `ev.command` instead of the raw tool call ID, covering the case where the ACP translator skips `ExecCommandBegin` entirely
 - Verifying that incomplete (stuck) tool calls that never receive End events do not block the agent's final text from rendering (the `MOCK_AGENT_STUCK_TOOL_CALLS` scenario), where `finalize_active_cell_as_failed()` cleans up incomplete ExecCells on turn boundaries so `insert_history_lines()` can proceed
 
+**MCP Command Tests** (`acp_mcp_command.rs`):
+
+Tests verify the `/mcp` slash command in ACP mode:
+- With configured MCP servers: verifies that server details (name, transport) are displayed even though individual tool names are unavailable in ACP mode
+- Without configured MCP servers: verifies the "No MCP servers configured" fallback message appears
+
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
 - Expected vs actual screen content

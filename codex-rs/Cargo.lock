@@ -880,6 +880,7 @@ dependencies = [
  "codex-core",
  "codex-git",
  "codex-protocol",
+ "codex-rmcp-client",
  "codex-utils-string",
  "diffy",
  "dirs",

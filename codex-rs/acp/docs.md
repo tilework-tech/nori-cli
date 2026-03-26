@@ -926,6 +926,14 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 - Ghost commits are unreferenced git objects (not on any branch) created by the `codex-git` crate
 - `GhostSnapshotStack` is deliberately a standalone type (not embedded inside `AcpBackend`) so it can be tested independently without requiring an ACP agent connection
 
+**MCP Server Listing** (`submit_and_ops.rs`, `backend/mod.rs`):
+
+The ACP backend handles `Op::ListMcpTools` to support the `/mcp` slash command. In ACP mode, MCP connections are managed by the upstream ACP agent subprocess, not by the CLI itself. This means the CLI cannot enumerate individual tools, resources, or templates -- those fields are sent as empty maps in the `McpListToolsResponseEvent`.
+
+Auth statuses *are* computed locally via `codex_core::mcp::auth::compute_auth_statuses()`, which checks OAuth/bearer token status without needing active MCP connections. The MCP server configuration (`mcp_servers`) and OAuth credentials store mode (`mcp_oauth_credentials_store_mode`) are carried on both `AcpBackendConfig` and `AcpBackend`, threaded from the TUI's `Config` through `spawn()` and `resume_session()`.
+
+The handler spawns a background task to compute auth statuses asynchronously, then sends the response event with empty tool/resource maps but populated `auth_statuses`.
+
 **ACP Error Categorization:**
 
 | Category | Detection Patterns | User Message |

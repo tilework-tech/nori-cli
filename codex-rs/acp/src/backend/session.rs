@@ -251,6 +251,8 @@ impl AcpBackend {
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             pending_tool_calls: Arc::clone(&pending_tool_calls),
+            mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         // Execute session_start hooks

@@ -253,6 +253,8 @@ fn spawn_acp_agent(
             script_timeout: nori_config.script_timeout.as_duration(),
             default_model: nori_config.default_models.get(&config.model).cloned(),
             initial_context: fork_context,
+            mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         // Race backend init against shutdown requests and a timeout.
@@ -419,6 +421,8 @@ pub(crate) fn spawn_acp_agent_resume(
             script_timeout: nori_config.script_timeout.as_duration(),
             default_model: nori_config.default_models.get(&config.model).cloned(),
             initial_context: None,
+            mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         // Race backend resume against shutdown requests and a timeout.

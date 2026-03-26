@@ -58,6 +58,8 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
         initial_context: None,
+        mcp_servers: std::collections::HashMap::new(),
+        mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)
@@ -215,6 +217,8 @@ async fn test_compact_not_in_unsupported_ops() {
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
         initial_context: None,
+        mcp_servers: std::collections::HashMap::new(),
+        mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
     let backend = AcpBackend::spawn(&config, event_tx)
