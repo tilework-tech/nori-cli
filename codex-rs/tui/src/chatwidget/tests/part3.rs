@@ -282,6 +282,47 @@ fn approval_modal_patch_from_client_event_snapshot() {
 }
 
 #[test]
+fn approval_modal_exec_from_client_event() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.approval_policy = AskForApproval::OnRequest;
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ApprovalRequest(
+        nori_protocol::ApprovalRequest {
+            call_id: "call-approve-exec-client-event".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-approve-exec-client-event".into(),
+                title: "Terminal".into(),
+                kind: nori_protocol::ToolKind::Execute,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Command {
+                    command: "git status".into(),
+                }),
+                artifacts: vec![],
+                raw_input: Some(serde_json::json!({"command": "git status"})),
+                raw_output: None,
+            }),
+        },
+    ));
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw exec approval modal");
+    let contents = terminal.backend().vt100().screen().contents();
+    assert!(
+        contents.contains("git status"),
+        "expected exec approval modal: {contents:?}"
+    );
+}
+
+#[test]
 fn interrupt_restores_queued_messages_into_composer() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
 
@@ -669,6 +710,78 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
 }
 
 #[test]
+fn completed_delete_tool_snapshot_renders_patch_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-delete-complete".into(),
+            title: "Delete README.md".into(),
+            kind: nori_protocol::ToolKind::Delete,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Delete {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("hello\nworld\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({
+                "path": "README.md",
+                "content": "hello\nworld\n",
+            })),
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Deleted README.md"),
+        "expected delete summary in patch cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_move_tool_snapshot_renders_patch_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-move-complete".into(),
+            title: "Move README.md".into(),
+            kind: nori_protocol::ToolKind::Move,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Move {
+                    from_path: PathBuf::from("README.md"),
+                    to_path: PathBuf::from("docs/README.md"),
+                    old_text: Some("hello\nworld\n".into()),
+                    new_text: Some("hello\nworld\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({
+                "from": "README.md",
+                "to": "docs/README.md",
+            })),
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("README.md") && blob.contains("docs/README.md"),
+        "expected move summary in patch cell: {blob:?}"
+    );
+}
+
+#[test]
 fn completed_execute_tool_snapshot_renders_exec_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
@@ -904,5 +1017,47 @@ fn completed_generic_execute_tool_snapshot_renders_exec_history_cell() {
     assert!(
         !blob.contains("toolu_generic_test_001"),
         "raw call id should not be rendered in history cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_fetch_tool_snapshot_renders_exec_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-fetch-complete".into(),
+            title: "Fetch".into(),
+            kind: nori_protocol::ToolKind::Fetch,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Tool {
+                tool_name: "Fetch".into(),
+                input: Some(serde_json::json!({
+                    "url": "https://example.com",
+                })),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "ok\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({
+                "url": "https://example.com",
+            })),
+            raw_output: Some(serde_json::json!({
+                "stdout": "ok\n",
+            })),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one exec history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Fetch"),
+        "expected tool title in history cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("ok"),
+        "expected output in history cell: {blob:?}"
     );
 }

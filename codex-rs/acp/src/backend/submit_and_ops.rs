@@ -363,7 +363,9 @@ impl AcpBackend {
                     }
 
                     // Translate and forward events to TUI for display
-                    let events = if client_event_handles_live_tool_snapshot(&client_events) {
+                    let events = if client_event_tx_for_updates.is_some()
+                        && client_event_handles_live_tool_snapshot(&client_events)
+                    {
                         Vec::new()
                     } else {
                         translate_session_update_to_events(

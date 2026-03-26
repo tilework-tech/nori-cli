@@ -401,47 +401,51 @@ pub(crate) async fn forward_client_events(
 }
 
 pub(crate) fn client_event_handles_live_approval(client_events: &[ClientEvent]) -> bool {
-    client_events.iter().any(|client_event| {
-        matches!(
-            client_event,
-            ClientEvent::ApprovalRequest(approval)
-                if approval.kind == nori_protocol::ToolKind::Edit
-        )
-    })
+    client_events
+        .iter()
+        .any(|client_event| matches!(client_event, ClientEvent::ApprovalRequest(_)))
 }
 
 pub(crate) fn client_event_handles_live_tool_snapshot(client_events: &[ClientEvent]) -> bool {
     client_events.iter().any(|client_event| {
-        matches!(
-            client_event,
-            ClientEvent::ToolSnapshot(tool_snapshot)
-                if tool_snapshot.kind == nori_protocol::ToolKind::Edit
-                    && tool_snapshot.phase == nori_protocol::ToolPhase::Completed
-        ) || matches!(
-            client_event,
-            ClientEvent::ToolSnapshot(tool_snapshot)
-                if tool_snapshot.kind == nori_protocol::ToolKind::Execute
-                    && matches!(
-                        tool_snapshot.phase,
-                        nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
-                    )
-        ) || matches!(
-            client_event,
-            ClientEvent::ToolSnapshot(tool_snapshot)
-                if matches!(
-                    tool_snapshot.kind,
-                    nori_protocol::ToolKind::Read | nori_protocol::ToolKind::Search
-                ) && matches!(
-                    tool_snapshot.phase,
-                    nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
-                ) && matches!(
-                    tool_snapshot.invocation,
-                    Some(nori_protocol::Invocation::Read { .. })
-                        | Some(nori_protocol::Invocation::Search { .. })
-                        | Some(nori_protocol::Invocation::ListFiles { .. })
-                )
-        )
+        matches!(client_event, ClientEvent::ToolSnapshot(tool_snapshot) if client_tool_snapshot_is_live_handled(tool_snapshot))
     })
+}
+
+fn client_tool_snapshot_is_live_handled(tool_snapshot: &nori_protocol::ToolSnapshot) -> bool {
+    match tool_snapshot.phase {
+        nori_protocol::ToolPhase::Completed => match tool_snapshot.kind {
+            nori_protocol::ToolKind::Edit
+            | nori_protocol::ToolKind::Delete
+            | nori_protocol::ToolKind::Move => matches!(
+                tool_snapshot.invocation,
+                Some(nori_protocol::Invocation::FileChanges { .. })
+                    | Some(nori_protocol::Invocation::FileOperations { .. })
+            ),
+            nori_protocol::ToolKind::Read | nori_protocol::ToolKind::Search => matches!(
+                tool_snapshot.invocation,
+                Some(nori_protocol::Invocation::Read { .. })
+                    | Some(nori_protocol::Invocation::Search { .. })
+                    | Some(nori_protocol::Invocation::ListFiles { .. })
+            ),
+            nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Fetch
+            | nori_protocol::ToolKind::Think
+            | nori_protocol::ToolKind::Other(_) => true,
+        },
+        nori_protocol::ToolPhase::Failed => matches!(
+            tool_snapshot.kind,
+            nori_protocol::ToolKind::Execute
+                | nori_protocol::ToolKind::Read
+                | nori_protocol::ToolKind::Search
+                | nori_protocol::ToolKind::Fetch
+                | nori_protocol::ToolKind::Think
+                | nori_protocol::ToolKind::Other(_)
+        ),
+        nori_protocol::ToolPhase::Pending
+        | nori_protocol::ToolPhase::PendingApproval
+        | nori_protocol::ToolPhase::InProgress => false,
+    }
 }
 use hooks::commands_dir;
 use hooks::generate_id;

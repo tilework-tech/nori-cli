@@ -719,6 +719,97 @@ async fn test_patch_approval_emits_normalized_client_event() {
 }
 
 #[tokio::test]
+async fn test_exec_approval_emits_normalized_client_event() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+    use tokio::sync::oneshot;
+    use tokio::sync::watch;
+
+    let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let cwd = PathBuf::from("/tmp/test");
+    let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_approval_handler(
+        approval_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_approvals),
+        Arc::clone(&user_notifier),
+        cwd,
+        policy_rx,
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+        None,
+    ));
+
+    let tool_call = acp::ToolCallUpdate::new(
+        "call-exec-approve",
+        acp::ToolCallUpdateFields::new()
+            .title("Terminal")
+            .kind(acp::ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "git status"})),
+    );
+    let (response_tx, _response_rx) = oneshot::channel();
+    approval_tx
+        .send(ApprovalRequest {
+            event: ApprovalEventType::Exec(codex_protocol::approvals::ExecApprovalRequestEvent {
+                call_id: "call-exec-approve".into(),
+                turn_id: String::new(),
+                command: vec!["bash".into(), "-lc".into(), "git status".into()],
+                cwd: PathBuf::from("/tmp/test"),
+                reason: Some("Execute: git status".into()),
+                risk: None,
+                parsed_cmd: vec![],
+            }),
+            acp_request: acp::RequestPermissionRequest::new("session-1", tool_call, vec![]),
+            options: vec![],
+            response_tx,
+            tool_call_metadata: None,
+        })
+        .await
+        .expect("send approval request");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::ApprovalRequest(nori_protocol::ApprovalRequest {
+            call_id: "call-exec-approve".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-exec-approve".into(),
+                title: "Terminal".into(),
+                kind: nori_protocol::ToolKind::Execute,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Command {
+                    command: "git status".into(),
+                }),
+                artifacts: vec![],
+                raw_input: Some(serde_json::json!({"command": "git status"})),
+                raw_output: None,
+            }),
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "execute approvals should not be emitted on the legacy event channel once the client-event path exists",
+    );
+}
+
+#[tokio::test]
 async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -784,6 +875,151 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     assert!(
         event.is_err(),
         "completed edit snapshots should not emit the legacy patch event once the client-event path exists",
+    );
+}
+
+#[tokio::test]
+async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+    ));
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCallUpdate(
+            acp::ToolCallUpdate::new(
+                "call-delete-complete",
+                acp::ToolCallUpdateFields::new()
+                    .title("Delete README.md")
+                    .kind(acp::ToolKind::Delete)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({
+                        "path": "README.md",
+                        "content": "before\n",
+                    })),
+            ),
+        ))
+        .await
+        .expect("send tool call update");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            call_id: "call-delete-complete".into(),
+            title: "Delete README.md".into(),
+            kind: nori_protocol::ToolKind::Delete,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Delete {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("before\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({
+                "path": "README.md",
+                "content": "before\n",
+            })),
+            raw_output: None,
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "delete tool snapshots should not be emitted on the legacy event channel once the client-event path exists",
+    );
+}
+
+#[tokio::test]
+async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        event_tx,
+        Some(client_event_tx),
+        Arc::clone(&pending_tool_calls),
+        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
+    ));
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCallUpdate(
+            acp::ToolCallUpdate::new(
+                "call-fetch-complete",
+                acp::ToolCallUpdateFields::new()
+                    .title("Fetch")
+                    .kind(acp::ToolKind::Fetch)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({
+                        "url": "https://example.com",
+                    }))
+                    .raw_output(serde_json::json!({
+                        "stdout": "ok\n",
+                    })),
+            ),
+        ))
+        .await
+        .expect("send tool call update");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    assert_eq!(
+        client_event,
+        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            call_id: "call-fetch-complete".into(),
+            title: "Fetch".into(),
+            kind: nori_protocol::ToolKind::Fetch,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Tool {
+                tool_name: "Fetch".into(),
+                input: Some(serde_json::json!({
+                    "url": "https://example.com",
+                })),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "ok\n".into()
+            }],
+            raw_input: Some(serde_json::json!({
+                "url": "https://example.com",
+            })),
+            raw_output: Some(serde_json::json!({
+                "stdout": "ok\n",
+            })),
+        })
+    );
+
+    let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        event.is_err(),
+        "fetch tool snapshots should not be emitted on the legacy event channel once the client-event path exists",
     );
 }
 

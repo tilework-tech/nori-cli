@@ -66,6 +66,7 @@ pub enum ToolKind {
     Search,
     Execute,
     Edit,
+    Delete,
     Move,
     Fetch,
     Think,
@@ -95,6 +96,9 @@ pub enum Invocation {
     FileChanges {
         changes: Vec<FileChange>,
     },
+    FileOperations {
+        operations: Vec<FileOperation>,
+    },
     Command {
         command: String,
     },
@@ -107,6 +111,10 @@ pub enum Invocation {
     },
     ListFiles {
         path: Option<PathBuf>,
+    },
+    Tool {
+        tool_name: String,
+        input: Option<serde_json::Value>,
     },
     RawJson(serde_json::Value),
 }
@@ -124,6 +132,30 @@ pub struct FileChange {
     pub path: PathBuf,
     pub old_text: Option<String>,
     pub new_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "operation_type", rename_all = "snake_case")]
+pub enum FileOperation {
+    Create {
+        path: PathBuf,
+        new_text: String,
+    },
+    Update {
+        path: PathBuf,
+        old_text: String,
+        new_text: String,
+    },
+    Delete {
+        path: PathBuf,
+        old_text: Option<String>,
+    },
+    Move {
+        from_path: PathBuf,
+        to_path: PathBuf,
+        old_text: Option<String>,
+        new_text: Option<String>,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -214,6 +246,7 @@ impl ToolKind {
             acp::ToolKind::Search => ToolKind::Search,
             acp::ToolKind::Execute => ToolKind::Execute,
             acp::ToolKind::Edit => ToolKind::Edit,
+            acp::ToolKind::Delete => ToolKind::Delete,
             acp::ToolKind::Move => ToolKind::Move,
             acp::ToolKind::Fetch => ToolKind::Fetch,
             acp::ToolKind::Think => ToolKind::Think,
@@ -327,6 +360,18 @@ fn artifacts_from_tool_call(tool_call: &acp::ToolCall) -> Vec<Artifact> {
 fn structured_invocation_from_tool_call(tool_call: &acp::ToolCall) -> Option<Invocation> {
     let raw_input = tool_call.raw_input.as_ref()?;
     match tool_call.kind {
+        acp::ToolKind::Edit => file_operations_from_edit_input(raw_input)
+            .map(|operations| Invocation::FileOperations { operations }),
+        acp::ToolKind::Delete => file_operation_from_delete_input(raw_input).map(|operation| {
+            Invocation::FileOperations {
+                operations: vec![operation],
+            }
+        }),
+        acp::ToolKind::Move => {
+            file_operation_from_move_input(raw_input).map(|operation| Invocation::FileOperations {
+                operations: vec![operation],
+            })
+        }
         acp::ToolKind::Execute => {
             let command = raw_input
                 .get("command")
@@ -365,8 +410,75 @@ fn structured_invocation_from_tool_call(tool_call: &acp::ToolCall) -> Option<Inv
                 Some(Invocation::Search { query, path })
             }
         }
+        acp::ToolKind::Fetch | acp::ToolKind::Think | acp::ToolKind::Other => {
+            Some(Invocation::Tool {
+                tool_name: tool_call.title.clone(),
+                input: Some(raw_input.clone()),
+            })
+        }
         _ => None,
     }
+}
+
+fn file_operations_from_edit_input(raw_input: &serde_json::Value) -> Option<Vec<FileOperation>> {
+    let path = extract_path(raw_input, &["file_path", "path", "file"])?;
+
+    if let Some(new_text) = raw_input.get("content").and_then(serde_json::Value::as_str) {
+        return Some(vec![FileOperation::Create {
+            path,
+            new_text: new_text.to_string(),
+        }]);
+    }
+
+    let old_text = raw_input
+        .get("old_string")
+        .and_then(serde_json::Value::as_str)?;
+    let new_text = raw_input
+        .get("new_string")
+        .and_then(serde_json::Value::as_str)?;
+    Some(vec![FileOperation::Update {
+        path,
+        old_text: old_text.to_string(),
+        new_text: new_text.to_string(),
+    }])
+}
+
+fn file_operation_from_delete_input(raw_input: &serde_json::Value) -> Option<FileOperation> {
+    let path = extract_path(raw_input, &["file_path", "path", "file"])?;
+    let old_text = raw_input
+        .get("content")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    Some(FileOperation::Delete { path, old_text })
+}
+
+fn file_operation_from_move_input(raw_input: &serde_json::Value) -> Option<FileOperation> {
+    let from_path = extract_path(raw_input, &["from", "from_path", "path", "file"])?;
+    let to_path = extract_path(raw_input, &["to", "to_path", "destination", "new_path"])?;
+    let old_text = raw_input
+        .get("old_string")
+        .or_else(|| raw_input.get("content"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let new_text = raw_input
+        .get("new_string")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .or_else(|| old_text.clone());
+
+    Some(FileOperation::Move {
+        from_path,
+        to_path,
+        old_text,
+        new_text,
+    })
+}
+
+fn extract_path(raw_input: &serde_json::Value, keys: &[&str]) -> Option<PathBuf> {
+    keys.iter()
+        .find_map(|key| raw_input.get(*key))
+        .and_then(serde_json::Value::as_str)
+        .map(PathBuf::from)
 }
 
 fn raw_output_text(raw_output: Option<&serde_json::Value>) -> Option<String> {
@@ -677,5 +789,111 @@ mod tests {
         let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn normalizer_extracts_delete_file_operation() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-delete"),
+            acp::ToolCallUpdateFields::new()
+                .title("Delete README.md")
+                .kind(acp::ToolKind::Delete)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "path": "README.md",
+                    "content": "before\n",
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.kind, ToolKind::Delete);
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::FileOperations {
+                operations: vec![FileOperation::Delete {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("before\n".into()),
+                }],
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_move_file_operation() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-move"),
+            acp::ToolCallUpdateFields::new()
+                .title("Move README.md")
+                .kind(acp::ToolKind::Move)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "from": "README.md",
+                    "to": "docs/README.md",
+                    "content": "before\n",
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.kind, ToolKind::Move);
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::FileOperations {
+                operations: vec![FileOperation::Move {
+                    from_path: PathBuf::from("README.md"),
+                    to_path: PathBuf::from("docs/README.md"),
+                    old_text: Some("before\n".into()),
+                    new_text: Some("before\n".into()),
+                }],
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_generic_tool_invocation_for_fetch() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-fetch"),
+            acp::ToolCallUpdateFields::new()
+                .title("Fetch")
+                .kind(acp::ToolKind::Fetch)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "url": "https://example.com",
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Tool {
+                tool_name: "Fetch".into(),
+                input: Some(serde_json::json!({
+                    "url": "https://example.com",
+                })),
+            })
+        );
     }
 }

@@ -130,6 +130,10 @@ fn format_invocation(invocation: &Option<nori_protocol::Invocation>) -> Option<S
         nori_protocol::Invocation::FileChanges { changes } => {
             Some(format!("Files changed: {}", format_change_paths(changes)))
         }
+        nori_protocol::Invocation::FileOperations { operations } => Some(format!(
+            "Files changed: {}",
+            format_operation_paths(operations)
+        )),
         nori_protocol::Invocation::Command { command } => Some(format!("Command: {command}")),
         nori_protocol::Invocation::Read { path } => Some(format!("Read: {}", path.display())),
         nori_protocol::Invocation::Search { query, path } => match (query, path) {
@@ -142,6 +146,10 @@ fn format_invocation(invocation: &Option<nori_protocol::Invocation>) -> Option<S
             .as_ref()
             .map(|path| format!("List files: {}", path.display()))
             .or_else(|| Some("List files".to_string())),
+        nori_protocol::Invocation::Tool { tool_name, input } => match input {
+            Some(input) => Some(format!("Tool: {tool_name} {input}")),
+            None => Some(format!("Tool: {tool_name}")),
+        },
         nori_protocol::Invocation::RawJson(value) => Some(format!("Input: {value}")),
     }
 }
@@ -150,6 +158,21 @@ fn format_change_paths(changes: &[nori_protocol::FileChange]) -> String {
     changes
         .iter()
         .map(|change| change.path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_operation_paths(operations: &[nori_protocol::FileOperation]) -> String {
+    operations
+        .iter()
+        .map(|operation| match operation {
+            nori_protocol::FileOperation::Create { path, .. }
+            | nori_protocol::FileOperation::Update { path, .. }
+            | nori_protocol::FileOperation::Delete { path, .. } => path.display().to_string(),
+            nori_protocol::FileOperation::Move {
+                from_path, to_path, ..
+            } => format!("{} -> {}", from_path.display(), to_path.display()),
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -174,6 +197,7 @@ fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
         nori_protocol::ToolKind::Search => "search",
         nori_protocol::ToolKind::Execute => "execute",
         nori_protocol::ToolKind::Edit => "edit",
+        nori_protocol::ToolKind::Delete => "delete",
         nori_protocol::ToolKind::Move => "move",
         nori_protocol::ToolKind::Fetch => "fetch",
         nori_protocol::ToolKind::Think => "think",
