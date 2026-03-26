@@ -217,22 +217,82 @@ fn parse_active_skillsets(output: &str) -> Vec<String> {
 
 /// Get active skillsets by running `nori-skillsets list-active`.
 ///
-/// Returns an empty vec if the command fails or is not available.
+/// Falls back to reading `.nori-config.json` if `list-active` is not supported
+/// (older versions of nori-skillsets). Returns an empty vec if no skillsets are
+/// active or nori-skillsets is not installed.
 fn get_active_skillsets(dir: Option<&std::path::Path>) -> Vec<String> {
     let mut cmd = Command::new("nori-skillsets");
     cmd.arg("list-active");
     if let Some(d) = dir {
         cmd.current_dir(d);
     }
-    let output = match cmd.output() {
-        Ok(output) if output.status.success() => output,
-        _ => return Vec::new(),
-    };
+    match cmd.output() {
+        Ok(output) if output.status.success() => String::from_utf8(output.stdout)
+            .ok()
+            .map(|s| parse_active_skillsets(&s))
+            .unwrap_or_default(),
+        Ok(output) => {
+            // Non-zero exit. Distinguish "no active skillsets" (known command,
+            // no results) from "unknown subcommand" (old nori-skillsets version).
+            // When the subcommand is unknown, the CLI framework writes to stderr.
+            let has_stderr = output.stderr.iter().any(|&b| !b.is_ascii_whitespace());
+            if has_stderr {
+                // Likely an old version that doesn't support list-active.
+                // Fall back to reading .nori-config.json directly.
+                get_nori_profile().into_iter().collect()
+            } else {
+                // Known command, just no active skillsets.
+                Vec::new()
+            }
+        }
+        // nori-skillsets not installed at all.
+        Err(_) => Vec::new(),
+    }
+}
 
-    String::from_utf8(output.stdout)
-        .ok()
-        .map(|s| parse_active_skillsets(&s))
-        .unwrap_or_default()
+/// Read the active skillset from `.nori-config.json` by walking parent directories.
+///
+/// This is the legacy fallback for older versions of nori-skillsets that don't
+/// support the `list-active` subcommand.
+fn get_nori_profile() -> Option<String> {
+    let mut current_dir = env::current_dir().ok()?;
+
+    loop {
+        let config_path = current_dir.join(".nori-config.json");
+        if config_path.exists()
+            && let Ok(contents) = std::fs::read_to_string(&config_path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+        {
+            // Try new format: activeSkillset
+            if let Some(profile) = json.get("activeSkillset").and_then(|v| v.as_str()) {
+                return Some(profile.to_string());
+            }
+            // Fall back to old format: agents.claude-code.profile.baseProfile
+            if let Some(profile) = json
+                .get("agents")
+                .and_then(|a| a.get("claude-code"))
+                .and_then(|c| c.get("profile"))
+                .and_then(|p| p.get("baseProfile"))
+                .and_then(|b| b.as_str())
+            {
+                return Some(profile.to_string());
+            }
+            // Fall back to oldest format: profile.baseProfile
+            if let Some(profile) = json
+                .get("profile")
+                .and_then(|p| p.get("baseProfile"))
+                .and_then(|b| b.as_str())
+            {
+                return Some(profile.to_string());
+            }
+        }
+
+        if !current_dir.pop() {
+            break;
+        }
+    }
+
+    None
 }
 
 /// Parse the output of `git symbolic-ref refs/remotes/origin/HEAD` to extract
