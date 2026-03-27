@@ -5,47 +5,6 @@ use super::*;
 /// rejection is the real guard — but large summaries are worth logging.
 const TRANSCRIPT_SUMMARY_WARN_CHARS: usize = 200_000;
 
-/// Convert a loaded transcript into a list of `EventMsg` suitable for
-/// `SessionConfiguredEvent.initial_messages` (UI replay).
-///
-/// Only `User` and `Assistant` entries are converted; tool calls, results,
-/// patches, and session metadata are skipped since the UI does not need to
-/// replay the full tool lifecycle for display purposes.
-pub fn transcript_to_replay_events(transcript: &crate::transcript::Transcript) -> Vec<EventMsg> {
-    use codex_protocol::protocol::AgentMessageEvent;
-    use codex_protocol::protocol::UserMessageEvent;
-
-    transcript
-        .entries
-        .iter()
-        .filter_map(|line| match &line.entry {
-            crate::transcript::TranscriptEntry::User(user) => {
-                Some(EventMsg::UserMessage(UserMessageEvent {
-                    message: user.content.clone(),
-                    images: None,
-                }))
-            }
-            crate::transcript::TranscriptEntry::Assistant(assistant) => {
-                let text: String = assistant
-                    .content
-                    .iter()
-                    .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str()),
-                        ContentBlock::Thinking { .. } => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("");
-                if text.is_empty() {
-                    None
-                } else {
-                    Some(EventMsg::AgentMessage(AgentMessageEvent { message: text }))
-                }
-            }
-            _ => None,
-        })
-        .collect()
-}
-
 /// Convert a loaded transcript into normalized replay events suitable for ACP
 /// session resume. The replay stream is intentionally static: it reconstructs
 /// user/assistant history and completed normalized artifacts without reviving

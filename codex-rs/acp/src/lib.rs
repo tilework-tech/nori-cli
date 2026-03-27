@@ -39,6 +39,7 @@ pub use message_history::search_entries;
 
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
+pub use backend::BackendEvent;
 pub use connection::AcpModelState;
 pub use connection::ApprovalRequest;
 pub use connection::sacp_connection::SacpConnection;

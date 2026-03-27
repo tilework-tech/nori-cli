@@ -6,16 +6,17 @@ impl AcpBackend {
     /// If the agent supports `session/load` (via capabilities) and an
     /// `acp_session_id` is provided, the existing server-side resume path is
     /// used. Otherwise a client-side replay fallback is used: a fresh session
-    /// is created via `session/new`, the transcript is converted into
-    /// `initial_messages` for TUI display, and a summary is stored in
-    /// `pending_compact_summary` so it gets prepended to the first prompt.
+    /// is created via `session/new`, normalized replay entries are derived from
+    /// the transcript, and a summary is stored in `pending_compact_summary` so
+    /// it gets prepended to the first prompt.
     pub async fn resume_session(
         config: &AcpBackendConfig,
         acp_session_id: Option<&str>,
         transcript: Option<&crate::transcript::Transcript>,
-        event_tx: mpsc::Sender<Event>,
-        client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
+        let (event_tx, event_rx) = mpsc::channel(32);
+        tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
         let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
@@ -56,11 +57,9 @@ impl AcpBackend {
         // resume_session from sending.
         let (
             session_id,
-            initial_messages,
             pending_summary,
             is_first_prompt_val,
             used_fallback,
-            deferred_replay_events,
             deferred_replay_client_events,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
@@ -94,15 +93,7 @@ impl AcpBackend {
                         );
                     }
                     debug!("ACP session resumed via session/load: {sid}");
-                    (
-                        session_id,
-                        None,
-                        None,
-                        false,
-                        None,
-                        Vec::new(),
-                        buffered_client_events,
-                    )
+                    (session_id, None, false, None, buffered_client_events)
                 }
                 Err(e) => {
                     warn!(
@@ -125,11 +116,6 @@ impl AcpBackend {
                     })?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
-                        let events = if client_event_tx.is_some() {
-                            None
-                        } else {
-                            Some(transcript_to_replay_events(t))
-                        };
                         let client_events = transcript_to_replay_client_events(t);
                         let summary_text = transcript_to_summary(t);
                         let summary_opt = if summary_text.is_empty() {
@@ -137,19 +123,17 @@ impl AcpBackend {
                         } else {
                             Some(summary_text)
                         };
-                        ((events, client_events), summary_opt)
+                        (client_events, summary_opt)
                     } else {
-                        ((None, Vec::new()), None)
+                        (Vec::new(), None)
                     };
 
                     (
                         session_id,
-                        replay_events.0,
                         summary,
                         true,
                         Some(e.to_string()),
-                        Vec::new(),
-                        replay_events.1,
+                        replay_events,
                     )
                 }
             }
@@ -171,11 +155,6 @@ impl AcpBackend {
             })?;
 
             let (replay_events, summary) = if let Some(t) = transcript {
-                let events = if client_event_tx.is_some() {
-                    None
-                } else {
-                    Some(transcript_to_replay_events(t))
-                };
                 let client_events = transcript_to_replay_client_events(t);
                 let summary_text = transcript_to_summary(t);
                 let summary_opt = if summary_text.is_empty() {
@@ -183,20 +162,12 @@ impl AcpBackend {
                 } else {
                     Some(summary_text)
                 };
-                ((events, client_events), summary_opt)
+                (client_events, summary_opt)
             } else {
-                ((None, Vec::new()), None)
+                (Vec::new(), None)
             };
 
-            (
-                session_id,
-                replay_events.0,
-                summary,
-                true,
-                None,
-                Vec::new(),
-                replay_events.1,
-            )
+            (session_id, summary, true, None, replay_events)
         };
 
         let approval_rx = connection.take_approval_receiver();
@@ -237,7 +208,7 @@ impl AcpBackend {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
             event_tx: event_tx.clone(),
-            client_event_tx: client_event_tx.clone(),
+            backend_event_tx: backend_event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
             user_notifier: Arc::clone(&user_notifier),
@@ -270,7 +241,6 @@ impl AcpBackend {
             async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
-            pending_tool_calls: Arc::clone(&pending_tool_calls),
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
@@ -302,7 +272,7 @@ impl AcpBackend {
             reasoning_effort: None,
             history_log_id,
             history_entry_count,
-            initial_messages,
+            initial_messages: None,
             rollout_path: cwd.join(".codex-rollout.jsonl"),
         };
 
@@ -332,8 +302,7 @@ impl AcpBackend {
 
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
-            event_tx.clone(),
-            client_event_tx.clone(),
+            backend_event_tx.clone(),
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             cwd.clone(),
@@ -346,32 +315,17 @@ impl AcpBackend {
         // Spawn persistent listener relay for inter-turn notifications
         tokio::spawn(Self::run_persistent_relay(
             persistent_rx,
-            event_tx.clone(),
-            client_event_tx,
-            Arc::clone(&pending_tool_calls),
             Arc::clone(&client_event_normalizer),
+            backend_event_tx.clone(),
         ));
 
-        // Spawn the replay relay *after* all setup events (SessionConfigured,
-        // Warning, etc.) have been sent.  Spawning it earlier causes a
-        // deadlock: the relay fills the bounded event_tx channel, blocking
-        // resume_session from sending its own events while nobody is
-        // consuming from event_rx yet.
-        if !deferred_replay_events.is_empty() {
-            let event_tx = event_tx.clone();
-            tokio::spawn(async move {
-                for event in deferred_replay_events {
-                    let _ = event_tx.send(event).await;
-                }
-            });
-        }
-
-        if !deferred_replay_client_events.is_empty()
-            && let Some(client_event_tx) = backend.client_event_tx.clone()
-        {
+        if !deferred_replay_client_events.is_empty() {
+            let backend_event_tx = backend.backend_event_tx.clone();
             tokio::spawn(async move {
                 for client_event in deferred_replay_client_events {
-                    let _ = client_event_tx.send(client_event).await;
+                    let _ = backend_event_tx
+                        .send(BackendEvent::Client(client_event))
+                        .await;
                 }
             });
         }

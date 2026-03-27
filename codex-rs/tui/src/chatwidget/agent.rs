@@ -193,9 +193,9 @@ fn spawn_acp_agent(
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
-        // Create event channel for backend → TUI
-        let (event_tx, mut event_rx) = mpsc::channel(32);
-        let (client_event_tx, mut client_event_rx) = mpsc::channel(32);
+        // Create a single ACP backend → TUI channel for both control-plane
+        // and normalized session-domain events.
+        let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
@@ -261,7 +261,7 @@ fn spawn_acp_agent(
         // Race backend init against shutdown requests and a timeout.
         // This ensures the user can always exit even if the backend hangs.
         let backend = tokio::select! {
-            result = AcpBackend::spawn(&acp_config, event_tx, Some(client_event_tx)) => {
+            result = AcpBackend::spawn(&acp_config, backend_event_tx) => {
                 match result {
                     Ok(b) => Arc::new(b),
                     Err(e) => {
@@ -331,22 +331,13 @@ fn spawn_acp_agent(
         // which drops event_tx, allowing event_rx to return None and this task to exit.
         drop(backend);
 
-        let mut codex_events_open = true;
-        let mut client_events_open = true;
-        while codex_events_open || client_events_open {
-            tokio::select! {
-                biased;
-                client_event = client_event_rx.recv(), if client_events_open => {
-                    match client_event {
-                        Some(client_event) => app_event_tx.send(AppEvent::ClientEvent(client_event)),
-                        None => client_events_open = false,
-                    }
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                codex_acp::BackendEvent::Control(event) => {
+                    app_event_tx.send(AppEvent::CodexEvent(event));
                 }
-                event = event_rx.recv(), if codex_events_open => {
-                    match event {
-                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
-                        None => codex_events_open = false,
-                    }
+                codex_acp::BackendEvent::Client(client_event) => {
+                    app_event_tx.send(AppEvent::ClientEvent(client_event));
                 }
             }
         }
@@ -383,8 +374,7 @@ pub(crate) fn spawn_acp_agent_resume(
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
-        let (event_tx, mut event_rx) = mpsc::channel(32);
-        let (client_event_tx, mut client_event_rx) = mpsc::channel(32);
+        let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
@@ -448,8 +438,7 @@ pub(crate) fn spawn_acp_agent_resume(
                 &acp_config,
                 acp_session_id.as_deref(),
                 Some(&transcript),
-                event_tx,
-                Some(client_event_tx),
+                backend_event_tx,
             ) => {
                 match result {
                     Ok(b) => Arc::new(b),
@@ -515,22 +504,13 @@ pub(crate) fn spawn_acp_agent_resume(
 
         drop(backend);
 
-        let mut codex_events_open = true;
-        let mut client_events_open = true;
-        while codex_events_open || client_events_open {
-            tokio::select! {
-                biased;
-                client_event = client_event_rx.recv(), if client_events_open => {
-                    match client_event {
-                        Some(client_event) => app_event_tx.send(AppEvent::ClientEvent(client_event)),
-                        None => client_events_open = false,
-                    }
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                codex_acp::BackendEvent::Control(event) => {
+                    app_event_tx.send(AppEvent::CodexEvent(event));
                 }
-                event = event_rx.recv(), if codex_events_open => {
-                    match event {
-                        Some(event) => app_event_tx.send(AppEvent::CodexEvent(event)),
-                        None => codex_events_open = false,
-                    }
+                codex_acp::BackendEvent::Client(client_event) => {
+                    app_event_tx.send(AppEvent::ClientEvent(client_event));
                 }
             }
         }

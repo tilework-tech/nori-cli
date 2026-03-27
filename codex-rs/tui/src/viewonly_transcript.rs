@@ -82,14 +82,9 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
 
 fn viewonly_entries_from_client_event(event: &nori_protocol::ClientEvent) -> Vec<ViewonlyEntry> {
     match event {
-        nori_protocol::ClientEvent::MessageDelta(message_delta) => match message_delta.stream {
-            nori_protocol::MessageStream::Answer => vec![ViewonlyEntry::Assistant {
-                content: message_delta.delta.clone(),
-            }],
-            nori_protocol::MessageStream::Reasoning => vec![ViewonlyEntry::Thinking {
-                content: message_delta.delta.clone(),
-            }],
-        },
+        // Transcript files already store finalized assistant/thinking blocks.
+        // Rendering live deltas here duplicates content in view-only history.
+        nori_protocol::ClientEvent::MessageDelta(_) => vec![],
         nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
             viewonly_entries_from_replay_entry(replay_entry)
         }
@@ -482,6 +477,47 @@ mod tests {
         );
         assert!(
             matches!(&entries[3], ViewonlyEntry::Assistant { content } if content == "Here is my response")
+        );
+    }
+
+    #[test]
+    fn test_transcript_to_entries_skips_normalized_message_deltas() {
+        let transcript = make_transcript(vec![
+            TranscriptEntry::User(UserEntry {
+                id: "msg-001".to_string(),
+                content: "Hello".to_string(),
+                attachments: vec![],
+            }),
+            TranscriptEntry::ClientEvent(ClientEventEntry {
+                event: nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                    stream: nori_protocol::MessageStream::Answer,
+                    delta: "partial answer".to_string(),
+                }),
+            }),
+            TranscriptEntry::Assistant(AssistantEntry {
+                id: "msg-002".to_string(),
+                content: vec![ContentBlock::Text {
+                    text: "final answer".to_string(),
+                }],
+                agent: None,
+            }),
+        ]);
+
+        let entries = transcript_to_entries(&transcript);
+
+        assert_eq!(
+            entries,
+            vec![
+                ViewonlyEntry::Info {
+                    content: "Session from 2025-01-27 12:00 (test-ses)".to_string(),
+                },
+                ViewonlyEntry::User {
+                    content: "Hello".to_string(),
+                },
+                ViewonlyEntry::Assistant {
+                    content: "final answer".to_string(),
+                },
+            ]
         );
     }
 

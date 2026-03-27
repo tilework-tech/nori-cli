@@ -1,6 +1,108 @@
 use super::*;
 use serial_test::serial;
 
+async fn recv_backend_control(
+    rx: &mut mpsc::Receiver<BackendEvent>,
+    timeout: std::time::Duration,
+) -> Option<Event> {
+    while let Ok(event) = tokio::time::timeout(timeout, rx.recv()).await {
+        match event {
+            Some(BackendEvent::Control(event)) => return Some(event),
+            Some(BackendEvent::Client(_)) => continue,
+            None => return None,
+        }
+    }
+    None
+}
+
+async fn recv_backend_client(
+    rx: &mut mpsc::Receiver<BackendEvent>,
+    timeout: std::time::Duration,
+) -> Option<nori_protocol::ClientEvent> {
+    while let Ok(event) = tokio::time::timeout(timeout, rx.recv()).await {
+        match event {
+            Some(BackendEvent::Client(event)) => return Some(event),
+            Some(BackendEvent::Control(_)) => continue,
+            None => return None,
+        }
+    }
+    None
+}
+
+fn forward_test_backend_events(
+    mut backend_event_rx: mpsc::Receiver<BackendEvent>,
+    event_tx: mpsc::Sender<Event>,
+    client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
+) {
+    tokio::spawn(async move {
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                BackendEvent::Control(event) => {
+                    let _ = event_tx.send(event).await;
+                }
+                BackendEvent::Client(client_event) => {
+                    if let Some(client_event_tx) = &client_event_tx {
+                        let _ = client_event_tx.send(client_event).await;
+                    }
+                }
+            }
+        }
+    });
+}
+
+async fn spawn_test_backend(
+    config: &AcpBackendConfig,
+    event_tx: mpsc::Sender<Event>,
+    client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
+) -> anyhow::Result<AcpBackend> {
+    let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
+    forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
+    AcpBackend::spawn(config, backend_event_tx).await
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_test_approval_handler(
+    approval_rx: mpsc::Receiver<ApprovalRequest>,
+    event_tx: mpsc::Sender<Event>,
+    client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
+    pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    user_notifier: Arc<codex_core::UserNotifier>,
+    cwd: PathBuf,
+    approval_policy_rx: watch::Receiver<AskForApproval>,
+    pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+    transcript_recorder: Option<Arc<TranscriptRecorder>>,
+) {
+    let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
+    forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
+    tokio::spawn(AcpBackend::run_approval_handler(
+        approval_rx,
+        backend_event_tx,
+        pending_approvals,
+        user_notifier,
+        cwd,
+        approval_policy_rx,
+        pending_tool_calls,
+        client_event_normalizer,
+        transcript_recorder,
+    ));
+}
+
+fn spawn_test_persistent_relay(
+    persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
+    event_tx: mpsc::Sender<Event>,
+    client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
+    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+) {
+    let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
+    forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
+    tokio::spawn(AcpBackend::run_persistent_relay(
+        persistent_rx,
+        client_event_normalizer,
+        backend_event_tx,
+    ));
+}
+
 /// Helper to build a minimal transcript for resume tests.
 fn build_test_transcript() -> crate::transcript::Transcript {
     use crate::transcript::*;
@@ -78,10 +180,6 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
     }
 }
 
-mod part1;
 mod part2;
 mod part3;
 mod part4;
-mod part5;
-mod part6;
-mod part7;

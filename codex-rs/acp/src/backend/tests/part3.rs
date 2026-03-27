@@ -1,65 +1,5 @@
 use super::*;
 
-/// Test that ToolCall with Execute kind generates command-mode parsed_cmd.
-#[test]
-fn test_tool_call_execute_generates_command_parsed_cmd() {
-    let update = acp::SessionUpdate::ToolCall(
-        acp::ToolCall::new(acp::ToolCallId::from("call-exec".to_string()), "Terminal")
-            .kind(acp::ToolKind::Execute)
-            .status(acp::ToolCallStatus::InProgress)
-            .raw_input(serde_json::json!({"command": "cargo test"})),
-    );
-
-    let mut pending = std::collections::HashMap::new();
-    let mut pending_tool_calls = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
-    assert_eq!(events.len(), 1);
-
-    match &events[0] {
-        EventMsg::ExecCommandBegin(begin) => {
-            assert_eq!(begin.parsed_cmd.len(), 1);
-            match &begin.parsed_cmd[0] {
-                ParsedCommand::Unknown { cmd } => {
-                    assert!(cmd.contains("cargo test"));
-                }
-                _ => panic!("Expected ParsedCommand::Unknown"),
-            }
-        }
-        _ => panic!("Expected ExecCommandBegin event"),
-    }
-}
-
-/// Test that ToolCallUpdate with Read kind generates exploring parsed_cmd in ExecCommandEnd.
-#[test]
-fn test_tool_call_update_read_generates_exploring_parsed_cmd() {
-    let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
-        acp::ToolCallId::from("call-read-end".to_string()),
-        acp::ToolCallUpdateFields::new()
-            .status(acp::ToolCallStatus::Completed)
-            .title("Read File")
-            .kind(acp::ToolKind::Read)
-            .raw_input(serde_json::json!({"path": "Cargo.toml"})),
-    ));
-
-    let mut pending = std::collections::HashMap::new();
-    let mut pending_tool_calls = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
-    assert_eq!(events.len(), 1);
-
-    match &events[0] {
-        EventMsg::ExecCommandEnd(end) => {
-            assert_eq!(end.parsed_cmd.len(), 1);
-            match &end.parsed_cmd[0] {
-                ParsedCommand::Read { name, .. } => {
-                    assert_eq!(name, "Cargo.toml");
-                }
-                _ => panic!("Expected ParsedCommand::Read"),
-            }
-        }
-        _ => panic!("Expected ExecCommandEnd event"),
-    }
-}
-
 /// Test that authentication errors are correctly categorized
 #[test]
 fn test_categorize_acp_error_authentication() {
@@ -450,7 +390,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let result = AcpBackend::spawn(&config, event_tx, None).await;
+    let result = spawn_test_backend(&config, event_tx, None).await;
 
     // Clean up env var
     // SAFETY: Cleaning up the environment variable we set above.
@@ -489,19 +429,20 @@ async fn test_approval_policy_dynamic_update() {
     // Create channels for the test
     let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
     let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
     let cwd = PathBuf::from("/tmp/test");
 
     // Create watch channel starting with OnRequest policy (requires approval)
     let (policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
+    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     // Spawn the approval handler with the watch receiver
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
-    tokio::spawn(AcpBackend::run_approval_handler(
+    spawn_test_approval_handler(
         approval_rx,
         event_tx.clone(),
-        None,
+        Some(client_event_tx),
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
         cwd.clone(),
@@ -509,7 +450,7 @@ async fn test_approval_policy_dynamic_update() {
         Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
         None,
-    ));
+    );
 
     // Create a mock approval request
     let (response_tx1, mut response_rx1) = oneshot::channel();
@@ -539,26 +480,25 @@ async fn test_approval_policy_dynamic_update() {
     // Give the handler time to process
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    // Should have received an approval request event in the TUI
-    let event = event_rx.try_recv();
+    let client_event = client_event_rx.try_recv();
     assert!(
-        event.is_ok(),
-        "Should have received approval request event for OnRequest policy"
+        client_event.is_ok(),
+        "Should have received normalized approval request event for OnRequest policy"
     );
-    if let Ok(Event {
-        msg: EventMsg::ExecApprovalRequest(req),
-        ..
-    }) = event
-    {
+    if let Ok(nori_protocol::ClientEvent::ApprovalRequest(req)) = client_event {
         assert_eq!(req.call_id, "call-1");
     } else {
-        panic!("Expected ExecApprovalRequest event");
+        panic!("Expected normalized ApprovalRequest event");
     }
 
     // The request should be pending (not auto-approved)
     assert!(
         response_rx1.try_recv().is_err(),
         "Request should not be auto-approved with OnRequest policy"
+    );
+    assert!(
+        event_rx.try_recv().is_err(),
+        "OnRequest policy should not emit legacy approval events",
     );
 
     // Now update the policy to Never (yolo mode)
@@ -625,7 +565,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
     let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_approval_handler(
+    spawn_test_approval_handler(
         approval_rx,
         event_tx,
         Some(client_event_tx),
@@ -636,7 +576,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
         Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
         None,
-    ));
+    );
 
     let mut changes = HashMap::new();
     changes.insert(
@@ -734,7 +674,7 @@ async fn test_exec_approval_emits_normalized_client_event() {
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
     let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_approval_handler(
+    spawn_test_approval_handler(
         approval_rx,
         event_tx,
         Some(client_event_tx),
@@ -745,7 +685,7 @@ async fn test_exec_approval_emits_normalized_client_event() {
         Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
         None,
-    ));
+    );
 
     let tool_call = acp::ToolCallUpdate::new(
         "call-exec-approve",
@@ -825,7 +765,7 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::Never);
     let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_approval_handler(
+    spawn_test_approval_handler(
         approval_rx,
         event_tx,
         Some(client_event_tx),
@@ -836,7 +776,7 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
         Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
         None,
-    ));
+    );
 
     let tool_call = acp::ToolCallUpdate::new(
         "call-auto-approved",
@@ -896,15 +836,13 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -965,15 +903,13 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1035,15 +971,13 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1110,15 +1044,13 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1174,15 +1106,13 @@ async fn test_agent_message_chunk_emits_normalized_message_delta() {
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::AgentMessageChunk(
@@ -1221,15 +1151,13 @@ async fn test_plan_update_emits_normalized_plan_snapshot() {
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::Plan(acp::Plan::new(vec![
@@ -1367,15 +1295,13 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
         let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
         let (client_event_tx, mut client_event_rx) =
             mpsc::channel::<nori_protocol::ClientEvent>(16);
-        let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-        tokio::spawn(AcpBackend::run_persistent_relay(
+        spawn_test_persistent_relay(
             persistent_rx,
             event_tx,
             Some(client_event_tx),
-            Arc::clone(&pending_tool_calls),
             Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-        ));
+        );
 
         persistent_tx
             .send(acp::SessionUpdate::ToolCallUpdate(update))
@@ -1406,15 +1332,13 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    spawn_test_persistent_relay(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
-        Arc::clone(&pending_tool_calls),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    ));
+    );
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCall(
@@ -1496,6 +1420,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel(64);
 
     let config = AcpBackendConfig {
         agent: "mock-model".to_string(),
@@ -1533,7 +1458,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let backend = AcpBackend::spawn(&config, event_tx, None)
+    let backend = spawn_test_backend(&config, event_tx, Some(client_event_tx))
         .await
         .expect("Failed to spawn ACP backend");
 
@@ -1548,62 +1473,82 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         .await
         .expect("Failed to submit Op::Compact");
 
-    // Collect events with a timeout
-    let mut events = Vec::new();
+    // Collect client events with a timeout
+    let mut client_events = Vec::new();
+    let mut warning_events = Vec::new();
     let timeout = Duration::from_secs(10);
     let start = std::time::Instant::now();
 
     while start.elapsed() < timeout {
-        match tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await {
-            Ok(Some(event)) => {
-                events.push(event);
-                // Check if we got TaskComplete, which signals the end
-                if matches!(
-                    events.last().map(|e| &e.msg),
-                    Some(EventMsg::TaskComplete(_))
-                ) {
-                    break;
+        tokio::select! {
+            client_event = client_event_rx.recv() => {
+                if let Some(client_event) = client_event {
+                    let done = matches!(
+                        client_event,
+                        nori_protocol::ClientEvent::TurnLifecycle(
+                            nori_protocol::TurnLifecycle::Completed { .. }
+                        )
+                    );
+                    client_events.push(client_event);
+                    if done {
+                        break;
+                    }
                 }
             }
-            Ok(None) => break, // Channel closed
-            Err(_) => {
-                // Timeout on recv - check if we have enough events
-                if events
-                    .iter()
-                    .any(|e| matches!(e.msg, EventMsg::TaskComplete(_)))
-                {
-                    break;
+            event = event_rx.recv() => {
+                if let Some(event) = event {
+                    warning_events.push(event);
                 }
             }
         }
     }
 
-    // Verify we got the expected events
-    let has_task_started = events
+    while let Ok(Some(event)) =
+        tokio::time::timeout(Duration::from_millis(100), event_rx.recv()).await
+    {
+        warning_events.push(event);
+    }
+
+    let has_task_started = client_events.iter().any(|e| {
+        matches!(
+            e,
+            nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
+        )
+    });
+    let has_context_compacted = client_events.iter().any(|e| {
+        matches!(
+            e,
+            nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::ContextCompacted { .. }
+            )
+        )
+    });
+    let has_warning = warning_events
         .iter()
-        .any(|e| matches!(e.msg, EventMsg::TaskStarted(_)));
-    let has_context_compacted = events
-        .iter()
-        .any(|e| matches!(e.msg, EventMsg::ContextCompacted(_)));
-    let has_warning = events.iter().any(|e| matches!(e.msg, EventMsg::Warning(_)));
-    let has_task_complete = events
-        .iter()
-        .any(|e| matches!(e.msg, EventMsg::TaskComplete(_)));
+        .any(|e| matches!(e.msg, EventMsg::Warning(_)));
+    let has_task_complete = client_events.iter().any(|e| {
+        matches!(
+            e,
+            nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::Completed { .. }
+            )
+        )
+    });
 
     assert!(
         has_task_started,
-        "Expected TaskStarted event. Events received: {events:?}"
+        "Expected normalized turn start event. Client events: {client_events:?}"
     );
     assert!(
         has_context_compacted,
-        "Expected ContextCompacted event. Events received: {events:?}"
+        "Expected normalized context compacted event. Client events: {client_events:?}"
     );
     assert!(
         has_warning,
-        "Expected Warning event about long conversations. Events received: {events:?}"
+        "Expected Warning event about long conversations. Events received: {warning_events:?}"
     );
     assert!(
         has_task_complete,
-        "Expected TaskComplete event. Events received: {events:?}"
+        "Expected normalized task complete event. Client events: {client_events:?}"
     );
 }
