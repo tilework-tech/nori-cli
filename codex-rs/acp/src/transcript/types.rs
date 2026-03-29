@@ -34,6 +34,7 @@ pub struct TranscriptLine {
 /// Entry types that can appear in a transcript.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum TranscriptEntry {
     /// Session metadata (first line of file)
     SessionMeta(SessionMetaEntry),
