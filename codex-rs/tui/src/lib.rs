@@ -77,6 +77,7 @@ mod streaming;
 mod style;
 mod system_info;
 mod terminal_palette;
+mod terminal_title;
 mod text_formatting;
 mod tui;
 mod ui_consts;

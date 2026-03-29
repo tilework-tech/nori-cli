@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 #[allow(unused_imports)]
 use std::time::Duration;
+use std::time::Instant;
 
 #[allow(unused_imports)]
 use codex_app_server_protocol::AuthMode;
@@ -426,6 +427,11 @@ pub(crate) struct ChatWidget {
     /// pinned plan drawer when enabled; retained when disabled so toggling
     /// the drawer on shows the most recent plan immediately.
     pinned_plan: Option<UpdatePlanArgs>,
+
+    // Terminal title state: baseline instant for computing spinner frame index.
+    terminal_title_animation_origin: Instant,
+    // Terminal title state: cache to avoid redundant OSC writes.
+    last_terminal_title: Option<String>,
 }
 
 /// Information about a pending agent switch in ChatWidget.
@@ -471,6 +477,9 @@ impl ChatWidget {}
 impl Drop for ChatWidget {
     fn drop(&mut self) {
         self.stop_rate_limit_poller();
+        if let Err(err) = self.clear_managed_terminal_title() {
+            tracing::debug!(error = %err, "failed to clear terminal title on drop");
+        }
     }
 }
 

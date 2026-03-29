@@ -52,6 +52,7 @@ impl ChatWidget {
         if !self.suppress_session_configured_redraw {
             self.request_redraw();
         }
+        self.refresh_terminal_title();
     }
 
     pub(super) fn on_agent_message(&mut self, message: String) {
@@ -183,6 +184,7 @@ impl ChatWidget {
         self.reasoning_buffer.clear();
         self.turn_finished = false;
         self.request_redraw();
+        self.refresh_terminal_title();
     }
 
     pub(super) fn on_task_complete(&mut self, last_agent_message: Option<String>) {
@@ -213,6 +215,7 @@ impl ChatWidget {
         self.suppressed_exec_calls.clear();
         self.last_unified_wait = None;
         self.request_redraw();
+        self.refresh_terminal_title();
 
         // Refresh system info (including git branch) on task completion.
         // This catches any branch changes that occurred during the agent's turn.
@@ -398,6 +401,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.maybe_send_next_queued_input();
         self.request_redraw();
+        self.refresh_terminal_title();
     }
 
     /// Handle a turn aborted due to user interrupt (Esc).

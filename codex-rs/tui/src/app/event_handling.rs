@@ -22,6 +22,7 @@ impl App {
                     self.chat_widget.handle_paste(pasted);
                 }
                 TuiEvent::Draw => {
+                    self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
                     if self
                         .chat_widget

@@ -259,4 +259,79 @@ impl ChatWidget {
         );
         RenderableItem::Owned(Box::new(flex))
     }
+
+    // --- Terminal title management ---
+
+    /// Returns the project name derived from the working directory.
+    fn project_name(&self) -> String {
+        self.config
+            .cwd
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Whether the terminal title spinner should animate right now.
+    pub(crate) fn should_animate_terminal_title_spinner(&self) -> bool {
+        self.config.animations && self.terminal_title_has_active_progress()
+    }
+
+    /// Whether there is active progress that warrants showing the spinner.
+    fn terminal_title_has_active_progress(&self) -> bool {
+        self.mcp_startup_status.is_some() || self.bottom_pane.is_task_running()
+    }
+
+    /// Recompute and write the terminal title. Schedules the next animation
+    /// frame if the spinner is active.
+    pub(crate) fn refresh_terminal_title(&mut self) {
+        let now = Instant::now();
+        let spinner_frame = if self.should_animate_terminal_title_spinner() {
+            Some(crate::terminal_title::spinner_frame_at(
+                self.terminal_title_animation_origin,
+                now,
+            ))
+        } else {
+            None
+        };
+
+        let project = self.project_name();
+        if project.is_empty() {
+            return;
+        }
+
+        let title = crate::terminal_title::compose_title(&project, spinner_frame);
+
+        // Skip redundant writes.
+        if self.last_terminal_title.as_deref() == Some(&title) {
+            // Still schedule the next frame so the animation continues.
+            if spinner_frame.is_some() {
+                self.frame_requester
+                    .schedule_frame_in(crate::terminal_title::SPINNER_INTERVAL);
+            }
+            return;
+        }
+
+        if let Err(err) = crate::terminal_title::set_terminal_title(&title) {
+            tracing::debug!(error = %err, "failed to set terminal title");
+        }
+        self.last_terminal_title = Some(title);
+
+        if spinner_frame.is_some() {
+            self.frame_requester
+                .schedule_frame_in(crate::terminal_title::SPINNER_INTERVAL);
+        }
+    }
+
+    /// Clear the managed terminal title and reset the cache.
+    pub(crate) fn clear_managed_terminal_title(&mut self) -> std::io::Result<()> {
+        self.last_terminal_title = None;
+        crate::terminal_title::clear_terminal_title()
+    }
+
+    /// Called before every frame draw to advance the terminal title spinner.
+    pub(crate) fn pre_draw_tick(&mut self) {
+        if self.should_animate_terminal_title_spinner() {
+            self.refresh_terminal_title();
+        }
+    }
 }

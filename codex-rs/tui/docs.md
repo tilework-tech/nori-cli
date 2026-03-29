@@ -604,6 +604,18 @@ When the user selects an agent (or resumes a session), the TUI shows a "Connecti
 
 When the agent begins processing a task, the `StatusIndicatorWidget` displays an animated header with a randomly selected tongue-in-cheek message (e.g., "Thinking really hard", "Hallucinating responsibly") drawn from the `WHIMSICAL_STATUS_MESSAGES` pool via `random_status_message()`. A new random message is selected each time `on_task_started()` fires in `chatwidget/event_handlers.rs`. During streaming, reasoning chunk headers (extracted from bold markdown text) dynamically replace this initial message via `update_status_header()`.
 
+**Terminal Title Management (`terminal_title.rs`, `chatwidget/helpers.rs`):**
+
+The TUI sets the terminal window/tab title via OSC 0 escape sequences so users can see whether Nori is idle or working at a glance, even when the tab is not focused. The title is written directly to stdout via crossterm's `execute!` macro with a custom `SetWindowTitle` command implementation -- this bypasses the ratatui draw buffer entirely.
+
+When the agent is working (`mcp_startup_status` is present or `bottom_pane.is_task_running()` is true), an animated braille dot-spinner (`SPINNER_FRAMES`, 10 frames at 100ms intervals) appears before the project name in the title bar. When idle, only the project name (derived from `config.cwd`) is shown. The animation is gated on `config.animations` -- when disabled, the spinner is suppressed but the project name still appears.
+
+The animation is demand-driven rather than timer-based: each `refresh_terminal_title()` call schedules the next frame via `FrameRequester::schedule_frame_in(100ms)`, and `pre_draw_tick()` (called before every frame in the `TuiEvent::Draw` handler in `app/event_handling.rs`) advances the spinner only when progress is active. This creates a self-stopping loop -- when progress ends, no further frames are scheduled. Title writes are deduplicated via a `last_terminal_title: Option<String>` cache to avoid redundant OSC writes.
+
+`refresh_terminal_title()` is hooked into `on_session_configured()`, `on_task_started()`, `on_task_complete()`, and `on_mcp_startup_complete()` in `chatwidget/event_handlers.rs`. The title is cleared (set to empty string) on `ChatWidget` drop. The module does not attempt to save or restore the terminal's previous title because that is not portable across terminals.
+
+Title content is sanitized by `sanitize_terminal_title()` which strips control characters, bidi overrides, zero-width characters, and collapses whitespace, with a 240-character cap.
+
 **Exit Path When Backend Is Dead:**
 
 Every error/timeout/shutdown arm in the `tokio::select!` explicitly calls `drop(codex_op_rx)` before returning. This closes the receiver end of the channel so that `codex_op_tx` (held by `ChatWidget`) has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
