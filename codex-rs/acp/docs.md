@@ -4,7 +4,7 @@ Path: @/codex-rs/acp
 
 ### Overview
 
-The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC, and translating between ACP protocol messages and Codex internal protocol types.
+The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers. `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 
 ### How it fits into the larger codebase
 
@@ -15,18 +15,20 @@ nori-tui
 codex-acp <---> ACP Agent subprocess (claude-agent-acp, codex-acp, gemini-cli)
     |
     v
-codex-protocol (internal event types)
+nori-protocol (normalized ACP session events)
 ```
 
 The ACP crate serves as a bridge between:
 - The TUI layer (`@/codex-rs/tui/`) which displays UI and collects user input
 - External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
+- `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
+- The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - SACP v10-based subprocess spawning and JSON-RPC communication
-- `translator.rs` - Bidirectional protocol translation: ACP session updates to Codex events, and Codex `UserInput` items to ACP `ContentBlock`s (including image conversion)
-- `backend/mod.rs` - Implements `ConversationClient` trait from codex-core
+- `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
+- `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
 - `auto_worktree.rs` - Orchestrates automatic git worktree creation and summary-based renaming
 
@@ -634,27 +636,24 @@ The `AcpBackend` automatically:
 1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
-4. Records tool events via `record_tool_events_to_transcript()` in the update handler
+4. Records normalized ACP session events via `record_client_event()` in the update and approval handlers
 5. Shuts down recorder on `Op::Shutdown`
 
 **Tool Event Recording Flow:**
 
-Tool calls and patch operations are recorded by `record_tool_events_to_transcript()` in `backend/mod.rs`:
+Live ACP session semantics are recorded as normalized client-event entries:
 
 ```
-ACP SessionUpdate          Transcript Entry
-─────────────────────      ──────────────────
-ToolCall (non-patch)   →   tool_call entry
-ToolCallUpdate         →   tool_result entry (on completion)
-  (Completed, non-patch)
-ToolCallUpdate         →   patch_apply entry (on completion)
-  (Completed, patch)
+ACP session activity         Transcript Entry
+────────────────────────     ─────────────────────────
+Message / reasoning deltas → client_event entry
+Plan snapshot            → client_event entry
+Tool snapshot            → client_event entry
+Approval request         → client_event entry
+Turn lifecycle           → client_event entry
 ```
 
-Patch operations (Edit/Write/Delete via `ToolKind`) are recorded separately from generic tool calls because they represent file modifications. The operation type is determined by `ToolKind`:
-- `ToolKind::Edit` → `PatchOperationType::Edit`
-- `ToolKind::Delete` → `PatchOperationType::Delete`
-- Other (including Write) → `PatchOperationType::Write`
+Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.
 
 Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. Both this truncation and the `truncate_for_log()` helper (used for tracing previews) use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
@@ -737,38 +736,34 @@ Parses token usage from agent session files:
 
 Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` command to take effect immediately.
 
-`run_approval_handler()` in `backend/mod.rs` enforces a strict ordering invariant: the approval event is sent to the TUI (`event_tx.send()`) and the request is pushed into `pending_approvals` **before** the OS notification fires (`user_notifier.notify()`). This ordering is critical because `notify-rust`'s `notif.show()` blocks synchronously on some platforms (macOS), so if the notification were sent first, the TUI would never receive the approval overlay.
+`run_approval_handler()` in `backend/mod.rs` enforces a strict ordering invariant: the normalized approval event is forwarded to the TUI via `BackendEvent::Client`, and the request is pushed into `pending_approvals`, **before** the OS notification fires (`user_notifier.notify()`). This ordering is critical because `notify-rust`'s `notif.show()` blocks synchronously on some platforms (macOS), so if the notification were sent first, the TUI would never receive the approval overlay.
 
-The `ApprovalRequest` struct (`connection/mod.rs`) carries an optional `tool_call_metadata: Option<ToolCallMetadata>` field. `ToolCallMetadata` holds the title, kind, and raw_input extracted from the ACP permission request's tool call fields. This metadata is populated in `ClientDelegate::request_permission()` (`connection/client_delegate.rs`) and consumed by the approval handler to seed the shared `pending_tool_calls` map, bridging the gap between the permission request path and the event translation path.
+The `ApprovalRequest` struct (`connection/mod.rs`) carries an optional `tool_call_metadata: Option<ToolCallMetadata>` field. `ToolCallMetadata` holds the title, kind, and raw_input extracted from the ACP permission request's tool call fields. This metadata is populated in `ClientDelegate::request_permission()` (`connection/client_delegate.rs`) and consumed by the approval handler to seed the shared `pending_tool_calls` map, bridging the gap between the permission request path and the normalized tool snapshot path.
 
-**Patch Event Translation:**
+**Normalized File Mutations:**
 
-For Edit/Write/Delete operations, the ACP backend keeps file mutations on the patch event path so the TUI can render them with diff-aware patch cells instead of generic command cells. There are two sources for the `PatchApplyBegin` event emitted by `translate_session_update_to_events()` in `backend/event_translation.rs`:
+For Edit/Write/Delete operations, the ACP backend normalizes file mutations into `nori_protocol::ClientEvent` snapshots that carry file-operation details for the TUI and transcript recorder. The same normalized snapshot drives approval prompts, live rendering, and persistence so the UI does not need to infer edits from Codex-shaped tool events.
 
 | Operation | Approval Event | Result Event |
 |-----------|----------------|--------------|
-| Edit (old_string + new_string) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Update` |
-| Write (content only) | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Add` |
-| Delete | `ApplyPatchApprovalRequest` | `PatchApplyBegin` with `FileChange::Delete` |
-| Execute, Read, etc. | `ExecApprovalRequest` | `ExecCommandBegin/End` |
+| Edit (old_string + new_string) | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
+| Write (content only) | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
+| Delete | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
+| Execute, Read, etc. | `ApprovalRequest` or auto-approval depending on policy | Normalized tool snapshot |
 
-The first path is the eager path: when the initial `ToolCall` already contains enough file-change metadata, the translator stores a `HashMap<PathBuf, FileChange>` in `pending_patch_changes` and re-emits it as `PatchApplyBegin` when the matching `ToolCallUpdate(completed)` arrives after approval.
-
-The second path is the completion-derived fallback used by the ACP/TUI live transcript fix: if `pending_patch_changes` is empty for a completed tool call, the translator still merges the best available `title`, `kind`, and `raw_input` from the completion update, accumulated intermediate updates, and permission-request metadata. When that merged state still identifies an Edit/Write/Delete operation, `tool_call_to_file_change()` synthesizes the `FileChange` directly from the resolved `raw_input`, and the translator emits `PatchApplyBegin` instead of falling back to `ExecCommandEnd`. This keeps late-resolved edit/write calls on the same patch rendering path used by approvals and transcript history.
-
-The transcript recorder reuses that same completion-resolution logic when deciding whether a completed tool update should be persisted as `patch_apply` versus `tool_result`. That keeps persisted transcript shape aligned with the live UI path: a completion that renders as a patch block in the TUI is also recorded as a patch operation instead of drifting into a generic tool result.
+The transcript recorder uses the same normalized snapshot data when deciding how to persist tool activity, so the recorded transcript and live TUI stay aligned without requiring a separate patch translation path.
 
 **Tool Call Event Filtering and Title Accumulation:**
 
-The ACP backend filters `ToolCall` events that lack useful display information before emitting `ExecCommandBegin` events. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
+The ACP backend accumulates display metadata across multiple `ToolCall` and `ToolCallUpdate` messages so the normalized tool snapshot keeps a stable title, kind, and raw input. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
 
 1. `ToolCall` with a generic title and empty `raw_input` (skipped, but data stored in `pending_tool_calls`)
 2. `ToolCallUpdate` with the real title/kind/raw_input but not yet completed (accumulated into `pending_tool_calls`)
 3. `ToolCallUpdate` with `status: Completed` but typically no title/kind/raw_input
 
-Some agents (notably Gemini) route shell commands through the `request_permission` ACP path (`client_delegate.rs`) instead of emitting standard `ToolCall` events with populated fields. In this path, the permission request carries full metadata (title, kind, raw_input) via `ToolCallMetadata` on the `ApprovalRequest`. The approval handler in `run_approval_handler()` extracts this metadata and populates `pending_tool_calls` before processing the approval, so that when the subsequent `ToolCallUpdate(completed)` arrives with empty fields, the event translator can resolve the actual command name. Gemini's permission request titles follow a compound format (`command [current working directory path] (description)`), which is stripped by `extract_command_from_permission_title()` in `tool_display.rs` to extract just the command portion.
+Some agents (notably Gemini) route shell commands through the `request_permission` ACP path (`client_delegate.rs`) instead of emitting standard `ToolCall` events with populated fields. In this path, the permission request carries full metadata (title, kind, raw_input) via `ToolCallMetadata` on the `ApprovalRequest`. The approval handler in `run_approval_handler()` extracts this metadata and populates `pending_tool_calls` before processing the approval, so that when the subsequent `ToolCallUpdate(completed)` arrives with empty fields, the normalized snapshot can still resolve the actual command name. Gemini's permission request titles follow a compound format (`command [current working directory path] (description)`), which is stripped by `extract_command_from_permission_title()` in `tool_display.rs` to extract just the command portion.
 
-The `pending_tool_calls` HashMap (keyed by `call_id`) in `event_translation.rs` accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2 (and from permission request metadata for the Gemini path). On the completion event (step 3), `translate_session_update_to_events()` resolves the best available title using a fallback chain:
+The `pending_tool_calls` HashMap (keyed by `call_id`) accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2 (and from permission request metadata for the Gemini path). On the completion event (step 3), the normalizer resolves the best available title using a fallback chain:
 
 ```
 Title from completion update fields (if non-empty and not a raw ID)
@@ -788,9 +783,9 @@ Hardcoded "Tool"
 
 Raw Anthropic `tool_use` IDs (e.g., `toolu_015Xtg1GzAd6aPH6oiirx5us`) are detected by `title_is_raw_id()` in `tool_display.rs` and treated as empty titles, triggering the fallback chain. The `kind_to_display_name()` function maps `ToolKind` variants to human-readable strings (e.g., `Execute` -> `"Terminal"`, `SwitchMode` -> `"Switch Mode"`).
 
-The same merged completion state is also used to decide whether a completed tool update should stay on the patch path. In practice this means a generic `ToolCall("Edit")` or a completion that arrives without `pending_patch_changes` can still become `PatchApplyBegin` if the resolved `kind`/`raw_input` identifies a file edit. Only non-patch operations continue down the `ExecCommandEnd` fallback path.
+The same merged completion state is also used to decide whether a completed tool update should be treated as a file mutation or a generic tool snapshot. In practice this means a generic `ToolCall("Edit")` or a completion that arrives without earlier metadata can still resolve to a normalized file-operation snapshot if the resolved `kind`/`raw_input` identifies a file edit.
 
-The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. The `pending_patch_changes` state remains local to each relay caller because it only stores already-materialized `FileChange` values captured inside the relay path. Completed patch operations remove any stored `pending_patch_changes` entry and also consume the shared `pending_tool_calls` metadata used for title/raw-input resolution; non-patch completions consume only `pending_tool_calls`.
+The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. Completed normalized snapshots consume the shared `pending_tool_calls` metadata used for title/raw-input resolution once the lifecycle reaches its terminal phase.
 
 Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 
@@ -804,7 +799,7 @@ Late-arriving tool events that race past the agent's final response are handled 
 
 **Plan Event Translation:**
 
-ACP agents emit `SessionUpdate::Plan` events containing checklist/task entries. The `translate_session_update_to_events()` function in `event_translation.rs` maps these to `EventMsg::PlanUpdate(UpdatePlanArgs)`, enabling the TUI's existing `PlanUpdateCell` (in `@/codex-rs/tui/src/history_cell/mod.rs`) to render them as checkbox checklists.
+ACP agents emit `SessionUpdate::Plan` events containing checklist/task entries. The ACP backend normalizes these into `nori_protocol::ClientEvent::PlanSnapshot`, enabling the TUI's existing plan rendering to display them as checkbox checklists without relying on a Codex-shaped `PlanUpdate` event.
 
 Each `acp::PlanEntry` is mapped to a `codex_protocol::plan_tool::PlanItemArg`:
 
@@ -814,7 +809,7 @@ Each `acp::PlanEntry` is mapped to a `codex_protocol::plan_tool::PlanItemArg`:
 | `PlanEntry.status` | `PlanItemArg.status` | `Pending`/`InProgress`/`Completed` mapped 1:1; unknown variants default to `Pending` |
 | `PlanEntry.priority` | (dropped) | Not present in the internal `PlanItemArg` type |
 
-The simpler `translator.rs` `translate_session_update()` function (used only for text replay in its own module, not production event flow) still returns `vec![]` for Plan events since its `TranslatedEvent` enum only supports `TextDelta`/`Completed`.
+The simpler `translator.rs` helper functions are unrelated to ACP session translation; they remain focused on user input conversion and other local parsing helpers.
 
 **Conversation Compaction:**
 
@@ -829,10 +824,10 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 
-`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, the legacy `event_tx`, and an optional normalized `client_event_tx`, then selects between two resume strategies based on agent capabilities. The normalized channel is now used for live ACP edit approvals and completed edit snapshots while the remaining ACP UI still consumes translated legacy events:
+`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events:
 
 ```
-AcpBackend::resume_session(config, acp_session_id, transcript, event_tx, client_event_tx)
+AcpBackend::resume_session(config, acp_session_id, transcript, backend_event_tx)
     |
     v
 SacpConnection::spawn() -> check capabilities().load_session
@@ -845,7 +840,7 @@ SacpConnection::spawn() -> check capabilities().load_session
     │       ├── Success:
     │       │   Agent streams SessionUpdate notifications (history replay)
     │       │   Collect task buffers updates into Vec (no backpressure)
-    │       │   returns (session_id, no initial_messages, deferred_replay_events)
+    │       │   returns (session_id, deferred_replay_events)
     │       │
     │       └── Failure (runtime error):
     │           Collect task aborted
@@ -858,24 +853,21 @@ SacpConnection::spawn() -> check capabilities().load_session
         SacpConnection::create_session() (normal session/new)
             |
             v
-        transcript_to_replay_events() -> initial_messages (for TUI display)
         transcript_to_summary()       -> pending_compact_summary (for agent context)
             |
             v
-        returns (session_id, initial_messages, summary)
+        returns (session_id, summary)
     |
     v
-SessionConfigured event sent to TUI (with initial_messages if client-side)
+SessionConfigured event sent to TUI
     |
     v
-Deferred replay relay spawned (sends buffered events to event_tx)
+Deferred replay relay spawned (sends buffered events to backend_event_tx)
 ```
 
-**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the translated codex `Event`s into a `Vec` (using `translate_session_update_to_events()`). `SacpConnection::load_session()` installs the `update_tx` channel into the shared `active_update_tx` slot before sending the request, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to `event_tx`. This deferred-relay pattern prevents a deadlock: the `event_tx` channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to client-side replay by calling `create_session()` and replaying the transcript. A `WarningEvent` is emitted to inform the user that the restored session will not have tool call information in the context.
+**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` installs the `update_tx` channel into the shared `active_update_tx` slot before sending the request, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
 
-**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is then replayed through two mechanisms that reuse existing TUI infrastructure:
-- `transcript_to_replay_events()` converts `User` and `Assistant` transcript entries to `EventMsg::UserMessage` / `EventMsg::AgentMessage`, passed as `initial_messages` on `SessionConfiguredEvent` for display in the TUI chat history
-- `transcript_to_summary()` builds a human-readable summary of the full transcript (no truncation), stored in `pending_compact_summary` and prepended to the first user prompt -- the same mechanism used by `/compact`. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully
+**Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is replayed through normalized `ClientEvent::ReplayEntry` items derived from the transcript rather than through `SessionConfigured.initial_messages`. The transcript summary path remains available for context management and `/compact`-style behavior. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully.
 
 A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
@@ -953,7 +945,7 @@ Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `event_translation.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1

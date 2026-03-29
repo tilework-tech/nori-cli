@@ -130,136 +130,65 @@ This section documents the ACP (Agent Client Protocol) tool event behavior and h
 the TUI handles it. This is critical knowledge for anyone working on tool call
 display or debugging cell lifecycle issues.
 
-### ACP ToolCall Event Behavior
+### ACP Snapshot Behavior
 
-**Critical Discovery**: The ACP protocol emits **multiple ToolCall events** for the
-same `call_id` as details become available during streaming:
+ACP session-domain tool activity now reaches the TUI as normalized
+`nori_protocol::ClientEvent::ToolSnapshot` values rather than as a translated
+`ExecCommandBegin/End` stream from the backend. A single tool call typically
+produces multiple snapshots for the same `call_id`:
 
 ```
-Event 1 (early): ToolCall { call_id="toolu_123", title="Read File", raw_input={} }
-Event 2 (later): ToolCall { call_id="toolu_123", title="Read /home/.../file.rs", raw_input={path: "..."} }
+Snapshot 1: phase=Pending, title="Read File", invocation=None
+Snapshot 2: phase=InProgress, title="Read /home/.../file.rs", invocation=Read { path }
+Snapshot 3: phase=Completed, title="Read /home/.../file.rs", artifacts=[...]
 ```
 
-This happens because:
-1. The LLM starts generating a tool call, and ACP emits a placeholder event immediately
-2. As more tokens stream in, ACP emits updated events with more details
-3. The final event contains the complete information (title with path, raw_input with arguments)
+The ACP backend merges intermediate `ToolCall` and `ToolCallUpdate` messages by
+`call_id` before emitting them, so the TUI sees one progressively enriched
+snapshot stream rather than raw protocol churn.
 
-### Why This Caused Problems
+### Why This Still Matters For Cell Lifecycle
 
-Without filtering, the TUI would receive both events and try to create cells for each:
+Even with normalized snapshots, multiple updates for the same `call_id` can
+arrive while the viewport is streaming text:
 
-1. First ToolCall → Creates ExecCell A in `active_cell`
-2. Second ToolCall (same call_id) → `with_added_call` rejects duplicate → Creates NEW cell
-3. Old cell A gets flushed to `pending_exec_cells`
-4. When ExecEnd arrives, cell A was already "processed" but is stuck in pending
-5. Cell is discarded (with warnings) at `drain_failed()` when the turn completes
+1. Pending/InProgress snapshot creates or updates an `ExecCell`
+2. Another snapshot for the same `call_id` arrives with better title/input
+3. The completed snapshot arrives after the cell has already been deferred
+4. If pairing breaks, the completion can create an orphan cell or leave the
+   pending one stuck until `drain_failed()`
 
-### The Solution: Two-Layer Filtering
+The backend now owns the provider-specific normalization, but the TUI still has
+to preserve ordering and deduplicate by `call_id`.
 
-The fix is implemented in `acp/src/backend.rs` with two layers:
+### Snapshot Routing In The TUI
 
-#### Layer 1: Skip Generic Events (Primary Filter)
+`handle_client_tool_snapshot()` in `chatwidget/event_handlers.rs` routes
+normalized ACP snapshots into existing cell types:
 
-In `translate_session_update_to_events()`, we skip ToolCall events that don't have
-useful display information:
+| Snapshot kind/phase | TUI handling |
+|---------------------|--------------|
+| `Edit` / `Delete` / `Move` completed with file operations | `PatchHistoryCell` path |
+| `Execute` / `Read` / `Search` / `Fetch` / `Think` / `Other` pending or in-progress | Adapt to exec-begin flow |
+| Same kinds completed or failed | Adapt to exec-end flow |
 
-```rust
-acp::SessionUpdate::ToolCall(tool_call) => {
-    // Check for useful display info in raw_input
-    let display_args = tool_call
-        .raw_input
-        .as_ref()
-        .and_then(|input| extract_display_args(&tool_call.title, input));
-
-    // Check for useful info in the title itself (some providers put path there)
-    let title_has_path = title_contains_useful_info(&tool_call.title);
-
-    // Skip if NEITHER has useful info
-    if display_args.is_none() && !title_has_path {
-        // Skip this generic placeholder event
-        return vec![];
-    }
-
-    // Emit the event with complete information
-    // ...
-}
-```
-
-**Why check both?**
-- Some ACP providers put the path/command in `raw_input` (e.g., `{path: "/home/user/file.rs"}`)
-- Other providers put it in the title itself (e.g., `"Read /home/user/file.rs"`)
-- We need to detect either case to avoid skipping legitimate detailed events
-
-#### Layer 2: Dispatch-Loop Deduplication (Safety Net)
-
-Even with Layer 1, edge cases could still allow duplicates through. The dispatch
-loop tracks emitted call_ids and skips any that were already sent:
-
-```rust
-let mut emitted_begin_call_ids: HashSet<String> = HashSet::new();
-
-while let Some(update) = update_rx.recv().await {
-    let events = translate_session_update_to_events(&update);
-    for event_msg in events {
-        // Safety net: skip duplicate ExecCommandBegin events
-        if let EventMsg::ExecCommandBegin(ref begin_ev) = event_msg {
-            if emitted_begin_call_ids.contains(&begin_ev.call_id) {
-                continue;  // Skip duplicate
-            }
-            emitted_begin_call_ids.insert(begin_ev.call_id.clone());
-        }
-        // ... send event to TUI
-    }
-}
-```
-
-### The `title_contains_useful_info()` Function
-
-This function detects when a title contains actionable information even if `raw_input`
-doesn't have extractable arguments:
-
-```rust
-fn title_contains_useful_info(title: &str) -> bool {
-    // Check for absolute paths (Unix or Windows style)
-    if title.contains(" /") || title.contains(" C:\\") || title.contains(" ~") {
-        return true;
-    }
-
-    // Check for backtick-quoted commands (e.g., "`git status`")
-    if title.contains('`') {
-        return true;
-    }
-
-    // Known generic titles that should be skipped
-    let generic_patterns = [
-        "Read File", "Read file", "Terminal", "Search",
-        "Grep", "Glob", "List", "Write", "Edit",
-    ];
-    for pattern in &generic_patterns {
-        if title == *pattern {
-            return false;
-        }
-    }
-
-    // Long titles with spaces likely contain useful info
-    title.len() > 15 && title.contains(' ')
-}
-```
+This preserves the existing cell presentation without requiring the backend to
+reconstruct Codex-shaped event vocabulary.
 
 ### Guidelines for Handling ACP Events
 
 When working with ACP tool events, follow these principles:
 
-1. **Never trust a single ToolCall event** - The first event for a call_id is often incomplete
-2. **Filter early** - Skip events at the translation layer, not in the TUI
-3. **Use multiple signals** - Check both `raw_input` and title for useful information
-4. **Have a safety net** - Track emitted call_ids to catch any duplicates that slip through
+1. **Never trust a single snapshot** - early pending snapshots are often incomplete
+2. **Preserve `call_id` pairing** - begin and completion state must stay correlated
+3. **Route by normalized semantics** - file operations, exploring tools, and generic tools take different cell paths
+4. **Keep provider quirks out of the TUI** - the backend should normalize titles and raw input before UI rendering
 5. **Log thoroughly** - Use the `acp_event_flow` tracing target to debug event issues
 
 ### Tool Display Information Extraction
 
-The `extract_display_args()` function extracts human-readable arguments based on tool type:
+The TUI still derives concise display text from the normalized invocation/raw
+input when adapting snapshots into exec-like cells:
 
 | Tool Type | Checked Fields | Output Format |
 |-----------|---------------|---------------|
@@ -274,14 +203,15 @@ This enables the TUI to show `"Read File(src/main.rs)"` instead of just `"Read F
 
 ### Tool Classification for Exploring vs Command Mode
 
-The `classify_tool_to_parsed_command()` function maps ACP ToolKind to TUI rendering modes:
+The snapshot adapter maps normalized `ToolKind` and `Invocation` data to TUI rendering modes:
 
 | ACP ToolKind | ParsedCommand | TUI Mode |
 |--------------|---------------|----------|
 | `Read` | `ParsedCommand::Read` | Exploring (compact) |
 | `Search` | `ParsedCommand::Search` | Exploring (compact) |
 | `Other` with "list"/"glob"/"ls" in title | `ParsedCommand::ListFiles` | Exploring (compact) |
-| `Execute`, `Edit`, `Delete`, `Move`, `Fetch`, `Think` | `ParsedCommand::Unknown` | Command (full display) |
+| `Execute`, `Fetch`, `Think`, generic `Other` | `ParsedCommand::Unknown` | Command (full display) |
+| `Edit`, `Delete`, `Move` | N/A | Patch history path |
 
 This enables the TUI to group and collapse read-only operations while showing
 mutating operations prominently.
@@ -328,7 +258,7 @@ already used by `on_exec_command_begin`.
 - `tui_event_flow` - Event reception in the TUI (on_agent_message_delta, on_exec_command_begin, on_exec_command_end)
 
 ### ACP-side tracing
-- `acp_event_flow` - Event emission from ACP backend (translate_session_update_to_events, dispatch loop)
+- `acp_event_flow` - Normalized approval/tool/lifecycle emission from the ACP backend
 
 ### Enable all event flow tracing
 
@@ -346,8 +276,8 @@ RUST_LOG=acp_event_flow=debug,tui_event_flow=debug,cell_flushing=debug,pending_e
 ### What to look for in the logs
 
 1. **Event sequence**: Events should arrive in order (seq=1, 2, 3...)
-2. **Skipped events**: Look for "skipping generic ToolCall" messages - these should be the placeholder events
-3. **Duplicate detection**: Look for "skipping duplicate ExecCommandBegin" - these are the safety net catches
+2. **Snapshot progression**: Verify the same `call_id` moves from pending/in-progress to completed without spawning extra cells
+3. **Duplicate detection**: Look for repeated begin adaptation for the same `call_id`
 4. **State at reception**: Check `has_active_cell`, `active_cell_is_exec`, `pending_exec_count` at each event
 5. **Cell flushing**: Track when cells are saved to pending vs flushed to history
-6. **call_id correlation**: Match `ExecCommandBegin` and `ExecCommandEnd` by call_id
+6. **call_id correlation**: Match begin and completion handling for the same normalized ACP snapshot stream
