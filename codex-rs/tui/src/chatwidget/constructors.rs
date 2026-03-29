@@ -99,6 +99,8 @@ impl ChatWidget {
             turn_finished: false,
             plan_drawer_mode: PlanDrawerMode::Off,
             pinned_plan: None,
+            terminal_title_animation_origin: std::time::Instant::now(),
+            last_terminal_title: None,
         };
 
         widget.prefetch_rate_limits();
@@ -203,6 +205,8 @@ impl ChatWidget {
             turn_finished: false,
             plan_drawer_mode: PlanDrawerMode::Off,
             pinned_plan: None,
+            terminal_title_animation_origin: std::time::Instant::now(),
+            last_terminal_title: None,
         };
 
         widget.prefetch_rate_limits();
