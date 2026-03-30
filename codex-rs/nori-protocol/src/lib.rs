@@ -465,38 +465,42 @@ fn structured_invocation_from_tool_call(tool_call: &acp::ToolCall) -> Option<Inv
             })
         }
         acp::ToolKind::Execute => {
-            let command = raw_input
-                .get("command")
-                .or_else(|| raw_input.get("cmd"))
-                .and_then(serde_json::Value::as_str)?;
-            Some(Invocation::Command {
-                command: command.to_string(),
-            })
+            extract_command(raw_input).map(|command| Invocation::Command { command })
         }
         acp::ToolKind::Read => {
-            let path = raw_input
-                .get("path")
-                .or_else(|| raw_input.get("file_path"))
-                .or_else(|| raw_input.get("file"))
-                .and_then(serde_json::Value::as_str)?;
-            Some(Invocation::Read {
-                path: PathBuf::from(path),
-            })
+            let path = extract_path(raw_input, &["path", "file_path", "file"]).or_else(|| {
+                parsed_command_type(raw_input)
+                    .filter(|type_| *type_ == "read")
+                    .and_then(|_| parsed_command_path(raw_input))
+            })?;
+            Some(Invocation::Read { path })
         }
         acp::ToolKind::Search => {
-            let path = raw_input
+            let mut path = raw_input
                 .get("path")
                 .or_else(|| raw_input.get("directory"))
                 .and_then(serde_json::Value::as_str)
                 .map(PathBuf::from);
-            let query = raw_input
+            let mut query = raw_input
                 .get("pattern")
                 .or_else(|| raw_input.get("query"))
                 .or_else(|| raw_input.get("glob"))
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string);
 
-            if query.is_none() && title_looks_like_listing(&tool_call.title) {
+            if path.is_none()
+                && (parsed_command_is_listing(raw_input) || parsed_command_is_search(raw_input))
+            {
+                path = parsed_command_path(raw_input);
+            }
+
+            if query.is_none() && parsed_command_is_search(raw_input) {
+                query = parsed_command_query(raw_input);
+            }
+
+            if parsed_command_is_listing(raw_input)
+                || (query.is_none() && title_looks_like_listing(&tool_call.title))
+            {
                 Some(Invocation::ListFiles { path })
             } else {
                 Some(Invocation::Search { query, path })
@@ -571,6 +575,64 @@ fn extract_path(raw_input: &serde_json::Value, keys: &[&str]) -> Option<PathBuf>
         .find_map(|key| raw_input.get(*key))
         .and_then(serde_json::Value::as_str)
         .map(PathBuf::from)
+}
+
+fn extract_command(raw_input: &serde_json::Value) -> Option<String> {
+    let command = raw_input.get("command").or_else(|| raw_input.get("cmd"));
+
+    command
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            command
+                .and_then(serde_json::Value::as_array)
+                .and_then(|command| command_from_array(command))
+        })
+        .or_else(|| parsed_command_query(raw_input))
+}
+
+fn command_from_array(command: &[serde_json::Value]) -> Option<String> {
+    command
+        .iter()
+        .all(serde_json::Value::is_string)
+        .then(|| command.last().and_then(serde_json::Value::as_str))
+        .flatten()
+        .map(str::to_string)
+}
+
+fn first_parsed_command(raw_input: &serde_json::Value) -> Option<&serde_json::Value> {
+    raw_input.get("parsed_cmd")?.as_array()?.first()
+}
+
+fn parsed_command_type(raw_input: &serde_json::Value) -> Option<&str> {
+    first_parsed_command(raw_input)?.get("type")?.as_str()
+}
+
+fn parsed_command_path(raw_input: &serde_json::Value) -> Option<PathBuf> {
+    first_parsed_command(raw_input)?
+        .get("path")?
+        .as_str()
+        .map(PathBuf::from)
+}
+
+fn parsed_command_query(raw_input: &serde_json::Value) -> Option<String> {
+    ["pattern", "query", "cmd"]
+        .iter()
+        .find_map(|key| first_parsed_command(raw_input)?.get(*key)?.as_str())
+        .map(str::to_string)
+}
+
+fn parsed_command_is_listing(raw_input: &serde_json::Value) -> bool {
+    matches!(parsed_command_type(raw_input), Some("list_files"))
+}
+
+fn parsed_command_is_search(raw_input: &serde_json::Value) -> bool {
+    parsed_command_type(raw_input).is_some_and(|type_| {
+        type_.contains("search")
+            || type_.contains("grep")
+            || type_.contains("rg")
+            || type_.contains("glob")
+    })
 }
 
 fn raw_output_text(raw_output: Option<&serde_json::Value>) -> Option<String> {
@@ -872,6 +934,151 @@ mod tests {
             snapshot.invocation,
             Some(Invocation::Read {
                 path: PathBuf::from("Cargo.toml"),
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_codex_execute_command_from_command_array() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-exec-codex"),
+            acp::ToolCallUpdateFields::new()
+                .title("Run df -h .")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "command": ["/usr/bin/zsh", "-lc", "df -h ."],
+                    "cwd": "/repo",
+                    "parsed_cmd": [{
+                        "cmd": "df -h .",
+                        "type": "unknown",
+                    }],
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Command {
+                command: "df -h .".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_codex_read_path_from_parsed_command() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-read-codex"),
+            acp::ToolCallUpdateFields::new()
+                .title("Read SKILL.md")
+                .kind(acp::ToolKind::Read)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "command": ["/usr/bin/zsh", "-lc", "sed -n '1,220p' /repo/SKILL.md"],
+                    "cwd": "/repo",
+                    "parsed_cmd": [{
+                        "cmd": "sed -n '1,220p' /repo/SKILL.md",
+                        "name": "SKILL.md",
+                        "path": "/repo/SKILL.md",
+                        "type": "read",
+                    }],
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Read {
+                path: PathBuf::from("/repo/SKILL.md"),
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_codex_list_files_from_parsed_command() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-list-codex"),
+            acp::ToolCallUpdateFields::new()
+                .title("List files")
+                .kind(acp::ToolKind::Search)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "command": ["/usr/bin/zsh", "-lc", "find /repo/src -maxdepth 1"],
+                    "cwd": "/repo",
+                    "parsed_cmd": [{
+                        "cmd": "find /repo/src -maxdepth 1",
+                        "path": "/repo/src",
+                        "type": "list_files",
+                    }],
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::ListFiles {
+                path: Some(PathBuf::from("/repo/src")),
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_extracts_codex_search_from_parsed_command() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-search-codex"),
+            acp::ToolCallUpdateFields::new()
+                .title("Search files")
+                .kind(acp::ToolKind::Search)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "command": ["/usr/bin/zsh", "-lc", "rg structured_invocation /repo/src"],
+                    "cwd": "/repo",
+                    "parsed_cmd": [{
+                        "cmd": "rg structured_invocation /repo/src",
+                        "path": "/repo/src",
+                        "type": "search",
+                    }],
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Search {
+                query: Some("rg structured_invocation /repo/src".into()),
+                path: Some(PathBuf::from("/repo/src")),
             })
         );
     }

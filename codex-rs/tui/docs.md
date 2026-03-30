@@ -63,6 +63,8 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`.
 
 The execute rendering path reuses shared utilities from `exec_cell/render.rs` (`truncate_lines_middle`, `limit_lines_from_start`, `output_lines`, `spinner`) and layout constants that match the `ExecCell` display layout (`"  │ "` for command continuation, `"  └ "` for output). Output text is sourced preferentially from `raw_output["stdout"]`, falling back to `Artifact::Text` with code fence stripping. Exit code success is determined from `raw_output["exit_code"]` when present, otherwise inferred from `ToolPhase`.
 
+For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` normalizing shell-wrapper `rawInput.command` arrays and `rawInput.parsed_cmd` metadata into structured `Invocation::Command` / `Invocation::Read` / `Invocation::Search` / `Invocation::ListFiles` values. Without that normalization, `ClientToolCell` falls back to rendering raw protocol JSON instead of the compact command and exploration details the TUI expects.
+
 **Chronological Ordering Invariant** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
 
 Tool cells always appear in scrollback history before the agent text that follows them, matching the chronological order of execution. This is enforced by two mechanisms:
