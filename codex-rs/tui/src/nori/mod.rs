@@ -25,6 +25,8 @@ pub(crate) mod hotkey_picker;
 #[cfg(feature = "nori-config")]
 pub(crate) mod loop_count_picker;
 
+pub(crate) mod mcp_server_picker;
+
 #[cfg(feature = "nori-config")]
 pub(crate) mod worktree_ask;
 
