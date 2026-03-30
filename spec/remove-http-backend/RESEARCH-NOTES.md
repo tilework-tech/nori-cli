@@ -123,6 +123,42 @@ After removing Chat Completions, `codex-api`'s `WireApi` enum is now a single-va
 - The `WireApi::Chat` variant in codex-core is kept for config deserialization compat (existing user config files).
 - `codex-core`'s `WireApi` enum and its Chat variant are NOT part of this removal — only the codex-api side.
 
+## WireApi enum removal from codex-core (next removal target)
+
+After removing `WireApi` from codex-api, the codex-core `WireApi` is a two-variant enum where `Chat` is dead (errors at runtime) and `Responses` is always used. The `wire_api` field on `ModelProviderInfo` is always `Responses` in practice.
+
+**Dependency analysis:**
+- `WireApi` is imported by 8 test files and 2 source files (`model_provider_info.rs`, `client.rs`)
+- `WireApi` is re-exported from `lib.rs`
+- `wire_api` field is set in every `ModelProviderInfo` construction across the test suite
+- `create_oss_provider()` and `create_oss_provider_with_base_url()` take a `WireApi` parameter
+
+**Backwards compatibility:**
+- `ModelProviderInfo` does NOT have `#[serde(deny_unknown_fields)]`, so serde ignores unknown fields by default
+- Existing configs with `wire_api = "chat"` or `wire_api = "responses"` will silently ignore the field — this is actually better than the current runtime error for Chat
+- E2E tests reference `wire_api = "acp"` in comments/configs — these are already broken/ignored since there's no Acp variant
+
+**Files to modify (source):**
+1. `core/src/model_provider_info.rs` — Remove `WireApi` enum, remove `wire_api` field from `ModelProviderInfo`, remove `WireApi` param from `create_oss_provider*`, remove `Chat` check from `to_api_provider()`
+2. `core/src/client.rs` — Remove `WireApi` import, remove match on `wire_api` in `stream()`, call `stream_responses_api` directly
+3. `core/src/lib.rs` — Remove `WireApi` re-export
+
+**Files to modify (tests):**
+1. `core/tests/suite/client/mod.rs` — Remove `WireApi` import, remove `wire_api` field from provider
+2. `core/tests/suite/client/part3.rs` — Remove `wire_api` field
+3. `core/tests/suite/client/part4.rs` — Remove `wire_api` field
+4. `core/tests/suite/stream_error_allows_next_turn.rs` — Remove `WireApi` import, `wire_api` field
+5. `core/tests/suite/stream_no_completed.rs` — Remove `WireApi` import, `wire_api` field
+6. `core/tests/responses_headers.rs` — Remove `WireApi` import, `wire_api` field
+7. `core/src/config/tests/mod.rs` — Remove `wire_api` from test fixture, remove `chat_wire_api_config_deserializes_but_fails_to_create_provider` test
+
+**Tests to remove:**
+- `chat_wire_api_config_deserializes_but_fails_to_create_provider` — tests removed behavior
+- `ollama_builtin_provider_creates_successfully` — still valid but `wire_api` field gone from assertion
+
+**Docs to update:**
+- `core/docs.md` — Remove WireApi references
+
 ## Approach: Feature-gate codex-api (future)
 
 Add a `legacy-http-backend` feature to codex-core:

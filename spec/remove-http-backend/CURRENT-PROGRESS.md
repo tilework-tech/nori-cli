@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Fourth component removed
+## Status: Fifth component removed
 
 ### Completed: Remove compact_remote module
 
@@ -90,6 +90,28 @@ Removed the `WireApi` enum from `codex-api` entirely. After removing Chat Comple
 - `ollama_builtin_provider_creates_successfully` — verifies Ollama built-in creates without error
 
 **Impact:** Net -20 lines across codex-api and codex-core. All existing tests pass (codex-api: 16 tests, codex-core: 541 unit + 440 integration pass, 22 pre-existing nvm environment failures).
+
+### Completed: Remove WireApi enum from codex-core
+
+Removed the `WireApi` enum from codex-core entirely. After previous commits removed `WireApi` from codex-api and made the `Chat` variant a dead error path, the enum was a two-variant type (`Responses` / `Chat`) where one variant was always used and the other always errored. The `wire_api` field on `ModelProviderInfo` was always `Responses` in practice.
+
+**What was removed:**
+- `WireApi` enum from `core/src/model_provider_info.rs`
+- `wire_api` field from `ModelProviderInfo` struct
+- `WireApi` re-export from `core/src/lib.rs`
+- `WireApi` parameter from `create_oss_provider()` and `create_oss_provider_with_base_url()`
+- `WireApi::Chat` error check from `to_api_provider()`
+- `WireApi::Chat` match arm from `ModelClient::stream()`
+- `chat_wire_api_config_deserializes_but_fails_to_create_provider` test (tested removed behavior)
+- `WireApi` imports and `wire_api` field references from 8 test files
+
+**What was simplified:**
+- `ModelClient::stream()` now directly calls `stream_responses_api()` — no more dispatch logic
+- `ModelProviderInfo` no longer carries a wire protocol selector
+- `create_oss_provider_with_base_url()` no longer takes a `WireApi` parameter
+- Config files with `wire_api = "chat"` or `wire_api = "responses"` silently ignore the unknown field (serde default behavior) — better than the previous runtime error for Chat
+
+**Impact:** Net ~-70 lines across codex-core source and tests. All existing tests pass (codex-core: 536 unit, 440 integration pass, 22 pre-existing nvm environment failures; codex-api: 2 tests; E2E: 6 tests).
 
 ### Suggested next steps for future commits
 1. Remove the `codex_conversation.rs` and `conversation_manager.rs` wrappers (only used by HTTP backend tests — would cascade to ~30 integration test modules, so consider rewriting tests to use ACP path first)

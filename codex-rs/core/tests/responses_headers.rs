@@ -7,7 +7,6 @@ use codex_core::ModelProviderInfo;
 use codex_core::Prompt;
 use codex_core::ResponseEvent;
 use codex_core::ResponseItem;
-use codex_core::WireApi;
 use codex_otel::otel_event_manager::OtelEventManager;
 use codex_protocol::ConversationId;
 use codex_protocol::protocol::SessionSource;
@@ -40,7 +39,6 @@ async fn responses_stream_includes_subagent_header_on_other() {
         env_key: None,
         env_key_instructions: None,
         experimental_bearer_token: None,
-        wire_api: WireApi::Responses,
         query_params: None,
         http_headers: None,
         env_http_headers: None,

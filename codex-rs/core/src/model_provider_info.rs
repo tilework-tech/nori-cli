@@ -26,23 +26,6 @@ const MAX_STREAM_MAX_RETRIES: u64 = 100;
 /// Hard cap for user-configured `request_max_retries`.
 const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
-/// Wire protocol that the provider speaks.
-///
-/// Only the Responses API is supported. The `Chat` variant is retained for
-/// backwards-compatible config deserialization but will produce an error at
-/// runtime if selected.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WireApi {
-    /// The Responses API exposed by OpenAI at `/v1/responses`.
-    #[default]
-    Responses,
-
-    /// Formerly the Chat Completions wire protocol. No longer supported at
-    /// runtime — kept only so that existing config files still parse.
-    Chat,
-}
-
 /// Serializable representation of a provider definition.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct ModelProviderInfo {
@@ -61,10 +44,6 @@ pub struct ModelProviderInfo {
     /// config is discouraged in favor of `env_key` for security reasons, but
     /// this may be necessary when using this programmatically.
     pub experimental_bearer_token: Option<String>,
-
-    /// Which wire protocol this provider expects.
-    #[serde(default)]
-    pub wire_api: WireApi,
 
     /// Optional query parameters to append to the base URL.
     pub query_params: Option<HashMap<String, String>>,
@@ -128,13 +107,6 @@ impl ModelProviderInfo {
         &self,
         auth_mode: Option<AuthMode>,
     ) -> crate::error::Result<ApiProvider> {
-        if self.wire_api == WireApi::Chat {
-            return Err(crate::error::CodexErr::UnsupportedOperation(
-                "Chat Completions wire API has been removed; use wire_api = \"responses\" instead"
-                    .to_string(),
-            ));
-        }
-
         let default_base_url = if matches!(auth_mode, Some(AuthMode::ChatGPT)) {
             "https://chatgpt.com/backend-api/codex"
         } else {
@@ -242,7 +214,6 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 env_key: None,
                 env_key_instructions: None,
                 experimental_bearer_token: None,
-                wire_api: WireApi::Responses,
                 query_params: None,
                 http_headers: Some(
                     [("version".to_string(), env!("CARGO_PKG_VERSION").to_string())]
@@ -269,11 +240,11 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
         ),
         (
             OLLAMA_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Responses),
+            create_oss_provider(DEFAULT_OLLAMA_PORT),
         ),
         (
             LMSTUDIO_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_LMSTUDIO_PORT, WireApi::Responses),
+            create_oss_provider(DEFAULT_LMSTUDIO_PORT),
         ),
     ]
     .into_iter()
@@ -281,7 +252,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     .collect()
 }
 
-pub fn create_oss_provider(default_provider_port: u16, wire_api: WireApi) -> ModelProviderInfo {
+pub fn create_oss_provider(default_provider_port: u16) -> ModelProviderInfo {
     // These CODEX_OSS_ environment variables are experimental: we may
     // switch to reading values from config.toml instead.
     let codex_oss_base_url = match std::env::var("CODEX_OSS_BASE_URL")
@@ -298,17 +269,16 @@ pub fn create_oss_provider(default_provider_port: u16, wire_api: WireApi) -> Mod
                 .unwrap_or(default_provider_port)
         ),
     };
-    create_oss_provider_with_base_url(&codex_oss_base_url, wire_api)
+    create_oss_provider_with_base_url(&codex_oss_base_url)
 }
 
-pub fn create_oss_provider_with_base_url(base_url: &str, wire_api: WireApi) -> ModelProviderInfo {
+pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
     ModelProviderInfo {
         name: "gpt-oss".into(),
         base_url: Some(base_url.into()),
         env_key: None,
         env_key_instructions: None,
         experimental_bearer_token: None,
-        wire_api,
         query_params: None,
         http_headers: None,
         env_http_headers: None,
@@ -336,7 +306,7 @@ base_url = "http://localhost:11434/v1"
             env_key: None,
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Responses,
+
             query_params: None,
             http_headers: None,
             env_http_headers: None,
@@ -364,7 +334,7 @@ query_params = { api-version = "2025-04-01-preview" }
             env_key: Some("AZURE_OPENAI_API_KEY".into()),
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Responses,
+
             query_params: Some(maplit::hashmap! {
                 "api-version".to_string() => "2025-04-01-preview".to_string(),
             }),
@@ -395,7 +365,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             env_key: Some("API_KEY".into()),
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Responses,
+
             query_params: None,
             http_headers: Some(maplit::hashmap! {
                 "X-Example-Header".to_string() => "example-value".to_string(),
@@ -414,7 +384,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
     }
 
     #[test]
-    fn chat_wire_api_config_deserializes_but_fails_to_create_provider() {
+    fn legacy_wire_api_field_in_config_is_silently_ignored() {
         let toml_str = r#"
 name = "test"
 base_url = "https://example.com/v1"
@@ -423,7 +393,7 @@ wire_api = "chat"
         let provider: ModelProviderInfo = toml::from_str(toml_str).unwrap();
         provider
             .to_api_provider(None)
-            .expect_err("wire_api = 'chat' should be rejected at provider creation");
+            .expect("legacy wire_api field should be silently ignored");
     }
 
     #[test]
@@ -454,7 +424,7 @@ wire_api = "chat"
                 env_key: None,
                 env_key_instructions: None,
                 experimental_bearer_token: None,
-                wire_api: WireApi::Responses,
+
                 query_params: None,
                 http_headers: None,
                 env_http_headers: None,
@@ -476,7 +446,7 @@ wire_api = "chat"
             env_key: None,
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Responses,
+
             query_params: None,
             http_headers: None,
             env_http_headers: None,
@@ -500,7 +470,7 @@ wire_api = "chat"
                 env_key: None,
                 env_key_instructions: None,
                 experimental_bearer_token: None,
-                wire_api: WireApi::Responses,
+
                 query_params: None,
                 http_headers: None,
                 env_http_headers: None,

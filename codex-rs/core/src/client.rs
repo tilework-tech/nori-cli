@@ -40,7 +40,6 @@ use crate::error::Result;
 use crate::flags::CODEX_RS_SSE_FIXTURE;
 use crate::model_family::ModelFamily;
 use crate::model_provider_info::ModelProviderInfo;
-use crate::model_provider_info::WireApi;
 use crate::openai_model_info::get_model_info;
 use crate::tools::spec::create_tools_json_for_responses_api;
 
@@ -104,13 +103,7 @@ impl ModelClient {
 
     /// Streams a single model turn using the Responses wire API.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        match self.provider.wire_api {
-            WireApi::Responses => self.stream_responses_api(prompt).await,
-            WireApi::Chat => Err(CodexErr::UnsupportedOperation(
-                "Chat Completions wire API has been removed; use wire_api = \"responses\" instead"
-                    .to_string(),
-            )),
-        }
+        self.stream_responses_api(prompt).await
     }
 
     /// Streams a turn via the OpenAI Responses API.

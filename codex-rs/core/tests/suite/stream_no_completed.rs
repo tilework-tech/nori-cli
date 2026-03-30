@@ -2,7 +2,6 @@
 //! delivering a `response.completed` event.
 
 use codex_core::ModelProviderInfo;
-use codex_core::WireApi;
 use codex_core::protocol::EventMsg;
 use codex_core::protocol::Op;
 use codex_protocol::user_input::UserInput;
@@ -72,7 +71,6 @@ async fn retries_on_early_close() {
         env_key: Some("PATH".into()),
         env_key_instructions: None,
         experimental_bearer_token: None,
-        wire_api: WireApi::Responses,
         query_params: None,
         http_headers: None,
         env_http_headers: None,
