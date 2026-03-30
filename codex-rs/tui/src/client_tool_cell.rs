@@ -8,6 +8,8 @@ use crate::client_event_format::format_artifacts;
 use crate::client_event_format::format_invocation;
 use crate::client_event_format::format_tool_header;
 use crate::client_event_format::is_exploring_snapshot;
+use crate::client_event_format::is_invocation_redundant;
+use crate::client_event_format::strip_code_fences;
 use crate::exec_cell::OutputLinesParams;
 use crate::exec_cell::TOOL_CALL_MAX_LINES;
 use crate::exec_cell::limit_lines_from_start;
@@ -88,7 +90,9 @@ impl ClientToolCell {
         ]));
 
         let mut details = Vec::new();
-        if let Some(invocation) = format_invocation(&self.snapshot.invocation) {
+        if let Some(invocation) = format_invocation(&self.snapshot.invocation)
+            && !is_invocation_redundant(&invocation, &self.snapshot.title)
+        {
             details.push(invocation);
         }
         for artifact in format_artifacts(&self.snapshot.artifacts) {
@@ -289,15 +293,6 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
     }
 
     None
-}
-
-fn strip_code_fences(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() >= 2 && lines[0].starts_with("```") && lines[lines.len() - 1].trim() == "```" {
-        lines[1..lines.len() - 1].join("\n")
-    } else {
-        text.to_string()
-    }
 }
 
 impl HistoryCell for ClientToolCell {
@@ -618,6 +613,136 @@ mod tests {
             lines[0].contains("README.md"),
             "Header should contain the title, got: {}",
             lines[0]
+        );
+    }
+
+    // --- Spec 06: Artifact Text Output Cleanup ---
+
+    #[test]
+    fn generic_tool_strips_code_fences_from_text_artifact() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-fence".into(),
+            title: "Read /repo/src/main.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "/repo/src/main.rs".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "```rust\nfn main() {}\n```".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Code fence markers should NOT appear in the rendered output
+        assert!(
+            !lines.iter().any(|l| l.contains("```")),
+            "Code fences should be stripped from generic tool output, got: {lines:?}"
+        );
+        // The actual content should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("fn main() {}")),
+            "Content inside fences should still render, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_tool_single_line_output_has_no_output_prefix() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-single".into(),
+            title: "Fetch https://example.com".into(),
+            kind: ToolKind::Fetch,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![Artifact::Text {
+                text: "200 OK".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should NOT have "Output:" prefix for single-line output
+        assert!(
+            !lines.iter().any(|l| l.contains("Output:")),
+            "Single-line output should not have 'Output:' prefix, got: {lines:?}"
+        );
+        // The actual text should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("200 OK")),
+            "Output text should still render, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_tool_multi_line_output_has_no_output_prefix() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-multi".into(),
+            title: "Search 'pattern'".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("pattern".into()),
+                path: None,
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "line one\nline two\nline three".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should NOT have "Output:" prefix for multi-line output either
+        assert!(
+            !lines.iter().any(|l| l.contains("Output:")),
+            "Multi-line output should not have 'Output:' prefix, got: {lines:?}"
+        );
+        // Content lines should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("line one")),
+            "First content line should render, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_tool_invocation_omitted_when_redundant_with_title() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-dup".into(),
+            title: "Read /repo/README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "/repo/README.md".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "# README".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // The invocation detail line ("Read: /repo/README.md") should NOT appear
+        // because the title already contains the same information
+        assert!(
+            !lines.iter().any(|l| l.contains("Read: /repo/README.md")),
+            "Redundant invocation should be omitted when title contains same info, got: {lines:?}"
+        );
+        // But the artifact output should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("# README")),
+            "Output content should still render, got: {lines:?}"
         );
     }
 }
