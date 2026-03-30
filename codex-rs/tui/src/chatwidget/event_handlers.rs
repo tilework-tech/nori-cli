@@ -1134,17 +1134,6 @@ impl ChatWidget {
         self.submit_op(Op::Shutdown);
     }
 
-    pub(super) fn on_list_mcp_tools(&mut self, ev: McpListToolsResponseEvent) {
-        self.mcp_auth_statuses = ev.auth_statuses.clone();
-        self.add_to_history(history_cell::new_mcp_tools_output(
-            &self.config,
-            ev.tools,
-            ev.resources,
-            ev.resource_templates,
-            &ev.auth_statuses,
-        ));
-    }
-
     pub(super) fn on_list_custom_prompts(&mut self, ev: ListCustomPromptsResponseEvent) {
         let len = ev.custom_prompts.len();
         tracing::debug!("received {len} custom prompts");

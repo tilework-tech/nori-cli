@@ -29,7 +29,6 @@ pub enum SlashCommand {
     Memory,
     FirstPrompt,
     Mcp,
-    McpServers,
     Login,
     Logout,
     Quit,
@@ -61,8 +60,7 @@ impl SlashCommand {
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Config => "toggle config settings",
-            SlashCommand::Mcp => "list configured MCP tools",
-            SlashCommand::McpServers => "manage MCP server connections",
+            SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
             SlashCommand::Rollout => "print the rollout file path",
@@ -91,7 +89,7 @@ impl SlashCommand {
             | SlashCommand::Model
             | SlashCommand::Approvals
             | SlashCommand::Config
-            | SlashCommand::McpServers
+            | SlashCommand::Mcp
             | SlashCommand::Login
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset
@@ -102,7 +100,6 @@ impl SlashCommand {
             | SlashCommand::Status
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
-            | SlashCommand::Mcp
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
             SlashCommand::Rollout => true,
@@ -303,5 +300,13 @@ mod tests {
     fn resume_parses_from_string() {
         let cmd: SlashCommand = "resume".parse().expect("/resume should parse from string");
         assert_eq!(cmd, SlashCommand::Resume);
+    }
+
+    #[test]
+    fn mcp_not_available_during_task() {
+        assert!(
+            !SlashCommand::Mcp.available_during_task(),
+            "/mcp should not be available while task is running"
+        );
     }
 }

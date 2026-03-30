@@ -237,9 +237,6 @@ impl ChatWidget {
                 }
             }
             SlashCommand::Mcp => {
-                self.add_mcp_output();
-            }
-            SlashCommand::McpServers => {
                 self.open_mcp_servers_popup();
             }
             SlashCommand::Rollout => {

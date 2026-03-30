@@ -92,18 +92,14 @@ pub(crate) struct McpServerPickerView {
 }
 
 impl McpServerPickerView {
-    pub fn new(
-        servers: &BTreeMap<String, McpServerConfig>,
-        auth_statuses: &HashMap<String, McpAuthStatus>,
-        app_event_tx: AppEventSender,
-    ) -> Self {
+    pub fn new(servers: &BTreeMap<String, McpServerConfig>, app_event_tx: AppEventSender) -> Self {
         let servers: Vec<(String, McpServerConfig)> = servers
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         Self {
             servers,
-            auth_statuses: auth_statuses.clone(),
+            auth_statuses: HashMap::new(),
             mode: Mode::List,
             selected_idx: 0,
             complete: false,
@@ -908,7 +904,8 @@ mod tests {
     ) {
         let (tx_raw, rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let picker = McpServerPickerView::new(servers, auth_statuses, tx);
+        let mut picker = McpServerPickerView::new(servers, tx);
+        picker.auth_statuses = auth_statuses.clone();
         (picker, rx)
     }
 

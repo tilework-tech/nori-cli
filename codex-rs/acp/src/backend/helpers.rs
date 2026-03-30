@@ -13,7 +13,6 @@ pub(crate) fn get_op_name(op: &Op) -> &'static str {
         Op::AddToHistory { .. } => "AddToHistory",
         Op::GetHistoryEntryRequest { .. } => "GetHistoryEntryRequest",
         Op::SearchHistoryRequest { .. } => "SearchHistoryRequest",
-        Op::ListMcpTools => "ListMcpTools",
         Op::ListCustomPrompts => "ListCustomPrompts",
         Op::Compact => "Compact",
         Op::Undo => "Undo",
