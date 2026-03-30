@@ -1750,8 +1750,6 @@ pub struct McpServerConfigToml {
     /// Environment variable names to inherit
     #[serde(default)]
     pub env_vars: Option<Vec<String>>,
-    /// Working directory for the command
-    pub cwd: Option<PathBuf>,
 
     // HTTP transport fields
     /// URL for HTTP-based MCP server
@@ -1814,7 +1812,6 @@ pub enum McpServerTransportConfig {
         args: Vec<String>,
         env: Option<HashMap<String, String>>,
         env_vars: Vec<String>,
-        cwd: Option<PathBuf>,
     },
     /// HTTP-based MCP server
     StreamableHttp {
@@ -1837,7 +1834,6 @@ impl McpServerConfigToml {
                 args: self.args.clone().unwrap_or_default(),
                 env: self.env.clone(),
                 env_vars: self.env_vars.clone().unwrap_or_default(),
-                cwd: self.cwd.clone(),
             }
         } else if let Some(url) = &self.url {
             McpServerTransportConfig::StreamableHttp {

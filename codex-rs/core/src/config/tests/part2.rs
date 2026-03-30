@@ -84,7 +84,6 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
                 args: vec!["hello".to_string()],
                 env: None,
                 env_vars: Vec::new(),
-                cwd: None,
             },
             enabled: true,
             startup_timeout_sec: Some(Duration::from_secs(3)),
@@ -109,13 +108,11 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
             args,
             env,
             env_vars,
-            cwd,
         } => {
             assert_eq!(command, "echo");
             assert_eq!(args, &vec!["hello".to_string()]);
             assert!(env.is_none());
             assert!(env_vars.is_empty());
-            assert!(cwd.is_none());
         }
         other => panic!("unexpected transport {other:?}"),
     }
@@ -230,7 +227,6 @@ async fn replace_mcp_servers_serializes_env_sorted() -> anyhow::Result<()> {
                     ("ALPHA_VAR".to_string(), "1".to_string()),
                 ])),
                 env_vars: Vec::new(),
-                cwd: None,
             },
             enabled: true,
             startup_timeout_sec: None,
@@ -268,7 +264,6 @@ ZIG_VAR = "3"
             args,
             env,
             env_vars,
-            cwd,
         } => {
             assert_eq!(command, "docs-server");
             assert_eq!(args, &vec!["--verbose".to_string()]);
@@ -278,7 +273,6 @@ ZIG_VAR = "3"
             assert_eq!(env.get("ALPHA_VAR"), Some(&"1".to_string()));
             assert_eq!(env.get("ZIG_VAR"), Some(&"3".to_string()));
             assert!(env_vars.is_empty());
-            assert!(cwd.is_none());
         }
         other => panic!("unexpected transport {other:?}"),
     }
@@ -298,7 +292,6 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
                 args: Vec::new(),
                 env: None,
                 env_vars: vec!["ALPHA".to_string(), "BETA".to_string()],
-                cwd: None,
             },
             enabled: true,
             startup_timeout_sec: None,
@@ -326,54 +319,6 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
     match &docs.transport {
         McpServerTransportConfig::Stdio { env_vars, .. } => {
             assert_eq!(env_vars, &vec!["ALPHA".to_string(), "BETA".to_string()]);
-        }
-        other => panic!("unexpected transport {other:?}"),
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn replace_mcp_servers_serializes_cwd() -> anyhow::Result<()> {
-    let codex_home = TempDir::new()?;
-
-    let cwd_path = PathBuf::from("/tmp/codex-mcp");
-    let servers = BTreeMap::from([(
-        "docs".to_string(),
-        McpServerConfig {
-            transport: McpServerTransportConfig::Stdio {
-                command: "docs-server".to_string(),
-                args: Vec::new(),
-                env: None,
-                env_vars: Vec::new(),
-                cwd: Some(cwd_path.clone()),
-            },
-            enabled: true,
-            startup_timeout_sec: None,
-            tool_timeout_sec: None,
-            enabled_tools: None,
-            disabled_tools: None,
-        },
-    )]);
-
-    apply_blocking(
-        codex_home.path(),
-        None,
-        &[ConfigEdit::ReplaceMcpServers(servers.clone())],
-    )?;
-
-    let config_path = codex_home.path().join(CONFIG_TOML_FILE);
-    let serialized = std::fs::read_to_string(&config_path)?;
-    assert!(
-        serialized.contains(r#"cwd = "/tmp/codex-mcp""#),
-        "serialized config missing cwd field:\n{serialized}"
-    );
-
-    let loaded = load_global_mcp_servers(codex_home.path()).await?;
-    let docs = loaded.get("docs").expect("docs entry");
-    match &docs.transport {
-        McpServerTransportConfig::Stdio { cwd, .. } => {
-            assert_eq!(cwd.as_deref(), Some(Path::new("/tmp/codex-mcp")));
         }
         other => panic!("unexpected transport {other:?}"),
     }

@@ -16,7 +16,7 @@ pub(super) async fn run_prompt_summary(
 
     let agent_config = get_agent_config(agent_name)?;
     let connection = SacpConnection::spawn(&agent_config, cwd).await?;
-    let session_id = connection.create_session(cwd).await?;
+    let session_id = connection.create_session(cwd, vec![]).await?;
 
     let summarization_prompt = format!(
         "Summarize the following user request in 5 words or fewer. \

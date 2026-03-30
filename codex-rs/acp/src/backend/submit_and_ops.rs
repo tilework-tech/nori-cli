@@ -310,6 +310,7 @@ impl AcpBackend {
         let session_id_lock = Arc::clone(&self.session_id);
         let connection = Arc::clone(&self.connection);
         let cwd = self.cwd.clone();
+        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&self.mcp_servers);
         let id_clone = id.to_string();
         let pending_compact_summary = Arc::clone(&self.pending_compact_summary);
         let user_notifier = Arc::clone(&self.user_notifier);
@@ -386,7 +387,7 @@ impl AcpBackend {
                 // Create a new session to clear the agent's conversation history.
                 // The summary we captured will be prepended to the next user prompt,
                 // giving the agent context about the previous conversation.
-                match connection.create_session(&cwd).await {
+                match connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
                         debug!("Created new session after compact: {:?}", new_session_id);
                         *session_id_lock.write().await = new_session_id;
