@@ -30,7 +30,6 @@ use codex_core::protocol::ExecCommandSource;
 use codex_core::protocol::HookOutputEvent;
 use codex_core::protocol::HookOutputLevel;
 use codex_core::protocol::ListCustomPromptsResponseEvent;
-use codex_core::protocol::McpListToolsResponseEvent;
 use codex_core::protocol::McpStartupCompleteEvent;
 use codex_core::protocol::McpStartupStatus;
 use codex_core::protocol::McpStartupUpdateEvent;

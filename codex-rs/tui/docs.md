@@ -187,8 +187,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and context window usage |
 | `/first-prompt` | Show the first prompt from this session |
-| `/mcp` | List configured MCP servers and tools |
-| `/mcp-servers` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
+| `/mcp` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
 | `/switch-skillset [name]` | Switch between available skillsets (with optional direct name) |
@@ -196,13 +195,9 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
-**`/mcp` Rendering** (`history_cell/mod.rs`):
+**`/mcp` Picker** (`nori/mcp_server_picker.rs`):
 
-`new_mcp_tools_output()` renders the `/mcp` output. It shows "No MCP tools available" only when both the tools map AND `config.mcp_servers` are empty. When MCP servers are configured but no individual tool names are available (as in ACP mode, where MCP connections are managed by the upstream agent), the function still renders per-server details -- command/URL, auth status, env vars -- with `"(none)"` for tools and resources. This allows the `/mcp` command to be useful in ACP mode for verifying server configuration and auth status even though the CLI does not have direct MCP connections.
-
-**`/mcp-servers` Picker** (`nori/mcp_server_picker.rs`):
-
-The `/mcp-servers` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
+The `/mcp` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
 
 | Mode | Purpose | Transitions |
 |------|---------|-------------|

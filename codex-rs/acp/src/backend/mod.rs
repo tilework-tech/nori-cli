@@ -321,10 +321,8 @@ pub struct AcpBackend {
     script_timeout: std::time::Duration,
     /// ACP-native normalized event accumulator.
     client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
-    /// MCP server configuration for listing via /mcp command
+    /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
-    /// OAuth credentials store mode for MCP auth status computation
-    mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
 mod helpers;
