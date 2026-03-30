@@ -64,7 +64,7 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
+**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend`) and handles:
 - Session creation and resumption
 - Message history tracking
 - Token usage accumulation

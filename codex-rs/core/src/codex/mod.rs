@@ -8,8 +8,6 @@ use crate::AuthManager;
 use crate::SandboxState;
 use crate::compact;
 use crate::compact::run_inline_auto_compact_task;
-use crate::compact::should_use_remote_compact_task;
-use crate::compact_remote::run_inline_remote_auto_compact_task;
 use crate::features::Feature;
 use crate::function_tool::FunctionCallError;
 use crate::parse_command::parse_command;
