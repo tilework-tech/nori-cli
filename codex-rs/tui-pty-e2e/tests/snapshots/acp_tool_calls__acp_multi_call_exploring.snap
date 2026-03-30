@@ -6,12 +6,15 @@ expression: normalize_for_input_snapshot(contents)
 
 • Test message 1Test message 2
 
+• Exploring
+  └ Read file1.rs, file2.rs
+
 ────────────────────────────────────────────────────────────────────────────────
 
 • Reading multiple files...
 
 • Explored
-  └ Read file1.rs, file2.rs, file3.rs
+  └ Read file3.rs
 
 ────────────────────────────────────────────────────────────────────────────────
 

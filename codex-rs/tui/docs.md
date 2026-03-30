@@ -57,6 +57,22 @@ The transcript pager overlay uses each history cell's transcript view rather tha
 
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`. Live ACP approvals arrive as `ClientEvent::ApprovalRequest`, are normalized into the TUI's existing approval UI model in `chatwidget/event_handlers.rs`, and then render through the same command/patch approval pane used elsewhere in the app.
 
+**ClientToolCell Rendering** (`client_tool_cell.rs`):
+
+`ClientToolCell` wraps a `nori_protocol::ToolSnapshot` and implements `HistoryCell`. It dispatches on `ToolKind` to select between two rendering paths: `ToolKind::Execute` uses `render_execute_lines(width)` for ExecCell-parity display (colored bullet, "Ran"/"Running" verb, bash syntax highlighting, output with truncation), while all other tool kinds use `render_generic_lines()` for the generic `"Tool [phase]: title (kind)"` format with invocation/artifact details.
+
+The execute rendering path reuses shared utilities from `exec_cell/render.rs` (`truncate_lines_middle`, `limit_lines_from_start`, `output_lines`, `spinner`) and layout constants that match the `ExecCell` display layout (`"  │ "` for command continuation, `"  └ "` for output). Output text is sourced preferentially from `raw_output["stdout"]`, falling back to `Artifact::Text` with code fence stripping. Exit code success is determined from `raw_output["exit_code"]` when present, otherwise inferred from `ToolPhase`.
+
+**Chronological Ordering Invariant** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
+
+Tool cells always appear in scrollback history before the agent text that follows them, matching the chronological order of execution. This is enforced by two mechanisms:
+
+- `handle_streaming_delta()` always calls `flush_active_cell()` before streaming text, even when the active cell contains an incomplete (still-running) ExecCell. The incomplete cell is sent to history immediately rather than held in `active_cell` until completion.
+- `flush_active_cell()` marks pending call_ids of incomplete ExecCells as completed (via `completed_client_tool_calls`) so that later completion events for the same call_ids do not create duplicate cells. The `pending_exec_cells` tracker is bypassed for this path -- cells go directly to history.
+- `add_boxed_history()` also always flushes the active cell first, applying the same ordering guarantee when non-streaming history cells are inserted.
+
+The trade-off: incomplete cells may appear in scrollback showing "Running"/"Exploring" status rather than their final "Ran"/"Explored" state, because they are flushed before completion events arrive.
+
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
 When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. The TUI adapts those normalized snapshots into the existing exec-cell and patch-cell machinery, and the relevant handlers call `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
@@ -77,7 +93,7 @@ The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, re
 
 | Transition | Trigger | Effect |
 |------------|---------|--------|
-| `turn_finished = true` | `on_agent_message()` | Closes the gate -- subsequent tool events are discarded |
+| `turn_finished = true` | `on_agent_message()`, `on_task_complete()` | Closes the gate -- subsequent tool events are discarded |
 | `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
 
 The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
@@ -96,10 +112,11 @@ on_agent_message():
 
 on_task_complete():
   1. flush_answer_stream_with_separator()
-  2. flush_completions_and_clear()
-  3. pending_exec_cells.drain_failed()
-  4. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
-  5. set_task_running(false)
+  2. turn_finished = true                    -- close the gate (mirrors on_agent_message)
+  3. flush_completions_and_clear()
+  4. pending_exec_cells.drain_failed()
+  5. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
+  6. set_task_running(false)
 ```
 
 `finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.

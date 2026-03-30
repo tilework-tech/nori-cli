@@ -39,6 +39,8 @@ mod ascii_animation;
 mod bottom_pane;
 mod chatwidget;
 mod cli;
+mod client_event_format;
+mod client_tool_cell;
 mod clipboard_paste;
 mod color;
 pub mod custom_terminal;

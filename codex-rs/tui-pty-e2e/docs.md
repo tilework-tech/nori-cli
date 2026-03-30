@@ -30,13 +30,13 @@ Tests validate rendering behavior end-to-end by checking the actual terminal scr
 
 **Tool Call Rendering Tests** (`acp_tool_calls.rs`):
 
-Tests in this file verify that tool call events (Explored, Ran, Searched cells) render in the correct positions relative to agent text. Key test patterns include:
-- Verifying tool calls that complete before text streaming appear above the agent message
-- Verifying that tool call completions arriving during the final text stream are NOT rendered after the agent's response (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
-- Checking for absence of trailing tool output by asserting that screen content after the final agent message position contains no tool-related strings
+Tests in this file verify that tool call events (Explored, Ran, Searched cells) render in the correct chronological positions relative to agent text. The core invariant under test is that tool cells appear BEFORE the agent text that follows them in the scrollback, even when tool calls have not completed yet. Key test patterns include:
+- Verifying chronological ordering: tool cells appear before the final agent text in screen position (asserted via string position comparisons)
+- Verifying no duplicate tool cells when text arrives during an incomplete tool call (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
 - Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
-- Verifying that generic tool calls with no `raw_input` (the `MOCK_AGENT_GENERIC_TOOL_CALL` scenario) display a resolved semantic name from `ev.command` instead of the raw tool call ID, covering the case where the ACP translator skips `ExecCommandBegin` entirely
-- Verifying that incomplete (stuck) tool calls that never receive End events do not block the agent's final text from rendering (the `MOCK_AGENT_STUCK_TOOL_CALLS` scenario), where `finalize_active_cell_as_failed()` cleans up incomplete ExecCells on turn boundaries so `insert_history_lines()` can proceed
+- Verifying that generic tool calls with no `raw_input` (the `MOCK_AGENT_GENERIC_TOOL_CALL` scenario) display a resolved semantic name from `ev.command` instead of the raw tool call ID
+- Verifying that incomplete (stuck) tool calls that never receive End events do not block the agent's final text from rendering (the `MOCK_AGENT_STUCK_TOOL_CALLS` scenario), where `finalize_active_cell_as_failed()` cleans up incomplete ExecCells on turn boundaries
+- Verifying that multi-call exploring cells (the `MOCK_AGENT_MULTI_CALL_EXPLORING` scenario) are flushed to history when text arrives, potentially splitting into separate cells for calls that complete before vs after the flush
 
 **MCP Command Tests** (`acp_mcp_command.rs`):
 
