@@ -10,7 +10,6 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WireApi {
     Responses,
-    Chat,
 }
 
 /// High-level retry configuration for a provider.

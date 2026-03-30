@@ -27,20 +27,20 @@ const MAX_STREAM_MAX_RETRIES: u64 = 100;
 /// Hard cap for user-configured `request_max_retries`.
 const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
-/// Wire protocol that the provider speaks. Most third-party services only
-/// implement the classic OpenAI Chat Completions JSON schema, whereas OpenAI
-/// itself (and a handful of others) additionally expose the more modern
-/// *Responses* API. The two protocols use different request/response shapes
-/// and *cannot* be auto-detected at runtime, therefore each provider entry
-/// must declare which one it expects.
+/// Wire protocol that the provider speaks.
+///
+/// Only the Responses API is supported. The `Chat` variant is retained for
+/// backwards-compatible config deserialization but will produce an error at
+/// runtime if selected.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WireApi {
     /// The Responses API exposed by OpenAI at `/v1/responses`.
+    #[default]
     Responses,
 
-    /// Regular Chat Completions compatible with `/v1/chat/completions`.
-    #[default]
+    /// Formerly the Chat Completions wire protocol. No longer supported at
+    /// runtime — kept only so that existing config files still parse.
     Chat,
 }
 
@@ -154,7 +154,11 @@ impl ModelProviderInfo {
             query_params: self.query_params.clone(),
             wire: match self.wire_api {
                 WireApi::Responses => ApiWireApi::Responses,
-                WireApi::Chat => ApiWireApi::Chat,
+                WireApi::Chat => {
+                    return Err(crate::error::CodexErr::UnsupportedOperation(
+                        "Chat Completions wire API has been removed; use wire_api = \"responses\" instead".to_string(),
+                    ));
+                }
             },
             headers,
             retry,
@@ -334,7 +338,7 @@ base_url = "http://localhost:11434/v1"
             env_key: None,
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Chat,
+            wire_api: WireApi::Responses,
             query_params: None,
             http_headers: None,
             env_http_headers: None,
@@ -362,7 +366,7 @@ query_params = { api-version = "2025-04-01-preview" }
             env_key: Some("AZURE_OPENAI_API_KEY".into()),
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Chat,
+            wire_api: WireApi::Responses,
             query_params: Some(maplit::hashmap! {
                 "api-version".to_string() => "2025-04-01-preview".to_string(),
             }),
@@ -393,7 +397,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             env_key: Some("API_KEY".into()),
             env_key_instructions: None,
             experimental_bearer_token: None,
-            wire_api: WireApi::Chat,
+            wire_api: WireApi::Responses,
             query_params: None,
             http_headers: Some(maplit::hashmap! {
                 "X-Example-Header".to_string() => "example-value".to_string(),

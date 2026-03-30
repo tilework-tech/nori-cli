@@ -64,6 +64,46 @@ After removing `compact_remote.rs` from codex-core, the compact endpoint in `cod
 - `WireApi::Compact` is only used within codex-api (codex-core has its own WireApi without Compact)
 - All integration tests use the streaming endpoints (Chat/Responses), not Compact
 
+## Chat Completions wire protocol (next removal target)
+
+The HTTP backend supports two wire APIs: `WireApi::Responses` (Responses API) and `WireApi::Chat` (Chat Completions API). The Chat Completions path is a distinct, self-contained component.
+
+**Key findings:**
+- Nori uses ACP exclusively — neither wire protocol matters for production
+- The integration test suite uses `WireApi::Responses` for mocking, NOT `WireApi::Chat`
+- Only one `#[ignore]`d test (`rmcp_client::stdio_image_completions_round_trip`) uses `WireApi::Chat`
+- `WireApi::Chat` is the `#[default]` variant in codex-core (for Ollama/OSS providers)
+- Built-in Ollama provider explicitly sets `WireApi::Chat`
+
+**codex-api files to remove:**
+1. `codex-api/src/endpoint/chat.rs` - ChatClient, AggregatedStream (~266 lines)
+2. `codex-api/src/requests/chat.rs` - ChatRequestBuilder (~388 lines)
+3. `codex-api/src/sse/chat.rs` - spawn_chat_stream, process_chat_sse (~504 lines)
+
+**codex-api files to modify:**
+1. `codex-api/src/endpoint/mod.rs` - remove `pub mod chat;`
+2. `codex-api/src/requests/mod.rs` - remove `pub mod chat;`
+3. `codex-api/src/sse/mod.rs` - remove `pub mod chat;`
+4. `codex-api/src/lib.rs` - remove ChatClient re-export
+5. `codex-api/src/provider.rs` - remove `WireApi::Chat` variant
+6. `codex-api/tests/clients.rs` - remove Chat URL routing tests
+
+**codex-core files to modify:**
+1. `core/src/client.rs` - remove `stream_chat_completions()`, simplify `stream()` dispatch
+2. `core/src/tools/spec/mod.rs` - remove `create_tools_json_for_chat_completions_api()`
+3. `core/src/model_provider_info.rs` - keep `WireApi::Chat` variant for config compat, remove `to_api_provider()` Chat mapping
+
+**Test files to remove:**
+1. `core/tests/chat_completions_sse.rs` - 8 SSE parsing tests
+2. `core/tests/chat_completions_payload.rs` - 7 request payload tests
+
+**Test files to modify:**
+1. `core/tests/suite/rmcp_client.rs` - update or remove the `#[ignore]`d Chat test
+2. `core/src/config/tests/mod.rs` - update test fixtures
+3. `core/src/model_provider_info.rs` - update deserialization tests
+
+**Strategy:** Keep the `WireApi::Chat` variant in codex-core's enum for config compatibility. When the Chat path is selected in `ModelClient::stream()`, return an error. This prevents config deserialization breakage while removing all implementation code.
+
 ## Approach: Feature-gate codex-api (future)
 
 Add a `legacy-http-backend` feature to codex-core:

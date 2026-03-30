@@ -1,89 +1,14 @@
-use crate::ChatRequest;
-use crate::auth::AuthProvider;
-use crate::common::Prompt as ApiPrompt;
 use crate::common::ResponseEvent;
 use crate::common::ResponseStream;
-use crate::endpoint::streaming::StreamingClient;
 use crate::error::ApiError;
-use crate::provider::Provider;
-use crate::provider::WireApi;
-use crate::sse::chat::spawn_chat_stream;
-use crate::telemetry::SseTelemetry;
-use codex_client::HttpTransport;
-use codex_client::RequestTelemetry;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ReasoningItemContent;
 use codex_protocol::models::ResponseItem;
-use codex_protocol::protocol::SessionSource;
 use futures::Stream;
-use http::HeaderMap;
-use serde_json::Value;
 use std::collections::VecDeque;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
-
-pub struct ChatClient<T: HttpTransport, A: AuthProvider> {
-    streaming: StreamingClient<T, A>,
-}
-
-impl<T: HttpTransport, A: AuthProvider> ChatClient<T, A> {
-    pub fn new(transport: T, provider: Provider, auth: A) -> Self {
-        Self {
-            streaming: StreamingClient::new(transport, provider, auth),
-        }
-    }
-
-    pub fn with_telemetry(
-        self,
-        request: Option<Arc<dyn RequestTelemetry>>,
-        sse: Option<Arc<dyn SseTelemetry>>,
-    ) -> Self {
-        Self {
-            streaming: self.streaming.with_telemetry(request, sse),
-        }
-    }
-
-    pub async fn stream_request(&self, request: ChatRequest) -> Result<ResponseStream, ApiError> {
-        self.stream(request.body, request.headers).await
-    }
-
-    pub async fn stream_prompt(
-        &self,
-        model: &str,
-        prompt: &ApiPrompt,
-        conversation_id: Option<String>,
-        session_source: Option<SessionSource>,
-    ) -> Result<ResponseStream, ApiError> {
-        use crate::requests::ChatRequestBuilder;
-
-        let request =
-            ChatRequestBuilder::new(model, &prompt.instructions, &prompt.input, &prompt.tools)
-                .conversation_id(conversation_id)
-                .session_source(session_source)
-                .build(self.streaming.provider())?;
-
-        self.stream_request(request).await
-    }
-
-    fn path(&self) -> &'static str {
-        match self.streaming.provider().wire {
-            WireApi::Chat => "chat/completions",
-            _ => "responses",
-        }
-    }
-
-    pub async fn stream(
-        &self,
-        body: Value,
-        extra_headers: HeaderMap,
-    ) -> Result<ResponseStream, ApiError> {
-        self.streaming
-            .stream(self.path(), body, extra_headers, spawn_chat_stream)
-            .await
-    }
-}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum AggregateMode {
