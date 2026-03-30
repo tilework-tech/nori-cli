@@ -3,22 +3,18 @@ use super::*;
 impl ChatWidget {
     pub(super) fn flush_active_cell(&mut self) {
         if let Some(active) = self.active_cell.take() {
-            // Check if this is an incomplete ExecCell that should be saved to pending
-            // instead of being flushed to history. This prevents duplicate entries when
-            // the ExecCommandEnd event arrives later.
+            // Always flush to history to preserve chronological ordering.
+            // If this is an incomplete ExecCell, mark its pending call_ids as
+            // already-flushed so that later completion events don't create
+            // duplicate cells.
             if let Some(exec_cell) = active.as_any().downcast_ref::<ExecCell>()
                 && exec_cell.is_active()
             {
-                // Get the pending call_ids before we consume the cell
                 let pending_ids = exec_cell.pending_call_ids();
-                if !pending_ids.is_empty() {
-                    // Save to pending map with ALL pending call_ids
-                    // This allows the cell to be retrieved when any of them completes
-                    self.pending_exec_cells.save_pending(pending_ids, active);
-                    return;
+                for id in &pending_ids {
+                    self.completed_client_tool_calls.insert(id.clone());
                 }
             }
-            // Normal flush path - cell is complete or not an ExecCell
             self.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
         }
@@ -30,22 +26,9 @@ impl ChatWidget {
 
     pub(crate) fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
         if !cell.display_lines(u16::MAX).is_empty() {
-            // Only break exec grouping if the cell renders visible lines.
-            // EXCEPT: Don't flush incomplete ExecCells - they should remain visible
-            // in active_cell while streaming content is added to history.
-            let should_flush = self
-                .active_cell
-                .as_ref()
-                .map(|c| {
-                    c.as_any()
-                        .downcast_ref::<ExecCell>()
-                        .map(|exec| !exec.is_active())
-                        .unwrap_or(true)
-                })
-                .unwrap_or(true);
-            if should_flush {
-                self.flush_active_cell();
-            }
+            // Always flush active cell before inserting new history to preserve
+            // chronological ordering.
+            self.flush_active_cell();
             self.needs_final_message_separator = true;
         }
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));

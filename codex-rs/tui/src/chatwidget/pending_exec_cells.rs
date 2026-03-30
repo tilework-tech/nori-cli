@@ -54,6 +54,7 @@ impl PendingExecCellTracker {
     /// # Arguments
     /// * `call_ids` - All pending call_ids for this cell. The first is used as the primary key.
     /// * `cell` - The incomplete cell to save.
+    #[allow(dead_code)]
     pub(crate) fn save_pending(&mut self, call_ids: Vec<String>, cell: Box<dyn HistoryCell>) {
         if call_ids.is_empty() {
             debug!(

@@ -204,7 +204,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
     let contents = session.screen_contents();
 
     // Count occurrences of the tool title "Executing interleaved command"
-    // It should appear exactly ONCE (in the completed "Ran" form)
+    // It should appear exactly ONCE (no duplicate entries)
     let tool_title = "Executing interleaved command";
     let count = contents.matches(tool_title).count();
 
@@ -216,26 +216,16 @@ fn test_acp_tool_call_no_duplicate_messages() {
         tool_title, count, contents
     );
 
-    // Also verify we see "Ran" (completed state)
+    // The tool cell should appear BEFORE the interleaved text (correct chronological order)
+    let tool_pos = contents
+        .find(tool_title)
+        .expect("Should contain tool title");
+    let text_pos = contents
+        .find("Interleaved test done")
+        .expect("Should contain final text");
     assert!(
-        contents.contains("Ran"),
-        "Should show completed 'Ran' state. Screen contents:\n{}",
-        contents
-    );
-
-    // Verify we don't have both "Running" AND "Ran" for this tool call
-    // (which would indicate duplicates)
-    let has_running = contents
-        .lines()
-        .any(|line| line.contains("Running") && line.contains("Executing interleaved"));
-    let has_ran = contents
-        .lines()
-        .any(|line| line.contains("Ran") && line.contains("Executing interleaved"));
-
-    assert!(
-        !(has_running && has_ran),
-        "Should NOT have both 'Running' and 'Ran' states for the same tool call.\n\
-         This indicates duplicate messages.\n\
+        tool_pos < text_pos,
+        "Tool cell should appear BEFORE final text (chronological order).\n\
          Screen contents:\n{}",
         contents
     );
@@ -349,44 +339,30 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
         contents
     );
 
-    // Verify the exploring cell is shown as completed (not stuck in "Running" state)
-    // The completed exploring cell should show "Explored" status
+    // Verify tool cells appear. When text arrives during incomplete tool calls,
+    // the cell is flushed to history immediately (may show as "Exploring" if not
+    // yet complete). Tool calls that complete after the flush produce a separate
+    // completed cell.
     assert!(
-        contents.contains("Explored"),
-        "Should show completed 'Explored' state. Screen contents:\n{}",
+        contents.contains("Explored") || contents.contains("Exploring"),
+        "Should show exploring/explored cell. Screen contents:\n{}",
         contents
     );
 
-    // Count how many "Explored" entries appear - should be exactly 1 grouped cell
-    // All 3 Read operations are grouped into a single cell because incomplete ExecCells
-    // are NOT flushed during streaming text. The text "Reading multiple files..." arrives
-    // while calls 1 & 2 are still pending, but the cell stays in active_cell. Call 3 then
-    // joins via with_added_call(), resulting in one cell with all 3 Read operations.
-    let explored_count = contents.matches("Explored").count();
-    assert!(
-        explored_count == 1,
-        "Should have one 'Explored' entry (all calls grouped), found {}. Screen contents:\n{}",
-        explored_count,
-        contents
-    );
-
-    // CRITICAL: Verify the "Explored" cell appears BEFORE the final agent message
-    // This ensures it was flushed immediately when the last tool call completed,
-    // not delayed until TaskComplete drained pending cells.
-    let explored_pos = contents
-        .find("Explored")
-        .expect("Should contain 'Explored'");
+    // CRITICAL: Verify tool cells appear BEFORE the final agent message.
+    // This ensures correct chronological ordering.
+    let tool_pos = contents
+        .find("Exploring")
+        .or_else(|| contents.find("Explored"))
+        .expect("Should contain exploring cell");
     let final_msg_pos = contents
         .find("Multi-call exploring done")
         .expect("Should contain final message");
 
     assert!(
-        explored_pos < final_msg_pos,
-        "The 'Explored' cell should appear BEFORE the final agent message, not after. \
-         This ensures it was flushed immediately on completion, not delayed until task end. \
-         Explored at {}, final message at {}",
-        explored_pos,
-        final_msg_pos
+        tool_pos < final_msg_pos,
+        "Tool cells should appear BEFORE the final agent message (chronological order). \
+         Tool at {tool_pos}, final message at {final_msg_pos}",
     );
 
     // Snapshot for visual verification

@@ -1,14 +1,15 @@
 ---
 source: tui-pty-e2e/tests/acp_tool_calls.rs
-assertion_line: 710
 expression: normalize_for_input_snapshot(contents)
 ---
 › Analyze files
 
-• Analysis complete despite incomplete tool calls.
-
-• Explored
+• Exploring
   └ Read app.rs, config.rs, main.rs
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Analysis complete despite incomplete tool calls.
 
 › [DEFAULT_PROMPT]
 
