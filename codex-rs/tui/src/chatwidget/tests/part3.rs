@@ -906,15 +906,11 @@ fn completed_execute_tool_snapshot_renders_native_tool_history_cell() {
     assert_eq!(cells.len(), 1, "expected one exec history cell");
     let blob = lines_to_single_string(cells.first().unwrap());
     assert!(
-        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
-        "expected native ACP tool status header in history cell: {blob:?}"
+        blob.contains("Ran") && blob.contains("git status"),
+        "expected native execute rendering with 'Ran' verb in history cell: {blob:?}"
     );
     assert!(
-        blob.contains("Command: git status"),
-        "expected native ACP invocation summary in history cell: {blob:?}"
-    );
-    assert!(
-        blob.contains("Output:") || blob.contains("On branch main"),
+        blob.contains("On branch main"),
         "expected tool output in history cell: {blob:?}"
     );
 }
@@ -941,12 +937,8 @@ fn pending_execute_tool_snapshot_renders_native_tool_cell() {
 
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Tool [pending]") || blob.contains("Tool [pending]:"),
-        "expected native ACP pending tool header: {blob:?}"
-    );
-    assert!(
-        blob.contains("Command: git status"),
-        "expected native ACP invocation summary in active tool cell: {blob:?}"
+        blob.contains("Running") && blob.contains("git status"),
+        "expected native execute rendering with 'Running' verb in active tool cell: {blob:?}"
     );
 }
 
@@ -1145,8 +1137,12 @@ fn completed_generic_execute_tool_snapshot_renders_native_tool_history_cell() {
     assert_eq!(cells.len(), 1, "expected one exec history cell");
     let blob = lines_to_single_string(cells.first().unwrap());
     assert!(
-        blob.contains("Tool [completed]: Terminal (execute)"),
-        "expected native ACP generic tool title in history cell: {blob:?}"
+        blob.contains("Ran") && blob.contains("Terminal"),
+        "expected native execute rendering with 'Ran' verb in history cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("command output here"),
+        "expected tool output in history cell: {blob:?}"
     );
     assert!(
         !blob.contains("toolu_generic_test_001"),

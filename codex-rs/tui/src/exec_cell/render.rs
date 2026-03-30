@@ -482,16 +482,7 @@ impl ExecCell {
     }
 
     fn limit_lines_from_start(lines: &[Line<'static>], keep: usize) -> Vec<Line<'static>> {
-        if lines.len() <= keep {
-            return lines.to_vec();
-        }
-        if keep == 0 {
-            return vec![Self::ellipsis_line(lines.len())];
-        }
-
-        let mut out: Vec<Line<'static>> = lines[..keep].to_vec();
-        out.push(Self::ellipsis_line(lines.len() - keep));
-        out
+        limit_lines_from_start(lines, keep)
     }
 
     fn truncate_lines_middle(
@@ -499,51 +490,72 @@ impl ExecCell {
         max: usize,
         omitted_hint: Option<usize>,
     ) -> Vec<Line<'static>> {
-        if max == 0 {
-            return Vec::new();
-        }
-        if lines.len() <= max {
-            return lines.to_vec();
-        }
-        if max == 1 {
-            // Carry forward any previously omitted count and add any
-            // additionally hidden content lines from this truncation.
-            let base = omitted_hint.unwrap_or(0);
-            // When an existing ellipsis is present, `lines` already includes
-            // that single representation line; exclude it from the count of
-            // additionally omitted content lines.
-            let extra = lines
-                .len()
-                .saturating_sub(usize::from(omitted_hint.is_some()));
-            let omitted = base + extra;
-            return vec![Self::ellipsis_line(omitted)];
-        }
+        truncate_lines_middle(lines, max, omitted_hint)
+    }
+}
 
-        let head = (max - 1) / 2;
-        let tail = max - head - 1;
-        let mut out: Vec<Line<'static>> = Vec::new();
+pub(crate) fn limit_lines_from_start(lines: &[Line<'static>], keep: usize) -> Vec<Line<'static>> {
+    if lines.len() <= keep {
+        return lines.to_vec();
+    }
+    if keep == 0 {
+        return vec![ellipsis_line(lines.len())];
+    }
 
-        if head > 0 {
-            out.extend(lines[..head].iter().cloned());
-        }
+    let mut out: Vec<Line<'static>> = lines[..keep].to_vec();
+    out.push(ellipsis_line(lines.len() - keep));
+    out
+}
 
+pub(crate) fn truncate_lines_middle(
+    lines: &[Line<'static>],
+    max: usize,
+    omitted_hint: Option<usize>,
+) -> Vec<Line<'static>> {
+    if max == 0 {
+        return Vec::new();
+    }
+    if lines.len() <= max {
+        return lines.to_vec();
+    }
+    if max == 1 {
+        // Carry forward any previously omitted count and add any
+        // additionally hidden content lines from this truncation.
         let base = omitted_hint.unwrap_or(0);
-        let additional = lines
+        // When an existing ellipsis is present, `lines` already includes
+        // that single representation line; exclude it from the count of
+        // additionally omitted content lines.
+        let extra = lines
             .len()
-            .saturating_sub(head + tail)
             .saturating_sub(usize::from(omitted_hint.is_some()));
-        out.push(Self::ellipsis_line(base + additional));
-
-        if tail > 0 {
-            out.extend(lines[lines.len() - tail..].iter().cloned());
-        }
-
-        out
+        let omitted = base + extra;
+        return vec![ellipsis_line(omitted)];
     }
 
-    fn ellipsis_line(omitted: usize) -> Line<'static> {
-        Line::from(vec![format!("… +{omitted} lines").dim()])
+    let head = (max - 1) / 2;
+    let tail = max - head - 1;
+    let mut out: Vec<Line<'static>> = Vec::new();
+
+    if head > 0 {
+        out.extend(lines[..head].iter().cloned());
     }
+
+    let base = omitted_hint.unwrap_or(0);
+    let additional = lines
+        .len()
+        .saturating_sub(head + tail)
+        .saturating_sub(usize::from(omitted_hint.is_some()));
+    out.push(ellipsis_line(base + additional));
+
+    if tail > 0 {
+        out.extend(lines[lines.len() - tail..].iter().cloned());
+    }
+
+    out
+}
+
+pub(crate) fn ellipsis_line(omitted: usize) -> Line<'static> {
+    Line::from(vec![format!("… +{omitted} lines").dim()])
 }
 
 #[derive(Clone, Copy)]
