@@ -1158,7 +1158,6 @@ pub(crate) fn new_mcp_tools_output(
                 args,
                 env,
                 env_vars,
-                cwd,
             } => {
                 let args_suffix = if args.is_empty() {
                     String::new()
@@ -1167,10 +1166,6 @@ pub(crate) fn new_mcp_tools_output(
                 };
                 let cmd_display = format!("{command}{args_suffix}");
                 lines.push(vec!["    • Command: ".into(), cmd_display.into()].into());
-
-                if let Some(cwd) = cwd.as_ref() {
-                    lines.push(vec!["    • Cwd: ".into(), cwd.display().to_string().into()].into());
-                }
 
                 let env_display = format_env_display(env.as_ref(), env_vars);
                 if env_display != "-" {

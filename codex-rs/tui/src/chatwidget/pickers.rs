@@ -263,6 +263,7 @@ impl ChatWidget {
             .collect();
         let view = crate::nori::mcp_server_picker::McpServerPickerView::new(
             &servers,
+            &self.mcp_auth_statuses,
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_view(Box::new(view));

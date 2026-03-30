@@ -9,6 +9,7 @@ use codex_protocol::protocol::ReviewDecision;
 use sacp::schema as acp;
 use tokio::sync::oneshot;
 
+pub mod mcp;
 pub mod sacp_connection;
 
 #[cfg(test)]

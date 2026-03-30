@@ -103,7 +103,6 @@ mod document_helpers {
                 args,
                 env,
                 env_vars,
-                cwd,
             } => {
                 entry["command"] = value(command.clone());
                 if !args.is_empty() {
@@ -116,9 +115,6 @@ mod document_helpers {
                 }
                 if !env_vars.is_empty() {
                     entry["env_vars"] = array_from_iter(env_vars.iter().cloned());
-                }
-                if let Some(cwd) = cwd {
-                    entry["cwd"] = value(cwd.to_string_lossy().to_string());
                 }
             }
             McpServerTransportConfig::StreamableHttp {
@@ -893,7 +889,6 @@ existing = "value"
                         .collect(),
                     ),
                     env_vars: vec!["FOO".to_string()],
-                    cwd: None,
                 },
                 enabled: true,
                 startup_timeout_sec: None,

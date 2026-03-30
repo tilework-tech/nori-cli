@@ -1144,6 +1144,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_list_mcp_tools(&mut self, ev: McpListToolsResponseEvent) {
+        self.mcp_auth_statuses = ev.auth_statuses.clone();
         self.add_to_history(history_cell::new_mcp_tools_output(
             &self.config,
             ev.tools,

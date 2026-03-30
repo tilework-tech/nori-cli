@@ -53,8 +53,9 @@ impl AcpBackend {
             }
         };
 
-        // Create a session with enhanced error handling
-        let session_result = connection.create_session(&cwd).await;
+        // Create a session with enhanced error handling, forwarding CLI MCP servers.
+        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+        let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
             Err(e) => {
