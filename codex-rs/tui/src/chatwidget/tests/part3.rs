@@ -1187,3 +1187,140 @@ fn completed_fetch_tool_snapshot_renders_exec_history_cell() {
         "expected output in history cell: {blob:?}"
     );
 }
+
+// --- Spec 05: In-Progress Edit/Delete/Move Rendering ---
+
+#[test]
+fn in_progress_edit_renders_active_client_tool_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-progress".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    // Should NOT produce any flushed history cells
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "In-progress edit should not flush to history, got {cells:?}",
+    );
+
+    // Should have an active cell (the spinner)
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Write README.md"),
+        "Active cell should show edit title, got: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_edit_after_in_progress_replaces_spinner_with_patch() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // First: in-progress edit creates spinner
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-lifecycle".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    // Drain any events from in-progress
+    let _ = drain_insert_history(&mut rx);
+
+    // Then: completed edit with diff arrives
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-lifecycle".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileChanges {
+                changes: vec![nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                }],
+            }),
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: None,
+                new_text: "hello\nworld\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    // Should have exactly 1 cell (the PatchHistoryCell), NOT 2 (spinner + patch)
+    assert_eq!(
+        cells.len(),
+        1,
+        "Expected only one cell (patch), not spinner+patch, got {} cells",
+        cells.len()
+    );
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("README.md"),
+        "Patch cell should show filename, got: {blob:?}"
+    );
+}
+
+#[test]
+fn in_progress_delete_renders_active_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-delete-progress".into(),
+            title: "Delete temp.txt".into(),
+            kind: nori_protocol::ToolKind::Delete,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("temp.txt"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "In-progress delete should not flush to history"
+    );
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Delete temp.txt"),
+        "Active cell should show delete title, got: {blob:?}"
+    );
+}

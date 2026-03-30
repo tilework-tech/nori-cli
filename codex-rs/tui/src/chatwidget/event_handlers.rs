@@ -1289,6 +1289,12 @@ impl ChatWidget {
             {
                 self.handle_client_exec_like_tool_snapshot(tool_snapshot);
             }
+            // Non-completed Edit/Delete/Move: render as ClientToolCell with spinner
+            nori_protocol::ToolKind::Edit
+            | nori_protocol::ToolKind::Delete
+            | nori_protocol::ToolKind::Move => {
+                self.handle_client_native_tool_snapshot(tool_snapshot);
+            }
             _ => {}
         }
     }
@@ -1368,6 +1374,18 @@ impl ChatWidget {
 
         if self.turn_finished {
             return;
+        }
+
+        // Discard (not flush) any in-progress spinner cell for the same call_id,
+        // so only the PatchHistoryCell appears in history.
+        if let Some(cell) = self
+            .active_cell
+            .as_ref()
+            .and_then(|c| c.as_any().downcast_ref::<ClientToolCell>())
+        {
+            if cell.call_id() == tool_snapshot.call_id {
+                self.active_cell.take();
+            }
         }
 
         self.session_stats.record_tool_call("Edit");
