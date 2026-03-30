@@ -12,6 +12,7 @@ use crate::client_event_format::is_exploring_snapshot;
 use crate::client_event_format::is_invocation_redundant;
 use crate::client_event_format::relativize_paths_in_text;
 use crate::client_event_format::strip_code_fences;
+use crate::diff_render::create_diff_summary;
 use crate::exec_cell::OutputLinesParams;
 use crate::exec_cell::TOOL_CALL_MAX_LINES;
 use crate::exec_cell::limit_lines_from_start;
@@ -118,6 +119,18 @@ impl ClientToolCell {
         for (idx, detail) in details.into_iter().enumerate() {
             let prefix = if idx == 0 { "  └ " } else { "    " };
             lines.push(Line::from(vec![prefix.dim(), detail.dim()]));
+        }
+
+        // Render diff artifacts if present
+        let diff_changes = diff_changes_from_artifacts(&self.snapshot.artifacts);
+        if !diff_changes.is_empty() {
+            let width = 76; // leave room for indentation
+            let diff_lines = create_diff_summary(&diff_changes, &self.cwd, width);
+            for diff_line in diff_lines {
+                let mut indented = vec![Span::from("    ")];
+                indented.extend(diff_line.spans);
+                lines.push(Line::from(indented));
+            }
         }
 
         lines
@@ -298,6 +311,27 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
     }
 
     None
+}
+
+fn diff_changes_from_artifacts(
+    artifacts: &[nori_protocol::Artifact],
+) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
+    let mut changes = std::collections::HashMap::new();
+    for artifact in artifacts {
+        if let nori_protocol::Artifact::Diff(change) = artifact {
+            let file_change = match &change.old_text {
+                None => codex_core::protocol::FileChange::Add {
+                    content: change.new_text.clone(),
+                },
+                Some(old_text) => codex_core::protocol::FileChange::Update {
+                    unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+                    move_path: None,
+                },
+            };
+            changes.insert(change.path.clone(), file_change);
+        }
+    }
+    changes
 }
 
 impl HistoryCell for ClientToolCell {
@@ -841,6 +875,46 @@ mod tests {
             lines[0].contains("Ran"),
             "Execute should still show 'Ran', got: {}",
             lines[0]
+        );
+    }
+
+    // --- Spec 07: Diff Artifact Rendering in ClientToolCell ---
+
+    #[test]
+    fn generic_tool_renders_diff_artifacts() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-diff".into(),
+            title: "Edit README.md".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: Some("# Old Title\n".into()),
+                new_text: "# New Title\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should render some diff content -- at minimum the file path
+        assert!(
+            lines.iter().any(|l| l.contains("README.md")),
+            "Diff artifact should render file path in output, got: {lines:?}"
+        );
+        // Should show some diff indicator (add/remove line counts or content)
+        let has_diff_indicator = lines.iter().any(|l| {
+            l.contains('+') || l.contains('-') || l.contains("Old Title") || l.contains("New Title")
+        });
+        assert!(
+            has_diff_indicator,
+            "Diff artifact should render diff content, got: {lines:?}"
         );
     }
 }
