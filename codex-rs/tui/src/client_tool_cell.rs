@@ -64,6 +64,10 @@ impl ClientToolCell {
         is_active_phase(&self.snapshot.phase)
     }
 
+    pub(crate) fn snapshot_kind(&self) -> &nori_protocol::ToolKind {
+        &self.snapshot.kind
+    }
+
     pub(crate) fn is_exploring(&self) -> bool {
         is_exploring_snapshot(&self.snapshot) || !self.exploring_snapshots.is_empty()
     }
@@ -119,10 +123,17 @@ impl ClientToolCell {
             },
         ]));
 
-        // Build sub-items from exploring snapshots
+        // Build sub-items from exploring snapshots. When exploring_snapshots
+        // is empty (single-snapshot exploring cell), use the primary snapshot.
         let mut sub_items: Vec<Line<'static>> = Vec::new();
         let mut i = 0;
-        let snapshots = &self.exploring_snapshots;
+        let single_fallback;
+        let snapshots = if self.exploring_snapshots.is_empty() {
+            single_fallback = [self.snapshot.clone()];
+            &single_fallback[..]
+        } else {
+            &self.exploring_snapshots[..]
+        };
         while i < snapshots.len() {
             let snap = &snapshots[i];
 
@@ -216,13 +227,20 @@ impl ClientToolCell {
                 continue;
             }
 
-            // Fallback: generic sub-item
-            let kind_label = format_tool_kind(&snap.kind).to_string();
-            sub_items.push(Line::from(vec![
-                kind_label.cyan(),
-                " ".into(),
-                relativize_paths_in_text(&snap.title, &self.cwd).into(),
-            ]));
+            // Fallback: generic sub-item. Skip the kind label if the title
+            // already starts with it (e.g., kind="List", title="List /path"
+            // → show "List /path" not "List List /path").
+            let kind_label = format_tool_kind(&snap.kind);
+            let title = relativize_paths_in_text(&snap.title, &self.cwd);
+            if title.to_lowercase().starts_with(&kind_label.to_lowercase()) {
+                sub_items.push(Line::from(vec![title.into()]));
+            } else {
+                sub_items.push(Line::from(vec![
+                    kind_label.to_string().cyan(),
+                    " ".into(),
+                    title.into(),
+                ]));
+            }
             i += 1;
         }
 
@@ -463,12 +481,17 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
         return Some(stdout.to_string());
     }
 
-    // Fall back to artifact text, stripping code fences
-    for artifact in &snapshot.artifacts {
-        if let nori_protocol::Artifact::Text { text } = artifact
-            && !text.is_empty()
-        {
-            return Some(strip_code_fences(text));
+    // Only fall back to artifact text for completed/failed snapshots.
+    // During pending/in-progress, artifact text for execute tools is
+    // the agent's description (e.g., "Print current UTC date/time"),
+    // not stdout.
+    if !is_active_phase(&snapshot.phase) {
+        for artifact in &snapshot.artifacts {
+            if let nori_protocol::Artifact::Text { text } = artifact
+                && !text.is_empty()
+            {
+                return Some(strip_code_fences(text));
+            }
         }
     }
 
@@ -1230,6 +1253,68 @@ mod tests {
             lines[0].contains("Exploring"),
             "Active exploring cell should show 'Exploring', got: {}",
             lines[0]
+        );
+    }
+
+    // --- Spec 12: Execute Cell Completion Buffering ---
+
+    #[test]
+    fn execute_in_progress_with_description_artifact_shows_no_output() {
+        // Claude sends the tool description in the content array of in-progress
+        // execute updates. This description text should NOT be rendered as stdout.
+        let snapshot = make_execute_snapshot(
+            ToolPhase::InProgress,
+            "date --utc +\"%Y-%m-%d %H:%M:%S %Z\"",
+            vec![Artifact::Text {
+                text: "Print current UTC date/time with format flags".into(),
+            }],
+            None, // no raw_output yet (in-progress)
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Running" header with command
+        assert!(
+            lines[0].contains("Running"),
+            "In-progress execute should show 'Running', got: {}",
+            lines[0]
+        );
+        // Should NOT show the description text as output
+        assert!(
+            !lines.iter().any(|l| l.contains("Print current UTC")),
+            "Description text should not be rendered as execute output, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn list_files_title_not_duplicated_in_exploring_fallback() {
+        // When the kind maps to a label that already prefixes the title,
+        // the exploring renderer should not duplicate it.
+        let snapshot = ToolSnapshot {
+            call_id: "call-list-dup".into(),
+            title: "List /home/user/project/src".into(),
+            kind: ToolKind::Other("List".into()),
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None, // no ListFiles invocation, so hits generic fallback
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should NOT show "List List /home/..."
+        let has_double_list = lines.iter().any(|l| l.contains("List List"));
+        assert!(
+            !has_double_list,
+            "Should not duplicate 'List' label, got: {lines:?}"
+        );
+        // Should still show the path
+        assert!(
+            lines.iter().any(|l| l.contains("/home/user/project/src")),
+            "Should still show the path, got: {lines:?}"
         );
     }
 }

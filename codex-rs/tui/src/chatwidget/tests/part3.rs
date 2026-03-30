@@ -1383,3 +1383,306 @@ fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
         "Active cell should contain both filenames, got: {blob:?}"
     );
 }
+
+// --- Spec 12: Execute Cell Completion Buffering ---
+
+#[test]
+fn parallel_execute_snapshots_buffer_and_complete_correctly() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    // Simulate parallel ACP execute tool calls (date, uptime, df).
+    // The pattern is: pending(date), update(date, desc), pending(uptime)
+    // which should displace date to buffer, then update(date, completed).
+
+    // 1) Pending date
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_date".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Pending,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: None,
+        },
+    ));
+
+    // 2) In-progress date with description text
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_date".into(),
+            title: "date --utc".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "Print current UTC date/time".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: None,
+        },
+    ));
+
+    // 3) Pending uptime — this displaces date from active_cell
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_uptime".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Pending,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "uptime -p".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "uptime -p"})),
+            raw_output: None,
+        },
+    ));
+
+    // 4) Completed date arrives (should find it in buffer, not discard it)
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_date".into(),
+            title: "date --utc".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "2026-03-30 05:45:34 UTC".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "2026-03-30 05:45:34 UTC"
+            })),
+        },
+    ));
+
+    // 5) Completed uptime
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_uptime".into(),
+            title: "uptime -p".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "uptime -p".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "up 1 week, 2 days".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "uptime -p"})),
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "up 1 week, 2 days"
+            })),
+        },
+    ));
+
+    // Drain history and check that both commands rendered with correct output
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    // Date command should have real stdout, not description
+    assert!(
+        full.contains("2026-03-30 05:45:34 UTC"),
+        "Date command should show real stdout, got: {full:?}"
+    );
+    assert!(
+        !full.contains("Print current UTC date/time"),
+        "Description text should NOT appear as output, got: {full:?}"
+    );
+    // Uptime command should have real stdout
+    assert!(
+        full.contains("up 1 week, 2 days"),
+        "Uptime command should show real stdout, got: {full:?}"
+    );
+}
+
+#[test]
+fn orphan_buffered_execute_cell_discarded_on_turn_complete() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    // 1) Pending execute cell (date)
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_orphan".into(),
+            title: "date --utc".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "Print current UTC date/time".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: None,
+        },
+    ));
+
+    // 2) Another execute displaces the first one
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_second".into(),
+            title: "uptime -p".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "uptime -p".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "uptime -p"})),
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "up 1 week"
+            })),
+        },
+    ));
+
+    // 3) Turn completes without the first cell ever completing
+    chat.on_task_complete(None);
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    // The orphan cell should NOT appear in history with its description text
+    assert!(
+        !full.contains("Print current UTC date/time"),
+        "Orphan buffered cell should be discarded, not show description as output: {full:?}"
+    );
+    // The completed second cell should appear
+    assert!(
+        full.contains("up 1 week"),
+        "Completed cell should appear in history: {full:?}"
+    );
+}
+
+#[test]
+fn description_text_not_shown_as_execute_output() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Send in-progress execute with description-only content (no raw_output)
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_desc".into(),
+            title: "rm /tmp/test.md".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "rm /tmp/test.md".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "Delete the temporary test file".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "rm /tmp/test.md"})),
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Running"),
+        "In-progress execute should show 'Running': {blob:?}"
+    );
+    assert!(
+        !blob.contains("Delete the temporary test file"),
+        "Description text should NOT appear as output: {blob:?}"
+    );
+}
+
+#[test]
+fn single_read_snapshot_renders_as_explored() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-single-read".into(),
+            title: "Read README.md".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("README.md"),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    // Should show "Explored", not "Ran Read File" or "Tool [completed]"
+    assert!(
+        blob.contains("Explored"),
+        "Single read should render as 'Explored', got: {blob:?}"
+    );
+    assert!(
+        !blob.contains("Ran"),
+        "Single read should NOT show 'Ran', got: {blob:?}"
+    );
+    assert!(
+        !blob.contains("Tool ["),
+        "Single read should NOT use generic format, got: {blob:?}"
+    );
+    assert!(
+        blob.contains("README.md"),
+        "Should show the filename, got: {blob:?}"
+    );
+}
+
+#[test]
+fn list_files_title_not_duplicated() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Send a ListFiles snapshot with title "List src" and kind Other("List")
+    // This exercises the generic fallback path in render_exploring_lines
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-list-dup".into(),
+            title: "List /home/user/project/src".into(),
+            kind: nori_protocol::ToolKind::Other("List".into()),
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::ListFiles {
+                path: Some(PathBuf::from("/home/user/project/src")),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    // Should NOT show "List List"
+    assert!(
+        !blob.contains("List List"),
+        "Should not duplicate 'List' label, got: {blob:?}"
+    );
+    // Should still show the path
+    assert!(
+        blob.contains("src"),
+        "Should still show the path, got: {blob:?}"
+    );
+}

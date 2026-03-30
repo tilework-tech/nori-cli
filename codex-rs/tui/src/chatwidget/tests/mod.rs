@@ -297,6 +297,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         last_rendered_width: std::cell::Cell::new(None),
         current_rollout_path: None,
         pending_exec_cells: PendingExecCellTracker::new(),
+        pending_client_tool_cells: HashMap::new(),
         effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(cfg.cwd),
         pending_agent: None,
         expected_agent: None,

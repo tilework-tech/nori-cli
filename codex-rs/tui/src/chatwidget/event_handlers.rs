@@ -76,6 +76,9 @@ impl ChatWidget {
         // flush to history so the viewport is freed.
         self.finalize_active_cell_as_failed();
         self.pending_exec_cells.drain_failed();
+        // Discard orphan buffered execute cells — silence is better than
+        // showing description text as command output.
+        self.pending_client_tool_cells.clear();
 
         // Close the gate BEFORE flushing: any tool events arriving after this
         // point are stale and should be silently discarded.
@@ -104,6 +107,7 @@ impl ChatWidget {
         // Step 1: Flush the streamed summary from the old session.
         self.flush_answer_stream_with_separator();
         self.turn_finished = true;
+        self.pending_client_tool_cells.clear();
 
         // Step 2: Show "Context compacted" as an info message.
         self.add_info_message("Context compacted".to_owned(), None);
@@ -213,6 +217,8 @@ impl ChatWidget {
 
         // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
         self.pending_exec_cells.drain_failed();
+        // Discard orphan buffered execute cells.
+        self.pending_client_tool_cells.clear();
 
         // Safety net: finalize any incomplete ExecCell still stuck in active_cell.
         // This can happen when tool End events are blocked by the turn_finished gate
@@ -323,6 +329,8 @@ impl ChatWidget {
         self.finalize_active_cell_as_failed();
         // Drain any incomplete ExecCells saved in pending_exec_cells.
         self.pending_exec_cells.drain_failed();
+        // Discard orphan buffered execute cells.
+        self.pending_client_tool_cells.clear();
         // Reset running state and clear streaming buffers.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
@@ -1328,6 +1336,34 @@ impl ChatWidget {
             return;
         }
 
+        // Check if this snapshot is for a buffered incomplete execute cell.
+        // This allows completions to reach cells that were displaced from
+        // active_cell by subsequent tool snapshots (parallel ACP calls).
+        if let Some(mut buffered_cell) = self
+            .pending_client_tool_cells
+            .remove(&tool_snapshot.call_id)
+        {
+            buffered_cell.apply_snapshot(tool_snapshot);
+            if !buffered_cell.is_active() {
+                // Insert directly into history without flushing active_cell.
+                // The normal add_boxed_history path flushes active_cell first
+                // (to maintain chronological order), but that would incorrectly
+                // mark the current active Execute cell as completed and discard
+                // its later completion event.
+                self.completed_client_tool_calls
+                    .insert(buffered_cell.call_id().to_owned());
+                self.needs_final_message_separator = true;
+                self.app_event_tx
+                    .send(AppEvent::InsertHistoryCell(Box::new(buffered_cell)));
+            } else {
+                // Still incomplete — put it back in the buffer.
+                let call_id = buffered_cell.call_id().to_owned();
+                self.pending_client_tool_cells
+                    .insert(call_id, buffered_cell);
+            }
+            return;
+        }
+
         // Merge into existing exploring cell when possible
         let is_new_exploring = crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
         if is_new_exploring
@@ -1341,7 +1377,22 @@ impl ChatWidget {
             return;
         }
 
-        self.flush_active_cell();
+        // Buffer incomplete Execute ClientToolCells instead of flushing
+        // them to history with wrong content (description text as output).
+        if let Some(active) = self.active_cell.take() {
+            if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>()
+                && client_cell.is_active()
+                && *client_cell.snapshot_kind() == nori_protocol::ToolKind::Execute
+            {
+                let call_id = client_cell.call_id().to_owned();
+                if let Ok(boxed) = active.into_any().downcast::<ClientToolCell>() {
+                    self.pending_client_tool_cells.insert(call_id, *boxed);
+                }
+            } else {
+                self.active_cell = Some(active);
+                self.flush_active_cell();
+            }
+        }
         let should_flush = !matches!(
             tool_snapshot.phase,
             nori_protocol::ToolPhase::Pending
