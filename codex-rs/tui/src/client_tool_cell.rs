@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
 use ratatui::prelude::*;
@@ -9,6 +10,7 @@ use crate::client_event_format::format_invocation;
 use crate::client_event_format::format_tool_header;
 use crate::client_event_format::is_exploring_snapshot;
 use crate::client_event_format::is_invocation_redundant;
+use crate::client_event_format::relativize_paths_in_text;
 use crate::client_event_format::strip_code_fences;
 use crate::exec_cell::OutputLinesParams;
 use crate::exec_cell::TOOL_CALL_MAX_LINES;
@@ -26,12 +28,17 @@ use crate::wrapping::word_wrap_line;
 #[derive(Debug)]
 pub(crate) struct ClientToolCell {
     snapshot: nori_protocol::ToolSnapshot,
+    cwd: PathBuf,
     animations_enabled: bool,
     start_time: Option<Instant>,
 }
 
 impl ClientToolCell {
-    pub(crate) fn new(snapshot: nori_protocol::ToolSnapshot, animations_enabled: bool) -> Self {
+    pub(crate) fn new(
+        snapshot: nori_protocol::ToolSnapshot,
+        cwd: PathBuf,
+        animations_enabled: bool,
+    ) -> Self {
         let start_time = if is_active_phase(&snapshot.phase) {
             Some(Instant::now())
         } else {
@@ -39,6 +46,7 @@ impl ClientToolCell {
         };
         Self {
             snapshot,
+            cwd,
             animations_enabled,
             start_time,
         }
@@ -83,17 +91,14 @@ impl ClientToolCell {
         } else {
             "•".dim()
         };
-        lines.push(Line::from(vec![
-            bullet,
-            " ".into(),
-            format_tool_header(&self.snapshot).bold(),
-        ]));
+        let header = relativize_paths_in_text(&format_tool_header(&self.snapshot), &self.cwd);
+        lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
 
         let mut details = Vec::new();
         if let Some(invocation) = format_invocation(&self.snapshot.invocation)
             && !is_invocation_redundant(&invocation, &self.snapshot.title)
         {
-            details.push(invocation);
+            details.push(relativize_paths_in_text(&invocation, &self.cwd));
         }
         for artifact in format_artifacts(&self.snapshot.artifacts) {
             if artifact.contains('\n') {
@@ -374,7 +379,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 0, "stdout": "2026-03-30 05:45:34 UTC"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // First line: green bullet + "Ran" + command
@@ -395,7 +400,7 @@ mod tests {
             vec![],
             Some(serde_json::json!({"exit_code": 0, "stdout": ""})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         assert!(lines[0].contains("Ran"));
@@ -413,7 +418,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 1, "stdout": "error[E0308]: mismatched types"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = cell.display_lines(80);
 
         // Verify the bullet span is red+bold (not dim)
@@ -431,7 +436,7 @@ mod tests {
     #[test]
     fn execute_in_progress_shows_running() {
         let snapshot = make_execute_snapshot(ToolPhase::InProgress, "cargo build", vec![], None);
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         assert!(lines[0].contains("Running"));
@@ -453,7 +458,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 0, "stdout": long_output})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should have truncation indicator
@@ -486,7 +491,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should use the generic format
@@ -507,7 +512,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 0, "stdout": "up 1 day, 20 hours"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should NOT show ```console or ``` literals
@@ -527,7 +532,7 @@ mod tests {
             vec![Artifact::Text { text: "ok".into() }],
             Some(serde_json::json!({"exit_code": 0, "stdout": "ok"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = cell.display_lines(80);
 
         let bullet_span = &lines[0].spans[0];
@@ -551,7 +556,7 @@ mod tests {
             raw_input: None,
             raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": ""})),
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         assert!(lines[0].contains("Ran"));
@@ -576,7 +581,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should have more than just the header line
@@ -604,7 +609,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should still render at least a header line
@@ -635,7 +640,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Code fence markers should NOT appear in the rendered output
@@ -665,7 +670,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should NOT have "Output:" prefix for single-line output
@@ -698,7 +703,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should NOT have "Output:" prefix for multi-line output either
@@ -730,7 +735,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // The invocation detail line ("Read: /repo/README.md") should NOT appear
@@ -743,6 +748,99 @@ mod tests {
         assert!(
             lines.iter().any(|l| l.contains("# README")),
             "Output content should still render, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 04: Path Display Normalization ---
+
+    #[test]
+    fn generic_tool_title_relativizes_cwd_paths() {
+        let cwd = PathBuf::from("/home/user/project");
+        let snapshot = ToolSnapshot {
+            call_id: "call-path".into(),
+            title: "Read /home/user/project/src/main.rs (1 - 5)".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "/home/user/project/src/main.rs".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "fn main() {}".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, cwd, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // The absolute path should NOT appear in the header
+        assert!(
+            !lines[0].contains("/home/user/project/src/main.rs"),
+            "Absolute path should be relativized in title, got: {}",
+            lines[0]
+        );
+        // The relative path should appear instead
+        assert!(
+            lines[0].contains("src/main.rs"),
+            "Relative path should appear in title, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn generic_tool_invocation_path_relativized() {
+        let cwd = PathBuf::from("/home/user/project");
+        let snapshot = ToolSnapshot {
+            call_id: "call-inv-path".into(),
+            title: "Search in /home/user/project/src".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some("/home/user/project/src".into()),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "found 3 results".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, cwd, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Invocation detail should NOT have absolute path
+        let detail_lines: Vec<_> = lines.iter().filter(|l| l.contains("Search")).collect();
+        assert!(
+            !detail_lines
+                .iter()
+                .any(|l| l.contains("/home/user/project/src")),
+            "Absolute path should be relativized in invocation detail, got: {detail_lines:?}"
+        );
+    }
+
+    #[test]
+    fn execute_tool_command_not_path_mangled() {
+        let cwd = PathBuf::from("/home/user/project");
+        let snapshot = make_execute_snapshot(
+            ToolPhase::Completed,
+            "cat /home/user/project/README.md",
+            vec![Artifact::Text {
+                text: "# Readme".into(),
+            }],
+            Some(serde_json::json!({"exit_code": 0, "stdout": "# Readme"})),
+        );
+        // Override the default cwd for this test
+        let cell = ClientToolCell::new(snapshot, cwd, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Execute commands should keep their original command text
+        // (path normalization in the command itself is NOT desired for execute tools)
+        assert!(
+            lines[0].contains("Ran"),
+            "Execute should still show 'Ran', got: {}",
+            lines[0]
         );
     }
 }

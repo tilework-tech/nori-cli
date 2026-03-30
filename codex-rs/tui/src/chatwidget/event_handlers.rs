@@ -1331,6 +1331,7 @@ impl ChatWidget {
         ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
         self.active_cell = Some(Box::new(ClientToolCell::new(
             tool_snapshot,
+            self.config.cwd.clone(),
             self.config.animations,
         )));
         if should_flush {

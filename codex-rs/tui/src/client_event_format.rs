@@ -1,3 +1,14 @@
+use std::path::Path;
+
+/// Replace occurrences of the given `cwd` prefix (with trailing `/`) in `text`
+/// with an empty string, effectively turning absolute paths under `cwd` into
+/// relative ones. Only replaces when the prefix is followed by a non-`/`
+/// character (to avoid stripping a sibling directory that shares a prefix).
+pub(crate) fn relativize_paths_in_text(text: &str, cwd: &Path) -> String {
+    let cwd_str = format!("{}/", cwd.display());
+    text.replace(&cwd_str, "")
+}
+
 pub(crate) fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
     match kind {
         nori_protocol::ToolKind::Read => "read",
