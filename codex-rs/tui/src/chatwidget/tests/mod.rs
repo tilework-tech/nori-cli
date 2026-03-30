@@ -282,6 +282,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         last_unified_wait: None,
         task_complete_pending: false,
         mcp_startup_status: None,
+        mcp_auth_statuses: HashMap::new(),
         interrupts: InterruptManager::new(),
         reasoning_buffer: String::new(),
         full_reasoning_buffer: String::new(),

@@ -4,9 +4,11 @@
 //! new servers. Follows the same `BottomPaneView` pattern as the hotkey picker.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use codex_core::config::types::McpServerConfig;
 use codex_core::config::types::McpServerTransportConfig;
+use codex_protocol::protocol::McpAuthStatus;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -65,6 +67,8 @@ pub(crate) enum TransportChoice {
 pub(crate) struct McpServerPickerView {
     /// Sorted list of (name, config) pairs.
     servers: Vec<(String, McpServerConfig)>,
+    /// Auth status per server name.
+    auth_statuses: HashMap<String, McpAuthStatus>,
     /// Current UI mode.
     mode: Mode,
     /// Currently highlighted row in list mode (0 = "Add new...").
@@ -88,13 +92,18 @@ pub(crate) struct McpServerPickerView {
 }
 
 impl McpServerPickerView {
-    pub fn new(servers: &BTreeMap<String, McpServerConfig>, app_event_tx: AppEventSender) -> Self {
+    pub fn new(
+        servers: &BTreeMap<String, McpServerConfig>,
+        auth_statuses: &HashMap<String, McpAuthStatus>,
+        app_event_tx: AppEventSender,
+    ) -> Self {
         let servers: Vec<(String, McpServerConfig)> = servers
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         Self {
             servers,
+            auth_statuses: auth_statuses.clone(),
             mode: Mode::List,
             selected_idx: 0,
             complete: false,
@@ -166,6 +175,38 @@ impl McpServerPickerView {
     fn handle_list_delete(&mut self) {
         if !self.is_add_new_idx(self.selected_idx) {
             self.mode = Mode::ConfirmDelete(self.selected_idx);
+        }
+    }
+
+    fn handle_list_login(&mut self) {
+        let Some(server_idx) = self.server_idx(self.selected_idx) else {
+            return;
+        };
+        let Some((name, config)) = self.servers.get(server_idx) else {
+            return;
+        };
+        // Only allow login on StreamableHttp servers that are NotLoggedIn.
+        let auth_status = self
+            .auth_statuses
+            .get(name.as_str())
+            .copied()
+            .unwrap_or(McpAuthStatus::Unsupported);
+        if auth_status != McpAuthStatus::NotLoggedIn {
+            return;
+        }
+        if let McpServerTransportConfig::StreamableHttp {
+            url,
+            http_headers,
+            env_http_headers,
+            ..
+        } = &config.transport
+        {
+            self.app_event_tx.send(AppEvent::McpOAuthLogin {
+                server_name: name.clone(),
+                server_url: url.clone(),
+                http_headers: http_headers.clone(),
+                env_http_headers: env_http_headers.clone(),
+            });
         }
     }
 
@@ -522,6 +563,11 @@ impl BottomPaneView for McpServerPickerView {
                     ..
                 } => self.handle_list_delete(),
                 KeyEvent {
+                    code: KeyCode::Char('l'),
+                    modifiers: KeyModifiers::NONE,
+                    ..
+                } => self.handle_list_login(),
+                KeyEvent {
                     code: KeyCode::Esc, ..
                 } => self.go_back(),
                 _ => {}
@@ -837,9 +883,11 @@ impl Renderable for McpServerPickerView {
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
+    use codex_protocol::protocol::McpAuthStatus;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;
+    use std::collections::HashMap;
     use tokio::sync::mpsc::unbounded_channel;
 
     fn make_picker(
@@ -848,9 +896,19 @@ mod tests {
         McpServerPickerView,
         tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     ) {
+        make_picker_with_auth(servers, &HashMap::new())
+    }
+
+    fn make_picker_with_auth(
+        servers: &BTreeMap<String, McpServerConfig>,
+        auth_statuses: &HashMap<String, McpAuthStatus>,
+    ) -> (
+        McpServerPickerView,
+        tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    ) {
         let (tx_raw, rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let picker = McpServerPickerView::new(servers, tx);
+        let picker = McpServerPickerView::new(servers, auth_statuses, tx);
         (picker, rx)
     }
 
@@ -1313,6 +1371,176 @@ mod tests {
         assert!(
             rx.try_recv().is_err(),
             "no save should happen for duplicate name"
+        );
+    }
+
+    // --- OAuth login tests ---
+
+    fn picker_with_not_logged_in_http_server() -> (
+        McpServerPickerView,
+        tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    ) {
+        let mut servers = BTreeMap::new();
+        servers.insert(
+            "slack".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::StreamableHttp {
+                    url: "https://mcp.slack.com/mcp".to_string(),
+                    bearer_token_env_var: None,
+                    http_headers: None,
+                    env_http_headers: None,
+                },
+                enabled: true,
+                startup_timeout_sec: None,
+                tool_timeout_sec: None,
+                enabled_tools: None,
+                disabled_tools: None,
+            },
+        );
+        servers.insert(
+            "docs".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::Stdio {
+                    command: "docs-server".to_string(),
+                    args: vec![],
+                    env: None,
+                    env_vars: vec![],
+                },
+                enabled: true,
+                startup_timeout_sec: None,
+                tool_timeout_sec: None,
+                enabled_tools: None,
+                disabled_tools: None,
+            },
+        );
+        let mut auth_statuses = HashMap::new();
+        auth_statuses.insert("slack".to_string(), McpAuthStatus::NotLoggedIn);
+        auth_statuses.insert("docs".to_string(), McpAuthStatus::Unsupported);
+        make_picker_with_auth(&servers, &auth_statuses)
+    }
+
+    #[test]
+    fn login_on_not_logged_in_http_server_emits_event() {
+        let (mut picker, mut rx) = picker_with_not_logged_in_http_server();
+
+        // Navigate to "slack" (servers sorted: docs=1, slack=2)
+        press(&mut picker, KeyCode::Down); // -> docs (index 1)
+        press(&mut picker, KeyCode::Down); // -> slack (index 2)
+        assert_eq!(picker.selected_idx(), 2);
+
+        // Press 'l' to login
+        press(&mut picker, KeyCode::Char('l'));
+
+        // Should emit McpOAuthLogin event
+        let event = rx.try_recv().expect("should have emitted an event");
+        match event {
+            AppEvent::McpOAuthLogin { server_name, .. } => {
+                assert_eq!(server_name, "slack");
+            }
+            other => panic!("expected McpOAuthLogin event, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn login_on_stdio_server_is_noop() {
+        let (mut picker, mut rx) = picker_with_not_logged_in_http_server();
+
+        // Navigate to "docs" (Stdio server, index 1)
+        press(&mut picker, KeyCode::Down);
+        assert_eq!(picker.selected_idx(), 1);
+
+        // Press 'l' to attempt login
+        press(&mut picker, KeyCode::Char('l'));
+
+        // Should not emit any event
+        assert!(
+            rx.try_recv().is_err(),
+            "login on stdio server should be a no-op"
+        );
+    }
+
+    #[test]
+    fn login_on_add_new_is_noop() {
+        let (mut picker, mut rx) = picker_with_not_logged_in_http_server();
+
+        // Stay on "Add new..." (index 0)
+        assert_eq!(picker.selected_idx(), 0);
+
+        // Press 'l' to attempt login
+        press(&mut picker, KeyCode::Char('l'));
+
+        // Should not emit any event
+        assert!(
+            rx.try_recv().is_err(),
+            "login on 'Add new...' should be a no-op"
+        );
+    }
+
+    #[test]
+    fn login_on_bearer_token_server_is_noop() {
+        let mut servers = BTreeMap::new();
+        servers.insert(
+            "slack".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::StreamableHttp {
+                    url: "https://mcp.slack.com/mcp".to_string(),
+                    bearer_token_env_var: Some("SLACK_TOKEN".to_string()),
+                    http_headers: None,
+                    env_http_headers: None,
+                },
+                enabled: true,
+                startup_timeout_sec: None,
+                tool_timeout_sec: None,
+                enabled_tools: None,
+                disabled_tools: None,
+            },
+        );
+        let mut auth_statuses = HashMap::new();
+        auth_statuses.insert("slack".to_string(), McpAuthStatus::BearerToken);
+        let (mut picker, mut rx) = make_picker_with_auth(&servers, &auth_statuses);
+
+        press(&mut picker, KeyCode::Down);
+        press(&mut picker, KeyCode::Char('l'));
+
+        assert!(
+            rx.try_recv().is_err(),
+            "login on BearerToken server should be a no-op"
+        );
+    }
+
+    #[test]
+    fn login_on_already_authenticated_server_is_noop() {
+        let mut servers = BTreeMap::new();
+        servers.insert(
+            "slack".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::StreamableHttp {
+                    url: "https://mcp.slack.com/mcp".to_string(),
+                    bearer_token_env_var: None,
+                    http_headers: None,
+                    env_http_headers: None,
+                },
+                enabled: true,
+                startup_timeout_sec: None,
+                tool_timeout_sec: None,
+                enabled_tools: None,
+                disabled_tools: None,
+            },
+        );
+        let mut auth_statuses = HashMap::new();
+        auth_statuses.insert("slack".to_string(), McpAuthStatus::OAuth);
+        let (mut picker, mut rx) = make_picker_with_auth(&servers, &auth_statuses);
+
+        // Navigate to "slack" (already authenticated)
+        press(&mut picker, KeyCode::Down);
+
+        // Press 'l'
+        press(&mut picker, KeyCode::Char('l'));
+
+        // Should not emit login event (already authenticated)
+        assert!(
+            rx.try_recv().is_err(),
+            "login on already authenticated server should be a no-op"
         );
     }
 }
