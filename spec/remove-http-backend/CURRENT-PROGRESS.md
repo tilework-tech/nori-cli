@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Third component removed
+## Status: Fourth component removed
 
 ### Completed: Remove compact_remote module
 
@@ -64,6 +64,32 @@ Removed the entire Chat Completions (`WireApi::Chat`) wire protocol implementati
 - `AggregatedStream` and `AggregateStreamExt` moved to `codex-api/src/endpoint/aggregate.rs` (shared functionality, used by Responses stream aggregation)
 
 **Impact:** ~1200 lines of Chat Completions code removed across codex-api and codex-core. All existing tests pass (codex-api: 16 tests, codex-core: 535 pass, 2 pre-existing nvm environment failures).
+
+### Completed: Remove WireApi enum from codex-api
+
+Removed the `WireApi` enum from `codex-api` entirely. After removing Chat Completions, this was a single-variant enum (`Responses` only) — a pointless abstraction. Also fixed the Ollama built-in provider which was incorrectly set to `WireApi::Chat` (would error at runtime).
+
+**What was removed:**
+- `WireApi` enum from `codex-api/src/provider.rs`
+- `wire` field from `codex-api::Provider` struct
+- `WireApi` re-export from `codex-api/src/lib.rs`
+- `WireApi` import and match in `ResponsesClient::path()` (now returns `"responses"` directly)
+- Dead `wire != Responses` check in `is_azure_responses_endpoint()`
+- `WireApi as ApiWireApi` import from `codex-core/src/model_provider_info.rs`
+
+**What was simplified:**
+- `codex-api::Provider` no longer carries a wire format selector — it always uses Responses API
+- `to_api_provider()` in codex-core: `WireApi::Chat` error check moved to top of function, no longer constructs `wire` field
+- Ollama built-in provider: `WireApi::Chat` → `WireApi::Responses` (fixes runtime error)
+
+**What was preserved:**
+- `WireApi::Chat` variant in codex-core's enum still exists for config deserialization backwards compatibility
+
+**Tests added:**
+- `chat_wire_api_config_deserializes_but_fails_to_create_provider` — verifies that `wire_api = "chat"` in config deserializes but errors at provider creation
+- `ollama_builtin_provider_creates_successfully` — verifies Ollama built-in creates without error
+
+**Impact:** Net -20 lines across codex-api and codex-core. All existing tests pass (codex-api: 16 tests, codex-core: 541 unit + 440 integration pass, 22 pre-existing nvm environment failures).
 
 ### Suggested next steps for future commits
 1. Remove the `codex_conversation.rs` and `conversation_manager.rs` wrappers (only used by HTTP backend tests — would cascade to ~30 integration test modules, so consider rewriting tests to use ACP path first)

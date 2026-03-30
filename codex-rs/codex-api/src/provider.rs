@@ -6,12 +6,6 @@ use http::header::HeaderMap;
 use std::collections::HashMap;
 use std::time::Duration;
 
-/// Wire-level APIs supported by a `Provider`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WireApi {
-    Responses,
-}
-
 /// High-level retry configuration for a provider.
 ///
 /// This is converted into a `RetryPolicy` used by `codex-client` to drive
@@ -48,7 +42,6 @@ pub struct Provider {
     pub name: String,
     pub base_url: String,
     pub query_params: Option<HashMap<String, String>>,
-    pub wire: WireApi,
     pub headers: HeaderMap,
     pub retry: RetryConfig,
     pub stream_idle_timeout: Duration,
@@ -90,10 +83,6 @@ impl Provider {
     }
 
     pub fn is_azure_responses_endpoint(&self) -> bool {
-        if self.wire != WireApi::Responses {
-            return false;
-        }
-
         if self.name.eq_ignore_ascii_case("azure") {
             return true;
         }

@@ -6,7 +6,6 @@
 //!      key. These override or extend the defaults at runtime.
 
 use codex_api::Provider as ApiProvider;
-use codex_api::WireApi as ApiWireApi;
 use codex_api::provider::RetryConfig as ApiRetryConfig;
 use codex_app_server_protocol::AuthMode;
 use http::HeaderMap;
@@ -129,6 +128,13 @@ impl ModelProviderInfo {
         &self,
         auth_mode: Option<AuthMode>,
     ) -> crate::error::Result<ApiProvider> {
+        if self.wire_api == WireApi::Chat {
+            return Err(crate::error::CodexErr::UnsupportedOperation(
+                "Chat Completions wire API has been removed; use wire_api = \"responses\" instead"
+                    .to_string(),
+            ));
+        }
+
         let default_base_url = if matches!(auth_mode, Some(AuthMode::ChatGPT)) {
             "https://chatgpt.com/backend-api/codex"
         } else {
@@ -152,14 +158,6 @@ impl ModelProviderInfo {
             name: self.name.clone(),
             base_url,
             query_params: self.query_params.clone(),
-            wire: match self.wire_api {
-                WireApi::Responses => ApiWireApi::Responses,
-                WireApi::Chat => {
-                    return Err(crate::error::CodexErr::UnsupportedOperation(
-                        "Chat Completions wire API has been removed; use wire_api = \"responses\" instead".to_string(),
-                    ));
-                }
-            },
             headers,
             retry,
             stream_idle_timeout: self.stream_idle_timeout(),
@@ -271,7 +269,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
         ),
         (
             OLLAMA_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Chat),
+            create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Responses),
         ),
         (
             LMSTUDIO_OSS_PROVIDER_ID,
@@ -413,6 +411,30 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
 
         let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
         assert_eq!(expected_provider, provider);
+    }
+
+    #[test]
+    fn chat_wire_api_config_deserializes_but_fails_to_create_provider() {
+        let toml_str = r#"
+name = "test"
+base_url = "https://example.com/v1"
+wire_api = "chat"
+        "#;
+        let provider: ModelProviderInfo = toml::from_str(toml_str).unwrap();
+        provider
+            .to_api_provider(None)
+            .expect_err("wire_api = 'chat' should be rejected at provider creation");
+    }
+
+    #[test]
+    fn ollama_builtin_provider_creates_successfully() {
+        let providers = built_in_model_providers();
+        let ollama = providers
+            .get(OLLAMA_OSS_PROVIDER_ID)
+            .expect("ollama should exist");
+        ollama
+            .to_api_provider(None)
+            .expect("ollama built-in provider should create successfully");
     }
 
     #[test]

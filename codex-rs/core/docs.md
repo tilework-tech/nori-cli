@@ -100,7 +100,7 @@ Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 
 **Model Client Architecture:**
 
-`client.rs` provides `ModelClient` for communicating with HTTP-based model providers. Only the `WireApi::Responses` protocol (OpenAI Responses API) is supported at runtime. The `WireApi::Chat` variant still exists in the `model_provider_info.rs` enum solely for backwards-compatible config deserialization — selecting it produces an `UnsupportedOperation` error at runtime. The default wire API is `WireApi::Responses`.
+`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. The `codex-api` `Provider` struct has no wire format selector -- it always speaks Responses API. The `WireApi` enum in `model_provider_info.rs` still exists with `Chat` and `Responses` variants for backwards-compatible config deserialization (`wire_api = "chat"` in TOML), but selecting `Chat` produces an `UnsupportedOperation` error early in `to_api_provider()` before the `codex-api::Provider` is constructed. The default wire API is `WireApi::Responses`. All built-in providers (including Ollama) use `WireApi::Responses`.
 
 ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
 

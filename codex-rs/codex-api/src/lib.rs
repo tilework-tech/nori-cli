@@ -23,7 +23,6 @@ pub use crate::endpoint::responses::ResponsesClient;
 pub use crate::endpoint::responses::ResponsesOptions;
 pub use crate::error::ApiError;
 pub use crate::provider::Provider;
-pub use crate::provider::WireApi;
 pub use crate::requests::ResponsesRequest;
 pub use crate::requests::ResponsesRequestBuilder;
 pub use crate::sse::stream_from_fixture;

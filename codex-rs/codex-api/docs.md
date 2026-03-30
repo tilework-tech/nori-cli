@@ -13,8 +13,7 @@ Used by `@/codex-rs/core/` for the legacy HTTP backend (non-ACP mode). Provides 
 ### Core Implementation
 
 **Provider Abstraction** (`provider.rs`):
-- `Provider` - Configures API endpoint, auth, and wire format
-- `WireApi` - Only the `Responses` variant exists at this layer; codex-api has no awareness of Chat Completions
+- `Provider` - Configures API endpoint, auth, and retry behavior. Always uses the OpenAI Responses API wire protocol; there is no wire format selector at this layer.
 
 **Responses Client** (`endpoint/responses.rs`):
 - `ResponsesClient` - OpenAI Responses API client

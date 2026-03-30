@@ -6,7 +6,6 @@ use crate::common::TextControls;
 use crate::endpoint::streaming::StreamingClient;
 use crate::error::ApiError;
 use crate::provider::Provider;
-use crate::provider::WireApi;
 use crate::requests::ResponsesRequest;
 use crate::requests::ResponsesRequestBuilder;
 use crate::sse::spawn_response_stream;
@@ -89,9 +88,7 @@ impl<T: HttpTransport, A: AuthProvider> ResponsesClient<T, A> {
     }
 
     fn path(&self) -> &'static str {
-        match self.streaming.provider().wire {
-            WireApi::Responses => "responses",
-        }
+        "responses"
     }
 
     pub async fn stream(

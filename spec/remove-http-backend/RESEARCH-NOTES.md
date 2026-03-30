@@ -104,6 +104,25 @@ The HTTP backend supports two wire APIs: `WireApi::Responses` (Responses API) an
 
 **Strategy:** Keep the `WireApi::Chat` variant in codex-core's enum for config compatibility. When the Chat path is selected in `ModelClient::stream()`, return an error. This prevents config deserialization breakage while removing all implementation code.
 
+## WireApi enum removal from codex-api (next removal target)
+
+After removing Chat Completions, `codex-api`'s `WireApi` enum is now a single-variant enum (`Responses` only). It's a pointless abstraction that adds noise to the codebase.
+
+**codex-api files to modify:**
+1. `codex-api/src/provider.rs` - Remove `WireApi` enum, remove `wire` field from `Provider`, simplify `is_azure_responses_endpoint()`
+2. `codex-api/src/lib.rs` - Remove `WireApi` re-export
+3. `codex-api/src/endpoint/responses.rs` - Remove `WireApi` import, simplify `path()` to always return `"responses"`
+4. `codex-api/src/requests/responses.rs` - Update test helper to not set `wire` field
+5. `codex-api/tests/clients.rs` - Remove `WireApi` import, update `provider()` helper
+
+**codex-core files to modify:**
+1. `core/src/model_provider_info.rs` - Remove `WireApi as ApiWireApi` import, remove `wire` mapping from `to_api_provider()`, move `WireApi::Chat` error check earlier in the function, fix Ollama provider from `WireApi::Chat` to `WireApi::Responses`
+
+**Key observations:**
+- Ollama built-in provider currently sets `WireApi::Chat`, which will error at runtime via `to_api_provider()`. Fixing to `WireApi::Responses`.
+- The `WireApi::Chat` variant in codex-core is kept for config deserialization compat (existing user config files).
+- `codex-core`'s `WireApi` enum and its Chat variant are NOT part of this removal — only the codex-api side.
+
 ## Approach: Feature-gate codex-api (future)
 
 Add a `legacy-http-backend` feature to codex-core:
