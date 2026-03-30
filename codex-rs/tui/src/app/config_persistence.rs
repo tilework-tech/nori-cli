@@ -329,4 +329,69 @@ impl App {
             None,
         );
     }
+
+    pub(super) async fn persist_mcp_servers(
+        &mut self,
+        servers: std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .replace_mcp_servers(&servers)
+            .apply()
+            .await
+        {
+            tracing::error!(error = %err, "failed to persist MCP servers");
+            self.chat_widget
+                .add_error_message(format!("Failed to save MCP servers: {err}"));
+            return;
+        }
+
+        self.chat_widget.add_info_message(
+            "MCP servers updated. Restart to apply changes.".to_string(),
+            None,
+        );
+    }
+
+    /// Suspend the TUI, run the interactive MCP OAuth login flow, then resume.
+    pub(super) async fn perform_mcp_oauth_login(
+        &mut self,
+        tui: &mut crate::tui::Tui,
+        server_name: String,
+        server_url: String,
+        http_headers: Option<std::collections::HashMap<String, String>>,
+        env_http_headers: Option<std::collections::HashMap<String, String>>,
+    ) {
+        // Fully restore terminal state (raw mode, keyboard enhancement,
+        // bracketed paste, focus change) so the OAuth flow can print to
+        // stdout and the user can interact with the browser callback.
+        let _ = tui.leave_alt_screen();
+        let _ = crate::tui::restore();
+
+        let result = codex_rmcp_client::perform_oauth_login(
+            &server_name,
+            &server_url,
+            codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
+            http_headers,
+            env_http_headers,
+            &[],
+        )
+        .await;
+
+        // Re-enable all terminal modes and re-enter alt screen.
+        let _ = crate::tui::set_modes();
+        let _ = tui.enter_alt_screen();
+        tui.frame_requester().schedule_frame();
+
+        match result {
+            Ok(()) => {
+                self.chat_widget.add_info_message(
+                    format!("Successfully authenticated with `{server_name}`. Restart to apply."),
+                    None,
+                );
+            }
+            Err(err) => {
+                self.chat_widget
+                    .add_error_message(format!("OAuth login for `{server_name}` failed: {err}"));
+            }
+        }
+    }
 }

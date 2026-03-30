@@ -152,7 +152,7 @@ snapshot stream rather than raw protocol churn.
 Even with normalized snapshots, multiple updates for the same `call_id` can
 arrive while the viewport is streaming text:
 
-1. Pending/InProgress snapshot creates or updates a `ClientToolCell`
+1. Pending/InProgress snapshot creates or updates an `ExecCell`
 2. Another snapshot for the same `call_id` arrives with better title/input
 3. The completed snapshot arrives after the cell has already been deferred
 4. If pairing breaks, the completion can create an orphan cell or leave the
@@ -164,16 +164,16 @@ to preserve ordering and deduplicate by `call_id`.
 ### Snapshot Routing In The TUI
 
 `handle_client_tool_snapshot()` in `chatwidget/event_handlers.rs` routes
-normalized ACP snapshots into native ACP rendering paths:
+normalized ACP snapshots into existing cell types:
 
 | Snapshot kind/phase | TUI handling |
 |---------------------|--------------|
 | `Edit` / `Delete` / `Move` completed with file operations | `PatchHistoryCell` path |
-| `Execute` / `Read` / `Search` / `Fetch` / `Think` / `Other` pending or in-progress | Create or update `ClientToolCell` |
-| Same kinds completed or failed | Apply the terminal snapshot to `ClientToolCell`; non-exploring tools flush immediately, exploring tools stay visible until the next flush boundary |
+| `Execute` / `Read` / `Search` / `Fetch` / `Think` / `Other` pending or in-progress | Adapt to exec-begin flow |
+| Same kinds completed or failed | Adapt to exec-end flow |
 
-This keeps ACP rendering native to `nori_protocol` while still preserving the
-existing patch-history path for file mutations.
+This preserves the existing cell presentation without requiring the backend to
+reconstruct Codex-shaped event vocabulary.
 
 ### Guidelines for Handling ACP Events
 
@@ -188,7 +188,7 @@ When working with ACP tool events, follow these principles:
 ### Tool Display Information Extraction
 
 The TUI still derives concise display text from the normalized invocation/raw
-input when rendering native ACP tool cells and approval headers:
+input when adapting snapshots into exec-like cells:
 
 | Tool Type | Checked Fields | Output Format |
 |-----------|---------------|---------------|
@@ -203,13 +203,15 @@ This enables the TUI to show `"Read File(src/main.rs)"` instead of just `"Read F
 
 ### Tool Classification for Exploring vs Command Mode
 
-The native ACP renderer maps normalized `ToolKind` and `Invocation` data to TUI presentation modes:
+The snapshot adapter maps normalized `ToolKind` and `Invocation` data to TUI rendering modes:
 
-| ACP snapshot traits | TUI Mode |
-|---------------------|----------|
-| `Read`, `Search`, or `Invocation::ListFiles` | Exploring `ClientToolCell` |
-| `Execute`, `Fetch`, `Think`, generic `Other` | Command-style `ClientToolCell` |
-| `Edit`, `Delete`, `Move` with file changes | Patch history path |
+| ACP ToolKind | ParsedCommand | TUI Mode |
+|--------------|---------------|----------|
+| `Read` | `ParsedCommand::Read` | Exploring (compact) |
+| `Search` | `ParsedCommand::Search` | Exploring (compact) |
+| `Other` with "list"/"glob"/"ls" in title | `ParsedCommand::ListFiles` | Exploring (compact) |
+| `Execute`, `Fetch`, `Think`, generic `Other` | `ParsedCommand::Unknown` | Command (full display) |
+| `Edit`, `Delete`, `Move` | N/A | Patch history path |
 
 This enables the TUI to group and collapse read-only operations while showing
 mutating operations prominently.
@@ -229,21 +231,22 @@ the last one. This prevents duplicate call_ids from leaving cells stuck as "acti
 
 Added check in `with_added_call()` to reject calls with duplicate call_ids.
 
-### Fix 3: Don't Flush Incomplete Tool Cells During Streaming
+### Fix 3: Don't Flush Incomplete ExecCells During Streaming
 
 Both `handle_streaming_delta()` and `add_boxed_history()` now check if the
-active `ExecCell` or `ClientToolCell` is incomplete before flushing. If
-`is_active()` returns true, the cell stays in `active_cell` instead of being
-saved to pending.
+active ExecCell is incomplete before flushing. If `is_active()` returns true,
+the cell stays in `active_cell` instead of being saved to pending.
 
-### Fix 4: Flush Stream Before Deferred Tool Events
+### Fix 4: Flush Stream Before Tool End/Begin Events
 
 Tool End events (`on_exec_command_end`, `on_mcp_tool_call_end`, `on_patch_apply_end`)
 and `on_mcp_tool_call_begin` now call `flush_answer_stream_with_separator()` before
-`defer_or_handle()`. ACP `handle_client_tool_snapshot()` follows the same pattern
-before it queues or renders a normalized snapshot. Without this flush, deferred
-tool updates would be processed only at `TaskComplete`, causing tool results to
-appear after all text instead of interleaved in their correct order.
+`defer_or_handle()`. Without this, End events arriving during active text streaming
+were deferred to the interrupt queue and only processed at `TaskComplete`, causing
+all tool call results to appear after all text instead of interleaved in their correct
+order. The flush finalizes any in-progress text stream, allowing the subsequent
+`defer_or_handle()` to take the immediate-handle path. This matches the pattern
+already used by `on_exec_command_begin`.
 
 ---
 
@@ -274,7 +277,7 @@ RUST_LOG=acp_event_flow=debug,tui_event_flow=debug,cell_flushing=debug,pending_e
 
 1. **Event sequence**: Events should arrive in order (seq=1, 2, 3...)
 2. **Snapshot progression**: Verify the same `call_id` moves from pending/in-progress to completed without spawning extra cells
-3. **Duplicate detection**: Look for repeated native cell creation or deferred handling for the same `call_id`
+3. **Duplicate detection**: Look for repeated begin adaptation for the same `call_id`
 4. **State at reception**: Check `has_active_cell`, `active_cell_is_exec`, `pending_exec_count` at each event
 5. **Cell flushing**: Track when cells are saved to pending vs flushed to history
 6. **call_id correlation**: Match begin and completion handling for the same normalized ACP snapshot stream

@@ -1122,6 +1122,24 @@ impl App {
                 }
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::SaveMcpServers(servers) => {
+                self.persist_mcp_servers(servers).await;
+            }
+            AppEvent::McpOAuthLogin {
+                server_name,
+                server_url,
+                http_headers,
+                env_http_headers,
+            } => {
+                self.perform_mcp_oauth_login(
+                    tui,
+                    server_name,
+                    server_url,
+                    http_headers,
+                    env_http_headers,
+                )
+                .await;
+            }
         }
         Ok(true)
     }

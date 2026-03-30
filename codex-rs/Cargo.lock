@@ -3836,6 +3836,7 @@ dependencies = [
  "codex-git",
  "codex-login",
  "codex-protocol",
+ "codex-rmcp-client",
  "codex-utils-pty",
  "codex-windows-sandbox",
  "color-eyre",

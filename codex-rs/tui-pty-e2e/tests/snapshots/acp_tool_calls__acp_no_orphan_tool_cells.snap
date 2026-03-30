@@ -4,15 +4,14 @@ expression: normalize_for_input_snapshot(contents)
 ---
 › Analyze code
 
+• Running Running tests(cargo test)
+
+────────────────────────────────────────────────────────────────────────────────
+
 • Analyzing the code.
 
-• Tool [completed]: Running tests (execute)
-  └ Command: cargo test
-    Output: Tests passed
-
-• Tool [completed]: Running lint (execute)
-  └ Command: cargo clippy
-    Output: No files found
+• Ran Running lint(cargo clippy)
+  └ No files found
 
 ────────────────────────────────────────────────────────────────────────────────
 

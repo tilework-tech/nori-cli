@@ -541,6 +541,23 @@ The ACP connection layer uses SACP v10 (`sacp` crate) to communicate with agent 
 
 **Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the `approval_tx` channel, and spawns a concurrent task via `cx.spawn()` to wait for the user's response. The spawn avoids blocking the SACP dispatch loop while the UI collects user input.
 
+**MCP Server Forwarding** (`connection/mcp.rs`):
+
+CLI-configured MCP servers (from `config.toml`) are converted to SACP protocol types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to `sacp::schema::McpServer`:
+
+| Transport | SACP Type | Key Fields |
+|-----------|-----------|------------|
+| `Stdio` | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment) |
+| `StreamableHttp` | `McpServer::Http` | url, headers (static headers + env-resolved headers + bearer token from env var as `Authorization: Bearer` header) |
+
+Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. All servers are included regardless of the `enabled` flag; the agent decides how to handle them. Results are sorted by server name for deterministic ordering.
+
+`create_session()` accepts a `mcp_servers: Vec<McpServer>` parameter that is populated by calling `to_sacp_mcp_servers()` at each session creation site:
+- `spawn_and_relay.rs` -- initial session creation during backend spawn
+- `session.rs` -- both the server-side `load_session` fallback and client-side replay paths during session resume
+- `submit_and_ops.rs` -- fresh session creation after context compaction
+- `hooks.rs` -- passes an empty vec (hook sessions do not need MCP servers)
+
 ### Transcript Persistence
 
 The ACP module provides client-side transcript persistence that captures a full view of conversations (user input + assistant responses) without relying on agent-side storage. This enables viewing previous sessions without replaying agent mechanics.
@@ -751,7 +768,7 @@ For Edit/Write/Delete operations, the ACP backend normalizes file mutations into
 | Delete | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
 | Execute, Read, etc. | `ApprovalRequest` or auto-approval depending on policy | Normalized tool snapshot |
 
-The transcript recorder uses the same normalized snapshot data when deciding how to persist tool activity, so the recorded transcript and live TUI stay aligned without requiring a separate patch translation path. On the TUI side, non-mutation ACP tool snapshots now render directly through `ClientToolCell` instead of being translated into synthetic exec begin/end events, while resolved edit/delete/move snapshots still reuse the diff-oriented patch path.
+The transcript recorder uses the same normalized snapshot data when deciding how to persist tool activity, so the recorded transcript and live TUI stay aligned without requiring a separate patch translation path.
 
 **Tool Call Event Filtering and Title Accumulation:**
 
@@ -791,11 +808,11 @@ Late-arriving tool events that race past the agent's final response are handled 
 
 **Tool Classification System:**
 
-| ACP snapshot shape | TUI Rendering |
-|--------------------|---------------|
-| `Edit` / `Delete` / `Move` with resolved file changes | Diff-oriented patch history / approval rendering |
-| `Read`, `Search`, or `Invocation::ListFiles` | `ClientToolCell` in exploring mode |
-| `Execute`, `Fetch`, `Think`, and other non-file-mutation tools | `ClientToolCell` in command-style mode |
+| ACP ToolKind | ParsedCommand | TUI Rendering |
+|--------------|---------------|---------------|
+| `Read` | `ParsedCommand::Read` | Exploring (compact, grouped) |
+| `Search` | `ParsedCommand::Search` | Exploring (compact, grouped) |
+| `Execute`, `Edit`, `Delete`, etc. | `ParsedCommand::Unknown` | Command (full display) |
 
 **Plan Event Translation:**
 
@@ -920,7 +937,7 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 
 **MCP Server Listing** (`submit_and_ops.rs`, `backend/mod.rs`):
 
-The ACP backend handles `Op::ListMcpTools` to support the `/mcp` slash command. In ACP mode, MCP connections are managed by the upstream ACP agent subprocess, not by the CLI itself. This means the CLI cannot enumerate individual tools, resources, or templates -- those fields are sent as empty maps in the `McpListToolsResponseEvent`.
+The ACP backend handles `Op::ListMcpTools` to support the `/mcp` slash command. In ACP mode, MCP connections are managed by the upstream ACP agent subprocess (which receives servers via `NewSessionRequest.mcp_servers` at session creation -- see **MCP Server Forwarding** in the Connection Management section above). The CLI cannot enumerate individual tools, resources, or templates -- those fields are sent as empty maps in the `McpListToolsResponseEvent`.
 
 Auth statuses *are* computed locally via `codex_core::mcp::auth::compute_auth_statuses()`, which checks OAuth/bearer token status without needing active MCP connections. The MCP server configuration (`mcp_servers`) and OAuth credentials store mode (`mcp_oauth_credentials_store_mode`) are carried on both `AcpBackendConfig` and `AcpBackend`, threaded from the TUI's `Config` through `spawn()` and `resume_session()`.
 

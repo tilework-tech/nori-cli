@@ -101,19 +101,25 @@ impl AcpBackend {
                     );
                     collect_handle.abort();
 
-                    let session_id = connection.create_session(&cwd).await.map_err(|e| {
-                        let error_string = format!("{e:?}");
-                        let category = categorize_acp_error(&error_string);
-                        let display_error = format!("{e}");
-                        anyhow::anyhow!(enhanced_error_message(
-                            category,
-                            &display_error,
-                            &agent_config.provider_info.name,
-                            &agent_config.auth_hint,
-                            &agent_config.display_name,
-                            &agent_config.install_hint,
-                        ))
-                    })?;
+                    let mcp_servers =
+                        crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+                    let session_id =
+                        connection
+                            .create_session(&cwd, mcp_servers)
+                            .await
+                            .map_err(|e| {
+                                let error_string = format!("{e:?}");
+                                let category = categorize_acp_error(&error_string);
+                                let display_error = format!("{e}");
+                                anyhow::anyhow!(enhanced_error_message(
+                                    category,
+                                    &display_error,
+                                    &agent_config.provider_info.name,
+                                    &agent_config.auth_hint,
+                                    &agent_config.display_name,
+                                    &agent_config.install_hint,
+                                ))
+                            })?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
                         let client_events = transcript_to_replay_client_events(t);
@@ -140,19 +146,23 @@ impl AcpBackend {
         } else {
             debug!("Agent does not support session/load — using client-side replay");
 
-            let session_id = connection.create_session(&cwd).await.map_err(|e| {
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e}");
-                anyhow::anyhow!(enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                ))
-            })?;
+            let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+            let session_id = connection
+                .create_session(&cwd, mcp_servers)
+                .await
+                .map_err(|e| {
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+                    let display_error = format!("{e}");
+                    anyhow::anyhow!(enhanced_error_message(
+                        category,
+                        &display_error,
+                        &agent_config.provider_info.name,
+                        &agent_config.auth_hint,
+                        &agent_config.display_name,
+                        &agent_config.install_hint,
+                    ))
+                })?;
 
             let (replay_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);

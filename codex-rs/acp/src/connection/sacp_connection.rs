@@ -553,10 +553,17 @@ impl SacpConnection {
     }
 
     /// Create a new session with the agent.
-    pub async fn create_session(&self, cwd: &Path) -> Result<SessionId> {
+    ///
+    /// `mcp_servers` are forwarded to the agent so it can connect to CLI-configured
+    /// MCP servers. Pass an empty vec for sessions that don't need MCP (e.g. hooks).
+    pub async fn create_session(
+        &self,
+        cwd: &Path,
+        mcp_servers: Vec<sacp::schema::McpServer>,
+    ) -> Result<SessionId> {
         let response = self
             .cx
-            .send_request(NewSessionRequest::new(cwd))
+            .send_request(NewSessionRequest::new(cwd).mcp_servers(mcp_servers))
             .block_task()
             .await
             .context("Failed to create ACP session")?;

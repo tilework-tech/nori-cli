@@ -37,7 +37,7 @@ async fn test_spawn_and_create_session() {
 
     // Verify the connection is functional by creating a session.
     let session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create_session should succeed on a live connection");
 
@@ -63,7 +63,7 @@ async fn test_prompt_receives_text_updates() {
         .expect("spawn");
 
     let session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
@@ -109,7 +109,7 @@ async fn test_model_state_after_session_creation() {
         .expect("spawn");
 
     let _session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
@@ -156,7 +156,7 @@ async fn test_approval_receiver_forwards_requests() {
     let mut approval_rx = conn.take_approval_receiver();
 
     let session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
@@ -239,7 +239,7 @@ async fn test_codex_home_not_inherited() {
         .expect("spawn");
 
     let session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
@@ -288,7 +288,7 @@ async fn test_drop_kills_subprocess() {
         .expect("spawn");
 
     let session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
@@ -338,7 +338,7 @@ async fn test_cancel_during_prompt() {
         .expect("spawn");
 
     let session_id = conn
-        .create_session(temp_dir.path())
+        .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 

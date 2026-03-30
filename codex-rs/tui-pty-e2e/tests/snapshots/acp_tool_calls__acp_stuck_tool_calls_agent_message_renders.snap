@@ -4,6 +4,11 @@ expression: normalize_for_input_snapshot(contents)
 ---
 › Analyze files
 
+• Exploring
+  └ Read app.rs, config.rs, main.rs
+
+────────────────────────────────────────────────────────────────────────────────
+
 • Analysis complete despite incomplete tool calls.
 
 › [DEFAULT_PROMPT]

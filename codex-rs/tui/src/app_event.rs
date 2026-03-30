@@ -463,6 +463,17 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     OpenFileManagerPicker,
 
+    /// Persist the full MCP servers map to config.toml.
+    SaveMcpServers(std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>),
+
+    /// Trigger an MCP OAuth login flow for a server.
+    McpOAuthLogin {
+        server_name: String,
+        server_url: String,
+        http_headers: Option<std::collections::HashMap<String, String>>,
+        env_http_headers: Option<std::collections::HashMap<String, String>>,
+    },
+
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
 

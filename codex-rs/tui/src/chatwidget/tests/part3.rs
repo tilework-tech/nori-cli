@@ -415,10 +415,6 @@ fn approval_modal_exec_from_client_event() {
         contents.contains("git status"),
         "expected exec approval modal: {contents:?}"
     );
-    assert!(
-        contents.contains("Terminal") && contents.to_lowercase().contains("execute"),
-        "expected native ACP approval title/kind in modal: {contents:?}"
-    );
 }
 
 #[test]
@@ -881,7 +877,7 @@ fn completed_move_tool_snapshot_renders_patch_history_cell() {
 }
 
 #[test]
-fn completed_execute_tool_snapshot_renders_native_tool_history_cell() {
+fn completed_execute_tool_snapshot_renders_exec_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
@@ -906,17 +902,17 @@ fn completed_execute_tool_snapshot_renders_native_tool_history_cell() {
     assert_eq!(cells.len(), 1, "expected one exec history cell");
     let blob = lines_to_single_string(cells.first().unwrap());
     assert!(
-        blob.contains("Ran") && blob.contains("git status"),
-        "expected native execute rendering with 'Ran' verb in history cell: {blob:?}"
+        blob.contains("git status"),
+        "expected command in history cell: {blob:?}"
     );
     assert!(
         blob.contains("On branch main"),
-        "expected tool output in history cell: {blob:?}"
+        "expected output in history cell: {blob:?}"
     );
 }
 
 #[test]
-fn pending_execute_tool_snapshot_renders_native_tool_cell() {
+fn pending_execute_tool_snapshot_renders_running_exec_cell() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
@@ -937,8 +933,12 @@ fn pending_execute_tool_snapshot_renders_native_tool_cell() {
 
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Running") && blob.contains("git status"),
-        "expected native execute rendering with 'Running' verb in active tool cell: {blob:?}"
+        blob.contains("Running"),
+        "expected running exec cell from normalized pending snapshot: {blob:?}"
+    );
+    assert!(
+        blob.contains("git status"),
+        "expected command in running exec cell: {blob:?}"
     );
 }
 
@@ -1007,7 +1007,7 @@ fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
 }
 
 #[test]
-fn completed_read_tool_snapshot_renders_native_tool_history_cell() {
+fn completed_read_tool_snapshot_renders_exploring_history_cell() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
@@ -1030,17 +1030,17 @@ fn completed_read_tool_snapshot_renders_native_tool_history_cell() {
 
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
-        "expected native ACP completed tool header: {blob:?}"
+        blob.contains("Explored"),
+        "expected exploring summary header: {blob:?}"
     );
     assert!(
-        blob.contains("Read: Cargo.toml"),
-        "expected native ACP read invocation in tool cell: {blob:?}"
+        blob.contains("Cargo.toml"),
+        "expected read target in exploring cell: {blob:?}"
     );
 }
 
 #[test]
-fn completed_search_tool_snapshot_renders_native_tool_history_cell() {
+fn completed_search_tool_snapshot_renders_exploring_history_cell() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
@@ -1064,8 +1064,8 @@ fn completed_search_tool_snapshot_renders_native_tool_history_cell() {
 
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
-        "expected native ACP tool header: {blob:?}"
+        blob.contains("Explored"),
+        "expected exploring summary header: {blob:?}"
     );
     assert!(
         blob.contains("TODO"),
@@ -1078,7 +1078,7 @@ fn completed_search_tool_snapshot_renders_native_tool_history_cell() {
 }
 
 #[test]
-fn completed_list_files_tool_snapshot_renders_native_tool_history_cell() {
+fn completed_list_files_tool_snapshot_renders_exploring_history_cell() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
@@ -1101,8 +1101,8 @@ fn completed_list_files_tool_snapshot_renders_native_tool_history_cell() {
 
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
-        "expected native ACP tool header: {blob:?}"
+        blob.contains("Explored"),
+        "expected exploring summary header: {blob:?}"
     );
     assert!(
         blob.contains("src"),
@@ -1111,7 +1111,7 @@ fn completed_list_files_tool_snapshot_renders_native_tool_history_cell() {
 }
 
 #[test]
-fn completed_generic_execute_tool_snapshot_renders_native_tool_history_cell() {
+fn completed_generic_execute_tool_snapshot_renders_exec_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
@@ -1137,12 +1137,8 @@ fn completed_generic_execute_tool_snapshot_renders_native_tool_history_cell() {
     assert_eq!(cells.len(), 1, "expected one exec history cell");
     let blob = lines_to_single_string(cells.first().unwrap());
     assert!(
-        blob.contains("Ran") && blob.contains("Terminal"),
-        "expected native execute rendering with 'Ran' verb in history cell: {blob:?}"
-    );
-    assert!(
-        blob.contains("command output here"),
-        "expected tool output in history cell: {blob:?}"
+        blob.contains("Ran Terminal"),
+        "expected resolved generic tool title in history cell: {blob:?}"
     );
     assert!(
         !blob.contains("toolu_generic_test_001"),

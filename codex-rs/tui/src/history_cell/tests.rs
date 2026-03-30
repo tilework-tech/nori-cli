@@ -57,7 +57,6 @@ fn mcp_tools_output_masks_sensitive_values() {
             args: vec![],
             env: Some(env),
             env_vars: vec!["APP_TOKEN".to_string()],
-            cwd: None,
         },
         enabled: true,
         startup_timeout_sec: None,

@@ -4,8 +4,6 @@ expression: terminal.backend().vt100().screen().contents()
 ---
   Would you like to make the following edits?
 
-  Tool: Write README.md (edit)
-
   README.md (+2 -0)
 
     1 +hello

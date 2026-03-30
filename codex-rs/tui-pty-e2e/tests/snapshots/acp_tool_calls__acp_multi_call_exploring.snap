@@ -2,21 +2,19 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
+› Explore files
+
+• Test message 1Test message 2
+
+• Exploring
+  └ Read file1.rs, file2.rs
+
 ────────────────────────────────────────────────────────────────────────────────
 
 • Reading multiple files...
 
-• Tool [completed]: Reading file2.rs (read)
-  └ Read: src/file2.rs
-    Output: file2.rs read successfully
-
-• Tool [completed]: Reading file3.rs (read)
-  └ Read: src/file3.rs
-    Output: file3.rs read successfully
-
-• Tool [completed]: Reading file1.rs (read)
-  └ Read: src/file1.rs
-    Output: file1.rs read successfully
+• Explored
+  └ Read file3.rs
 
 ────────────────────────────────────────────────────────────────────────────────
 

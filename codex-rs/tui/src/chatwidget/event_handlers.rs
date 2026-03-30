@@ -184,6 +184,7 @@ impl ChatWidget {
         self.set_status_header(crate::status_indicator_widget::random_status_message());
         self.full_reasoning_buffer.clear();
         self.reasoning_buffer.clear();
+        self.completed_client_tool_calls.clear();
         self.turn_finished = false;
         self.request_redraw();
         self.refresh_terminal_title();
@@ -192,6 +193,12 @@ impl ChatWidget {
     pub(super) fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
+
+        // Close the gate: any tool events arriving after this point are stale
+        // and should be silently discarded. This mirrors on_agent_message() in
+        // the codex flow.
+        self.turn_finished = true;
+
         // Process any deferred completion events (ExecEnd, McpEnd, PatchEnd) so
         // in-progress tool cells transition to their finished state ("Running" →
         // "Ran"). Discard begin events that would create new cells below the
@@ -215,6 +222,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
         self.suppressed_exec_calls.clear();
+        self.completed_client_tool_calls.clear();
         self.last_unified_wait = None;
         self.request_redraw();
         self.refresh_terminal_title();
@@ -318,6 +326,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
         self.suppressed_exec_calls.clear();
+        self.completed_client_tool_calls.clear();
         self.last_unified_wait = None;
         self.stream_controller = None;
     }
@@ -598,7 +607,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_turn_diff(&mut self, unified_diff: String) {
-        debug!("TurnDiffEvent: {unified_diff}");
+        tracing::debug!("TurnDiffEvent: {unified_diff}");
     }
 
     pub(super) fn on_deprecation_notice(&mut self, event: DeprecationNoticeEvent) {
@@ -608,7 +617,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_background_event(&mut self, message: String) {
-        debug!("BackgroundEvent: {message}");
+        tracing::debug!("BackgroundEvent: {message}");
         self.bottom_pane.ensure_status_indicator();
         self.bottom_pane.set_interrupt_hint_visible(true);
         self.set_status_header(message);
@@ -729,26 +738,10 @@ impl ChatWidget {
 
     #[inline]
     pub(super) fn handle_streaming_delta(&mut self, delta: String) {
-        // Before streaming agent content, flush any active exec cell group.
-        // EXCEPT: Don't flush incomplete ExecCells - they should remain visible in
-        // active_cell during streaming. Streaming content goes to history (scrollback),
-        // while active_cell renders separately at the bottom. Flushing incomplete
-        // ExecCells would move them to pending_exec_cells, making them invisible
-        // until task completion.
-        let should_flush = self
-            .active_cell
-            .as_ref()
-            .map(|cell| {
-                cell.as_any()
-                    .downcast_ref::<ExecCell>()
-                    .map(|exec| !exec.is_active())
-                    .unwrap_or(true)
-            })
-            .unwrap_or(true);
-
-        if should_flush {
-            self.flush_active_cell();
-        }
+        // Always flush the active cell before streaming agent text. This ensures
+        // tool cells appear in the correct chronological position (before the text
+        // that follows them), even when tool calls haven't completed yet.
+        self.flush_active_cell();
 
         if self.stream_controller.is_none() {
             if self.needs_final_message_separator {
@@ -1141,6 +1134,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_list_mcp_tools(&mut self, ev: McpListToolsResponseEvent) {
+        self.mcp_auth_statuses = ev.auth_statuses.clone();
         self.add_to_history(history_cell::new_mcp_tools_output(
             &self.config,
             ev.tools,
@@ -1152,7 +1146,7 @@ impl ChatWidget {
 
     pub(super) fn on_list_custom_prompts(&mut self, ev: ListCustomPromptsResponseEvent) {
         let len = ev.custom_prompts.len();
-        debug!("received {len} custom prompts");
+        tracing::debug!("received {len} custom prompts");
         // Forward to bottom pane so the slash popup can show them now.
         self.bottom_pane.set_custom_prompts(ev.custom_prompts);
     }
@@ -1244,66 +1238,36 @@ impl ChatWidget {
     }
 
     fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
-        let request = ApprovalRequest::ClientTool {
-            approval: Box::new(approval.clone()),
-            cwd: self.config.cwd.clone(),
+        let Some(request) = approval_request_from_client_event(&self.config.cwd, approval) else {
+            return;
         };
 
         self.flush_answer_stream_with_separator();
-        let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = &approval.subject;
-        if matches!(
-            snapshot.kind,
-            nori_protocol::ToolKind::Edit
-                | nori_protocol::ToolKind::Delete
-                | nori_protocol::ToolKind::Move
-        ) && let Some(changes) = crate::client_event_format::snapshot_file_changes(snapshot)
-        {
-            self.notify(Notification::EditApprovalRequested {
-                cwd: self.config.cwd.clone(),
-                changes: changes.keys().cloned().collect(),
-            });
-        } else if let Some(invocation) =
-            crate::client_event_format::format_invocation(&snapshot.invocation)
-        {
-            self.notify(Notification::ExecApprovalRequested {
-                command: invocation,
-            });
-        } else {
-            self.notify(Notification::ExecApprovalRequested {
-                command: approval.title.clone(),
-            });
+        match &request {
+            ApprovalRequest::ApplyPatch { changes, .. } => {
+                self.notify(Notification::EditApprovalRequested {
+                    cwd: self.config.cwd.clone(),
+                    changes: changes.keys().cloned().collect(),
+                });
+            }
+            ApprovalRequest::Exec { command, .. } => {
+                let command = shlex::try_join(command.iter().map(String::as_str))
+                    .unwrap_or_else(|_| command.join(" "));
+                self.notify(Notification::ExecApprovalRequested { command });
+            }
+            ApprovalRequest::McpElicitation { .. } => {}
         }
         self.bottom_pane.push_approval_request(request);
         self.request_redraw();
     }
 
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        if self.turn_finished {
-            return;
-        }
-        self.flush_answer_stream_with_separator();
-        let snapshot2 = tool_snapshot.clone();
-        self.defer_or_handle(
-            |q| q.push_client_tool_snapshot(tool_snapshot),
-            |s| s.handle_client_tool_snapshot_now(snapshot2),
-        );
-    }
-
-    pub(crate) fn handle_client_tool_snapshot_deferred_now(
-        &mut self,
-        tool_snapshot: nori_protocol::ToolSnapshot,
-    ) {
-        self.handle_client_tool_snapshot_now(tool_snapshot);
-    }
-
-    fn handle_client_tool_snapshot_now(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         match tool_snapshot.kind {
             nori_protocol::ToolKind::Edit
             | nori_protocol::ToolKind::Delete
             | nori_protocol::ToolKind::Move
                 if tool_snapshot.phase == nori_protocol::ToolPhase::Completed
-                    && crate::client_event_format::snapshot_file_changes(&tool_snapshot)
-                        .is_some() =>
+                    && file_changes_from_snapshot(&tool_snapshot).is_some() =>
             {
                 self.handle_client_edit_tool_snapshot(tool_snapshot);
             }
@@ -1312,17 +1276,55 @@ impl ChatWidget {
             | nori_protocol::ToolKind::Search
             | nori_protocol::ToolKind::Fetch
             | nori_protocol::ToolKind::Think
-            | nori_protocol::ToolKind::Other(_) => {
-                self.handle_client_native_tool_snapshot(tool_snapshot);
+            | nori_protocol::ToolKind::Other(_)
+                if matches!(
+                    tool_snapshot.phase,
+                    nori_protocol::ToolPhase::Pending | nori_protocol::ToolPhase::InProgress
+                ) =>
+            {
+                self.handle_client_exec_like_tool_begin_snapshot(tool_snapshot);
+            }
+            nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Read
+            | nori_protocol::ToolKind::Search
+            | nori_protocol::ToolKind::Fetch
+            | nori_protocol::ToolKind::Think
+            | nori_protocol::ToolKind::Other(_)
+                if matches!(
+                    tool_snapshot.phase,
+                    nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+                ) =>
+            {
+                self.handle_client_exec_like_tool_snapshot(tool_snapshot);
             }
             _ => {}
         }
-        self.request_redraw();
+    }
+
+    fn handle_client_exec_like_tool_begin_snapshot(
+        &mut self,
+        tool_snapshot: nori_protocol::ToolSnapshot,
+    ) {
+        if self.turn_finished
+            || self
+                .completed_client_tool_calls
+                .contains(&tool_snapshot.call_id)
+            || self.running_commands.contains_key(&tool_snapshot.call_id)
+        {
+            return;
+        }
+
+        let Some(begin_event) =
+            exec_begin_event_from_client_snapshot(&self.config.cwd, &tool_snapshot)
+        else {
+            return;
+        };
+
+        self.on_exec_command_begin(begin_event);
     }
 
     fn handle_client_edit_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        let Some(changes) = crate::client_event_format::snapshot_file_changes(&tool_snapshot)
-        else {
+        let Some(changes) = file_changes_from_snapshot(&tool_snapshot) else {
             return;
         };
 
@@ -1335,49 +1337,370 @@ impl ChatWidget {
         self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
     }
 
-    fn handle_client_native_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        if let Some(cell) = self
-            .active_cell
-            .as_mut()
-            .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
-            && cell.call_id() == tool_snapshot.call_id
+    fn handle_client_exec_like_tool_snapshot(
+        &mut self,
+        tool_snapshot: nori_protocol::ToolSnapshot,
+    ) {
+        if self.turn_finished
+            || self
+                .completed_client_tool_calls
+                .contains(&tool_snapshot.call_id)
         {
-            cell.apply_snapshot(tool_snapshot);
-            if !cell.is_active() && !cell.is_exploring() {
-                self.flush_active_cell();
-            }
             return;
         }
-        if let Some(pending_cell) = self.pending_exec_cells.retrieve(&tool_snapshot.call_id) {
-            self.flush_active_cell();
-            self.active_cell = Some(pending_cell);
-            if let Some(cell) = self
-                .active_cell
-                .as_mut()
-                .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
-            {
-                cell.apply_snapshot(tool_snapshot);
-                if !cell.is_active() && !cell.is_exploring() {
-                    self.flush_active_cell();
-                }
-                return;
+
+        let Some(begin_event) =
+            exec_begin_event_from_client_snapshot(&self.config.cwd, &tool_snapshot)
+        else {
+            return;
+        };
+        let end_event =
+            exec_end_event_from_client_snapshot(&self.config.cwd, &tool_snapshot, &begin_event);
+
+        if !self.running_commands.contains_key(&tool_snapshot.call_id) {
+            self.on_exec_command_begin(begin_event);
+        }
+        self.on_exec_command_end(end_event);
+        self.completed_client_tool_calls
+            .insert(tool_snapshot.call_id);
+    }
+}
+
+fn exec_begin_event_from_client_snapshot(
+    cwd: &std::path::Path,
+    snapshot: &nori_protocol::ToolSnapshot,
+) -> Option<ExecCommandBeginEvent> {
+    let (command, parsed_cmd) = match snapshot.invocation.as_ref() {
+        Some(nori_protocol::Invocation::Command {
+            command: actual_command,
+        }) => {
+            let command_text = formatted_client_tool_command_text(
+                &snapshot.title,
+                snapshot.raw_input.as_ref(),
+                Some(actual_command),
+            )
+            .unwrap_or_else(|| actual_command.clone());
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
+        }
+        Some(nori_protocol::Invocation::Read { path }) => {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.display().to_string());
+            (
+                vec![snapshot.title.clone()],
+                vec![ParsedCommand::Read {
+                    cmd: snapshot.title.clone(),
+                    name,
+                    path: path.clone(),
+                }],
+            )
+        }
+        Some(nori_protocol::Invocation::Search { query, path }) => (
+            vec![snapshot.title.clone()],
+            vec![ParsedCommand::Search {
+                cmd: snapshot.title.clone(),
+                query: query.clone(),
+                path: path.as_ref().map(|value| value.display().to_string()),
+            }],
+        ),
+        Some(nori_protocol::Invocation::ListFiles { path }) => (
+            vec![snapshot.title.clone()],
+            vec![ParsedCommand::ListFiles {
+                cmd: snapshot.title.clone(),
+                path: path.as_ref().map(|value| value.display().to_string()),
+            }],
+        ),
+        Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
+            let command_text = generic_tool_command_text(tool_name, input.as_ref(), snapshot);
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
+        }
+        Some(nori_protocol::Invocation::RawJson(raw_input)) => {
+            let command_text =
+                generic_tool_command_text(&snapshot.title, Some(raw_input), snapshot);
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
+        }
+        Some(_) => return None,
+        None if snapshot.kind == nori_protocol::ToolKind::Execute => {
+            let command_text = generic_execute_command_text(snapshot);
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
+        }
+        None if matches!(
+            snapshot.kind,
+            nori_protocol::ToolKind::Fetch
+                | nori_protocol::ToolKind::Think
+                | nori_protocol::ToolKind::Other(_)
+        ) =>
+        {
+            let command_text =
+                generic_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), snapshot);
+            (
+                vec![command_text.clone()],
+                vec![ParsedCommand::Unknown { cmd: command_text }],
+            )
+        }
+        None => return None,
+    };
+
+    Some(ExecCommandBeginEvent {
+        call_id: snapshot.call_id.clone(),
+        process_id: None,
+        turn_id: String::new(),
+        command,
+        cwd: cwd.to_path_buf(),
+        parsed_cmd,
+        source: ExecCommandSource::Agent,
+        interaction_input: None,
+    })
+}
+
+fn generic_execute_command_text(snapshot: &nori_protocol::ToolSnapshot) -> String {
+    formatted_client_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), None)
+        .unwrap_or_else(|| snapshot.title.clone())
+}
+
+fn compact_json(value: &serde_json::Value) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| value.to_string())
+}
+
+fn formatted_client_tool_command_text(
+    title: &str,
+    raw_input: Option<&serde_json::Value>,
+    fallback_arg: Option<&str>,
+) -> Option<String> {
+    let args = raw_input
+        .and_then(extract_client_tool_display_args)
+        .or_else(|| fallback_arg.map(str::to_string));
+
+    match args {
+        Some(args) if !args.is_empty() && !title.contains(&args) => {
+            Some(format!("{title}({args})"))
+        }
+        Some(_) => Some(title.to_string()),
+        None => None,
+    }
+}
+
+fn extract_client_tool_display_args(input: &serde_json::Value) -> Option<String> {
+    input
+        .get("command")
+        .or_else(|| input.get("cmd"))
+        .or_else(|| input.get("path"))
+        .or_else(|| input.get("query"))
+        .or_else(|| input.get("pattern"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
+fn generic_tool_command_text(
+    tool_name: &str,
+    input: Option<&serde_json::Value>,
+    snapshot: &nori_protocol::ToolSnapshot,
+) -> String {
+    match input {
+        Some(raw_input)
+            if !raw_input.is_null()
+                && !raw_input.as_object().is_some_and(serde_json::Map::is_empty) =>
+        {
+            format!("{tool_name} {}", compact_json(raw_input))
+        }
+        _ => snapshot.title.clone(),
+    }
+}
+
+fn exec_end_event_from_client_snapshot(
+    cwd: &std::path::Path,
+    snapshot: &nori_protocol::ToolSnapshot,
+    begin_event: &ExecCommandBeginEvent,
+) -> ExecCommandEndEvent {
+    let output = snapshot
+        .artifacts
+        .iter()
+        .find_map(|artifact| match artifact {
+            nori_protocol::Artifact::Text { text } if !text.is_empty() => Some(text.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let exit_code = if snapshot.phase == nori_protocol::ToolPhase::Failed {
+        snapshot
+            .raw_output
+            .as_ref()
+            .and_then(|raw| raw.get("exit_code"))
+            .and_then(serde_json::Value::as_i64)
+            .and_then(|code| i32::try_from(code).ok())
+            .unwrap_or(1)
+    } else {
+        0
+    };
+
+    ExecCommandEndEvent {
+        call_id: snapshot.call_id.clone(),
+        process_id: None,
+        turn_id: String::new(),
+        command: begin_event.command.clone(),
+        cwd: cwd.to_path_buf(),
+        parsed_cmd: begin_event.parsed_cmd.clone(),
+        source: ExecCommandSource::Agent,
+        interaction_input: None,
+        stdout: output.clone(),
+        stderr: String::new(),
+        aggregated_output: output.clone(),
+        exit_code,
+        duration: Duration::from_millis(0),
+        formatted_output: output,
+    }
+}
+
+fn approval_request_from_client_event(
+    cwd: &std::path::Path,
+    approval: nori_protocol::ApprovalRequest,
+) -> Option<ApprovalRequest> {
+    let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
+
+    if matches!(
+        snapshot.kind,
+        nori_protocol::ToolKind::Edit
+            | nori_protocol::ToolKind::Delete
+            | nori_protocol::ToolKind::Move
+    ) && let Some(changes) = file_changes_from_snapshot(&snapshot)
+    {
+        return Some(ApprovalRequest::ApplyPatch {
+            id: approval.call_id,
+            reason: None,
+            cwd: cwd.to_path_buf(),
+            changes,
+        });
+    }
+
+    Some(ApprovalRequest::Exec {
+        id: approval.call_id,
+        command: approval_command_from_snapshot(&snapshot),
+        reason: None,
+        risk: None,
+    })
+}
+
+fn file_changes_from_snapshot(
+    snapshot: &nori_protocol::ToolSnapshot,
+) -> Option<HashMap<PathBuf, codex_core::protocol::FileChange>> {
+    match &snapshot.invocation {
+        Some(nori_protocol::Invocation::FileChanges { changes }) => {
+            let file_changes = changes
+                .iter()
+                .map(|change| (change.path.clone(), file_change_from_nori_change(change)))
+                .collect::<HashMap<_, _>>();
+            if file_changes.is_empty() {
+                None
+            } else {
+                Some(file_changes)
             }
         }
-
-        self.flush_active_cell();
-        let should_flush = !matches!(
-            tool_snapshot.phase,
-            nori_protocol::ToolPhase::Pending
-                | nori_protocol::ToolPhase::PendingApproval
-                | nori_protocol::ToolPhase::InProgress
-        ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
-        self.active_cell = Some(Box::new(ClientToolCell::new(
-            tool_snapshot,
-            self.config.animations,
-        )));
-        if should_flush {
-            self.flush_active_cell();
+        Some(nori_protocol::Invocation::FileOperations { operations }) => {
+            let file_changes = operations
+                .iter()
+                .map(file_change_from_nori_operation)
+                .collect::<HashMap<_, _>>();
+            if file_changes.is_empty() {
+                None
+            } else {
+                Some(file_changes)
+            }
         }
+        _ => None,
+    }
+}
+
+fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec<String> {
+    match snapshot.invocation.as_ref() {
+        Some(nori_protocol::Invocation::Command { command }) => {
+            vec!["bash".into(), "-lc".into(), command.clone()]
+        }
+        Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
+            vec![generic_tool_command_text(
+                tool_name,
+                input.as_ref(),
+                snapshot,
+            )]
+        }
+        Some(nori_protocol::Invocation::Read { .. })
+        | Some(nori_protocol::Invocation::Search { .. })
+        | Some(nori_protocol::Invocation::ListFiles { .. })
+        | Some(nori_protocol::Invocation::RawJson(_))
+        | Some(nori_protocol::Invocation::FileChanges { .. })
+        | Some(nori_protocol::Invocation::FileOperations { .. })
+        | None => vec![generic_execute_command_text(snapshot)],
+    }
+}
+
+fn file_change_from_nori_operation(
+    operation: &nori_protocol::FileOperation,
+) -> (PathBuf, codex_core::protocol::FileChange) {
+    match operation {
+        nori_protocol::FileOperation::Create { path, new_text } => (
+            path.clone(),
+            codex_core::protocol::FileChange::Add {
+                content: new_text.clone(),
+            },
+        ),
+        nori_protocol::FileOperation::Update {
+            path,
+            old_text,
+            new_text,
+        } => (
+            path.clone(),
+            codex_core::protocol::FileChange::Update {
+                unified_diff: diffy::create_patch(old_text, new_text).to_string(),
+                move_path: None,
+            },
+        ),
+        nori_protocol::FileOperation::Delete { path, old_text } => (
+            path.clone(),
+            codex_core::protocol::FileChange::Delete {
+                content: old_text.clone().unwrap_or_default(),
+            },
+        ),
+        nori_protocol::FileOperation::Move {
+            from_path,
+            to_path,
+            old_text,
+            new_text,
+        } => {
+            let old_text = old_text.clone().unwrap_or_default();
+            let new_text = new_text.clone().unwrap_or_else(|| old_text.clone());
+            (
+                from_path.clone(),
+                codex_core::protocol::FileChange::Update {
+                    unified_diff: diffy::create_patch(&old_text, &new_text).to_string(),
+                    move_path: Some(to_path.clone()),
+                },
+            )
+        }
+    }
+}
+
+fn file_change_from_nori_change(
+    change: &nori_protocol::FileChange,
+) -> codex_core::protocol::FileChange {
+    match &change.old_text {
+        None => codex_core::protocol::FileChange::Add {
+            content: change.new_text.clone(),
+        },
+        Some(old_text) => codex_core::protocol::FileChange::Update {
+            unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+            move_path: None,
+        },
     }
 }
 
