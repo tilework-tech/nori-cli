@@ -1324,3 +1324,62 @@ fn in_progress_delete_renders_active_cell() {
         "Active cell should show delete title, got: {blob:?}"
     );
 }
+
+// --- Spec 02: Exploring Cell Grouping ---
+
+#[test]
+fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Send two read snapshots
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-r1".into(),
+            title: "Read file1.rs".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("file1.rs"),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-r2".into(),
+            title: "Read file2.rs".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("file2.rs"),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    // Should NOT have flushed any cells yet (exploring stays active)
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "Exploring reads should not flush to history while still groupable, got {} cells",
+        cells.len()
+    );
+
+    // The active cell should contain both reads
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Explored") || blob.contains("Exploring"),
+        "Active cell should have Explored/Exploring header, got: {blob:?}"
+    );
+    assert!(
+        blob.contains("file1.rs") && blob.contains("file2.rs"),
+        "Active cell should contain both filenames, got: {blob:?}"
+    );
+}

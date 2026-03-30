@@ -8,6 +8,7 @@ use textwrap::WordSplitter;
 use crate::client_event_format::format_artifacts;
 use crate::client_event_format::format_invocation;
 use crate::client_event_format::format_tool_header;
+use crate::client_event_format::format_tool_kind;
 use crate::client_event_format::is_exploring_snapshot;
 use crate::client_event_format::is_invocation_redundant;
 use crate::client_event_format::relativize_paths_in_text;
@@ -29,6 +30,7 @@ use crate::wrapping::word_wrap_line;
 #[derive(Debug)]
 pub(crate) struct ClientToolCell {
     snapshot: nori_protocol::ToolSnapshot,
+    exploring_snapshots: Vec<nori_protocol::ToolSnapshot>,
     cwd: PathBuf,
     animations_enabled: bool,
     start_time: Option<Instant>,
@@ -47,6 +49,7 @@ impl ClientToolCell {
         };
         Self {
             snapshot,
+            exploring_snapshots: Vec::new(),
             cwd,
             animations_enabled,
             start_time,
@@ -62,7 +65,20 @@ impl ClientToolCell {
     }
 
     pub(crate) fn is_exploring(&self) -> bool {
-        is_exploring_snapshot(&self.snapshot)
+        is_exploring_snapshot(&self.snapshot) || !self.exploring_snapshots.is_empty()
+    }
+
+    /// Mark this cell as an exploring cell. The primary snapshot becomes the
+    /// first item in the exploring group.
+    pub(crate) fn mark_exploring(&mut self) {
+        if self.exploring_snapshots.is_empty() {
+            self.exploring_snapshots.push(self.snapshot.clone());
+        }
+    }
+
+    /// Add another exploring snapshot to this cell's group.
+    pub(crate) fn merge_exploring(&mut self, snapshot: nori_protocol::ToolSnapshot) {
+        self.exploring_snapshots.push(snapshot);
     }
 
     pub(crate) fn apply_snapshot(&mut self, snapshot: nori_protocol::ToolSnapshot) {
@@ -83,6 +99,152 @@ impl ClientToolCell {
             self.snapshot.phase = nori_protocol::ToolPhase::Failed;
             self.start_time = None;
         }
+    }
+
+    fn render_exploring_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut out: Vec<Line<'static>> = Vec::new();
+
+        // Header: Exploring/Explored with bullet
+        out.push(Line::from(vec![
+            if self.is_active() {
+                spinner(self.start_time, self.animations_enabled)
+            } else {
+                "\u{2022}".dim() // bullet
+            },
+            " ".into(),
+            if self.is_active() {
+                "Exploring".bold()
+            } else {
+                "Explored".bold()
+            },
+        ]));
+
+        // Build sub-items from exploring snapshots
+        let mut sub_items: Vec<Line<'static>> = Vec::new();
+        let mut i = 0;
+        let snapshots = &self.exploring_snapshots;
+        while i < snapshots.len() {
+            let snap = &snapshots[i];
+
+            // Group consecutive reads by filename
+            if snap.kind == nori_protocol::ToolKind::Read {
+                let mut paths: Vec<String> = Vec::new();
+                if let Some(nori_protocol::Invocation::Read { path }) = &snap.invocation {
+                    paths.push(relativize_paths_in_text(
+                        &path.display().to_string(),
+                        &self.cwd,
+                    ));
+                } else {
+                    paths.push(relativize_paths_in_text(&snap.title, &self.cwd));
+                }
+                let mut j = i + 1;
+                while j < snapshots.len() && snapshots[j].kind == nori_protocol::ToolKind::Read {
+                    let next = &snapshots[j];
+                    if let Some(nori_protocol::Invocation::Read { path }) = &next.invocation {
+                        paths.push(relativize_paths_in_text(
+                            &path.display().to_string(),
+                            &self.cwd,
+                        ));
+                    } else {
+                        paths.push(relativize_paths_in_text(&next.title, &self.cwd));
+                    }
+                    j += 1;
+                }
+                i = j;
+
+                // Build "Read file1.rs, file2.rs" line
+                let mut spans: Vec<Span<'static>> = vec!["Read".cyan(), " ".into()];
+                for (idx, path) in paths.into_iter().enumerate() {
+                    if idx > 0 {
+                        spans.push(", ".dim());
+                    }
+                    spans.push(path.into());
+                }
+                sub_items.push(Line::from(spans));
+                continue;
+            }
+
+            // Search sub-item
+            if snap.kind == nori_protocol::ToolKind::Search {
+                if let Some(nori_protocol::Invocation::Search { query, path }) = &snap.invocation {
+                    let mut spans: Vec<Span<'static>> = vec!["Search".cyan(), " ".into()];
+                    if let Some(q) = query {
+                        spans.push(q.clone().into());
+                    }
+                    if let Some(p) = path {
+                        spans.push(" in ".dim());
+                        spans.push(
+                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
+                        );
+                    }
+                    sub_items.push(Line::from(spans));
+                } else if let Some(nori_protocol::Invocation::ListFiles { path }) = &snap.invocation
+                {
+                    let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
+                    if let Some(p) = path {
+                        spans.push(
+                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
+                        );
+                    }
+                    sub_items.push(Line::from(spans));
+                } else {
+                    sub_items.push(Line::from(vec![
+                        "Search".cyan(),
+                        " ".into(),
+                        relativize_paths_in_text(&snap.title, &self.cwd).into(),
+                    ]));
+                }
+                i += 1;
+                continue;
+            }
+
+            // ListFiles invocation (from Read/Search tools classified as exploring)
+            if matches!(
+                &snap.invocation,
+                Some(nori_protocol::Invocation::ListFiles { .. })
+            ) {
+                if let Some(nori_protocol::Invocation::ListFiles { path }) = &snap.invocation {
+                    let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
+                    if let Some(p) = path {
+                        spans.push(
+                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
+                        );
+                    }
+                    sub_items.push(Line::from(spans));
+                }
+                i += 1;
+                continue;
+            }
+
+            // Fallback: generic sub-item
+            let kind_label = format_tool_kind(&snap.kind).to_string();
+            sub_items.push(Line::from(vec![
+                kind_label.cyan(),
+                " ".into(),
+                relativize_paths_in_text(&snap.title, &self.cwd).into(),
+            ]));
+            i += 1;
+        }
+
+        // Apply tree-style prefix (└ for first, spaces for subsequent)
+        let wrap_width = width.saturating_sub(4).max(1);
+        let wrap_opts =
+            RtOptions::new(wrap_width as usize).word_splitter(WordSplitter::NoHyphenation);
+        let mut wrapped_items: Vec<Line<'static>> = Vec::new();
+        for item in sub_items {
+            push_owned_lines(
+                &word_wrap_line(&item, wrap_opts.clone()),
+                &mut wrapped_items,
+            );
+        }
+
+        out.extend(prefix_lines(
+            wrapped_items,
+            "  \u{2514} ".dim(),
+            "    ".into(),
+        ));
+
+        out
     }
 
     fn render_generic_lines(&self) -> Vec<Line<'static>> {
@@ -336,7 +498,9 @@ fn diff_changes_from_artifacts(
 
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.snapshot.kind == nori_protocol::ToolKind::Execute {
+        if !self.exploring_snapshots.is_empty() {
+            self.render_exploring_lines(width)
+        } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
         } else {
             self.render_generic_lines()
@@ -344,7 +508,9 @@ impl HistoryCell for ClientToolCell {
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.snapshot.kind == nori_protocol::ToolKind::Execute {
+        if !self.exploring_snapshots.is_empty() {
+            self.render_exploring_lines(width)
+        } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
         } else {
             self.render_generic_lines()
@@ -915,6 +1081,155 @@ mod tests {
         assert!(
             has_diff_indicator,
             "Diff artifact should render diff content, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 02: Exploring Cell Grouping ---
+
+    #[test]
+    fn exploring_cell_with_single_read_shows_explored_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-read-1".into(),
+            title: "Read README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: Some(Invocation::Read {
+                path: "README.md".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "# Title\nSome content".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Explored" header, not "Tool [completed]"
+        assert!(
+            lines[0].contains("Explored"),
+            "Exploring cell should show 'Explored' header, got: {}",
+            lines[0]
+        );
+
+        // Should show the read file in a sub-item
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Read") && l.contains("README.md")),
+            "Exploring cell should show Read sub-item, got: {lines:?}"
+        );
+
+        // Should NOT show the read content (output is noise in exploring)
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.contains("# Title") || l.contains("Some content")),
+            "Exploring cell should omit read output content, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn exploring_cell_groups_multiple_reads() {
+        let snap1 = ToolSnapshot {
+            call_id: "call-r1".into(),
+            title: "Read file1.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file1.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let snap2 = ToolSnapshot {
+            call_id: "call-r2".into(),
+            title: "Read file2.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file2.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+
+        let mut cell = ClientToolCell::new(snap1, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        cell.merge_exploring(snap2);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should group reads on a single line: "Read file1.rs, file2.rs"
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("file1.rs") && l.contains("file2.rs")),
+            "Exploring cell should group reads, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn exploring_cell_shows_search_sub_item() {
+        let snap = ToolSnapshot {
+            call_id: "call-search".into(),
+            title: "Search TODO".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some("/repo/src".into()),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+
+        let mut cell = ClientToolCell::new(snap, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Search") && l.contains("TODO")),
+            "Exploring cell should show Search sub-item, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn exploring_cell_in_progress_shows_exploring_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-read-active".into(),
+            title: "Read file.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Exploring" (active), not "Explored"
+        assert!(
+            lines[0].contains("Exploring"),
+            "Active exploring cell should show 'Exploring', got: {}",
+            lines[0]
         );
     }
 }

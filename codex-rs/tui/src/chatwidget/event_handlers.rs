@@ -1328,18 +1328,37 @@ impl ChatWidget {
             return;
         }
 
+        // Merge into existing exploring cell when possible
+        let is_new_exploring = crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
+        if is_new_exploring {
+            if let Some(cell) = self
+                .active_cell
+                .as_mut()
+                .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
+            {
+                if cell.is_exploring() {
+                    cell.merge_exploring(tool_snapshot);
+                    return;
+                }
+            }
+        }
+
         self.flush_active_cell();
         let should_flush = !matches!(
             tool_snapshot.phase,
             nori_protocol::ToolPhase::Pending
                 | nori_protocol::ToolPhase::PendingApproval
                 | nori_protocol::ToolPhase::InProgress
-        ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
-        self.active_cell = Some(Box::new(ClientToolCell::new(
+        ) && !is_new_exploring;
+        let mut cell = ClientToolCell::new(
             tool_snapshot,
             self.config.cwd.clone(),
             self.config.animations,
-        )));
+        );
+        if is_new_exploring {
+            cell.mark_exploring();
+        }
+        self.active_cell = Some(Box::new(cell));
         if should_flush {
             self.flush_active_cell();
         }
