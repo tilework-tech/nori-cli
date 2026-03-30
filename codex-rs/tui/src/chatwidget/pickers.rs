@@ -250,6 +250,24 @@ impl ChatWidget {
         }
     }
 
+    /// Open the MCP server management popup.
+    pub(crate) fn open_mcp_servers_popup(&mut self) {
+        let servers: std::collections::BTreeMap<
+            String,
+            codex_core::config::types::McpServerConfig,
+        > = self
+            .config
+            .mcp_servers
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let view = crate::nori::mcp_server_picker::McpServerPickerView::new(
+            &servers,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_view(Box::new(view));
+    }
+
     /// Open the hotkey picker sub-view.
     pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: codex_acp::config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(

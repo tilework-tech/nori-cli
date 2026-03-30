@@ -329,4 +329,25 @@ impl App {
             None,
         );
     }
+
+    pub(super) async fn persist_mcp_servers(
+        &mut self,
+        servers: std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .replace_mcp_servers(&servers)
+            .apply()
+            .await
+        {
+            tracing::error!(error = %err, "failed to persist MCP servers");
+            self.chat_widget
+                .add_error_message(format!("Failed to save MCP servers: {err}"));
+            return;
+        }
+
+        self.chat_widget.add_info_message(
+            "MCP servers updated. Restart to apply changes.".to_string(),
+            None,
+        );
+    }
 }

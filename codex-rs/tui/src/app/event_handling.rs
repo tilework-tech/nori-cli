@@ -1085,6 +1085,9 @@ impl App {
                 }
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::SaveMcpServers(servers) => {
+                self.persist_mcp_servers(servers).await;
+            }
         }
         Ok(true)
     }
