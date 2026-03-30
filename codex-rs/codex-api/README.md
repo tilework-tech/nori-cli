@@ -2,7 +2,7 @@
 
 Typed clients for Codex/OpenAI APIs built on top of the generic transport in `codex-client`.
 
-- Hosts the request/response models and prompt helpers for Responses, Chat Completions, and Compact APIs.
+- Hosts the request/response models and prompt helpers for Responses and Chat Completions APIs.
 - Owns provider configuration (base URLs, headers, query params), auth header injection, retry tuning, and stream idle settings.
 - Parses SSE streams into `ResponseEvent`/`ResponseStream`, including rate-limit snapshots and API-specific error mapping.
 - Serves as the wire-level layer consumed by `codex-core`; higher layers handle auth refresh and business logic.
@@ -21,12 +21,4 @@ The public interface of this crate is intentionally small and uniform:
       - `output_schema: Option<Value>` – used to build `text.format` when present.
   - Output: a `ResponseStream` of `ResponseEvent` (both re-exported from `common`).
 
-- **Compaction endpoint**
-  - Input: `CompactionInput<'a>` (re-exported as `codex_api::CompactionInput`):
-    - `model: &str`.
-    - `input: &[ResponseItem]` – history to compact.
-    - `instructions: &str` – fully-resolved compaction instructions.
-  - Output: `Vec<ResponseItem>`.
-  - `CompactClient::compact_input(&CompactionInput, extra_headers)` wraps the JSON encoding and retry/telemetry wiring.
-
-All HTTP details (URLs, headers, retry/backoff policies, SSE framing) are encapsulated in `codex-api` and `codex-client`. Callers construct prompts/inputs using protocol types and work with typed streams of `ResponseEvent` or compacted `ResponseItem` values.
+All HTTP details (URLs, headers, retry/backoff policies, SSE framing) are encapsulated in `codex-api` and `codex-client`. Callers construct prompts/inputs using protocol types and work with typed streams of `ResponseEvent` values.

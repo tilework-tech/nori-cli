@@ -24,9 +24,6 @@ Used by `@/codex-rs/core/` for the legacy HTTP backend (non-ACP mode). Provides 
 - `ResponsesClient` - OpenAI Responses API
 - `ResponsesOptions` - Configuration options
 
-**Compact Client** (`endpoint/compact.rs`):
-- `CompactClient` - For conversation compaction
-
 **Request Builders** (`requests.rs`):
 - `ChatRequest` / `ChatRequestBuilder`
 - `ResponsesRequest` / `ResponsesRequestBuilder`

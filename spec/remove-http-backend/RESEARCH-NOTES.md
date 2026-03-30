@@ -46,7 +46,25 @@ The `codex-api` crate is the HTTP API client layer that `codex-core` depends on.
 - `mcp/` - MCP server management
 - Various utility modules
 
-## Approach: Feature-gate codex-api
+## Compact endpoint in codex-api (next removal target)
+
+After removing `compact_remote.rs` from codex-core, the compact endpoint in `codex-api` is now dead code:
+
+**Files to remove/modify:**
+1. `codex-api/src/endpoint/compact.rs` - entire file (CompactClient, tests)
+2. `codex-api/src/endpoint/mod.rs` - remove `pub mod compact;` line
+3. `codex-api/src/lib.rs` - remove `pub use crate::endpoint::compact::CompactClient;` and `pub use crate::common::CompactionInput;`
+4. `codex-api/src/common.rs` - remove `CompactionInput` struct and its doc comment
+5. `codex-api/src/provider.rs` - remove `WireApi::Compact` variant
+6. `codex-api/src/endpoint/compact.rs` references `WireApi::Compact` in `path()` method
+7. `codex-api/src/endpoint/responses.rs:93` - has `WireApi::Compact | WireApi::Responses` match arm that needs updating
+
+**Verification:**
+- No external consumers of `CompactClient` or `CompactionInput` exist (only within codex-api)
+- `WireApi::Compact` is only used within codex-api (codex-core has its own WireApi without Compact)
+- All integration tests use the streaming endpoints (Chat/Responses), not Compact
+
+## Approach: Feature-gate codex-api (future)
 
 Add a `legacy-http-backend` feature to codex-core:
 - Makes `codex-api` an optional dependency

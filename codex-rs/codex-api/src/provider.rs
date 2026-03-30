@@ -11,7 +11,6 @@ use std::time::Duration;
 pub enum WireApi {
     Responses,
     Chat,
-    Compact,
 }
 
 /// High-level retry configuration for a provider.

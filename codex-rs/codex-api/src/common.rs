@@ -29,14 +29,6 @@ pub struct Prompt {
     pub output_schema: Option<Value>,
 }
 
-/// Canonical input payload for the compaction endpoint.
-#[derive(Debug, Clone, Serialize)]
-pub struct CompactionInput<'a> {
-    pub model: &'a str,
-    pub input: &'a [ResponseItem],
-    pub instructions: &'a str,
-}
-
 #[derive(Debug)]
 pub enum ResponseEvent {
     Created,

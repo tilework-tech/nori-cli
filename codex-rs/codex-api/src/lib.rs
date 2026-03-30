@@ -13,7 +13,6 @@ pub use codex_client::ReqwestTransport;
 pub use codex_client::TransportError;
 
 pub use crate::auth::AuthProvider;
-pub use crate::common::CompactionInput;
 pub use crate::common::Prompt;
 pub use crate::common::ResponseEvent;
 pub use crate::common::ResponseStream;
@@ -21,7 +20,6 @@ pub use crate::common::ResponsesApiRequest;
 pub use crate::common::create_text_param_for_request;
 pub use crate::endpoint::chat::AggregateStreamExt;
 pub use crate::endpoint::chat::ChatClient;
-pub use crate::endpoint::compact::CompactClient;
 pub use crate::endpoint::responses::ResponsesClient;
 pub use crate::endpoint::responses::ResponsesOptions;
 pub use crate::error::ApiError;

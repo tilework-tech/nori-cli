@@ -90,7 +90,7 @@ impl<T: HttpTransport, A: AuthProvider> ResponsesClient<T, A> {
 
     fn path(&self) -> &'static str {
         match self.streaming.provider().wire {
-            WireApi::Responses | WireApi::Compact => "responses",
+            WireApi::Responses => "responses",
             WireApi::Chat => "chat/completions",
         }
     }
