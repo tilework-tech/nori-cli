@@ -1,56 +1,37 @@
-# ACP TUI Rendering Fixes — Current Progress
+# ACP TUI Rendering — Progress
 
-## Completed Specs
+> Full specification: [APPLICATION-SPEC.md](./APPLICATION-SPEC.md)
+> Remaining spec details: [`./specs/`](./specs/)
 
-### Spec 08: Gemini Empty Content Fallback
-- **Commit:** `12f3fae5`
-- Location-based invocation fallback when `raw_input` is None
-- Title sanitization for Gemini `[current working directory ...]` suffixes
-- Minimal completed cell renders locations when no other details available
+## Completed (specs 01–08)
 
-### Spec 06: Artifact Text Output Cleanup
-- **Commit:** `771bca1a`
-- Code fences stripped from generic artifact text via shared `strip_code_fences()`
-- `Output:` prefix removed from artifact rendering
-- Redundant invocation lines suppressed via `is_invocation_redundant()`
-- `strip_code_fences` shared between execute and generic rendering paths
+All eight initial specs are implemented on branch `feat/acp-tui-specs`.
 
-### Spec 04: Path Display Normalization
-- **Commit:** `f4320a7e`
-- `cwd` field threaded into `ClientToolCell` struct and constructor
-- `relativize_paths_in_text()` helper strips cwd prefix from title and invocation strings
-- Paths inside cwd render as relative; execute commands unmodified
-- Call site in `event_handlers.rs` updated to pass `self.config.cwd`
+| Spec | Commit | Summary |
+|------|--------|---------|
+| 01 — Execute Native Rendering | `512c505e` | Semantic verbs, bash highlighting, exit-code bullet, output truncation |
+| 02 — Exploring Cell Grouping | `2a482c09` | Multi-snapshot exploring cells, grouped reads, Search/List sub-items |
+| 03 — Codex Command Array Extraction | `cc12bf6b` | Codex `rawInput.command` array → `Invocation::Command` |
+| 04 — Path Display Normalization | `f4320a7e` | cwd-relative paths in titles and invocations |
+| 05 — In-Progress Edit Rendering | `94268dc0` | Spinner for pending edits, clean transition to PatchHistoryCell |
+| 06 — Artifact Text Cleanup | `771bca1a` | Code fence stripping, redundant invocation suppression |
+| 07 — Diff Artifact Rendering | `7e7e9f96` | Inline diff previews for in-progress edits |
+| 08 — Gemini Empty Content Fallback | `12f3fae5` | Location fallback invocations, Gemini title sanitization |
 
-### Spec 05: In-Progress Edit/Delete/Move Rendering
-- **Commit:** `94268dc0`
-- Non-completed Edit/Delete/Move routed to `handle_client_native_tool_snapshot`
-- Users see spinner during edits instead of silent drop
-- Completed edits discard (not flush) matching spinner cell before adding PatchHistoryCell
-- Prevents duplicate cells in history during spinner → diff transition
+Tests: 19 unit + 4 integration added. All 1123 existing tests pass.
 
-### Spec 07: Diff Artifact Rendering in ClientToolCell
-- **Commit:** `7e7e9f96`
-- `Artifact::Diff` entries extracted and converted to `codex_core::protocol::FileChange`
-- Rendered via `create_diff_summary` from `diff_render.rs`
-- Shows inline diff previews for in-progress edits
+## Remaining (specs 09–12)
 
-### Spec 02: Exploring Cell Grouping
-- **Commit:** `2a482c09`
-- `ClientToolCell` extended with `exploring_snapshots: Vec<ToolSnapshot>`
-- `mark_exploring()` and `merge_exploring()` methods for grouping lifecycle
-- `render_exploring_lines()` with compact Explored/Exploring header
-- Consecutive reads grouped by filename: `Read file1.rs, file2.rs`
-- Search/List sub-items with labels and compact arguments
-- Event handler merge logic: exploring snapshots merge into active exploring cell
+| # | Spec | File | Status | Blocked by |
+|---|------|------|--------|------------|
+| 12 | Execute Cell Completion Buffering | [`specs/12-execute-cell-completion-buffering.md`](specs/12-execute-cell-completion-buffering.md) | Not started | — |
+| 10 | Failed Edit Tool Visibility | [`specs/10-failed-edit-tool-visibility.md`](specs/10-failed-edit-tool-visibility.md) | Not started | — |
+| 09 | ACP-Native Approval Rendering | [`specs/09-acp-native-approval-rendering.md`](specs/09-acp-native-approval-rendering.md) | Not started | — |
+| 11 | Delete File Operation Bridge | [`specs/11-delete-file-operation-bridge.md`](specs/11-delete-file-operation-bridge.md) | Not started | 10; approval bridge waits for 09 |
 
-## Implementation Order
+### What each fixes
 
-All specs implemented in the recommended order from APPLICATION-SPEC.md:
-1. Spec 08 (Gemini fallback) → 2. Spec 06 (Artifact cleanup) → 3. Spec 04 (Path normalization) → 4. Spec 05 (In-progress edits) → 5. Spec 07 (Diff rendering) → 6. Spec 02 (Exploring grouping)
-
-## Test Coverage
-
-- 19 new tests in `client_tool_cell.rs` (unit tests for all rendering paths)
-- 4 new tests in `chatwidget/tests/part3.rs` (integration tests for routing and merge)
-- All 1123 existing tests continue to pass
+- **Spec 12** (highest priority): Parallel execute calls show description text instead of stdout; single reads show `Ran Read File` instead of `Explored`; `List List` doubled label.
+- **Spec 10**: Failed edits have dim bullet (not red), generic header (not semantic verb), no error detail.
+- **Spec 09**: Approval history shows `✔ You approved Nori to runrm...` (missing space, raw command); overlay wrong for non-execute tools.
+- **Spec 11**: Eliminates `nori_protocol` → `codex_core::protocol::FileChange` compatibility bridge; unifies all file-operation rendering through `ClientToolCell`.
