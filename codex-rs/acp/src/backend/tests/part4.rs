@@ -1,5 +1,210 @@
 use super::*;
 
+#[tokio::test]
+#[serial]
+async fn test_user_input_emits_normalized_turn_lifecycle_events() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Say hello".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut client_events = Vec::new();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(client_event) => {
+                let done = matches!(
+                    client_event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                );
+                client_events.push(client_event);
+                if done {
+                    break;
+                }
+            }
+            None => continue,
+        }
+    }
+
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(
+                event,
+                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
+            )
+        }),
+        "expected normalized turn started event: {client_events:?}"
+    );
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(
+                event,
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed { .. }
+                )
+            )
+        }),
+        "expected normalized turn completed event: {client_events:?}"
+    );
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(event, nori_protocol::ClientEvent::MessageDelta(message_delta) if message_delta.stream == nori_protocol::MessageStream::Answer)
+        }),
+        "expected normalized answer delta event: {client_events:?}"
+    );
+
+    let mut legacy_events = Vec::new();
+    while let Some(event) =
+        recv_backend_control(&mut backend_event_rx, Duration::from_millis(100)).await
+    {
+        legacy_events.push(event);
+    }
+    assert!(
+        !legacy_events.iter().any(|event| {
+            matches!(
+                event.msg,
+                EventMsg::TaskStarted(_)
+                    | EventMsg::TaskComplete(_)
+                    | EventMsg::AgentMessageDelta(_)
+            )
+        }),
+        "legacy ACP turn/text events should be suppressed when normalized client events are present: {legacy_events:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SEND_TOOL_CALL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Do a tool call".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut client_events = Vec::new();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(client_event) => {
+                let done = matches!(
+                    client_event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                );
+                client_events.push(client_event);
+                if done {
+                    break;
+                }
+            }
+            None => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SEND_TOOL_CALL");
+    }
+
+    assert!(
+        client_events.iter().any(|event| {
+            matches!(event, nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot)
+            if matches!(
+                tool_snapshot.phase,
+                nori_protocol::ToolPhase::Pending
+                    | nori_protocol::ToolPhase::InProgress
+                    | nori_protocol::ToolPhase::Completed
+            ))
+        }),
+        "expected normalized tool snapshot events: {client_events:?}"
+    );
+
+    let mut legacy_events = Vec::new();
+    while let Some(event) =
+        recv_backend_control(&mut backend_event_rx, Duration::from_millis(100)).await
+    {
+        legacy_events.push(event);
+    }
+
+    assert!(
+        !legacy_events.iter().any(|event| {
+            matches!(
+                event.msg,
+                EventMsg::ExecCommandBegin(_)
+                    | EventMsg::ExecCommandEnd(_)
+                    | EventMsg::AgentMessageDelta(_)
+                    | EventMsg::TaskStarted(_)
+                    | EventMsg::TaskComplete(_)
+            )
+        }),
+        "legacy ACP live tool/text/lifecycle events should be suppressed when normalized client events are present: {legacy_events:?}"
+    );
+}
+
 /// Test that after Op::Compact, subsequent Op::UserInput prompts have the
 /// summary prefix prepended to the user's message.
 ///
@@ -25,6 +230,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel(64);
 
     let config = AcpBackendConfig {
         agent: "mock-model".to_string(),
@@ -62,7 +268,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let backend = AcpBackend::spawn(&config, event_tx)
+    let backend = spawn_test_backend(&config, event_tx, Some(client_event_tx))
         .await
         .expect("Failed to spawn ACP backend");
 
@@ -81,9 +287,14 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     let timeout = Duration::from_secs(10);
     let start = std::time::Instant::now();
     while start.elapsed() < timeout {
-        match tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await {
+        match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
             Ok(Some(event)) => {
-                if matches!(event.msg, EventMsg::TaskComplete(_)) {
+                if matches!(
+                    event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                ) {
                     break;
                 }
             }
@@ -103,24 +314,31 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         .expect("Failed to submit Op::UserInput");
 
     // Collect events from the user input turn
-    let mut events = Vec::new();
+    let mut client_events = Vec::new();
     let start = std::time::Instant::now();
     while start.elapsed() < timeout {
-        match tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await {
+        match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
             Ok(Some(event)) => {
-                events.push(event);
-                if matches!(
-                    events.last().map(|e| &e.msg),
-                    Some(EventMsg::TaskComplete(_))
-                ) {
+                let done = matches!(
+                    event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                );
+                client_events.push(event);
+                if done {
                     break;
                 }
             }
             _ => {
-                if events
-                    .iter()
-                    .any(|e| matches!(e.msg, EventMsg::TaskComplete(_)))
-                {
+                if client_events.iter().any(|e| {
+                    matches!(
+                        e,
+                        nori_protocol::ClientEvent::TurnLifecycle(
+                            nori_protocol::TurnLifecycle::Completed { .. }
+                        )
+                    )
+                }) {
                     break;
                 }
             }
@@ -130,10 +348,14 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     // The mock agent echoes back what it receives, so we should see the summary
     // prefix in the agent's response if it was prepended correctly.
     // Look for agent message deltas that contain the summary prefix.
-    let agent_messages: String = events
+    let agent_messages: String = client_events
         .iter()
-        .filter_map(|e| match &e.msg {
-            EventMsg::AgentMessageDelta(delta) => Some(delta.delta.clone()),
+        .filter_map(|e| match e {
+            nori_protocol::ClientEvent::MessageDelta(delta)
+                if delta.stream == nori_protocol::MessageStream::Answer =>
+            {
+                Some(delta.delta.clone())
+            }
             _ => None,
         })
         .collect();
@@ -143,22 +365,30 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     // by checking that the agent received something (the response won't be empty)
     assert!(
         !agent_messages.is_empty()
-            || events
-                .iter()
-                .any(|e| matches!(e.msg, EventMsg::TaskComplete(_))),
-        "Expected agent response or task completion. Events: {events:?}"
+            || client_events.iter().any(|e| matches!(
+                e,
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed { .. }
+                )
+            )),
+        "Expected normalized agent response or task completion. Events: {client_events:?}"
     );
 
     // Verify that the backend has a pending_compact_summary stored
     // (This requires checking internal state, which we'll verify through behavior)
     // The key assertion is that the compact operation succeeded and subsequent
     // prompts can be sent without error
-    let has_task_complete = events
-        .iter()
-        .any(|e| matches!(e.msg, EventMsg::TaskComplete(_)));
+    let has_task_complete = client_events.iter().any(|e| {
+        matches!(
+            e,
+            nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::Completed { .. }
+            )
+        )
+    });
     assert!(
         has_task_complete,
-        "Expected TaskComplete event for follow-up prompt. Events: {events:?}"
+        "Expected normalized completion event for follow-up prompt. Events: {client_events:?}"
     );
 }
 
@@ -221,7 +451,7 @@ async fn test_compact_not_in_unsupported_ops() {
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
 
-    let backend = AcpBackend::spawn(&config, event_tx)
+    let backend = spawn_test_backend(&config, event_tx, None)
         .await
         .expect("Failed to spawn ACP backend");
 
@@ -408,109 +638,6 @@ async fn test_list_custom_prompts_sends_response_event() {
 }
 
 #[test]
-fn transcript_to_replay_events_converts_user_and_assistant() {
-    use crate::transcript::*;
-    use pretty_assertions::assert_eq;
-
-    let entries = vec![
-        TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
-            session_id: "s1".into(),
-            project_id: "p1".into(),
-            started_at: "2025-01-01T00:00:00.000Z".into(),
-            cwd: PathBuf::from("/tmp"),
-            agent: Some("claude-code".into()),
-            cli_version: "0.1.0".into(),
-            git: None,
-            acp_session_id: None,
-        })),
-        TranscriptLine::new(TranscriptEntry::User(UserEntry {
-            id: "msg-001".into(),
-            content: "Hello, world!".into(),
-            attachments: vec![],
-        })),
-        TranscriptLine::new(TranscriptEntry::Assistant(AssistantEntry {
-            id: "msg-002".into(),
-            content: vec![ContentBlock::Text {
-                text: "Hi there!".into(),
-            }],
-            agent: Some("claude-code".into()),
-        })),
-        TranscriptLine::new(TranscriptEntry::ToolCall(ToolCallEntry {
-            call_id: "call-001".into(),
-            name: "shell".into(),
-            input: serde_json::json!({"command": "ls"}),
-        })),
-        TranscriptLine::new(TranscriptEntry::ToolResult(ToolResultEntry {
-            call_id: "call-001".into(),
-            output: "file1.txt\nfile2.txt".into(),
-            truncated: false,
-            exit_code: Some(0),
-        })),
-        TranscriptLine::new(TranscriptEntry::User(UserEntry {
-            id: "msg-003".into(),
-            content: "Thanks!".into(),
-            attachments: vec![],
-        })),
-    ];
-
-    let transcript = crate::transcript::Transcript {
-        meta: match &entries[0].entry {
-            TranscriptEntry::SessionMeta(m) => m.clone(),
-            _ => unreachable!(),
-        },
-        entries,
-    };
-
-    let events = transcript_to_replay_events(&transcript);
-
-    // Should only include User and Assistant entries (3 total: 2 user + 1 assistant)
-    assert_eq!(events.len(), 3);
-
-    // First event: UserMessage
-    match &events[0] {
-        EventMsg::UserMessage(ev) => assert_eq!(ev.message, "Hello, world!"),
-        other => panic!("Expected UserMessage, got {other:?}"),
-    }
-
-    // Second event: AgentMessage
-    match &events[1] {
-        EventMsg::AgentMessage(ev) => assert_eq!(ev.message, "Hi there!"),
-        other => panic!("Expected AgentMessage, got {other:?}"),
-    }
-
-    // Third event: UserMessage
-    match &events[2] {
-        EventMsg::UserMessage(ev) => assert_eq!(ev.message, "Thanks!"),
-        other => panic!("Expected UserMessage, got {other:?}"),
-    }
-}
-
-#[test]
-fn transcript_to_replay_events_empty_transcript() {
-    use crate::transcript::*;
-    use pretty_assertions::assert_eq;
-
-    let meta = SessionMetaEntry {
-        session_id: "s1".into(),
-        project_id: "p1".into(),
-        started_at: "2025-01-01T00:00:00.000Z".into(),
-        cwd: PathBuf::from("/tmp"),
-        agent: None,
-        cli_version: "0.1.0".into(),
-        git: None,
-        acp_session_id: None,
-    };
-
-    let transcript = crate::transcript::Transcript {
-        meta: meta.clone(),
-        entries: vec![TranscriptLine::new(TranscriptEntry::SessionMeta(meta))],
-    };
-
-    let events = transcript_to_replay_events(&transcript);
-    assert_eq!(events.len(), 0);
-}
-
-#[test]
 fn transcript_to_summary_builds_conversation_text() {
     use crate::transcript::*;
 
@@ -608,6 +735,49 @@ fn transcript_to_summary_preserves_large_content_without_truncation() {
 }
 
 #[test]
+fn transcript_to_summary_includes_normalized_tool_snapshots() {
+    use crate::transcript::*;
+
+    let entries = vec![
+        TranscriptLine::new(TranscriptEntry::SessionMeta(SessionMetaEntry {
+            session_id: "s1".into(),
+            project_id: "p1".into(),
+            started_at: "2025-01-01T00:00:00.000Z".into(),
+            cwd: PathBuf::from("/tmp"),
+            agent: None,
+            cli_version: "0.1.0".into(),
+            git: None,
+            acp_session_id: None,
+        })),
+        TranscriptLine::new(TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-001".into(),
+                title: "Edit /tmp/main.rs".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: None,
+                artifacts: vec![],
+                raw_input: None,
+                raw_output: None,
+            }),
+        })),
+    ];
+
+    let transcript = crate::transcript::Transcript {
+        meta: match &entries[0].entry {
+            TranscriptEntry::SessionMeta(m) => m.clone(),
+            _ => unreachable!(),
+        },
+        entries,
+    };
+
+    let summary = transcript_to_summary(&transcript);
+
+    assert!(summary.contains("[Tool: Edit /tmp/main.rs]"));
+}
+
+#[test]
 fn truncate_for_log_with_multibyte_does_not_panic() {
     // ─ (U+2500) is 3 bytes in UTF-8 (0xE2 0x94 0x80).
     // Place it so that a naive byte slice at max_len would land
@@ -666,13 +836,17 @@ async fn test_resume_session_falls_back_on_load_session_failure() {
     }
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
     let config = build_test_config(temp_dir.path());
     let transcript = build_test_transcript();
 
-    let result =
-        AcpBackend::resume_session(&config, Some("acp-session-42"), Some(&transcript), event_tx)
-            .await;
+    let result = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-42"),
+        Some(&transcript),
+        backend_event_tx,
+    )
+    .await;
 
     // SAFETY: Cleaning up the environment variables we set above.
     unsafe {
@@ -688,20 +862,17 @@ async fn test_resume_session_falls_back_on_load_session_failure() {
     );
 
     // Collect the SessionConfigured event
-    let event = tokio::time::timeout(Duration::from_secs(5), event_rx.recv())
+    let event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
         .await
-        .expect("Should receive an event within timeout")
-        .expect("Channel should not be closed");
+        .expect("Should receive an event within timeout");
 
-    // Verify that initial_messages is Some (client-side replay was used)
+    // Client-side replay no longer uses SessionConfigured.initial_messages.
     match event.msg {
         EventMsg::SessionConfigured(configured) => {
             assert!(
-                configured.initial_messages.is_some(),
-                "Expected initial_messages to be Some (client-side replay), but got None"
+                configured.initial_messages.is_none(),
+                "Expected initial_messages to be None, but got Some"
             );
-            let messages = configured.initial_messages.unwrap();
-            assert!(!messages.is_empty(), "Expected at least one replay message");
         }
         other => panic!(
             "Expected SessionConfigured event, got: {:?}",
@@ -710,10 +881,9 @@ async fn test_resume_session_falls_back_on_load_session_failure() {
     }
 
     // Verify that a WarningEvent was sent about the fallback
-    let warning_event = tokio::time::timeout(Duration::from_secs(5), event_rx.recv())
+    let warning_event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
         .await
-        .expect("Should receive warning event within timeout")
-        .expect("Channel should not be closed");
+        .expect("Should receive warning event within timeout");
 
     match warning_event.msg {
         EventMsg::Warning(warning) => {
@@ -768,7 +938,7 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
     }
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
     let config = build_test_config(temp_dir.path());
     let transcript = build_test_transcript();
 
@@ -777,7 +947,12 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
     // detects the deadlock: if resume_session hangs, it times out.
     let result = tokio::time::timeout(
         Duration::from_secs(10),
-        AcpBackend::resume_session(&config, Some("acp-session-42"), Some(&transcript), event_tx),
+        AcpBackend::resume_session(
+            &config,
+            Some("acp-session-42"),
+            Some(&transcript),
+            backend_event_tx,
+        ),
     )
     .await;
 
@@ -801,19 +976,33 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
         backend_result.err()
     );
 
-    // Drain events and verify we received the replayed notifications
-    let mut notification_count = 0;
-    while let Ok(Some(event)) =
-        tokio::time::timeout(Duration::from_millis(500), event_rx.recv()).await
+    // Drain normalized replay events and verify that server-side replay still
+    // reaches the client even though resume_session had to buffer the updates.
+    let mut replay_event_count = 0;
+    while let Some(event) =
+        recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await
     {
-        if matches!(event.msg, EventMsg::AgentMessageDelta(_)) {
-            notification_count += 1;
+        if matches!(event, nori_protocol::ClientEvent::ReplayEntry(_)) {
+            replay_event_count += 1;
         }
     }
 
     assert!(
-        notification_count >= 100,
-        "Expected at least 100 replayed notification events, got {notification_count}"
+        replay_event_count > 0,
+        "Expected normalized replay events after buffered server-side load_session notifications"
+    );
+
+    let mut legacy_replay_count = 0;
+    while let Some(event) =
+        recv_backend_control(&mut backend_event_rx, Duration::from_millis(100)).await
+    {
+        if matches!(event.msg, EventMsg::AgentMessageDelta(_)) {
+            legacy_replay_count += 1;
+        }
+    }
+    assert_eq!(
+        legacy_replay_count, 0,
+        "server-side replay should no longer emit legacy agent replay deltas"
     );
 }
 
@@ -842,13 +1031,17 @@ async fn test_resume_session_uses_server_side_when_load_session_succeeds() {
     }
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let (event_tx, mut event_rx) = mpsc::channel(64);
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
     let config = build_test_config(temp_dir.path());
     let transcript = build_test_transcript();
 
-    let result =
-        AcpBackend::resume_session(&config, Some("acp-session-42"), Some(&transcript), event_tx)
-            .await;
+    let result = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-42"),
+        Some(&transcript),
+        backend_event_tx,
+    )
+    .await;
 
     // SAFETY: Cleaning up the environment variable we set above.
     unsafe {
@@ -862,10 +1055,9 @@ async fn test_resume_session_uses_server_side_when_load_session_succeeds() {
     );
 
     // Collect the SessionConfigured event
-    let event = tokio::time::timeout(Duration::from_secs(5), event_rx.recv())
+    let event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
         .await
-        .expect("Should receive an event within timeout")
-        .expect("Channel should not be closed");
+        .expect("Should receive an event within timeout");
 
     // Server-side path should NOT produce initial_messages
     match event.msg {

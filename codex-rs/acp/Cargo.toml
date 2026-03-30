@@ -22,6 +22,7 @@ codex-rmcp-client = { workspace = true }
 codex-protocol = { path = "../protocol" }
 codex-utils-string = { workspace = true }
 futures = { workspace = true }
+nori-protocol = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

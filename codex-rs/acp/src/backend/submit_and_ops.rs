@@ -24,16 +24,16 @@ impl AcpBackend {
                 self.connection
                     .cancel(&*self.session_id.read().await)
                     .await?;
-                // Send TurnAborted event to notify the TUI that the turn was interrupted
-                let _ = self
-                    .event_tx
-                    .send(Event {
-                        id: id.clone(),
-                        msg: EventMsg::TurnAborted(TurnAbortedEvent {
-                            reason: TurnAbortReason::Interrupted,
-                        }),
-                    })
-                    .await;
+                emit_client_event(
+                    &self.backend_event_tx,
+                    self.transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Aborted {
+                            reason: nori_protocol::TurnAbortReason::Interrupted,
+                        },
+                    ),
+                )
+                .await;
             }
             Op::ExecApproval {
                 id: call_id,
@@ -315,6 +315,9 @@ impl AcpBackend {
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
         let notify_after_idle = self.notify_after_idle;
+        let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
+        let backend_event_tx = self.backend_event_tx.clone();
+        let transcript_recorder = self.transcript_recorder.clone();
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -324,49 +327,31 @@ impl AcpBackend {
             }
 
             // Send TaskStarted event (inside spawned task for consistency)
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone.clone(),
-                    msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
-                        model_context_window: None,
-                    }),
-                })
-                .await;
+            emit_client_event(
+                &backend_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
+            )
+            .await;
 
             // Spawn update consumer task to capture the agent's response
-            let event_tx_clone = event_tx.clone();
-            let id_for_updates = id_clone.clone();
             let pending_summary_for_capture = Arc::clone(&pending_compact_summary);
+            let client_event_normalizer = Arc::clone(&client_event_normalizer);
+            let backend_event_tx_for_updates = backend_event_tx.clone();
 
             let update_handler = tokio::spawn(async move {
                 let mut summary_text = String::new();
-                let mut pending_patch_changes: std::collections::HashMap<
-                    String,
-                    std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
-                > = std::collections::HashMap::new();
-                let mut pending_tool_calls = std::collections::HashMap::new();
 
                 while let Some(update) = update_rx.recv().await {
+                    let client_events =
+                        normalize_session_update(&client_event_normalizer, &update).await;
+                    forward_client_events(&backend_event_tx_for_updates, &client_events).await;
+
                     // Capture text from agent message chunks
                     if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
                         && let acp::ContentBlock::Text(text) = &chunk.content
                     {
                         summary_text.push_str(&text.text);
-                    }
-
-                    // Translate and forward events to TUI for display
-                    let events = translate_session_update_to_events(
-                        &update,
-                        &mut pending_patch_changes,
-                        &mut pending_tool_calls,
-                    );
-                    for event_msg in events {
-                        let _ = event_tx_clone
-                            .send(Event {
-                                id: id_for_updates.clone(),
-                                msg: event_msg,
-                            })
-                            .await;
                     }
                 }
 
@@ -416,14 +401,16 @@ impl AcpBackend {
                 // Send ContextCompacted event to notify TUI, including the
                 // summary text so the TUI can reprint it under a new session header.
                 let compact_summary = pending_compact_summary.lock().await.clone();
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::ContextCompacted(ContextCompactedEvent {
-                            summary: compact_summary,
-                        }),
-                    })
-                    .await;
+                emit_client_event(
+                    &backend_event_tx,
+                    transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::ContextCompacted {
+                            summary: compact_summary.clone(),
+                        },
+                    ),
+                )
+                .await;
 
                 // Send warning about long conversations
                 let _ = event_tx
@@ -437,14 +424,16 @@ impl AcpBackend {
             }
 
             // Send TaskComplete event
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone,
-                    msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+            emit_client_event(
+                &backend_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed {
                         last_agent_message: None,
-                    }),
-                })
-                .await;
+                    },
+                ),
+            )
+            .await;
 
             // Start idle timer if configured
             if let Some(duration) = notify_after_idle.as_duration() {

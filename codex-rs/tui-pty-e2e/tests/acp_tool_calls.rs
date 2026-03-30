@@ -1,7 +1,7 @@
 //! E2E tests for ACP tool call rendering in the TUI
 //!
 //! These tests verify that tool calls from ACP agents are properly
-//! rendered in the TUI using the McpToolCallCell component.
+//! rendered in the TUI using the ACP-native tool cell path.
 //!
 //! ## Test Strategy
 //!
@@ -9,20 +9,23 @@
 //! events, then verify the TUI displays them correctly. This validates
 //! the entire ACP-to-TUI flow:
 //!
-//! 1. Mock agent sends `SessionUpdate::ToolCall`
-//! 2. ACP translator converts to `EventMsg::McpToolCallBegin`
-//! 3. TUI chatwidget renders via `McpToolCallCell`
+//! 1. Mock agent sends `SessionUpdate::ToolCall` / `ToolCallUpdate`
+//! 2. ACP backend normalizes them into `ClientEvent::ToolSnapshot`
+//! 3. TUI chatwidget renders via `ClientToolCell`
 //!
 //! ## Expected TUI Output Format
 //!
 //! Active tool calls display as:
 //! ```text
-//! • Calling server.tool_name({"arg":"value"})
+//! • Tool [in progress]: Reading configuration file (read)
+//!   └ Read: /etc/config.toml
 //! ```
 //!
 //! Completed tool calls display as:
 //! ```text
-//! ✓ Called server.tool_name({"arg":"value"}) (1.2s)
+//! • Tool [completed]: Reading configuration file (read)
+//!   └ Read: /etc/config.toml
+//!     Output: Configuration loaded successfully
 //! ```
 
 use std::time::Duration;
@@ -38,13 +41,13 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 ///
 /// This test verifies the full ACP tool call rendering pipeline:
 /// 1. Mock agent emits a ToolCall event
-/// 2. Translator converts it to McpToolCallBegin
-/// 3. TUI displays it using McpToolCallCell
+/// 2. ACP normalizes it to `ClientEvent::ToolSnapshot`
+/// 3. TUI displays it using `ClientToolCell`
 ///
 /// ## Prerequisites for this test to pass:
 /// - Mock agent must support MOCK_AGENT_TOOL_CALL env var
-/// - translator.rs must handle SessionUpdate::ToolCall
-/// - core/client.rs must emit EventMsg::McpToolCallBegin
+/// - ACP normalization must emit `ClientEvent::ToolSnapshot`
+/// - TUI must render the native ACP tool cell path
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_tool_call_rendered_in_tui() {
@@ -70,14 +73,9 @@ fn test_acp_tool_call_rendered_in_tui() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for tool call to appear in TUI
-    // The tool call should render like: "• Calling acp.read_file(...)"
-    // or with the server name from ACP
+    // Wait for the native ACP tool cell to appear in the TUI.
     let tool_call_appeared = session.wait_for(
-        |screen| {
-            // Look for signs of tool call rendering
-            screen.contains("Explored")
-        },
+        |screen| screen.contains("Tool [") && screen.contains("Reading configuration file"),
         Duration::from_secs(10),
     );
 
@@ -86,10 +84,11 @@ fn test_acp_tool_call_rendered_in_tui() {
             // Tool call UI appeared
             let contents = session.screen_contents();
 
-            // The tool call should display with the tool name
             assert!(
-                contents.contains("Explored") && contents.contains("Read config.toml"),
-                "Tool call should show tool name or 'Calling' prefix, got:\n{}",
+                (contents.contains("Tool [pending]: Reading configuration file (read)")
+                    || contents.contains("Tool [completed]: Reading configuration file (read)"))
+                    && contents.contains("Read: /etc/config.toml"),
+                "Tool call should render with the native ACP tool header and invocation, got:\n{}",
                 contents
             );
         }
@@ -106,9 +105,9 @@ fn test_acp_tool_call_rendered_in_tui() {
 /// Test that an ACP tool call completion is rendered
 ///
 /// This test verifies that when a tool call completes:
-/// 1. The status changes from "Calling" to "Called"
-/// 2. The duration is shown
-/// 3. Any output is displayed
+/// 1. The tool cell reaches the completed ACP phase
+/// 2. The invocation is preserved
+/// 3. Any output artifact is displayed
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_tool_call_completion_rendered_in_tui() {
@@ -144,29 +143,27 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
 
     let contents = session.screen_contents();
 
-    // After completion, should show "Called" or "Reading" (from title "Reading configuration file")
-    // The format is: "✓ Called server.tool_name(...) (Xs)" or the title display
     assert!(
-        contents.contains("Explored"),
-        "Completed tool call should show 'Called' or tool title, got:\n{}",
+        contents.contains("Tool [completed]: Reading configuration file (read)")
+            && contents.contains("Output: Configuration loaded successfully"),
+        "Completed tool call should show the native ACP completed tool cell, got:\n{}",
         contents
     );
     insta::assert_snapshot!("acp_tool_call_echo", normalize_for_input_snapshot(contents));
 }
 
-/// Test that ACP tool calls do NOT appear twice (once as Running, once as Ran)
+/// Test that ACP tool calls do NOT appear twice as separate active/completed cells
 ///
 /// This test verifies that when a tool call completes, there is only ONE entry
-/// in the TUI output, not duplicate entries showing both "Running" and "Ran"
-/// states. The expected behavior is that the "Running" state should be
-/// updated in-place to become "Ran" when the tool call completes.
+/// in the TUI output, not duplicate entries showing both active and completed
+/// ACP tool states for the same call.
 ///
 /// ## Bug being tested:
-/// When agent text streams while a tool call is active, the incomplete ExecCell
-/// gets flushed to history. Then when the tool call completes, a new ExecCell
+/// When agent text streams while a tool call is active, the incomplete ACP tool
+/// cell gets flushed to history. Then when the tool call completes, a new cell
 /// is created, resulting in duplicate entries:
-/// 1. "Running ..." (flushed incomplete cell)
-/// 2. "Ran ..." (new completed cell)
+/// 1. An active ACP tool cell
+/// 2. A duplicate completed ACP tool cell
 ///
 /// This test uses MOCK_AGENT_INTERLEAVED_TOOL_CALL which sends text DURING
 /// the tool call to trigger this exact scenario.
@@ -204,37 +201,39 @@ fn test_acp_tool_call_no_duplicate_messages() {
     let contents = session.screen_contents();
 
     // Count occurrences of the tool title "Executing interleaved command"
-    // It should appear exactly ONCE (in the completed "Ran" form)
+    // It should appear exactly ONCE in the completed ACP tool cell.
     let tool_title = "Executing interleaved command";
     let count = contents.matches(tool_title).count();
 
     assert_eq!(
         count, 1,
         "Tool call '{}' should appear exactly once, but appeared {} times.\n\
-         This indicates duplicate messages (both 'Running' and 'Ran' states visible).\n\
+         This indicates duplicate messages (both active and completed states visible).\n\
          Screen contents:\n{}",
         tool_title, count, contents
     );
 
-    // Also verify we see "Ran" (completed state)
     assert!(
-        contents.contains("Ran"),
-        "Should show completed 'Ran' state. Screen contents:\n{}",
+        contents.contains("Tool [completed]: Executing interleaved command (execute)"),
+        "Should show the completed ACP tool state. Screen contents:\n{}",
         contents
     );
 
-    // Verify we don't have both "Running" AND "Ran" for this tool call
-    // (which would indicate duplicates)
-    let has_running = contents
+    // Verify we don't have both an active ACP tool state and a completed ACP
+    // tool state for this tool call.
+    let has_active = contents.lines().any(|line| {
+        (line.contains("Tool [pending]")
+            || line.contains("Tool [pending approval]")
+            || line.contains("Tool [in progress]"))
+            && line.contains("Executing interleaved")
+    });
+    let has_completed = contents
         .lines()
-        .any(|line| line.contains("Running") && line.contains("Executing interleaved"));
-    let has_ran = contents
-        .lines()
-        .any(|line| line.contains("Ran") && line.contains("Executing interleaved"));
+        .any(|line| line.contains("Tool [completed]") && line.contains("Executing interleaved"));
 
     assert!(
-        !(has_running && has_ran),
-        "Should NOT have both 'Running' and 'Ran' states for the same tool call.\n\
+        !(has_active && has_completed),
+        "Should NOT have both active and completed ACP tool states for the same tool call.\n\
          This indicates duplicate messages.\n\
          Screen contents:\n{}",
         contents
@@ -290,11 +289,12 @@ fn test_acp_tool_call_snapshot() {
 /// Test that multi-call exploring cells don't disappear when completed out-of-order.
 ///
 /// This test verifies the fix for cells disappearing when:
-/// 1. Multiple exploring tool calls (Read/Search) are grouped into one ExecCell
-/// 2. Agent text streams during execution, causing the cell to flush while incomplete
+/// 1. Multiple exploring tool calls (Read/Search) are emitted in one turn
+/// 2. Agent text streams during execution, causing deferral pressure
 /// 3. Completion events arrive out-of-order (e.g., call-2 completes before call-1)
 ///
-/// The cell should remain visible and complete correctly even in this scenario.
+/// The completed ACP tool cells should remain visible and complete correctly
+/// even in this scenario.
 #[test]
 #[cfg(target_os = "linux")]
 fn test_multi_call_exploring_cells_with_out_of_order_completion() {
@@ -332,61 +332,61 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
 
     let contents = session.screen_contents();
 
-    // Verify that all 3 Read operations appear in the output
+    // Verify that all 3 Read operations appear in the output.
     assert!(
-        contents.contains("file1.rs") || contents.contains("Explored"),
+        contents.contains("file1.rs"),
         "Should show first Read operation. Screen contents:\n{}",
         contents
     );
     assert!(
-        contents.contains("file2.rs") || contents.contains("Explored"),
+        contents.contains("file2.rs"),
         "Should show second Read operation. Screen contents:\n{}",
         contents
     );
     assert!(
-        contents.contains("file3.rs") || contents.contains("Explored"),
+        contents.contains("file3.rs"),
         "Should show third Read operation. Screen contents:\n{}",
         contents
     );
 
-    // Verify the exploring cell is shown as completed (not stuck in "Running" state)
-    // The completed exploring cell should show "Explored" status
+    // Verify each completed exploring snapshot renders as a completed ACP tool
+    // cell.
     assert!(
-        contents.contains("Explored"),
-        "Should show completed 'Explored' state. Screen contents:\n{}",
+        contents.contains("Tool [completed]: Reading file1.rs (read)")
+            && contents.contains("Tool [completed]: Reading file2.rs (read)")
+            && contents.contains("Tool [completed]: Reading file3.rs (read)"),
+        "Should show completed ACP tool cells for each file. Screen contents:\n{}",
         contents
     );
 
-    // Count how many "Explored" entries appear - should be exactly 1 grouped cell
-    // All 3 Read operations are grouped into a single cell because incomplete ExecCells
-    // are NOT flushed during streaming text. The text "Reading multiple files..." arrives
-    // while calls 1 & 2 are still pending, but the cell stays in active_cell. Call 3 then
-    // joins via with_added_call(), resulting in one cell with all 3 Read operations.
-    let explored_count = contents.matches("Explored").count();
+    // Count how many completed tool headers appear for the three read calls.
+    let completed_count = contents.matches("Tool [completed]: Reading file").count();
     assert!(
-        explored_count == 1,
-        "Should have one 'Explored' entry (all calls grouped), found {}. Screen contents:\n{}",
-        explored_count,
+        completed_count == 3,
+        "Should have three completed ACP tool cells, found {}. Screen contents:\n{}",
+        completed_count,
         contents
     );
 
-    // CRITICAL: Verify the "Explored" cell appears BEFORE the final agent message
-    // This ensures it was flushed immediately when the last tool call completed,
-    // not delayed until TaskComplete drained pending cells.
-    let explored_pos = contents
-        .find("Explored")
-        .expect("Should contain 'Explored'");
+    // CRITICAL: Verify the completed tool cells appear BEFORE the final agent
+    // message rather than after it.
     let final_msg_pos = contents
         .find("Multi-call exploring done")
         .expect("Should contain final message");
+    let file1_pos = contents
+        .find("Reading file1.rs")
+        .expect("Should contain file1");
+    let file2_pos = contents
+        .find("Reading file2.rs")
+        .expect("Should contain file2");
+    let file3_pos = contents
+        .find("Reading file3.rs")
+        .expect("Should contain file3");
 
     assert!(
-        explored_pos < final_msg_pos,
-        "The 'Explored' cell should appear BEFORE the final agent message, not after. \
-         This ensures it was flushed immediately on completion, not delayed until task end. \
-         Explored at {}, final message at {}",
-        explored_pos,
-        final_msg_pos
+        file1_pos < final_msg_pos && file2_pos < final_msg_pos && file3_pos < final_msg_pos,
+        "Completed ACP tool cells should appear BEFORE the final agent message, not after. \
+         file1 at {file1_pos}, file2 at {file2_pos}, file3 at {file3_pos}, final at {final_msg_pos}"
     );
 
     // Snapshot for visual verification
@@ -398,12 +398,9 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
 
 /// Test that exploring cells are flushed immediately even without subsequent agent text.
 ///
-/// This is a regression test for a bug where completed exploring cells would remain
-/// in active_cell until TaskComplete drained them, instead of being flushed immediately.
-///
-/// The bug occurred because handle_exec_end_now() checked `cell.should_flush()` which
-/// returns false for exploring cells, so the cell wasn't flushed until agent text
-/// triggered flush_active_cell() or TaskComplete drained pending cells.
+/// This is a regression test for a bug where completed ACP exploring tool cells
+/// would remain in `active_cell` until task cleanup drained them instead of
+/// becoming visible immediately.
 #[test]
 #[cfg(target_os = "linux")]
 fn test_exploring_cell_flushed_immediately_without_agent_text() {
@@ -428,36 +425,30 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for the exploring cell to appear - it should be flushed immediately
-    // after the last tool call completes, even without subsequent agent text
+    // Wait for the completed ACP tool cells to appear even without subsequent
+    // agent text.
     session
-        .wait_for_text("Explored", Duration::from_secs(10))
-        .expect("The 'Explored' cell should appear immediately after tool calls complete");
+        .wait_for(
+            |screen| {
+                screen.contains("Tool [completed]: Reading file1.rs (read)")
+                    && screen.contains("Tool [completed]: Reading file2.rs (read)")
+                    && screen.contains("Tool [completed]: Reading file3.rs (read)")
+            },
+            Duration::from_secs(10),
+        )
+        .expect("Completed ACP tool cells should appear immediately after tool calls complete");
 
     let contents = session.screen_contents();
 
-    // The critical assertion: the "Explored" cell MUST appear in the output
-    // even though no agent text was sent after the tool calls completed.
-    // If the cell wasn't flushed immediately, it would be missing from the display.
+    // The critical assertion: the completed ACP tool cells MUST appear in the
+    // output even though no agent text was sent after the tool calls completed.
     assert!(
-        contents.contains("Explored"),
-        "The 'Explored' cell must appear immediately after tool calls complete, \
+        contents.contains("Tool [completed]: Reading file1.rs (read)")
+            && contents.contains("Tool [completed]: Reading file2.rs (read)")
+            && contents.contains("Tool [completed]: Reading file3.rs (read)"),
+        "Completed ACP tool cells must appear immediately after tool calls complete, \
          even without subsequent agent text. If this fails, the cell is stuck \
          in active_cell until drain_failed(). Screen contents:\n{}",
-        contents
-    );
-
-    // Verify all 3 files are shown
-    let read_text = if contents.contains("file1.rs") {
-        "individual files shown"
-    } else {
-        "grouped display"
-    };
-
-    assert!(
-        contents.contains("Explored") || contents.contains("file1.rs"),
-        "Should show completed exploring operation ({}). Screen contents:\n{}",
-        read_text,
         contents
     );
 }
@@ -469,7 +460,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
 /// When tool call completions arrive while the stream_controller is active (text is
 /// streaming), they get deferred into the interrupt queue. Previously, on_task_complete()
 /// would flush all deferred tool events, rendering them below the final
-/// agent text. This creates a confusing UX where "Explored" / "Ran" cells appear
+/// agent text. This creates a confusing UX where completed ACP tool cells appear
 /// after the message the user needs to respond to.
 ///
 /// ## Expected behavior (after fix):
@@ -516,11 +507,13 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
 
     let contents = session.screen_contents();
 
-    // The first batch (file1.rs, file2.rs) should appear ABOVE the agent text
-    // since they completed before streaming started.
+    // The visible ACP tool cells should appear ABOVE the agent text since they
+    // completed before streaming finished.
     assert!(
-        contents.contains("Explored"),
-        "Should show the initial batch of explored files. Screen contents:\n{}",
+        contents.contains("Tool [completed]: Reading SKILL.md (read)")
+            && contents.contains("Tool [completed]: Searching for undefined (search)")
+            && contents.contains("Tool [completed]: Reading config.toml (read)"),
+        "Should show the visible ACP tool cells before the final message. Screen contents:\n{}",
         contents
     );
 
@@ -530,14 +523,12 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
         .find(final_msg)
         .expect("Should contain final message");
 
-    // CRITICAL ASSERTION: No tool output should appear AFTER the final agent message.
-    // Look for any "Explored", "Ran", "Searched", "Read", "SKILL.md", "config.toml",
-    // or "undefined" text after the final message position.
+    // CRITICAL ASSERTION: No tool output should appear AFTER the final agent
+    // message.
     let after_final = &contents[final_msg_pos + final_msg.len()..];
-    let has_trailing_tool_output = after_final.contains("Explored")
-        || after_final.contains("Ran")
-        || after_final.contains("Searched")
+    let has_trailing_tool_output = after_final.contains("Tool [")
         || after_final.contains("SKILL.md")
+        || after_final.contains("undefined")
         || after_final.contains("config.toml");
 
     assert!(
@@ -555,25 +546,23 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
     );
 }
 
-/// Test that orphan tool cells are NOT created when deferred Begin events are
-/// discarded but their End events are still processed.
+/// Test that orphan tool cells are NOT created when deferred earlier snapshots
+/// are discarded but terminal snapshots are still processed.
 ///
 /// ## The bug (cascade deferral → orphan cells):
-/// 1. Tool A Begin → handled immediately (no stream active)
+/// 1. Tool A snapshot → handled immediately (no stream active)
 /// 2. Text streaming starts → stream_controller = Some
-/// 3. Tool A End arrives → DEFERRED (stream active), queue becomes non-empty
-/// 4. Tool B Begin arrives → flush_answer_stream_with_separator() clears stream,
+/// 3. Tool A terminal snapshot arrives → DEFERRED (stream active), queue becomes non-empty
+/// 4. Tool B pending snapshot arrives → flush_answer_stream_with_separator() clears stream,
 ///    BUT !interrupts.is_empty() → DEFERRED (cascade deferral)
-/// 5. Tool B End arrives → DEFERRED
+/// 5. Tool B terminal snapshot arrives → DEFERRED
 /// 6. Turn ends → flush_completions_and_clear():
-///    - End-A: processed OK (running_commands has entry)
-///    - Begin-B: DISCARDED
-///    - End-B: processed, but no running_commands entry (Begin-B was discarded)
-///      → creates orphan ExecCell with command = ["orphan-tool-b"]
-///      → renders as "• Ran orphan-tool-b / └ No files found"
+///    - Tool A terminal snapshot: processed OK
+///    - Tool B pending snapshot: DISCARDED
+///    - Tool B terminal snapshot: must also be discarded
 ///
 /// ## Expected behavior (after fix):
-/// End events whose Begin was discarded should also be discarded.
+/// Terminal snapshots whose earlier state was discarded should also be discarded.
 /// No raw call_id should appear in the TUI output.
 #[test]
 #[cfg(target_os = "linux")]
@@ -607,13 +596,13 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
     let contents = session.screen_contents();
 
     // CRITICAL ASSERTION: The raw call_id "orphan-tool-b" must NOT appear
-    // in the rendered output. If it does, an orphan ExecCell was created
-    // because flush_completions_and_clear processed End-B after discarding
-    // Begin-B.
+    // in the rendered output. If it does, an orphan ACP tool cell was created
+    // because flush_completions_and_clear processed a terminal snapshot after
+    // discarding the earlier state for the same call_id.
     assert!(
         !contents.contains("orphan-tool-b"),
         "Raw call_id 'orphan-tool-b' should NOT appear in TUI output.\n\
-         This indicates an orphan ExecCell was created from a discarded Begin event.\n\
+         This indicates an orphan ACP tool cell was created from a discarded earlier snapshot.\n\
          Screen contents:\n{contents}",
     );
 
@@ -638,10 +627,10 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
 /// from rendering.
 ///
 /// ## The bug being tested:
-/// When ACP tool call End events arrive on a separate async channel from the
+/// When ACP terminal tool updates arrive on a separate async channel from the
 /// agent's PromptResponse, the `turn_finished` gate in `on_agent_message()`
-/// discards End events for already-started tool calls. This leaves incomplete
-/// ExecCells stuck in `active_cell`, filling the viewport and blocking
+/// discards them for already-started tool calls. This leaves incomplete ACP
+/// tool cells stuck in `active_cell`, filling the viewport and blocking
 /// `insert_history_lines()` from rendering the agent's text response.
 ///
 /// The user would see many tool calls "frozen" on screen with no agent response,
@@ -678,7 +667,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
     session.send_key(Key::Enter).unwrap();
 
     // CRITICAL ASSERTION: The agent's final text MUST appear.
-    // If the bug is present, this will timeout because the stuck ExecCells
+    // If the bug is present, this will timeout because the stuck ACP tool cells
     // block the viewport and prevent the agent text from rendering.
     session
         .wait_for_text(
@@ -687,7 +676,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
         )
         .expect(
             "Agent message MUST render even when tool calls don't complete. \
-             If this times out, ExecCells are blocking the viewport.",
+             If this times out, ACP tool cells are blocking the viewport.",
         );
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -718,14 +707,12 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
 ///
 /// ## The bug:
 /// When an ACP ToolCall has a generic title ("Terminal") and no raw_input, the
-/// translation layer skips emitting ExecCommandBegin (stores data for later).
-/// On completion, it emits ExecCommandEnd with the resolved title in `command`.
-/// But the TUI's handle_exec_end_now() ignores `ev.command` when there's no
-/// matching Begin event, falling back to `ev.call_id` (the raw `toolu_` ID).
+/// completion path must still preserve that resolved title instead of falling
+/// back to the raw `toolu_` ID.
 ///
 /// ## Expected behavior:
-/// The TUI should use `ev.command` from the End event, showing "Terminal" or
-/// a similar resolved name instead of "toolu_generic_test_001".
+/// The TUI should show "Terminal" or a similar resolved name instead of
+/// "toolu_generic_test_001".
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_generic_tool_call_shows_resolved_name() {
@@ -758,18 +745,17 @@ fn test_acp_generic_tool_call_shows_resolved_name() {
     let contents = session.screen_contents();
 
     // CRITICAL ASSERTION: The raw tool call ID must NOT appear in the output.
-    // If it does, the TUI is using ev.call_id instead of ev.command.
     assert!(
         !contents.contains("toolu_generic_test_001"),
         "Raw tool call ID 'toolu_generic_test_001' should NOT appear in TUI output.\n\
-         The TUI should display the resolved tool name from ev.command instead.\n\
+         The TUI should display the resolved tool name instead.\n\
          Screen contents:\n{contents}",
     );
 
     // The resolved name should be visible in the rendered output
     assert!(
-        contents.contains("Ran Terminal"),
-        "Should display the resolved tool name 'Terminal' from ev.command.\n\
+        contents.contains("Tool [completed]: Terminal (execute)"),
+        "Should display the resolved tool name 'Terminal' in the native ACP tool cell.\n\
          Screen contents:\n{contents}",
     );
 

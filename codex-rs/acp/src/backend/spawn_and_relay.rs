@@ -8,17 +8,23 @@ impl AcpBackend {
     /// 2. Spawn the ACP connection
     /// 3. Create a session
     /// 4. Send a synthetic `SessionConfigured` event
-    /// 5. Start background tasks for event translation and approval handling
+    /// 5. Start background tasks for control-plane forwarding, approvals, and normalized session updates
     ///
     /// # Arguments
     /// * `config` - The ACP backend configuration
-    /// * `event_tx` - Channel to send translated events to the TUI
+    /// * `backend_event_tx` - Channel to send ACP backend events to the TUI
     ///
     /// # Returns
     /// A connected `AcpBackend` ready to receive operations.
-    pub async fn spawn(config: &AcpBackendConfig, event_tx: mpsc::Sender<Event>) -> Result<Self> {
+    pub async fn spawn(
+        config: &AcpBackendConfig,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
+    ) -> Result<Self> {
         let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
+
+        let (event_tx, event_rx) = mpsc::channel(32);
+        tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
 
         debug!("Spawning ACP backend for agent: {}", config.agent);
 
@@ -103,6 +109,7 @@ impl AcpBackend {
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
+        let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -143,6 +150,7 @@ impl AcpBackend {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
             event_tx: event_tx.clone(),
+            backend_event_tx: backend_event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
             user_notifier: Arc::clone(&user_notifier),
@@ -175,7 +183,7 @@ impl AcpBackend {
             async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
-            pending_tool_calls: Arc::clone(&pending_tool_calls),
+            client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
@@ -222,19 +230,21 @@ impl AcpBackend {
         // Spawn approval handler task
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
-            event_tx.clone(),
+            backend_event_tx.clone(),
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             cwd.clone(),
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
+            backend.transcript_recorder.clone(),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
         tokio::spawn(Self::run_persistent_relay(
             persistent_rx,
-            event_tx.clone(),
-            Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
+            backend_event_tx,
         ));
 
         Ok(backend)
@@ -244,14 +254,17 @@ impl AcpBackend {
     ///
     /// When `approval_policy` is `AskForApproval::Never` (yolo mode), requests
     /// are auto-approved without prompting the user.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn run_approval_handler(
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
-        event_tx: mpsc::Sender<Event>,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
         pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
         user_notifier: Arc<codex_core::UserNotifier>,
         cwd: PathBuf,
         approval_policy_rx: watch::Receiver<AskForApproval>,
         pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+        client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+        transcript_recorder: Option<Arc<TranscriptRecorder>>,
     ) {
         while let Some(request) = approval_rx.recv().await {
             // Store tool call metadata from the permission request so the
@@ -268,14 +281,12 @@ impl AcpBackend {
                     title: cleaned_title,
                     kind: metadata.kind,
                     raw_input: metadata.raw_input.clone(),
-                    meta_tool_name: None,
                 };
                 let mut map = pending_tool_calls.lock().await;
                 let entry = map.entry(call_id).or_insert_with(|| AccumulatedToolCall {
                     title: None,
                     kind: None,
                     raw_input: None,
-                    meta_tool_name: None,
                 });
                 if new_entry.title.is_some() {
                     entry.title = new_entry.title;
@@ -302,18 +313,26 @@ impl AcpBackend {
                 continue;
             }
 
+            let client_events =
+                normalize_permission_request(&client_event_normalizer, &request).await;
+            forward_client_events(&backend_event_tx, &client_events).await;
+            if let Some(ref recorder) = transcript_recorder {
+                for client_event in &client_events {
+                    if let Err(e) = recorder.record_client_event(client_event).await {
+                        warn!("Failed to record normalized approval event to transcript: {e}");
+                    }
+                }
+            }
+
             // Send the appropriate approval request event to TUI based on operation type.
             // Use the call_id as the event wrapper ID so that the TUI can
             // correctly route the user's decision back to this pending request.
-            let (id, msg, command_for_notification) = match &request.event {
-                ApprovalEventType::Exec(exec_event) => (
-                    exec_event.call_id.clone(),
-                    EventMsg::ExecApprovalRequest(exec_event.clone()),
-                    exec_event.command.join(" "),
-                ),
+            let (id, command_for_notification) = match &request.event {
+                ApprovalEventType::Exec(exec_event) => {
+                    (exec_event.call_id.clone(), exec_event.command.join(" "))
+                }
                 ApprovalEventType::Patch(patch_event) => (
                     patch_event.call_id.clone(),
-                    EventMsg::ApplyPatchApprovalRequest(patch_event.clone()),
                     format!(
                         "patch: {}",
                         patch_event
@@ -325,17 +344,6 @@ impl AcpBackend {
                     ),
                 ),
             };
-
-            // Send the approval event to the TUI first, then notify.
-            // Notification must come after event delivery because
-            // notif.show() can block on some platforms (e.g. macOS),
-            // which would prevent the TUI from ever receiving the event.
-            let _ = event_tx
-                .send(Event {
-                    id: id.clone(),
-                    msg,
-                })
-                .await;
 
             // Store the pending approval for later resolution
             pending_approvals.lock().await.push(request);
@@ -357,27 +365,12 @@ impl AcpBackend {
     /// this relay, those updates would be silently dropped.
     pub(super) async fn run_persistent_relay(
         mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
-        event_tx: mpsc::Sender<Event>,
-        pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+        client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
     ) {
-        let mut pending_patch_changes = HashMap::new();
         while let Some(update) = persistent_rx.recv().await {
-            let event_msgs = {
-                let mut tool_calls = pending_tool_calls.lock().await;
-                translate_session_update_to_events(
-                    &update,
-                    &mut pending_patch_changes,
-                    &mut tool_calls,
-                )
-            };
-            for msg in event_msgs {
-                let _ = event_tx
-                    .send(Event {
-                        id: String::new(),
-                        msg,
-                    })
-                    .await;
-            }
+            let client_events = normalize_session_update(&client_event_normalizer, &update).await;
+            forward_client_events(&backend_event_tx, &client_events).await;
         }
     }
 }

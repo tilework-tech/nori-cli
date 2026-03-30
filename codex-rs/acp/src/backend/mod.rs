@@ -2,8 +2,9 @@
 //!
 //! This module provides `AcpBackend`, which adapts the ACP connection interface
 //! to be compatible with the TUI's event-driven architecture. It translates
-//! between Codex `Op` submissions and ACP protocol calls, and converts ACP
-//! session updates into `codex_protocol::Event` for the TUI.
+//! between Codex `Op` submissions and ACP protocol calls, emits ACP session
+//! semantics on `nori_protocol::ClientEvent`, and keeps `codex_protocol::Event`
+//! only for shared control-plane notifications.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,25 +13,24 @@ use std::sync::Arc;
 use anyhow::Result;
 use codex_core::config::types::McpServerConfig;
 use codex_protocol::ConversationId;
+#[cfg(test)]
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::ContextCompactedEvent;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::HookOutputEvent;
 use codex_protocol::protocol::HookOutputLevel;
 use codex_protocol::protocol::Op;
-use codex_protocol::protocol::PatchApplyBeginEvent;
 use codex_protocol::protocol::PromptSummaryEvent;
 use codex_protocol::protocol::ReviewDecision;
 use codex_protocol::protocol::SandboxPolicy;
 use codex_protocol::protocol::SessionConfiguredEvent;
-use codex_protocol::protocol::TurnAbortReason;
-use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
+use nori_protocol::ClientEvent;
+use nori_protocol::ClientEventNormalizer;
 use sacp::schema as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -47,8 +47,6 @@ use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
 use crate::translator;
-use crate::translator::is_patch_operation;
-use crate::translator::tool_call_to_file_change;
 use crate::undo::GhostSnapshotStack;
 
 // =============================================================================
@@ -243,12 +241,20 @@ pub struct AcpBackendConfig {
 ///
 /// This struct wraps a `SacpConnection` and translates between:
 /// - Codex `Op` submissions → ACP protocol calls
-/// - ACP `SessionUpdate` events → `codex_protocol::Event`
+/// - ACP control-plane output → `codex_protocol::Event`
+/// - ACP session-domain output → `nori_protocol::ClientEvent`
+#[derive(Debug, Clone)]
+pub enum BackendEvent {
+    Control(Event),
+    Client(ClientEvent),
+}
+
 pub struct AcpBackend {
     connection: Arc<SacpConnection>,
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
     event_tx: mpsc::Sender<Event>,
+    backend_event_tx: mpsc::Sender<BackendEvent>,
     /// Working directory for the session
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
@@ -313,41 +319,102 @@ pub struct AcpBackend {
     async_post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
-    /// Shared map of accumulated tool call metadata, populated by the approval
-    /// handler when permission requests carry tool call info (e.g. Gemini shell
-    /// commands). The prompt relay and persistent relay use this to resolve
-    /// proper titles on `ToolCallUpdate(completed)`.
-    pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+    /// ACP-native normalized event accumulator.
+    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     /// MCP server configuration for listing via /mcp command
     mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
-mod event_translation;
+mod helpers;
 mod session;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
-pub(crate) use event_translation::AccumulatedToolCall;
-use event_translation::get_event_msg_type;
-use event_translation::get_op_name;
-use event_translation::record_tool_events_to_transcript;
-pub(crate) use event_translation::translate_session_update_to_events;
+pub(crate) use helpers::AccumulatedToolCall;
+use helpers::get_op_name;
 mod tool_display;
+#[cfg(test)]
 pub(crate) use tool_display::classify_tool_to_parsed_command;
 pub(crate) use tool_display::extract_command_from_permission_title;
-pub(crate) use tool_display::extract_display_args;
 pub(crate) use tool_display::extract_tool_output;
-pub(crate) use tool_display::format_tool_call_command;
-pub(crate) use tool_display::kind_to_display_name;
-pub(crate) use tool_display::title_contains_useful_info;
-pub(crate) use tool_display::title_is_raw_id;
+#[cfg(test)]
 pub(crate) use tool_display::truncate_for_log;
 mod transcript;
-pub use transcript::transcript_to_replay_events;
+pub use transcript::client_events_to_replay_client_events;
+pub use transcript::transcript_to_replay_client_events;
 pub use transcript::transcript_to_summary;
 mod hooks;
+
+pub(crate) async fn normalize_permission_request(
+    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
+    request: &crate::connection::ApprovalRequest,
+) -> Vec<ClientEvent> {
+    let mut normalizer = normalizer.lock().await;
+    let events = normalizer.push_permission_request(&request.acp_request);
+    if !events.is_empty() {
+        debug!(
+            target: "acp_normalized_event_flow",
+            event_count = events.len(),
+            call_id = %request.event.call_id(),
+            "Normalized ACP permission request"
+        );
+    }
+    events
+}
+
+pub(crate) async fn normalize_session_update(
+    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
+    update: &acp::SessionUpdate,
+) -> Vec<ClientEvent> {
+    let mut normalizer = normalizer.lock().await;
+    let events = normalizer.push_session_update(update);
+    if !events.is_empty() {
+        debug!(
+            target: "acp_normalized_event_flow",
+            event_count = events.len(),
+            "Normalized ACP session update"
+        );
+    }
+    events
+}
+
+pub(crate) async fn forward_client_events(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    client_events: &[ClientEvent],
+) {
+    for client_event in client_events {
+        let _ = backend_event_tx
+            .send(BackendEvent::Client(client_event.clone()))
+            .await;
+    }
+}
+
+pub(crate) async fn emit_client_event(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    transcript_recorder: Option<&Arc<TranscriptRecorder>>,
+    client_event: ClientEvent,
+) {
+    let _ = backend_event_tx
+        .send(BackendEvent::Client(client_event.clone()))
+        .await;
+    if let Some(recorder) = transcript_recorder
+        && let Err(e) = recorder.record_client_event(&client_event).await
+    {
+        warn!("Failed to record normalized client event: {e}");
+    }
+}
+
+pub(crate) async fn forward_control_events(
+    mut event_rx: mpsc::Receiver<Event>,
+    backend_event_tx: mpsc::Sender<BackendEvent>,
+) {
+    while let Some(event) = event_rx.recv().await {
+        let _ = backend_event_tx.send(BackendEvent::Control(event)).await;
+    }
+}
+
 use hooks::commands_dir;
 use hooks::generate_id;
 use hooks::route_hook_results;

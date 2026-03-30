@@ -11,12 +11,14 @@ The `nori-tui` crate provides the interactive terminal user interface for Nori, 
 ```
 User Input --> nori-tui --> codex-acp (ACP backend)
                        \--> codex-core (config, auth)
-                       \--> codex-protocol (types)
+                       \--> nori-protocol (ACP session events)
+                       \--> codex-protocol (shared control-plane events)
 ```
 
 The TUI acts as the frontend layer. It:
 - Uses `codex-acp` for ACP agent communication (see `@/codex-rs/acp/`)
 - Uses `codex-core` for configuration loading and authentication (see `@/codex-rs/core/`)
+- Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
 - Displays approval requests from the ACP layer and forwards user decisions back
 - Renders streaming AI responses with markdown and syntax highlighting
 
@@ -41,7 +43,7 @@ The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`
 The main event loop in `app/mod.rs` processes:
 
 1. **Terminal events** (keyboard input, resize) via `tui.rs`
-2. **ACP events** from the backend (streaming content, approval requests, completion)
+2. **Backend events** from ACP: `BackendEvent::Client` carries normalized `nori_protocol::ClientEvent` session data, while `BackendEvent::Control` carries shared control-plane events
 3. **App events** for state changes (agent selection, config updates)
 
 The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` + submodules), which handles:
@@ -50,38 +52,34 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - File search integration (`file_search.rs`)
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
-The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. This matters for ACP patch events because `PatchApplyBegin` feeds the existing `PatchHistoryCell` path, so approval history, normal transcript history, and late-resolved live patch updates all reuse the same diff-style transcript rendering.
+The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. In ACP sessions, normalized file-operation tool snapshots still reuse the same `PatchHistoryCell` path, so approval history, transcript history, and live edit completions all share the same diff-style rendering.
 
-Approval requests from ACP agents are handled through `bottom_pane/approval.rs`, which displays command/patch details and collects user decisions (approve, deny, skip).
+Approval requests from ACP agents are handled through `bottom_pane/approval.rs`. Live ACP approvals arrive as `ClientEvent::ApprovalRequest`, stay in native `ApprovalRequest::ClientTool` form inside the TUI, and render directly from ACP snapshot title/kind/invocation or diff data. The final button press still maps back to the existing exec/apply-patch ops when sending the user's decision.
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, tool events (ExecBegin/End, McpBegin/End, PatchEnd) can arrive concurrently from the ACP backend. Tool event handlers call `flush_answer_stream_with_separator()` before `defer_or_handle()` to finalize any in-progress text stream, ensuring tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
+When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. The TUI flushes the text stream first, then routes completed file-operation snapshots into the patch-cell path and all other ACP tool snapshots into `ClientToolCell`. The `InterruptManager` queues `ClientToolSnapshot` items via `defer_or_handle()` when earlier deferred work is still pending, preserving FIFO ordering without synthesizing ACP exec begin/end events.
 
 One operation consumes the queue:
 
 | Method | Called From | Behavior |
 |--------|------------|----------|
-| `flush_completions_and_clear()` | `on_agent_message()`, `on_task_complete()` | Processes completion events whose Begin was already handled, discards Begin events and any End events whose Begin was discarded. See below. |
+| `flush_completions_and_clear()` | `on_agent_message()`, `on_task_complete()` | Processes deferred completion events and terminal ACP snapshots whose earlier state was not discarded, then discards remaining begin events, non-terminal ACP snapshots, and completions for discarded `call_id`s. See below. |
 
-The selective flush ensures tool cells that are already visible transition from "Running" to "Ran", while preventing new "Explored" / "Ran" cells from appearing below the agent's final message.
+The selective flush ensures already-visible legacy exec/MCP cells receive their completion updates and already-visible ACP tool cells receive their terminal snapshot, while preventing new deferred tool cells from appearing below the agent's final message.
 
-**Begin/End Pairing in `flush_completions_and_clear`**: Begin and End events for the same tool call are always paired in the FIFO queue (Begin precedes its End). When `flush_completions_and_clear` discards a Begin event, it records the `call_id` in a `HashSet`. When it encounters an End event, it checks whether the corresponding Begin was discarded. If so, the End is also discarded. Without this pairing, processing an End whose Begin was discarded causes `handle_exec_end_now` to create an orphan `ExecCell` with the raw `call_id` as the command name (e.g. "Ran toolu_01Lt49..."). This cascade deferral scenario arises when a tool Begin arrives while the queue is non-empty (even if the stream is no longer active), causing the Begin to be deferred and later discarded at task completion.
-
-**End-Without-Begin Fallback in `handle_exec_end_now`**: When `handle_exec_end_now` receives an `ExecCommandEndEvent` with no matching entry in `running_commands` (the `None` branch), it falls back to the End event's own `ev.command`, `ev.parsed_cmd`, and `ev.source` fields. This handles late-resolved non-patch tool calls from the ACP translation layer in `@/codex-rs/acp/`: if a `ToolCall` was skipped because its initial title was generic and it never entered `running_commands`, the later `ToolCallUpdate(completed)` can still populate the End event directly, and the TUI renders the resolved name (for example, "Terminal") rather than the raw tool call ID.
-
-Late-resolved patch operations do not use this exec fallback anymore. When the ACP backend can resolve Edit/Write/Delete metadata from the completed update, it emits `PatchApplyBegin` instead, and `on_patch_apply_begin()` routes that event into the same `PatchHistoryCell` rendering path used for approvals and transcript history.
+**Call-ID Pairing in `flush_completions_and_clear`**: Legacy exec/MCP begin and completion updates are still paired by `call_id`, and deferred ACP `ClientToolSnapshot` updates use the same suppression rule. When `flush_completions_and_clear` discards a deferred begin event or a non-terminal ACP snapshot, it records the `call_id` in a `HashSet`. Any later legacy completion or ACP terminal snapshot for the same `call_id` is discarded too. Without this pairing, a deferred ACP completion can synthesize an orphan `ClientToolCell` after its earlier pending snapshot was already dropped.
 
 **Turn-Finished Gate** (`chatwidget/event_handlers.rs`):
 
-The ACP protocol has no end-of-turn synchronization guarantee -- `PromptResponse` and `SessionNotification` messages are independent async streams that race. This means tool call events (`ExecCommandBegin/End`, `McpToolCallBegin/End`) can arrive after the agent's final response text (`AgentMessage`). The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard these late-arriving events:
+The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, replay entries, tool snapshots, and control-plane notifications are independent async streams that can race. The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard late-arriving tool activity after the agent's final response text:
 
 | Transition | Trigger | Effect |
 |------------|---------|--------|
 | `turn_finished = true` | `on_agent_message()` | Closes the gate -- subsequent tool events are discarded |
 | `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
 
-The gate is checked at the entry point of `on_exec_command_begin()`, `on_exec_command_end()`, `on_mcp_tool_call_begin()`, and `on_mcp_tool_call_end()`. When `turn_finished` is true, these methods return immediately without rendering any UI. This is complementary to the interrupt queue -- the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
+The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
 
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 
@@ -103,11 +101,11 @@ on_task_complete():
   5. set_task_running(false)
 ```
 
-`finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
+`finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell`, `ClientToolCell`, or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
 
 **Pinned Plan Drawer** (`pinned_plan_drawer.rs`, `chatwidget/mod.rs`, `chatwidget/event_handlers.rs`, `chatwidget/helpers.rs`):
 
-Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one of two ways, controlled by the `PlanDrawerMode` enum on `ChatWidget`:
+Plan updates from the ACP agent (`ClientEvent::PlanSnapshot`) can be rendered in one of two ways, controlled by the `PlanDrawerMode` enum on `ChatWidget`:
 
 | Mode | `PlanDrawerMode` | Behavior |
 |------|-------------------|----------|
@@ -117,7 +115,7 @@ Plan updates from the ACP agent (`EventMsg::PlanUpdate`) can be rendered in one 
 
 The toggle cycle (bound to `Ctrl+O` via `HotkeyAction::TogglePlanDrawer`) is: `Off -> Collapsed -> Expanded -> Collapsed -> ...`. Once the drawer enters a visible mode, it cycles between Collapsed and Expanded without returning to Off. The `toggle_plan_drawer()` method on `ChatWidget` implements this state machine. The `App` layer intercepts the hotkey binding in `handle_key_event()` and updates both the widget and its own `plan_drawer_mode` field.
 
-The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of the current mode. In `on_plan_update()`, the `UpdatePlanArgs` is stored in `pinned_plan` on every event; when the mode is `Off`, the update is also cloned and added to history as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next `PlanUpdate` event.
+The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of the current mode. In the ACP path, `handle_client_plan_snapshot()` converts the normalized snapshot into `UpdatePlanArgs`, stores it in `pinned_plan`, and when the mode is `Off`, clones it into scrollback as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next update.
 
 The drawer is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0):
 - `Collapsed` renders `PinnedPlanDrawerCollapsed` (1 line, shows progress count and current/next step with truncation)
@@ -546,7 +544,7 @@ The async flow uses three AppEvents: `ShowViewonlySessionPicker` -> `LoadViewonl
 
 **Session Resume (`/resume`):**
 
-The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and falls back to client-side replay when the agent does not support it (see `@/codex-rs/acp/docs.md` for the dual-path architecture).
+The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/codex-rs/acp/docs.md`).
 
 The flow involves three layers:
 
@@ -572,13 +570,13 @@ ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
 spawn_acp_agent_resume() -> AcpBackend::resume_session()
 ```
 
-The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the client-side replay fallback.
+The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the normalized replay fallback.
 
 Session filtering: `load_resumable_sessions()` in `@/codex-rs/tui/src/nori/resume_session_picker.rs` loads all sessions for the current working directory via the viewonly session picker's `load_sessions_with_preview()`, then filters to only sessions whose `agent` field matches the currently active agent.
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/codex-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. The spawned task structure (op forwarding, event forwarding, agent command handling) is identical.
+`spawn_acp_agent_resume()` in `@/codex-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. Both spawn paths receive a single `BackendEvent` stream from `codex-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 

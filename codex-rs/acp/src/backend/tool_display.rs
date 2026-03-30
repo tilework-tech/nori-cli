@@ -1,6 +1,7 @@
 use super::*;
 
-/// Truncate a string for logging purposes
+/// Truncate a string for logging purposes.
+#[cfg(test)]
 pub(crate) fn truncate_for_log(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
@@ -10,46 +11,10 @@ pub(crate) fn truncate_for_log(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Check if a tool call title contains useful display information.
-///
-/// Some ACP providers include the path/command directly in the title
-/// (e.g., "Read /home/user/file.rs" or "`git status`") rather than in raw_input.
-/// This function detects such cases so we don't skip them.
-pub(crate) fn title_contains_useful_info(title: &str) -> bool {
-    // Check for absolute paths (Unix or Windows style)
-    if title.contains(" /") || title.contains(" C:\\") || title.contains(" ~") {
-        return true;
-    }
-    // Check for backtick-quoted commands (e.g., "`git status`")
-    if title.contains('`') {
-        return true;
-    }
-    // Check for patterns that suggest it's not a generic title
-    // Generic titles are typically just the tool name like "Read File", "Terminal", "Search"
-    let generic_patterns = [
-        "Read File",
-        "Read file",
-        "Terminal",
-        "Search",
-        "Grep",
-        "Glob",
-        "List",
-        "Write",
-        "Edit",
-    ];
-    for pattern in &generic_patterns {
-        if title == *pattern {
-            return false;
-        }
-    }
-    // If the title is longer than typical generic names and contains a space,
-    // it likely has useful info
-    title.len() > 15 && title.contains(' ')
-}
-
 /// Format a tool call command with its input arguments for display.
 ///
-/// Creates a display string like "Read(path/to/file.rs)" or "Terminal(git status)"
+/// Creates a display string like "Read(path/to/file.rs)" or "Terminal(git status)".
+#[cfg(test)]
 pub(crate) fn format_tool_call_command(
     title: &str,
     raw_input: Option<&serde_json::Value>,
@@ -69,6 +34,7 @@ pub(crate) fn format_tool_call_command(
 }
 
 /// Extract display-friendly arguments from raw_input based on tool type.
+#[cfg(test)]
 pub(crate) fn extract_display_args(title: &str, input: &serde_json::Value) -> Option<String> {
     let title_lower = title.to_lowercase();
 
@@ -312,6 +278,7 @@ pub(crate) fn format_raw_output(
 /// - `Search` → `ParsedCommand::Search` (exploring)
 /// - `Edit`, `Delete`, `Move`, `Execute`, `Fetch` → `ParsedCommand::Unknown` (command)
 /// - `Think`, `Other` → `ParsedCommand::Unknown` (command)
+#[cfg(test)]
 pub(crate) fn classify_tool_to_parsed_command(
     title: &str,
     kind: Option<&acp::ToolKind>,
@@ -403,6 +370,7 @@ pub(crate) fn classify_tool_to_parsed_command(
 /// Fallback classification based on tool title when ToolKind is not available.
 ///
 /// Uses heuristics to detect common tool patterns.
+#[cfg(test)]
 pub(crate) fn classify_tool_by_title(
     title: &str,
     raw_input: Option<&serde_json::Value>,
@@ -488,30 +456,5 @@ pub(crate) fn extract_command_from_permission_title(title: &str) -> String {
         title[..cwd_start].trim().to_string()
     } else {
         title.to_string()
-    }
-}
-
-/// Returns true if the title looks like a raw Anthropic tool_use ID
-/// (e.g., "toolu_015Xtg1GzAd6aPH6oiirx5us").
-pub(crate) fn title_is_raw_id(title: &str) -> bool {
-    title.starts_with("toolu_")
-        && title.len() > 10
-        && title[6..].bytes().all(|b| b.is_ascii_alphanumeric())
-}
-
-/// Maps a ToolKind to a human-readable display name for fallback use.
-pub(crate) fn kind_to_display_name(kind: acp::ToolKind) -> &'static str {
-    match kind {
-        acp::ToolKind::Read => "Read",
-        acp::ToolKind::Edit => "Edit",
-        acp::ToolKind::Delete => "Delete",
-        acp::ToolKind::Move => "Move",
-        acp::ToolKind::Search => "Search",
-        acp::ToolKind::Execute => "Terminal",
-        acp::ToolKind::Think => "Think",
-        acp::ToolKind::Fetch => "Fetch",
-        acp::ToolKind::SwitchMode => "Switch Mode",
-        acp::ToolKind::Other => "Tool",
-        _ => "Tool",
     }
 }

@@ -1,18 +1,5 @@
 use super::*;
 
-/// Test that unsupported session update types produce no events.
-#[test]
-fn test_unsupported_updates_produce_no_events() {
-    let update = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
-        acp::ContentBlock::Text(acp::TextContent::new("User message")),
-    ));
-
-    let mut pending = std::collections::HashMap::new();
-    let mut pending_tool_calls = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
-    assert!(events.is_empty());
-}
-
 /// Test that get_op_name returns correct names for various Op variants.
 #[test]
 fn test_get_op_name() {
@@ -234,34 +221,5 @@ fn test_classify_none_kind_fallback() {
             assert_eq!(query.as_deref(), Some("fn main"));
         }
         _ => panic!("Expected ParsedCommand::Search"),
-    }
-}
-
-/// Test that ToolCall with Read kind generates parsed_cmd in ExecCommandBegin.
-#[test]
-fn test_tool_call_read_generates_exploring_parsed_cmd() {
-    let update = acp::SessionUpdate::ToolCall(
-        acp::ToolCall::new(acp::ToolCallId::from("call-read".to_string()), "Read File")
-            .kind(acp::ToolKind::Read)
-            .status(acp::ToolCallStatus::InProgress)
-            .raw_input(serde_json::json!({"path": "src/lib.rs"})),
-    );
-
-    let mut pending = std::collections::HashMap::new();
-    let mut pending_tool_calls = std::collections::HashMap::new();
-    let events = translate_session_update_to_events(&update, &mut pending, &mut pending_tool_calls);
-    assert_eq!(events.len(), 1);
-
-    match &events[0] {
-        EventMsg::ExecCommandBegin(begin) => {
-            assert_eq!(begin.parsed_cmd.len(), 1);
-            match &begin.parsed_cmd[0] {
-                ParsedCommand::Read { name, .. } => {
-                    assert_eq!(name, "lib.rs");
-                }
-                _ => panic!("Expected ParsedCommand::Read"),
-            }
-        }
-        _ => panic!("Expected ExecCommandBegin event"),
     }
 }

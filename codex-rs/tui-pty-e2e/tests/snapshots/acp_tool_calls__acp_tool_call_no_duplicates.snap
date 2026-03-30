@@ -10,8 +10,9 @@ expression: normalize_for_input_snapshot(contents)
 
 • Processing command...
 
-• Ran Executing interleaved command(test)
-  └ Command completed
+• Tool [completed]: Executing interleaved command (execute)
+  └ Command: test
+    Output: Command completed
 
 ────────────────────────────────────────────────────────────────────────────────
 

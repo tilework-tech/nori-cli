@@ -107,6 +107,37 @@ mod types_tests {
     }
 
     #[test]
+    fn test_client_event_entry_serialization() {
+        let entry = TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-001".to_string(),
+                title: "Edit /src/main.rs".to_string(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::Completed,
+                locations: vec![],
+                invocation: None,
+                artifacts: vec![],
+                raw_input: None,
+                raw_output: None,
+            }),
+        });
+
+        let line = TranscriptLine {
+            ts: "2025-01-26T10:30:08.012Z".to_string(),
+            v: types::SCHEMA_VERSION,
+            entry,
+        };
+
+        let json = serde_json::to_string(&line).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["type"], "client_event");
+        assert_eq!(parsed["event"]["event_type"], "tool_snapshot");
+        assert_eq!(parsed["event"]["call_id"], "call-001");
+        assert_eq!(parsed["event"]["title"], "Edit /src/main.rs");
+    }
+
+    #[test]
     fn test_tool_call_entry_serialization() {
         let entry = TranscriptEntry::ToolCall(ToolCallEntry {
             call_id: "call-001".to_string(),

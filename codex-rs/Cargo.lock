@@ -887,6 +887,7 @@ dependencies = [
  "filetime",
  "futures",
  "libc",
+ "nori-protocol",
  "pretty_assertions",
  "sacp",
  "serde",
@@ -3805,6 +3806,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-protocol"
+version = "0.0.0"
+dependencies = [
+ "pretty_assertions",
+ "sacp",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nori-tui"
 version = "0.0.0"
 dependencies = [
@@ -3840,6 +3851,7 @@ dependencies = [
  "libc",
  "mcp-types",
  "nori-installed",
+ "nori-protocol",
  "opentelemetry-appender-tracing",
  "pathdiff",
  "pretty_assertions",

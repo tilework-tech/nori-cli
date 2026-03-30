@@ -44,6 +44,10 @@ pub(crate) enum ApprovalRequest {
         reason: Option<String>,
         risk: Option<SandboxCommandAssessment>,
     },
+    ClientTool {
+        approval: Box<nori_protocol::ApprovalRequest>,
+        cwd: PathBuf,
+    },
     ApplyPatch {
         id: String,
         reason: Option<String>,
@@ -386,6 +390,62 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                 Self {
                     variant: ApprovalVariant::ApplyPatch { id },
                     header: Box::new(ColumnRenderable::with(header)),
+                }
+            }
+            ApprovalRequest::ClientTool { approval, cwd } => {
+                let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = &approval.subject;
+                let kind_label = crate::client_event_format::format_tool_kind(&approval.kind);
+
+                if matches!(
+                    snapshot.kind,
+                    nori_protocol::ToolKind::Edit
+                        | nori_protocol::ToolKind::Delete
+                        | nori_protocol::ToolKind::Move
+                ) && let Some(changes) =
+                    crate::client_event_format::snapshot_file_changes(snapshot)
+                {
+                    let header: Vec<Box<dyn Renderable>> = vec![
+                        Box::new(Paragraph::new(Line::from(vec![
+                            "Tool: ".into(),
+                            format!("{} ({kind_label})", approval.title).bold(),
+                        ]))),
+                        Box::new(Line::from("")),
+                        DiffSummary::new(changes, cwd).into(),
+                    ];
+                    Self {
+                        variant: ApprovalVariant::ApplyPatch {
+                            id: approval.call_id.clone(),
+                        },
+                        header: Box::new(ColumnRenderable::with(header)),
+                    }
+                } else {
+                    let mut header: Vec<Line<'static>> = vec![Line::from(vec![
+                        "Tool: ".into(),
+                        format!("{} ({kind_label})", approval.title).bold(),
+                    ])];
+                    if let Some(invocation) =
+                        crate::client_event_format::format_invocation(&snapshot.invocation)
+                    {
+                        header.push(Line::from(""));
+                        header.push(Line::from(invocation));
+                    }
+                    Self {
+                        variant: ApprovalVariant::Exec {
+                            id: approval.call_id.clone(),
+                            command: match snapshot.invocation.as_ref() {
+                                Some(nori_protocol::Invocation::Command { command }) => {
+                                    vec!["bash".into(), "-lc".into(), command.clone()]
+                                }
+                                _ => vec![
+                                    crate::client_event_format::format_invocation(
+                                        &snapshot.invocation,
+                                    )
+                                    .unwrap_or_else(|| approval.title.clone()),
+                                ],
+                            },
+                        },
+                        header: Box::new(Paragraph::new(header).wrap(Wrap { trim: false })),
+                    }
                 }
             }
             ApprovalRequest::McpElicitation {

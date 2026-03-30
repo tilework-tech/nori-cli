@@ -37,6 +37,7 @@ pub use project::compute_project_id;
 pub use recorder::TranscriptRecorder;
 pub use types::AssistantEntry;
 pub use types::Attachment;
+pub use types::ClientEventEntry;
 pub use types::ContentBlock;
 pub use types::GitInfo;
 pub use types::PatchApplyEntry;

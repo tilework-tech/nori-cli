@@ -30,6 +30,7 @@ pub(crate) struct AcpModelInfo {
 #[derive(Debug)]
 pub(crate) enum AppEvent {
     CodexEvent(Event),
+    ClientEvent(nori_protocol::ClientEvent),
 
     /// Start a new session.
     NewSession,
@@ -125,11 +126,12 @@ pub(crate) enum AppEvent {
         preset: ApprovalPreset,
     },
 
-    /// Update the current approval policy in the running app and widget.
-    UpdateAskForApprovalPolicy(AskForApproval),
-
-    /// Update the current sandbox policy in the running app and widget.
-    UpdateSandboxPolicy(SandboxPolicy),
+    /// Apply an approval preset atomically across app state, widget state,
+    /// and the backend's turn context.
+    ApplyApprovalPreset {
+        approval: AskForApproval,
+        sandbox: SandboxPolicy,
+    },
 
     /// Update whether the full access warning prompt has been acknowledged.
     UpdateFullAccessWarningAcknowledged(bool),

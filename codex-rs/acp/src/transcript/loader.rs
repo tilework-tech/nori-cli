@@ -444,6 +444,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_load_transcript_with_client_event_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+
+        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
+            .await
+            .unwrap();
+        let project_id = recorder.project_id().to_string();
+        let session_id = recorder.session_id().to_string();
+
+        recorder
+            .record_client_event(&nori_protocol::ClientEvent::ToolSnapshot(
+                nori_protocol::ToolSnapshot {
+                    call_id: "call-001".to_string(),
+                    title: "Edit /tmp/test.md".to_string(),
+                    kind: nori_protocol::ToolKind::Edit,
+                    phase: nori_protocol::ToolPhase::Completed,
+                    locations: vec![],
+                    invocation: None,
+                    artifacts: vec![],
+                    raw_input: None,
+                    raw_output: None,
+                },
+            ))
+            .await
+            .unwrap();
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let transcript = loader
+            .load_transcript(&project_id, &session_id)
+            .await
+            .unwrap();
+
+        assert_eq!(transcript.entries.len(), 2);
+        assert!(matches!(
+            transcript.entries[1].entry,
+            TranscriptEntry::ClientEvent(_)
+        ));
+    }
+
+    #[tokio::test]
     async fn test_load_session_meta() {
         let temp_dir = TempDir::new().unwrap();
         let nori_home = temp_dir.path();

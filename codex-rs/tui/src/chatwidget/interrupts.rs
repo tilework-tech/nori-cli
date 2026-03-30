@@ -22,6 +22,7 @@ pub(crate) enum QueuedInterrupt {
     ExecApproval(String, ExecApprovalRequestEvent),
     ApplyPatchApproval(String, ApplyPatchApprovalRequestEvent),
     Elicitation(ElicitationRequestEvent),
+    ClientToolSnapshot(nori_protocol::ToolSnapshot),
     ExecBegin(ExecCommandBeginEvent),
     ExecEnd(ExecCommandEndEvent),
     McpBegin(McpToolCallBeginEvent),
@@ -79,6 +80,19 @@ impl InterruptManager {
                     }
                 }
                 QueuedInterrupt::PatchEnd(ev) => chat.handle_patch_apply_end_now(ev),
+                QueuedInterrupt::ClientToolSnapshot(snapshot) => {
+                    if discarded_call_ids.contains(&snapshot.call_id) {
+                        discarded += 1;
+                    } else if matches!(
+                        snapshot.phase,
+                        nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+                    ) {
+                        chat.handle_client_tool_snapshot_deferred_now(snapshot);
+                    } else {
+                        discarded_call_ids.insert(snapshot.call_id);
+                        discarded += 1;
+                    }
+                }
                 // Elicitation should not normally be queued at task completion,
                 // but warn if it is.
                 QueuedInterrupt::Elicitation(_) => {
@@ -128,6 +142,11 @@ impl InterruptManager {
 
     pub(crate) fn push_exec_begin(&mut self, ev: ExecCommandBeginEvent) {
         self.queue.push_back(QueuedInterrupt::ExecBegin(ev));
+    }
+
+    pub(crate) fn push_client_tool_snapshot(&mut self, snapshot: nori_protocol::ToolSnapshot) {
+        self.queue
+            .push_back(QueuedInterrupt::ClientToolSnapshot(snapshot));
     }
 
     pub(crate) fn push_exec_end(&mut self, ev: ExecCommandEndEvent) {

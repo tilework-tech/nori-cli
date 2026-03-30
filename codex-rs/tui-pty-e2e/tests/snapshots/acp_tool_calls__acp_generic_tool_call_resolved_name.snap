@@ -4,8 +4,8 @@ expression: normalize_for_input_snapshot(contents)
 ---
 › Run a command
 
-• Ran Terminal
-  └ command output here
+• Tool [completed]: Terminal (execute)
+  └ Output: command output here
 
 ────────────────────────────────────────────────────────────────────────────────
 

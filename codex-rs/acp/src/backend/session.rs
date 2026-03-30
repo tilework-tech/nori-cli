@@ -6,15 +6,17 @@ impl AcpBackend {
     /// If the agent supports `session/load` (via capabilities) and an
     /// `acp_session_id` is provided, the existing server-side resume path is
     /// used. Otherwise a client-side replay fallback is used: a fresh session
-    /// is created via `session/new`, the transcript is converted into
-    /// `initial_messages` for TUI display, and a summary is stored in
-    /// `pending_compact_summary` so it gets prepended to the first prompt.
+    /// is created via `session/new`, normalized replay entries are derived from
+    /// the transcript, and a summary is stored in `pending_compact_summary` so
+    /// it gets prepended to the first prompt.
     pub async fn resume_session(
         config: &AcpBackendConfig,
         acp_session_id: Option<&str>,
         transcript: Option<&crate::transcript::Transcript>,
-        event_tx: mpsc::Sender<Event>,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
+        let (event_tx, event_rx) = mpsc::channel(32);
+        tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
         let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
@@ -55,11 +57,10 @@ impl AcpBackend {
         // resume_session from sending.
         let (
             session_id,
-            initial_messages,
             pending_summary,
             is_first_prompt_val,
             used_fallback,
-            deferred_replay_events,
+            deferred_replay_client_events,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
 
@@ -70,23 +71,12 @@ impl AcpBackend {
             // resume_session returns, so sending directly would deadlock
             // when the number of events exceeds the channel capacity.
             let collect_handle = tokio::spawn(async move {
-                let mut pending_patch_changes = std::collections::HashMap::new();
-                let mut pending_tool_calls = std::collections::HashMap::new();
+                let mut client_event_normalizer = nori_protocol::ClientEventNormalizer::default();
                 let mut buffered_events = Vec::new();
                 while let Some(update) = update_rx.recv().await {
-                    let event_msgs = translate_session_update_to_events(
-                        &update,
-                        &mut pending_patch_changes,
-                        &mut pending_tool_calls,
-                    );
-                    for msg in event_msgs {
-                        buffered_events.push(Event {
-                            id: String::new(),
-                            msg,
-                        });
-                    }
+                    buffered_events.extend(client_event_normalizer.push_session_update(&update));
                 }
-                buffered_events
+                client_events_to_replay_client_events(buffered_events)
             });
 
             match connection.load_session(sid, &cwd, update_tx).await {
@@ -95,15 +85,15 @@ impl AcpBackend {
                     // because the collect task buffers into a Vec (no
                     // backpressure) and update_rx closes when load_session
                     // completes (the worker thread drops update_tx).
-                    let buffered_events = collect_handle.await.unwrap_or_default();
-                    if !buffered_events.is_empty() {
+                    let buffered_client_events = collect_handle.await.unwrap_or_default();
+                    if !buffered_client_events.is_empty() {
                         debug!(
-                            "ACP session/load produced {} replay events (deferred until after setup)",
-                            buffered_events.len()
+                            "ACP session/load produced {} replay client events (deferred until after setup)",
+                            buffered_client_events.len()
                         );
                     }
                     debug!("ACP session resumed via session/load: {sid}");
-                    (session_id, None, None, false, None, buffered_events)
+                    (session_id, None, false, None, buffered_client_events)
                 }
                 Err(e) => {
                     warn!(
@@ -126,25 +116,24 @@ impl AcpBackend {
                     })?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
-                        let events = transcript_to_replay_events(t);
+                        let client_events = transcript_to_replay_client_events(t);
                         let summary_text = transcript_to_summary(t);
                         let summary_opt = if summary_text.is_empty() {
                             None
                         } else {
                             Some(summary_text)
                         };
-                        (Some(events), summary_opt)
+                        (client_events, summary_opt)
                     } else {
-                        (None, None)
+                        (Vec::new(), None)
                     };
 
                     (
                         session_id,
-                        replay_events,
                         summary,
                         true,
                         Some(e.to_string()),
-                        Vec::new(),
+                        replay_events,
                     )
                 }
             }
@@ -166,19 +155,19 @@ impl AcpBackend {
             })?;
 
             let (replay_events, summary) = if let Some(t) = transcript {
-                let events = transcript_to_replay_events(t);
+                let client_events = transcript_to_replay_client_events(t);
                 let summary_text = transcript_to_summary(t);
                 let summary_opt = if summary_text.is_empty() {
                     None
                 } else {
                     Some(summary_text)
                 };
-                (Some(events), summary_opt)
+                (client_events, summary_opt)
             } else {
-                (None, None)
+                (Vec::new(), None)
             };
 
-            (session_id, replay_events, summary, true, None, Vec::new())
+            (session_id, summary, true, None, replay_events)
         };
 
         let approval_rx = connection.take_approval_receiver();
@@ -186,6 +175,7 @@ impl AcpBackend {
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
+        let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -218,6 +208,7 @@ impl AcpBackend {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
             event_tx: event_tx.clone(),
+            backend_event_tx: backend_event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
             user_notifier: Arc::clone(&user_notifier),
@@ -250,7 +241,7 @@ impl AcpBackend {
             async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
-            pending_tool_calls: Arc::clone(&pending_tool_calls),
+            client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
@@ -281,7 +272,7 @@ impl AcpBackend {
             reasoning_effort: None,
             history_log_id,
             history_entry_count,
-            initial_messages,
+            initial_messages: None,
             rollout_path: cwd.join(".codex-rollout.jsonl"),
         };
 
@@ -311,30 +302,30 @@ impl AcpBackend {
 
         tokio::spawn(Self::run_approval_handler(
             approval_rx,
-            event_tx.clone(),
+            backend_event_tx.clone(),
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             cwd.clone(),
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
+            backend.transcript_recorder.clone(),
         ));
 
         // Spawn persistent listener relay for inter-turn notifications
         tokio::spawn(Self::run_persistent_relay(
             persistent_rx,
-            event_tx.clone(),
-            Arc::clone(&pending_tool_calls),
+            Arc::clone(&client_event_normalizer),
+            backend_event_tx.clone(),
         ));
 
-        // Spawn the replay relay *after* all setup events (SessionConfigured,
-        // Warning, etc.) have been sent.  Spawning it earlier causes a
-        // deadlock: the relay fills the bounded event_tx channel, blocking
-        // resume_session from sending its own events while nobody is
-        // consuming from event_rx yet.
-        if !deferred_replay_events.is_empty() {
+        if !deferred_replay_client_events.is_empty() {
+            let backend_event_tx = backend.backend_event_tx.clone();
             tokio::spawn(async move {
-                for event in deferred_replay_events {
-                    let _ = event_tx.send(event).await;
+                for client_event in deferred_replay_client_events {
+                    let _ = backend_event_tx
+                        .send(BackendEvent::Client(client_event))
+                        .await;
                 }
             });
         }

@@ -18,6 +18,15 @@ impl ChatWidget {
                     return;
                 }
             }
+            if let Some(tool_cell) = active.as_any().downcast_ref::<ClientToolCell>()
+                && tool_cell.is_active()
+            {
+                let pending_ids = tool_cell.pending_call_ids();
+                if !pending_ids.is_empty() {
+                    self.pending_exec_cells.save_pending(pending_ids, active);
+                    return;
+                }
+            }
             // Normal flush path - cell is complete or not an ExecCell
             self.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
@@ -40,6 +49,11 @@ impl ChatWidget {
                     c.as_any()
                         .downcast_ref::<ExecCell>()
                         .map(|exec| !exec.is_active())
+                        .or_else(|| {
+                            c.as_any()
+                                .downcast_ref::<ClientToolCell>()
+                                .map(|tool| !tool.is_active())
+                        })
                         .unwrap_or(true)
                 })
                 .unwrap_or(true);
@@ -422,6 +436,8 @@ impl ChatWidget {
             // Insert finalized cell into history and keep grouping consistent.
             if let Some(exec) = cell.as_any_mut().downcast_mut::<ExecCell>() {
                 exec.mark_failed();
+            } else if let Some(tool) = cell.as_any_mut().downcast_mut::<ClientToolCell>() {
+                tool.mark_failed();
             } else if let Some(tool) = cell.as_any_mut().downcast_mut::<McpToolCallCell>() {
                 tool.mark_failed();
             }

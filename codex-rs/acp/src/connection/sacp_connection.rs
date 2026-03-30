@@ -270,6 +270,7 @@ impl SacpConnection {
                             let (response_tx, response_rx) = oneshot::channel();
                             let approval = ApprovalRequest {
                                 event,
+                                acp_request: request.clone(),
                                 options: request.options.clone(),
                                 response_tx,
                                 tool_call_metadata,

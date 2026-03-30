@@ -212,8 +212,9 @@ fn test_transcript_contains_assistant_message() {
 
     // Verify assistant message is in transcript
     assert!(
-        content.contains("\"type\":\"assistant\""),
-        "Transcript should contain assistant entry. Content:\n{}",
+        content.contains("\"type\":\"assistant\"")
+            || content.contains("\"type\":\"client_event\",\"event\":{\"event_type\":\"message_delta\",\"stream\":\"answer\""),
+        "Transcript should contain assistant text or normalized answer message deltas. Content:\n{}",
         content
     );
     assert!(

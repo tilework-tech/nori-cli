@@ -22,6 +22,7 @@ use super::project::ProjectId;
 use super::project::compute_project_id;
 use super::types::AssistantEntry;
 use super::types::Attachment;
+use super::types::ClientEventEntry;
 use super::types::ContentBlock;
 use super::types::GitInfo;
 use super::types::PatchApplyEntry;
@@ -33,6 +34,7 @@ use super::types::TranscriptEntry;
 use super::types::TranscriptLine;
 use super::types::UserEntry;
 use super::types::now_iso8601;
+use nori_protocol::ClientEvent as NoriClientEvent;
 
 /// Commands sent to the background writer task.
 enum TranscriptCmd {
@@ -157,6 +159,14 @@ impl TranscriptRecorder {
             input: input.clone(),
         });
         self.send_entry(entry).await
+    }
+
+    /// Record a normalized ACP-native client event.
+    pub async fn record_client_event(&self, event: &NoriClientEvent) -> io::Result<()> {
+        self.send_entry(TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: event.clone(),
+        }))
+        .await
     }
 
     /// Record a tool result (when tool execution completes).
@@ -549,6 +559,46 @@ mod tests {
             }
             _ => panic!("Expected ToolResult entry"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_transcript_recorder_records_client_event() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let cwd = temp_dir.path();
+
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
+            .await
+            .unwrap();
+
+        let event = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            call_id: "call-001".to_string(),
+            title: "Edit /src/main.rs".to_string(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        });
+
+        recorder.record_client_event(&event).await.unwrap();
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        let content = tokio::fs::read_to_string(recorder.transcript_path())
+            .await
+            .unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+
+        assert_eq!(lines.len(), 2);
+
+        let client_event_line: TranscriptLine = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(
+            client_event_line.entry,
+            TranscriptEntry::ClientEvent(ClientEventEntry { event })
+        );
     }
 
     #[tokio::test]

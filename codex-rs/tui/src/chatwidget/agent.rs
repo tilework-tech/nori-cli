@@ -193,8 +193,9 @@ fn spawn_acp_agent(
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
-        // Create event channel for backend → TUI
-        let (event_tx, mut event_rx) = mpsc::channel(32);
+        // Create a single ACP backend → TUI channel for both control-plane
+        // and normalized session-domain events.
+        let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
@@ -260,7 +261,7 @@ fn spawn_acp_agent(
         // Race backend init against shutdown requests and a timeout.
         // This ensures the user can always exit even if the backend hangs.
         let backend = tokio::select! {
-            result = AcpBackend::spawn(&acp_config, event_tx) => {
+            result = AcpBackend::spawn(&acp_config, backend_event_tx) => {
                 match result {
                     Ok(b) => Arc::new(b),
                     Err(e) => {
@@ -330,9 +331,15 @@ fn spawn_acp_agent(
         // which drops event_tx, allowing event_rx to return None and this task to exit.
         drop(backend);
 
-        // Forward events to TUI
-        while let Some(event) = event_rx.recv().await {
-            app_event_tx.send(AppEvent::CodexEvent(event));
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                codex_acp::BackendEvent::Control(event) => {
+                    app_event_tx.send(AppEvent::CodexEvent(event));
+                }
+                codex_acp::BackendEvent::Client(client_event) => {
+                    app_event_tx.send(AppEvent::ClientEvent(client_event));
+                }
+            }
         }
     });
 
@@ -367,7 +374,7 @@ pub(crate) fn spawn_acp_agent_resume(
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     tokio::spawn(async move {
-        let (event_tx, mut event_rx) = mpsc::channel(32);
+        let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
@@ -431,7 +438,7 @@ pub(crate) fn spawn_acp_agent_resume(
                 &acp_config,
                 acp_session_id.as_deref(),
                 Some(&transcript),
-                event_tx,
+                backend_event_tx,
             ) => {
                 match result {
                     Ok(b) => Arc::new(b),
@@ -497,8 +504,15 @@ pub(crate) fn spawn_acp_agent_resume(
 
         drop(backend);
 
-        while let Some(event) = event_rx.recv().await {
-            app_event_tx.send(AppEvent::CodexEvent(event));
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                codex_acp::BackendEvent::Control(event) => {
+                    app_event_tx.send(AppEvent::CodexEvent(event));
+                }
+                codex_acp::BackendEvent::Client(client_event) => {
+                    app_event_tx.send(AppEvent::ClientEvent(client_event));
+                }
+            }
         }
     });
 

@@ -8,6 +8,7 @@ use crate::history_cell::AgentMessageCell;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::UserHistoryCell;
 use crate::history_cell::new_session_info;
+use codex_common::approval_presets::builtin_approval_presets;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
 use codex_core::protocol::AskForApproval;
@@ -16,6 +17,7 @@ use codex_core::protocol::EventMsg;
 use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol::SessionConfiguredEvent;
 use codex_protocol::ConversationId;
+use pretty_assertions::assert_eq;
 use ratatui::prelude::Line;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -104,6 +106,13 @@ fn make_test_app_with_channels() -> (
         rx,
         op_rx,
     )
+}
+
+fn approval_preset(id: &str) -> codex_common::approval_presets::ApprovalPreset {
+    builtin_approval_presets()
+        .into_iter()
+        .find(|preset| preset.id == id)
+        .expect("approval preset")
 }
 
 #[test]
@@ -262,6 +271,62 @@ async fn new_session_requests_shutdown_for_previous_conversation() {
         Ok(other) => panic!("expected Op::Shutdown, got {other:?}"),
         Err(_) => panic!("expected shutdown op to be sent"),
     }
+}
+
+#[test]
+fn apply_approval_preset_updates_app_widget_and_backend_for_agent_mode() {
+    let (mut app, _app_event_rx, mut op_rx) = make_test_app_with_channels();
+    let preset = approval_preset("auto");
+
+    app.apply_approval_preset(preset.approval, preset.sandbox.clone());
+
+    assert_eq!(app.config.approval_policy, preset.approval);
+    assert_eq!(app.config.sandbox_policy, preset.sandbox);
+    assert_eq!(
+        app.chat_widget.config_ref().approval_policy,
+        preset.approval
+    );
+    assert_eq!(app.chat_widget.config_ref().sandbox_policy, preset.sandbox);
+    assert_eq!(
+        op_rx.try_recv().expect("override turn context op"),
+        Op::OverrideTurnContext {
+            cwd: None,
+            approval_policy: Some(preset.approval),
+            sandbox_policy: Some(preset.sandbox),
+            model: None,
+            effort: None,
+            summary: None,
+        }
+    );
+    assert!(op_rx.try_recv().is_err(), "expected a single override op");
+}
+
+#[test]
+fn apply_approval_preset_updates_app_widget_and_backend_for_full_access() {
+    let (mut app, _app_event_rx, mut op_rx) = make_test_app_with_channels();
+    let preset = approval_preset("full-access");
+
+    app.apply_approval_preset(preset.approval, preset.sandbox.clone());
+
+    assert_eq!(app.config.approval_policy, preset.approval);
+    assert_eq!(app.config.sandbox_policy, preset.sandbox);
+    assert_eq!(
+        app.chat_widget.config_ref().approval_policy,
+        preset.approval
+    );
+    assert_eq!(app.chat_widget.config_ref().sandbox_policy, preset.sandbox);
+    assert_eq!(
+        op_rx.try_recv().expect("override turn context op"),
+        Op::OverrideTurnContext {
+            cwd: None,
+            approval_policy: Some(preset.approval),
+            sandbox_policy: Some(preset.sandbox),
+            model: None,
+            effort: None,
+            summary: None,
+        }
+    );
+    assert!(op_rx.try_recv().is_err(), "expected a single override op");
 }
 
 #[test]

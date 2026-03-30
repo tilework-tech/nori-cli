@@ -1,4 +1,6 @@
 use super::*;
+use codex_protocol::plan_tool::PlanItemArg;
+use codex_protocol::plan_tool::StepStatus;
 
 impl ChatWidget {
     pub(super) fn flush_answer_stream_with_separator(&mut self) {
@@ -1153,5 +1155,246 @@ impl ChatWidget {
         debug!("received {len} custom prompts");
         // Forward to bottom pane so the slash popup can show them now.
         self.bottom_pane.set_custom_prompts(ev.custom_prompts);
+    }
+
+    pub(crate) fn handle_client_event(&mut self, event: nori_protocol::ClientEvent) {
+        match event {
+            nori_protocol::ClientEvent::ApprovalRequest(approval) => {
+                self.handle_client_approval_request(approval);
+            }
+            nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => {
+                self.handle_client_tool_snapshot(tool_snapshot);
+            }
+            nori_protocol::ClientEvent::MessageDelta(message_delta) => {
+                self.handle_client_message_delta(message_delta);
+            }
+            nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => {
+                self.handle_client_plan_snapshot(plan_snapshot);
+            }
+            nori_protocol::ClientEvent::TurnLifecycle(turn_lifecycle) => {
+                self.handle_client_turn_lifecycle(turn_lifecycle);
+            }
+            nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
+                self.handle_client_replay_entry(replay_entry);
+            }
+        }
+    }
+
+    fn handle_client_message_delta(&mut self, message_delta: nori_protocol::MessageDelta) {
+        match message_delta.stream {
+            nori_protocol::MessageStream::Answer => {
+                self.on_agent_message_delta(message_delta.delta)
+            }
+            nori_protocol::MessageStream::Reasoning => {
+                self.on_agent_reasoning_delta(message_delta.delta);
+            }
+        }
+    }
+
+    fn handle_client_plan_snapshot(&mut self, plan_snapshot: nori_protocol::PlanSnapshot) {
+        self.on_plan_update(plan_snapshot_to_update_plan_args(plan_snapshot));
+    }
+
+    fn handle_client_turn_lifecycle(&mut self, turn_lifecycle: nori_protocol::TurnLifecycle) {
+        match turn_lifecycle {
+            nori_protocol::TurnLifecycle::Started => self.on_task_started(),
+            nori_protocol::TurnLifecycle::Completed { last_agent_message } => {
+                self.on_task_complete(last_agent_message)
+            }
+            nori_protocol::TurnLifecycle::Aborted { reason } => match reason {
+                nori_protocol::TurnAbortReason::Interrupted => {
+                    self.on_interrupted_turn(TurnAbortReason::Interrupted)
+                }
+                nori_protocol::TurnAbortReason::Replaced => {
+                    self.on_error("Turn aborted: replaced by a new task".to_owned())
+                }
+                nori_protocol::TurnAbortReason::Other(reason) => {
+                    self.on_error(format!("Turn aborted: {reason}"))
+                }
+            },
+            nori_protocol::TurnLifecycle::ContextCompacted { summary } => {
+                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
+            }
+        }
+    }
+
+    fn handle_client_replay_entry(&mut self, replay_entry: nori_protocol::ReplayEntry) {
+        match replay_entry {
+            nori_protocol::ReplayEntry::UserMessage { text } => {
+                self.add_to_history(history_cell::new_user_prompt(text));
+            }
+            nori_protocol::ReplayEntry::AssistantMessage { text } => {
+                self.handle_streaming_delta(text);
+                self.flush_answer_stream_with_separator();
+            }
+            nori_protocol::ReplayEntry::ReasoningMessage { text } => {
+                let cell = history_cell::new_reasoning_summary_block(text, &self.config);
+                self.add_boxed_history(cell);
+            }
+            nori_protocol::ReplayEntry::PlanSnapshot { snapshot } => {
+                self.add_to_history(history_cell::new_plan_update(
+                    plan_snapshot_to_update_plan_args(snapshot),
+                ));
+            }
+            nori_protocol::ReplayEntry::ToolSnapshot { snapshot } => {
+                self.handle_client_tool_snapshot(*snapshot);
+            }
+        }
+        self.request_redraw();
+    }
+
+    fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
+        let request = ApprovalRequest::ClientTool {
+            approval: Box::new(approval.clone()),
+            cwd: self.config.cwd.clone(),
+        };
+
+        self.flush_answer_stream_with_separator();
+        let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = &approval.subject;
+        if matches!(
+            snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) && let Some(changes) = crate::client_event_format::snapshot_file_changes(snapshot)
+        {
+            self.notify(Notification::EditApprovalRequested {
+                cwd: self.config.cwd.clone(),
+                changes: changes.keys().cloned().collect(),
+            });
+        } else if let Some(invocation) =
+            crate::client_event_format::format_invocation(&snapshot.invocation)
+        {
+            self.notify(Notification::ExecApprovalRequested {
+                command: invocation,
+            });
+        } else {
+            self.notify(Notification::ExecApprovalRequested {
+                command: approval.title.clone(),
+            });
+        }
+        self.bottom_pane.push_approval_request(request);
+        self.request_redraw();
+    }
+
+    fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        if self.turn_finished {
+            return;
+        }
+        self.flush_answer_stream_with_separator();
+        let snapshot2 = tool_snapshot.clone();
+        self.defer_or_handle(
+            |q| q.push_client_tool_snapshot(tool_snapshot),
+            |s| s.handle_client_tool_snapshot_now(snapshot2),
+        );
+    }
+
+    pub(crate) fn handle_client_tool_snapshot_deferred_now(
+        &mut self,
+        tool_snapshot: nori_protocol::ToolSnapshot,
+    ) {
+        self.handle_client_tool_snapshot_now(tool_snapshot);
+    }
+
+    fn handle_client_tool_snapshot_now(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        match tool_snapshot.kind {
+            nori_protocol::ToolKind::Edit
+            | nori_protocol::ToolKind::Delete
+            | nori_protocol::ToolKind::Move
+                if tool_snapshot.phase == nori_protocol::ToolPhase::Completed
+                    && crate::client_event_format::snapshot_file_changes(&tool_snapshot)
+                        .is_some() =>
+            {
+                self.handle_client_edit_tool_snapshot(tool_snapshot);
+            }
+            nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Read
+            | nori_protocol::ToolKind::Search
+            | nori_protocol::ToolKind::Fetch
+            | nori_protocol::ToolKind::Think
+            | nori_protocol::ToolKind::Other(_) => {
+                self.handle_client_native_tool_snapshot(tool_snapshot);
+            }
+            _ => {}
+        }
+        self.request_redraw();
+    }
+
+    fn handle_client_edit_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        let Some(changes) = crate::client_event_format::snapshot_file_changes(&tool_snapshot)
+        else {
+            return;
+        };
+
+        if self.turn_finished {
+            return;
+        }
+
+        self.session_stats.record_tool_call("Edit");
+        self.observe_directories_from_changes(&changes);
+        self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
+    }
+
+    fn handle_client_native_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        if let Some(cell) = self
+            .active_cell
+            .as_mut()
+            .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
+            && cell.call_id() == tool_snapshot.call_id
+        {
+            cell.apply_snapshot(tool_snapshot);
+            if !cell.is_active() && !cell.is_exploring() {
+                self.flush_active_cell();
+            }
+            return;
+        }
+        if let Some(pending_cell) = self.pending_exec_cells.retrieve(&tool_snapshot.call_id) {
+            self.flush_active_cell();
+            self.active_cell = Some(pending_cell);
+            if let Some(cell) = self
+                .active_cell
+                .as_mut()
+                .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
+            {
+                cell.apply_snapshot(tool_snapshot);
+                if !cell.is_active() && !cell.is_exploring() {
+                    self.flush_active_cell();
+                }
+                return;
+            }
+        }
+
+        self.flush_active_cell();
+        let should_flush = !matches!(
+            tool_snapshot.phase,
+            nori_protocol::ToolPhase::Pending
+                | nori_protocol::ToolPhase::PendingApproval
+                | nori_protocol::ToolPhase::InProgress
+        ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
+        self.active_cell = Some(Box::new(ClientToolCell::new(
+            tool_snapshot,
+            self.config.animations,
+        )));
+        if should_flush {
+            self.flush_active_cell();
+        }
+    }
+}
+
+fn plan_snapshot_to_update_plan_args(plan_snapshot: nori_protocol::PlanSnapshot) -> UpdatePlanArgs {
+    UpdatePlanArgs {
+        explanation: None,
+        plan: plan_snapshot
+            .entries
+            .into_iter()
+            .map(|entry| PlanItemArg {
+                step: entry.step,
+                status: match entry.status {
+                    nori_protocol::PlanStatus::Pending => StepStatus::Pending,
+                    nori_protocol::PlanStatus::InProgress => StepStatus::InProgress,
+                    nori_protocol::PlanStatus::Completed => StepStatus::Completed,
+                },
+            })
+            .collect(),
     }
 }

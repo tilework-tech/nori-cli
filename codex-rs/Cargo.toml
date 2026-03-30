@@ -32,6 +32,7 @@ members = [
     "acp",
     "installed",
     "mock-acp-agent",
+    "nori-protocol",
     "tui-pty-e2e",
 ]
 resolver = "2"
@@ -67,6 +68,7 @@ codex-process-hardening = { path = "process-hardening" }
 codex-protocol = { path = "protocol" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
+nori-protocol = { path = "nori-protocol" }
 nori-tui = { path = "tui" }
 codex-utils-cache = { path = "utils/cache" }
 codex-utils-image = { path = "utils/image" }

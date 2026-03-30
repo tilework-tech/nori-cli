@@ -191,7 +191,8 @@ impl AcpBackend {
         let async_post_agent_response_hooks = self.async_post_agent_response_hooks.clone();
         let hook_timeout = self.script_timeout;
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
-        let pending_tool_calls = Arc::clone(&self.pending_tool_calls);
+        let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
+        let backend_event_tx = self.backend_event_tx.clone();
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -203,14 +204,12 @@ impl AcpBackend {
             }
 
             // Send TaskStarted event
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone.clone(),
-                    msg: EventMsg::TaskStarted(codex_protocol::protocol::TaskStartedEvent {
-                        model_context_window: None,
-                    }),
-                })
-                .await;
+            emit_client_event(
+                &backend_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
+            )
+            .await;
 
             // Spawn update consumer task that returns accumulated text for transcript
             let event_tx_clone = event_tx.clone();
@@ -222,24 +221,18 @@ impl AcpBackend {
             let async_pre_tool_call_hooks_for_updates = async_pre_tool_call_hooks.clone();
             let async_post_tool_call_hooks_for_updates = async_post_tool_call_hooks.clone();
             let async_pre_agent_response_hooks_for_updates = async_pre_agent_response_hooks.clone();
+            let backend_event_tx_for_updates = backend_event_tx.clone();
             let update_handler = tokio::spawn(async move {
-                let mut event_sequence: u64 = 0;
                 // Accumulate assistant text for transcript recording
                 let mut accumulated_text = String::new();
                 // Track whether pre_agent_response hook has fired
                 let mut has_fired_pre_agent_response = false;
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
-                // Track call_ids that have already been recorded to the transcript.
-                let mut recorded_tool_call_ids: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
-                // Track pending patch operations: store FileChange data from ToolCall events
-                // so we can emit PatchApplyBegin on ToolCallUpdate (after approval).
-                let mut pending_patch_changes: std::collections::HashMap<
-                    String,
-                    std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
-                > = std::collections::HashMap::new();
                 while let Some(update) = update_rx.recv().await {
+                    let client_events =
+                        normalize_session_update(&client_event_normalizer, &update).await;
+                    forward_client_events(&backend_event_tx_for_updates, &client_events).await;
                     if has_agent_text
                         && matches!(
                             update,
@@ -284,6 +277,19 @@ impl AcpBackend {
                                 hook_timeout,
                                 env,
                             );
+                        }
+                    }
+
+                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+                        && let acp::ContentBlock::Text(text) = &chunk.content
+                    {
+                        if needs_agent_separator && has_agent_text && !text.text.starts_with('\n') {
+                            accumulated_text.push('\n');
+                            needs_agent_separator = false;
+                        }
+                        if !text.text.is_empty() {
+                            has_agent_text = true;
+                            accumulated_text.push_str(&text.text);
                         }
                     }
 
@@ -351,58 +357,16 @@ impl AcpBackend {
                         }
                     }
 
-                    let mut tool_calls = pending_tool_calls.lock().await;
                     if let Some(ref recorder) = transcript_recorder_for_updates {
-                        record_tool_events_to_transcript(
-                            &update,
-                            recorder,
-                            &mut recorded_tool_call_ids,
-                            &pending_patch_changes,
-                            &tool_calls,
-                        )
-                        .await;
-                    }
-                    let events = translate_session_update_to_events(
-                        &update,
-                        &mut pending_patch_changes,
-                        &mut tool_calls,
-                    );
-                    drop(tool_calls);
-                    for mut event_msg in events {
-                        // Accumulate text for transcript
-                        if let EventMsg::AgentMessageDelta(ref mut delta) = event_msg {
-                            if needs_agent_separator && has_agent_text {
-                                if !delta.delta.starts_with('\n') {
-                                    delta.delta =
-                                        format!("\n{delta_text}", delta_text = delta.delta);
-                                }
-                                needs_agent_separator = false;
+                        for client_event in &client_events {
+                            if let Err(e) = recorder.record_client_event(client_event).await {
+                                warn!(
+                                    "Failed to record normalized client event to transcript: {e}"
+                                );
                             }
-                            if !delta.delta.is_empty() {
-                                has_agent_text = true;
-                            }
-                            accumulated_text.push_str(&delta.delta);
                         }
-                        event_sequence += 1;
-                        debug!(
-                            target: "acp_event_flow",
-                            seq = event_sequence,
-                            event_type = get_event_msg_type(&event_msg),
-                            "ACP dispatch: sending event to TUI"
-                        );
-                        let _ = event_tx_clone
-                            .send(Event {
-                                id: id_for_updates.clone(),
-                                msg: event_msg,
-                            })
-                            .await;
                     }
                 }
-                debug!(
-                    target: "acp_event_flow",
-                    total_events = event_sequence,
-                    "ACP dispatch: update stream completed"
-                );
                 accumulated_text
             });
 
@@ -568,14 +532,16 @@ impl AcpBackend {
             }
 
             // Send TaskComplete event (always, to end the turn)
-            let _ = event_tx
-                .send(Event {
-                    id: id_clone,
-                    msg: EventMsg::TaskComplete(codex_protocol::protocol::TaskCompleteEvent {
+            emit_client_event(
+                &backend_event_tx,
+                transcript_recorder.as_ref(),
+                nori_protocol::ClientEvent::TurnLifecycle(
+                    nori_protocol::TurnLifecycle::Completed {
                         last_agent_message: None,
-                    }),
-                })
-                .await;
+                    },
+                ),
+            )
+            .await;
 
             // Start idle timer if configured
             if let Some(duration) = notify_after_idle.as_duration() {

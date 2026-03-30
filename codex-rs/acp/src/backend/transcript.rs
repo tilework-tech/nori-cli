@@ -5,45 +5,98 @@ use super::*;
 /// rejection is the real guard — but large summaries are worth logging.
 const TRANSCRIPT_SUMMARY_WARN_CHARS: usize = 200_000;
 
-/// Convert a loaded transcript into a list of `EventMsg` suitable for
-/// `SessionConfiguredEvent.initial_messages` (UI replay).
-///
-/// Only `User` and `Assistant` entries are converted; tool calls, results,
-/// patches, and session metadata are skipped since the UI does not need to
-/// replay the full tool lifecycle for display purposes.
-pub fn transcript_to_replay_events(transcript: &crate::transcript::Transcript) -> Vec<EventMsg> {
-    use codex_protocol::protocol::AgentMessageEvent;
-    use codex_protocol::protocol::UserMessageEvent;
+/// Convert a loaded transcript into normalized replay events suitable for ACP
+/// session resume. The replay stream is intentionally static: it reconstructs
+/// user/assistant history and completed normalized artifacts without reviving
+/// live approval or turn-lifecycle state.
+pub fn transcript_to_replay_client_events(
+    transcript: &crate::transcript::Transcript,
+) -> Vec<nori_protocol::ClientEvent> {
+    let mut replay = Vec::new();
 
-    transcript
-        .entries
-        .iter()
-        .filter_map(|line| match &line.entry {
+    for line in &transcript.entries {
+        match &line.entry {
             crate::transcript::TranscriptEntry::User(user) => {
-                Some(EventMsg::UserMessage(UserMessageEvent {
-                    message: user.content.clone(),
-                    images: None,
-                }))
+                replay.push(nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::UserMessage {
+                        text: user.content.clone(),
+                    },
+                ));
             }
             crate::transcript::TranscriptEntry::Assistant(assistant) => {
-                let text: String = assistant
-                    .content
-                    .iter()
-                    .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str()),
-                        ContentBlock::Thinking { .. } => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("");
-                if text.is_empty() {
-                    None
-                } else {
-                    Some(EventMsg::AgentMessage(AgentMessageEvent { message: text }))
+                for block in &assistant.content {
+                    match block {
+                        ContentBlock::Text { text } if !text.is_empty() => {
+                            replay.push(nori_protocol::ClientEvent::ReplayEntry(
+                                nori_protocol::ReplayEntry::AssistantMessage { text: text.clone() },
+                            ))
+                        }
+                        ContentBlock::Thinking { thinking } if !thinking.is_empty() => {
+                            replay.push(nori_protocol::ClientEvent::ReplayEntry(
+                                nori_protocol::ReplayEntry::ReasoningMessage {
+                                    text: thinking.clone(),
+                                },
+                            ))
+                        }
+                        _ => {}
+                    }
                 }
             }
-            _ => None,
-        })
-        .collect()
+            crate::transcript::TranscriptEntry::ClientEvent(client_event) => {
+                if let Some(replay_entry) = replay_entry_from_client_event(&client_event.event) {
+                    replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    replay
+}
+
+pub fn client_events_to_replay_client_events(
+    client_events: Vec<nori_protocol::ClientEvent>,
+) -> Vec<nori_protocol::ClientEvent> {
+    let mut replay = Vec::new();
+    let mut assistant = String::new();
+    let mut reasoning = String::new();
+
+    let flush_buffers = |replay: &mut Vec<nori_protocol::ClientEvent>,
+                         assistant: &mut String,
+                         reasoning: &mut String| {
+        if !reasoning.is_empty() {
+            replay.push(nori_protocol::ClientEvent::ReplayEntry(
+                nori_protocol::ReplayEntry::ReasoningMessage {
+                    text: std::mem::take(reasoning),
+                },
+            ));
+        }
+        if !assistant.is_empty() {
+            replay.push(nori_protocol::ClientEvent::ReplayEntry(
+                nori_protocol::ReplayEntry::AssistantMessage {
+                    text: std::mem::take(assistant),
+                },
+            ));
+        }
+    };
+
+    for event in client_events {
+        match event {
+            nori_protocol::ClientEvent::MessageDelta(message_delta) => match message_delta.stream {
+                nori_protocol::MessageStream::Answer => assistant.push_str(&message_delta.delta),
+                nori_protocol::MessageStream::Reasoning => reasoning.push_str(&message_delta.delta),
+            },
+            other => {
+                flush_buffers(&mut replay, &mut assistant, &mut reasoning);
+                if let Some(replay_entry) = replay_entry_from_client_event(&other) {
+                    replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
+                }
+            }
+        }
+    }
+
+    flush_buffers(&mut replay, &mut assistant, &mut reasoning);
+    replay
 }
 
 /// Convert a loaded transcript into a human-readable summary string suitable
@@ -58,6 +111,7 @@ pub fn transcript_to_replay_events(transcript: &crate::transcript::Transcript) -
 /// exceeds the model's context window, the agent will reject it with a
 /// "prompt too long" error, which is handled gracefully by the caller.
 pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> String {
+    let mut seen_tool_calls = std::collections::HashSet::new();
     let mut summary = String::new();
 
     for line in &transcript.entries {
@@ -82,6 +136,16 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
             crate::transcript::TranscriptEntry::ToolCall(tool) => {
                 summary.push_str(&format!("[Tool: {}]\n", tool.name));
             }
+            crate::transcript::TranscriptEntry::ClientEvent(client_event) => {
+                match &client_event.event {
+                    nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot)
+                        if seen_tool_calls.insert(tool_snapshot.call_id.clone()) =>
+                    {
+                        summary.push_str(&format!("[Tool: {}]\n", tool_snapshot.title));
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
@@ -95,4 +159,151 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
     }
 
     summary
+}
+
+fn replay_entry_from_client_event(
+    event: &nori_protocol::ClientEvent,
+) -> Option<nori_protocol::ReplayEntry> {
+    match event {
+        nori_protocol::ClientEvent::ToolSnapshot(snapshot)
+            if matches!(
+                snapshot.phase,
+                nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+            ) =>
+        {
+            Some(nori_protocol::ReplayEntry::ToolSnapshot {
+                snapshot: Box::new(snapshot.clone()),
+            })
+        }
+        nori_protocol::ClientEvent::ToolSnapshot(_) => None,
+        nori_protocol::ClientEvent::PlanSnapshot(snapshot) => {
+            Some(nori_protocol::ReplayEntry::PlanSnapshot {
+                snapshot: snapshot.clone(),
+            })
+        }
+        nori_protocol::ClientEvent::ApprovalRequest(_)
+        | nori_protocol::ClientEvent::MessageDelta(_)
+        | nori_protocol::ClientEvent::TurnLifecycle(_)
+        | nori_protocol::ClientEvent::ReplayEntry(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::transcript::AssistantEntry;
+    use crate::transcript::ClientEventEntry;
+    use crate::transcript::ContentBlock;
+    use crate::transcript::SessionMetaEntry;
+    use crate::transcript::Transcript;
+    use crate::transcript::TranscriptEntry;
+    use crate::transcript::TranscriptLine;
+    use crate::transcript::UserEntry;
+
+    fn make_transcript(entries: Vec<TranscriptEntry>) -> Transcript {
+        let meta = SessionMetaEntry {
+            session_id: "session-1".into(),
+            project_id: "project-1".into(),
+            started_at: "2025-01-01T00:00:00.000Z".into(),
+            cwd: PathBuf::from("/repo"),
+            agent: Some("claude-code".into()),
+            cli_version: "0.1.0".into(),
+            git: None,
+            acp_session_id: None,
+        };
+
+        let mut lines = vec![TranscriptLine::new(TranscriptEntry::SessionMeta(
+            meta.clone(),
+        ))];
+        lines.extend(entries.into_iter().map(TranscriptLine::new));
+
+        Transcript {
+            meta,
+            entries: lines,
+        }
+    }
+
+    #[test]
+    fn transcript_replay_client_events_preserve_user_assistant_and_tool_snapshot() {
+        let transcript = make_transcript(vec![
+            TranscriptEntry::User(UserEntry {
+                id: "user-1".into(),
+                content: "Inspect the repo".into(),
+                attachments: vec![],
+            }),
+            TranscriptEntry::Assistant(AssistantEntry {
+                id: "assistant-1".into(),
+                content: vec![
+                    ContentBlock::Thinking {
+                        thinking: "Need to inspect files".into(),
+                    },
+                    ContentBlock::Text {
+                        text: "I found the ACP bridge.".into(),
+                    },
+                ],
+                agent: Some("claude-code".into()),
+            }),
+            TranscriptEntry::ClientEvent(ClientEventEntry {
+                event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+                    call_id: "tool-1".into(),
+                    title: "Read Cargo.toml".into(),
+                    kind: nori_protocol::ToolKind::Read,
+                    phase: nori_protocol::ToolPhase::Completed,
+                    locations: vec![],
+                    invocation: Some(nori_protocol::Invocation::Read {
+                        path: PathBuf::from("Cargo.toml"),
+                    }),
+                    artifacts: vec![],
+                    raw_input: None,
+                    raw_output: None,
+                }),
+            }),
+            TranscriptEntry::ClientEvent(ClientEventEntry {
+                event: nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                    stream: nori_protocol::MessageStream::Answer,
+                    delta: "duplicate streamed text".into(),
+                }),
+            }),
+        ]);
+
+        let replay = transcript_to_replay_client_events(&transcript);
+
+        assert_eq!(
+            replay,
+            vec![
+                nori_protocol::ClientEvent::ReplayEntry(nori_protocol::ReplayEntry::UserMessage {
+                    text: "Inspect the repo".into(),
+                }),
+                nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::ReasoningMessage {
+                        text: "Need to inspect files".into(),
+                    },
+                ),
+                nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::AssistantMessage {
+                        text: "I found the ACP bridge.".into(),
+                    },
+                ),
+                nori_protocol::ClientEvent::ReplayEntry(nori_protocol::ReplayEntry::ToolSnapshot {
+                    snapshot: Box::new(nori_protocol::ToolSnapshot {
+                        call_id: "tool-1".into(),
+                        title: "Read Cargo.toml".into(),
+                        kind: nori_protocol::ToolKind::Read,
+                        phase: nori_protocol::ToolPhase::Completed,
+                        locations: vec![],
+                        invocation: Some(nori_protocol::Invocation::Read {
+                            path: PathBuf::from("Cargo.toml"),
+                        }),
+                        artifacts: vec![],
+                        raw_input: None,
+                        raw_output: None,
+                    }),
+                }),
+            ]
+        );
+    }
 }

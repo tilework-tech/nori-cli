@@ -234,6 +234,194 @@ fn approval_modal_patch_snapshot() {
 }
 
 #[test]
+fn normalized_answer_message_delta_starts_streaming_controller() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "Here is the normalized answer.\n".into(),
+        },
+    ));
+
+    assert!(
+        chat.stream_controller.is_some(),
+        "normalized answer deltas should start the live streaming controller"
+    );
+}
+
+#[test]
+fn normalized_reasoning_message_delta_updates_status_header() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Reasoning,
+            delta: "**Analyzing** the live ACP flow".into(),
+        },
+    ));
+
+    assert_eq!(chat.current_status_header, "Analyzing");
+}
+
+#[test]
+fn normalized_turn_started_sets_task_running() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
+        nori_protocol::TurnLifecycle::Started,
+    ));
+
+    assert!(chat.bottom_pane.is_task_running());
+}
+
+#[test]
+fn normalized_turn_aborted_restores_queued_messages_into_composer() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.bottom_pane.set_task_running(true);
+    chat.queued_user_messages
+        .push_back(UserMessage::from("first queued".to_string()));
+    chat.queued_user_messages
+        .push_back(UserMessage::from("second queued".to_string()));
+    chat.refresh_queued_user_messages();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
+        nori_protocol::TurnLifecycle::Aborted {
+            reason: nori_protocol::TurnAbortReason::Interrupted,
+        },
+    ));
+
+    assert_eq!(
+        chat.bottom_pane.composer_text(),
+        "first queued\nsecond queued"
+    );
+    assert!(chat.queued_user_messages.is_empty());
+    assert!(
+        op_rx.try_recv().is_err(),
+        "unexpected outbound op after interrupt"
+    );
+
+    let _ = drain_insert_history(&mut rx);
+}
+
+#[test]
+fn replay_entry_user_and_assistant_render_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ReplayEntry(
+        nori_protocol::ReplayEntry::UserMessage {
+            text: "Resume the session".into(),
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::ReplayEntry(
+        nori_protocol::ReplayEntry::AssistantMessage {
+            text: "Resuming now.".into(),
+        },
+    ));
+
+    let history = drain_insert_history(&mut rx);
+    assert!(
+        history.len() >= 2,
+        "replay entries should produce visible history output"
+    );
+}
+
+#[test]
+fn approval_modal_patch_from_client_event_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.approval_policy = AskForApproval::OnRequest;
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ApprovalRequest(
+        nori_protocol::ApprovalRequest {
+            call_id: "call-approve-patch-client-event".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-approve-patch-client-event".into(),
+                title: "Write README.md".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: PathBuf::from("README.md"),
+                        old_text: None,
+                        new_text: "hello\nworld\n".into(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        },
+    ));
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw patch approval modal");
+    assert_snapshot!(
+        "approval_modal_patch_from_client_event",
+        terminal.backend().vt100().screen().contents()
+    );
+}
+
+#[test]
+fn approval_modal_exec_from_client_event() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.approval_policy = AskForApproval::OnRequest;
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ApprovalRequest(
+        nori_protocol::ApprovalRequest {
+            call_id: "call-approve-exec-client-event".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-approve-exec-client-event".into(),
+                title: "Terminal".into(),
+                kind: nori_protocol::ToolKind::Execute,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Command {
+                    command: "git status".into(),
+                }),
+                artifacts: vec![],
+                raw_input: Some(serde_json::json!({"command": "git status"})),
+                raw_output: None,
+            }),
+        },
+    ));
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw exec approval modal");
+    let contents = terminal.backend().vt100().screen().contents();
+    assert!(
+        contents.contains("git status"),
+        "expected exec approval modal: {contents:?}"
+    );
+    assert!(
+        contents.contains("Terminal") && contents.to_lowercase().contains("execute"),
+        "expected native ACP approval title/kind in modal: {contents:?}"
+    );
+}
+
+#[test]
 fn interrupt_restores_queued_messages_into_composer() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
 
@@ -583,5 +771,427 @@ fn apply_patch_manual_approval_adjusts_header() {
     assert!(
         blob.contains("Added foo.txt") || blob.contains("Edited foo.txt"),
         "expected apply summary header for foo.txt: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_edit_tool_snapshot_renders_patch_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-complete".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileChanges {
+                changes: vec![nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                }],
+            }),
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: None,
+                new_text: "hello\nworld\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert_snapshot!("completed_edit_tool_snapshot", blob);
+}
+
+#[test]
+fn completed_delete_tool_snapshot_renders_patch_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-delete-complete".into(),
+            title: "Delete README.md".into(),
+            kind: nori_protocol::ToolKind::Delete,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Delete {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("hello\nworld\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({
+                "path": "README.md",
+                "content": "hello\nworld\n",
+            })),
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Deleted README.md"),
+        "expected delete summary in patch cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_move_tool_snapshot_renders_patch_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-move-complete".into(),
+            title: "Move README.md".into(),
+            kind: nori_protocol::ToolKind::Move,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Move {
+                    from_path: PathBuf::from("README.md"),
+                    to_path: PathBuf::from("docs/README.md"),
+                    old_text: Some("hello\nworld\n".into()),
+                    new_text: Some("hello\nworld\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({
+                "from": "README.md",
+                "to": "docs/README.md",
+            })),
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("README.md") && blob.contains("docs/README.md"),
+        "expected move summary in patch cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_execute_tool_snapshot_renders_native_tool_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-complete".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch main\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one exec history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
+        "expected native ACP tool status header in history cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("Command: git status"),
+        "expected native ACP invocation summary in history cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("Output:") || blob.contains("On branch main"),
+        "expected tool output in history cell: {blob:?}"
+    );
+}
+
+#[test]
+fn pending_execute_tool_snapshot_renders_native_tool_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-pending".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Pending,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Tool [pending]") || blob.contains("Tool [pending]:"),
+        "expected native ACP pending tool header: {blob:?}"
+    );
+    assert!(
+        blob.contains("Command: git status"),
+        "expected native ACP invocation summary in active tool cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    chat.on_agent_message_delta("Sure, let me check...\n".to_string());
+    chat.on_commit_tick();
+    let first_text = drain_insert_history(&mut rx);
+    assert!(
+        !first_text.is_empty(),
+        "first text block should have been committed to history"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-complete".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch main\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "git status"})),
+            raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+        },
+    ));
+
+    assert!(
+        chat.interrupts.is_empty(),
+        "completed execute client snapshot should not be deferred"
+    );
+
+    chat.on_agent_message_delta("Done!\n".to_string());
+    chat.on_commit_tick();
+    chat.on_task_complete(None);
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    let tool_pos = full.find("git status");
+    let done_pos = full.find("Done!");
+    assert!(
+        tool_pos.is_some(),
+        "tool call should appear in history: {full:?}"
+    );
+    assert!(
+        done_pos.is_some(),
+        "second text block should appear in history: {full:?}"
+    );
+    assert!(
+        tool_pos.unwrap() < done_pos.unwrap(),
+        "tool call should appear before second text block, but tool_pos={} >= done_pos={}\nfull output: {full:?}",
+        tool_pos.unwrap(),
+        done_pos.unwrap(),
+    );
+}
+
+#[test]
+fn completed_read_tool_snapshot_renders_native_tool_history_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-read-complete".into(),
+            title: "Read Cargo.toml".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("Cargo.toml"),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "[package]\nname = \"nori\"\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
+            raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
+        "expected native ACP completed tool header: {blob:?}"
+    );
+    assert!(
+        blob.contains("Read: Cargo.toml"),
+        "expected native ACP read invocation in tool cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_search_tool_snapshot_renders_native_tool_history_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-search-complete".into(),
+            title: "Search src".into(),
+            kind: nori_protocol::ToolKind::Search,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some(PathBuf::from("src")),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "src/main.rs:12:// TODO\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
+            raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
+        "expected native ACP tool header: {blob:?}"
+    );
+    assert!(
+        blob.contains("TODO"),
+        "expected search query in exploring cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("src"),
+        "expected search path in exploring cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_list_files_tool_snapshot_renders_native_tool_history_cell() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-list-complete".into(),
+            title: "List src".into(),
+            kind: nori_protocol::ToolKind::Search,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::ListFiles {
+                path: Some(PathBuf::from("src")),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "src/main.rs\nsrc/lib.rs\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({"path": "src"})),
+            raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Tool [completed]") || blob.contains("Tool [completed]:"),
+        "expected native ACP tool header: {blob:?}"
+    );
+    assert!(
+        blob.contains("src"),
+        "expected list target in exploring cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_generic_execute_tool_snapshot_renders_native_tool_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_generic_test_001".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "command output here".into(),
+            }],
+            raw_input: None,
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "command output here",
+            })),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one exec history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Tool [completed]: Terminal (execute)"),
+        "expected native ACP generic tool title in history cell: {blob:?}"
+    );
+    assert!(
+        !blob.contains("toolu_generic_test_001"),
+        "raw call id should not be rendered in history cell: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_fetch_tool_snapshot_renders_exec_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-fetch-complete".into(),
+            title: "Fetch".into(),
+            kind: nori_protocol::ToolKind::Fetch,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Tool {
+                tool_name: "Fetch".into(),
+                input: Some(serde_json::json!({
+                    "url": "https://example.com",
+                })),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "ok\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({
+                "url": "https://example.com",
+            })),
+            raw_output: Some(serde_json::json!({
+                "stdout": "ok\n",
+            })),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one exec history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("Fetch"),
+        "expected tool title in history cell: {blob:?}"
+    );
+    assert!(
+        blob.contains("ok"),
+        "expected output in history cell: {blob:?}"
     );
 }

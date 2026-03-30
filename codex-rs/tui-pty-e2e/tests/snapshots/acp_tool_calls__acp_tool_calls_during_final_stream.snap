@@ -2,19 +2,21 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
-› Analyze the codebase
-
-• Explored
-  └ Read file1.rs, file2.rs
-
 ────────────────────────────────────────────────────────────────────────────────
 
 • Here is my analysis of the codebase.
 
-• Explored
-  └ Read SKILL.md
-    Search undefined
-    Read config.toml
+• Tool [completed]: Reading SKILL.md (read)
+  └ Read: .claude/skills/using-skills/SKILL.md
+    Output: SKILL.md read successfully
+
+• Tool [completed]: Searching for undefined (search)
+  └ Search: undefined
+    Output: Found 5 matches
+
+• Tool [completed]: Reading config.toml (read)
+  └ Read: config.toml
+    Output: config.toml read successfully
 
 ────────────────────────────────────────────────────────────────────────────────
 
