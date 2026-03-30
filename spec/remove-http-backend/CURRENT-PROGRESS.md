@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Fifth component removed
+## Status: Sixth component removed
 
 ### Completed: Remove compact_remote module
 
@@ -113,7 +113,30 @@ Removed the `WireApi` enum from codex-core entirely. After previous commits remo
 
 **Impact:** Net ~-70 lines across codex-core source and tests. All existing tests pass (codex-core: 536 unit, 440 integration pass, 22 pre-existing nvm environment failures; codex-api: 2 tests; E2E: 6 tests).
 
+### Completed: Introduce `legacy-http-backend` feature flag and gate HTTP-backend public API
+
+Introduced a `legacy-http-backend` cargo feature in codex-core to begin gating HTTP-backend-only code. When the feature is OFF (which it is for all downstream crates: nori-tui, nori-cli, codex-acp), the HTTP-backend types are invisible in codex-core's public API.
+
+**What was gated behind `#[cfg(feature = "legacy-http-backend")]`:**
+- `codex_conversation` module and `CodexConversation` re-export
+- `conversation_manager` module and `ConversationManager` / `NewConversation` re-exports
+- Re-exports of `ModelClient`, `Prompt`, `ResponseEvent`, `ResponseStream`
+
+**What was simplified:**
+- `pub mod api_bridge;` → `pub(crate) mod api_bridge;` (no external consumers)
+- `pub mod codex;` → `pub(crate) mod codex;` (no external consumers)
+- `compact.rs`: `use crate::Prompt` → `use crate::client_common::Prompt` (direct path instead of gated re-export)
+- Clippy: removed unused `use serde_json;` from codex/mod.rs
+
+**What was preserved:**
+- Dev-dependencies enable `legacy-http-backend`, so all existing tests compile and pass
+- All internal module implementations unchanged — only lib.rs declarations/re-exports and Cargo.toml modified
+- No behavioral changes
+
+**Impact:** 6 HTTP-backend types removed from codex-core's default public API. All existing tests pass (codex-core: 537 unit, 441 integration pass, 21 pre-existing nvm environment failures; E2E: 6 tests).
+
 ### Suggested next steps for future commits
-1. Remove the `codex_conversation.rs` and `conversation_manager.rs` wrappers (only used by HTTP backend tests — would cascade to ~30 integration test modules, so consider rewriting tests to use ACP path first)
-2. Feature-gate `codex-api` dependency in codex-core behind a `legacy-http-backend` cargo feature
-3. Eventually: remove the `codex-api` and `codex-client` crates entirely
+1. Gate `client.rs`, `api_bridge.rs`, and `sandboxing/assessment.rs` behind `legacy-http-backend` (requires also gating compact.rs HTTP-only functions)
+2. Make `codex-api` an optional dependency (`dep:codex-api`) enabled by `legacy-http-backend`
+3. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
+4. Eventually: remove the `codex-api` and `codex-client` crates entirely

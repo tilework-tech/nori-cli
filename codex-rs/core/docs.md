@@ -64,10 +64,7 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend`) and handles:
-- Session creation and resumption
-- Message history tracking
-- Token usage accumulation
+**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend`) and handles session creation/resumption, message history tracking, and token usage accumulation. Note: `ConversationManager` is gated behind the `legacy-http-backend` feature (see below).
 
 **Command Execution** (`exec.rs`, `sandboxing/`): Executes shell commands with optional sandboxing:
 - Linux: Landlock LSM (`landlock.rs`) + seccomp
@@ -89,7 +86,16 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 
 **MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model.
 
-**Data Flow:**
+**Data Flow (ACP path -- primary):**
+
+```
+User Input -> Op (UserTurn) -> AcpBackend (@/codex-rs/acp) -> Agent subprocess (JSON-RPC)
+    |
+    v
+Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
+```
+
+**Data Flow (legacy HTTP path -- behind `legacy-http-backend` feature):**
 
 ```
 User Input -> Op (UserTurn) -> ConversationManager -> ModelClient -> ResponseStream
@@ -103,6 +109,21 @@ Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 `client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. The `ModelProviderInfo` struct in `model_provider_info.rs` defines provider configuration (base URL, auth, retry/timeout settings, headers) and converts to a `codex-api::Provider` via `to_api_provider()`.
 
 ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
+
+**Feature Gating -- `legacy-http-backend`:**
+
+The `legacy-http-backend` cargo feature (defined in `core/Cargo.toml`) gates HTTP-backend-only types out of the public API for downstream crates that only use ACP. When the feature is **disabled** (the default), the following are hidden:
+
+| Gated Item | Module |
+|---|---|
+| `CodexConversation` | `codex_conversation` |
+| `ConversationManager`, `NewConversation` | `conversation_manager` |
+| `ModelClient` | `client` |
+| `Prompt`, `ResponseEvent`, `ResponseStream` | `client_common` |
+
+The feature is enabled in `[dev-dependencies]` so that the core crate's own test suite still compiles against these types. No downstream crate (`nori-tui`, `nori-cli`, `codex-acp`) enables this feature -- they exclusively use the ACP path.
+
+Additionally, `api_bridge` and `codex` are `pub(crate)` rather than `pub` since no external crate imports them directly.
 
 **User Notifications:**
 

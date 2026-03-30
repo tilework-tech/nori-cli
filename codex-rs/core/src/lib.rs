@@ -5,14 +5,16 @@
 // the TUI or the tracing stack).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
-pub mod api_bridge;
+pub(crate) mod api_bridge;
 mod apply_patch;
 pub mod auth;
 pub mod bash;
 mod client;
 mod client_common;
-pub mod codex;
+pub(crate) mod codex;
+#[cfg(feature = "legacy-http-backend")]
 mod codex_conversation;
+#[cfg(feature = "legacy-http-backend")]
 pub use codex_conversation::CodexConversation;
 mod command_safety;
 pub mod config;
@@ -52,10 +54,13 @@ pub use model_provider_info::ModelProviderInfo;
 pub use model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 pub use model_provider_info::built_in_model_providers;
 pub use model_provider_info::create_oss_provider_with_base_url;
+#[cfg(feature = "legacy-http-backend")]
 mod conversation_manager;
 mod event_mapping;
 pub use codex_protocol::protocol::InitialHistory;
+#[cfg(feature = "legacy-http-backend")]
 pub use conversation_manager::ConversationManager;
+#[cfg(feature = "legacy-http-backend")]
 pub use conversation_manager::NewConversation;
 // Re-export common auth types for workspace consumers
 pub use auth::AuthManager;
@@ -103,9 +108,13 @@ pub use codex_protocol::protocol;
 // as those in the protocol crate when constructing protocol messages.
 pub use codex_protocol::config_types as protocol_config_types;
 
+#[cfg(feature = "legacy-http-backend")]
 pub use client::ModelClient;
+#[cfg(feature = "legacy-http-backend")]
 pub use client_common::Prompt;
+#[cfg(feature = "legacy-http-backend")]
 pub use client_common::ResponseEvent;
+#[cfg(feature = "legacy-http-backend")]
 pub use client_common::ResponseStream;
 pub use codex_protocol::models::ContentItem;
 pub use codex_protocol::models::LocalShellAction;

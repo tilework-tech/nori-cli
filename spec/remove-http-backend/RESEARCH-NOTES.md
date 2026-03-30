@@ -159,10 +159,41 @@ After removing `WireApi` from codex-api, the codex-core `WireApi` is a two-varia
 **Docs to update:**
 - `core/docs.md` — Remove WireApi references
 
-## Approach: Feature-gate codex-api (future)
+## Feature-gating the HTTP backend: detailed cascade analysis
 
-Add a `legacy-http-backend` feature to codex-core:
-- Makes `codex-api` an optional dependency
-- Gates HTTP-backend-only modules with `#[cfg(feature = "legacy-http-backend")]`
-- Dev-dependencies enable the feature so all tests pass
-- Downstream crates (acp, tui, cli) do NOT enable it
+### Downstream crate dependencies on HTTP-backend types
+
+**Critical finding:** None of the downstream crates (tui, cli, acp) import ANY of these HTTP-backend types:
+- `ModelClient`, `Prompt`, `ResponseEvent`, `ResponseStream`
+- `CodexConversation`, `ConversationManager`, `NewConversation`
+- `ModelProviderInfo`, `built_in_model_providers`, `create_oss_provider_with_base_url`
+
+The TUI uses: `codex_core::protocol::*`, `codex_core::config::*`, `codex_core::auth::*`, `codex_core::rollout::*`, and utility modules.
+The CLI uses: `codex_core::config::*`, `codex_core::auth::*`, sandbox-related modules.
+The ACP uses: `codex_core::config::types::McpServerConfig`, `codex_core::compact::{SUMMARIZATION_PROMPT, SUMMARY_PREFIX}`.
+
+### Cascade from gating `codex/` module
+
+**Problem:** `codex::Session` and `codex::TurnContext` permeate almost every module:
+- `tools/` (context.rs, events.rs, sandboxing.rs, parallel.rs, router.rs, orchestrator.rs, handlers/*)
+- `tasks/` (all submodules)
+- `state/` (session.rs, turn.rs)
+- `compact.rs`, `apply_patch.rs`, `environment_context.rs`, `user_shell_command.rs`
+- `mcp_tool_call.rs`, `mcp_connection_manager.rs`, `context_manager/`, `unified_exec/`
+
+Gating `codex/` would cascade to gating most of the crate. Not viable for a single commit.
+
+### Safe leaf modules (no reverse dependencies from non-gated code)
+
+These modules are at the "top" of the dependency chain — nothing in core/src/ imports FROM them except lib.rs:
+1. `conversation_manager.rs` — imported only by lib.rs
+2. `codex_conversation.rs` — imported only by conversation_manager.rs and lib.rs
+3. `api_bridge.rs` — imported only by client.rs (HTTP-only, but client.rs is not being gated yet)
+
+### Strategy: Incremental feature-gating
+
+Phase 1 (this commit): Introduce `legacy-http-backend` feature. Gate leaf modules and HTTP-only re-exports.
+Phase 2 (future): Gate `client.rs`, `api_bridge.rs`, `sandboxing/assessment.rs` behind the feature.
+Phase 3 (future): Make `codex-api` an optional dependency (`dep:codex-api`).
+Phase 4 (future): Gate the codex/ module and its cascade (requires separating Session/TurnContext from shared infrastructure).
+Phase 5 (future): Remove codex-api and codex-client crates entirely.

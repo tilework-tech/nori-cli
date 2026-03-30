@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::Prompt;
+use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::codex::Session;
 use crate::codex::TurnContext;

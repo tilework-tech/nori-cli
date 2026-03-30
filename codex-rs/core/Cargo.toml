@@ -90,6 +90,7 @@ wildmatch = { workspace = true }
 
 [features]
 deterministic_process_ids = []
+legacy-http-backend = []
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -127,7 +128,7 @@ keyring = { workspace = true, features = ["sync-secret-service"] }
 assert_cmd = { workspace = true }
 assert_matches = { workspace = true }
 codex-arg0 = { workspace = true }
-codex-core = { path = ".", features = ["deterministic_process_ids"] }
+codex-core = { path = ".", features = ["deterministic_process_ids", "legacy-http-backend"] }
 core_test_support = { workspace = true }
 ctor = { workspace = true }
 escargot = { workspace = true }
