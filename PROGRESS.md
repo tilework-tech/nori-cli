@@ -6,7 +6,7 @@
 
 | # | Spec | Status | Branch/PR |
 |---|------|--------|-----------|
-| 1 | Spec 08: Gemini Empty Content Fallback | Not Started | — |
+| 1 | Spec 08: Gemini Empty Content Fallback | **Done** | feat/acp-tui-specs |
 | 2 | Spec 06: Artifact Text Output Cleanup | Not Started | — |
 | 3 | Spec 04: Path Display Normalization | Not Started | — |
 | 4 | Spec 05: In-Progress Edit/Delete/Move Rendering | Not Started | — |
@@ -17,23 +17,20 @@
 
 ### 1. Spec 08: Gemini Empty Content Fallback
 
-- [ ] **Normalizer: location-based invocation fallback**
-  - File: `nori-protocol/src/lib.rs:invocation_from_tool_call`
-  - When `raw_input` is None and `locations` is non-empty, synthesize invocation from kind + location
+- [x] **Normalizer: location-based invocation fallback**
+  - Added `location_fallback_invocation()` as tier 4 in `invocation_from_tool_call`
   - Read + location → `Invocation::Read { path }`
-  - Edit + location → `Invocation::FileOperations`
   - Search + location → `Invocation::Search { path, query: None }`
-- [ ] **Normalizer: Gemini title sanitization**
-  - File: `nori-protocol/src/lib.rs` (title processing in `tool_snapshot_from_tool_call` or a new helper)
-  - Strip `[current working directory ...]` suffix
-  - Strip trailing `(description text)` when kind is Execute
-- [ ] **TUI: minimal completed cell rendering**
-  - File: `tui/src/client_tool_cell.rs:render_generic_lines`
-  - When zero detail lines: show locations as sub-items, or title without `(kind)` suffix
-- [ ] **Tests**
-  - Normalizer tests for location fallback invocations
-  - Normalizer tests for title sanitization
-  - ClientToolCell rendering tests for minimal completed cells
+  - Edit/Delete/Move intentionally excluded — they fall through to TUI location-path fallback
+- [x] **Normalizer: Gemini title sanitization**
+  - Added `sanitize_title()` called from `tool_snapshot_from_tool_call`
+  - Strips `[current working directory ...]` suffix
+  - Strips trailing `(description text)` after cwd bracket removal
+- [x] **TUI: minimal completed cell rendering**
+  - Added location path fallback in `render_generic_lines()` when invocation and artifacts produce zero details
+- [x] **Tests**
+  - 7 normalizer tests: 2 location fallback (Read, Search), 1 Edit exclusion, 3 title sanitization (cwd+desc, cwd-only, parens edge case), 1 passthrough
+  - 2 TUI tests: location fallback rendering, header-only rendering
 
 ---
 
@@ -140,7 +137,19 @@
 
 ## Completed Work
 
-_(None yet)_
+### Spec 08: Gemini Empty Content Fallback
+
+**Commit:** feat/acp-tui-specs branch
+
+**Changes:**
+- `nori-protocol/src/lib.rs`: Added `sanitize_title()` (strips Gemini cwd/description metadata from titles) and `location_fallback_invocation()` (synthesizes Read/Search/Edit invocations from locations when raw_input is absent). Modified `tool_snapshot_from_tool_call` to sanitize titles and `invocation_from_tool_call` to use location fallback as tier 4.
+- `tui/src/client_tool_cell.rs`: Added location path fallback in `render_generic_lines()` — shows location paths as dim sub-items when invocation and artifact formatting produce nothing.
+- `nori-protocol/docs.md`: New noridoc for the nori-protocol crate.
+- `tui/docs.md`: Updated with location fallback documentation.
+
+**Observations:**
+- The description parenthetical strip only fires after a cwd bracket was found, preventing false positives on legitimate titles containing parentheses.
+- `sanitize_title` is applied at the protocol layer so all downstream consumers (TUI, transcript, approvals) benefit.
 
 ## Open Questions
 

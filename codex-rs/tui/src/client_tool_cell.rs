@@ -99,6 +99,13 @@ impl ClientToolCell {
             }
         }
 
+        // Fallback: show location paths when no other detail lines were produced
+        if details.is_empty() {
+            for location in &self.snapshot.locations {
+                details.push(location.path.display().to_string());
+            }
+        }
+
         for (idx, detail) in details.into_iter().enumerate() {
             let prefix = if idx == 0 { "  └ " } else { "    " };
             lines.push(Line::from(vec![prefix.dim(), detail.dim()]));
@@ -554,5 +561,63 @@ mod tests {
 
         assert!(lines[0].contains("Ran"));
         assert!(lines[0].contains("ls -la"));
+    }
+
+    // --- Spec 08: Gemini Empty Content Fallback ---
+
+    #[test]
+    fn generic_completed_with_no_details_but_locations_shows_location_paths() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-3".into(),
+            title: "Fetch resource".into(),
+            kind: ToolKind::Fetch,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: "/repo/README.md".into(),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should have more than just the header line
+        assert!(
+            lines.len() > 1,
+            "Expected location detail lines, got only: {lines:?}"
+        );
+        // Location path should appear in the detail lines
+        assert!(
+            lines.iter().any(|l| l.contains("/repo/README.md")),
+            "Expected location path in output, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_completed_with_no_details_no_locations_still_renders_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-4".into(),
+            title: "README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should still render at least a header line
+        assert!(!lines.is_empty(), "Expected at least a header line");
+        assert!(
+            lines[0].contains("README.md"),
+            "Header should contain the title, got: {}",
+            lines[0]
+        );
     }
 }

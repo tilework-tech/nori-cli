@@ -65,6 +65,8 @@ The execute rendering path reuses shared utilities from `exec_cell/render.rs` (`
 
 For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` normalizing shell-wrapper `rawInput.command` arrays and `rawInput.parsed_cmd` metadata into structured `Invocation::Command` / `Invocation::Read` / `Invocation::Search` / `Invocation::ListFiles` values. Without that normalization, `ClientToolCell` falls back to rendering raw protocol JSON instead of the compact command and exploration details the TUI expects.
 
+The generic rendering path (`render_generic_lines()`) has a final location fallback: when both invocation formatting and artifact formatting produce zero detail lines, it displays the `locations` paths from the `ToolSnapshot` as dim sub-items. This prevents completed tool cells from rendering as bare headers with no context, which occurs when agents (e.g., Gemini) send tool calls with empty `content` arrays and no `rawInput`/`rawOutput`.
+
 **Chronological Ordering Invariant** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
 
 Tool cells always appear in scrollback history before the agent text that follows them, matching the chronological order of execution. This is enforced by two mechanisms:

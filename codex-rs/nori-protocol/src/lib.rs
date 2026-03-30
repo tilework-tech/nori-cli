@@ -375,7 +375,7 @@ fn tool_snapshot_from_tool_call(tool_call: &acp::ToolCall, phase: ToolPhase) -> 
 
     ToolSnapshot {
         call_id: tool_call.tool_call_id.to_string(),
-        title: tool_call.title.clone(),
+        title: sanitize_title(&tool_call.title),
         kind: ToolKind::from_acp(tool_call.kind),
         phase,
         locations: tool_call
@@ -415,7 +415,68 @@ fn invocation_from_tool_call(
         return Some(invocation);
     }
 
-    tool_call.raw_input.clone().map(Invocation::RawJson)
+    if let Some(json) = &tool_call.raw_input {
+        return Some(Invocation::RawJson(json.clone()));
+    }
+
+    location_fallback_invocation(tool_call)
+}
+
+fn location_fallback_invocation(tool_call: &acp::ToolCall) -> Option<Invocation> {
+    let location = tool_call.locations.first()?;
+    let path = location.path.clone();
+
+    match tool_call.kind {
+        acp::ToolKind::Read => Some(Invocation::Read { path }),
+        acp::ToolKind::Search => Some(Invocation::Search {
+            query: None,
+            path: Some(path),
+        }),
+        // Edit/Delete/Move require more context (old_text/new_text) than a bare
+        // location provides. They fall through to the TUI's location-path fallback.
+        _ => None,
+    }
+}
+
+fn sanitize_title(title: &str) -> String {
+    const CWD_MARKER: &str = " [current working directory ";
+
+    let Some(cwd_start) = title.find(CWD_MARKER) else {
+        return title.to_string();
+    };
+
+    let before_cwd = &title[..cwd_start];
+    let after_marker = cwd_start + CWD_MARKER.len();
+
+    let remainder = if let Some(bracket_end) = title[after_marker..].find(']') {
+        let after_bracket = after_marker + bracket_end + 1;
+        title[after_bracket..].trim()
+    } else {
+        return before_cwd.trim().to_string();
+    };
+
+    if remainder.is_empty() {
+        return before_cwd.trim().to_string();
+    }
+
+    // Strip trailing (description text) from the remainder — Gemini appends these
+    // after the cwd bracket. Apply stripping to the remainder only, not the
+    // reconstituted string, to avoid removing parentheses in the command itself.
+    let remainder = if remainder.starts_with('(') && remainder.ends_with(')') {
+        ""
+    } else if let Some(paren_start) = remainder.rfind(" (")
+        && remainder.ends_with(')')
+    {
+        remainder[..paren_start].trim()
+    } else {
+        remainder
+    };
+
+    if remainder.is_empty() {
+        before_cwd.trim().to_string()
+    } else {
+        format!("{} {remainder}", before_cwd.trim())
+    }
 }
 
 fn artifacts_from_tool_call(tool_call: &acp::ToolCall) -> Vec<Artifact> {
@@ -1504,5 +1565,176 @@ mod tests {
                 })),
             })
         );
+    }
+
+    // --- Spec 08: Gemini Empty Content Fallback ---
+
+    #[test]
+    fn normalizer_synthesizes_read_invocation_from_location_when_no_raw_input() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(acp::ToolCallId::new("read-1"), "README.md")
+                .kind(acp::ToolKind::Read)
+                .status(acp::ToolCallStatus::Completed)
+                .locations(vec![acp::ToolCallLocation::new("/repo/README.md")]),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Read {
+                path: "/repo/README.md".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_synthesizes_search_invocation_from_location_when_no_raw_input() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(acp::ToolCallId::new("search-1"), "Search src")
+                .kind(acp::ToolKind::Search)
+                .status(acp::ToolCallStatus::Completed)
+                .locations(vec![acp::ToolCallLocation::new("/repo/src")]),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Search {
+                query: None,
+                path: Some("/repo/src".into()),
+            })
+        );
+    }
+
+    #[test]
+    fn normalizer_does_not_synthesize_edit_invocation_from_location() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(acp::ToolCallId::new("edit-1"), "file.rs")
+                .kind(acp::ToolKind::Edit)
+                .status(acp::ToolCallStatus::InProgress)
+                .locations(vec![acp::ToolCallLocation::new("/repo/file.rs")]),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        // Edit with only locations and no raw_input should NOT synthesize an
+        // invocation — it falls through to the TUI's location-path fallback.
+        assert_eq!(snapshot.invocation, None);
+    }
+
+    #[test]
+    fn normalizer_sanitizes_title_stripping_cwd_and_description() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(
+                acp::ToolCallId::new("exec-1"),
+                "echo \"hello\" [current working directory /home/user/project] (Create test file)",
+            )
+            .kind(acp::ToolKind::Execute)
+            .status(acp::ToolCallStatus::Completed)
+            .raw_input(serde_json::json!({"command": "echo \"hello\""})),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.title, "echo \"hello\"");
+    }
+
+    #[test]
+    fn normalizer_sanitizes_title_stripping_cwd_only() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(
+                acp::ToolCallId::new("exec-2"),
+                "ls -la [current working directory /home/user]",
+            )
+            .kind(acp::ToolKind::Execute)
+            .status(acp::ToolCallStatus::Completed)
+            .raw_input(serde_json::json!({"command": "ls -la"})),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.title, "ls -la");
+    }
+
+    #[test]
+    fn normalizer_title_without_brackets_passes_through() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(acp::ToolCallId::new("exec-3"), "echo \"hello world\"")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({"command": "echo \"hello world\""})),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.title, "echo \"hello world\"");
+    }
+
+    #[test]
+    fn normalizer_sanitizes_title_preserves_command_parens_without_description() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let tool_call = acp::SessionUpdate::ToolCall(
+            acp::ToolCall::new(
+                acp::ToolCallId::new("exec-4"),
+                "echo (hello) [current working directory /foo]",
+            )
+            .kind(acp::ToolKind::Execute)
+            .status(acp::ToolCallStatus::Completed)
+            .raw_input(serde_json::json!({"command": "echo (hello)"})),
+        );
+
+        let events = normalizer.push_session_update(&tool_call);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.title, "echo (hello)");
     }
 }
