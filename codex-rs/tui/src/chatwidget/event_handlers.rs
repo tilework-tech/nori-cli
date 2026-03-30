@@ -1330,18 +1330,15 @@ impl ChatWidget {
 
         // Merge into existing exploring cell when possible
         let is_new_exploring = crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
-        if is_new_exploring {
-            if let Some(cell) = self
+        if is_new_exploring
+            && let Some(cell) = self
                 .active_cell
                 .as_mut()
                 .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
-            {
-                if cell.is_exploring() {
+                && cell.is_exploring() {
                     cell.merge_exploring(tool_snapshot);
                     return;
                 }
-            }
-        }
 
         self.flush_active_cell();
         let should_flush = !matches!(
@@ -1401,11 +1398,9 @@ impl ChatWidget {
             .active_cell
             .as_ref()
             .and_then(|c| c.as_any().downcast_ref::<ClientToolCell>())
-        {
-            if cell.call_id() == tool_snapshot.call_id {
+            && cell.call_id() == tool_snapshot.call_id {
                 self.active_cell.take();
             }
-        }
 
         self.session_stats.record_tool_call("Edit");
         self.observe_directories_from_changes(&changes);
