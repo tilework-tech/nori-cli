@@ -54,14 +54,6 @@ impl ClientToolCell {
         is_exploring_snapshot(&self.snapshot)
     }
 
-    pub(crate) fn pending_call_ids(&self) -> Vec<String> {
-        if self.is_active() {
-            vec![self.snapshot.call_id.clone()]
-        } else {
-            Vec::new()
-        }
-    }
-
     pub(crate) fn apply_snapshot(&mut self, snapshot: nori_protocol::ToolSnapshot) {
         if self.snapshot.call_id != snapshot.call_id {
             return;

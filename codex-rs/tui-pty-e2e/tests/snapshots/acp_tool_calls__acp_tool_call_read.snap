@@ -6,9 +6,8 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • Test message 1Test message 2
 
-• Tool [completed]: Reading configuration file (read)
-  └ Read: /etc/config.toml
-    Output: Configuration loaded successfully
+• Explored
+  └ Read config.toml
 
 ────────────────────────────────────────────────────────────────────────────────
 

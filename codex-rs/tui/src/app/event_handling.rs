@@ -505,43 +505,6 @@ impl App {
                         "E X E C".to_string(),
                     ));
                 }
-                ApprovalRequest::ClientTool { approval, cwd } => {
-                    let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = &approval.subject;
-                    if matches!(
-                        snapshot.kind,
-                        nori_protocol::ToolKind::Edit
-                            | nori_protocol::ToolKind::Delete
-                            | nori_protocol::ToolKind::Move
-                    ) && let Some(changes) =
-                        crate::client_event_format::snapshot_file_changes(snapshot)
-                    {
-                        let _ = tui.enter_alt_screen();
-                        let diff_summary = DiffSummary::new(changes, cwd);
-                        self.overlay = Some(Overlay::new_static_with_renderables(
-                            vec![diff_summary.into()],
-                            "P A T C H".to_string(),
-                        ));
-                    } else {
-                        let _ = tui.enter_alt_screen();
-                        let mut lines = vec![Line::from(vec![
-                            "Tool: ".into(),
-                            format!(
-                                "{} ({})",
-                                approval.title,
-                                crate::client_event_format::format_tool_kind(&approval.kind)
-                            )
-                            .bold(),
-                        ])];
-                        if let Some(invocation) =
-                            crate::client_event_format::format_invocation(&snapshot.invocation)
-                        {
-                            lines.push(Line::from(""));
-                            lines.push(Line::from(invocation));
-                        }
-                        self.overlay =
-                            Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
-                    }
-                }
                 ApprovalRequest::McpElicitation {
                     server_name,
                     message,

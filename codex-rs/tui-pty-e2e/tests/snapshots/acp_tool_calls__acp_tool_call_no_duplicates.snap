@@ -6,11 +6,15 @@ expression: normalize_for_input_snapshot(contents)
 
 • Test message 1Test message 2
 
-• Running Executing interleaved command(test)
+• Running test
 
 ────────────────────────────────────────────────────────────────────────────────
 
-• Processing command...Interleaved test done.
+• Processing command...
+
+────────────────────────────────────────────────────────────────────────────────
+
+• Interleaved test done.
 
 › [DEFAULT_PROMPT]
 

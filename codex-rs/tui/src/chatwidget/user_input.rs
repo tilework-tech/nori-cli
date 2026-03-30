@@ -4,9 +4,9 @@ impl ChatWidget {
     pub(super) fn flush_active_cell(&mut self) {
         if let Some(active) = self.active_cell.take() {
             // Always flush to history to preserve chronological ordering.
-            // If this is an incomplete ExecCell, mark its pending call_ids as
-            // already-flushed so that later completion events don't create
-            // duplicate cells.
+            // If this is an incomplete ExecCell or ClientToolCell, mark its
+            // pending call_ids as already-flushed so that later completion
+            // events don't create duplicate cells.
             if let Some(exec_cell) = active.as_any().downcast_ref::<ExecCell>()
                 && exec_cell.is_active()
             {
@@ -14,6 +14,11 @@ impl ChatWidget {
                 for id in &pending_ids {
                     self.completed_client_tool_calls.insert(id.clone());
                 }
+            } else if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>()
+                && client_cell.is_active()
+            {
+                self.completed_client_tool_calls
+                    .insert(client_cell.call_id().to_owned());
             }
             self.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
@@ -407,6 +412,8 @@ impl ChatWidget {
                 exec.mark_failed();
             } else if let Some(tool) = cell.as_any_mut().downcast_mut::<McpToolCallCell>() {
                 tool.mark_failed();
+            } else if let Some(client) = cell.as_any_mut().downcast_mut::<ClientToolCell>() {
+                client.mark_failed();
             }
             self.add_boxed_history(cell);
         }

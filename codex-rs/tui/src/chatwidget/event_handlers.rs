@@ -1,4 +1,5 @@
 use super::*;
+use crate::client_tool_cell::ClientToolCell;
 use codex_protocol::plan_tool::PlanItemArg;
 use codex_protocol::plan_tool::StepStatus;
 
@@ -1271,8 +1272,11 @@ impl ChatWidget {
             {
                 self.handle_client_edit_tool_snapshot(tool_snapshot);
             }
-            nori_protocol::ToolKind::Execute
-            | nori_protocol::ToolKind::Read
+            // Execute snapshots use ClientToolCell for native rendering
+            nori_protocol::ToolKind::Execute => {
+                self.handle_client_native_tool_snapshot(tool_snapshot);
+            }
+            nori_protocol::ToolKind::Read
             | nori_protocol::ToolKind::Search
             | nori_protocol::ToolKind::Fetch
             | nori_protocol::ToolKind::Think
@@ -1284,8 +1288,7 @@ impl ChatWidget {
             {
                 self.handle_client_exec_like_tool_begin_snapshot(tool_snapshot);
             }
-            nori_protocol::ToolKind::Execute
-            | nori_protocol::ToolKind::Read
+            nori_protocol::ToolKind::Read
             | nori_protocol::ToolKind::Search
             | nori_protocol::ToolKind::Fetch
             | nori_protocol::ToolKind::Think
@@ -1298,6 +1301,51 @@ impl ChatWidget {
                 self.handle_client_exec_like_tool_snapshot(tool_snapshot);
             }
             _ => {}
+        }
+    }
+
+    fn handle_client_native_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        if self.turn_finished {
+            return;
+        }
+        self.flush_answer_stream_with_separator();
+
+        // Update existing active ClientToolCell if same call_id
+        if let Some(cell) = self
+            .active_cell
+            .as_mut()
+            .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
+            && cell.call_id() == tool_snapshot.call_id
+        {
+            cell.apply_snapshot(tool_snapshot);
+            if !cell.is_active() && !cell.is_exploring() {
+                self.flush_active_cell();
+            }
+            return;
+        }
+
+        // If this call_id was already flushed to history (e.g., due to
+        // interleaved text streaming), skip creating a duplicate cell.
+        if self
+            .completed_client_tool_calls
+            .contains(&tool_snapshot.call_id)
+        {
+            return;
+        }
+
+        self.flush_active_cell();
+        let should_flush = !matches!(
+            tool_snapshot.phase,
+            nori_protocol::ToolPhase::Pending
+                | nori_protocol::ToolPhase::PendingApproval
+                | nori_protocol::ToolPhase::InProgress
+        ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
+        self.active_cell = Some(Box::new(ClientToolCell::new(
+            tool_snapshot,
+            self.config.animations,
+        )));
+        if should_flush {
+            self.flush_active_cell();
         }
     }
 

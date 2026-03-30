@@ -4,13 +4,13 @@ expression: normalize_for_input_snapshot(contents)
 ---
 › Analyze code
 
-• Running Running tests(cargo test)
+• Running cargo test
 
 ────────────────────────────────────────────────────────────────────────────────
 
 • Analyzing the code.
 
-• Ran Running lint(cargo clippy)
+• Ran cargo clippy
   └ No files found
 
 ────────────────────────────────────────────────────────────────────────────────

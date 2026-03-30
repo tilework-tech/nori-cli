@@ -1,14 +1,3 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
-
-pub(crate) fn format_plan_status(status: &nori_protocol::PlanStatus) -> &'static str {
-    match status {
-        nori_protocol::PlanStatus::Pending => "pending",
-        nori_protocol::PlanStatus::InProgress => "in_progress",
-        nori_protocol::PlanStatus::Completed => "completed",
-    }
-}
-
 pub(crate) fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
     match kind {
         nori_protocol::ToolKind::Read => "read",
@@ -39,14 +28,6 @@ pub(crate) fn format_tool_header(snapshot: &nori_protocol::ToolSnapshot) -> Stri
         format_tool_phase(&snapshot.phase),
         snapshot.title,
         format_tool_kind(&snapshot.kind)
-    )
-}
-
-pub(crate) fn format_approval_header(approval: &nori_protocol::ApprovalRequest) -> String {
-    format!(
-        "Approval requested: {} ({})",
-        approval.title,
-        format_tool_kind(&approval.kind)
     )
 }
 
@@ -124,94 +105,4 @@ fn format_operation_paths(operations: &[nori_protocol::FileOperation]) -> String
         })
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-pub(crate) fn snapshot_file_changes(
-    snapshot: &nori_protocol::ToolSnapshot,
-) -> Option<HashMap<PathBuf, codex_core::protocol::FileChange>> {
-    match &snapshot.invocation {
-        Some(nori_protocol::Invocation::FileChanges { changes }) => {
-            let file_changes = changes
-                .iter()
-                .map(|change| (change.path.clone(), file_change_from_nori_change(change)))
-                .collect::<HashMap<_, _>>();
-            if file_changes.is_empty() {
-                None
-            } else {
-                Some(file_changes)
-            }
-        }
-        Some(nori_protocol::Invocation::FileOperations { operations }) => {
-            let file_changes = operations
-                .iter()
-                .map(file_change_from_nori_operation)
-                .collect::<HashMap<_, _>>();
-            if file_changes.is_empty() {
-                None
-            } else {
-                Some(file_changes)
-            }
-        }
-        _ => None,
-    }
-}
-
-fn file_change_from_nori_operation(
-    operation: &nori_protocol::FileOperation,
-) -> (PathBuf, codex_core::protocol::FileChange) {
-    match operation {
-        nori_protocol::FileOperation::Create { path, new_text } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Add {
-                content: new_text.clone(),
-            },
-        ),
-        nori_protocol::FileOperation::Update {
-            path,
-            old_text,
-            new_text,
-        } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Update {
-                unified_diff: diffy::create_patch(old_text, new_text).to_string(),
-                move_path: None,
-            },
-        ),
-        nori_protocol::FileOperation::Delete { path, old_text } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Delete {
-                content: old_text.clone().unwrap_or_default(),
-            },
-        ),
-        nori_protocol::FileOperation::Move {
-            from_path,
-            to_path,
-            old_text,
-            new_text,
-        } => {
-            let old_text = old_text.clone().unwrap_or_default();
-            let new_text = new_text.clone().unwrap_or_else(|| old_text.clone());
-            (
-                from_path.clone(),
-                codex_core::protocol::FileChange::Update {
-                    unified_diff: diffy::create_patch(&old_text, &new_text).to_string(),
-                    move_path: Some(to_path.clone()),
-                },
-            )
-        }
-    }
-}
-
-fn file_change_from_nori_change(
-    change: &nori_protocol::FileChange,
-) -> codex_core::protocol::FileChange {
-    match &change.old_text {
-        None => codex_core::protocol::FileChange::Add {
-            content: change.new_text.clone(),
-        },
-        Some(old_text) => codex_core::protocol::FileChange::Update {
-            unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
-            move_path: None,
-        },
-    }
 }

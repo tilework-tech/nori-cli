@@ -203,31 +203,34 @@ fn test_acp_tool_call_no_duplicate_messages() {
 
     let contents = session.screen_contents();
 
-    // Count occurrences of the tool title "Executing interleaved command"
-    // It should appear exactly ONCE (no duplicate entries)
-    let tool_title = "Executing interleaved command";
-    let count = contents.matches(tool_title).count();
+    // The Execute tool renders using the command from Invocation::Command
+    // (extracted from raw_input). The command is "test", so the TUI shows
+    // "Running test" (in-progress) or "Ran test" (completed).
+    // Count occurrences to verify no duplicates (both Running and Ran visible).
+    let running_count = contents.matches("Running test").count();
+    let ran_count = contents.matches("Ran test").count();
+    let total = running_count + ran_count;
 
     assert_eq!(
-        count, 1,
-        "Tool call '{}' should appear exactly once, but appeared {} times.\n\
-         This indicates duplicate messages (both 'Running' and 'Ran' states visible).\n\
-         Screen contents:\n{}",
-        tool_title, count, contents
+        total, 1,
+        "Execute tool should appear exactly once (either 'Running test' or 'Ran test'), \
+         but appeared {total} times (Running: {running_count}, Ran: {ran_count}).\n\
+         This indicates duplicate messages (both states visible).\n\
+         Screen contents:\n{contents}",
     );
 
     // The tool cell should appear BEFORE the interleaved text (correct chronological order)
     let tool_pos = contents
-        .find(tool_title)
-        .expect("Should contain tool title");
+        .find("Running test")
+        .or_else(|| contents.find("Ran test"))
+        .expect("Should contain tool cell with command");
     let text_pos = contents
         .find("Interleaved test done")
         .expect("Should contain final text");
     assert!(
         tool_pos < text_pos,
         "Tool cell should appear BEFORE final text (chronological order).\n\
-         Screen contents:\n{}",
-        contents
+         Screen contents:\n{contents}",
     );
 
     // Snapshot for visual verification
