@@ -189,10 +189,13 @@ pub(crate) fn sanitize_tool_title(title: &str, cwd: &Path) -> String {
         );
     }
 
-    // Step 2: strip trailing (description text) parenthetical
+    // Step 2: strip trailing (description text) parenthetical, but only if the opening
+    // paren is preceded by a space (to avoid clipping function names like "fn main()").
     let trimmed = result.trim_end();
     if trimmed.ends_with(')')
         && let Some(paren_start) = trimmed.rfind('(')
+        && paren_start > 0
+        && trimmed.as_bytes()[paren_start - 1] == b' '
     {
         result = trimmed[..paren_start].to_string();
     }
@@ -251,5 +254,13 @@ mod tests {
     fn sanitize_empty_title() {
         let result = sanitize_tool_title("", &PathBuf::from("/tmp"));
         assert_eq!(result, "");
+    }
+
+    #[test]
+    fn sanitize_preserves_function_parens_in_title() {
+        let title = "Execute fn main()";
+        let cwd = PathBuf::from("/tmp");
+        let result = sanitize_tool_title(title, &cwd);
+        assert_eq!(result, "Execute fn main()");
     }
 }

@@ -560,15 +560,16 @@ impl App {
                             "P A T C H".to_string(),
                         ));
                     } else {
-                        let mut lines = vec![Line::from(title)];
+                        let rel_title = client_event_format::relativize_paths_in_text(&title, &cwd);
+                        let mut lines = vec![Line::from(rel_title.clone())];
                         if let Some(inv_text) =
                             client_event_format::format_invocation(&snapshot.invocation)
-                            && !client_event_format::is_invocation_redundant(
-                                &inv_text,
-                                &snapshot.title,
-                            )
                         {
-                            lines.push(Line::from(inv_text));
+                            let rel_inv =
+                                client_event_format::relativize_paths_in_text(&inv_text, &cwd);
+                            if !client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
+                                lines.push(Line::from(rel_inv));
+                            }
                         }
                         for text in client_event_format::format_artifacts(&snapshot.artifacts) {
                             lines.push(Line::from(text));

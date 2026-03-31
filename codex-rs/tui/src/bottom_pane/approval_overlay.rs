@@ -500,10 +500,7 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                 {
                     let rel_inv =
                         crate::client_event_format::relativize_paths_in_text(&inv_text, &cwd);
-                    if !crate::client_event_format::is_invocation_redundant(
-                        &rel_inv,
-                        &snapshot.title,
-                    ) {
+                    if !crate::client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
                         lines.push(Line::from(rel_inv));
                     }
                 }
