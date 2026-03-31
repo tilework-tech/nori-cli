@@ -167,15 +167,15 @@ fn agent_message_finalizes_multiple_incomplete_cells() {
     );
 }
 
-/// Streaming scenario: when tool calls are started, text is streamed, and then
-/// TaskComplete arrives with an incomplete ExecCell still visible, the cell
-/// should be finalized. This matches the ACP flow where:
+/// Streaming scenario: when tool calls are started and text is streamed, the
+/// incomplete ExecCell should be flushed to history immediately to preserve
+/// chronological ordering (tool cell appears before the text that follows it).
+/// This matches the ACP flow where:
 /// 1. Agent starts tool calls
 /// 2. Agent streams its response text (via deltas)
-/// 3. TaskComplete arrives
-/// 4. Some tool End events haven't arrived yet
+/// 3. The tool cell should appear in history BEFORE the streamed text
 #[test]
-fn streaming_with_stuck_exec_cell_finalized_on_task_complete() {
+fn streaming_flushes_incomplete_exec_cell_before_text() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     // Start a task
@@ -191,7 +191,8 @@ fn streaming_with_stuck_exec_cell_finalized_on_task_complete() {
     begin_exec(&mut chat, "tool-1", "cat README.md");
     assert!(chat.active_cell.is_some());
 
-    // Stream agent text (creates stream_controller; doesn't flush incomplete ExecCell)
+    // Stream agent text — the incomplete ExecCell should be flushed to history
+    // first, so tool cells appear before the text in chronological order.
     chat.handle_codex_event(Event {
         id: "t1".into(),
         msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
@@ -200,27 +201,13 @@ fn streaming_with_stuck_exec_cell_finalized_on_task_complete() {
     });
     chat.on_commit_tick();
 
-    // The incomplete ExecCell should still be in active_cell during streaming
-    assert!(
-        chat.active_cell.is_some(),
-        "incomplete ExecCell should remain in active_cell during streaming"
-    );
-
-    // TaskComplete fires (no separate AgentMessage in this flow)
-    chat.handle_codex_event(Event {
-        id: "t1".into(),
-        msg: EventMsg::TaskComplete(TaskCompleteEvent {
-            last_agent_message: Some("Here is the file content:\n".into()),
-        }),
-    });
-
-    // active_cell must be None
+    // The incomplete ExecCell should have been flushed to history (not kept in active_cell)
     assert!(
         chat.active_cell.is_none(),
-        "active_cell should be None after task_complete with streaming"
+        "incomplete ExecCell should be flushed to history when text arrives"
     );
 
-    // The finalized cell should appear in history
+    // The flushed cell should appear in history before the streamed text
     let cells = drain_insert_history(&mut rx);
     let combined: String = cells
         .iter()
@@ -228,6 +215,6 @@ fn streaming_with_stuck_exec_cell_finalized_on_task_complete() {
         .collect();
     assert!(
         combined.contains("README.md"),
-        "finalized stuck cell should appear in history: {combined:?}"
+        "flushed incomplete cell should appear in history: {combined:?}"
     );
 }

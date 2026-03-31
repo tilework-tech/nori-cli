@@ -114,14 +114,6 @@ impl ChatWidget {
         self.add_plain_history_lines(lines);
     }
 
-    pub(crate) fn add_mcp_output(&mut self) {
-        if self.config.mcp_servers.is_empty() {
-            self.add_to_history(history_cell::empty_mcp_output());
-        } else {
-            self.submit_op(Op::ListMcpTools);
-        }
-    }
-
     /// Forward file-search results to the bottom pane.
     pub(crate) fn apply_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
         self.bottom_pane.on_file_search_result(query, matches);
@@ -208,6 +200,14 @@ impl ChatWidget {
     /// runtime overrides applied via TUI, e.g., model or approval policy).
     pub(crate) fn config_ref(&self) -> &Config {
         &self.config
+    }
+
+    /// Forward MCP auth statuses to the active bottom pane view.
+    pub(crate) fn update_mcp_auth_statuses(
+        &mut self,
+        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+    ) {
+        self.bottom_pane.update_mcp_auth_statuses(statuses);
     }
 
     /// Get a reference to the session statistics tracker.

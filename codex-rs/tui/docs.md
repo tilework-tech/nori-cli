@@ -57,6 +57,24 @@ The transcript pager overlay uses each history cell's transcript view rather tha
 
 Approval requests from ACP agents are handled through `bottom_pane/approval.rs`. Live ACP approvals arrive as `ClientEvent::ApprovalRequest`, are normalized into the TUI's existing approval UI model in `chatwidget/event_handlers.rs`, and then render through the same command/patch approval pane used elsewhere in the app.
 
+**ClientToolCell Rendering** (`client_tool_cell.rs`):
+
+`ClientToolCell` wraps a `nori_protocol::ToolSnapshot` and implements `HistoryCell`. It dispatches on `ToolKind` to select between two rendering paths: `ToolKind::Execute` uses `render_execute_lines(width)` for ExecCell-parity display (colored bullet, "Ran"/"Running" verb, bash syntax highlighting, output with truncation), while all other tool kinds use `render_generic_lines()` for the generic `"Tool [phase]: title (kind)"` format with invocation/artifact details.
+
+The execute rendering path reuses shared utilities from `exec_cell/render.rs` (`truncate_lines_middle`, `limit_lines_from_start`, `output_lines`, `spinner`) and layout constants that match the `ExecCell` display layout (`"  │ "` for command continuation, `"  └ "` for output). Output text is sourced preferentially from `raw_output["stdout"]`, falling back to `Artifact::Text` with code fence stripping. Exit code success is determined from `raw_output["exit_code"]` when present, otherwise inferred from `ToolPhase`.
+
+For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` normalizing shell-wrapper `rawInput.command` arrays and `rawInput.parsed_cmd` metadata into structured `Invocation::Command` / `Invocation::Read` / `Invocation::Search` / `Invocation::ListFiles` values. Without that normalization, `ClientToolCell` falls back to rendering raw protocol JSON instead of the compact command and exploration details the TUI expects.
+
+**Chronological Ordering Invariant** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
+
+Tool cells always appear in scrollback history before the agent text that follows them, matching the chronological order of execution. This is enforced by two mechanisms:
+
+- `handle_streaming_delta()` always calls `flush_active_cell()` before streaming text, even when the active cell contains an incomplete (still-running) ExecCell. The incomplete cell is sent to history immediately rather than held in `active_cell` until completion.
+- `flush_active_cell()` marks pending call_ids of incomplete ExecCells as completed (via `completed_client_tool_calls`) so that later completion events for the same call_ids do not create duplicate cells. The `pending_exec_cells` tracker is bypassed for this path -- cells go directly to history.
+- `add_boxed_history()` also always flushes the active cell first, applying the same ordering guarantee when non-streaming history cells are inserted.
+
+The trade-off: incomplete cells may appear in scrollback showing "Running"/"Exploring" status rather than their final "Ran"/"Explored" state, because they are flushed before completion events arrive.
+
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
 When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. The TUI adapts those normalized snapshots into the existing exec-cell and patch-cell machinery, and the relevant handlers call `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
@@ -77,7 +95,7 @@ The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, re
 
 | Transition | Trigger | Effect |
 |------------|---------|--------|
-| `turn_finished = true` | `on_agent_message()` | Closes the gate -- subsequent tool events are discarded |
+| `turn_finished = true` | `on_agent_message()`, `on_task_complete()` | Closes the gate -- subsequent tool events are discarded |
 | `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
 
 The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
@@ -96,10 +114,11 @@ on_agent_message():
 
 on_task_complete():
   1. flush_answer_stream_with_separator()
-  2. flush_completions_and_clear()
-  3. pending_exec_cells.drain_failed()
-  4. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
-  5. set_task_running(false)
+  2. turn_finished = true                    -- close the gate (mirrors on_agent_message)
+  3. flush_completions_and_clear()
+  4. pending_exec_cells.drain_failed()
+  5. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
+  6. set_task_running(false)
 ```
 
 `finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
@@ -188,8 +207,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and context window usage |
 | `/first-prompt` | Show the first prompt from this session |
-| `/mcp` | List configured MCP servers and tools |
-| `/mcp-servers` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
+| `/mcp` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
 | `/switch-skillset [name]` | Switch between available skillsets (with optional direct name) |
@@ -197,13 +215,9 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
-**`/mcp` Rendering** (`history_cell/mod.rs`):
+**`/mcp` Picker** (`nori/mcp_server_picker.rs`):
 
-`new_mcp_tools_output()` renders the `/mcp` output. It shows "No MCP tools available" only when both the tools map AND `config.mcp_servers` are empty. When MCP servers are configured but no individual tool names are available (as in ACP mode, where MCP connections are managed by the upstream agent), the function still renders per-server details -- command/URL, auth status, env vars -- with `"(none)"` for tools and resources. This allows the `/mcp` command to be useful in ACP mode for verifying server configuration and auth status even though the CLI does not have direct MCP connections.
-
-**`/mcp-servers` Picker** (`nori/mcp_server_picker.rs`):
-
-The `/mcp-servers` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
+The `/mcp` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
 
 | Mode | Purpose | Transitions |
 |------|---------|-------------|
@@ -221,19 +235,24 @@ The wizard field set matches Claude Code's `claude mcp add` command: transport t
 
 On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP), inserts it into the servers list, and calls `save_servers()`. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `ConfigEditsBuilder::replace_mcp_servers()` for atomic config file writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
 
-The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`.
+The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`. After creating the picker, it fires `AppEvent::ComputeMcpAuthStatuses` to asynchronously populate auth statuses.
 
 **MCP OAuth Login** (`nori/mcp_server_picker.rs`, `app/config_persistence.rs`):
 
-Pressing `l` in the `/mcp-servers` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
+Pressing `l` in the `/mcp` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
 
-The auth statuses flow through the system as follows:
+Auth statuses are computed asynchronously when the picker opens:
 ```
-McpListToolsResponseEvent.auth_statuses
-    -> ChatWidget.mcp_auth_statuses (stored in on_list_mcp_tools)
-    -> McpServerPickerView.auth_statuses (passed in open_mcp_servers_popup)
+open_mcp_servers_popup()
+    -> sends AppEvent::ComputeMcpAuthStatuses
+    -> App spawns tokio task calling codex_core::mcp::auth::compute_auth_statuses()
+    -> results delivered via AppEvent::McpAuthStatusesReady(HashMap)
+    -> ChatWidget.update_mcp_auth_statuses() -> BottomPane -> active BottomPaneView
+    -> McpServerPickerView.update_mcp_auth_statuses() stores statuses
     -> handle_list_login() checks status before emitting AppEvent::McpOAuthLogin
 ```
+
+The `BottomPaneView` trait has a default no-op `update_mcp_auth_statuses()` method; only `McpServerPickerView` implements it. This pattern pushes data INTO a view through the trait interface, since the view stack does not support downcasting.
 
 The `McpOAuthLogin` event carries `server_name`, `server_url`, `http_headers`, and `env_http_headers`. The handler in `app/config_persistence.rs` (`perform_mcp_oauth_login()`) suspends the TUI (leaves alt screen, disables raw mode), delegates to `codex_rmcp_client::perform_oauth_login()` from `@/codex-rs/rmcp-client/`, then restores the TUI (enables raw mode, enters alt screen). This suspension is necessary because the OAuth flow uses `println!` for status output and `webbrowser::open` for the browser callback. On success, an info message tells the user to restart to apply the new credentials.
 

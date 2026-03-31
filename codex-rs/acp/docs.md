@@ -770,6 +770,8 @@ For Edit/Write/Delete operations, the ACP backend normalizes file mutations into
 
 The transcript recorder uses the same normalized snapshot data when deciding how to persist tool activity, so the recorded transcript and live TUI stay aligned without requiring a separate patch translation path.
 
+For Codex specifically, the normalized tool snapshot path now understands the provider's `rawInput.command` shell-wrapper arrays (for example `["/usr/bin/zsh", "-lc", "df -h ."]`) and `rawInput.parsed_cmd` objects. This means execute tools normalize to `Invocation::Command`, read tools can recover paths from `parsed_cmd[0].path`, and search/list-files tools can recover query/path semantics from Codex's parsed command metadata instead of falling back to raw JSON in the TUI.
+
 **Tool Call Event Filtering and Title Accumulation:**
 
 The ACP backend accumulates display metadata across multiple `ToolCall` and `ToolCallUpdate` messages so the normalized tool snapshot keeps a stable title, kind, and raw input. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
@@ -934,14 +936,6 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 - If no snapshots exist when undo is requested, `UndoCompleted` reports `success: false`
 - Ghost commits are unreferenced git objects (not on any branch) created by the `codex-git` crate
 - `GhostSnapshotStack` is deliberately a standalone type (not embedded inside `AcpBackend`) so it can be tested independently without requiring an ACP agent connection
-
-**MCP Server Listing** (`submit_and_ops.rs`, `backend/mod.rs`):
-
-The ACP backend handles `Op::ListMcpTools` to support the `/mcp` slash command. In ACP mode, MCP connections are managed by the upstream ACP agent subprocess (which receives servers via `NewSessionRequest.mcp_servers` at session creation -- see **MCP Server Forwarding** in the Connection Management section above). The CLI cannot enumerate individual tools, resources, or templates -- those fields are sent as empty maps in the `McpListToolsResponseEvent`.
-
-Auth statuses *are* computed locally via `codex_core::mcp::auth::compute_auth_statuses()`, which checks OAuth/bearer token status without needing active MCP connections. The MCP server configuration (`mcp_servers`) and OAuth credentials store mode (`mcp_oauth_credentials_store_mode`) are carried on both `AcpBackendConfig` and `AcpBackend`, threaded from the TUI's `Config` through `spawn()` and `resume_session()`.
-
-The handler spawns a background task to compute auth statuses asynchronously, then sends the response event with empty tool/resource maps but populated `auth_statuses`.
 
 **ACP Error Categorization:**
 

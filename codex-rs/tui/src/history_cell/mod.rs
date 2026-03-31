@@ -22,12 +22,9 @@ use crate::wrapping::RtOptions;
 use crate::wrapping::word_wrap_line;
 use crate::wrapping::word_wrap_lines;
 use base64::Engine;
-use codex_common::format_env_display::format_env_display;
 use codex_core::config::Config;
-use codex_core::config::types::McpServerTransportConfig;
 use codex_core::config::types::ReasoningSummaryFormat;
 use codex_core::protocol::FileChange;
-use codex_core::protocol::McpAuthStatus;
 use codex_core::protocol::McpInvocation;
 use codex_core::protocol::SessionConfiguredEvent;
 use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
@@ -37,12 +34,8 @@ use codex_protocol::plan_tool::UpdatePlanArgs;
 use image::DynamicImage;
 use image::ImageReader;
 use mcp_types::EmbeddedResourceResource;
-use mcp_types::Resource;
 use mcp_types::ResourceLink;
-use mcp_types::ResourceTemplate;
 use ratatui::prelude::*;
-use ratatui::style::Modifier;
-use ratatui::style::Style;
 use ratatui::style::Styled;
 use ratatui::style::Stylize;
 use ratatui::widgets::Paragraph;
@@ -1084,183 +1077,6 @@ impl HistoryCell for DeprecationNoticeCell {
     }
 }
 
-/// Render a summary of configured MCP servers from the current `Config`.
-pub(crate) fn empty_mcp_output() -> PlainHistoryCell {
-    let lines: Vec<Line<'static>> = vec![
-        "/mcp".magenta().into(),
-        "".into(),
-        vec!["🔌  ".into(), "MCP Tools".bold()].into(),
-        "".into(),
-        "  • No MCP servers configured.".italic().into(),
-        Line::from(vec![
-            "    See the ".into(),
-            "\u{1b}]8;;https://github.com/tilework-tech/nori-cli/blob/main/docs/config.md#mcp_servers\u{7}MCP docs\u{1b}]8;;\u{7}".underlined(),
-            " to configure them.".into(),
-        ])
-        .style(Style::default().add_modifier(Modifier::DIM)),
-    ];
-
-    PlainHistoryCell { lines }
-}
-
-/// Render MCP tools grouped by connection using the fully-qualified tool names.
-pub(crate) fn new_mcp_tools_output(
-    config: &Config,
-    tools: HashMap<String, mcp_types::Tool>,
-    resources: HashMap<String, Vec<Resource>>,
-    resource_templates: HashMap<String, Vec<ResourceTemplate>>,
-    auth_statuses: &HashMap<String, McpAuthStatus>,
-) -> PlainHistoryCell {
-    let mut lines: Vec<Line<'static>> = vec![
-        "/mcp".magenta().into(),
-        "".into(),
-        vec!["🔌  ".into(), "MCP Tools".bold()].into(),
-        "".into(),
-    ];
-
-    if tools.is_empty() && config.mcp_servers.is_empty() {
-        lines.push("  • No MCP tools available.".italic().into());
-        lines.push("".into());
-        return PlainHistoryCell { lines };
-    }
-
-    let mut servers: Vec<_> = config.mcp_servers.iter().collect();
-    servers.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    for (server, cfg) in servers {
-        let prefix = format!("mcp__{server}__");
-        let mut names: Vec<String> = tools
-            .keys()
-            .filter(|k| k.starts_with(&prefix))
-            .map(|k| k[prefix.len()..].to_string())
-            .collect();
-        names.sort();
-
-        let auth_status = auth_statuses
-            .get(server.as_str())
-            .copied()
-            .unwrap_or(McpAuthStatus::Unsupported);
-        let mut header: Vec<Span<'static>> = vec!["  • ".into(), server.clone().into()];
-        if !cfg.enabled {
-            header.push(" ".into());
-            header.push("(disabled)".red());
-            lines.push(header.into());
-            lines.push(Line::from(""));
-            continue;
-        }
-        lines.push(header.into());
-        lines.push(vec!["    • Status: ".into(), "enabled".green()].into());
-        lines.push(vec!["    • Auth: ".into(), auth_status.to_string().into()].into());
-
-        match &cfg.transport {
-            McpServerTransportConfig::Stdio {
-                command,
-                args,
-                env,
-                env_vars,
-            } => {
-                let args_suffix = if args.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {}", args.join(" "))
-                };
-                let cmd_display = format!("{command}{args_suffix}");
-                lines.push(vec!["    • Command: ".into(), cmd_display.into()].into());
-
-                let env_display = format_env_display(env.as_ref(), env_vars);
-                if env_display != "-" {
-                    lines.push(vec!["    • Env: ".into(), env_display.into()].into());
-                }
-            }
-            McpServerTransportConfig::StreamableHttp {
-                url,
-                http_headers,
-                env_http_headers,
-                ..
-            } => {
-                lines.push(vec!["    • URL: ".into(), url.clone().into()].into());
-                if let Some(headers) = http_headers.as_ref()
-                    && !headers.is_empty()
-                {
-                    let mut pairs: Vec<_> = headers.iter().collect();
-                    pairs.sort_by(|(a, _), (b, _)| a.cmp(b));
-                    let display = pairs
-                        .into_iter()
-                        .map(|(name, _)| format!("{name}=*****"))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    lines.push(vec!["    • HTTP headers: ".into(), display.into()].into());
-                }
-                if let Some(headers) = env_http_headers.as_ref()
-                    && !headers.is_empty()
-                {
-                    let mut pairs: Vec<_> = headers.iter().collect();
-                    pairs.sort_by(|(a, _), (b, _)| a.cmp(b));
-                    let display = pairs
-                        .into_iter()
-                        .map(|(name, var)| format!("{name}={var}"))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    lines.push(vec!["    • Env HTTP headers: ".into(), display.into()].into());
-                }
-            }
-        }
-
-        if names.is_empty() {
-            lines.push("    • Tools: (none)".into());
-        } else {
-            lines.push(vec!["    • Tools: ".into(), names.join(", ").into()].into());
-        }
-
-        let server_resources: Vec<Resource> =
-            resources.get(server.as_str()).cloned().unwrap_or_default();
-        if server_resources.is_empty() {
-            lines.push("    • Resources: (none)".into());
-        } else {
-            let mut spans: Vec<Span<'static>> = vec!["    • Resources: ".into()];
-
-            for (idx, resource) in server_resources.iter().enumerate() {
-                if idx > 0 {
-                    spans.push(", ".into());
-                }
-
-                let label = resource.title.as_ref().unwrap_or(&resource.name);
-                spans.push(label.clone().into());
-                spans.push(" ".into());
-                spans.push(format!("({})", resource.uri).dim());
-            }
-
-            lines.push(spans.into());
-        }
-
-        let server_templates: Vec<ResourceTemplate> = resource_templates
-            .get(server.as_str())
-            .cloned()
-            .unwrap_or_default();
-        if server_templates.is_empty() {
-            lines.push("    • Resource templates: (none)".into());
-        } else {
-            let mut spans: Vec<Span<'static>> = vec!["    • Resource templates: ".into()];
-
-            for (idx, template) in server_templates.iter().enumerate() {
-                if idx > 0 {
-                    spans.push(", ".into());
-                }
-
-                let label = template.title.as_ref().unwrap_or(&template.name);
-                spans.push(label.clone().into());
-                spans.push(" ".into());
-                spans.push(format!("({})", template.uri_template).dim());
-            }
-
-            lines.push(spans.into());
-        }
-
-        lines.push(Line::from(""));
-    }
-
-    PlainHistoryCell { lines }
-}
 pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHistoryCell {
     let mut line = vec!["• ".dim(), message.into()];
     if let Some(hint) = hint {

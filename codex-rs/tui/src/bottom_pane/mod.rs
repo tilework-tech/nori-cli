@@ -533,6 +533,17 @@ impl BottomPane {
         self.push_view(view);
     }
 
+    /// Forward MCP auth statuses to the active view (if any).
+    pub(crate) fn update_mcp_auth_statuses(
+        &mut self,
+        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+    ) {
+        if let Some(view) = self.view_stack.last_mut() {
+            view.update_mcp_auth_statuses(statuses);
+            self.request_redraw();
+        }
+    }
+
     /// Called when the agent requests user approval.
     pub fn push_approval_request(&mut self, request: ApprovalRequest) {
         let request = if let Some(view) = self.view_stack.last_mut() {

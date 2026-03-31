@@ -1,4 +1,5 @@
 use super::*;
+use crate::client_tool_cell::ClientToolCell;
 use codex_protocol::plan_tool::PlanItemArg;
 use codex_protocol::plan_tool::StepStatus;
 
@@ -193,6 +194,12 @@ impl ChatWidget {
     pub(super) fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
+
+        // Close the gate: any tool events arriving after this point are stale
+        // and should be silently discarded. This mirrors on_agent_message() in
+        // the codex flow.
+        self.turn_finished = true;
+
         // Process any deferred completion events (ExecEnd, McpEnd, PatchEnd) so
         // in-progress tool cells transition to their finished state ("Running" →
         // "Ran"). Discard begin events that would create new cells below the
@@ -601,7 +608,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_turn_diff(&mut self, unified_diff: String) {
-        debug!("TurnDiffEvent: {unified_diff}");
+        tracing::debug!("TurnDiffEvent: {unified_diff}");
     }
 
     pub(super) fn on_deprecation_notice(&mut self, event: DeprecationNoticeEvent) {
@@ -611,7 +618,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_background_event(&mut self, message: String) {
-        debug!("BackgroundEvent: {message}");
+        tracing::debug!("BackgroundEvent: {message}");
         self.bottom_pane.ensure_status_indicator();
         self.bottom_pane.set_interrupt_hint_visible(true);
         self.set_status_header(message);
@@ -732,26 +739,10 @@ impl ChatWidget {
 
     #[inline]
     pub(super) fn handle_streaming_delta(&mut self, delta: String) {
-        // Before streaming agent content, flush any active exec cell group.
-        // EXCEPT: Don't flush incomplete ExecCells - they should remain visible in
-        // active_cell during streaming. Streaming content goes to history (scrollback),
-        // while active_cell renders separately at the bottom. Flushing incomplete
-        // ExecCells would move them to pending_exec_cells, making them invisible
-        // until task completion.
-        let should_flush = self
-            .active_cell
-            .as_ref()
-            .map(|cell| {
-                cell.as_any()
-                    .downcast_ref::<ExecCell>()
-                    .map(|exec| !exec.is_active())
-                    .unwrap_or(true)
-            })
-            .unwrap_or(true);
-
-        if should_flush {
-            self.flush_active_cell();
-        }
+        // Always flush the active cell before streaming agent text. This ensures
+        // tool cells appear in the correct chronological position (before the text
+        // that follows them), even when tool calls haven't completed yet.
+        self.flush_active_cell();
 
         if self.stream_controller.is_none() {
             if self.needs_final_message_separator {
@@ -1143,20 +1134,9 @@ impl ChatWidget {
         self.submit_op(Op::Shutdown);
     }
 
-    pub(super) fn on_list_mcp_tools(&mut self, ev: McpListToolsResponseEvent) {
-        self.mcp_auth_statuses = ev.auth_statuses.clone();
-        self.add_to_history(history_cell::new_mcp_tools_output(
-            &self.config,
-            ev.tools,
-            ev.resources,
-            ev.resource_templates,
-            &ev.auth_statuses,
-        ));
-    }
-
     pub(super) fn on_list_custom_prompts(&mut self, ev: ListCustomPromptsResponseEvent) {
         let len = ev.custom_prompts.len();
-        debug!("received {len} custom prompts");
+        tracing::debug!("received {len} custom prompts");
         // Forward to bottom pane so the slash popup can show them now.
         self.bottom_pane.set_custom_prompts(ev.custom_prompts);
     }
@@ -1281,8 +1261,11 @@ impl ChatWidget {
             {
                 self.handle_client_edit_tool_snapshot(tool_snapshot);
             }
-            nori_protocol::ToolKind::Execute
-            | nori_protocol::ToolKind::Read
+            // Execute snapshots use ClientToolCell for native rendering
+            nori_protocol::ToolKind::Execute => {
+                self.handle_client_native_tool_snapshot(tool_snapshot);
+            }
+            nori_protocol::ToolKind::Read
             | nori_protocol::ToolKind::Search
             | nori_protocol::ToolKind::Fetch
             | nori_protocol::ToolKind::Think
@@ -1294,8 +1277,7 @@ impl ChatWidget {
             {
                 self.handle_client_exec_like_tool_begin_snapshot(tool_snapshot);
             }
-            nori_protocol::ToolKind::Execute
-            | nori_protocol::ToolKind::Read
+            nori_protocol::ToolKind::Read
             | nori_protocol::ToolKind::Search
             | nori_protocol::ToolKind::Fetch
             | nori_protocol::ToolKind::Think
@@ -1308,6 +1290,51 @@ impl ChatWidget {
                 self.handle_client_exec_like_tool_snapshot(tool_snapshot);
             }
             _ => {}
+        }
+    }
+
+    fn handle_client_native_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+        if self.turn_finished {
+            return;
+        }
+        self.flush_answer_stream_with_separator();
+
+        // Update existing active ClientToolCell if same call_id
+        if let Some(cell) = self
+            .active_cell
+            .as_mut()
+            .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
+            && cell.call_id() == tool_snapshot.call_id
+        {
+            cell.apply_snapshot(tool_snapshot);
+            if !cell.is_active() && !cell.is_exploring() {
+                self.flush_active_cell();
+            }
+            return;
+        }
+
+        // If this call_id was already flushed to history (e.g., due to
+        // interleaved text streaming), skip creating a duplicate cell.
+        if self
+            .completed_client_tool_calls
+            .contains(&tool_snapshot.call_id)
+        {
+            return;
+        }
+
+        self.flush_active_cell();
+        let should_flush = !matches!(
+            tool_snapshot.phase,
+            nori_protocol::ToolPhase::Pending
+                | nori_protocol::ToolPhase::PendingApproval
+                | nori_protocol::ToolPhase::InProgress
+        ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
+        self.active_cell = Some(Box::new(ClientToolCell::new(
+            tool_snapshot,
+            self.config.animations,
+        )));
+        if should_flush {
+            self.flush_active_cell();
         }
     }
 

@@ -6,13 +6,10 @@ use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
-/// Test that /mcp shows configured MCP servers in ACP mode.
-///
-/// Configures a stdio-based MCP server in config.toml, launches the TUI
-/// in ACP mode, types `/mcp`, and verifies the server info appears.
+/// Test that /mcp opens the MCP server management picker with configured servers.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_mcp_command_shows_configured_servers() {
+fn test_mcp_command_opens_picker_with_servers() {
     let config_toml = r#"
 [mcp_servers.test-server]
 command = "echo"
@@ -38,26 +35,26 @@ args = ["hello"]
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // The output should show the configured server name
+    // The picker should open showing the server name and "Add new..."
     session
-        .wait_for_text("test-server", TIMEOUT)
-        .expect("/mcp should display configured MCP server name");
+        .wait_for_text("MCP Servers", TIMEOUT)
+        .expect("/mcp should open the MCP server picker");
 
     let contents = session.screen_contents();
     assert!(
-        contents.contains("MCP Tools"),
-        "/mcp output should contain 'MCP Tools' header, got:\n{contents}"
+        contents.contains("Add new..."),
+        "/mcp picker should show 'Add new...' option, got:\n{contents}"
     );
     assert!(
-        contents.contains("echo"),
-        "/mcp output should show the server command, got:\n{contents}"
+        contents.contains("test-server"),
+        "/mcp picker should show configured server name, got:\n{contents}"
     );
 }
 
-/// Test that /mcp with no servers configured shows appropriate message.
+/// Test that /mcp with no servers configured opens picker with just "Add new...".
 #[test]
 #[cfg(target_os = "linux")]
-fn test_mcp_command_no_servers_shows_empty_message() {
+fn test_mcp_command_no_servers_opens_picker() {
     let config = SessionConfig::new().with_model("mock-model".to_owned());
 
     let mut session =
@@ -75,8 +72,14 @@ fn test_mcp_command_no_servers_shows_empty_message() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Should show the "no servers" message (handled entirely in TUI, no backend needed)
+    // The picker should open with just "Add new..."
     session
-        .wait_for_text("No MCP servers configured", TIMEOUT)
-        .expect("/mcp with no servers should show empty message");
+        .wait_for_text("MCP Servers", TIMEOUT)
+        .expect("/mcp should open the MCP server picker even with no servers");
+
+    let contents = session.screen_contents();
+    assert!(
+        contents.contains("Add new..."),
+        "/mcp picker should show 'Add new...' option, got:\n{contents}"
+    );
 }

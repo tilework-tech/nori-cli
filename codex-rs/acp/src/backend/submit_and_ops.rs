@@ -218,36 +218,6 @@ impl AcpBackend {
                 )
                 .await;
             }
-            Op::ListMcpTools => {
-                let mcp_servers = self.mcp_servers.clone();
-                let store_mode = self.mcp_oauth_credentials_store_mode;
-                let event_tx = self.event_tx.clone();
-                let id_clone = id.clone();
-                tokio::spawn(async move {
-                    let auth_status_entries = codex_core::mcp::auth::compute_auth_statuses(
-                        mcp_servers.iter(),
-                        store_mode,
-                    )
-                    .await;
-                    let auth_statuses = auth_status_entries
-                        .iter()
-                        .map(|(name, entry)| (name.clone(), entry.auth_status))
-                        .collect();
-                    let _ = event_tx
-                        .send(Event {
-                            id: id_clone,
-                            msg: EventMsg::McpListToolsResponse(
-                                codex_protocol::protocol::McpListToolsResponseEvent {
-                                    tools: HashMap::new(),
-                                    resources: HashMap::new(),
-                                    resource_templates: HashMap::new(),
-                                    auth_statuses,
-                                },
-                            ),
-                        })
-                        .await;
-                });
-            }
             // Unsupported operations - only show error in debug builds
             Op::RunUserShellCommand { .. } => {
                 let op_name = get_op_name(&op);
