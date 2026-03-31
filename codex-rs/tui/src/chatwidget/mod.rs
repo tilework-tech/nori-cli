@@ -30,7 +30,6 @@ use codex_core::protocol::ExecCommandSource;
 use codex_core::protocol::HookOutputEvent;
 use codex_core::protocol::HookOutputLevel;
 use codex_core::protocol::ListCustomPromptsResponseEvent;
-use codex_core::protocol::McpListToolsResponseEvent;
 use codex_core::protocol::McpStartupCompleteEvent;
 use codex_core::protocol::McpStartupStatus;
 use codex_core::protocol::McpStartupUpdateEvent;
@@ -363,7 +362,6 @@ pub(crate) struct ChatWidget {
     last_unified_wait: Option<UnifiedExecWaitState>,
     task_complete_pending: bool,
     mcp_startup_status: Option<HashMap<String, McpStartupStatus>>,
-    mcp_auth_statuses: HashMap<String, codex_core::protocol::McpAuthStatus>,
     // Queue of interruptive UI events deferred during an active write cycle
     interrupts: InterruptManager,
     // Accumulates the current reasoning block text to extract a header

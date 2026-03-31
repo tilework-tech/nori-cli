@@ -63,6 +63,8 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`.
 
 The execute rendering path reuses shared utilities from `exec_cell/render.rs` (`truncate_lines_middle`, `limit_lines_from_start`, `output_lines`, `spinner`) and layout constants that match the `ExecCell` display layout (`"  │ "` for command continuation, `"  └ "` for output). Output text is sourced preferentially from `raw_output["stdout"]`, falling back to `Artifact::Text` with code fence stripping. Exit code success is determined from `raw_output["exit_code"]` when present, otherwise inferred from `ToolPhase`.
 
+For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` normalizing shell-wrapper `rawInput.command` arrays and `rawInput.parsed_cmd` metadata into structured `Invocation::Command` / `Invocation::Read` / `Invocation::Search` / `Invocation::ListFiles` values. Without that normalization, `ClientToolCell` falls back to rendering raw protocol JSON instead of the compact command and exploration details the TUI expects.
+
 **Chronological Ordering Invariant** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
 
 Tool cells always appear in scrollback history before the agent text that follows them, matching the chronological order of execution. This is enforced by two mechanisms:
@@ -205,8 +207,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and context window usage |
 | `/first-prompt` | Show the first prompt from this session |
-| `/mcp` | List configured MCP servers and tools |
-| `/mcp-servers` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
+| `/mcp` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
 | `/switch-skillset [name]` | Switch between available skillsets (with optional direct name) |
@@ -214,13 +215,9 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
-**`/mcp` Rendering** (`history_cell/mod.rs`):
+**`/mcp` Picker** (`nori/mcp_server_picker.rs`):
 
-`new_mcp_tools_output()` renders the `/mcp` output. It shows "No MCP tools available" only when both the tools map AND `config.mcp_servers` are empty. When MCP servers are configured but no individual tool names are available (as in ACP mode, where MCP connections are managed by the upstream agent), the function still renders per-server details -- command/URL, auth status, env vars -- with `"(none)"` for tools and resources. This allows the `/mcp` command to be useful in ACP mode for verifying server configuration and auth status even though the CLI does not have direct MCP connections.
-
-**`/mcp-servers` Picker** (`nori/mcp_server_picker.rs`):
-
-The `/mcp-servers` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
+The `/mcp` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
 
 | Mode | Purpose | Transitions |
 |------|---------|-------------|
@@ -238,19 +235,24 @@ The wizard field set matches Claude Code's `claude mcp add` command: transport t
 
 On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP), inserts it into the servers list, and calls `save_servers()`. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `ConfigEditsBuilder::replace_mcp_servers()` for atomic config file writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
 
-The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`.
+The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`. After creating the picker, it fires `AppEvent::ComputeMcpAuthStatuses` to asynchronously populate auth statuses.
 
 **MCP OAuth Login** (`nori/mcp_server_picker.rs`, `app/config_persistence.rs`):
 
-Pressing `l` in the `/mcp-servers` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
+Pressing `l` in the `/mcp` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
 
-The auth statuses flow through the system as follows:
+Auth statuses are computed asynchronously when the picker opens:
 ```
-McpListToolsResponseEvent.auth_statuses
-    -> ChatWidget.mcp_auth_statuses (stored in on_list_mcp_tools)
-    -> McpServerPickerView.auth_statuses (passed in open_mcp_servers_popup)
+open_mcp_servers_popup()
+    -> sends AppEvent::ComputeMcpAuthStatuses
+    -> App spawns tokio task calling codex_core::mcp::auth::compute_auth_statuses()
+    -> results delivered via AppEvent::McpAuthStatusesReady(HashMap)
+    -> ChatWidget.update_mcp_auth_statuses() -> BottomPane -> active BottomPaneView
+    -> McpServerPickerView.update_mcp_auth_statuses() stores statuses
     -> handle_list_login() checks status before emitting AppEvent::McpOAuthLogin
 ```
+
+The `BottomPaneView` trait has a default no-op `update_mcp_auth_statuses()` method; only `McpServerPickerView` implements it. This pattern pushes data INTO a view through the trait interface, since the view stack does not support downcasting.
 
 The `McpOAuthLogin` event carries `server_name`, `server_url`, `http_headers`, and `env_http_headers`. The handler in `app/config_persistence.rs` (`perform_mcp_oauth_login()`) suspends the TUI (leaves alt screen, disables raw mode), delegates to `codex_rmcp_client::perform_oauth_login()` from `@/codex-rs/rmcp-client/`, then restores the TUI (enables raw mode, enters alt screen). This suspension is necessary because the OAuth flow uses `println!` for status output and `webbrowser::open` for the browser callback. On success, an info message tells the user to restart to apply the new credentials.
 

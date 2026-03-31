@@ -55,9 +55,6 @@ pub(super) async fn submission_loop(
                 handlers::get_history_entry_request(&sess, &config, sub.id.clone(), offset, log_id)
                     .await;
             }
-            Op::ListMcpTools => {
-                handlers::list_mcp_tools(&sess, &config, sub.id.clone()).await;
-            }
             Op::ListCustomPrompts => {
                 handlers::list_custom_prompts(&sess, sub.id.clone()).await;
             }
@@ -101,7 +98,6 @@ mod handlers {
     use crate::codex::TurnContext;
 
     use crate::config::Config;
-    use crate::mcp::auth::compute_auth_statuses;
     use crate::tasks::CompactTask;
     use crate::tasks::RegularTask;
     use crate::tasks::UndoTask;
@@ -292,36 +288,6 @@ mod handlers {
 
             sess_clone.send_event_raw(event).await;
         });
-    }
-
-    pub async fn list_mcp_tools(sess: &Session, config: &Arc<Config>, sub_id: String) {
-        let mcp_connection_manager = sess.services.mcp_connection_manager.read().await;
-        let (tools, auth_status_entries, resources, resource_templates) = tokio::join!(
-            mcp_connection_manager.list_all_tools(),
-            compute_auth_statuses(
-                config.mcp_servers.iter(),
-                config.mcp_oauth_credentials_store_mode,
-            ),
-            mcp_connection_manager.list_all_resources(),
-            mcp_connection_manager.list_all_resource_templates(),
-        );
-        let auth_statuses = auth_status_entries
-            .iter()
-            .map(|(name, entry)| (name.clone(), entry.auth_status))
-            .collect();
-        let event = Event {
-            id: sub_id,
-            msg: EventMsg::McpListToolsResponse(crate::protocol::McpListToolsResponseEvent {
-                tools: tools
-                    .into_iter()
-                    .map(|(name, tool)| (name, tool.tool))
-                    .collect(),
-                resources,
-                resource_templates,
-                auth_statuses,
-            }),
-        };
-        sess.send_event_raw(event).await;
     }
 
     pub async fn list_custom_prompts(sess: &Session, sub_id: String) {

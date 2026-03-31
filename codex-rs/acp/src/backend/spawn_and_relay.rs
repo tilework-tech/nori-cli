@@ -186,7 +186,6 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
-            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         // Execute session_start hooks
