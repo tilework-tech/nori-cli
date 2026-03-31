@@ -28,7 +28,7 @@ Tests: 46 unit + 10 integration. All 1153 tests pass.
 
 | Task | Commit | Summary |
 |------|--------|---------|
-| Approval Bridge Removal (spec 11 step 4) | *pending commit* | Removed Edit/Delete/Move → ApplyPatch routing; unified through AcpTool with DiffSummary rendering; deleted 3 bridge functions |
+| Approval Bridge Removal (spec 11 step 4) | `e9910c34` | Removed Edit/Delete/Move → ApplyPatch routing; unified through AcpTool with DiffSummary rendering; deleted 3 bridge functions |
 
 ## Remaining
 
