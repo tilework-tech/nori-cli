@@ -195,7 +195,8 @@ These modules are at the "top" of the dependency chain — nothing in core/src/ 
 Phase 1 (done): Introduce `legacy-http-backend` feature. Gate leaf modules and HTTP-only re-exports.
 Phase 2 (done): Move `to_api_provider()` from `model_provider_info.rs` to `client.rs`, removing codex-api from the shared config module.
 Phase 3 (done): Gate `sandboxing/assessment.rs` behind the feature.
-Phase 4 (future): Gate `client.rs` and `api_bridge.rs` behind the feature (requires also gating codex/ module and compact.rs HTTP-only functions).
+Phase 4a (next): Gate HTTP-specific compact functions behind `legacy-http-backend` — `run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed` use `ModelClient`/`ResponseEvent` and are only called from within the `codex/` module.
+Phase 4b (future): Gate `client.rs` and `api_bridge.rs` behind the feature (requires also gating codex/ module).
 Phase 5 (future): Make `codex-api` an optional dependency (`dep:codex-api`).
 Phase 6 (future): Gate the codex/ module and its cascade (requires separating Session/TurnContext from shared infrastructure).
 Phase 7 (future): Remove codex-api and codex-client crates entirely.
@@ -228,6 +229,66 @@ The `assess_sandbox_command` method is called from `tools/orchestrator.rs` which
 - Preserves the existing call sites unchanged
 - Has the same behavior as `experimental_sandbox_command_assessment = false` (the default)
 - Cleanly eliminates the HTTP-backend dependency (`ModelClient`, `codex-api`) from the non-feature-flagged build
+
+## Gating HTTP-specific compact functions behind `legacy-http-backend` (Phase 4a)
+
+### Why this component
+
+`compact.rs` contains a mix of shared and HTTP-backend-specific code. The shared code (constants, utility functions) is used by ACP. The HTTP-specific functions make direct model calls via `ModelClient.stream()` and process `ResponseEvent`s — pure HTTP-backend code.
+
+### HTTP-specific functions (to be gated)
+
+1. `run_inline_auto_compact_task(sess, turn_context)` — auto-compaction triggered during turn execution
+2. `run_compact_task(sess, turn_context, input)` — manual compaction task
+3. `run_compact_task_inner(sess, turn_context, input)` — shared implementation
+4. `drain_to_completed(sess, turn_context, prompt)` — streams model response to completion
+
+HTTP-specific imports used only by these functions:
+- `use crate::client_common::Prompt;` — constructs prompts for model calls
+- `use crate::client_common::ResponseEvent;` — re-export of `codex_api::common::ResponseEvent`
+- `use crate::codex::get_last_assistant_message_from_turn;`
+
+### Shared functions (remain ungated)
+
+- `SUMMARIZATION_PROMPT`, `SUMMARY_PREFIX` — constants used by ACP
+- `content_items_to_text()` — utility
+- `collect_user_messages()` — utility
+- `is_summary_message()` — utility
+- `build_compacted_history()` / `build_compacted_history_with_limit()` — history construction
+
+### Callers
+
+- `run_inline_auto_compact_task`: `codex/mod.rs:10` (import), `codex/turn_execution.rs:91` (call)
+- `run_compact_task`: `tasks/compact.rs:28` (call)
+
+All callers are inside the `codex/` module — HTTP-backend code compiled unconditionally.
+
+### Approach: Stub pattern (same as sandboxing/assessment.rs)
+
+1. Gate the 4 HTTP-specific functions and their imports behind `#[cfg(feature = "legacy-http-backend")]`
+2. Add `#[cfg(not(feature = "legacy-http-backend"))]` no-op stubs for the 2 public functions (`run_inline_auto_compact_task`, `run_compact_task`)
+3. Callers don't need to change — stubs have identical signatures, return `()`
+
+### Why stubs work here
+
+- `run_inline_auto_compact_task` and `run_compact_task` both return `()` — no-op stubs are trivially correct
+- Nori uses ACP, never reaches these codex/ code paths — the stubs are never called in production
+- Dev-dependencies enable `legacy-http-backend`, so all tests use the real implementations
+- Stub behavior is equivalent to "compaction not available" — safe for ACP path
+
+### Also gate unused imports in compact.rs
+
+Several imports at the top of compact.rs are only used by the HTTP-specific functions:
+- `crate::client_common::Prompt`
+- `crate::client_common::ResponseEvent`
+- `crate::codex::get_last_assistant_message_from_turn`
+- `crate::protocol::{CompactedItem, ContextCompactedEvent, EventMsg, TaskStartedEvent, TurnContextItem, WarningEvent}`
+- `crate::truncate::TruncationPolicy`
+- `crate::util::backoff`
+- `codex_protocol::items::TurnItem` (actually only used by `collect_user_messages` — keep)
+- `codex_protocol::protocol::RolloutItem` (only in HTTP functions — gate)
+- `futures::prelude::*` (only in HTTP functions — gate)
+- `tracing::error` (only in HTTP functions — gate)
 
 ## Moving `to_api_provider()` out of `model_provider_info.rs` (Phase 2 analysis)
 

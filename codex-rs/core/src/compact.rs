@@ -1,35 +1,53 @@
 use std::sync::Arc;
 
-use crate::client_common::Prompt;
-use crate::client_common::ResponseEvent;
 use crate::codex::Session;
 use crate::codex::TurnContext;
-use crate::codex::get_last_assistant_message_from_turn;
-use crate::error::CodexErr;
-use crate::error::Result as CodexResult;
-use crate::protocol::CompactedItem;
-use crate::protocol::ContextCompactedEvent;
-use crate::protocol::EventMsg;
-use crate::protocol::TaskStartedEvent;
-use crate::protocol::TurnContextItem;
-use crate::protocol::WarningEvent;
 use crate::truncate::TruncationPolicy;
 use crate::truncate::approx_token_count;
 use crate::truncate::truncate_text;
-use crate::util::backoff;
 use codex_protocol::items::TurnItem;
 use codex_protocol::models::ContentItem;
-use codex_protocol::models::ResponseInputItem;
 use codex_protocol::models::ResponseItem;
-use codex_protocol::protocol::RolloutItem;
 use codex_protocol::user_input::UserInput;
+
+#[cfg(feature = "legacy-http-backend")]
+use crate::client_common::Prompt;
+#[cfg(feature = "legacy-http-backend")]
+use crate::client_common::ResponseEvent;
+#[cfg(feature = "legacy-http-backend")]
+use crate::codex::get_last_assistant_message_from_turn;
+#[cfg(feature = "legacy-http-backend")]
+use crate::error::CodexErr;
+#[cfg(feature = "legacy-http-backend")]
+use crate::error::Result as CodexResult;
+#[cfg(feature = "legacy-http-backend")]
+use crate::protocol::CompactedItem;
+#[cfg(feature = "legacy-http-backend")]
+use crate::protocol::ContextCompactedEvent;
+#[cfg(feature = "legacy-http-backend")]
+use crate::protocol::EventMsg;
+#[cfg(feature = "legacy-http-backend")]
+use crate::protocol::TaskStartedEvent;
+#[cfg(feature = "legacy-http-backend")]
+use crate::protocol::TurnContextItem;
+#[cfg(feature = "legacy-http-backend")]
+use crate::protocol::WarningEvent;
+#[cfg(feature = "legacy-http-backend")]
+use crate::util::backoff;
+#[cfg(feature = "legacy-http-backend")]
+use codex_protocol::models::ResponseInputItem;
+#[cfg(feature = "legacy-http-backend")]
+use codex_protocol::protocol::RolloutItem;
+#[cfg(feature = "legacy-http-backend")]
 use futures::prelude::*;
+#[cfg(feature = "legacy-http-backend")]
 use tracing::error;
 
 pub const SUMMARIZATION_PROMPT: &str = include_str!("../templates/compact/prompt.md");
 pub const SUMMARY_PREFIX: &str = include_str!("../templates/compact/summary_prefix.md");
 const COMPACT_USER_MESSAGE_MAX_TOKENS: usize = 20_000;
 
+#[cfg(feature = "legacy-http-backend")]
 pub(crate) async fn run_inline_auto_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
@@ -40,6 +58,14 @@ pub(crate) async fn run_inline_auto_compact_task(
     run_compact_task_inner(sess, turn_context, input).await;
 }
 
+#[cfg(not(feature = "legacy-http-backend"))]
+pub(crate) async fn run_inline_auto_compact_task(
+    _sess: Arc<Session>,
+    _turn_context: Arc<TurnContext>,
+) {
+}
+
+#[cfg(feature = "legacy-http-backend")]
 pub(crate) async fn run_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
@@ -52,6 +78,15 @@ pub(crate) async fn run_compact_task(
     run_compact_task_inner(sess.clone(), turn_context, input).await;
 }
 
+#[cfg(not(feature = "legacy-http-backend"))]
+pub(crate) async fn run_compact_task(
+    _sess: Arc<Session>,
+    _turn_context: Arc<TurnContext>,
+    _input: Vec<UserInput>,
+) {
+}
+
+#[cfg(feature = "legacy-http-backend")]
 async fn run_compact_task_inner(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
@@ -276,6 +311,7 @@ fn build_compacted_history_with_limit(
     history
 }
 
+#[cfg(feature = "legacy-http-backend")]
 async fn drain_to_completed(
     sess: &Session,
     turn_context: &TurnContext,

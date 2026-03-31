@@ -121,8 +121,11 @@ The `legacy-http-backend` cargo feature (defined in `core/Cargo.toml`) gates HTT
 | `ModelClient` | `client` |
 | `Prompt`, `ResponseEvent`, `ResponseStream` | `client_common` |
 | `assessment` submodule | `sandboxing` |
+| `run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed` | `compact` |
 
 The `sandboxing/assessment` module creates a `ModelClient` and makes direct HTTP API calls to evaluate command safety. Since this is purely HTTP-backend functionality, it is gated out of the default build. In `codex/approval.rs`, the `assess_sandbox_command()` method on `Session` has two `#[cfg]`-conditional implementations: the real one (when `legacy-http-backend` is on) delegates to `sandboxing::assessment::assess_command()`, and the stub (when the feature is off) returns `None`. This avoids cascading `#[cfg]` annotations into `tools/orchestrator.rs`, which calls `assess_sandbox_command()` unconditionally. The stub's `None` return matches the default behavior when `experimental_sandbox_command_assessment` is `false`.
+
+The `compact` module has a similar split: shared utility functions (`content_items_to_text`, `collect_user_messages`, `is_summary_message`, `build_compacted_history`, `build_compacted_history_with_limit`, and the `SUMMARIZATION_PROMPT`/`SUMMARY_PREFIX` constants) are always available because the ACP backend uses them. The HTTP-backend-specific functions that stream model responses via `ModelClient` (`run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed`) are gated behind `legacy-http-backend`. No-op stubs are provided for `run_inline_auto_compact_task` and `run_compact_task` when the feature is off, so callers in the `codex/` module compile without `#[cfg]` annotations.
 
 The feature is enabled in `[dev-dependencies]` so that the core crate's own test suite still compiles against these types. No downstream crate (`nori-tui`, `nori-cli`, `codex-acp`) enables this feature -- they exclusively use the ACP path.
 

@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Eighth component removed
+## Status: Ninth component removed
 
 ### Completed: Remove compact_remote module
 
@@ -173,8 +173,34 @@ Gated the sandbox assessment module behind the `legacy-http-backend` feature fla
 
 **Impact:** When `legacy-http-backend` is off (nori/tui/cli/acp binaries), `sandboxing/assessment.rs` and its `ModelClient`/`Prompt`/`ResponseEvent` imports are excluded from compilation. All existing tests pass (codex-core: 439 pass, 23 pre-existing nvm environment failures; E2E: 6 tests).
 
+### Completed: Gate HTTP-specific compact functions behind `legacy-http-backend`
+
+Gated the HTTP-backend-specific compaction functions in `compact.rs` behind the `legacy-http-backend` feature flag. These functions make direct model calls via `ModelClient.stream()` and process `ResponseEvent`s — pure HTTP-backend code that nori never uses.
+
+**What was gated:**
+- `run_inline_auto_compact_task()` — auto-compaction during HTTP turn execution
+- `run_compact_task()` — manual compaction task
+- `run_compact_task_inner()` — shared implementation
+- `drain_to_completed()` — streams model response to completion
+- 16 HTTP-specific imports (Prompt, ResponseEvent, protocol event types, etc.)
+
+**What was preserved (shared, always available):**
+- `SUMMARIZATION_PROMPT`, `SUMMARY_PREFIX` constants (used by ACP)
+- `content_items_to_text()`, `collect_user_messages()`, `is_summary_message()` utilities
+- `build_compacted_history()` / `build_compacted_history_with_limit()` history construction
+- All 6 unit tests (test shared functions)
+
+**Stub approach:**
+- `#[cfg(not(feature = "legacy-http-backend"))]` no-op stubs for `run_inline_auto_compact_task` and `run_compact_task`
+- Callers in `codex/mod.rs`, `codex/turn_execution.rs`, `tasks/compact.rs` unchanged
+- Same pattern as `sandboxing/assessment.rs` gating
+
+**Known limitation:** The no-op stubs are safe because the `codex/` turn execution path is unreachable from the nori binary (ACP). However, if the `codex/` module is ever called without the feature, `run_inline_auto_compact_task` no-op + `continue` in `turn_execution.rs:91` would infinite-loop. This is acceptable because the entire `codex/` module should be feature-gated in a future commit (Phase 6), eliminating the dead code path entirely.
+
+**Impact:** 4 HTTP-backend functions and 16 imports excluded from non-feature-flagged builds. All existing tests pass (codex-core: 541 unit, 12 compact integration; E2E: 6 tests). Build without feature succeeds with 1 fewer warning than baseline.
+
 ### Suggested next steps for future commits
-1. Gate `client.rs` and `api_bridge.rs` behind `legacy-http-backend` (requires also gating `codex/` module and `compact.rs` HTTP-only functions — large cascade)
+1. Gate `client.rs` and `api_bridge.rs` behind `legacy-http-backend` (requires also gating `codex/` module — large cascade)
 2. Make `codex-api` an optional dependency (`dep:codex-api`) enabled by `legacy-http-backend` — now only 3 source files import from codex-api: `api_bridge.rs`, `client.rs`, `client_common.rs`
 3. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
 4. Eventually: remove the `codex-api` and `codex-client` crates entirely
