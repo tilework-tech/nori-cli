@@ -869,6 +869,39 @@ impl ChatWidget {
         }
     }
 
+    /// Observes the parent directories of file paths to update the effective CWD tracker.
+    /// If the effective CWD changes (after debounce), triggers a system info refresh.
+    pub(super) fn observe_directories_from_paths<'a>(
+        &mut self,
+        paths: impl Iterator<Item = &'a std::path::Path>,
+    ) {
+        for file_path in paths {
+            let absolute_path = if file_path.is_absolute() {
+                file_path.to_path_buf()
+            } else {
+                self.config.cwd.join(file_path)
+            };
+
+            if self.effective_cwd_tracker.observe_file_path(&absolute_path) {
+                let refresh_dir = crate::effective_cwd_tracker::find_git_root(&absolute_path)
+                    .or_else(|| {
+                        absolute_path
+                            .parent()
+                            .filter(|p| p.exists())
+                            .map(std::path::Path::to_path_buf)
+                    });
+
+                if let Some(dir) = refresh_dir {
+                    self.app_event_tx
+                        .send(AppEvent::RefreshSystemInfoForDirectory {
+                            dir,
+                            agent: Some(self.config.model.clone()),
+                        });
+                }
+            }
+        }
+    }
+
     /// Observes the parent directories of changed files to update the effective CWD tracker.
     /// If the effective CWD changes (after debounce), triggers a system info refresh.
     ///
@@ -1266,16 +1299,11 @@ impl ChatWidget {
 
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         match tool_snapshot.kind {
-            nori_protocol::ToolKind::Edit
+            // Execute and Edit/Delete/Move use ClientToolCell for native rendering
+            nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Edit
             | nori_protocol::ToolKind::Delete
-            | nori_protocol::ToolKind::Move
-                if tool_snapshot.phase == nori_protocol::ToolPhase::Completed
-                    && file_changes_from_snapshot(&tool_snapshot).is_some() =>
-            {
-                self.handle_client_edit_tool_snapshot(tool_snapshot);
-            }
-            // Execute snapshots use ClientToolCell for native rendering
-            nori_protocol::ToolKind::Execute => {
+            | nori_protocol::ToolKind::Move => {
                 self.handle_client_native_tool_snapshot(tool_snapshot);
             }
             nori_protocol::ToolKind::Read
@@ -1302,12 +1330,6 @@ impl ChatWidget {
             {
                 self.handle_client_exec_like_tool_snapshot(tool_snapshot);
             }
-            // Non-completed Edit/Delete/Move: render as ClientToolCell with spinner
-            nori_protocol::ToolKind::Edit
-            | nori_protocol::ToolKind::Delete
-            | nori_protocol::ToolKind::Move => {
-                self.handle_client_native_tool_snapshot(tool_snapshot);
-            }
             _ => {}
         }
     }
@@ -1317,6 +1339,23 @@ impl ChatWidget {
             return;
         }
         self.flush_answer_stream_with_separator();
+
+        // For completed Edit/Delete/Move, observe directories and record stats
+        if matches!(
+            tool_snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) && tool_snapshot.phase == nori_protocol::ToolPhase::Completed
+        {
+            self.observe_directories_from_paths(
+                tool_snapshot.locations.iter().map(|l| l.path.as_path()),
+            );
+            self.session_stats
+                .record_tool_call(crate::client_event_format::format_tool_kind(
+                    &tool_snapshot.kind,
+                ));
+        }
 
         // Update existing active ClientToolCell if same call_id
         if let Some(cell) = self
@@ -1438,42 +1477,6 @@ impl ChatWidget {
         };
 
         self.on_exec_command_begin(begin_event);
-    }
-
-    fn handle_client_edit_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        let Some(changes) = file_changes_from_snapshot(&tool_snapshot) else {
-            return;
-        };
-
-        if self.turn_finished {
-            return;
-        }
-
-        // Discard (not flush) any in-progress spinner cell for the same call_id,
-        // so only the PatchHistoryCell appears in history.
-        if let Some(cell) = self
-            .active_cell
-            .as_ref()
-            .and_then(|c| c.as_any().downcast_ref::<ClientToolCell>())
-            && cell.call_id() == tool_snapshot.call_id
-        {
-            self.active_cell.take();
-        }
-
-        // Also discard any buffered spinner cell for this call_id (parallel
-        // edit calls can end up in the pending buffer).
-        self.pending_client_tool_cells
-            .remove(&tool_snapshot.call_id);
-
-        // Mark call_id as completed so no further snapshots for it create
-        // duplicate cells (e.g., if the spinner was already flushed to history
-        // due to interleaved text streaming).
-        self.completed_client_tool_calls
-            .insert(tool_snapshot.call_id.clone());
-
-        self.session_stats.record_tool_call("Edit");
-        self.observe_directories_from_changes(&changes);
-        self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
     }
 
     fn handle_client_exec_like_tool_snapshot(

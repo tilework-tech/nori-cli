@@ -266,6 +266,49 @@ impl ClientToolCell {
         out
     }
 
+    fn render_edit_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+
+        // Bullet: green for completed, red for failed, spinner for active
+        let bullet = if self.snapshot.phase == nori_protocol::ToolPhase::Completed {
+            "•".green().bold()
+        } else if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            "•".red().bold()
+        } else {
+            spinner(self.start_time, self.animations_enabled)
+        };
+
+        let header = relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+        lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
+
+        // For failed edits: show error text or "(failed)" fallback
+        if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            if let Some(error_text) = extract_error_text(&self.snapshot) {
+                lines.push(Line::from(vec!["  └ ".dim(), error_text.dim()]));
+            } else {
+                lines.push(Line::from(vec!["  └ ".dim(), "(failed)".dim()]));
+            }
+        }
+
+        // Render diff content from artifacts or invocation
+        let diff_changes = diff_changes_from_artifacts(&self.snapshot.artifacts);
+        let changes = if !diff_changes.is_empty() {
+            diff_changes
+        } else {
+            changes_from_invocation(&self.snapshot.invocation)
+        };
+        if !changes.is_empty() {
+            let diff_width = width.saturating_sub(4).max(1) as usize;
+            for diff_line in create_diff_summary(&changes, &self.cwd, diff_width) {
+                let mut indented = vec![Span::from("    ")];
+                indented.extend(diff_line.spans);
+                lines.push(Line::from(indented));
+            }
+        }
+
+        lines
+    }
+
     fn render_generic_lines(&self) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         let bullet = if self.is_active() {
@@ -276,18 +319,7 @@ impl ClientToolCell {
             "•".dim()
         };
 
-        // Use semantic verb headers for Edit/Delete/Move kinds
-        let is_file_op = matches!(
-            self.snapshot.kind,
-            nori_protocol::ToolKind::Edit
-                | nori_protocol::ToolKind::Delete
-                | nori_protocol::ToolKind::Move
-        );
-        let header = if is_file_op {
-            relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd)
-        } else {
-            relativize_paths_in_text(&format_tool_header(&self.snapshot), &self.cwd)
-        };
+        let header = relativize_paths_in_text(&format_tool_header(&self.snapshot), &self.cwd);
         lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
 
         let mut details = Vec::new();
@@ -329,18 +361,6 @@ impl ClientToolCell {
         for (idx, detail) in details.into_iter().enumerate() {
             let prefix = if idx == 0 { "  └ " } else { "    " };
             lines.push(Line::from(vec![prefix.dim(), detail.dim()]));
-        }
-
-        // Render diff artifacts if present
-        let diff_changes = diff_changes_from_artifacts(&self.snapshot.artifacts);
-        if !diff_changes.is_empty() {
-            let width = 76; // leave room for indentation
-            let diff_lines = create_diff_summary(&diff_changes, &self.cwd, width);
-            for diff_line in diff_lines {
-                let mut indented = vec![Span::from("    ")];
-                indented.extend(diff_line.spans);
-                lines.push(Line::from(indented));
-            }
         }
 
         lines
@@ -567,12 +587,89 @@ fn diff_changes_from_artifacts(
     changes
 }
 
+fn changes_from_invocation(
+    invocation: &Option<nori_protocol::Invocation>,
+) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
+    let mut changes = std::collections::HashMap::new();
+    match invocation.as_ref() {
+        Some(nori_protocol::Invocation::FileChanges { changes: fc }) => {
+            for change in fc {
+                let file_change = match &change.old_text {
+                    None => codex_core::protocol::FileChange::Add {
+                        content: change.new_text.clone(),
+                    },
+                    Some(old_text) => codex_core::protocol::FileChange::Update {
+                        unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+                        move_path: None,
+                    },
+                };
+                changes.insert(change.path.clone(), file_change);
+            }
+        }
+        Some(nori_protocol::Invocation::FileOperations { operations }) => {
+            for op in operations {
+                let (path, file_change) = match op {
+                    nori_protocol::FileOperation::Create { path, new_text } => (
+                        path.clone(),
+                        codex_core::protocol::FileChange::Add {
+                            content: new_text.clone(),
+                        },
+                    ),
+                    nori_protocol::FileOperation::Update {
+                        path,
+                        old_text,
+                        new_text,
+                    } => (
+                        path.clone(),
+                        codex_core::protocol::FileChange::Update {
+                            unified_diff: diffy::create_patch(old_text, new_text).to_string(),
+                            move_path: None,
+                        },
+                    ),
+                    nori_protocol::FileOperation::Delete { path, old_text } => (
+                        path.clone(),
+                        codex_core::protocol::FileChange::Delete {
+                            content: old_text.clone().unwrap_or_default(),
+                        },
+                    ),
+                    nori_protocol::FileOperation::Move {
+                        from_path,
+                        to_path,
+                        old_text,
+                        new_text,
+                    } => {
+                        let old = old_text.clone().unwrap_or_default();
+                        let new = new_text.clone().unwrap_or_else(|| old.clone());
+                        (
+                            from_path.clone(),
+                            codex_core::protocol::FileChange::Update {
+                                unified_diff: diffy::create_patch(&old, &new).to_string(),
+                                move_path: Some(to_path.clone()),
+                            },
+                        )
+                    }
+                };
+                changes.insert(path, file_change);
+            }
+        }
+        _ => {}
+    }
+    changes
+}
+
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         if !self.exploring_snapshots.is_empty() {
             self.render_exploring_lines(width)
         } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
+        } else if matches!(
+            self.snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) {
+            self.render_edit_lines(width)
         } else {
             self.render_generic_lines()
         }
@@ -583,6 +680,13 @@ impl HistoryCell for ClientToolCell {
             self.render_exploring_lines(width)
         } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
+        } else if matches!(
+            self.snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) {
+            self.render_edit_lines(width)
         } else {
             self.render_generic_lines()
         }
@@ -1605,6 +1709,141 @@ mod tests {
             lines[0].contains("Move failed:"),
             "Failed move should show 'Move failed:' header, got: {}",
             lines[0]
+        );
+    }
+
+    // --- Spec 11: Delete File Operation Bridge ---
+
+    #[test]
+    fn completed_delete_has_green_bullet_and_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-del-1".into(),
+            title: "Delete temp.txt".into(),
+            kind: ToolKind::Delete,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("temp.txt"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Delete {
+                    path: PathBuf::from("temp.txt"),
+                    old_text: Some("old content\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let raw_lines = cell.display_lines(80);
+        let lines = render_lines(&raw_lines);
+
+        // Green bullet for completed delete
+        let bullet_span = &raw_lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Green),
+            "Completed delete should have green bullet, got {:?}",
+            bullet_span.style
+        );
+
+        // Semantic header
+        assert!(
+            lines[0].contains("Deleted"),
+            "Completed delete should show 'Deleted' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("temp.txt"),
+            "Completed delete header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn completed_move_has_green_bullet_and_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-move-2".into(),
+            title: "Move old.rs to new.rs".into(),
+            kind: ToolKind::Move,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("old.rs"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Move {
+                    from_path: PathBuf::from("old.rs"),
+                    to_path: PathBuf::from("new.rs"),
+                    old_text: Some("content\n".into()),
+                    new_text: Some("content\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let raw_lines = cell.display_lines(80);
+        let lines = render_lines(&raw_lines);
+
+        // Green bullet for completed move
+        let bullet_span = &raw_lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Green),
+            "Completed move should have green bullet, got {:?}",
+            bullet_span.style
+        );
+
+        // Semantic header
+        assert!(
+            lines[0].contains("Moved"),
+            "Completed move should show 'Moved' header, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn completed_edit_with_file_operations_invocation_renders_diff() {
+        // When a completed edit has FileOperations invocation (no Artifact::Diff),
+        // it should still render diff content from the invocation data.
+        let snapshot = ToolSnapshot {
+            call_id: "call-edit-ops".into(),
+            title: "Edit src/lib.rs".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("src/lib.rs"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Update {
+                    path: PathBuf::from("src/lib.rs"),
+                    old_text: "fn old() {}\n".into(),
+                    new_text: "fn new() {}\n".into(),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Edited" header
+        assert!(
+            lines[0].contains("Edited"),
+            "Completed edit with FileOperations should show 'Edited', got: {}",
+            lines[0]
+        );
+
+        // Should render diff content from FileOperations
+        let has_diff = lines
+            .iter()
+            .any(|l| l.contains("lib.rs") || l.contains('+') || l.contains('-'));
+        assert!(
+            has_diff,
+            "Completed edit with FileOperations should render diff content, got: {lines:?}"
         );
     }
 }

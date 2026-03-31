@@ -780,7 +780,10 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
             title: "Write README.md".into(),
             kind: nori_protocol::ToolKind::Edit,
             phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
             invocation: Some(nori_protocol::Invocation::FileChanges {
                 changes: vec![nori_protocol::FileChange {
                     path: PathBuf::from("README.md"),
@@ -799,7 +802,7 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
     ));
 
     let cells = drain_insert_history(&mut rx);
-    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    assert_eq!(cells.len(), 1, "expected one edit history cell");
     let blob = lines_to_single_string(cells.first().unwrap());
     assert_snapshot!("completed_edit_tool_snapshot", blob);
 }
@@ -814,7 +817,10 @@ fn completed_delete_tool_snapshot_renders_patch_history_cell() {
             title: "Delete README.md".into(),
             kind: nori_protocol::ToolKind::Delete,
             phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
             invocation: Some(nori_protocol::Invocation::FileOperations {
                 operations: vec![nori_protocol::FileOperation::Delete {
                     path: PathBuf::from("README.md"),
@@ -849,7 +855,10 @@ fn completed_move_tool_snapshot_renders_patch_history_cell() {
             title: "Move README.md".into(),
             kind: nori_protocol::ToolKind::Move,
             phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
             invocation: Some(nori_protocol::Invocation::FileOperations {
                 operations: vec![nori_protocol::FileOperation::Move {
                     from_path: PathBuf::from("README.md"),
