@@ -1269,7 +1269,7 @@ impl ChatWidget {
     }
 
     fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
-        let Some(request) = approval_request_from_client_event(&self.config.cwd, approval) else {
+        let Some(request) = approval_request_from_client_event(approval) else {
             return;
         };
 
@@ -1706,26 +1706,9 @@ fn exec_end_event_from_client_snapshot(
 }
 
 fn approval_request_from_client_event(
-    cwd: &std::path::Path,
     approval: nori_protocol::ApprovalRequest,
 ) -> Option<ApprovalRequest> {
     let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
-
-    // Edit/Delete/Move with parseable file changes → ApplyPatch (DiffSummary overlay)
-    if matches!(
-        snapshot.kind,
-        nori_protocol::ToolKind::Edit
-            | nori_protocol::ToolKind::Delete
-            | nori_protocol::ToolKind::Move
-    ) && let Some(changes) = file_changes_from_snapshot(&snapshot)
-    {
-        return Some(ApprovalRequest::ApplyPatch {
-            id: approval.call_id,
-            reason: None,
-            cwd: cwd.to_path_buf(),
-            changes,
-        });
-    }
 
     // Execute with a real shell command → Exec (bash-highlighted overlay)
     if matches!(snapshot.kind, nori_protocol::ToolKind::Execute)
@@ -1742,43 +1725,13 @@ fn approval_request_from_client_event(
         });
     }
 
-    // Everything else → AcpTool (native protocol fields)
+    // Everything else (including Edit/Delete/Move) → AcpTool (native protocol fields)
     Some(ApprovalRequest::AcpTool {
         call_id: approval.call_id,
         title: approval.title,
         kind: approval.kind,
         snapshot: Box::new(snapshot),
     })
-}
-
-fn file_changes_from_snapshot(
-    snapshot: &nori_protocol::ToolSnapshot,
-) -> Option<HashMap<PathBuf, codex_core::protocol::FileChange>> {
-    match &snapshot.invocation {
-        Some(nori_protocol::Invocation::FileChanges { changes }) => {
-            let file_changes = changes
-                .iter()
-                .map(|change| (change.path.clone(), file_change_from_nori_change(change)))
-                .collect::<HashMap<_, _>>();
-            if file_changes.is_empty() {
-                None
-            } else {
-                Some(file_changes)
-            }
-        }
-        Some(nori_protocol::Invocation::FileOperations { operations }) => {
-            let file_changes = operations
-                .iter()
-                .map(file_change_from_nori_operation)
-                .collect::<HashMap<_, _>>();
-            if file_changes.is_empty() {
-                None
-            } else {
-                Some(file_changes)
-            }
-        }
-        _ => None,
-    }
 }
 
 fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec<String> {
@@ -1800,66 +1753,6 @@ fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec
         | Some(nori_protocol::Invocation::FileChanges { .. })
         | Some(nori_protocol::Invocation::FileOperations { .. })
         | None => vec![generic_execute_command_text(snapshot)],
-    }
-}
-
-fn file_change_from_nori_operation(
-    operation: &nori_protocol::FileOperation,
-) -> (PathBuf, codex_core::protocol::FileChange) {
-    match operation {
-        nori_protocol::FileOperation::Create { path, new_text } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Add {
-                content: new_text.clone(),
-            },
-        ),
-        nori_protocol::FileOperation::Update {
-            path,
-            old_text,
-            new_text,
-        } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Update {
-                unified_diff: diffy::create_patch(old_text, new_text).to_string(),
-                move_path: None,
-            },
-        ),
-        nori_protocol::FileOperation::Delete { path, old_text } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Delete {
-                content: old_text.clone().unwrap_or_default(),
-            },
-        ),
-        nori_protocol::FileOperation::Move {
-            from_path,
-            to_path,
-            old_text,
-            new_text,
-        } => {
-            let old_text = old_text.clone().unwrap_or_default();
-            let new_text = new_text.clone().unwrap_or_else(|| old_text.clone());
-            (
-                from_path.clone(),
-                codex_core::protocol::FileChange::Update {
-                    unified_diff: diffy::create_patch(&old_text, &new_text).to_string(),
-                    move_path: Some(to_path.clone()),
-                },
-            )
-        }
-    }
-}
-
-fn file_change_from_nori_change(
-    change: &nori_protocol::FileChange,
-) -> codex_core::protocol::FileChange {
-    match &change.old_text {
-        None => codex_core::protocol::FileChange::Add {
-            content: change.new_text.clone(),
-        },
-        Some(old_text) => codex_core::protocol::FileChange::Update {
-            unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
-            move_path: None,
-        },
     }
 }
 

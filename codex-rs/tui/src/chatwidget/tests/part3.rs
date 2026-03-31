@@ -1695,3 +1695,103 @@ fn list_files_title_not_duplicated() {
         "Should still show the path, got: {blob:?}"
     );
 }
+
+// --- ACP Edit Approval Bridge Removal ---
+
+/// ACP edit approval requests should route through AcpTool (not ApplyPatch).
+/// This gives users the "always approve" option and uses native protocol rendering.
+#[test]
+fn acp_edit_approval_routes_through_acp_tool() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Send an ACP approval request for an Edit tool with file changes
+    chat.handle_client_event(nori_protocol::ClientEvent::ApprovalRequest(
+        nori_protocol::ApprovalRequest {
+            call_id: "call-edit-approval".into(),
+            title: "Edit src/main.rs".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-edit-approval".into(),
+                title: "Edit src/main.rs".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![nori_protocol::ToolLocation {
+                    path: PathBuf::from("src/main.rs"),
+                    line: None,
+                }],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: PathBuf::from("src/main.rs"),
+                        old_text: Some("fn main() {}\n".into()),
+                        new_text: "fn main() {\n    println!(\"hello\");\n}\n".into(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("src/main.rs"),
+                    old_text: Some("fn main() {}\n".into()),
+                    new_text: "fn main() {\n    println!(\"hello\");\n}\n".into(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        },
+    ));
+
+    // Render the bottom pane and check the approval text
+    let width: u16 = 80;
+    let height: u16 = 30;
+    let mut buf = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, width, height));
+    chat.bottom_pane
+        .render(ratatui::layout::Rect::new(0, 0, width, height), &mut buf);
+
+    let rendered: Vec<String> = (0..height)
+        .map(|row| {
+            (0..width)
+                .map(|col| buf[(col, row)].symbol().to_string())
+                .collect()
+        })
+        .collect();
+
+    // AcpTool renders "Would you like to allow edit: ..."
+    // ApplyPatch renders "Would you like to make the following edits?"
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("Would you like to allow")),
+        "ACP edit approval should route through AcpTool ('Would you like to allow'), got: {rendered:?}"
+    );
+    assert!(
+        !rendered
+            .iter()
+            .any(|line| line.contains("Would you like to make the following edits")),
+        "ACP edit approval should NOT use ApplyPatch text, got: {rendered:?}"
+    );
+
+    // Approve with 'y' and verify it sends ExecApproval (AcpTool path), not PatchApproval
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('y'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+
+    // The approval overlay sends Op via AppEvent::CodexOp through app_event_tx
+    let mut found_exec_approval = false;
+    let mut found_patch_approval = false;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::CodexOp(op) = event {
+            match op {
+                Op::ExecApproval { .. } => found_exec_approval = true,
+                Op::PatchApproval { .. } => found_patch_approval = true,
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        found_exec_approval,
+        "ACP edit approval should emit Op::ExecApproval (AcpTool path)"
+    );
+    assert!(
+        !found_patch_approval,
+        "ACP edit approval should NOT emit Op::PatchApproval"
+    );
+}

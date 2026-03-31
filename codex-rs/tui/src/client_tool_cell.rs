@@ -566,7 +566,7 @@ fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> 
     None
 }
 
-fn diff_changes_from_artifacts(
+pub(crate) fn diff_changes_from_artifacts(
     artifacts: &[nori_protocol::Artifact],
 ) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
     let mut changes = std::collections::HashMap::new();
@@ -587,7 +587,7 @@ fn diff_changes_from_artifacts(
     changes
 }
 
-fn changes_from_invocation(
+pub(crate) fn changes_from_invocation(
     invocation: &Option<nori_protocol::Invocation>,
 ) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
     let mut changes = std::collections::HashMap::new();

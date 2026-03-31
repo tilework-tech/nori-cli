@@ -68,12 +68,12 @@ All twelve specs were implemented across commits `512c505e`..HEAD. Summary:
 | 11 — Delete File Operation Bridge | `render_edit_lines`: dedicated edit/delete/move renderer with green/red bullet; unified routing through `handle_client_native_tool_snapshot`; `handle_client_edit_tool_snapshot` deleted; `PatchHistoryCell` no longer used for ACP | *pending commit* |
 | 12 — Execute Cell Completion Buffering | Parallel execute buffering, description text filtering, List dedup | `c23b3af4` |
 
-Test coverage: 45 unit tests in `client_tool_cell.rs` and `approval_overlay.rs`, 9 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
+Test coverage: 48 unit tests in `client_tool_cell.rs` and `approval_overlay.rs`, 10 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
 
 ### Learnings from Spec 11
 
 - **`render_edit_lines` needs two diff sources.** Diff artifacts (`Artifact::Diff`) are the primary source, but some completed edits only have `Invocation::FileOperations` or `Invocation::FileChanges` without artifacts. The renderer tries artifacts first, then falls back to `changes_from_invocation()`.
-- **Bridge functions survive for approval overlay.** `file_changes_from_snapshot` and its helpers are still needed for `ApprovalRequest::ApplyPatch` construction in `approval_request_from_client_event`. The approval overlay uses `DiffSummary::new()` which requires `codex_core::protocol::FileChange`. Full bridge removal would require refactoring the approval overlay to work with `nori_protocol` types directly.
+- **Bridge functions removed.** The bridge functions (`file_changes_from_snapshot`, `file_change_from_nori_operation`, `file_change_from_nori_change`) that converted `nori_protocol` types to `codex_core::protocol::FileChange` for the approval overlay have been deleted. Edit/Delete/Move approvals now route through `ApprovalRequest::AcpTool` and reuse the same `pub(crate)` diff extraction helpers (`diff_changes_from_artifacts()`, `changes_from_invocation()`) from `client_tool_cell.rs`.
 - **`observe_directories_from_paths` extracts paths from snapshot locations.** The old `handle_client_edit_tool_snapshot` observed directories from the changes HashMap keys. The new path uses `snapshot.locations` which already contain the file paths. Added `observe_directories_from_paths()` as a lighter-weight companion to `observe_directories_from_changes()`.
 - **Completed edit cells get green bullets, matching Execute.** This is a visible UX improvement — previously completed edits went through `PatchHistoryCell` which had no bullet/header. Now they show `● Edited path` with green bullet and diff summary below.
 
@@ -85,7 +85,7 @@ Test coverage: 45 unit tests in `client_tool_cell.rs` and `approval_overlay.rs`,
 ### Learnings from Spec 09
 
 - **ACP backend treats ExecApproval and PatchApproval identically.** Both call `handle_exec_approval` in `acp/src/backend/submit_and_ops.rs`. The `AcpTool` variant reuses `Op::ExecApproval` rather than introducing a new Op.
-- **Three-way routing is necessary.** Edit/Delete/Move tools with parseable file changes benefit from the `DiffSummary` overlay (ApplyPatch). Execute tools with `Invocation::Command` benefit from bash syntax highlighting (Exec). Everything else (Read, Search, Fetch, Think, Other, or Execute without a shell command) uses native protocol fields directly (AcpTool).
+- **Two-way routing (updated from three-way).** Execute tools with `Invocation::Command` route to `ApprovalRequest::Exec` for bash syntax highlighting. Everything else (including Edit/Delete/Move) routes to `ApprovalRequest::AcpTool`, which renders diffs via `DiffSummary` for edit-like tools and falls back to text rendering for others. `ApplyPatch` is only used by the legacy non-ACP codex backend.
 - **Protocol approval options not mapped to TUI options.** The `nori_protocol::ApprovalOption` entries carry option text and kind, but TUI approval options need keyboard shortcuts and agent display names that aren't in the protocol. The `AcpTool` variant generates its own options via `acp_tool_options()` with hardcoded Yes/Always/No choices and y/a/n keyboard shortcuts.
 - **ToolSnapshot must be boxed in the enum.** The `ToolSnapshot` struct is 440+ bytes, triggering clippy's `large_enum_variant` lint. Boxing it as `Box<nori_protocol::ToolSnapshot>` keeps the `ApprovalRequest` enum size reasonable.
 

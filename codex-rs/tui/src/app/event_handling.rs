@@ -523,21 +523,59 @@ impl App {
                     ));
                 }
                 ApprovalRequest::AcpTool {
-                    title, snapshot, ..
+                    title,
+                    kind,
+                    snapshot,
+                    ..
                 } => {
                     let _ = tui.enter_alt_screen();
-                    let mut lines = vec![Line::from(title)];
-                    if let Some(inv_text) =
-                        client_event_format::format_invocation(&snapshot.invocation)
-                        && !client_event_format::is_invocation_redundant(&inv_text, &snapshot.title)
-                    {
-                        lines.push(Line::from(inv_text));
+
+                    // For edit-like tools, show DiffSummary in fullscreen
+                    let edit_changes = if matches!(
+                        kind,
+                        nori_protocol::ToolKind::Edit
+                            | nori_protocol::ToolKind::Delete
+                            | nori_protocol::ToolKind::Move
+                    ) {
+                        let mut changes =
+                            client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts);
+                        if changes.is_empty() {
+                            changes =
+                                client_tool_cell::changes_from_invocation(&snapshot.invocation);
+                        }
+                        if changes.is_empty() {
+                            None
+                        } else {
+                            Some(changes)
+                        }
+                    } else {
+                        None
+                    };
+
+                    if let Some(changes) = edit_changes {
+                        let cwd = std::path::PathBuf::from(".");
+                        let diff_summary = DiffSummary::new(changes, cwd);
+                        self.overlay = Some(Overlay::new_static_with_renderables(
+                            vec![diff_summary.into()],
+                            "P A T C H".to_string(),
+                        ));
+                    } else {
+                        let mut lines = vec![Line::from(title)];
+                        if let Some(inv_text) =
+                            client_event_format::format_invocation(&snapshot.invocation)
+                            && !client_event_format::is_invocation_redundant(
+                                &inv_text,
+                                &snapshot.title,
+                            )
+                        {
+                            lines.push(Line::from(inv_text));
+                        }
+                        for text in client_event_format::format_artifacts(&snapshot.artifacts) {
+                            lines.push(Line::from(text));
+                        }
+                        self.overlay =
+                            Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
                     }
-                    for text in client_event_format::format_artifacts(&snapshot.artifacts) {
-                        lines.push(Line::from(text));
-                    }
-                    self.overlay =
-                        Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
                 }
             },
             AppEvent::SetPendingAgent {

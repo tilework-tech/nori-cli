@@ -22,8 +22,14 @@ All twelve specs are implemented on branch `feat/acp-tui-specs`.
 | 11 — Delete File Operation Bridge | `71af633c` | Unified edit/delete/move rendering via `render_edit_lines`, routing unification, bridge deletion |
 | 12 — Execute Cell Completion Buffering | `c23b3af4` | Parallel execute buffering, description text filtering, List dedup |
 
-Tests: 43 unit + 9 integration. All 1148 tests pass.
+Tests: 46 unit + 10 integration. All 1153 tests pass.
+
+## Post-Spec Follow-Up
+
+| Task | Commit | Summary |
+|------|--------|---------|
+| Approval Bridge Removal (spec 11 step 4) | *pending commit* | Removed Edit/Delete/Move → ApplyPatch routing; unified through AcpTool with DiffSummary rendering; deleted 3 bridge functions |
 
 ## Remaining
 
-None. All specs are complete.
+None. All specs and follow-up work are complete.

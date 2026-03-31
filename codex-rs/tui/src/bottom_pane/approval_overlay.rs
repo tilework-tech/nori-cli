@@ -459,6 +459,37 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                 kind,
                 snapshot,
             } => {
+                let is_edit_like = matches!(
+                    kind,
+                    nori_protocol::ToolKind::Edit
+                        | nori_protocol::ToolKind::Delete
+                        | nori_protocol::ToolKind::Move
+                );
+
+                // For edit-like tools, try to render a DiffSummary from the snapshot
+                if is_edit_like {
+                    let mut changes =
+                        crate::client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts);
+                    if changes.is_empty() {
+                        changes =
+                            crate::client_tool_cell::changes_from_invocation(&snapshot.invocation);
+                    }
+                    if !changes.is_empty() {
+                        let cwd = std::path::PathBuf::from(".");
+                        let header: Vec<Box<dyn Renderable>> =
+                            vec![DiffSummary::new(changes, cwd).into()];
+                        return Self {
+                            variant: ApprovalVariant::AcpTool {
+                                call_id,
+                                title,
+                                kind,
+                            },
+                            header: Box::new(ColumnRenderable::with(header)),
+                        };
+                    }
+                }
+
+                // Non-edit tools or edit tools without diff data: text-only rendering
                 let mut lines: Vec<Line<'static>> = Vec::new();
                 lines.push(Line::from(title.clone()));
                 if let Some(inv_text) =
@@ -1034,6 +1065,128 @@ mod tests {
         assert!(
             rendered.contains("read"),
             "expected tool kind, got {rendered}"
+        );
+    }
+
+    fn make_acp_edit_tool_request() -> ApprovalRequest {
+        ApprovalRequest::AcpTool {
+            call_id: "call-edit-1".to_string(),
+            title: "Edit src/main.rs".to_string(),
+            kind: nori_protocol::ToolKind::Edit,
+            snapshot: Box::new(nori_protocol::ToolSnapshot {
+                call_id: "call-edit-1".to_string(),
+                title: "Edit src/main.rs".to_string(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![nori_protocol::ToolLocation {
+                    path: std::path::PathBuf::from("src/main.rs"),
+                    line: None,
+                }],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: std::path::PathBuf::from("src/main.rs"),
+                        old_text: Some("fn main() {}\n".to_string()),
+                        new_text: "fn main() {\n    println!(\"hello\");\n}\n".to_string(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: std::path::PathBuf::from("src/main.rs"),
+                    old_text: Some("fn main() {}\n".to_string()),
+                    new_text: "fn main() {\n    println!(\"hello\");\n}\n".to_string(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn acp_edit_tool_overlay_shows_diff_content() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let view = ApprovalOverlay::new(make_acp_edit_tool_request(), tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        // The overlay should show "Would you like to allow edit: Edit src/main.rs?"
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Would you like to allow")),
+            "expected AcpTool edit header to contain approval question, got {rendered:?}"
+        );
+        // The overlay should contain diff change counts (e.g., "+3 -1") from the DiffSummary.
+        // This proves the diff artifacts were rendered, not just the title.
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("+3") || line.contains("-1")),
+            "expected AcpTool edit overlay to show diff line counts, got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn acp_edit_tool_has_always_approve_option() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let view = ApprovalOverlay::new(make_acp_edit_tool_request(), tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        // AcpTool gets "don't ask again" option (unlike ApplyPatch which only has Yes/No)
+        assert!(
+            rendered.iter().any(|line| line.contains("don't ask again")),
+            "expected AcpTool edit to have 'don't ask again' option, got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn acp_edit_tool_approved_history_cell() {
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Edit src/main.rs",
+            &nori_protocol::ToolKind::Edit,
+            ReviewDecision::Approved,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("approved"),
+            "expected approved text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("edit"),
+            "expected 'edit' tool kind in text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("Edit src/main.rs"),
+            "expected tool title in text, got {rendered}"
         );
     }
 }
