@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::api_bridge::auth_provider_from_auth;
 use crate::api_bridge::map_api_error;
 use codex_api::Prompt as ApiPrompt;
+use codex_api::Provider as ApiProvider;
 use codex_api::RequestTelemetry;
 use codex_api::ReqwestTransport;
 use codex_api::ResponsesClient as ApiResponsesClient;
@@ -12,6 +13,7 @@ use codex_api::TransportError;
 use codex_api::common::Reasoning;
 use codex_api::create_text_param_for_request;
 use codex_api::error::ApiError;
+use codex_api::provider::RetryConfig as ApiRetryConfig;
 use codex_app_server_protocol::AuthMode;
 use codex_otel::otel_event_manager::OtelEventManager;
 use codex_protocol::ConversationId;
@@ -21,7 +23,10 @@ use codex_protocol::protocol::SessionSource;
 use eventsource_stream::Event;
 use eventsource_stream::EventStreamError;
 use futures::StreamExt;
+use http::HeaderMap;
 use http::StatusCode as HttpStatusCode;
+use http::header::HeaderName;
+use http::header::HeaderValue;
 use reqwest::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
@@ -42,6 +47,64 @@ use crate::model_family::ModelFamily;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::openai_model_info::get_model_info;
 use crate::tools::spec::create_tools_json_for_responses_api;
+
+fn build_header_map(info: &ModelProviderInfo) -> Result<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    if let Some(extra) = &info.http_headers {
+        for (k, v) in extra {
+            if let (Ok(name), Ok(value)) = (HeaderName::try_from(k), HeaderValue::try_from(v)) {
+                headers.insert(name, value);
+            }
+        }
+    }
+
+    if let Some(env_headers) = &info.env_http_headers {
+        for (header, env_var) in env_headers {
+            if let Ok(val) = std::env::var(env_var)
+                && !val.trim().is_empty()
+                && let (Ok(name), Ok(value)) =
+                    (HeaderName::try_from(header), HeaderValue::try_from(val))
+            {
+                headers.insert(name, value);
+            }
+        }
+    }
+
+    Ok(headers)
+}
+
+pub(crate) fn create_api_provider(
+    info: &ModelProviderInfo,
+    auth_mode: Option<AuthMode>,
+) -> Result<ApiProvider> {
+    let default_base_url = if matches!(auth_mode, Some(AuthMode::ChatGPT)) {
+        "https://chatgpt.com/backend-api/codex"
+    } else {
+        "https://api.openai.com/v1"
+    };
+    let base_url = info
+        .base_url
+        .clone()
+        .unwrap_or_else(|| default_base_url.to_string());
+
+    let headers = build_header_map(info)?;
+    let retry = ApiRetryConfig {
+        max_attempts: info.request_max_retries(),
+        base_delay: Duration::from_millis(200),
+        retry_429: false,
+        retry_5xx: true,
+        retry_transport: true,
+    };
+
+    Ok(ApiProvider {
+        name: info.name.clone(),
+        base_url,
+        query_params: info.query_params.clone(),
+        headers,
+        retry,
+        stream_idle_timeout: info.stream_idle_timeout(),
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct ModelClient {
@@ -163,9 +226,7 @@ impl ModelClient {
         let mut refreshed = false;
         loop {
             let auth = auth_manager.as_ref().and_then(|m| m.auth());
-            let api_provider = self
-                .provider
-                .to_api_provider(auth.as_ref().map(|a| a.mode))?;
+            let api_provider = create_api_provider(&self.provider, auth.as_ref().map(|a| a.mode))?;
             let api_auth = auth_provider_from_auth(auth.clone(), &self.provider).await?;
             let transport = ReqwestTransport::new(build_reqwest_client());
             let (request_telemetry, sse_telemetry) = self.build_streaming_telemetry();
@@ -397,5 +458,112 @@ impl SseTelemetry for ApiTelemetry {
         duration: Duration,
     ) {
         self.otel_event_manager.log_sse_event(result, duration);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model_provider_info::ModelProviderInfo;
+    use crate::model_provider_info::OLLAMA_OSS_PROVIDER_ID;
+    use crate::model_provider_info::built_in_model_providers;
+
+    #[test]
+    fn legacy_wire_api_field_in_config_is_silently_ignored() {
+        let toml_str = r#"
+name = "test"
+base_url = "https://example.com/v1"
+wire_api = "chat"
+        "#;
+        let provider: ModelProviderInfo = toml::from_str(toml_str).unwrap();
+        create_api_provider(&provider, None)
+            .expect("legacy wire_api field should be silently ignored");
+    }
+
+    #[test]
+    fn ollama_builtin_provider_creates_successfully() {
+        let providers = built_in_model_providers();
+        let ollama = providers
+            .get(OLLAMA_OSS_PROVIDER_ID)
+            .expect("ollama should exist");
+        create_api_provider(ollama, None)
+            .expect("ollama built-in provider should create successfully");
+    }
+
+    #[test]
+    fn detects_azure_responses_base_urls() {
+        let positive_cases = [
+            "https://foo.openai.azure.com/openai",
+            "https://foo.openai.azure.us/openai/deployments/bar",
+            "https://foo.cognitiveservices.azure.cn/openai",
+            "https://foo.aoai.azure.com/openai",
+            "https://foo.openai.azure-api.net/openai",
+            "https://foo.z01.azurefd.net/",
+        ];
+        for base_url in positive_cases {
+            let provider = ModelProviderInfo {
+                name: "test".into(),
+                base_url: Some(base_url.into()),
+                env_key: None,
+                env_key_instructions: None,
+                experimental_bearer_token: None,
+                query_params: None,
+                http_headers: None,
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
+            };
+            let api = create_api_provider(&provider, None).expect("api provider");
+            assert!(
+                api.is_azure_responses_endpoint(),
+                "expected {base_url} to be detected as Azure"
+            );
+        }
+
+        let named_provider = ModelProviderInfo {
+            name: "Azure".into(),
+            base_url: Some("https://example.com".into()),
+            env_key: None,
+            env_key_instructions: None,
+            experimental_bearer_token: None,
+            query_params: None,
+            http_headers: None,
+            env_http_headers: None,
+            request_max_retries: None,
+            stream_max_retries: None,
+            stream_idle_timeout_ms: None,
+            requires_openai_auth: false,
+        };
+        let named_api = create_api_provider(&named_provider, None).expect("api provider");
+        assert!(named_api.is_azure_responses_endpoint());
+
+        let negative_cases = [
+            "https://api.openai.com/v1",
+            "https://example.com/openai",
+            "https://myproxy.azurewebsites.net/openai",
+        ];
+        for base_url in negative_cases {
+            let provider = ModelProviderInfo {
+                name: "test".into(),
+                base_url: Some(base_url.into()),
+                env_key: None,
+                env_key_instructions: None,
+                experimental_bearer_token: None,
+                query_params: None,
+                http_headers: None,
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
+            };
+            let api = create_api_provider(&provider, None).expect("api provider");
+            assert!(
+                !api.is_azure_responses_endpoint(),
+                "expected {base_url} not to be detected as Azure"
+            );
+        }
     }
 }

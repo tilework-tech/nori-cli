@@ -192,8 +192,38 @@ These modules are at the "top" of the dependency chain — nothing in core/src/ 
 
 ### Strategy: Incremental feature-gating
 
-Phase 1 (this commit): Introduce `legacy-http-backend` feature. Gate leaf modules and HTTP-only re-exports.
-Phase 2 (future): Gate `client.rs`, `api_bridge.rs`, `sandboxing/assessment.rs` behind the feature.
-Phase 3 (future): Make `codex-api` an optional dependency (`dep:codex-api`).
-Phase 4 (future): Gate the codex/ module and its cascade (requires separating Session/TurnContext from shared infrastructure).
-Phase 5 (future): Remove codex-api and codex-client crates entirely.
+Phase 1 (done): Introduce `legacy-http-backend` feature. Gate leaf modules and HTTP-only re-exports.
+Phase 2 (next): Move `to_api_provider()` from `model_provider_info.rs` to `client.rs`, removing codex-api from the shared config module.
+Phase 3 (future): Gate `client.rs`, `api_bridge.rs`, `sandboxing/assessment.rs` behind the feature.
+Phase 4 (future): Make `codex-api` an optional dependency (`dep:codex-api`).
+Phase 5 (future): Gate the codex/ module and its cascade (requires separating Session/TurnContext from shared infrastructure).
+Phase 6 (future): Remove codex-api and codex-client crates entirely.
+
+## Moving `to_api_provider()` out of `model_provider_info.rs` (Phase 2 analysis)
+
+### Why this step
+
+`model_provider_info.rs` is a shared module — its `ModelProviderInfo` struct is used by Config for all backends. But it imports `codex_api::Provider` and `codex_api::provider::RetryConfig` solely for the `to_api_provider()` method, which converts the config struct into an HTTP API client provider. This couples a shared module to the HTTP backend.
+
+Moving `to_api_provider()` and its helper `build_header_map()` into `client.rs` (where the only production caller lives) concentrates HTTP-backend code in the HTTP-backend module and removes codex-api from the shared config module.
+
+### Current state
+
+- `to_api_provider()` is `pub(crate)` on `ModelProviderInfo` (line 106)
+- `build_header_map()` is private, `#[allow(dead_code)]`, called only by `to_api_provider()` (line 81)
+- Only production caller: `client.rs:168`
+- Test callers: 4 tests in `model_provider_info.rs` that verify Azure detection and Ollama provider creation
+- codex-api imports: `Provider as ApiProvider`, `provider::RetryConfig as ApiRetryConfig` (lines 8-9)
+
+### Approach
+
+1. Move `to_api_provider()` to a standalone `pub(crate)` function in `client.rs`: `fn create_api_provider(info: &ModelProviderInfo, auth_mode: Option<AuthMode>) -> Result<ApiProvider>`
+2. Move `build_header_map()` as a private helper alongside it
+3. Move the 4 HTTP-backend tests (`legacy_wire_api_field_in_config_is_silently_ignored`, `ollama_builtin_provider_creates_successfully`, `detects_azure_responses_base_urls`) to the `client.rs` test module
+4. Remove codex-api imports from `model_provider_info.rs`
+
+### Cascading effects
+
+- None. The function signature changes from `self.to_api_provider(auth_mode)` to `create_api_provider(&self.provider, auth_mode)` at one call site in `client.rs`
+- Tests move but logic is unchanged
+- No external crates call `to_api_provider()` (it's `pub(crate)`)

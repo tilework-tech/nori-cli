@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Sixth component removed
+## Status: Seventh component removed
 
 ### Completed: Remove compact_remote module
 
@@ -135,8 +135,30 @@ Introduced a `legacy-http-backend` cargo feature in codex-core to begin gating H
 
 **Impact:** 6 HTTP-backend types removed from codex-core's default public API. All existing tests pass (codex-core: 537 unit, 441 integration pass, 21 pre-existing nvm environment failures; E2E: 6 tests).
 
+### Completed: Move `to_api_provider()` out of shared config module
+
+Moved the `to_api_provider()` method and `build_header_map()` helper from `model_provider_info.rs` to `client.rs` as standalone functions (`create_api_provider()` and `build_header_map()`). This removes the `codex-api` dependency from the shared configuration module.
+
+**What was moved:**
+- `to_api_provider()` → `create_api_provider()` standalone function in `client.rs`
+- `build_header_map()` → private helper in `client.rs`
+- 3 HTTP-backend tests (`legacy_wire_api_field_in_config_is_silently_ignored`, `ollama_builtin_provider_creates_successfully`, `detects_azure_responses_base_urls`) → `client.rs` test module
+
+**What was removed from `model_provider_info.rs`:**
+- `use codex_api::Provider as ApiProvider;`
+- `use codex_api::provider::RetryConfig as ApiRetryConfig;`
+- `build_header_map()` method
+- `to_api_provider()` method
+- 3 HTTP-backend tests
+
+**What was simplified:**
+- `model_provider_info.rs` is now a pure shared configuration module — no `codex-api` dependency
+- HTTP-backend conversion logic is concentrated in `client.rs` where `ModelClient` lives
+
+**Impact:** `model_provider_info.rs` no longer imports from `codex-api`. Reduces the codex-api dependency surface in shared modules. All existing tests pass (codex-core: 537 unit, 441 integration pass, 21 pre-existing nvm environment failures).
+
 ### Suggested next steps for future commits
-1. Gate `client.rs`, `api_bridge.rs`, and `sandboxing/assessment.rs` behind `legacy-http-backend` (requires also gating compact.rs HTTP-only functions)
-2. Make `codex-api` an optional dependency (`dep:codex-api`) enabled by `legacy-http-backend`
+1. Gate `client.rs`, `api_bridge.rs`, and `sandboxing/assessment.rs` behind `legacy-http-backend` (requires also gating codex/ module imports and compact.rs HTTP-only functions)
+2. Make `codex-api` an optional dependency (`dep:codex-api`) enabled by `legacy-http-backend` — now only 3 source files import from codex-api: `api_bridge.rs`, `client.rs`, `client_common.rs`
 3. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
 4. Eventually: remove the `codex-api` and `codex-client` crates entirely

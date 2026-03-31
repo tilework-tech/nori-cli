@@ -106,7 +106,7 @@ Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 
 **Model Client Architecture:**
 
-`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. The `ModelProviderInfo` struct in `model_provider_info.rs` defines provider configuration (base URL, auth, retry/timeout settings, headers) and converts to a `codex-api::Provider` via `to_api_provider()`.
+`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. The `ModelProviderInfo` struct in `model_provider_info.rs` is a pure shared configuration type (base URL, auth, retry/timeout settings, headers) with no dependency on `codex-api`. The conversion from `ModelProviderInfo` to a `codex-api::Provider` happens via the standalone `create_api_provider()` function in `client.rs`, keeping all HTTP-backend-specific logic concentrated in the HTTP-backend module.
 
 ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
 

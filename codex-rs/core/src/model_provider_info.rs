@@ -5,12 +5,6 @@
 //!   2. User-defined entries inside `~/.codex/config.toml` under the `model_providers`
 //!      key. These override or extend the defaults at runtime.
 
-use codex_api::Provider as ApiProvider;
-use codex_api::provider::RetryConfig as ApiRetryConfig;
-use codex_app_server_protocol::AuthMode;
-use http::HeaderMap;
-use http::header::HeaderName;
-use http::header::HeaderValue;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -77,65 +71,6 @@ pub struct ModelProviderInfo {
 }
 
 impl ModelProviderInfo {
-    #[allow(dead_code)]
-    fn build_header_map(&self) -> crate::error::Result<HeaderMap> {
-        let mut headers = HeaderMap::new();
-        if let Some(extra) = &self.http_headers {
-            for (k, v) in extra {
-                if let (Ok(name), Ok(value)) = (HeaderName::try_from(k), HeaderValue::try_from(v)) {
-                    headers.insert(name, value);
-                }
-            }
-        }
-
-        if let Some(env_headers) = &self.env_http_headers {
-            for (header, env_var) in env_headers {
-                if let Ok(val) = std::env::var(env_var)
-                    && !val.trim().is_empty()
-                    && let (Ok(name), Ok(value)) =
-                        (HeaderName::try_from(header), HeaderValue::try_from(val))
-                {
-                    headers.insert(name, value);
-                }
-            }
-        }
-
-        Ok(headers)
-    }
-
-    pub(crate) fn to_api_provider(
-        &self,
-        auth_mode: Option<AuthMode>,
-    ) -> crate::error::Result<ApiProvider> {
-        let default_base_url = if matches!(auth_mode, Some(AuthMode::ChatGPT)) {
-            "https://chatgpt.com/backend-api/codex"
-        } else {
-            "https://api.openai.com/v1"
-        };
-        let base_url = self
-            .base_url
-            .clone()
-            .unwrap_or_else(|| default_base_url.to_string());
-
-        let headers = self.build_header_map()?;
-        let retry = ApiRetryConfig {
-            max_attempts: self.request_max_retries(),
-            base_delay: Duration::from_millis(200),
-            retry_429: false,
-            retry_5xx: true,
-            retry_transport: true,
-        };
-
-        Ok(ApiProvider {
-            name: self.name.clone(),
-            base_url,
-            query_params: self.query_params.clone(),
-            headers,
-            retry,
-            stream_idle_timeout: self.stream_idle_timeout(),
-        })
-    }
-
     /// If `env_key` is Some, returns the API key for this provider if present
     /// (and non-empty) in the environment. If `env_key` is required but
     /// cannot be found, returns an error.
@@ -381,109 +316,5 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
 
         let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
         assert_eq!(expected_provider, provider);
-    }
-
-    #[test]
-    fn legacy_wire_api_field_in_config_is_silently_ignored() {
-        let toml_str = r#"
-name = "test"
-base_url = "https://example.com/v1"
-wire_api = "chat"
-        "#;
-        let provider: ModelProviderInfo = toml::from_str(toml_str).unwrap();
-        provider
-            .to_api_provider(None)
-            .expect("legacy wire_api field should be silently ignored");
-    }
-
-    #[test]
-    fn ollama_builtin_provider_creates_successfully() {
-        let providers = built_in_model_providers();
-        let ollama = providers
-            .get(OLLAMA_OSS_PROVIDER_ID)
-            .expect("ollama should exist");
-        ollama
-            .to_api_provider(None)
-            .expect("ollama built-in provider should create successfully");
-    }
-
-    #[test]
-    fn detects_azure_responses_base_urls() {
-        let positive_cases = [
-            "https://foo.openai.azure.com/openai",
-            "https://foo.openai.azure.us/openai/deployments/bar",
-            "https://foo.cognitiveservices.azure.cn/openai",
-            "https://foo.aoai.azure.com/openai",
-            "https://foo.openai.azure-api.net/openai",
-            "https://foo.z01.azurefd.net/",
-        ];
-        for base_url in positive_cases {
-            let provider = ModelProviderInfo {
-                name: "test".into(),
-                base_url: Some(base_url.into()),
-                env_key: None,
-                env_key_instructions: None,
-                experimental_bearer_token: None,
-
-                query_params: None,
-                http_headers: None,
-                env_http_headers: None,
-                request_max_retries: None,
-                stream_max_retries: None,
-                stream_idle_timeout_ms: None,
-                requires_openai_auth: false,
-            };
-            let api = provider.to_api_provider(None).expect("api provider");
-            assert!(
-                api.is_azure_responses_endpoint(),
-                "expected {base_url} to be detected as Azure"
-            );
-        }
-
-        let named_provider = ModelProviderInfo {
-            name: "Azure".into(),
-            base_url: Some("https://example.com".into()),
-            env_key: None,
-            env_key_instructions: None,
-            experimental_bearer_token: None,
-
-            query_params: None,
-            http_headers: None,
-            env_http_headers: None,
-            request_max_retries: None,
-            stream_max_retries: None,
-            stream_idle_timeout_ms: None,
-            requires_openai_auth: false,
-        };
-        let named_api = named_provider.to_api_provider(None).expect("api provider");
-        assert!(named_api.is_azure_responses_endpoint());
-
-        let negative_cases = [
-            "https://api.openai.com/v1",
-            "https://example.com/openai",
-            "https://myproxy.azurewebsites.net/openai",
-        ];
-        for base_url in negative_cases {
-            let provider = ModelProviderInfo {
-                name: "test".into(),
-                base_url: Some(base_url.into()),
-                env_key: None,
-                env_key_instructions: None,
-                experimental_bearer_token: None,
-
-                query_params: None,
-                http_headers: None,
-                env_http_headers: None,
-                request_max_retries: None,
-                stream_max_retries: None,
-                stream_idle_timeout_ms: None,
-                requires_openai_auth: false,
-            };
-            let api = provider.to_api_provider(None).expect("api provider");
-            assert!(
-                !api.is_azure_responses_endpoint(),
-                "expected {base_url} not to be detected as Azure"
-            );
-        }
     }
 }
