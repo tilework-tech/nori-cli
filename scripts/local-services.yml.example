@@ -1,0 +1,46 @@
+# ~/.nori/local-services.yml
+#
+# Lightweight inventory of known local services across Nori repos.
+# Used by `just services` in each repo to show relevant nearby dependencies.
+#
+# Required fields: repo, cwd, role, start_cmd
+# Optional fields: default_port, url, notes
+
+services:
+  nori-cli:
+    repo: cli
+    cwd: /home/user/Documents/source/nori/cli
+    role: interactive AI coding assistant (TUI)
+    start_cmd: cd codex-rs && cargo run --bin nori --
+
+  handroll:
+    repo: sessions
+    cwd: /home/user/Documents/source/nori/sessions
+    role: local handroll cli
+    start_cmd: cargo run -p nori-handroll --
+
+  broker-server:
+    repo: sessions
+    cwd: /home/user/Documents/source/nori/sessions/broker/server
+    role: local broker api
+    start_cmd: cd broker/server && bun run src/main.ts
+    default_port: 3001
+
+  broker-ui:
+    repo: sessions
+    cwd: /home/user/Documents/source/nori/sessions/broker/ui
+    role: local broker ui
+    start_cmd: cd broker/ui && npm run dev
+    default_port: 5173
+
+  registrar-server:
+    repo: registrar
+    cwd: /home/user/Documents/source/nori/registrar/server
+    role: local registrar api
+    start_cmd: cd server && npm start
+
+  registrar-ui:
+    repo: registrar
+    cwd: /home/user/Documents/source/nori/registrar/ui
+    role: local registrar ui
+    start_cmd: cd ui && npm run dev

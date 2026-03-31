@@ -4,8 +4,9 @@ Path: @/scripts
 
 ### Overview
 
-- Utility scripts for release management, development setup, and code quality checks
+- Utility scripts for release management, development setup, code quality checks, and infrastructure validation
 - The most critical script is `create_nori_release`, which creates tagged releases via the GitHub API using synthetic commits
+- Also contains the `local-services.yml.example` reference file for the Shared Local Runner Layer's service registry and `test_justfile.sh` for validating the root justfile targets
 
 ### How it fits into the larger codebase
 
@@ -37,10 +38,21 @@ The `N` suffix is determined by scanning all git tags (via `list_tags()`) that m
 
 `get_latest_release_version()` also uses `list_tags()` -- it filters to stable-only versions (no `-` in the version string) and returns the highest by semver comparison.
 
+### Shared Local Runner Layer Support
+
+**`local-services.yml.example` -- reference template for `~/.nori/local-services.yml`:**
+
+This file is a working example of the user-level service registry consumed by `just services` in each Nori repo. It defines the YAML schema (required fields: `repo`, `cwd`, `role`, `start_cmd`; optional: `default_port`, `url`, `notes`) and includes sample entries for `cli`, `sessions`, and `registrar` services. Engineers copy this to `~/.nori/local-services.yml` and customize paths for their machine. The file is not consumed directly by any runtime -- it exists purely as documentation of the expected format.
+
+**`test_justfile.sh` -- integration tests for the root justfile:**
+
+Validates the five standard targets (`help`, `dev`, `test`, `doctor`, `services`) defined by the Shared Local Runner Layer spec in `@/justfile`. The test uses string-matching assertions (`assert_contains`) against command output and `just --summary` / `just --show` for structural checks. It tests the `services` target using the `NORI_SERVICES_FILE` env var override to point at a controlled temp fixture, avoiding any mutation of the user's `~/.nori/local-services.yml`. Run with `bash scripts/test_justfile.sh`.
+
 ### Things to Know
 
 - Git tags are the single source of truth for version enumeration -- `list_tags()` queries the GitHub refs/tags API, not GitHub Releases; this matters because synthetic-commit tags may not always have corresponding GitHub Releases (e.g., if the release workflow was cancelled after tagging)
 - The `--get-next-version` flag simulates `--publish-next` internally to compute the version, then prints it and exits without creating any tags; this is how the CI workflow determines what version to build
 - The version determination logic in `determine_version()` is noted in comments as being "mirrored" in `@/.github/workflows/nori-release.yml` -- changes to version numbering logic must be kept in sync between the two
+- `test_justfile.sh` uses the `NORI_SERVICES_FILE` env var to point the `services` target at a temp fixture file, so it never touches the user's `~/.nori/local-services.yml`
 
 Created and maintained by Nori.
