@@ -318,3 +318,52 @@ Moving `to_api_provider()` and its helper `build_header_map()` into `client.rs` 
 - None. The function signature changes from `self.to_api_provider(auth_mode)` to `create_api_provider(&self.provider, auth_mode)` at one call site in `client.rs`
 - Tests move but logic is unchanged
 - No external crates call `to_api_provider()` (it's `pub(crate)`)
+
+## Moving ResponseEvent and ResponseStream from `client_common.rs` to `client.rs`
+
+### Why this step
+
+`client_common.rs` is a shared module — its `tools` submodule (ToolSpec, FreeformTool, etc.) is used by both backends. But it has one production import from `codex-api`: `pub use codex_api::common::ResponseEvent;` (line 4). The `ResponseStream` type (lines 233-243) wraps `ResponseEvent` in a channel-based stream. Both types are pure HTTP-backend types never used by ACP.
+
+Moving these two types into `client.rs` (which is already a pure HTTP-backend module) removes `codex-api` from the shared module's production code. This directly enables making `codex-api` an optional dependency in a future commit.
+
+### Current state
+
+- `client_common.rs:4`: `pub use codex_api::common::ResponseEvent;` — sole production codex-api import
+- `client_common.rs:233-243`: `ResponseStream` struct and `Stream` impl — depends on `ResponseEvent`
+- `client.rs:39-40`: imports both from `crate::client_common`
+- Tests in `client_common.rs:245-419`: three tests use `codex_api` types (ResponsesApiRequest, etc.) — already `#[cfg(test)]`, harmless
+
+### Consumers of ResponseEvent from client_common
+
+1. `client.rs:39` — `use crate::client_common::ResponseEvent;` (will become local)
+2. `codex/mod.rs:59` — `use crate::client_common::ResponseEvent;` → change to `crate::client::ResponseEvent`
+3. `compact.rs:16` — gated: `use crate::client_common::ResponseEvent;` → change to `crate::client::ResponseEvent`
+4. `sandboxing/assessment.rs:11` — gated: `use crate::client_common::ResponseEvent;` → change to `crate::client::ResponseEvent`
+5. `lib.rs:116` — gated: `pub use client_common::ResponseEvent;` → change to `pub use client::ResponseEvent;`
+
+### Consumers of ResponseStream from client_common
+
+1. `client.rs:40` — `use crate::client_common::ResponseStream;` (will become local)
+2. `lib.rs:118` — gated: `pub use client_common::ResponseStream;` → change to `pub use client::ResponseStream;`
+
+### Approach
+
+1. Add `pub use codex_api::common::ResponseEvent;` to `client.rs`
+2. Move `ResponseStream` struct and `Stream` impl to `client.rs`
+3. Remove both from `client_common.rs`
+4. Remove `use crate::client_common::{ResponseEvent, ResponseStream}` from `client.rs` (now local)
+5. Update import paths in consumers (codex/mod.rs, compact.rs, sandboxing/assessment.rs, lib.rs)
+
+### Cascading effects
+
+- Pure import-path changes. No behavioral changes.
+- All consumers of `ResponseEvent`/`ResponseStream` already import from `crate::client_common` — they just change to `crate::client`
+- The `ResponseStream` struct's `rx_event` field is `pub(crate)` and only accessed in `client.rs` — moving it there makes the field truly private
+- Test code in `client_common.rs` is unaffected (tests import codex-api types via `#[cfg(test)]`)
+
+### After this change
+
+- `client_common.rs` production imports: zero from codex-api
+- `client.rs` + `api_bridge.rs` are the only two source files with production codex-api imports
+- Direct prerequisite for making `codex-api` an optional dependency (`dep:codex-api`) behind `legacy-http-backend`

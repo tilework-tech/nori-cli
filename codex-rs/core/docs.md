@@ -106,7 +106,9 @@ Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 
 **Model Client Architecture:**
 
-`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. The `ModelProviderInfo` struct in `model_provider_info.rs` is a pure shared configuration type (base URL, auth, retry/timeout settings, headers) with no dependency on `codex-api`. The conversion from `ModelProviderInfo` to a `codex-api::Provider` happens via the standalone `create_api_provider()` function in `client.rs`, keeping all HTTP-backend-specific logic concentrated in the HTTP-backend module.
+`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. `client.rs` also hosts `ResponseEvent` (a re-export from `codex_api::common::ResponseEvent`) and the `ResponseStream` struct (a channel-based `futures::Stream` wrapper over `ResponseEvent`). The `ModelProviderInfo` struct in `model_provider_info.rs` is a pure shared configuration type (base URL, auth, retry/timeout settings, headers) with no dependency on `codex-api`. The conversion from `ModelProviderInfo` to a `codex-api::Provider` happens via the standalone `create_api_provider()` function in `client.rs`, keeping all HTTP-backend-specific logic concentrated in the HTTP-backend module.
+
+`client_common.rs` is a shared module with no production `codex-api` dependency. It contains `Prompt` (the API request payload struct) and the `tools` submodule (`ToolSpec`, `FreeformTool`, etc.) used by both backends. Only `client.rs` and `api_bridge.rs` import from `codex-api` in production code.
 
 ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
 
@@ -119,7 +121,8 @@ The `legacy-http-backend` cargo feature (defined in `core/Cargo.toml`) gates HTT
 | `CodexConversation` | `codex_conversation` |
 | `ConversationManager`, `NewConversation` | `conversation_manager` |
 | `ModelClient` | `client` |
-| `Prompt`, `ResponseEvent`, `ResponseStream` | `client_common` |
+| `Prompt` | `client_common` |
+| `ResponseEvent`, `ResponseStream` | `client` |
 | `assessment` submodule | `sandboxing` |
 | `run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed` | `compact` |
 

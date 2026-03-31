@@ -55,8 +55,8 @@ use tracing::warn;
 
 use crate::ModelProviderInfo;
 use crate::client::ModelClient;
+use crate::client::ResponseEvent;
 use crate::client_common::Prompt;
-use crate::client_common::ResponseEvent;
 use crate::compact::collect_user_messages;
 use crate::config::Config;
 use crate::config::types::ShellEnvironmentPolicy;

@@ -1,4 +1,7 @@
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
 use crate::api_bridge::auth_provider_from_auth;
 use crate::api_bridge::map_api_error;
@@ -11,6 +14,7 @@ use codex_api::ResponsesOptions as ApiResponsesOptions;
 use codex_api::SseTelemetry;
 use codex_api::TransportError;
 use codex_api::common::Reasoning;
+pub use codex_api::common::ResponseEvent;
 use codex_api::create_text_param_for_request;
 use codex_api::error::ApiError;
 use codex_api::provider::RetryConfig as ApiRetryConfig;
@@ -36,8 +40,6 @@ use tracing::warn;
 use crate::AuthManager;
 use crate::auth::RefreshTokenError;
 use crate::client_common::Prompt;
-use crate::client_common::ResponseEvent;
-use crate::client_common::ResponseStream;
 use crate::config::Config;
 use crate::default_client::build_reqwest_client;
 use crate::error::CodexErr;
@@ -445,6 +447,18 @@ impl RequestTelemetry for ApiTelemetry {
             error_message.as_deref(),
             duration,
         );
+    }
+}
+
+pub struct ResponseStream {
+    pub(crate) rx_event: mpsc::Receiver<Result<ResponseEvent>>,
+}
+
+impl futures::Stream for ResponseStream {
+    type Item = Result<ResponseEvent>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.rx_event.poll_recv(cx)
     }
 }
 

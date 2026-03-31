@@ -11,9 +11,9 @@ use codex_protocol::models::ResponseItem;
 use codex_protocol::user_input::UserInput;
 
 #[cfg(feature = "legacy-http-backend")]
-use crate::client_common::Prompt;
+use crate::client::ResponseEvent;
 #[cfg(feature = "legacy-http-backend")]
-use crate::client_common::ResponseEvent;
+use crate::client_common::Prompt;
 #[cfg(feature = "legacy-http-backend")]
 use crate::codex::get_last_assistant_message_from_turn;
 #[cfg(feature = "legacy-http-backend")]

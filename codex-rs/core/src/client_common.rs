@@ -1,19 +1,12 @@
 use crate::client_common::tools::ToolSpec;
-use crate::error::Result;
 use crate::model_family::ModelFamily;
-pub use codex_api::common::ResponseEvent;
 use codex_apply_patch::APPLY_PATCH_TOOL_INSTRUCTIONS;
 use codex_protocol::models::ResponseItem;
-use futures::Stream;
 use serde::Deserialize;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::Deref;
-use std::pin::Pin;
-use std::task::Context;
-use std::task::Poll;
-use tokio::sync::mpsc;
 
 /// API request payload for a single model turn
 #[derive(Default, Debug, Clone)]
@@ -227,18 +220,6 @@ pub(crate) mod tools {
         /// `properties` must be present in `required`.
         pub(crate) strict: bool,
         pub(crate) parameters: JsonSchema,
-    }
-}
-
-pub struct ResponseStream {
-    pub(crate) rx_event: mpsc::Receiver<Result<ResponseEvent>>,
-}
-
-impl Stream for ResponseStream {
-    type Item = Result<ResponseEvent>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.rx_event.poll_recv(cx)
     }
 }
 

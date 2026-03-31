@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Ninth component removed
+## Status: Tenth component removed
 
 ### Completed: Remove compact_remote module
 
@@ -198,6 +198,32 @@ Gated the HTTP-backend-specific compaction functions in `compact.rs` behind the 
 **Known limitation:** The no-op stubs are safe because the `codex/` turn execution path is unreachable from the nori binary (ACP). However, if the `codex/` module is ever called without the feature, `run_inline_auto_compact_task` no-op + `continue` in `turn_execution.rs:91` would infinite-loop. This is acceptable because the entire `codex/` module should be feature-gated in a future commit (Phase 6), eliminating the dead code path entirely.
 
 **Impact:** 4 HTTP-backend functions and 16 imports excluded from non-feature-flagged builds. All existing tests pass (codex-core: 541 unit, 12 compact integration; E2E: 6 tests). Build without feature succeeds with 1 fewer warning than baseline.
+
+### Completed: Move ResponseEvent/ResponseStream from `client_common.rs` to `client.rs`
+
+Moved the `ResponseEvent` re-export (from `codex-api`) and `ResponseStream` type from `client_common.rs` into `client.rs`. This removes the sole production `codex-api` import from `client_common.rs`, making it a pure shared-code module.
+
+**What was moved:**
+- `pub use codex_api::common::ResponseEvent;` — re-export, from client_common.rs to client.rs
+- `ResponseStream` struct and its `futures::Stream` impl — from client_common.rs to client.rs
+
+**What was updated (import paths):**
+- `codex/mod.rs` — `crate::client_common::ResponseEvent` → `crate::client::ResponseEvent`
+- `compact.rs` — gated import path updated from `client_common` to `client`
+- `sandboxing/assessment.rs` — import path updated from `client_common` to `client`
+- `lib.rs` — gated re-exports updated from `client_common` to `client`
+
+**What was removed from `client_common.rs`:**
+- `pub use codex_api::common::ResponseEvent;` (line 4)
+- `ResponseStream` struct and `Stream` impl
+- Unused imports: `futures::Stream`, `std::pin::Pin`, `std::task::{Context, Poll}`, `tokio::sync::mpsc`, `crate::error::Result`
+
+**After this change:**
+- `client_common.rs` has zero production `codex-api` imports — it's a pure shared module with `Prompt` and `tools` submodule
+- Only `client.rs` and `api_bridge.rs` have production `codex-api` imports in codex-core
+- Direct prerequisite for making `codex-api` an optional dependency behind `legacy-http-backend`
+
+**Impact:** Pure import reorganization, no behavioral changes. All existing tests pass (codex-core: 537 unit, 436 integration pass, 26 pre-existing nvm environment failures; codex-api: 2 tests; E2E: 5 ACP + 3 streaming pass).
 
 ### Suggested next steps for future commits
 1. Gate `client.rs` and `api_bridge.rs` behind `legacy-http-backend` (requires also gating `codex/` module — large cascade)

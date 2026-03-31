@@ -111,11 +111,11 @@ pub use codex_protocol::config_types as protocol_config_types;
 #[cfg(feature = "legacy-http-backend")]
 pub use client::ModelClient;
 #[cfg(feature = "legacy-http-backend")]
+pub use client::ResponseEvent;
+#[cfg(feature = "legacy-http-backend")]
+pub use client::ResponseStream;
+#[cfg(feature = "legacy-http-backend")]
 pub use client_common::Prompt;
-#[cfg(feature = "legacy-http-backend")]
-pub use client_common::ResponseEvent;
-#[cfg(feature = "legacy-http-backend")]
-pub use client_common::ResponseStream;
 pub use codex_protocol::models::ContentItem;
 pub use codex_protocol::models::LocalShellAction;
 pub use codex_protocol::models::LocalShellExecAction;
