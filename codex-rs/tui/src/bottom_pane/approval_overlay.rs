@@ -60,6 +60,7 @@ pub(crate) enum ApprovalRequest {
         call_id: String,
         title: String,
         kind: nori_protocol::ToolKind,
+        cwd: PathBuf,
         snapshot: Box<nori_protocol::ToolSnapshot>,
     },
 }
@@ -457,8 +458,11 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                 call_id,
                 title,
                 kind,
+                cwd,
                 snapshot,
             } => {
+                let rel_title = crate::client_event_format::relativize_paths_in_text(&title, &cwd);
+
                 let is_edit_like = matches!(
                     kind,
                     nori_protocol::ToolKind::Edit
@@ -475,13 +479,12 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                             crate::client_tool_cell::changes_from_invocation(&snapshot.invocation);
                     }
                     if !changes.is_empty() {
-                        let cwd = std::path::PathBuf::from(".");
                         let header: Vec<Box<dyn Renderable>> =
                             vec![DiffSummary::new(changes, cwd).into()];
                         return Self {
                             variant: ApprovalVariant::AcpTool {
                                 call_id,
-                                title,
+                                title: rel_title,
                                 kind,
                             },
                             header: Box::new(ColumnRenderable::with(header)),
@@ -491,15 +494,18 @@ impl From<ApprovalRequest> for ApprovalRequestState {
 
                 // Non-edit tools or edit tools without diff data: text-only rendering
                 let mut lines: Vec<Line<'static>> = Vec::new();
-                lines.push(Line::from(title.clone()));
+                lines.push(Line::from(rel_title.clone()));
                 if let Some(inv_text) =
                     crate::client_event_format::format_invocation(&snapshot.invocation)
-                    && !crate::client_event_format::is_invocation_redundant(
-                        &inv_text,
-                        &snapshot.title,
-                    )
                 {
-                    lines.push(Line::from(inv_text));
+                    let rel_inv =
+                        crate::client_event_format::relativize_paths_in_text(&inv_text, &cwd);
+                    if !crate::client_event_format::is_invocation_redundant(
+                        &rel_inv,
+                        &snapshot.title,
+                    ) {
+                        lines.push(Line::from(rel_inv));
+                    }
                 }
                 for text in crate::client_event_format::format_artifacts(&snapshot.artifacts) {
                     lines.push(Line::from(text));
@@ -507,7 +513,7 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                 Self {
                     variant: ApprovalVariant::AcpTool {
                         call_id,
-                        title,
+                        title: rel_title,
                         kind,
                     },
                     header: Box::new(Paragraph::new(lines).wrap(Wrap { trim: false })),
@@ -908,6 +914,7 @@ mod tests {
             call_id: "call-1".to_string(),
             title: "Read /src/main.rs".to_string(),
             kind: nori_protocol::ToolKind::Read,
+            cwd: std::path::PathBuf::from("."),
             snapshot: Box::new(nori_protocol::ToolSnapshot {
                 call_id: "call-1".to_string(),
                 title: "Read /src/main.rs".to_string(),
@@ -1073,6 +1080,7 @@ mod tests {
             call_id: "call-edit-1".to_string(),
             title: "Edit src/main.rs".to_string(),
             kind: nori_protocol::ToolKind::Edit,
+            cwd: std::path::PathBuf::from("."),
             snapshot: Box::new(nori_protocol::ToolSnapshot {
                 call_id: "call-edit-1".to_string(),
                 title: "Edit src/main.rs".to_string(),
@@ -1187,6 +1195,104 @@ mod tests {
         assert!(
             rendered.contains("Edit src/main.rs"),
             "expected tool title in text, got {rendered}"
+        );
+    }
+
+    // --- Spec 13: Approval title path relativization ---
+
+    #[test]
+    fn acp_tool_overlay_relativizes_absolute_path_in_title() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let request = ApprovalRequest::AcpTool {
+            call_id: "call-abs".to_string(),
+            title: "Edit /home/user/project/README.md".to_string(),
+            kind: nori_protocol::ToolKind::Edit,
+            cwd: std::path::PathBuf::from("/home/user/project"),
+            snapshot: Box::new(nori_protocol::ToolSnapshot {
+                call_id: "call-abs".to_string(),
+                title: "Edit /home/user/project/README.md".to_string(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![nori_protocol::ToolLocation {
+                    path: std::path::PathBuf::from("/home/user/project/README.md"),
+                    line: None,
+                }],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: std::path::PathBuf::from("/home/user/project/README.md"),
+                        old_text: Some("old\n".to_string()),
+                        new_text: "new\n".to_string(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: std::path::PathBuf::from("/home/user/project/README.md"),
+                    old_text: Some("old\n".to_string()),
+                    new_text: "new\n".to_string(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        };
+
+        let view = ApprovalOverlay::new(request, tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        // The prompt title line should show relative path, not absolute.
+        // Find the "Would you like to allow" line and verify it uses the relative path.
+        let prompt_line = rendered
+            .iter()
+            .find(|line| line.contains("Would you like to allow"))
+            .expect("expected approval prompt line");
+        assert!(
+            !prompt_line.contains("/home/user/project/README.md"),
+            "Approval prompt should not show absolute path, got: {prompt_line}"
+        );
+        assert!(
+            prompt_line.contains("README.md"),
+            "Approval prompt should show relative path, got: {prompt_line}"
+        );
+    }
+
+    #[test]
+    fn acp_decision_cell_uses_relativized_title_from_overlay() {
+        // The overlay relativizes the title before storing it in ApprovalVariant.
+        // When the decision cell is created, it receives the already-relativized title.
+        // Verify this by constructing a cell with a pre-relativized title.
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Edit README.md",
+            &nori_protocol::ToolKind::Edit,
+            ReviewDecision::Approved,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            rendered.contains("approved"),
+            "expected approved text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("Edit README.md"),
+            "expected relativized title in decision cell, got {rendered}"
         );
     }
 }

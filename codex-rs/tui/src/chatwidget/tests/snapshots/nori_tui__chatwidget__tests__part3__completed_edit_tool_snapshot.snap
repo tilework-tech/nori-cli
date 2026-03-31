@@ -2,7 +2,6 @@
 source: tui/src/chatwidget/tests/part3.rs
 expression: blob
 ---
-• Edited README.md
-    • Added README.md (+2 -0)
+• Added README.md (+2 -0)
         1 +hello
         2 +world

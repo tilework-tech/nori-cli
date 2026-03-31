@@ -67,8 +67,16 @@ All twelve specs were implemented across commits `512c505e`..HEAD. Summary:
 | 10 — Failed Edit Tool Visibility | `format_edit_tool_header()`: semantic verb headers for Edit/Delete/Move; red bullet for Failed; error text fallback from `raw_output`; duplicate-cell prevention | `bd51a208` |
 | 11 — Delete File Operation Bridge | `render_edit_lines`: dedicated edit/delete/move renderer with green/red bullet; unified routing through `handle_client_native_tool_snapshot`; `handle_client_edit_tool_snapshot` deleted; `PatchHistoryCell` no longer used for ACP | *pending commit* |
 | 12 — Execute Cell Completion Buffering | Parallel execute buffering, description text filtering, List dedup | `c23b3af4` |
+| 13 — Final Polish | `sanitize_tool_title()` for Gemini exec-like tools, single-file edit header dedup, `cwd` in `AcpTool` approval for path relativization | *pending commit* |
 
-Test coverage: 48 unit tests in `client_tool_cell.rs` and `approval_overlay.rs`, 10 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
+Test coverage: 57 unit tests in `client_tool_cell.rs`, `approval_overlay.rs`, and `client_event_format.rs`, 10 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
+
+### Learnings from Spec 13
+
+- **Gemini title sanitization is simple string ops.** `[current working directory ...]` is always a single bracket pair and trailing `(description text)` is always at the end. No regex needed — `find`/`rfind` is sufficient.
+- **Single-file DiffSummary header promotion avoids modifying diff_render.rs.** Rather than changing the shared `render_changes_block` to conditionally suppress its header, `render_edit_lines` in `client_tool_cell.rs` takes the first line from `create_diff_summary` and uses it as the outer header. This keeps the dedup logic in the consumer, not the shared renderer.
+- **Move tools need the outer header preserved.** DiffSummary always says "Edited" for `FileChange::Update`, but Move tools need the verb "Moved". The dedup skips `ToolKind::Move` to keep the correct verb.
+- **`cwd` threading through `ApprovalRequest::AcpTool` makes relativization consistent.** Previously the DiffSummary in the approval overlay used `PathBuf::from(".")` as cwd, which didn't relativize absolute paths. Now the real cwd is threaded from `handle_client_approval_request` through the enum variant.
 
 ### Learnings from Spec 11
 
@@ -93,7 +101,7 @@ Test coverage: 48 unit tests in `client_tool_cell.rs` and `approval_overlay.rs`,
 
 ## Remaining Work
 
-None. All twelve specs are complete.
+None. All thirteen specs are complete.
 
 ---
 
@@ -103,5 +111,6 @@ None. All twelve specs are complete.
 Spec 12 (Completion Buffering)   ��� done
 Spec 10 (Failed Edit Visibility) ✅ done
 Spec 09 (Approval Rendering)     ✅ done
-Spec 11 (Delete File Bridge)     ✅ done — all specs complete
+Spec 11 (Delete File Bridge)     ✅ done
+Spec 13 (Final Polish)           ✅ done — all specs complete
 ```

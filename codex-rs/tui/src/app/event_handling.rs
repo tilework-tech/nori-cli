@@ -525,6 +525,7 @@ impl App {
                 ApprovalRequest::AcpTool {
                     title,
                     kind,
+                    cwd,
                     snapshot,
                     ..
                 } => {
@@ -553,7 +554,6 @@ impl App {
                     };
 
                     if let Some(changes) = edit_changes {
-                        let cwd = std::path::PathBuf::from(".");
                         let diff_summary = DiffSummary::new(changes, cwd);
                         self.overlay = Some(Overlay::new_static_with_renderables(
                             vec![diff_summary.into()],

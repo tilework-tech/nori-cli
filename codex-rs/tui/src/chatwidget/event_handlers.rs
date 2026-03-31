@@ -1269,7 +1269,7 @@ impl ChatWidget {
     }
 
     fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
-        let Some(request) = approval_request_from_client_event(approval) else {
+        let Some(request) = approval_request_from_client_event(approval, &self.config.cwd) else {
             return;
         };
 
@@ -1528,36 +1528,43 @@ fn exec_begin_event_from_client_snapshot(
             )
         }
         Some(nori_protocol::Invocation::Read { path }) => {
+            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
             let name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.display().to_string());
             (
-                vec![snapshot.title.clone()],
+                vec![title.clone()],
                 vec![ParsedCommand::Read {
-                    cmd: snapshot.title.clone(),
+                    cmd: title,
                     name,
                     path: path.clone(),
                 }],
             )
         }
-        Some(nori_protocol::Invocation::Search { query, path }) => (
-            vec![snapshot.title.clone()],
-            vec![ParsedCommand::Search {
-                cmd: snapshot.title.clone(),
-                query: query.clone(),
-                path: path.as_ref().map(|value| value.display().to_string()),
-            }],
-        ),
-        Some(nori_protocol::Invocation::ListFiles { path }) => (
-            vec![snapshot.title.clone()],
-            vec![ParsedCommand::ListFiles {
-                cmd: snapshot.title.clone(),
-                path: path.as_ref().map(|value| value.display().to_string()),
-            }],
-        ),
+        Some(nori_protocol::Invocation::Search { query, path }) => {
+            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
+            (
+                vec![title.clone()],
+                vec![ParsedCommand::Search {
+                    cmd: title,
+                    query: query.clone(),
+                    path: path.as_ref().map(|value| value.display().to_string()),
+                }],
+            )
+        }
+        Some(nori_protocol::Invocation::ListFiles { path }) => {
+            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
+            (
+                vec![title.clone()],
+                vec![ParsedCommand::ListFiles {
+                    cmd: title,
+                    path: path.as_ref().map(|value| value.display().to_string()),
+                }],
+            )
+        }
         Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
-            let command_text = generic_tool_command_text(tool_name, input.as_ref(), snapshot);
+            let command_text = generic_tool_command_text(tool_name, input.as_ref(), snapshot, cwd);
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1565,7 +1572,7 @@ fn exec_begin_event_from_client_snapshot(
         }
         Some(nori_protocol::Invocation::RawJson(raw_input)) => {
             let command_text =
-                generic_tool_command_text(&snapshot.title, Some(raw_input), snapshot);
+                generic_tool_command_text(&snapshot.title, Some(raw_input), snapshot, cwd);
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1573,7 +1580,7 @@ fn exec_begin_event_from_client_snapshot(
         }
         Some(_) => return None,
         None if snapshot.kind == nori_protocol::ToolKind::Execute => {
-            let command_text = generic_execute_command_text(snapshot);
+            let command_text = generic_execute_command_text(snapshot, cwd);
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1586,8 +1593,12 @@ fn exec_begin_event_from_client_snapshot(
                 | nori_protocol::ToolKind::Other(_)
         ) =>
         {
-            let command_text =
-                generic_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), snapshot);
+            let command_text = generic_tool_command_text(
+                &snapshot.title,
+                snapshot.raw_input.as_ref(),
+                snapshot,
+                cwd,
+            );
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1608,9 +1619,12 @@ fn exec_begin_event_from_client_snapshot(
     })
 }
 
-fn generic_execute_command_text(snapshot: &nori_protocol::ToolSnapshot) -> String {
-    formatted_client_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), None)
-        .unwrap_or_else(|| snapshot.title.clone())
+fn generic_execute_command_text(
+    snapshot: &nori_protocol::ToolSnapshot,
+    cwd: &std::path::Path,
+) -> String {
+    let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
+    formatted_client_tool_command_text(&title, snapshot.raw_input.as_ref(), None).unwrap_or(title)
 }
 
 fn compact_json(value: &serde_json::Value) -> String {
@@ -1650,15 +1664,17 @@ fn generic_tool_command_text(
     tool_name: &str,
     input: Option<&serde_json::Value>,
     snapshot: &nori_protocol::ToolSnapshot,
+    cwd: &std::path::Path,
 ) -> String {
     match input {
         Some(raw_input)
             if !raw_input.is_null()
                 && !raw_input.as_object().is_some_and(serde_json::Map::is_empty) =>
         {
-            format!("{tool_name} {}", compact_json(raw_input))
+            let sanitized = crate::client_event_format::sanitize_tool_title(tool_name, cwd);
+            format!("{sanitized} {}", compact_json(raw_input))
         }
-        _ => snapshot.title.clone(),
+        _ => crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd),
     }
 }
 
@@ -1707,6 +1723,7 @@ fn exec_end_event_from_client_snapshot(
 
 fn approval_request_from_client_event(
     approval: nori_protocol::ApprovalRequest,
+    cwd: &std::path::Path,
 ) -> Option<ApprovalRequest> {
     let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
 
@@ -1730,6 +1747,7 @@ fn approval_request_from_client_event(
         call_id: approval.call_id,
         title: approval.title,
         kind: approval.kind,
+        cwd: cwd.to_path_buf(),
         snapshot: Box::new(snapshot),
     })
 }
@@ -1740,10 +1758,12 @@ fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec
             vec!["bash".into(), "-lc".into(), command.clone()]
         }
         Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
+            let fallback_cwd = std::path::Path::new(".");
             vec![generic_tool_command_text(
                 tool_name,
                 input.as_ref(),
                 snapshot,
+                fallback_cwd,
             )]
         }
         Some(nori_protocol::Invocation::Read { .. })
@@ -1752,7 +1772,10 @@ fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec
         | Some(nori_protocol::Invocation::RawJson(_))
         | Some(nori_protocol::Invocation::FileChanges { .. })
         | Some(nori_protocol::Invocation::FileOperations { .. })
-        | None => vec![generic_execute_command_text(snapshot)],
+        | None => {
+            let fallback_cwd = std::path::Path::new(".");
+            vec![generic_execute_command_text(snapshot, fallback_cwd)]
+        }
     }
 }
 

@@ -173,3 +173,83 @@ fn format_operation_paths(operations: &[nori_protocol::FileOperation]) -> String
         .collect::<Vec<_>>()
         .join(", ")
 }
+
+/// Sanitize a tool title for display: strip Gemini-style `[current working directory ...]`
+/// bracket metadata and trailing `(description text)` parenthetical, then relativize paths.
+pub(crate) fn sanitize_tool_title(title: &str, cwd: &Path) -> String {
+    // Step 1: strip [current working directory ...] bracket pattern
+    let mut result = title.to_string();
+    if let Some(bracket_start) = result.find("[current working directory")
+        && let Some(bracket_end) = result[bracket_start..].find(']')
+    {
+        result = format!(
+            "{}{}",
+            &result[..bracket_start],
+            &result[bracket_start + bracket_end + 1..]
+        );
+    }
+
+    // Step 2: strip trailing (description text) parenthetical
+    let trimmed = result.trim_end();
+    if trimmed.ends_with(')')
+        && let Some(paren_start) = trimmed.rfind('(')
+    {
+        result = trimmed[..paren_start].to_string();
+    }
+
+    // Step 3: trim and relativize
+    let result = result.trim().to_string();
+    relativize_paths_in_text(&result, cwd)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn sanitize_gemini_title_strips_bracket_and_paren() {
+        let title = "Read README.md [current working directory /home/user/project] (Read the contents of README.md)";
+        let cwd = PathBuf::from("/home/user/project");
+        let result = sanitize_tool_title(title, &cwd);
+        assert_eq!(result, "Read README.md");
+    }
+
+    #[test]
+    fn sanitize_title_with_only_brackets() {
+        let title = "Search pattern [current working directory /home/user/project]";
+        let cwd = PathBuf::from("/home/user/project");
+        let result = sanitize_tool_title(title, &cwd);
+        assert_eq!(result, "Search pattern");
+    }
+
+    #[test]
+    fn sanitize_title_with_only_trailing_paren() {
+        let title = "ListFiles src (List all files in src directory)";
+        let cwd = PathBuf::from("/tmp");
+        let result = sanitize_tool_title(title, &cwd);
+        assert_eq!(result, "ListFiles src");
+    }
+
+    #[test]
+    fn sanitize_clean_title_passes_through() {
+        let title = "Read README.md";
+        let cwd = PathBuf::from("/tmp");
+        let result = sanitize_tool_title(title, &cwd);
+        assert_eq!(result, "Read README.md");
+    }
+
+    #[test]
+    fn sanitize_title_relativizes_absolute_paths() {
+        let title = "Read /home/user/project/src/main.rs";
+        let cwd = PathBuf::from("/home/user/project");
+        let result = sanitize_tool_title(title, &cwd);
+        assert_eq!(result, "Read src/main.rs");
+    }
+
+    #[test]
+    fn sanitize_empty_title() {
+        let result = sanitize_tool_title("", &PathBuf::from("/tmp"));
+        assert_eq!(result, "");
+    }
+}

@@ -278,16 +278,17 @@ impl ClientToolCell {
             spinner(self.start_time, self.animations_enabled)
         };
 
-        let header = relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
-        lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
-
         // For failed edits: show error text or "(failed)" fallback
         if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            let header =
+                relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+            lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
             if let Some(error_text) = extract_error_text(&self.snapshot) {
                 lines.push(Line::from(vec!["  └ ".dim(), error_text.dim()]));
             } else {
                 lines.push(Line::from(vec!["  └ ".dim(), "(failed)".dim()]));
             }
+            return lines;
         }
 
         // Render diff content from artifacts or invocation
@@ -297,13 +298,49 @@ impl ClientToolCell {
         } else {
             changes_from_invocation(&self.snapshot.invocation)
         };
+
         if !changes.is_empty() {
             let diff_width = width.saturating_sub(4).max(1) as usize;
-            for diff_line in create_diff_summary(&changes, &self.cwd, diff_width) {
-                let mut indented = vec![Span::from("    ")];
-                indented.extend(diff_line.spans);
-                lines.push(Line::from(indented));
+            let diff_lines = create_diff_summary(&changes, &self.cwd, diff_width);
+
+            // Single-file edit/delete: promote DiffSummary's first line (verb+path+counts)
+            // as the outer header to avoid duplicating "Edited README.md" / "Edited README.md (+1 -1)".
+            // Skip for Move tools — DiffSummary says "Edited" but the tool header says "Moved".
+            if changes.len() == 1 && self.snapshot.kind != nori_protocol::ToolKind::Move {
+                if let Some((first, rest)) = diff_lines.split_first() {
+                    // Replace "• " bullet from DiffSummary with our computed bullet
+                    let mut header_spans = vec![bullet, " ".into()];
+                    for span in &first.spans {
+                        let content = span.content.as_ref();
+                        // Skip the DiffSummary's own "• " prefix
+                        if content == "• " {
+                            continue;
+                        }
+                        header_spans.push(span.clone());
+                    }
+                    lines.push(Line::from(header_spans));
+                    for diff_line in rest {
+                        let mut indented = vec![Span::from("    ")];
+                        indented.extend(diff_line.spans.clone());
+                        lines.push(Line::from(indented));
+                    }
+                }
+            } else {
+                // Multi-file: keep outer header separate from per-file DiffSummary
+                let header =
+                    relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+                lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
+                for diff_line in diff_lines {
+                    let mut indented = vec![Span::from("    ")];
+                    indented.extend(diff_line.spans);
+                    lines.push(Line::from(indented));
+                }
             }
+        } else {
+            // No diff data: use the format_edit_tool_header as sole header
+            let header =
+                relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+            lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
         }
 
         lines
@@ -1844,6 +1881,96 @@ mod tests {
         assert!(
             has_diff,
             "Completed edit with FileOperations should render diff content, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 13: Deduplicate single-file edit header ---
+
+    #[test]
+    fn single_file_edit_shows_verb_path_counts_once() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-dedup".into(),
+            title: "Edit README.md".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: Some("# Old Title\n".into()),
+                new_text: "# New Title\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Count how many lines contain "Edited README.md" — should be exactly 1
+        let edit_header_count = lines
+            .iter()
+            .filter(|l| l.contains("Edited") && l.contains("README.md"))
+            .count();
+        assert_eq!(
+            edit_header_count, 1,
+            "Single-file edit should show 'Edited README.md' exactly once, got {edit_header_count} in: {lines:?}"
+        );
+        // The single header should include line counts
+        let header_with_counts = lines
+            .iter()
+            .find(|l| l.contains("Edited") && l.contains("README.md"))
+            .expect("should have an edit header");
+        assert!(
+            header_with_counts.contains("+1") && header_with_counts.contains("-1"),
+            "Single-file edit header should include line counts, got: {header_with_counts}"
+        );
+    }
+
+    #[test]
+    fn multi_file_edit_keeps_outer_header_separate() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-multi-edit".into(),
+            title: "Edit multiple files".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![
+                nori_protocol::ToolLocation {
+                    path: PathBuf::from("README.md"),
+                    line: None,
+                },
+                nori_protocol::ToolLocation {
+                    path: PathBuf::from("src/lib.rs"),
+                    line: None,
+                },
+            ],
+            invocation: None,
+            artifacts: vec![
+                nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("# Old\n".into()),
+                    new_text: "# New\n".into(),
+                }),
+                nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("src/lib.rs"),
+                    old_text: Some("fn old() {}\n".into()),
+                    new_text: "fn new() {}\n".into(),
+                }),
+            ],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Multi-file: outer header should say "Edited 2 files"
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Edited") && l.contains("2 files")),
+            "Multi-file edit should have outer 'Edited 2 files' header, got: {lines:?}"
         );
     }
 }
