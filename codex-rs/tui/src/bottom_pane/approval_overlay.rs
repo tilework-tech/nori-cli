@@ -55,6 +55,13 @@ pub(crate) enum ApprovalRequest {
         request_id: RequestId,
         message: String,
     },
+    /// ACP-native tool approval using protocol fields directly.
+    AcpTool {
+        call_id: String,
+        title: String,
+        kind: nori_protocol::ToolKind,
+        snapshot: Box<nori_protocol::ToolSnapshot>,
+    },
 }
 
 /// Modal overlay asking the user to approve or deny one or more requests.
@@ -123,6 +130,13 @@ impl ApprovalOverlay {
                 elicitation_options(),
                 format!("{server_name} needs your approval."),
             ),
+            ApprovalVariant::AcpTool { title, kind, .. } => {
+                let kind_str = crate::client_event_format::format_tool_kind(kind);
+                (
+                    acp_tool_options(agent_display_name),
+                    format!("Would you like to allow {kind_str}: {title}?"),
+                )
+            }
         };
 
         let header = Box::new(ColumnRenderable::with([
@@ -183,6 +197,16 @@ impl ApprovalOverlay {
                 ) => {
                     self.handle_elicitation_decision(server_name, request_id, *decision);
                 }
+                (
+                    ApprovalVariant::AcpTool {
+                        call_id,
+                        title,
+                        kind,
+                    },
+                    ApprovalDecision::Review(decision),
+                ) => {
+                    self.handle_acp_tool_decision(call_id, title, kind, *decision);
+                }
                 _ => {}
             }
         }
@@ -196,6 +220,21 @@ impl ApprovalOverlay {
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
         self.app_event_tx.send(AppEvent::CodexOp(Op::ExecApproval {
             id: id.to_string(),
+            decision,
+        }));
+    }
+
+    fn handle_acp_tool_decision(
+        &self,
+        call_id: &str,
+        title: &str,
+        kind: &nori_protocol::ToolKind,
+        decision: ReviewDecision,
+    ) {
+        let cell = history_cell::new_acp_approval_decision_cell(title, kind, decision);
+        self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
+        self.app_event_tx.send(AppEvent::CodexOp(Op::ExecApproval {
+            id: call_id.to_string(),
             decision,
         }));
     }
@@ -295,6 +334,13 @@ impl BottomPaneView for ApprovalOverlay {
                         request_id,
                         ElicitationAction::Cancel,
                     );
+                }
+                ApprovalVariant::AcpTool {
+                    call_id,
+                    title,
+                    kind,
+                } => {
+                    self.handle_acp_tool_decision(call_id, title, kind, ReviewDecision::Abort);
                 }
             }
         }
@@ -407,6 +453,35 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                     header: Box::new(header),
                 }
             }
+            ApprovalRequest::AcpTool {
+                call_id,
+                title,
+                kind,
+                snapshot,
+            } => {
+                let mut lines: Vec<Line<'static>> = Vec::new();
+                lines.push(Line::from(title.clone()));
+                if let Some(inv_text) =
+                    crate::client_event_format::format_invocation(&snapshot.invocation)
+                    && !crate::client_event_format::is_invocation_redundant(
+                        &inv_text,
+                        &snapshot.title,
+                    )
+                {
+                    lines.push(Line::from(inv_text));
+                }
+                for text in crate::client_event_format::format_artifacts(&snapshot.artifacts) {
+                    lines.push(Line::from(text));
+                }
+                Self {
+                    variant: ApprovalVariant::AcpTool {
+                        call_id,
+                        title,
+                        kind,
+                    },
+                    header: Box::new(Paragraph::new(lines).wrap(Wrap { trim: false })),
+                }
+            }
         }
     }
 }
@@ -445,6 +520,11 @@ enum ApprovalVariant {
     McpElicitation {
         server_name: String,
         request_id: RequestId,
+    },
+    AcpTool {
+        call_id: String,
+        title: String,
+        kind: nori_protocol::ToolKind,
     },
 }
 
@@ -539,6 +619,34 @@ fn elicitation_options() -> Vec<ApprovalOption> {
             decision: ApprovalDecision::McpElicitation(ElicitationAction::Cancel),
             display_shortcut: Some(key_hint::plain(KeyCode::Esc)),
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('c'))],
+        },
+    ]
+}
+
+fn acp_tool_options(agent_display_name: &str) -> Vec<ApprovalOption> {
+    let display_name = if agent_display_name.is_empty() {
+        "the agent"
+    } else {
+        agent_display_name
+    };
+    vec![
+        ApprovalOption {
+            label: "Yes, proceed".to_string(),
+            decision: ApprovalDecision::Review(ReviewDecision::Approved),
+            display_shortcut: None,
+            additional_shortcuts: vec![key_hint::plain(KeyCode::Char('y'))],
+        },
+        ApprovalOption {
+            label: "Yes, and don't ask again for this tool".to_string(),
+            decision: ApprovalDecision::Review(ReviewDecision::ApprovedForSession),
+            display_shortcut: None,
+            additional_shortcuts: vec![key_hint::plain(KeyCode::Char('a'))],
+        },
+        ApprovalOption {
+            label: format!("No, and tell {display_name} what to do differently"),
+            decision: ApprovalDecision::Review(ReviewDecision::Abort),
+            display_shortcut: Some(key_hint::plain(KeyCode::Esc)),
+            additional_shortcuts: vec![key_hint::plain(KeyCode::Char('n'))],
         },
     ]
 }
@@ -761,6 +869,171 @@ mod tests {
         assert!(
             rendered.iter().any(|line| line.contains("tell the agent")),
             "expected deny option to use fallback 'the agent' for empty model name, got {rendered:?}"
+        );
+    }
+
+    fn make_acp_tool_request() -> ApprovalRequest {
+        ApprovalRequest::AcpTool {
+            call_id: "call-1".to_string(),
+            title: "Read /src/main.rs".to_string(),
+            kind: nori_protocol::ToolKind::Read,
+            snapshot: Box::new(nori_protocol::ToolSnapshot {
+                call_id: "call-1".to_string(),
+                title: "Read /src/main.rs".to_string(),
+                kind: nori_protocol::ToolKind::Read,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Read {
+                    path: std::path::PathBuf::from("/src/main.rs"),
+                }),
+                artifacts: vec![],
+                raw_input: None,
+                raw_output: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn acp_tool_shortcut_triggers_selection() {
+        let (tx, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut view = ApprovalOverlay::new(make_acp_tool_request(), tx, String::new());
+        assert!(!view.is_complete());
+
+        // Press 'y' to approve
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+
+        // Should emit an ExecApproval Op with Approved decision
+        let mut decision = None;
+        while let Ok(ev) = rx.try_recv() {
+            if let AppEvent::CodexOp(Op::ExecApproval { decision: d, .. }) = ev {
+                decision = Some(d);
+                break;
+            }
+        }
+        assert_eq!(
+            decision,
+            Some(ReviewDecision::Approved),
+            "expected AcpTool 'y' shortcut to emit Approved decision"
+        );
+    }
+
+    #[test]
+    fn acp_tool_ctrl_c_aborts() {
+        let (tx, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut view = ApprovalOverlay::new(make_acp_tool_request(), tx, String::new());
+        view.enqueue_request(make_acp_tool_request());
+
+        assert_eq!(CancellationEvent::Handled, view.on_ctrl_c());
+        assert!(view.is_complete());
+
+        // Should emit an ExecApproval Op with Abort decision
+        let mut decision = None;
+        while let Ok(ev) = rx.try_recv() {
+            if let AppEvent::CodexOp(Op::ExecApproval { decision: d, .. }) = ev {
+                decision = Some(d);
+                break;
+            }
+        }
+        assert_eq!(
+            decision,
+            Some(ReviewDecision::Abort),
+            "expected Ctrl+C on AcpTool to emit Abort decision"
+        );
+    }
+
+    #[test]
+    fn acp_tool_header_includes_tool_title() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let view = ApprovalOverlay::new(make_acp_tool_request(), tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Would you like to allow")),
+            "expected AcpTool header to contain 'Would you like to allow', got {rendered:?}"
+        );
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Read /src/main.rs")),
+            "expected AcpTool header to contain tool title, got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn acp_tool_approved_history_cell_text() {
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Read /src/main.rs",
+            &nori_protocol::ToolKind::Read,
+            ReviewDecision::Approved,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("approved"),
+            "expected approved text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("read"),
+            "expected tool kind in text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("Read /src/main.rs"),
+            "expected tool title in text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("this time"),
+            "expected 'this time' for single approval, got {rendered}"
+        );
+    }
+
+    #[test]
+    fn acp_tool_denied_history_cell_text() {
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Read /src/main.rs",
+            &nori_protocol::ToolKind::Read,
+            ReviewDecision::Denied,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("denied"),
+            "expected denied text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("read"),
+            "expected tool kind, got {rendered}"
         );
     }
 }

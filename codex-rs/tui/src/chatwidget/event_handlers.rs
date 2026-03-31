@@ -1254,6 +1254,11 @@ impl ChatWidget {
                 self.notify(Notification::ExecApprovalRequested { command });
             }
             ApprovalRequest::McpElicitation { .. } => {}
+            ApprovalRequest::AcpTool { title, .. } => {
+                self.notify(Notification::ExecApprovalRequested {
+                    command: title.clone(),
+                });
+            }
         }
         self.bottom_pane.push_approval_request(request);
         self.request_redraw();
@@ -1703,6 +1708,7 @@ fn approval_request_from_client_event(
 ) -> Option<ApprovalRequest> {
     let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
 
+    // Edit/Delete/Move with parseable file changes → ApplyPatch (DiffSummary overlay)
     if matches!(
         snapshot.kind,
         nori_protocol::ToolKind::Edit
@@ -1718,11 +1724,27 @@ fn approval_request_from_client_event(
         });
     }
 
-    Some(ApprovalRequest::Exec {
-        id: approval.call_id,
-        command: approval_command_from_snapshot(&snapshot),
-        reason: None,
-        risk: None,
+    // Execute with a real shell command → Exec (bash-highlighted overlay)
+    if matches!(snapshot.kind, nori_protocol::ToolKind::Execute)
+        && matches!(
+            snapshot.invocation,
+            Some(nori_protocol::Invocation::Command { .. })
+        )
+    {
+        return Some(ApprovalRequest::Exec {
+            id: approval.call_id,
+            command: approval_command_from_snapshot(&snapshot),
+            reason: None,
+            risk: None,
+        });
+    }
+
+    // Everything else → AcpTool (native protocol fields)
+    Some(ApprovalRequest::AcpTool {
+        call_id: approval.call_id,
+        title: approval.title,
+        kind: approval.kind,
+        snapshot: Box::new(snapshot),
     })
 }
 

@@ -522,6 +522,23 @@ impl App {
                         "E L I C I T A T I O N".to_string(),
                     ));
                 }
+                ApprovalRequest::AcpTool {
+                    title, snapshot, ..
+                } => {
+                    let _ = tui.enter_alt_screen();
+                    let mut lines = vec![Line::from(title)];
+                    if let Some(inv_text) =
+                        client_event_format::format_invocation(&snapshot.invocation)
+                        && !client_event_format::is_invocation_redundant(&inv_text, &snapshot.title)
+                    {
+                        lines.push(Line::from(inv_text));
+                    }
+                    for text in client_event_format::format_artifacts(&snapshot.artifacts) {
+                        lines.push(Line::from(text));
+                    }
+                    self.overlay =
+                        Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
+                }
             },
             AppEvent::SetPendingAgent {
                 agent_name,

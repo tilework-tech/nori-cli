@@ -49,9 +49,9 @@ nori-tui ChatWidget  (handle_client_event → handle_client_tool_snapshot)
 
 ---
 
-## Completed Work (specs 01–08, 10, 12)
+## Completed Work (specs 01–10, 12)
 
-Ten specs were implemented across commits `512c505e`..HEAD. Summary:
+Eleven specs were implemented across commits `512c505e`..HEAD. Summary:
 
 | Spec | What it delivered | Commit |
 |------|-------------------|--------|
@@ -63,31 +63,34 @@ Ten specs were implemented across commits `512c505e`..HEAD. Summary:
 | 06 — Artifact Text Cleanup | Code fences stripped via `strip_code_fences()`, `Output:` prefix removed, redundant invocation suppressed | `771bca1a` |
 | 07 — Diff Artifact Rendering | `Artifact::Diff` converted to `FileChange` and rendered via `create_diff_summary` for in-progress edit previews | `7e7e9f96` |
 | 08 — Gemini Empty Content Fallback | Location-based invocation fallback, Gemini title sanitization, minimal completed cell rendering | `12f3fae5` |
-| 10 — Failed Edit Tool Visibility | `format_edit_tool_header()`: semantic verb headers for Edit/Delete/Move; red bullet for Failed; error text fallback from `raw_output`; duplicate-cell prevention | *pending commit* |
+| 09 — ACP-Native Approval Rendering | `ApprovalRequest::AcpTool` variant with three-way routing (Edit/Delete/Move→ApplyPatch, Execute+Command→Exec, everything else→AcpTool); native overlay/history/fullscreen for non-exec ACP tools | *pending commit* |
+| 10 — Failed Edit Tool Visibility | `format_edit_tool_header()`: semantic verb headers for Edit/Delete/Move; red bullet for Failed; error text fallback from `raw_output`; duplicate-cell prevention | `bd51a208` |
 | 12 — Execute Cell Completion Buffering | Parallel execute buffering, description text filtering, List dedup | `c23b3af4` |
 
-Test coverage: 32 unit tests in `client_tool_cell.rs`, 9 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
+Test coverage: 37 unit tests in `client_tool_cell.rs` and `approval_overlay.rs`, 9 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
 
 ### Learnings from Spec 10
 
 - **ChatWidget doesn't hold history cells.** History cells are sent via `AppEvent::InsertHistoryCell` to the main app event loop. The ChatWidget cannot scan or remove previously-flushed cells. Duplicate-cell prevention must be done proactively via `completed_client_tool_calls` tracking rather than reactively scanning history.
 - **Semantic verb headers reuse the path from `locations[0]`.** The `format_edit_tool_header()` function extracts the path from the first location entry, falling back to parsing it from the title string. This is more reliable than relying on the title alone, since title formats vary across providers.
 
+### Learnings from Spec 09
+
+- **ACP backend treats ExecApproval and PatchApproval identically.** Both call `handle_exec_approval` in `acp/src/backend/submit_and_ops.rs`. The `AcpTool` variant reuses `Op::ExecApproval` rather than introducing a new Op.
+- **Three-way routing is necessary.** Edit/Delete/Move tools with parseable file changes benefit from the `DiffSummary` overlay (ApplyPatch). Execute tools with `Invocation::Command` benefit from bash syntax highlighting (Exec). Everything else (Read, Search, Fetch, Think, Other, or Execute without a shell command) uses native protocol fields directly (AcpTool).
+- **Protocol approval options not mapped to TUI options.** The `nori_protocol::ApprovalOption` entries carry option text and kind, but TUI approval options need keyboard shortcuts and agent display names that aren't in the protocol. The `AcpTool` variant generates its own options via `acp_tool_options()` with hardcoded Yes/Always/No choices and y/a/n keyboard shortcuts.
+- **ToolSnapshot must be boxed in the enum.** The `ToolSnapshot` struct is 440+ bytes, triggering clippy's `large_enum_variant` lint. Boxing it as `Box<nori_protocol::ToolSnapshot>` keeps the `ApprovalRequest` enum size reasonable.
+
 ---
 
-## Remaining Work (specs 09, 11)
+## Remaining Work (spec 11)
 
-Two specs remain. Each has a detailed document in [`./specs/`](./specs/).
-
-### Spec 09: ACP-Native Approval Rendering
-**File:** [`specs/09-acp-native-approval-rendering.md`](specs/09-acp-native-approval-rendering.md)
-
-All ACP approval requests are force-fit into legacy `ApprovalRequest::Exec` or `ApplyPatch`. This produces broken history text (`✔ You approved Nori to runrm /path...` — missing space, raw command concatenated) and wrong overlay content for non-execute tools. Adds `ApprovalRequest::AcpTool` variant with native protocol fields, new overlay renderer, and correct decision history cells.
+One spec remains. It has a detailed document in [`./specs/`](./specs/).
 
 ### Spec 11: Delete File Operation Bridge
 **File:** [`specs/11-delete-file-operation-bridge.md`](specs/11-delete-file-operation-bridge.md)
 
-Removes the compatibility bridge converting `nori_protocol` file types back to `codex_core::protocol::FileChange`. Adds `render_edit_lines` to `ClientToolCell`, unifies all Edit/Delete/Move phases through `handle_client_native_tool_snapshot`, deletes bridge functions. **Depends on** spec 10 (✅ done); approval bridge persists until spec 09 lands.
+Removes the compatibility bridge converting `nori_protocol` file types back to `codex_core::protocol::FileChange`. Adds `render_edit_lines` to `ClientToolCell`, unifies all Edit/Delete/Move phases through `handle_client_native_tool_snapshot`, deletes bridge functions. **Depends on** spec 10 (✅ done) and spec 09 (✅ done); now fully unblocked.
 
 ---
 
@@ -96,9 +99,8 @@ Removes the compatibility bridge converting `nori_protocol` file types back to `
 ```
 Spec 12 (Completion Buffering)   ✅ done
 Spec 10 (Failed Edit Visibility) ✅ done
-Spec 09 (Approval Rendering)     ← independent, next priority
-Spec 11 (Delete File Bridge)     ← depends on 10 ✅; approval bridge waits for 09
+Spec 09 (Approval Rendering)     ✅ done
+Spec 11 (Delete File Bridge)     ← fully unblocked, final spec
 ```
 
-1. **Spec 09** — unblocks full spec 11 bridge deletion
-2. **Spec 11** — final cleanup
+1. **Spec 11** — final cleanup, now fully unblocked
