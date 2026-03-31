@@ -1221,8 +1221,8 @@ fn in_progress_edit_renders_active_client_tool_cell() {
     // Should have an active cell (the spinner)
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Write README.md"),
-        "Active cell should show edit title, got: {blob:?}"
+        blob.contains("Editing README.md"),
+        "Active cell should show semantic edit header, got: {blob:?}"
     );
 }
 
@@ -1320,8 +1320,8 @@ fn in_progress_delete_renders_active_cell() {
 
     let blob = active_blob(&chat);
     assert!(
-        blob.contains("Delete temp.txt"),
-        "Active cell should show delete title, got: {blob:?}"
+        blob.contains("Deleting temp.txt"),
+        "Active cell should show semantic delete header, got: {blob:?}"
     );
 }
 

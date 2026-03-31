@@ -6,6 +6,7 @@ use ratatui::style::Stylize;
 use textwrap::WordSplitter;
 
 use crate::client_event_format::format_artifacts;
+use crate::client_event_format::format_edit_tool_header;
 use crate::client_event_format::format_invocation;
 use crate::client_event_format::format_tool_header;
 use crate::client_event_format::format_tool_kind;
@@ -269,10 +270,24 @@ impl ClientToolCell {
         let mut lines = Vec::new();
         let bullet = if self.is_active() {
             spinner(self.start_time, self.animations_enabled)
+        } else if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            "•".red().bold()
         } else {
             "•".dim()
         };
-        let header = relativize_paths_in_text(&format_tool_header(&self.snapshot), &self.cwd);
+
+        // Use semantic verb headers for Edit/Delete/Move kinds
+        let is_file_op = matches!(
+            self.snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        );
+        let header = if is_file_op {
+            relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd)
+        } else {
+            relativize_paths_in_text(&format_tool_header(&self.snapshot), &self.cwd)
+        };
         lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
 
         let mut details = Vec::new();
@@ -289,10 +304,25 @@ impl ClientToolCell {
             }
         }
 
-        // Fallback: show location paths when no other detail lines were produced
+        let is_failed = self.snapshot.phase == nori_protocol::ToolPhase::Failed;
+
+        // For failed tools with no text artifacts, extract error from raw_output
+        if is_failed
+            && details.is_empty()
+            && let Some(error_text) = extract_error_text(&self.snapshot)
+        {
+            details.push(error_text);
+        }
+
         if details.is_empty() {
-            for location in &self.snapshot.locations {
-                details.push(location.path.display().to_string());
+            if is_failed {
+                // For failed tools with absolutely no detail, show "(failed)" fallback
+                details.push("(failed)".to_string());
+            } else {
+                // Fallback: show location paths when no other detail lines were produced
+                for location in &self.snapshot.locations {
+                    details.push(location.path.display().to_string());
+                }
             }
         }
 
@@ -495,6 +525,24 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
         }
     }
 
+    None
+}
+
+fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> {
+    let raw = snapshot.raw_output.as_ref()?;
+    for key in ["error", "stderr", "output"] {
+        if let Some(text) = raw.get(key).and_then(serde_json::Value::as_str)
+            && !text.is_empty()
+        {
+            return Some(text.to_string());
+        }
+    }
+    // Check if raw_output is itself a string
+    if let Some(s) = raw.as_str()
+        && !s.is_empty()
+    {
+        return Some(s.to_string());
+    }
     None
 }
 
@@ -1315,6 +1363,248 @@ mod tests {
         assert!(
             lines.iter().any(|l| l.contains("/home/user/project/src")),
             "Should still show the path, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 10: Failed Edit Tool Visibility ---
+
+    fn make_edit_snapshot(
+        phase: ToolPhase,
+        path: &str,
+        artifacts: Vec<Artifact>,
+        raw_output: Option<serde_json::Value>,
+    ) -> ToolSnapshot {
+        ToolSnapshot {
+            call_id: "call-edit-1".into(),
+            title: format!("Edit {path}"),
+            kind: ToolKind::Edit,
+            phase,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from(path),
+                line: None,
+            }],
+            invocation: None,
+            artifacts,
+            raw_input: None,
+            raw_output,
+        }
+    }
+
+    #[test]
+    fn failed_edit_has_red_bullet() {
+        let snapshot = make_edit_snapshot(ToolPhase::Failed, "README.md", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = cell.display_lines(80);
+
+        let bullet_span = &lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Red),
+            "Failed edit should have red bullet, got {:?}",
+            bullet_span.style
+        );
+    }
+
+    #[test]
+    fn failed_edit_has_semantic_header() {
+        let snapshot = make_edit_snapshot(ToolPhase::Failed, "README.md", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Edit failed:"),
+            "Failed edit should show 'Edit failed:' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("README.md"),
+            "Failed edit header should include path, got: {}",
+            lines[0]
+        );
+        assert!(
+            !lines[0].contains("Tool ["),
+            "Failed edit should NOT use generic 'Tool [failed]' header, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn failed_delete_has_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-del-1".into(),
+            title: "Delete temp.txt".into(),
+            kind: ToolKind::Delete,
+            phase: ToolPhase::Failed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("temp.txt"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Delete failed:"),
+            "Failed delete should show 'Delete failed:' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("temp.txt"),
+            "Failed delete header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn in_progress_edit_has_semantic_header() {
+        let snapshot = make_edit_snapshot(ToolPhase::InProgress, "src/main.rs", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Editing"),
+            "In-progress edit should show 'Editing' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("src/main.rs"),
+            "In-progress edit header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn completed_edit_fallthrough_has_semantic_header() {
+        // Completed edit that falls through to generic rendering (no file_changes)
+        let snapshot = make_edit_snapshot(ToolPhase::Completed, "config.toml", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Edited"),
+            "Completed edit fallthrough should show 'Edited' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("config.toml"),
+            "Completed edit header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn failed_edit_with_error_in_raw_output_shows_error_text() {
+        let snapshot = make_edit_snapshot(
+            ToolPhase::Failed,
+            "README.md",
+            vec![],
+            Some(serde_json::json!({"error": "Permission denied: README.md"})),
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines.iter().any(|l| l.contains("Permission denied")),
+            "Failed edit with raw_output error should show error text, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn failed_edit_with_no_artifacts_shows_failed_fallback() {
+        let snapshot = make_edit_snapshot(ToolPhase::Failed, "README.md", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines.iter().any(|l| l.contains("(failed)")),
+            "Failed edit with no artifacts should show '(failed)' fallback, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn failed_edit_with_diff_artifact_renders_diff() {
+        let snapshot = make_edit_snapshot(
+            ToolPhase::Failed,
+            "README.md",
+            vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: Some("# Old\n".into()),
+                new_text: "# New\n".into(),
+            })],
+            None,
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should have red bullet (failed)
+        let raw_lines = cell.display_lines(80);
+        let bullet_span = &raw_lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Red),
+            "Failed edit with diff should still have red bullet"
+        );
+
+        // Should render diff content — look for the changed file path
+        // and the actual content from old/new text
+        assert!(
+            lines.iter().any(|l| l.contains("README.md")),
+            "Failed edit with diff artifact should render file path, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn completed_non_edit_tool_still_has_dim_bullet() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-fetch-1".into(),
+            title: "Fetch resource".into(),
+            kind: ToolKind::Fetch,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![Artifact::Text {
+                text: "200 OK".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = cell.display_lines(80);
+
+        let bullet_span = &lines[0].spans[0];
+        // Should NOT be red (it's completed, not failed)
+        assert!(
+            bullet_span.style.fg != Some(ratatui::style::Color::Red),
+            "Completed non-edit tool should NOT have red bullet, got {:?}",
+            bullet_span.style
+        );
+    }
+
+    #[test]
+    fn failed_move_has_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-move-1".into(),
+            title: "Move old.rs to new.rs".into(),
+            kind: ToolKind::Move,
+            phase: ToolPhase::Failed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("old.rs"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Move failed:"),
+            "Failed move should show 'Move failed:' header, got: {}",
+            lines[0]
         );
     }
 }

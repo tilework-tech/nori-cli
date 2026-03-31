@@ -49,9 +49,9 @@ nori-tui ChatWidget  (handle_client_event → handle_client_tool_snapshot)
 
 ---
 
-## Completed Work (specs 01–08)
+## Completed Work (specs 01–08, 10, 12)
 
-Eight specs were implemented across commits `512c505e`..`2a482c09`. Summary:
+Ten specs were implemented across commits `512c505e`..HEAD. Summary:
 
 | Spec | What it delivered | Commit |
 |------|-------------------|--------|
@@ -63,48 +63,42 @@ Eight specs were implemented across commits `512c505e`..`2a482c09`. Summary:
 | 06 — Artifact Text Cleanup | Code fences stripped via `strip_code_fences()`, `Output:` prefix removed, redundant invocation suppressed | `771bca1a` |
 | 07 — Diff Artifact Rendering | `Artifact::Diff` converted to `FileChange` and rendered via `create_diff_summary` for in-progress edit previews | `7e7e9f96` |
 | 08 — Gemini Empty Content Fallback | Location-based invocation fallback, Gemini title sanitization, minimal completed cell rendering | `12f3fae5` |
+| 10 — Failed Edit Tool Visibility | `format_edit_tool_header()`: semantic verb headers for Edit/Delete/Move; red bullet for Failed; error text fallback from `raw_output`; duplicate-cell prevention | *pending commit* |
+| 12 — Execute Cell Completion Buffering | Parallel execute buffering, description text filtering, List dedup | `c23b3af4` |
 
-Test coverage: 19 unit tests in `client_tool_cell.rs`, 4 integration tests in `chatwidget/tests/part3.rs`.
+Test coverage: 32 unit tests in `client_tool_cell.rs`, 9 integration tests in `chatwidget/tests/part3.rs` and `part5.rs`.
+
+### Learnings from Spec 10
+
+- **ChatWidget doesn't hold history cells.** History cells are sent via `AppEvent::InsertHistoryCell` to the main app event loop. The ChatWidget cannot scan or remove previously-flushed cells. Duplicate-cell prevention must be done proactively via `completed_client_tool_calls` tracking rather than reactively scanning history.
+- **Semantic verb headers reuse the path from `locations[0]`.** The `format_edit_tool_header()` function extracts the path from the first location entry, falling back to parsing it from the title string. This is more reliable than relying on the title alone, since title formats vary across providers.
 
 ---
 
-## Remaining Work (specs 09–12)
+## Remaining Work (specs 09, 11)
 
-Four specs remain. Each has a detailed document in [`./specs/`](./specs/).
-
-### Spec 12: Execute Cell Completion Buffering
-**File:** [`specs/12-execute-cell-completion-buffering.md`](specs/12-execute-cell-completion-buffering.md)
-**Priority:** Highest — fixes the most user-visible regression.
-
-Parallel ACP execute calls (e.g., Claude firing `date`, `uptime`, `df` concurrently) produce permanently wrong output. Each pending snapshot flushes the previous active cell to history before its completion arrives; the flushed cell shows the agent's description text as command output, and the real stdout is discarded. Also fixes: single-read `Ran Read File` misroute, `List List` doubled label, description-as-output for empty-stdout commands.
+Two specs remain. Each has a detailed document in [`./specs/`](./specs/).
 
 ### Spec 09: ACP-Native Approval Rendering
 **File:** [`specs/09-acp-native-approval-rendering.md`](specs/09-acp-native-approval-rendering.md)
 
 All ACP approval requests are force-fit into legacy `ApprovalRequest::Exec` or `ApplyPatch`. This produces broken history text (`✔ You approved Nori to runrm /path...` — missing space, raw command concatenated) and wrong overlay content for non-execute tools. Adds `ApprovalRequest::AcpTool` variant with native protocol fields, new overlay renderer, and correct decision history cells.
 
-### Spec 10: Failed Edit Tool Visibility
-**File:** [`specs/10-failed-edit-tool-visibility.md`](specs/10-failed-edit-tool-visibility.md)
-
-Failed Edit/Delete/Move snapshots render with dim bullet (not red), generic `Tool [failed]` header (not semantic verb), and no error detail. Adds phase-aware bullet coloring in `render_generic_lines`, semantic verb headers (`Edit failed: {path}`), error text fallback, and spinner-to-patch transition hardening.
-
 ### Spec 11: Delete File Operation Bridge
 **File:** [`specs/11-delete-file-operation-bridge.md`](specs/11-delete-file-operation-bridge.md)
 
-Removes the compatibility bridge converting `nori_protocol` file types back to `codex_core::protocol::FileChange`. Adds `render_edit_lines` to `ClientToolCell`, unifies all Edit/Delete/Move phases through `handle_client_native_tool_snapshot`, deletes bridge functions. **Depends on** spec 10; approval bridge persists until spec 09 lands.
+Removes the compatibility bridge converting `nori_protocol` file types back to `codex_core::protocol::FileChange`. Adds `render_edit_lines` to `ClientToolCell`, unifies all Edit/Delete/Move phases through `handle_client_native_tool_snapshot`, deletes bridge functions. **Depends on** spec 10 (✅ done); approval bridge persists until spec 09 lands.
 
 ---
 
 ## Dependency Graph and Recommended Order
 
 ```
-Spec 12 (Completion Buffering)   ← independent, highest priority
-Spec 10 (Failed Edit Visibility) ← independent
-Spec 09 (Approval Rendering)     ← independent
-Spec 11 (Delete File Bridge)     ← depends on 10; approval bridge waits for 09
+Spec 12 (Completion Buffering)   ✅ done
+Spec 10 (Failed Edit Visibility) ✅ done
+Spec 09 (Approval Rendering)     ← independent, next priority
+Spec 11 (Delete File Bridge)     ← depends on 10 ✅; approval bridge waits for 09
 ```
 
-1. **Spec 12** — fixes most visible regression (wrong output in parallel execute batches)
-2. **Spec 10** — prerequisite for spec 11
-3. **Spec 09** — unblocks full spec 11 bridge deletion
-4. **Spec 11** — final cleanup
+1. **Spec 09** — unblocks full spec 11 bridge deletion
+2. **Spec 11** — final cleanup

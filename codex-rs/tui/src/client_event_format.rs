@@ -42,6 +42,36 @@ pub(crate) fn format_tool_header(snapshot: &nori_protocol::ToolSnapshot) -> Stri
     )
 }
 
+/// Semantic header for Edit/Delete/Move tool snapshots.
+/// Returns verb-based header like "Editing path", "Edit failed: path", "Deleted path".
+pub(crate) fn format_edit_tool_header(snapshot: &nori_protocol::ToolSnapshot) -> String {
+    let (verb_active, verb_past, verb_failed, prefix) = match &snapshot.kind {
+        nori_protocol::ToolKind::Edit => ("Editing", "Edited", "Edit failed:", "Edit "),
+        nori_protocol::ToolKind::Delete => ("Deleting", "Deleted", "Delete failed:", "Delete "),
+        nori_protocol::ToolKind::Move => ("Moving", "Moved", "Move failed:", "Move "),
+        _ => return format_tool_header(snapshot),
+    };
+
+    let path = snapshot
+        .locations
+        .first()
+        .map(|loc| loc.path.display().to_string())
+        .unwrap_or_else(|| {
+            snapshot
+                .title
+                .strip_prefix(prefix)
+                .unwrap_or(&snapshot.title)
+                .to_string()
+        });
+
+    let verb = match &snapshot.phase {
+        nori_protocol::ToolPhase::Failed => verb_failed,
+        nori_protocol::ToolPhase::Completed => verb_past,
+        _ => verb_active,
+    };
+    format!("{verb} {path}")
+}
+
 pub(crate) fn is_exploring_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> bool {
     matches!(
         snapshot.kind,

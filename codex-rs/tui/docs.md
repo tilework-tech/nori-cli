@@ -67,11 +67,25 @@ Approval requests from ACP agents are handled through `bottom_pane/approval.rs`.
 
 For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` normalizing shell-wrapper `rawInput.command` arrays and `rawInput.parsed_cmd` metadata into structured `Invocation::Command` / `Invocation::Read` / `Invocation::Search` / `Invocation::ListFiles` values. Without that normalization, `ClientToolCell` falls back to rendering raw protocol JSON instead of the compact command and exploration details the TUI expects.
 
-**Generic rendering**: The generic rendering path (`render_generic_lines()`) applies several cleanup passes to produce compact output: code fences are stripped from text artifacts via `strip_code_fences()` (shared with the execute path), the `Output:` prefix is omitted so artifact text renders directly as detail lines, invocation detail lines that are redundant with the title are suppressed (e.g., `Read: /path` when the title already says `Read /path`), and absolute paths under `cwd` are relativized in both the header and invocation lines. It also has a final location fallback: when both invocation formatting and artifact formatting produce zero detail lines, it displays the `locations` paths from the `ToolSnapshot` as dim sub-items. This prevents completed tool cells from rendering as bare headers with no context, which occurs when agents (e.g., Gemini) send tool calls with empty `content` arrays and no `rawInput`/`rawOutput`.
+**Generic rendering**: The generic rendering path (`render_generic_lines()`) applies several cleanup passes to produce compact output: code fences are stripped from text artifacts via `strip_code_fences()` (shared with the execute path), the `Output:` prefix is omitted so artifact text renders directly as detail lines, invocation detail lines that are redundant with the title are suppressed (e.g., `Read: /path` when the title already says `Read /path`), and absolute paths under `cwd` are relativized in both the header and invocation lines.
+
+For Edit/Delete/Move tool kinds, the generic path uses `format_edit_tool_header()` (from `client_event_format.rs`) instead of the generic `format_tool_header()`. This produces semantic verb-based headers that vary by phase:
+
+| Kind | In-Progress | Completed | Failed |
+|------|-------------|-----------|--------|
+| Edit | `Editing {path}` | `Edited {path}` | `Edit failed: {path}` |
+| Delete | `Deleting {path}` | `Deleted {path}` | `Delete failed: {path}` |
+| Move | `Moving {path}` | `Moved {path}` | `Move failed: {path}` |
+
+The path is extracted from `locations[0].path` when available, falling back to parsing the title (stripping the kind prefix, e.g., `"Edit README.md"` -> `"README.md"`). All other tool kinds continue using the generic `"Tool [phase]: title (kind)"` header.
+
+Bullet styling is phase-aware: active tools show a spinner, failed tools (`ToolPhase::Failed`) show a red bold bullet (`"•".red().bold()`), and all other completed tools show a dim bullet. This matches the existing execute rendering path's phase-aware coloring.
+
+For failed tools, error detail is extracted via a cascade: (1) text artifacts (via `format_artifacts`), (2) `extract_error_text()` which checks `raw_output` for `"error"`, `"output"`, or bare string values, (3) a `"(failed)"` fallback when no detail is available at all. For non-failed tools, the location fallback still applies: when both invocation formatting and artifact formatting produce zero detail lines, it displays the `locations` paths from the `ToolSnapshot` as dim sub-items. This prevents completed tool cells from rendering as bare headers with no context, which occurs when agents (e.g., Gemini) send tool calls with empty `content` arrays and no `rawInput`/`rawOutput`.
 
 **Diff artifact rendering**: When a `ClientToolCell` carries `Artifact::Diff` entries (e.g., during an in-progress edit), the generic rendering path extracts them, converts to `codex_core::protocol::FileChange`, and renders inline diffs via `create_diff_summary` from `diff_render.rs`. This provides a diff preview while an edit is being applied or awaiting approval.
 
-**In-progress Edit/Delete/Move routing**: Non-completed Edit/Delete/Move snapshots are now routed to `handle_client_native_tool_snapshot` instead of being silently dropped. This shows a spinner cell while an edit is being applied. When the completed edit arrives with file changes, the spinner cell is discarded (not flushed to history) and replaced with a `PatchHistoryCell` diff. The discard logic in `handle_client_edit_tool_snapshot` checks whether the active cell is a `ClientToolCell` with the same `call_id` and takes it without flushing to avoid duplicate cells in history.
+**In-progress Edit/Delete/Move routing**: Non-completed Edit/Delete/Move snapshots are now routed to `handle_client_native_tool_snapshot` instead of being silently dropped. This shows a spinner cell while an edit is being applied. When the completed edit arrives with file changes, the spinner cell is discarded (not flushed to history) and replaced with a `PatchHistoryCell` diff. The discard logic in `handle_client_edit_tool_snapshot` checks whether the active cell is a `ClientToolCell` with the same `call_id` and takes it without flushing to avoid duplicate cells in history. Additionally, `handle_client_edit_tool_snapshot` removes any buffered spinner cell from `pending_client_tool_cells` (parallel edit calls can end up in the buffer) and inserts the `call_id` into `completed_client_tool_calls` to prevent further snapshots from creating duplicate cells.
 
 **Execute Cell Completion Buffering** (`chatwidget/event_handlers.rs`, `chatwidget/mod.rs`):
 
@@ -83,7 +97,7 @@ The `pending_client_tool_cells: HashMap<String, ClientToolCell>` buffer holds in
 
 2. **Conditional displacement**: When a new snapshot arrives and the current `active_cell` is an incomplete Execute `ClientToolCell`, instead of calling `flush_active_cell()` (which would send it to history with wrong content), the cell is moved to the buffer keyed by its `call_id`. Non-Execute cells and completed cells still go through the normal `flush_active_cell()` path.
 
-3. **Turn-boundary drain**: The buffer is cleared (orphans discarded) at all turn boundaries: `on_agent_message()`, `on_task_complete()`, and `finalize_turn()`. Discarding orphans is preferred over flushing them with description text.
+3. **Turn-boundary drain**: The buffer is cleared (orphans discarded) at all turn boundaries: `on_agent_message()`, `on_task_complete()`, `finalize_turn()`, and `on_context_compacted()`. Discarding orphans is preferred over flushing them with description text.
 
 The displacement check uses `into_any()` on `dyn HistoryCell` (added in `history_cell/mod.rs`) for owned downcasting from `Box<dyn HistoryCell>` to the concrete `ClientToolCell` type, and `snapshot_kind()` to confirm the cell is `ToolKind::Execute`.
 

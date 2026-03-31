@@ -1455,6 +1455,17 @@ impl ChatWidget {
             self.active_cell.take();
         }
 
+        // Also discard any buffered spinner cell for this call_id (parallel
+        // edit calls can end up in the pending buffer).
+        self.pending_client_tool_cells
+            .remove(&tool_snapshot.call_id);
+
+        // Mark call_id as completed so no further snapshots for it create
+        // duplicate cells (e.g., if the spinner was already flushed to history
+        // due to interleaved text streaming).
+        self.completed_client_tool_calls
+            .insert(tool_snapshot.call_id.clone());
+
         self.session_stats.record_tool_call("Edit");
         self.observe_directories_from_changes(&changes);
         self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
