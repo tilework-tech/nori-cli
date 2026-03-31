@@ -19,7 +19,7 @@ All twelve specs are implemented on branch `feat/acp-tui-specs`.
 | 08 — Gemini Empty Content Fallback | `12f3fae5` | Location fallback invocations, Gemini title sanitization |
 | 09 — ACP-Native Approval Rendering | `2801dd03` | `AcpTool` approval variant, native overlay/history/fullscreen for non-exec ACP tools |
 | 10 — Failed Edit Tool Visibility | `bd51a208` | Red bullet for failed edits, semantic verb headers, error text fallback, duplicate-cell prevention |
-| 11 — Delete File Operation Bridge | *pending commit* | Unified edit/delete/move rendering via `render_edit_lines`, routing unification, bridge deletion |
+| 11 — Delete File Operation Bridge | `71af633c` | Unified edit/delete/move rendering via `render_edit_lines`, routing unification, bridge deletion |
 | 12 — Execute Cell Completion Buffering | `c23b3af4` | Parallel execute buffering, description text filtering, List dedup |
 
 Tests: 43 unit + 9 integration. All 1148 tests pass.
