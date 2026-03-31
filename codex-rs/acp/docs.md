@@ -770,6 +770,8 @@ For Edit/Write/Delete operations, the ACP backend normalizes file mutations into
 
 The transcript recorder uses the same normalized snapshot data when deciding how to persist tool activity, so the recorded transcript and live TUI stay aligned without requiring a separate patch translation path.
 
+For Codex specifically, the normalized tool snapshot path now understands the provider's `rawInput.command` shell-wrapper arrays (for example `["/usr/bin/zsh", "-lc", "df -h ."]`) and `rawInput.parsed_cmd` objects. This means execute tools normalize to `Invocation::Command`, read tools can recover paths from `parsed_cmd[0].path`, and search/list-files tools can recover query/path semantics from Codex's parsed command metadata instead of falling back to raw JSON in the TUI.
+
 **Tool Call Event Filtering and Title Accumulation:**
 
 The ACP backend accumulates display metadata across multiple `ToolCall` and `ToolCallUpdate` messages so the normalized tool snapshot keeps a stable title, kind, and raw input. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
