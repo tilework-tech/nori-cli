@@ -193,11 +193,41 @@ These modules are at the "top" of the dependency chain — nothing in core/src/ 
 ### Strategy: Incremental feature-gating
 
 Phase 1 (done): Introduce `legacy-http-backend` feature. Gate leaf modules and HTTP-only re-exports.
-Phase 2 (next): Move `to_api_provider()` from `model_provider_info.rs` to `client.rs`, removing codex-api from the shared config module.
-Phase 3 (future): Gate `client.rs`, `api_bridge.rs`, `sandboxing/assessment.rs` behind the feature.
-Phase 4 (future): Make `codex-api` an optional dependency (`dep:codex-api`).
-Phase 5 (future): Gate the codex/ module and its cascade (requires separating Session/TurnContext from shared infrastructure).
-Phase 6 (future): Remove codex-api and codex-client crates entirely.
+Phase 2 (done): Move `to_api_provider()` from `model_provider_info.rs` to `client.rs`, removing codex-api from the shared config module.
+Phase 3 (done): Gate `sandboxing/assessment.rs` behind the feature.
+Phase 4 (future): Gate `client.rs` and `api_bridge.rs` behind the feature (requires also gating codex/ module and compact.rs HTTP-only functions).
+Phase 5 (future): Make `codex-api` an optional dependency (`dep:codex-api`).
+Phase 6 (future): Gate the codex/ module and its cascade (requires separating Session/TurnContext from shared infrastructure).
+Phase 7 (future): Remove codex-api and codex-client crates entirely.
+
+## Gating `sandboxing/assessment.rs` behind `legacy-http-backend` (next removal target)
+
+### Why this component
+
+`sandboxing/assessment.rs` is a self-contained HTTP-backend component that:
+1. Creates a `ModelClient` (HTTP-backend type) and makes direct HTTP API calls
+2. Has exactly one caller: `codex/approval.rs:assess_sandbox_command()`, which is called from `tools/orchestrator.rs`
+3. Is behind the `experimental_sandbox_command_assessment` config flag (default: false)
+4. Provides no shared functionality used by ACP — the `SandboxCommandAssessment` result TYPE lives in `codex-protocol` and is independent
+
+### Cascade analysis
+
+- `sandboxing/mod.rs:9`: `pub mod assessment;` — gate this
+- `codex/approval.rs:4-28`: `assess_sandbox_command()` method on `Session` — the only caller of `assessment::assess_command()`
+- `tools/orchestrator.rs:70-79, 151-159`: Two call sites of `sess.assess_sandbox_command()`
+
+### Approach
+
+1. Gate `pub mod assessment;` in `sandboxing/mod.rs` behind `#[cfg(feature = "legacy-http-backend")]`
+2. In `codex/approval.rs`: Gate `assess_sandbox_command` behind `#[cfg(feature = "legacy-http-backend")]`, add a `#[cfg(not(...))]` stub that returns `None` — this avoids cascading changes to `tools/orchestrator.rs`
+3. The `SandboxCommandAssessment` type, config field, and feature flag remain unchanged (they're shared protocol/config types)
+
+### Why stub instead of gating callers
+
+The `assess_sandbox_command` method is called from `tools/orchestrator.rs` which is compiled unconditionally (shared code). Adding `#[cfg]` to call sites in orchestrator.rs would be messy and brittle. A stub method that always returns `None` when the feature is off:
+- Preserves the existing call sites unchanged
+- Has the same behavior as `experimental_sandbox_command_assessment = false` (the default)
+- Cleanly eliminates the HTTP-backend dependency (`ModelClient`, `codex-api`) from the non-feature-flagged build
 
 ## Moving `to_api_provider()` out of `model_provider_info.rs` (Phase 2 analysis)
 

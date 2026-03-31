@@ -6,6 +6,7 @@ sandbox placement and transformation of portable CommandSpec into a
 ready‑to‑spawn environment.
 */
 
+#[cfg(feature = "legacy-http-backend")]
 pub mod assessment;
 
 use crate::exec::ExecExpiration;

@@ -1,6 +1,7 @@
 use super::*;
 
 impl Session {
+    #[cfg(feature = "legacy-http-backend")]
     pub(crate) async fn assess_sandbox_command(
         &self,
         turn_context: &TurnContext,
@@ -26,6 +27,17 @@ impl Session {
             failure_message,
         )
         .await
+    }
+
+    #[cfg(not(feature = "legacy-http-backend"))]
+    pub(crate) async fn assess_sandbox_command(
+        &self,
+        _turn_context: &TurnContext,
+        _call_id: &str,
+        _command: &[String],
+        _failure_message: Option<&str>,
+    ) -> Option<SandboxCommandAssessment> {
+        None
     }
 
     /// Emit an exec approval request event and await the user's decision.

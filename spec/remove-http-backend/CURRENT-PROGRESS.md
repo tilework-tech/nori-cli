@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Seventh component removed
+## Status: Eighth component removed
 
 ### Completed: Remove compact_remote module
 
@@ -157,8 +157,24 @@ Moved the `to_api_provider()` method and `build_header_map()` helper from `model
 
 **Impact:** `model_provider_info.rs` no longer imports from `codex-api`. Reduces the codex-api dependency surface in shared modules. All existing tests pass (codex-core: 537 unit, 441 integration pass, 21 pre-existing nvm environment failures).
 
+### Completed: Gate `sandboxing/assessment` behind `legacy-http-backend`
+
+Gated the sandbox assessment module behind the `legacy-http-backend` feature flag. This module creates a `ModelClient` and makes direct HTTP API calls to evaluate command safety — pure HTTP-backend code that nori never uses.
+
+**What was gated:**
+- `sandboxing/assessment.rs` module — `#[cfg(feature = "legacy-http-backend")]` on `pub mod assessment;` in `sandboxing/mod.rs`
+- `assess_sandbox_command()` method on `Session` in `codex/approval.rs` — split into feature-gated real implementation and `#[cfg(not(...))]` stub returning `None`
+
+**What was preserved:**
+- `SandboxCommandAssessment` type in codex-protocol (shared protocol type)
+- `experimental_sandbox_command_assessment` config field (shared config)
+- Call sites in `tools/orchestrator.rs` unchanged — stub method has same signature
+- Stub behavior identical to `experimental_sandbox_command_assessment = false` (the default)
+
+**Impact:** When `legacy-http-backend` is off (nori/tui/cli/acp binaries), `sandboxing/assessment.rs` and its `ModelClient`/`Prompt`/`ResponseEvent` imports are excluded from compilation. All existing tests pass (codex-core: 439 pass, 23 pre-existing nvm environment failures; E2E: 6 tests).
+
 ### Suggested next steps for future commits
-1. Gate `client.rs`, `api_bridge.rs`, and `sandboxing/assessment.rs` behind `legacy-http-backend` (requires also gating codex/ module imports and compact.rs HTTP-only functions)
+1. Gate `client.rs` and `api_bridge.rs` behind `legacy-http-backend` (requires also gating `codex/` module and `compact.rs` HTTP-only functions — large cascade)
 2. Make `codex-api` an optional dependency (`dep:codex-api`) enabled by `legacy-http-backend` — now only 3 source files import from codex-api: `api_bridge.rs`, `client.rs`, `client_common.rs`
 3. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
 4. Eventually: remove the `codex-api` and `codex-client` crates entirely
