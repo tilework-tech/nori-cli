@@ -233,19 +233,24 @@ The wizard field set matches Claude Code's `claude mcp add` command: transport t
 
 On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP), inserts it into the servers list, and calls `save_servers()`. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `ConfigEditsBuilder::replace_mcp_servers()` for atomic config file writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
 
-The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`.
+The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`. After creating the picker, it fires `AppEvent::ComputeMcpAuthStatuses` to asynchronously populate auth statuses.
 
 **MCP OAuth Login** (`nori/mcp_server_picker.rs`, `app/config_persistence.rs`):
 
-Pressing `l` in the `/mcp-servers` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
+Pressing `l` in the `/mcp` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
 
-The auth statuses flow through the system as follows:
+Auth statuses are computed asynchronously when the picker opens:
 ```
-McpListToolsResponseEvent.auth_statuses
-    -> ChatWidget.mcp_auth_statuses (stored in on_list_mcp_tools)
-    -> McpServerPickerView.auth_statuses (passed in open_mcp_servers_popup)
+open_mcp_servers_popup()
+    -> sends AppEvent::ComputeMcpAuthStatuses
+    -> App spawns tokio task calling codex_core::mcp::auth::compute_auth_statuses()
+    -> results delivered via AppEvent::McpAuthStatusesReady(HashMap)
+    -> ChatWidget.update_mcp_auth_statuses() -> BottomPane -> active BottomPaneView
+    -> McpServerPickerView.update_mcp_auth_statuses() stores statuses
     -> handle_list_login() checks status before emitting AppEvent::McpOAuthLogin
 ```
+
+The `BottomPaneView` trait has a default no-op `update_mcp_auth_statuses()` method; only `McpServerPickerView` implements it. This pattern pushes data INTO a view through the trait interface, since the view stack does not support downcasting.
 
 The `McpOAuthLogin` event carries `server_name`, `server_url`, `http_headers`, and `env_http_headers`. The handler in `app/config_persistence.rs` (`perform_mcp_oauth_login()`) suspends the TUI (leaves alt screen, disables raw mode), delegates to `codex_rmcp_client::perform_oauth_login()` from `@/codex-rs/rmcp-client/`, then restores the TUI (enables raw mode, enters alt screen). This suspension is necessary because the OAuth flow uses `println!` for status output and `webbrowser::open` for the browser callback. On success, an info message tells the user to restart to apply the new credentials.
 

@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use crate::bottom_pane::ApprovalRequest;
 use crate::render::renderable::Renderable;
+use codex_protocol::protocol::McpAuthStatus;
 use crossterm::event::KeyEvent;
 
 use super::CancellationEvent;
@@ -34,4 +37,8 @@ pub(crate) trait BottomPaneView: Renderable {
     ) -> Option<ApprovalRequest> {
         Some(request)
     }
+
+    /// Update MCP server auth statuses. Only meaningful for the MCP server
+    /// picker; other views ignore this.
+    fn update_mcp_auth_statuses(&mut self, _statuses: &HashMap<String, McpAuthStatus>) {}
 }

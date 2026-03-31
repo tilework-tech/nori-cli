@@ -202,6 +202,14 @@ impl ChatWidget {
         &self.config
     }
 
+    /// Forward MCP auth statuses to the active bottom pane view.
+    pub(crate) fn update_mcp_auth_statuses(
+        &mut self,
+        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+    ) {
+        self.bottom_pane.update_mcp_auth_statuses(statuses);
+    }
+
     /// Get a reference to the session statistics tracker.
     pub(crate) fn session_stats(&self) -> &SessionStats {
         &self.session_stats

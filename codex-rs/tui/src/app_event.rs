@@ -474,6 +474,14 @@ pub(crate) enum AppEvent {
         env_http_headers: Option<std::collections::HashMap<String, String>>,
     },
 
+    /// Request async computation of MCP server auth statuses.
+    ComputeMcpAuthStatuses,
+
+    /// Deliver computed MCP auth statuses to the active picker view.
+    McpAuthStatusesReady(
+        std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+    ),
+
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
 

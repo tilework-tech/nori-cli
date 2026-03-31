@@ -1103,6 +1103,26 @@ impl App {
                 )
                 .await;
             }
+            AppEvent::ComputeMcpAuthStatuses => {
+                let servers = self.chat_widget.config_ref().mcp_servers.clone();
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    let entries = codex_core::mcp::auth::compute_auth_statuses(
+                        &servers,
+                        codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
+                    )
+                    .await;
+                    let statuses = entries
+                        .into_iter()
+                        .map(|(name, entry)| (name, entry.auth_status))
+                        .collect();
+                    tx.send(AppEvent::McpAuthStatusesReady(statuses));
+                });
+            }
+            AppEvent::McpAuthStatusesReady(statuses) => {
+                self.chat_widget.update_mcp_auth_statuses(&statuses);
+                tui.frame_requester().schedule_frame();
+            }
         }
         Ok(true)
     }

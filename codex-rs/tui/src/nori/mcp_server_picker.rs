@@ -495,7 +495,7 @@ impl McpServerPickerView {
     /// Footer hint for the current mode.
     fn footer_hint(&self) -> &'static str {
         match &self.mode {
-            Mode::List => "↑↓ select · enter toggle · d delete · esc close",
+            Mode::List => "↑↓ select · enter toggle · l login · d delete · esc close",
             Mode::ConfirmDelete(_) => "d confirm delete · esc cancel",
             Mode::TransportSelect { .. } => "↑↓ select · enter choose · esc back",
             Mode::NameInput
@@ -641,6 +641,13 @@ impl BottomPaneView for McpServerPickerView {
     fn on_ctrl_c(&mut self) -> CancellationEvent {
         self.complete = true;
         CancellationEvent::Handled
+    }
+
+    fn update_mcp_auth_statuses(
+        &mut self,
+        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+    ) {
+        self.auth_statuses = statuses.clone();
     }
 }
 
@@ -1503,6 +1510,57 @@ mod tests {
             rx.try_recv().is_err(),
             "login on BearerToken server should be a no-op"
         );
+    }
+
+    #[test]
+    fn login_works_after_auth_statuses_update() {
+        // Create picker WITHOUT auth statuses (simulates production behavior).
+        let mut servers = BTreeMap::new();
+        servers.insert(
+            "slack".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::StreamableHttp {
+                    url: "https://mcp.slack.com/mcp".to_string(),
+                    bearer_token_env_var: None,
+                    http_headers: None,
+                    env_http_headers: None,
+                },
+                enabled: true,
+                startup_timeout_sec: None,
+                tool_timeout_sec: None,
+                enabled_tools: None,
+                disabled_tools: None,
+            },
+        );
+        let (mut picker, mut rx) = make_picker(&servers);
+
+        // Navigate to "slack" (index 1)
+        press(&mut picker, KeyCode::Down);
+        assert_eq!(picker.selected_idx(), 1);
+
+        // Press 'l' — should be a no-op because auth statuses are empty.
+        press(&mut picker, KeyCode::Char('l'));
+        assert!(
+            rx.try_recv().is_err(),
+            "login should be a no-op before auth statuses arrive"
+        );
+
+        // Simulate auth statuses arriving asynchronously.
+        let mut statuses = HashMap::new();
+        statuses.insert("slack".to_string(), McpAuthStatus::NotLoggedIn);
+        picker.update_mcp_auth_statuses(&statuses);
+
+        // Press 'l' again — should now emit McpOAuthLogin.
+        press(&mut picker, KeyCode::Char('l'));
+        let event = rx
+            .try_recv()
+            .expect("should have emitted an event after auth status update");
+        match event {
+            AppEvent::McpOAuthLogin { server_name, .. } => {
+                assert_eq!(server_name, "slack");
+            }
+            other => panic!("expected McpOAuthLogin event, got {other:?}"),
+        }
     }
 
     #[test]
