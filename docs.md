@@ -99,8 +99,7 @@ Nori acts as both MCP client and server:
 - The `unstable` feature flag gates experimental ACP features like model switching
 - Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
 - Snapshot testing with `insta` is used extensively for TUI regression testing
-- The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor`, `services` targets) and `@/codex-rs/justfile` for Rust-specific workflows. The root justfile wraps `codex-rs` by running `cd codex-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd codex-rs && just` for the Rust-native recipes
-- The `just services` target reads `~/.nori/local-services.yml`, a user-level service registry (not checked into git) shared across all Nori repos. A reference example lives at `@/scripts/local-services.yml.example`
+- The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor` targets) and `@/codex-rs/justfile` for Rust-specific workflows. The root justfile wraps `codex-rs` by running `cd codex-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd codex-rs && just` for the Rust-native recipes
 - `pnpm` is used for Node.js workspace management in `@/nori-cli/`
 
 Created and maintained by Nori.

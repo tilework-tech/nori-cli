@@ -14,7 +14,6 @@ help:
       just dev [-- args]
       just test [scope] [-- args]
       just doctor
-      just services
 
     Test scopes:
       just test                   Workspace tests (default)
@@ -139,53 +138,6 @@ doctor:
       echo "Install missing required tools before working in this repo."
       exit 1
     fi
-
-# Print local services relevant to this repo
-services:
-    #!/usr/bin/env bash
-    SERVICES_FILE="${NORI_SERVICES_FILE:-$HOME/.nori/local-services.yml}"
-    if [ ! -f "$SERVICES_FILE" ]; then
-      echo "No local services registry found."
-      echo ""
-      echo "Create ~/.nori/local-services.yml to register local services."
-      echo "See scripts/local-services.yml.example for the expected format."
-      exit 0
-    fi
-
-    echo "Local services (repo: cli)"
-    echo ""
-
-    # Parse YAML entries where repo is cli
-    awk '
-      /^  [a-zA-Z]/ {
-        if (name != "" && repo == "cli") {
-          printf "  %-20s %s\n", name, role
-          if (start_cmd != "") printf "    start: %s\n", start_cmd
-          if (port != "") printf "    port:  %s\n", port
-          printf "\n"
-        }
-        gsub(/:$/, "", $1)
-        name = $1
-        repo = ""
-        role = ""
-        start_cmd = ""
-        port = ""
-      }
-      /^ *repo:/ { gsub(/.*repo: */, ""); repo = $0 }
-      /^ *role:/ { gsub(/.*role: */, ""); role = $0 }
-      /^ *start_cmd:/ { gsub(/.*start_cmd: */, ""); start_cmd = $0 }
-      /^ *default_port:/ { gsub(/.*default_port: */, ""); port = $0 }
-      END {
-        if (name != "" && repo == "cli") {
-          printf "  %-20s %s\n", name, role
-          if (start_cmd != "") printf "    start: %s\n", start_cmd
-          if (port != "") printf "    port:  %s\n", port
-          printf "\n"
-        }
-      }
-    ' "$SERVICES_FILE"
-
-    echo "Source: $SERVICES_FILE"
 
 # Forward existing codex-rs targets
 

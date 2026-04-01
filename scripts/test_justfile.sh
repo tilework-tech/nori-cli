@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Integration tests for the root-level justfile shared runner layer.
-# These tests validate the five standard targets: help, dev, test, doctor, services.
+# These tests validate the standard targets: help, dev, test, doctor.
 #
 # Usage: bash scripts/test_justfile.sh
 #
@@ -49,7 +49,6 @@ assert_contains "$HELP_OUTPUT" "nori" "help mentions nori"
 assert_contains "$HELP_OUTPUT" "just dev" "help mentions just dev"
 assert_contains "$HELP_OUTPUT" "just test" "help mentions just test"
 assert_contains "$HELP_OUTPUT" "just doctor" "help mentions just doctor"
-assert_contains "$HELP_OUTPUT" "just services" "help mentions just services"
 assert_contains "$HELP_OUTPUT" "Standard targets" "help has Standard targets section"
 echo ""
 
@@ -61,31 +60,6 @@ assert_contains "$DOCTOR_OUTPUT" "rustup" "doctor checks rustup"
 assert_contains "$DOCTOR_OUTPUT" "just" "doctor checks just"
 echo ""
 
-# ---- just services ----
-echo "[just services]"
-
-# Use a controlled temp file via NORI_SERVICES_FILE to avoid touching user config
-TEMP_SERVICES="$(mktemp)"
-cat > "$TEMP_SERVICES" <<'YAML'
-services:
-  nori-cli:
-    repo: cli
-    cwd: /tmp/nori/cli
-    role: interactive AI coding assistant (TUI)
-    start_cmd: cd codex-rs && cargo run --bin nori --
-YAML
-SERVICES_OUTPUT="$(cd "$REPO_ROOT" && NORI_SERVICES_FILE="$TEMP_SERVICES" just services 2>&1)" || true
-assert_contains "$SERVICES_OUTPUT" "nori-cli" "services shows nori-cli entry"
-assert_contains "$SERVICES_OUTPUT" "cli" "services shows cli repo entries"
-echo ""
-
-# Test services with missing file
-echo "[just services - missing file]"
-SERVICES_MISSING_OUTPUT="$(cd "$REPO_ROOT" && NORI_SERVICES_FILE="/nonexistent/path" just services 2>&1)" || true
-assert_contains "$SERVICES_MISSING_OUTPUT" "local-services.yml" "services mentions config file when missing"
-rm -f "$TEMP_SERVICES"
-echo ""
-
 # ---- just dev (dry-run check) ----
 echo "[just dev]"
 # We can't actually run the full dev server, but we can check that the recipe exists
@@ -95,7 +69,6 @@ assert_contains "$SUMMARY" "dev" "dev target exists in justfile"
 assert_contains "$SUMMARY" "test" "test target exists in justfile"
 assert_contains "$SUMMARY" "help" "help target exists in justfile"
 assert_contains "$SUMMARY" "doctor" "doctor target exists in justfile"
-assert_contains "$SUMMARY" "services" "services target exists in justfile"
 echo ""
 
 # ---- just test (dry-run check) ----
