@@ -116,11 +116,10 @@ pub use user_notification::UserNotifier;
 mod user_shell_command;
 pub mod util;
 
-#[cfg(feature = "legacy-http-backend")]
-pub use apply_patch::CODEX_APPLY_PATCH_ARG1;
 pub use command_safety::is_safe_command;
 pub use safety::get_platform_sandbox;
 pub use safety::set_windows_sandbox_enabled;
+pub use tool_types::CODEX_APPLY_PATCH_ARG1;
 // Re-export the protocol types from the standalone `codex-protocol` crate so existing
 // `codex_core::protocol::...` references continue to work across the workspace.
 pub use codex_protocol::protocol;

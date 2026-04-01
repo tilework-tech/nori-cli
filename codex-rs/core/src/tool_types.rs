@@ -52,3 +52,6 @@ pub enum ApplyPatchToolType {
     Freeform,
     Function,
 }
+
+/// The special argv[1] sentinel that tells the binary to run as apply-patch.
+pub const CODEX_APPLY_PATCH_ARG1: &str = "--codex-run-as-apply-patch";

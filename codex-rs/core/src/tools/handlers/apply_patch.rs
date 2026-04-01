@@ -22,8 +22,6 @@ use crate::tools::sandboxing::ToolCtx;
 use crate::tools::spec::ApplyPatchToolArgs;
 use crate::tools::spec::JsonSchema;
 use async_trait::async_trait;
-use serde::Deserialize;
-use serde::Serialize;
 
 pub struct ApplyPatchHandler;
 
@@ -156,8 +154,6 @@ impl ToolHandler for ApplyPatchHandler {
         }
     }
 }
-
-pub use crate::tool_types::ApplyPatchToolType;
 
 /// Returns a custom tool that can be used to edit files. Well-suited for GPT-5 models
 /// https://platform.openai.com/docs/guides/function-calling#custom-tools

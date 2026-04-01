@@ -225,8 +225,22 @@ Moved the `ResponseEvent` re-export (from `codex-api`) and `ResponseStream` type
 
 **Impact:** Pure import reorganization, no behavioral changes. All existing tests pass (codex-core: 537 unit, 436 integration pass, 26 pre-existing nvm environment failures; codex-api: 2 tests; E2E: 5 ACP + 3 streaming pass).
 
+### Completed: Make `codex-api` optional and fix workspace compilation
+
+Made `codex-api` an optional dependency in codex-core behind the `legacy-http-backend` feature flag. Gated the majority of HTTP-backend modules in `lib.rs` behind the feature. Fixed two workspace compilation errors that resulted from the gating.
+
+**What was made optional:**
+- `codex-api` dependency: `codex-api = { workspace = true, optional = true }` with `legacy-http-backend = ["dep:codex-api"]`
+- 18+ modules gated in `lib.rs`: `api_bridge`, `apply_patch`, `client`, `codex`, `codex_conversation`, `conversation_manager`, `context_manager`, `environment_context`, `mcp_connection_manager`, `mcp_tool_call`, `message_history`, `response_processing`, `unified_exec`, `function_tool`, `state`, `tasks`, `user_shell_command`
+
+**What was fixed:**
+- `CODEX_APPLY_PATCH_ARG1` constant moved from gated `apply_patch.rs` to shared `tool_types.rs` — `codex-arg0` imports it without enabling the feature
+- `core_test_support` Cargo.toml updated to enable `legacy-http-backend` — it imports `CodexConversation` and `ConversationManager`
+- `build_specs()` in `tools/spec/mod.rs` gated behind `legacy-http-backend` (imports from gated modules)
+- Compact stubs removed (all callers are in gated modules, stubs were unreachable)
+
+**Impact:** `codex-api` and its transitive dependencies (`codex-client`, `eventsource-stream`, etc.) are excluded from the nori binary's dependency tree. `cargo check --workspace` succeeds with zero errors. All existing tests pass (codex-core: 537 unit, 227+ apply_patch integration pass; E2E: pass individually).
+
 ### Suggested next steps for future commits
-1. Gate `client.rs` and `api_bridge.rs` behind `legacy-http-backend` (requires also gating `codex/` module — large cascade)
-2. Make `codex-api` an optional dependency (`dep:codex-api`) enabled by `legacy-http-backend` — now only 3 source files import from codex-api: `api_bridge.rs`, `client.rs`, `client_common.rs`
-3. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
-4. Eventually: remove the `codex-api` and `codex-client` crates entirely
+1. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
+2. Eventually: remove the `codex-api` and `codex-client` crates entirely

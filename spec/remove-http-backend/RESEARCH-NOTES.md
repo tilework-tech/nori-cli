@@ -491,3 +491,34 @@ After fixes:
 - `cargo check -p codex-core --features legacy-http-backend` should succeed
 - `cargo test -p codex-core` (dev-deps enable the feature) should pass all tests
 - `cargo check -p nori-tui` and `cargo check -p codex-acp` should succeed
+
+## Fix workspace compilation with gated modules (current target)
+
+### Problem
+
+After the WIP commit that gated many modules and made `codex-api` optional, `cargo check --workspace` reveals two remaining breakages:
+
+### Root cause 1: `CODEX_APPLY_PATCH_ARG1` gated behind `legacy-http-backend`
+
+`codex-arg0` imports `codex_core::CODEX_APPLY_PATCH_ARG1` unconditionally (used for argv dispatch and Windows batch scripts), but the re-export at `lib.rs:119-120` is gated behind `legacy-http-backend`. The constant is defined in `apply_patch.rs` which is entirely gated because it imports `Session`/`TurnContext`.
+
+The constant itself (`"--codex-run-as-apply-patch"`) has zero HTTP-backend dependency. It's a simple CLI argument string.
+
+**Fix:** Move `CODEX_APPLY_PATCH_ARG1` to `tool_types.rs` (the shared module for types extracted from gated modules — same pattern used for `ApplyPatchToolType`, `ConfigShellToolType`, etc.). Then:
+1. Add `pub const CODEX_APPLY_PATCH_ARG1: &str = "--codex-run-as-apply-patch";` to `tool_types.rs`
+2. Change `apply_patch.rs` to import from `crate::tool_types::CODEX_APPLY_PATCH_ARG1`
+3. Change `lib.rs` re-export from gated `apply_patch::CODEX_APPLY_PATCH_ARG1` to ungated `tool_types::CODEX_APPLY_PATCH_ARG1`
+4. `codex-arg0` import remains unchanged
+
+### Root cause 2: `core_test_support` imports gated types without feature
+
+`core_test_support` (at `core/tests/common/`) imports `CodexConversation` and `ConversationManager` which are gated behind `legacy-http-backend`. This crate is purely a test helper — it makes sense for it to require the feature.
+
+**Fix:** Add `features = ["legacy-http-backend"]` to `core_test_support`'s `codex-core` dependency in `core/tests/common/Cargo.toml`.
+
+### Verification
+
+- `cargo check --workspace` should succeed with no errors
+- `cargo test -p codex-core` should pass all tests
+- `cargo check -p nori-tui` should succeed (via codex-arg0)
+- `cargo check -p codex-acp` should succeed
