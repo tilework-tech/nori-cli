@@ -125,21 +125,25 @@ below. Choose the option that matches the area of the codebase you changed.
 
 Run all steps from the `codex-rs/` directory.
 
-1. Build the `nori` binary and the mock ACP agent: `cargo build --bin nori --bin mock-acp-agent`
-2. Create a temporary config directory with a mock provider so the TUI bypasses onboarding:
+1. Build the `nori` binary: `cargo build --bin nori`
+2. Create a temporary config directory with the ElizACP agent so the TUI bypasses onboarding with a lightweight local agent:
    ```bash
    VERIFY_HOME=$(mktemp -d)
    cat > "$VERIFY_HOME/config.toml" <<'TOML'
-   model = "mock-model"
-   model_provider = "mock_provider"
+   agent = "elizacp"
 
-   [model_providers.mock_provider]
-   name = "Mock ACP provider for verification"
+   [[agents]]
+   name = "ElizACP"
+   slug = "elizacp"
+
+   [agents.distribution.local]
+   command = "elizacp"
+   args = ["acp"]
    TOML
    ```
 3. Read the `tui-puppeteering-with-tmux` skill and set the `SCRIPTS` variable to its scripts directory.
-4. Start an isolated tmux session running the binary with the mock config:
-   `CODEX_HOME="$VERIFY_HOME" NORI_HOME="$VERIFY_HOME" $SCRIPTS/tui-start nori-verify "./target/debug/nori --agent mock-model --skip-trust-directory"`
+4. Start an isolated tmux session running the binary with the ElizACP config:
+   `CODEX_HOME="$VERIFY_HOME" NORI_HOME="$VERIFY_HOME" $SCRIPTS/tui-start nori-verify "./target/debug/nori --agent elizacp --skip-trust-directory"`
 5. Assert the TUI renders and the `›` prompt appears: `$SCRIPTS/tui-assert nori-verify "›" 10`
 6. Type a test message and press Enter:
    `$SCRIPTS/tui-send nori-verify "hello"` then `$SCRIPTS/tui-send nori-verify --keys Enter`
