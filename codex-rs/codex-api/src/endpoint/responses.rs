@@ -1,4 +1,6 @@
 use crate::auth::AuthProvider;
+use crate::client::HttpTransport;
+use crate::client::RequestTelemetry;
 use crate::common::Prompt as ApiPrompt;
 use crate::common::Reasoning;
 use crate::common::ResponseStream;
@@ -10,8 +12,6 @@ use crate::requests::ResponsesRequest;
 use crate::requests::ResponsesRequestBuilder;
 use crate::sse::spawn_response_stream;
 use crate::telemetry::SseTelemetry;
-use codex_client::HttpTransport;
-use codex_client::RequestTelemetry;
 use codex_protocol::protocol::SessionSource;
 use http::HeaderMap;
 use serde_json::Value;

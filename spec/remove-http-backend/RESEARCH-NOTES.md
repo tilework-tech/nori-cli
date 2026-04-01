@@ -522,3 +522,61 @@ The constant itself (`"--codex-run-as-apply-patch"`) has zero HTTP-backend depen
 - `cargo test -p codex-core` should pass all tests
 - `cargo check -p nori-tui` should succeed (via codex-arg0)
 - `cargo check -p codex-acp` should succeed
+
+## Remove `codex-client` crate by inlining into `codex-api` (current target)
+
+### Why this component
+
+`codex-client` is a 331-line crate (7 source files) providing HTTP transport, SSE streaming, retry logic, and request/response types. It has exactly ONE consumer: `codex-api`. Since `codex-api` is already behind the `legacy-http-backend` feature flag and optional in `codex-core`, `codex-client` is effectively dead code for the nori binary. Having it as a separate workspace member adds confusion.
+
+### What `codex-client` exports (used by `codex-api`)
+
+| Type | File | Usage in codex-api |
+|------|------|--------------------|
+| `HttpTransport` trait | transport.rs | endpoint/responses.rs, endpoint/streaming.rs |
+| `ReqwestTransport` struct | transport.rs | lib.rs (re-export) |
+| `ByteStream` type alias | transport.rs | sse/responses.rs |
+| `StreamResponse` struct | transport.rs | sse/responses.rs, endpoint/streaming.rs, telemetry.rs |
+| `Request` struct | request.rs | telemetry.rs, auth.rs, provider.rs |
+| `Response` struct | request.rs | telemetry.rs |
+| `TransportError` enum | error.rs | sse/responses.rs, error.rs, telemetry.rs, lib.rs (re-export) |
+| `StreamError` enum | error.rs | NOT used by codex-api |
+| `RetryPolicy` struct | retry.rs | provider.rs, telemetry.rs |
+| `RetryOn` struct | retry.rs | provider.rs |
+| `run_with_retry` fn | retry.rs | telemetry.rs |
+| `backoff` fn | retry.rs | NOT used by codex-api |
+| `RequestTelemetry` trait | telemetry.rs | endpoint/responses.rs, endpoint/streaming.rs, telemetry.rs, lib.rs (re-export) |
+| `sse_stream` fn | sse.rs | NOT used by codex-api |
+
+### Approach: Inline as `codex-api/src/client/` submodule
+
+1. Create `codex-api/src/client/` directory with all 7 source files from `codex-client/src/`
+2. Add `pub(crate) mod client;` to `codex-api/src/lib.rs`
+3. Change all `codex_client::X` imports to `crate::client::X`
+4. Change 3 re-exports in lib.rs from `codex_client::X` to `crate::client::X`
+5. Remove `codex-client` dep from `codex-api/Cargo.toml`
+6. Add missing deps to `codex-api/Cargo.toml`: `reqwest` (json, stream), `rand`
+7. Remove `codex-client` from workspace members + workspace deps in root `Cargo.toml`
+8. Delete `codex-client/` directory entirely
+9. Remove `codex-client` from `workspace.metadata.cargo-shear.ignored` if present
+10. Update docs: `codex-client/docs.md`, `codex-client/README.md` (deleted with crate), `codex-rs/docs.md`, `codex-rs/core/docs.md`
+
+### Dependencies to add to codex-api
+
+codex-client's Cargo.toml deps not already in codex-api:
+- `reqwest = { workspace = true, features = ["json", "stream"] }` — needed by `ReqwestTransport`
+- `rand = { workspace = true }` — needed by `backoff()` jitter
+
+Already present in codex-api: async-trait, bytes, futures, http, serde, serde_json, thiserror, tokio, eventsource-stream
+
+### Backwards compatibility
+
+- No external consumers of `codex-client` exist (only `codex-api`)
+- `codex-api` re-exports `RequestTelemetry`, `ReqwestTransport`, `TransportError` from `codex-client` — these become re-exports from `crate::client` instead; external API unchanged
+- `codex-core` imports these re-exports from `codex-api`, not `codex-client` directly — no changes needed
+
+### Edge cases
+
+- `sse_stream` and `backoff` are public in `codex-client` but NOT used by `codex-api` — they become `pub(crate)` or dead code in the inlined module. Keep them as-is since the module is `pub(crate)`.
+- `StreamError` is exported from `codex-client` but NOT used by `codex-api` — it's used by `sse_stream` internally, so it stays in the inlined module.
+- The `eventsource-stream` dependency is used by both `codex-client/src/sse.rs` and `codex-api/src/sse/responses.rs` — already in codex-api's deps, no conflict.

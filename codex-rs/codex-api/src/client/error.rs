@@ -19,11 +19,3 @@ pub enum TransportError {
     #[error("request build error: {0}")]
     Build(String),
 }
-
-#[derive(Debug, Error)]
-pub enum StreamError {
-    #[error("stream failed: {0}")]
-    Stream(String),
-    #[error("timeout")]
-    Timeout,
-}

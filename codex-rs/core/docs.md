@@ -106,7 +106,7 @@ Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 
 **Model Client Architecture:**
 
-`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. `client.rs` also hosts `ResponseEvent` (a re-export from `codex_api::common::ResponseEvent`) and the `ResponseStream` struct (a channel-based `futures::Stream` wrapper over `ResponseEvent`). The `ModelProviderInfo` struct in `model_provider_info.rs` is a pure shared configuration type (base URL, auth, retry/timeout settings, headers) with no dependency on `codex-api`. The conversion from `ModelProviderInfo` to a `codex-api::Provider` happens via the standalone `create_api_provider()` function in `client.rs`, keeping all HTTP-backend-specific logic concentrated in the HTTP-backend module.
+`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. `client.rs` also hosts `ResponseEvent` and the `ResponseStream` struct (a channel-based `futures::Stream` wrapper over `ResponseEvent`). The `ModelProviderInfo` struct in `model_provider_info.rs` is a pure shared configuration type (base URL, auth, retry/timeout settings, headers) with no dependency on `codex-api`. The conversion from `ModelProviderInfo` to a `codex-api::Provider` happens via the standalone `create_api_provider()` function in `client.rs`, keeping all HTTP-backend-specific logic concentrated in the HTTP-backend module.
 
 `client_common.rs` is a shared module with no production `codex-api` dependency. It contains `Prompt` (the API request payload struct) and the `tools` submodule (`ToolSpec`, `FreeformTool`, etc.) used by both backends. Only `client.rs` and `api_bridge.rs` import from `codex-api` in production code.
 
@@ -114,26 +114,37 @@ ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/ac
 
 **Feature Gating -- `legacy-http-backend`:**
 
-The `legacy-http-backend` cargo feature (defined in `core/Cargo.toml`) gates HTTP-backend-only types out of the public API for downstream crates that only use ACP. When the feature is **disabled** (the default), the following are hidden:
+The `legacy-http-backend` cargo feature (defined in `core/Cargo.toml`) gates the entire HTTP backend, including the `codex-api` dependency itself (`dep:codex-api`). When the feature is **disabled** (the default), entire modules are excluded from compilation:
 
-| Gated Item | Module |
+| Gated Module | What it contains |
 |---|---|
-| `CodexConversation` | `codex_conversation` |
-| `ConversationManager`, `NewConversation` | `conversation_manager` |
-| `ModelClient` | `client` |
-| `Prompt` | `client_common` |
-| `ResponseEvent`, `ResponseStream` | `client` |
-| `assessment` submodule | `sandboxing` |
-| `run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed` | `compact` |
-| `build_specs()` | `tools/spec` |
+| `client` | `ModelClient`, `ResponseEvent`, `ResponseStream` |
+| `api_bridge` | Bridges core types to `codex-api` |
+| `codex` | `Session`, turn execution, conversation orchestration |
+| `codex_conversation` | `CodexConversation` |
+| `conversation_manager` | `ConversationManager`, `NewConversation` |
+| `apply_patch` | Apply-patch tool implementation |
+| `context_manager` | Context window management |
+| `environment_context` | Environment info collection |
+| `mcp_connection_manager` | MCP server lifecycle |
+| `mcp_tool_call` | MCP tool call handling |
+| `message_history` | Message history tracking |
+| `response_processing` | Response event processing |
+| `unified_exec` | Unified command execution |
+| `function_tool` | Function tool definitions |
+| `state` | Conversation state machine |
+| `tasks` | Background task management |
+| `user_shell_command` | Shell command construction |
 
-The `sandboxing/assessment` module creates a `ModelClient` and makes direct HTTP API calls to evaluate command safety. Since this is purely HTTP-backend functionality, it is gated out of the default build. In `codex/approval.rs`, the `assess_sandbox_command()` method on `Session` has two `#[cfg]`-conditional implementations: the real one (when `legacy-http-backend` is on) delegates to `sandboxing::assessment::assess_command()`, and the stub (when the feature is off) returns `None`. This avoids cascading `#[cfg]` annotations into `tools/orchestrator.rs`, which calls `assess_sandbox_command()` unconditionally. The stub's `None` return matches the default behavior when `experimental_sandbox_command_assessment` is `false`.
+Additionally, individual functions in the `compact` module (`run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed`) are gated, while shared utility functions and constants remain always-available for the ACP backend.
 
-The `compact` module has a similar split: shared utility functions (`content_items_to_text`, `collect_user_messages`, `is_summary_message`, `build_compacted_history`, `build_compacted_history_with_limit`, and the `SUMMARIZATION_PROMPT`/`SUMMARY_PREFIX` constants) are always available because the ACP backend uses them. The HTTP-backend-specific functions that stream model responses via `ModelClient` (`run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed`) are gated behind `legacy-http-backend`. All callers of these functions are in modules that are themselves gated (e.g., `codex/turn_execution.rs`, `tasks/compact.rs`), so no stubs are needed when the feature is off.
+The `sandboxing/assessment` module creates a `ModelClient` and makes direct HTTP API calls to evaluate command safety. In `codex/approval.rs`, the `assess_sandbox_command()` method on `Session` has two `#[cfg]`-conditional implementations: the real one (when `legacy-http-backend` is on) delegates to `sandboxing::assessment::assess_command()`, and the stub (when the feature is off) returns `None`.
 
-The feature is enabled in `[dev-dependencies]` so that the core crate's own test suite still compiles against these types. The `core_test_support` helper crate (`@/codex-rs/core/tests/common/`) also explicitly enables `legacy-http-backend` in its `codex-core` dependency since it imports `CodexConversation` and `ConversationManager`. No downstream production crate (`nori-tui`, `nori-cli`, `codex-acp`) enables this feature -- they exclusively use the ACP path.
+The feature is enabled in `[dev-dependencies]` so that the core crate's own test suite still compiles against these types. The `core_test_support` helper crate (`@/codex-rs/core/tests/common/`) also explicitly enables `legacy-http-backend` in its `codex-core` dependency. No downstream production crate (`nori-tui`, `nori-cli`, `codex-acp`) enables this feature -- they exclusively use the ACP path.
 
 **Shared Types Module (`tool_types.rs`):** Types and constants that originated in gated modules but are needed by always-compiled code are extracted to `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, `ApprovalRequirement`, `SandboxablePreference`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` unconditionally because `codex-arg0` (`@/codex-rs/arg0/`) imports it without enabling `legacy-http-backend` (it uses the constant for argv dispatch and Windows batch scripts).
+
+**Model Provider Info (`model_provider_info.rs`):** This module is a pure configuration type with no dependency on `codex-api`. It defines `ModelProviderInfo` (base URL, auth, retry/timeout settings, headers). The `to_api_provider()` method that converted to a `codex-api::Provider` has been moved into `client.rs` (gated code). The `WireApi` enum has been removed -- all providers now implicitly use the Responses API wire protocol.
 
 Additionally, `api_bridge` and `codex` are `pub(crate)` rather than `pub` since no external crate imports them directly.
 

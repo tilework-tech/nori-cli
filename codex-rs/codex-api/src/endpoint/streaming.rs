@@ -1,13 +1,13 @@
 use crate::auth::AuthProvider;
 use crate::auth::add_auth_headers;
+use crate::client::HttpTransport;
+use crate::client::RequestTelemetry;
+use crate::client::StreamResponse;
 use crate::common::ResponseStream;
 use crate::error::ApiError;
 use crate::provider::Provider;
 use crate::telemetry::SseTelemetry;
 use crate::telemetry::run_with_request_telemetry;
-use codex_client::HttpTransport;
-use codex_client::RequestTelemetry;
-use codex_client::StreamResponse;
 use http::HeaderMap;
 use http::Method;
 use serde_json::Value;

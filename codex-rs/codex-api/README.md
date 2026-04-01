@@ -1,6 +1,6 @@
 # codex-api
 
-Typed clients for Codex/OpenAI APIs built on top of the generic transport in `codex-client`.
+Typed clients for the OpenAI Responses API with a self-contained HTTP transport layer.
 
 - Hosts the request/response models and prompt helpers for the Responses API.
 - Owns provider configuration (base URLs, headers, query params), auth header injection, retry tuning, and stream idle settings.
@@ -21,4 +21,4 @@ The public interface of this crate is intentionally small and uniform:
       - `output_schema: Option<Value>` – used to build `text.format` when present.
   - Output: a `ResponseStream` of `ResponseEvent` (both re-exported from `common`).
 
-All HTTP details (URLs, headers, retry/backoff policies, SSE framing) are encapsulated in `codex-api` and `codex-client`. Callers construct prompts/inputs using protocol types and work with typed streams of `ResponseEvent` values.
+All HTTP details (URLs, headers, retry/backoff policies, SSE framing) are encapsulated within `codex-api` (including its internal `src/client/` transport module). Callers construct prompts/inputs using protocol types and work with typed streams of `ResponseEvent` values.

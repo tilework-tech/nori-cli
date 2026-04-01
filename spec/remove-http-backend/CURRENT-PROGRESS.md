@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Tenth component removed
+## Status: Eleventh component removed
 
 ### Completed: Remove compact_remote module
 
@@ -241,6 +241,28 @@ Made `codex-api` an optional dependency in codex-core behind the `legacy-http-ba
 
 **Impact:** `codex-api` and its transitive dependencies (`codex-client`, `eventsource-stream`, etc.) are excluded from the nori binary's dependency tree. `cargo check --workspace` succeeds with zero errors. All existing tests pass (codex-core: 537 unit, 227+ apply_patch integration pass; E2E: pass individually).
 
+### Completed: Remove `codex-client` crate by inlining into `codex-api`
+
+Removed the `codex-client` crate from the workspace entirely. Its source code (7 files, 331 lines) was inlined into `codex-api` as a `pub(crate) mod client;` submodule. This eliminates one confusing HTTP-backend crate from the workspace.
+
+**What was removed:**
+- `codex-client/` crate directory (Cargo.toml, src/, docs.md, README.md)
+- `codex-client` from workspace members and workspace dependencies
+- `sse_stream` function (unused by codex-api — it has its own SSE parsing)
+- `StreamError` enum (only used by the removed `sse_stream`)
+
+**What was inlined:**
+- `codex-api/src/client/` submodule containing: `mod.rs` (re-exports), `error.rs` (TransportError), `request.rs` (Request/Response), `retry.rs` (RetryPolicy, backoff, run_with_retry), `telemetry.rs` (RequestTelemetry trait), `transport.rs` (HttpTransport, ReqwestTransport, ByteStream, StreamResponse)
+
+**What was updated:**
+- All `codex_client::` imports in codex-api source → `crate::client::`
+- All `codex_client::` imports in codex-api tests → `codex_api::` (via new re-exports)
+- `codex-api/Cargo.toml`: removed `codex-client` dep, added `reqwest` and `rand` (previously transitive through codex-client)
+- New public re-exports from codex-api: `HttpTransport`, `Request`, `Response`, `StreamResponse` (previously accessed via `codex_client::` in tests)
+- Documentation: `codex-api/docs.md`, `codex-api/README.md`, `core/docs.md` updated to remove codex-client references
+
+**Impact:** One fewer crate in the workspace. codex-api is now self-contained. Net -346 lines. All existing tests pass (codex-api: 5 tests, codex-core: 537 unit + 441 integration pass, 21 pre-existing nvm environment failures; E2E: 9 tests).
+
 ### Suggested next steps for future commits
 1. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
-2. Eventually: remove the `codex-api` and `codex-client` crates entirely
+2. Eventually: remove the `codex-api` crate entirely

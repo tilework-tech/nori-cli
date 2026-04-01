@@ -1,4 +1,5 @@
 pub mod auth;
+pub(crate) mod client;
 pub mod common;
 pub mod endpoint;
 pub mod error;
@@ -8,9 +9,13 @@ pub mod requests;
 pub mod sse;
 pub mod telemetry;
 
-pub use codex_client::RequestTelemetry;
-pub use codex_client::ReqwestTransport;
-pub use codex_client::TransportError;
+pub use crate::client::HttpTransport;
+pub use crate::client::Request;
+pub use crate::client::RequestTelemetry;
+pub use crate::client::ReqwestTransport;
+pub use crate::client::Response;
+pub use crate::client::StreamResponse;
+pub use crate::client::TransportError;
 
 pub use crate::auth::AuthProvider;
 pub use crate::common::Prompt;

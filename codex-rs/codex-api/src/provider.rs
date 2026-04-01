@@ -1,6 +1,6 @@
-use codex_client::Request;
-use codex_client::RetryOn;
-use codex_client::RetryPolicy;
+use crate::client::Request;
+use crate::client::RetryOn;
+use crate::client::RetryPolicy;
 use http::Method;
 use http::header::HeaderMap;
 use std::collections::HashMap;
@@ -8,7 +8,7 @@ use std::time::Duration;
 
 /// High-level retry configuration for a provider.
 ///
-/// This is converted into a `RetryPolicy` used by `codex-client` to drive
+/// This is converted into a `RetryPolicy` used by the client module to drive
 /// transport-level retries for both unary and streaming calls.
 #[derive(Debug, Clone)]
 pub struct RetryConfig {

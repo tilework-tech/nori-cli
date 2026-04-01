@@ -1,4 +1,4 @@
-use codex_client::Request;
+use crate::client::Request;
 
 /// Provides bearer and account identity information for API requests.
 ///

@@ -1,10 +1,10 @@
-use codex_client::Request;
-use codex_client::RequestTelemetry;
-use codex_client::Response;
-use codex_client::RetryPolicy;
-use codex_client::StreamResponse;
-use codex_client::TransportError;
-use codex_client::run_with_retry;
+use crate::client::Request;
+use crate::client::RequestTelemetry;
+use crate::client::Response;
+use crate::client::RetryPolicy;
+use crate::client::StreamResponse;
+use crate::client::TransportError;
+use crate::client::run_with_retry;
 use http::StatusCode;
 use std::future::Future;
 use std::sync::Arc;

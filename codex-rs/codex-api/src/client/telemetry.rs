@@ -1,4 +1,4 @@
-use crate::error::TransportError;
+use super::error::TransportError;
 use http::StatusCode;
 use std::time::Duration;
 
