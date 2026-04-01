@@ -126,7 +126,8 @@ below. Choose the option that matches the area of the codebase you changed.
 Run all steps from the `codex-rs/` directory.
 
 1. Build the `nori` binary: `cargo build --bin nori`
-2. Create a temporary config directory with the ElizACP agent so the TUI bypasses onboarding with a lightweight local agent:
+2. Ensure `elizacp` is installed: `which elizacp || cargo install --locked elizacp`
+3. Create a temporary config directory with the ElizACP agent so the TUI bypasses onboarding with a lightweight local agent:
    ```bash
    VERIFY_HOME=$(mktemp -d)
    cat > "$VERIFY_HOME/config.toml" <<'TOML'
@@ -141,13 +142,13 @@ Run all steps from the `codex-rs/` directory.
    args = ["acp"]
    TOML
    ```
-3. Read the `tui-puppeteering-with-tmux` skill and set the `SCRIPTS` variable to its scripts directory.
-4. Start an isolated tmux session running the binary with the ElizACP config:
+4. Read the `tui-puppeteering-with-tmux` skill and set the `SCRIPTS` variable to its scripts directory.
+5. Start an isolated tmux session running the binary with the ElizACP config:
    `CODEX_HOME="$VERIFY_HOME" NORI_HOME="$VERIFY_HOME" $SCRIPTS/tui-start nori-verify "./target/debug/nori --agent elizacp --skip-trust-directory"`
-5. Assert the TUI renders and the `›` prompt appears: `$SCRIPTS/tui-assert nori-verify "›" 10`
-6. Type a test message and press Enter:
+6. Assert the TUI renders and the `›` prompt appears: `$SCRIPTS/tui-assert nori-verify "›" 10`
+7. Type a test message and press Enter:
    `$SCRIPTS/tui-send nori-verify "hello"` then `$SCRIPTS/tui-send nori-verify --keys Enter`
-7. Assert the TUI accepted the input (the prompt reappears): `$SCRIPTS/tui-assert nori-verify "›" 10`
-8. Clean up: `$SCRIPTS/tui-stop nori-verify && rm -rf "$VERIFY_HOME"`
+8. Assert the TUI accepted the input (the prompt reappears): `$SCRIPTS/tui-assert nori-verify "›" 10`
+9. Clean up: `$SCRIPTS/tui-stop nori-verify && rm -rf "$VERIFY_HOME"`
 
 **You know it works when:** The TUI launches without panicking, the `›` input prompt appears, the application accepts keyboard input, and the prompt returns after submission.
