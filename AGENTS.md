@@ -108,3 +108,42 @@ If you don’t have the tool:
   let request = mock.single_request();
   // assert using request.function_call_output(call_id) or request.json_body() or other helpers.
   ```
+
+## Critical: How to Close the Loop
+
+After implementation is complete and all tests, linting, and formatting pass,
+you MUST verify your changes work end-to-end using one or more of the options
+below. Choose the option that matches the area of the codebase you changed.
+
+### Option 1: Build and Drive the TUI
+
+**When to use:** Any change to `codex-rs/tui/`, `codex-rs/cli/`, or `codex-rs/acp/` crates. Also consider running this for changes to shared crates (`core/`, `common/`, `protocol/`) that affect TUI behavior.
+
+**Skill:** `tui-puppeteering-with-tmux`
+
+**Steps:**
+
+Run all steps from the `codex-rs/` directory.
+
+1. Build the `nori` binary and the mock ACP agent: `cargo build --bin nori --bin mock-acp-agent`
+2. Create a temporary config directory with a mock provider so the TUI bypasses onboarding:
+   ```bash
+   VERIFY_HOME=$(mktemp -d)
+   cat > "$VERIFY_HOME/config.toml" <<'TOML'
+   model = "mock-model"
+   model_provider = "mock_provider"
+
+   [model_providers.mock_provider]
+   name = "Mock ACP provider for verification"
+   TOML
+   ```
+3. Read the `tui-puppeteering-with-tmux` skill and set the `SCRIPTS` variable to its scripts directory.
+4. Start an isolated tmux session running the binary with the mock config:
+   `CODEX_HOME="$VERIFY_HOME" NORI_HOME="$VERIFY_HOME" $SCRIPTS/tui-start nori-verify "./target/debug/nori --agent mock-model --skip-trust-directory"`
+5. Assert the TUI renders and the `›` prompt appears: `$SCRIPTS/tui-assert nori-verify "›" 10`
+6. Type a test message and press Enter:
+   `$SCRIPTS/tui-send nori-verify "hello"` then `$SCRIPTS/tui-send nori-verify --keys Enter`
+7. Assert the TUI accepted the input (the prompt reappears): `$SCRIPTS/tui-assert nori-verify "›" 10`
+8. Clean up: `$SCRIPTS/tui-stop nori-verify && rm -rf "$VERIFY_HOME"`
+
+**You know it works when:** The TUI launches without panicking, the `›` input prompt appears, the application accepts keyboard input, and the prompt returns after submission.
