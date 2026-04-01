@@ -1,3 +1,4 @@
+#[cfg(feature = "legacy-http-backend")]
 use crate::codex::ProcessedResponseItem;
 use crate::exec::ExecToolCallOutput;
 use crate::token_data::KnownPlan;
@@ -8,6 +9,7 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Local;
 use chrono::Utc;
+#[cfg(feature = "legacy-http-backend")]
 use codex_async_utils::CancelErr;
 use codex_protocol::ConversationId;
 use codex_protocol::protocol::CodexErrorInfo;
@@ -60,6 +62,7 @@ pub enum SandboxErr {
 #[derive(Error, Debug)]
 pub enum CodexErr {
     // todo(aibrahim): git rid of this error carrying the dangling artifacts
+    #[cfg(feature = "legacy-http-backend")]
     #[error(
         "turn aborted. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues"
     )]
@@ -175,6 +178,7 @@ pub enum CodexErr {
     EnvVar(EnvVarError),
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl From<CancelErr> for CodexErr {
     fn from(_: CancelErr) -> Self {
         CodexErr::TurnAborted {

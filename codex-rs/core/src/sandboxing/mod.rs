@@ -23,7 +23,7 @@ use crate::seatbelt::create_seatbelt_command_args;
 #[cfg(target_os = "macos")]
 use crate::spawn::CODEX_SANDBOX_ENV_VAR;
 use crate::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR;
-use crate::tools::sandboxing::SandboxablePreference;
+use crate::tool_types::SandboxablePreference;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;

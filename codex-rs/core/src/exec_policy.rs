@@ -17,7 +17,7 @@ use crate::bash::parse_shell_lc_plain_commands;
 use crate::features::Feature;
 use crate::features::Features;
 use crate::sandboxing::SandboxPermissions;
-use crate::tools::sandboxing::ApprovalRequirement;
+use crate::tool_types::ApprovalRequirement;
 
 const FORBIDDEN_REASON: &str = "execpolicy forbids this command";
 const PROMPT_REASON: &str = "execpolicy requires approval for this command";

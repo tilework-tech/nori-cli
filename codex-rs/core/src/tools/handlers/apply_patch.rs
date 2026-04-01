@@ -157,12 +157,7 @@ impl ToolHandler for ApplyPatchHandler {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum ApplyPatchToolType {
-    Freeform,
-    Function,
-}
+pub use crate::tool_types::ApplyPatchToolType;
 
 /// Returns a custom tool that can be used to edit files. Well-suited for GPT-5 models
 /// https://platform.openai.com/docs/guides/function-calling#custom-tools

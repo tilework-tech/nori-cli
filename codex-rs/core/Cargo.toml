@@ -23,7 +23,7 @@ chardetng = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-apply-patch = { workspace = true }
 codex-async-utils = { workspace = true }
-codex-api = { workspace = true }
+codex-api = { workspace = true, optional = true }
 codex-execpolicy = { workspace = true }
 codex-file-search = { workspace = true }
 codex-git = { workspace = true }
@@ -90,7 +90,7 @@ wildmatch = { workspace = true }
 
 [features]
 deterministic_process_ids = []
-legacy-http-backend = []
+legacy-http-backend = ["dep:codex-api"]
 
 
 [target.'cfg(target_os = "linux")'.dependencies]

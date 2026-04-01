@@ -86,20 +86,7 @@ pub(crate) struct ApprovalCtx<'a> {
     pub risk: Option<SandboxCommandAssessment>,
 }
 
-// Specifies what tool orchestrator should do with a given tool call.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ApprovalRequirement {
-    /// No approval required for this tool call.
-    Skip {
-        /// The first attempt should skip sandboxing (e.g., when explicitly
-        /// greenlit by policy).
-        bypass_sandbox: bool,
-    },
-    /// Approval required for this tool call
-    NeedsApproval { reason: Option<String> },
-    /// Execution forbidden for this tool call
-    Forbidden { reason: String },
-}
+pub(crate) use crate::tool_types::ApprovalRequirement;
 
 /// - Never, OnFailure: do not ask
 /// - OnRequest: ask unless sandbox policy is DangerFullAccess
@@ -168,14 +155,7 @@ pub(crate) trait Approvable<Req> {
     ) -> BoxFuture<'a, ReviewDecision>;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SandboxablePreference {
-    Auto,
-    #[allow(dead_code)] // Will be used by later tools.
-    Require,
-    #[allow(dead_code)] // Will be used by later tools.
-    Forbid,
-}
+pub(crate) use crate::tool_types::SandboxablePreference;
 
 pub(crate) trait Sandboxable {
     fn sandbox_preference(&self) -> SandboxablePreference;

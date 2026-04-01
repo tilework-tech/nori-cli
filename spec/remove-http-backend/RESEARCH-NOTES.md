@@ -367,3 +367,84 @@ Moving these two types into `client.rs` (which is already a pure HTTP-backend mo
 - `client_common.rs` production imports: zero from codex-api
 - `client.rs` + `api_bridge.rs` are the only two source files with production codex-api imports
 - Direct prerequisite for making `codex-api` an optional dependency (`dep:codex-api`) behind `legacy-http-backend`
+
+## Making `codex-api` an optional dependency (Phase 5 — current target)
+
+### Why this step
+
+After all previous gating work, only `client.rs` and `api_bridge.rs` have production `codex-api` imports. Both are HTTP-backend-only modules. Making `codex-api` optional behind `legacy-http-backend` means the nori binary's dependency tree no longer includes `codex-api` (or its transitive deps like `codex-client`, `eventsource-stream` SSE parser, etc.).
+
+### Prerequisites verified
+
+1. `client_common.rs` — zero production codex-api imports (done in previous commit)
+2. `model_provider_info.rs` — codex-api imports moved to client.rs (done)
+3. `compact.rs` — HTTP-specific functions gated (done)
+4. `sandboxing/assessment.rs` — gated at module level (done)
+
+### Modules to gate behind `legacy-http-backend`
+
+**Must gate (directly import codex-api):**
+1. `mod client;` (lib.rs:12)
+2. `pub(crate) mod api_bridge;` (lib.rs:8)
+
+**Must gate (import from `crate::client`):**
+3. `pub(crate) mod codex;` (lib.rs:14) — imports `ModelClient`, `ResponseEvent` from client.rs
+
+**Must gate (import from `crate::codex`):**
+The `codex/` module's `Session` and `TurnContext` types permeate these modules:
+4. `mod tools;` (lib.rs:78)
+5. `mod state;` (lib.rs:92)
+6. `mod tasks;` (lib.rs:93)
+7. `mod function_tool;` (lib.rs:91)
+8. `mod mcp_tool_call;` (lib.rs:38)
+9. `mod mcp_connection_manager;` (lib.rs:34) — has public re-exports: `MCP_SANDBOX_STATE_CAPABILITY`, `MCP_SANDBOX_STATE_NOTIFICATION`, `SandboxState`
+10. `mod context_manager;` (lib.rs:22, line 22)
+11. `mod unified_exec;` (lib.rs:48)
+12. `mod user_shell_command;` (lib.rs:97)
+13. `mod response_processing;` (lib.rs:43)
+14. `mod event_mapping;` (lib.rs:59)
+15. `mod message_history;` (lib.rs:39)
+16. `mod user_notification;` (lib.rs:94) — has public re-exports: `UserNotification`, `UserNotifier`
+17. `mod apply_patch;` (lib.rs:9) — has public re-export: `CODEX_APPLY_PATCH_ARG1`
+18. `mod environment_context;` (lib.rs:24)
+19. `mod truncate;` (lib.rs:47)
+
+### Key insight: Public re-exports from gated modules
+
+Several gated modules have public re-exports in lib.rs:
+- `mcp_connection_manager`: `MCP_SANDBOX_STATE_CAPABILITY`, `MCP_SANDBOX_STATE_NOTIFICATION`, `SandboxState`
+- `user_notification`: `UserNotification`, `UserNotifier`
+- `apply_patch`: `CODEX_APPLY_PATCH_ARG1`
+- `event_mapping`: `parse_turn_item`
+
+**These re-exports may be used by downstream crates (tui, cli, acp).** Must verify before gating.
+
+### Downstream crate usage (verified)
+
+- TUI uses: `protocol::*`, `config::*`, `auth::*`, `rollout::*`, utility modules
+- CLI uses: `config::*`, `auth::*`, sandbox-related modules
+- ACP uses: `config::types::McpServerConfig`, `compact::{SUMMARIZATION_PROMPT, SUMMARY_PREFIX}`
+
+None of them use `ModelClient`, `ResponseEvent`, `TurnContext`, `Session`, or any of the HTTP-backend types. But we need to check if they use the re-exported types from modules we'd be gating.
+
+### Approach: Compiler-driven gating
+
+Rather than tracing every dependency manually:
+1. Gate `client`, `api_bridge`, `codex` in lib.rs
+2. Make `codex-api` optional in Cargo.toml
+3. Run `cargo check -p codex-core` (without features) to see what breaks
+4. Gate each broken module, and also gate its re-exports if they're only used by HTTP-backend code
+5. For re-exports used by downstream crates, move the underlying types to shared modules
+6. Iterate until it compiles cleanly
+
+### Cargo.toml changes
+
+```toml
+# In [dependencies]:
+codex-api = { workspace = true, optional = true }
+
+# In [features]:
+legacy-http-backend = ["dep:codex-api"]
+```
+
+Dev-dependencies already enable `legacy-http-backend`, so all tests will continue to compile.

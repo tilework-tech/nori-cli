@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+#[cfg(feature = "legacy-http-backend")]
 use crate::codex::Session;
+#[cfg(feature = "legacy-http-backend")]
 use crate::codex::TurnContext;
 use crate::truncate::TruncationPolicy;
 use crate::truncate::approx_token_count;

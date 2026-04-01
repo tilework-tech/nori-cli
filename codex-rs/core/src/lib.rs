@@ -5,12 +5,16 @@
 // the TUI or the tracing stack).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
+#[cfg(feature = "legacy-http-backend")]
 pub(crate) mod api_bridge;
+#[cfg(feature = "legacy-http-backend")]
 mod apply_patch;
 pub mod auth;
 pub mod bash;
+#[cfg(feature = "legacy-http-backend")]
 mod client;
 mod client_common;
+#[cfg(feature = "legacy-http-backend")]
 pub(crate) mod codex;
 #[cfg(feature = "legacy-http-backend")]
 mod codex_conversation;
@@ -19,8 +23,10 @@ pub use codex_conversation::CodexConversation;
 mod command_safety;
 pub mod config;
 pub mod config_loader;
+#[cfg(feature = "legacy-http-backend")]
 mod context_manager;
 pub mod custom_prompts;
+#[cfg(feature = "legacy-http-backend")]
 mod environment_context;
 pub mod error;
 pub mod exec;
@@ -31,20 +37,29 @@ mod flags;
 pub mod git_info;
 pub mod landlock;
 pub mod mcp;
+#[cfg(feature = "legacy-http-backend")]
 mod mcp_connection_manager;
+#[cfg(feature = "legacy-http-backend")]
 pub use mcp_connection_manager::MCP_SANDBOX_STATE_CAPABILITY;
+#[cfg(feature = "legacy-http-backend")]
 pub use mcp_connection_manager::MCP_SANDBOX_STATE_NOTIFICATION;
+#[cfg(feature = "legacy-http-backend")]
 pub use mcp_connection_manager::SandboxState;
+#[cfg(feature = "legacy-http-backend")]
 mod mcp_tool_call;
+#[cfg(feature = "legacy-http-backend")]
 mod message_history;
 mod model_provider_info;
 pub mod parse_command;
 pub mod powershell;
+#[cfg(feature = "legacy-http-backend")]
 mod response_processing;
 pub mod sandboxing;
 mod text_encoding;
+pub(crate) mod tool_types;
 pub mod token_data;
 mod truncate;
+#[cfg(feature = "legacy-http-backend")]
 mod unified_exec;
 mod user_instructions;
 pub use model_provider_info::DEFAULT_LMSTUDIO_PORT;
@@ -88,15 +103,20 @@ pub use rollout::list::ConversationsPage;
 pub use rollout::list::Cursor;
 pub use rollout::list::parse_cursor;
 pub use rollout::list::read_head_for_summary;
+#[cfg(feature = "legacy-http-backend")]
 mod function_tool;
+#[cfg(feature = "legacy-http-backend")]
 mod state;
+#[cfg(feature = "legacy-http-backend")]
 mod tasks;
 mod user_notification;
 pub use user_notification::UserNotification;
 pub use user_notification::UserNotifier;
+#[cfg(feature = "legacy-http-backend")]
 mod user_shell_command;
 pub mod util;
 
+#[cfg(feature = "legacy-http-backend")]
 pub use apply_patch::CODEX_APPLY_PATCH_ARG1;
 pub use command_safety::is_safe_command;
 pub use safety::get_platform_sandbox;

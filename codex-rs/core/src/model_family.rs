@@ -2,8 +2,8 @@ use codex_protocol::config_types::ReasoningEffort;
 use codex_protocol::config_types::Verbosity;
 
 use crate::config::types::ReasoningSummaryFormat;
-use crate::tools::handlers::apply_patch::ApplyPatchToolType;
-use crate::tools::spec::ConfigShellToolType;
+use crate::tool_types::ApplyPatchToolType;
+use crate::tool_types::ConfigShellToolType;
 use crate::truncate::TruncationPolicy;
 
 /// The `instructions` field in the payload sent to a model should always start

@@ -15,19 +15,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ConfigShellToolType {
-    Default,
-    Local,
-    UnifiedExec,
-    /// Do not include a shell tool by default. Useful when using Codex
-    /// with tools provided exclusively provided by MCP servers. Often used
-    /// with `--config base_instructions=CUSTOM_INSTRUCTIONS`
-    /// to customize agent behavior.
-    Disabled,
-    /// Takes a command as a single string to be run in the user's default shell.
-    ShellCommand,
-}
+pub use crate::tool_types::ConfigShellToolType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolsConfig {
