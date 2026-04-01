@@ -41,4 +41,8 @@ pub(crate) trait BottomPaneView: Renderable {
     /// Update MCP server auth statuses. Only meaningful for the MCP server
     /// picker; other views ignore this.
     fn update_mcp_auth_statuses(&mut self, _statuses: &HashMap<String, McpAuthStatus>) {}
+
+    /// Handle MCP OAuth login completion. Only meaningful for the MCP server
+    /// picker; other views ignore this.
+    fn handle_mcp_oauth_complete(&mut self, _server_name: &str, _success: bool) {}
 }

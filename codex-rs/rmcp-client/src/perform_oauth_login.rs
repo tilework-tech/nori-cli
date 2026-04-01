@@ -32,6 +32,107 @@ impl Drop for CallbackServerGuard {
     }
 }
 
+/// Handle for an in-progress OAuth login flow that can be cancelled.
+///
+/// The caller takes ownership of both the `cancel_tx` (to cancel the flow)
+/// and the `task` (to await completion). There is no Drop implementation;
+/// the caller is responsible for managing both halves.
+pub struct OAuthLoginHandle {
+    /// Send to cancel the OAuth flow.
+    pub cancel_tx: Option<oneshot::Sender<()>>,
+    /// The task running the flow.
+    pub task: tokio::task::JoinHandle<Result<()>>,
+}
+
+/// Start an async MCP OAuth login flow that can be cancelled.
+///
+/// Opens the browser for the user and waits for the callback. The returned
+/// handle can be used to cancel the flow. Call `.task` to await completion.
+pub async fn start_oauth_login(
+    server_name: String,
+    server_url: String,
+    store_mode: OAuthCredentialsStoreMode,
+    http_headers: Option<HashMap<String, String>>,
+    env_http_headers: Option<HashMap<String, String>>,
+    scopes: Vec<String>,
+) -> Result<OAuthLoginHandle> {
+    let server = Arc::new(Server::http("127.0.0.1:0").map_err(|err| anyhow!(err))?);
+    let _guard = CallbackServerGuard {
+        server: Arc::clone(&server),
+    };
+
+    let redirect_uri = match server.server_addr() {
+        tiny_http::ListenAddr::IP(std::net::SocketAddr::V4(addr)) => {
+            format!("http://{}:{}/callback", addr.ip(), addr.port())
+        }
+        tiny_http::ListenAddr::IP(std::net::SocketAddr::V6(addr)) => {
+            format!("http://[{}]:{}/callback", addr.ip(), addr.port())
+        }
+        #[cfg(not(target_os = "windows"))]
+        _ => return Err(anyhow!("unable to determine callback address")),
+    };
+
+    let (callback_tx, callback_rx) = oneshot::channel();
+    spawn_callback_server(server, callback_tx);
+
+    let default_headers = build_default_headers(http_headers, env_http_headers)?;
+    let http_client = apply_default_headers(ClientBuilder::new(), &default_headers).build()?;
+
+    let mut oauth_state = OAuthState::new(&server_url, Some(http_client)).await?;
+    let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
+    oauth_state
+        .start_authorization(&scope_refs, &redirect_uri, Some("Codex"))
+        .await?;
+    let auth_url = oauth_state.get_authorization_url().await?;
+
+    tracing::info!("MCP OAuth: opening browser for {server_name}: {auth_url}");
+    if webbrowser::open(&auth_url).is_err() {
+        tracing::warn!("MCP OAuth: browser launch failed for {server_name}");
+    }
+
+    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+
+    let task = tokio::spawn(async move {
+        let _guard = _guard; // move guard into the task to keep server alive
+
+        let cancel = async {
+            let _ = cancel_rx.await;
+        };
+
+        let (code, csrf_state) =
+            wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await?;
+
+        oauth_state
+            .handle_callback(&code, &csrf_state)
+            .await
+            .context("failed to handle OAuth callback")?;
+
+        let (client_id, credentials_opt) = oauth_state
+            .get_credentials()
+            .await
+            .context("failed to retrieve OAuth credentials")?;
+        let credentials =
+            credentials_opt.ok_or_else(|| anyhow!("OAuth provider did not return credentials"))?;
+
+        let expires_at = compute_expires_at_millis(&credentials);
+        let stored = StoredOAuthTokens {
+            server_name,
+            url: server_url,
+            client_id,
+            token_response: WrappedOAuthTokenResponse(credentials),
+            expires_at,
+        };
+        save_oauth_tokens(&stored.server_name, &stored, store_mode)?;
+
+        Ok(())
+    });
+
+    Ok(OAuthLoginHandle {
+        cancel_tx: Some(cancel_tx),
+        task,
+    })
+}
+
 pub async fn perform_oauth_login(
     server_name: &str,
     server_url: &str,

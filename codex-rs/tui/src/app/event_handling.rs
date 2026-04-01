@@ -1159,6 +1159,38 @@ impl App {
                 )
                 .await;
             }
+            AppEvent::McpOAuthLoginCancel { server_name } => {
+                tracing::info!("MCP OAuth login cancelled for {server_name}");
+                self.cancel_mcp_oauth_login();
+                self.chat_widget.add_info_message(
+                    format!("OAuth cancelled for `{server_name}`. Press `l` in /mcp to try again."),
+                    None,
+                );
+            }
+            AppEvent::McpOAuthLoginComplete {
+                server_name,
+                success,
+                error,
+            } => {
+                if success {
+                    self.chat_widget.add_info_message(
+                        format!(
+                            "Successfully authenticated with `{server_name}`. Restart to apply."
+                        ),
+                        None,
+                    );
+                } else {
+                    let msg = match error {
+                        Some(err) => {
+                            format!("OAuth login for `{server_name}` failed: {err}")
+                        }
+                        None => format!("OAuth login for `{server_name}` failed."),
+                    };
+                    self.chat_widget.add_error_message(msg);
+                }
+                self.chat_widget
+                    .handle_mcp_oauth_complete(&server_name, success);
+            }
             AppEvent::ComputeMcpAuthStatuses => {
                 let servers = self.chat_widget.config_ref().mcp_servers.clone();
                 let tx = self.app_event_tx.clone();

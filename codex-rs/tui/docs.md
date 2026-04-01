@@ -264,24 +264,28 @@ The `/mcp` command opens an interactive `BottomPaneView` for managing MCP server
 | Mode | Purpose | Transitions |
 |------|---------|-------------|
 | `List` | Browse servers; "Add new..." row at index 0, servers below | Enter on "Add new..." -> `TransportSelect`; Enter on server -> toggle enabled; `d` on server -> `ConfirmDelete`; `l` on server -> OAuth login |
-| `ConfirmDelete` | Confirm server deletion | `y` -> delete + save + `List`; `n`/Esc -> `List` |
+| `ConfirmDelete` | Confirm server deletion | `d` -> delete + save + `List`; Esc -> `List` |
 | `TransportSelect` | Choose Stdio or HTTP transport | Enter -> `NameInput` |
 | `NameInput` | Type server name | Enter -> `CommandInput` (stdio) or `UrlInput` (http) |
 | `CommandInput` | Type command for stdio transport | Enter -> `ArgsInput` |
 | `ArgsInput` | Type space-separated args | Enter -> `EnvInput` |
-| `UrlInput` | Type URL for HTTP transport | Enter -> `EnvInput` |
-| `EnvInput` | Type env vars as `KEY=VAL` | Enter with empty -> `HeaderInput` (http) or finalize (stdio); Enter with value -> adds to list, stays in `EnvInput` |
-| `HeaderInput` | Type headers as `Key: Value` (HTTP only) | Enter with empty -> finalize; Enter with value -> adds to list, stays in `HeaderInput` |
+| `UrlInput` | Type URL for HTTP transport | Enter -> `HeaderInput` |
+| `EnvInput` | Type env vars as `KEY=VAL` | Enter with empty -> finalize (stdio only); Enter with value -> adds to list, stays in `EnvInput` |
+| `HeaderInput` | Type headers as `Key: Value` (HTTP only) | Enter with empty -> `SecretInput`; Enter with value -> adds to list, stays in `HeaderInput` |
+| `SecretInput` | Type bearer token env var name (HTTP only) | Enter -> finalize (value stored in `wizard_bearer_token_env_var`) |
+| `OAuthInProgress` | Inline OAuth status display | Esc -> emits `McpOAuthLoginCancel`, returns to `List` |
 
-The wizard field set matches Claude Code's `claude mcp add` command: transport type, name, command/url, args, env vars, headers.
+The wizard field set matches Claude Code's `claude mcp add` command: transport type, name, command/url, args, env vars, headers, bearer token env var.
 
-On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP), inserts it into the servers list, and calls `save_servers()`. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `ConfigEditsBuilder::replace_mcp_servers()` for atomic config file writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
+On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP, with `bearer_token_env_var` populated from `SecretInput` for HTTP), inserts it into the servers list, and calls `save_servers()`. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `ConfigEditsBuilder::replace_mcp_servers()` for atomic config file writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
+
+**Auto-OAuth Probe**: When an HTTP server is added without a bearer token (`wizard_bearer_token_env_var` is empty), `finish_wizard()` sets `pending_oauth_server` to the new server name and fires `AppEvent::ComputeMcpAuthStatuses`. When auth statuses arrive, `update_mcp_auth_statuses()` checks if the pending server reports `NotLoggedIn` -- if so, it emits `AppEvent::McpOAuthLogin` and transitions to `Mode::OAuthInProgress`. If the server reports `Unsupported` or any other status, the pending server is cleared and the picker stays in `List` mode. This provides a seamless setup flow where users add an HTTP server and are automatically prompted for OAuth if the server requires it.
 
 The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pickers.rs`, which converts `config.mcp_servers` to a `BTreeMap` and creates the view via `McpServerPickerView::new()`. After creating the picker, it fires `AppEvent::ComputeMcpAuthStatuses` to asynchronously populate auth statuses.
 
 **MCP OAuth Login** (`nori/mcp_server_picker.rs`, `app/config_persistence.rs`):
 
-Pressing `l` in the `/mcp` list triggers an interactive OAuth authorization flow for HTTP MCP servers that report `NotLoggedIn` auth status. The login is gated on two conditions: the server's auth status must be `McpAuthStatus::NotLoggedIn` (already-authenticated or unsupported servers are ignored), and the transport must be `StreamableHttp` (Stdio servers are ignored).
+OAuth login can be triggered two ways: (1) pressing `l` in the `/mcp` list on a server with `NotLoggedIn` status, or (2) automatically via the auto-probe mechanism after adding an HTTP server without a bearer token. Both paths emit `AppEvent::McpOAuthLogin`.
 
 Auth statuses are computed asynchronously when the picker opens:
 ```
@@ -291,12 +295,15 @@ open_mcp_servers_popup()
     -> results delivered via AppEvent::McpAuthStatusesReady(HashMap)
     -> ChatWidget.update_mcp_auth_statuses() -> BottomPane -> active BottomPaneView
     -> McpServerPickerView.update_mcp_auth_statuses() stores statuses
+        (also auto-triggers OAuth for pending_oauth_server if NotLoggedIn)
     -> handle_list_login() checks status before emitting AppEvent::McpOAuthLogin
 ```
 
-The `BottomPaneView` trait has a default no-op `update_mcp_auth_statuses()` method; only `McpServerPickerView` implements it. This pattern pushes data INTO a view through the trait interface, since the view stack does not support downcasting.
+The `BottomPaneView` trait has default no-op `update_mcp_auth_statuses()` and `handle_mcp_oauth_complete()` methods; only `McpServerPickerView` implements them. This pattern pushes data INTO a view through the trait interface, since the view stack does not support downcasting.
 
-The `McpOAuthLogin` event carries `server_name`, `server_url`, `http_headers`, and `env_http_headers`. The handler in `app/config_persistence.rs` (`perform_mcp_oauth_login()`) suspends the TUI (leaves alt screen, disables raw mode), delegates to `codex_rmcp_client::perform_oauth_login()` from `@/codex-rs/rmcp-client/`, then restores the TUI (enables raw mode, enters alt screen). This suspension is necessary because the OAuth flow uses `println!` for status output and `webbrowser::open` for the browser callback. On success, an info message tells the user to restart to apply the new credentials.
+The OAuth flow is fully async and inline -- no TUI suspension. The `McpOAuthLogin` event carries `server_name`, `server_url`, `http_headers`, and `env_http_headers`. The handler in `app/config_persistence.rs` (`perform_mcp_oauth_login()`) calls `codex_rmcp_client::start_oauth_login()` from `@/codex-rs/rmcp-client/`, which returns an `OAuthLoginHandle`. The cancel sender is stored in `App.mcp_oauth_cancel_tx`, and a spawned watcher task awaits the handle's `JoinHandle` and sends `AppEvent::McpOAuthLoginComplete` on finish.
+
+Cancellation uses the oneshot channel pattern: Esc in `OAuthInProgress` mode emits `McpOAuthLoginCancel`, which calls `cancel_mcp_oauth_login()` (sends `()` on the stored cancel sender). The watcher task then resolves with the cancellation error. Completion (`McpOAuthLoginComplete`) shows a success or error info message and forwards to `McpServerPickerView::handle_oauth_complete()`, which transitions the picker from `OAuthInProgress` back to `List` mode.
 
 **Slash Command Description Overrides:**
 

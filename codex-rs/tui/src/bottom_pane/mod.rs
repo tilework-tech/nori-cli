@@ -544,6 +544,14 @@ impl BottomPane {
         }
     }
 
+    /// Forward MCP OAuth completion to the active view (if any).
+    pub(crate) fn handle_mcp_oauth_complete(&mut self, server_name: &str, success: bool) {
+        if let Some(view) = self.view_stack.last_mut() {
+            view.handle_mcp_oauth_complete(server_name, success);
+            self.request_redraw();
+        }
+    }
+
     /// Called when the agent requests user approval.
     pub fn push_approval_request(&mut self, request: ApprovalRequest) {
         let request = if let Some(view) = self.view_stack.last_mut() {
