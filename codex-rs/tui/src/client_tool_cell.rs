@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
 use ratatui::prelude::*;
@@ -5,9 +6,15 @@ use ratatui::style::Stylize;
 use textwrap::WordSplitter;
 
 use crate::client_event_format::format_artifacts;
+use crate::client_event_format::format_edit_tool_header;
 use crate::client_event_format::format_invocation;
 use crate::client_event_format::format_tool_header;
+use crate::client_event_format::format_tool_kind;
 use crate::client_event_format::is_exploring_snapshot;
+use crate::client_event_format::is_invocation_redundant;
+use crate::client_event_format::relativize_paths_in_text;
+use crate::client_event_format::strip_code_fences;
+use crate::diff_render::create_diff_summary;
 use crate::exec_cell::OutputLinesParams;
 use crate::exec_cell::TOOL_CALL_MAX_LINES;
 use crate::exec_cell::limit_lines_from_start;
@@ -24,12 +31,18 @@ use crate::wrapping::word_wrap_line;
 #[derive(Debug)]
 pub(crate) struct ClientToolCell {
     snapshot: nori_protocol::ToolSnapshot,
+    exploring_snapshots: Vec<nori_protocol::ToolSnapshot>,
+    cwd: PathBuf,
     animations_enabled: bool,
     start_time: Option<Instant>,
 }
 
 impl ClientToolCell {
-    pub(crate) fn new(snapshot: nori_protocol::ToolSnapshot, animations_enabled: bool) -> Self {
+    pub(crate) fn new(
+        snapshot: nori_protocol::ToolSnapshot,
+        cwd: PathBuf,
+        animations_enabled: bool,
+    ) -> Self {
         let start_time = if is_active_phase(&snapshot.phase) {
             Some(Instant::now())
         } else {
@@ -37,6 +50,8 @@ impl ClientToolCell {
         };
         Self {
             snapshot,
+            exploring_snapshots: Vec::new(),
+            cwd,
             animations_enabled,
             start_time,
         }
@@ -50,8 +65,25 @@ impl ClientToolCell {
         is_active_phase(&self.snapshot.phase)
     }
 
+    pub(crate) fn snapshot_kind(&self) -> &nori_protocol::ToolKind {
+        &self.snapshot.kind
+    }
+
     pub(crate) fn is_exploring(&self) -> bool {
-        is_exploring_snapshot(&self.snapshot)
+        is_exploring_snapshot(&self.snapshot) || !self.exploring_snapshots.is_empty()
+    }
+
+    /// Mark this cell as an exploring cell. The primary snapshot becomes the
+    /// first item in the exploring group.
+    pub(crate) fn mark_exploring(&mut self) {
+        if self.exploring_snapshots.is_empty() {
+            self.exploring_snapshots.push(self.snapshot.clone());
+        }
+    }
+
+    /// Add another exploring snapshot to this cell's group.
+    pub(crate) fn merge_exploring(&mut self, snapshot: nori_protocol::ToolSnapshot) {
+        self.exploring_snapshots.push(snapshot);
     }
 
     pub(crate) fn apply_snapshot(&mut self, snapshot: nori_protocol::ToolSnapshot) {
@@ -74,28 +106,292 @@ impl ClientToolCell {
         }
     }
 
+    fn render_exploring_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut out: Vec<Line<'static>> = Vec::new();
+
+        // Header: Exploring/Explored with bullet
+        out.push(Line::from(vec![
+            if self.is_active() {
+                spinner(self.start_time, self.animations_enabled)
+            } else {
+                "\u{2022}".dim() // bullet
+            },
+            " ".into(),
+            if self.is_active() {
+                "Exploring".bold()
+            } else {
+                "Explored".bold()
+            },
+        ]));
+
+        // Build sub-items from exploring snapshots. When exploring_snapshots
+        // is empty (single-snapshot exploring cell), use the primary snapshot.
+        let mut sub_items: Vec<Line<'static>> = Vec::new();
+        let mut i = 0;
+        let single_fallback;
+        let snapshots = if self.exploring_snapshots.is_empty() {
+            single_fallback = [self.snapshot.clone()];
+            &single_fallback[..]
+        } else {
+            &self.exploring_snapshots[..]
+        };
+        while i < snapshots.len() {
+            let snap = &snapshots[i];
+
+            // Group consecutive reads by filename
+            if snap.kind == nori_protocol::ToolKind::Read {
+                let mut paths: Vec<String> = Vec::new();
+                if let Some(nori_protocol::Invocation::Read { path }) = &snap.invocation {
+                    paths.push(relativize_paths_in_text(
+                        &path.display().to_string(),
+                        &self.cwd,
+                    ));
+                } else {
+                    paths.push(relativize_paths_in_text(&snap.title, &self.cwd));
+                }
+                let mut j = i + 1;
+                while j < snapshots.len() && snapshots[j].kind == nori_protocol::ToolKind::Read {
+                    let next = &snapshots[j];
+                    if let Some(nori_protocol::Invocation::Read { path }) = &next.invocation {
+                        paths.push(relativize_paths_in_text(
+                            &path.display().to_string(),
+                            &self.cwd,
+                        ));
+                    } else {
+                        paths.push(relativize_paths_in_text(&next.title, &self.cwd));
+                    }
+                    j += 1;
+                }
+                i = j;
+
+                // Build "Read file1.rs, file2.rs" line
+                let mut spans: Vec<Span<'static>> = vec!["Read".cyan(), " ".into()];
+                for (idx, path) in paths.into_iter().enumerate() {
+                    if idx > 0 {
+                        spans.push(", ".dim());
+                    }
+                    spans.push(path.into());
+                }
+                sub_items.push(Line::from(spans));
+                continue;
+            }
+
+            // Search sub-item
+            if snap.kind == nori_protocol::ToolKind::Search {
+                if let Some(nori_protocol::Invocation::Search { query, path }) = &snap.invocation {
+                    let mut spans: Vec<Span<'static>> = vec!["Search".cyan(), " ".into()];
+                    if let Some(q) = query {
+                        spans.push(q.clone().into());
+                    }
+                    if let Some(p) = path {
+                        spans.push(" in ".dim());
+                        spans.push(
+                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
+                        );
+                    }
+                    sub_items.push(Line::from(spans));
+                } else if let Some(nori_protocol::Invocation::ListFiles { path }) = &snap.invocation
+                {
+                    let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
+                    if let Some(p) = path {
+                        spans.push(
+                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
+                        );
+                    }
+                    sub_items.push(Line::from(spans));
+                } else {
+                    sub_items.push(Line::from(vec![
+                        "Search".cyan(),
+                        " ".into(),
+                        relativize_paths_in_text(&snap.title, &self.cwd).into(),
+                    ]));
+                }
+                i += 1;
+                continue;
+            }
+
+            // ListFiles invocation (from Read/Search tools classified as exploring)
+            if matches!(
+                &snap.invocation,
+                Some(nori_protocol::Invocation::ListFiles { .. })
+            ) {
+                if let Some(nori_protocol::Invocation::ListFiles { path }) = &snap.invocation {
+                    let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
+                    if let Some(p) = path {
+                        spans.push(
+                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
+                        );
+                    }
+                    sub_items.push(Line::from(spans));
+                }
+                i += 1;
+                continue;
+            }
+
+            // Fallback: generic sub-item. Skip the kind label if the title
+            // already starts with it (e.g., kind="List", title="List /path"
+            // → show "List /path" not "List List /path").
+            let kind_label = format_tool_kind(&snap.kind);
+            let title = relativize_paths_in_text(&snap.title, &self.cwd);
+            if title.to_lowercase().starts_with(&kind_label.to_lowercase()) {
+                sub_items.push(Line::from(vec![title.into()]));
+            } else {
+                sub_items.push(Line::from(vec![
+                    kind_label.to_string().cyan(),
+                    " ".into(),
+                    title.into(),
+                ]));
+            }
+            i += 1;
+        }
+
+        // Apply tree-style prefix (└ for first, spaces for subsequent)
+        let wrap_width = width.saturating_sub(4).max(1);
+        let wrap_opts =
+            RtOptions::new(wrap_width as usize).word_splitter(WordSplitter::NoHyphenation);
+        let mut wrapped_items: Vec<Line<'static>> = Vec::new();
+        for item in sub_items {
+            push_owned_lines(
+                &word_wrap_line(&item, wrap_opts.clone()),
+                &mut wrapped_items,
+            );
+        }
+
+        out.extend(prefix_lines(
+            wrapped_items,
+            "  \u{2514} ".dim(),
+            "    ".into(),
+        ));
+
+        out
+    }
+
+    fn render_edit_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+
+        // Bullet: green for completed, red for failed, spinner for active
+        let bullet = if self.snapshot.phase == nori_protocol::ToolPhase::Completed {
+            "•".green().bold()
+        } else if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            "•".red().bold()
+        } else {
+            spinner(self.start_time, self.animations_enabled)
+        };
+
+        // For failed edits: show error text or "(failed)" fallback
+        if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            let header =
+                relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+            lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
+            if let Some(error_text) = extract_error_text(&self.snapshot) {
+                lines.push(Line::from(vec!["  └ ".dim(), error_text.dim()]));
+            } else {
+                lines.push(Line::from(vec!["  └ ".dim(), "(failed)".dim()]));
+            }
+            return lines;
+        }
+
+        // Render diff content from artifacts or invocation
+        let diff_changes = diff_changes_from_artifacts(&self.snapshot.artifacts);
+        let changes = if !diff_changes.is_empty() {
+            diff_changes
+        } else {
+            changes_from_invocation(&self.snapshot.invocation)
+        };
+
+        if !changes.is_empty() {
+            let diff_width = width.saturating_sub(4).max(1) as usize;
+            let diff_lines = create_diff_summary(&changes, &self.cwd, diff_width);
+
+            // Single-file edit/delete: promote DiffSummary's first line (verb+path+counts)
+            // as the outer header to avoid duplicating "Edited README.md" / "Edited README.md (+1 -1)".
+            // Skip for Move tools — DiffSummary says "Edited" but the tool header says "Moved".
+            if changes.len() == 1 && self.snapshot.kind != nori_protocol::ToolKind::Move {
+                if let Some((first, rest)) = diff_lines.split_first() {
+                    // Replace "• " bullet from DiffSummary with our computed bullet
+                    let mut header_spans = vec![bullet, " ".into()];
+                    for span in &first.spans {
+                        let content = span.content.as_ref();
+                        // Skip the DiffSummary's own "• " prefix
+                        if content == "• " {
+                            continue;
+                        }
+                        header_spans.push(span.clone());
+                    }
+                    lines.push(Line::from(header_spans));
+                    for diff_line in rest {
+                        let mut indented = vec![Span::from("    ")];
+                        indented.extend(diff_line.spans.clone());
+                        lines.push(Line::from(indented));
+                    }
+                }
+            } else {
+                // Multi-file: keep outer header separate from per-file DiffSummary
+                let header =
+                    relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+                lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
+                for diff_line in diff_lines {
+                    let mut indented = vec![Span::from("    ")];
+                    indented.extend(diff_line.spans);
+                    lines.push(Line::from(indented));
+                }
+            }
+        } else {
+            // No diff data: use the format_edit_tool_header as sole header
+            let header =
+                relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
+            lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
+        }
+
+        lines
+    }
+
     fn render_generic_lines(&self) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         let bullet = if self.is_active() {
             spinner(self.start_time, self.animations_enabled)
+        } else if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+            "•".red().bold()
         } else {
             "•".dim()
         };
-        lines.push(Line::from(vec![
-            bullet,
-            " ".into(),
-            format_tool_header(&self.snapshot).bold(),
-        ]));
+
+        let header = relativize_paths_in_text(&format_tool_header(&self.snapshot), &self.cwd);
+        lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
 
         let mut details = Vec::new();
-        if let Some(invocation) = format_invocation(&self.snapshot.invocation) {
-            details.push(invocation);
+        if let Some(invocation) = format_invocation(&self.snapshot.invocation)
+            && !is_invocation_redundant(&invocation, &self.snapshot.title)
+        {
+            details.push(relativize_paths_in_text(&invocation, &self.cwd));
         }
         for artifact in format_artifacts(&self.snapshot.artifacts) {
             if artifact.contains('\n') {
                 details.extend(artifact.lines().map(str::to_string));
             } else {
                 details.push(artifact);
+            }
+        }
+
+        let is_failed = self.snapshot.phase == nori_protocol::ToolPhase::Failed;
+
+        // For failed tools with no text artifacts, extract error from raw_output
+        if is_failed
+            && details.is_empty()
+            && let Some(error_text) = extract_error_text(&self.snapshot)
+        {
+            details.push(error_text);
+        }
+
+        if details.is_empty() {
+            if is_failed {
+                // For failed tools with absolutely no detail, show "(failed)" fallback
+                details.push("(failed)".to_string());
+            } else {
+                // Fallback: show location paths when no other detail lines were produced
+                for location in &self.snapshot.locations {
+                    details.push(location.path.display().to_string());
+                }
             }
         }
 
@@ -272,39 +568,162 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
         return Some(stdout.to_string());
     }
 
-    // Fall back to artifact text, stripping code fences
-    for artifact in &snapshot.artifacts {
-        if let nori_protocol::Artifact::Text { text } = artifact
-            && !text.is_empty()
-        {
-            return Some(strip_code_fences(text));
+    // Only fall back to artifact text for completed/failed snapshots.
+    // During pending/in-progress, artifact text for execute tools is
+    // the agent's description (e.g., "Print current UTC date/time"),
+    // not stdout.
+    if !is_active_phase(&snapshot.phase) {
+        for artifact in &snapshot.artifacts {
+            if let nori_protocol::Artifact::Text { text } = artifact
+                && !text.is_empty()
+            {
+                return Some(strip_code_fences(text));
+            }
         }
     }
 
     None
 }
 
-fn strip_code_fences(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() >= 2 && lines[0].starts_with("```") && lines[lines.len() - 1].trim() == "```" {
-        lines[1..lines.len() - 1].join("\n")
-    } else {
-        text.to_string()
+fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> {
+    let raw = snapshot.raw_output.as_ref()?;
+    for key in ["error", "stderr", "output"] {
+        if let Some(text) = raw.get(key).and_then(serde_json::Value::as_str)
+            && !text.is_empty()
+        {
+            return Some(text.to_string());
+        }
     }
+    // Check if raw_output is itself a string
+    if let Some(s) = raw.as_str()
+        && !s.is_empty()
+    {
+        return Some(s.to_string());
+    }
+    None
+}
+
+pub(crate) fn diff_changes_from_artifacts(
+    artifacts: &[nori_protocol::Artifact],
+) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
+    let mut changes = std::collections::HashMap::new();
+    for artifact in artifacts {
+        if let nori_protocol::Artifact::Diff(change) = artifact {
+            let file_change = match &change.old_text {
+                None => codex_core::protocol::FileChange::Add {
+                    content: change.new_text.clone(),
+                },
+                Some(old_text) => codex_core::protocol::FileChange::Update {
+                    unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+                    move_path: None,
+                },
+            };
+            changes.insert(change.path.clone(), file_change);
+        }
+    }
+    changes
+}
+
+pub(crate) fn changes_from_invocation(
+    invocation: &Option<nori_protocol::Invocation>,
+) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
+    let mut changes = std::collections::HashMap::new();
+    match invocation.as_ref() {
+        Some(nori_protocol::Invocation::FileChanges { changes: fc }) => {
+            for change in fc {
+                let file_change = match &change.old_text {
+                    None => codex_core::protocol::FileChange::Add {
+                        content: change.new_text.clone(),
+                    },
+                    Some(old_text) => codex_core::protocol::FileChange::Update {
+                        unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+                        move_path: None,
+                    },
+                };
+                changes.insert(change.path.clone(), file_change);
+            }
+        }
+        Some(nori_protocol::Invocation::FileOperations { operations }) => {
+            for op in operations {
+                let (path, file_change) = match op {
+                    nori_protocol::FileOperation::Create { path, new_text } => (
+                        path.clone(),
+                        codex_core::protocol::FileChange::Add {
+                            content: new_text.clone(),
+                        },
+                    ),
+                    nori_protocol::FileOperation::Update {
+                        path,
+                        old_text,
+                        new_text,
+                    } => (
+                        path.clone(),
+                        codex_core::protocol::FileChange::Update {
+                            unified_diff: diffy::create_patch(old_text, new_text).to_string(),
+                            move_path: None,
+                        },
+                    ),
+                    nori_protocol::FileOperation::Delete { path, old_text } => (
+                        path.clone(),
+                        codex_core::protocol::FileChange::Delete {
+                            content: old_text.clone().unwrap_or_default(),
+                        },
+                    ),
+                    nori_protocol::FileOperation::Move {
+                        from_path,
+                        to_path,
+                        old_text,
+                        new_text,
+                    } => {
+                        let old = old_text.clone().unwrap_or_default();
+                        let new = new_text.clone().unwrap_or_else(|| old.clone());
+                        (
+                            from_path.clone(),
+                            codex_core::protocol::FileChange::Update {
+                                unified_diff: diffy::create_patch(&old, &new).to_string(),
+                                move_path: Some(to_path.clone()),
+                            },
+                        )
+                    }
+                };
+                changes.insert(path, file_change);
+            }
+        }
+        _ => {}
+    }
+    changes
 }
 
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.snapshot.kind == nori_protocol::ToolKind::Execute {
+        if !self.exploring_snapshots.is_empty() {
+            self.render_exploring_lines(width)
+        } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
+        } else if matches!(
+            self.snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) {
+            self.render_edit_lines(width)
         } else {
             self.render_generic_lines()
         }
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.snapshot.kind == nori_protocol::ToolKind::Execute {
+        if !self.exploring_snapshots.is_empty() {
+            self.render_exploring_lines(width)
+        } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
+        } else if matches!(
+            self.snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) {
+            self.render_edit_lines(width)
         } else {
             self.render_generic_lines()
         }
@@ -372,7 +791,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 0, "stdout": "2026-03-30 05:45:34 UTC"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // First line: green bullet + "Ran" + command
@@ -393,7 +812,7 @@ mod tests {
             vec![],
             Some(serde_json::json!({"exit_code": 0, "stdout": ""})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         assert!(lines[0].contains("Ran"));
@@ -411,7 +830,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 1, "stdout": "error[E0308]: mismatched types"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = cell.display_lines(80);
 
         // Verify the bullet span is red+bold (not dim)
@@ -429,7 +848,7 @@ mod tests {
     #[test]
     fn execute_in_progress_shows_running() {
         let snapshot = make_execute_snapshot(ToolPhase::InProgress, "cargo build", vec![], None);
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         assert!(lines[0].contains("Running"));
@@ -451,7 +870,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 0, "stdout": long_output})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should have truncation indicator
@@ -484,7 +903,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should use the generic format
@@ -505,7 +924,7 @@ mod tests {
             }],
             Some(serde_json::json!({"exit_code": 0, "stdout": "up 1 day, 20 hours"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         // Should NOT show ```console or ``` literals
@@ -525,7 +944,7 @@ mod tests {
             vec![Artifact::Text { text: "ok".into() }],
             Some(serde_json::json!({"exit_code": 0, "stdout": "ok"})),
         );
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = cell.display_lines(80);
 
         let bullet_span = &lines[0].spans[0];
@@ -549,10 +968,1009 @@ mod tests {
             raw_input: None,
             raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": ""})),
         };
-        let cell = ClientToolCell::new(snapshot, false);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
         assert!(lines[0].contains("Ran"));
         assert!(lines[0].contains("ls -la"));
+    }
+
+    // --- Spec 08: Gemini Empty Content Fallback ---
+
+    #[test]
+    fn generic_completed_with_no_details_but_locations_shows_location_paths() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-3".into(),
+            title: "Fetch resource".into(),
+            kind: ToolKind::Fetch,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: "/repo/README.md".into(),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should have more than just the header line
+        assert!(
+            lines.len() > 1,
+            "Expected location detail lines, got only: {lines:?}"
+        );
+        // Location path should appear in the detail lines
+        assert!(
+            lines.iter().any(|l| l.contains("/repo/README.md")),
+            "Expected location path in output, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_completed_with_no_details_no_locations_still_renders_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-4".into(),
+            title: "README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should still render at least a header line
+        assert!(!lines.is_empty(), "Expected at least a header line");
+        assert!(
+            lines[0].contains("README.md"),
+            "Header should contain the title, got: {}",
+            lines[0]
+        );
+    }
+
+    // --- Spec 06: Artifact Text Output Cleanup ---
+
+    #[test]
+    fn generic_tool_strips_code_fences_from_text_artifact() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-fence".into(),
+            title: "Read /repo/src/main.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "/repo/src/main.rs".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "```rust\nfn main() {}\n```".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Code fence markers should NOT appear in the rendered output
+        assert!(
+            !lines.iter().any(|l| l.contains("```")),
+            "Code fences should be stripped from generic tool output, got: {lines:?}"
+        );
+        // The actual content should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("fn main() {}")),
+            "Content inside fences should still render, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_tool_single_line_output_has_no_output_prefix() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-single".into(),
+            title: "Fetch https://example.com".into(),
+            kind: ToolKind::Fetch,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![Artifact::Text {
+                text: "200 OK".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should NOT have "Output:" prefix for single-line output
+        assert!(
+            !lines.iter().any(|l| l.contains("Output:")),
+            "Single-line output should not have 'Output:' prefix, got: {lines:?}"
+        );
+        // The actual text should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("200 OK")),
+            "Output text should still render, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_tool_multi_line_output_has_no_output_prefix() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-multi".into(),
+            title: "Search 'pattern'".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("pattern".into()),
+                path: None,
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "line one\nline two\nline three".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should NOT have "Output:" prefix for multi-line output either
+        assert!(
+            !lines.iter().any(|l| l.contains("Output:")),
+            "Multi-line output should not have 'Output:' prefix, got: {lines:?}"
+        );
+        // Content lines should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("line one")),
+            "First content line should render, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn generic_tool_invocation_omitted_when_redundant_with_title() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-dup".into(),
+            title: "Read /repo/README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "/repo/README.md".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "# README".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // The invocation detail line ("Read: /repo/README.md") should NOT appear
+        // because the title already contains the same information
+        assert!(
+            !lines.iter().any(|l| l.contains("Read: /repo/README.md")),
+            "Redundant invocation should be omitted when title contains same info, got: {lines:?}"
+        );
+        // But the artifact output should still appear
+        assert!(
+            lines.iter().any(|l| l.contains("# README")),
+            "Output content should still render, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 04: Path Display Normalization ---
+
+    #[test]
+    fn generic_tool_title_relativizes_cwd_paths() {
+        let cwd = PathBuf::from("/home/user/project");
+        let snapshot = ToolSnapshot {
+            call_id: "call-path".into(),
+            title: "Read /home/user/project/src/main.rs (1 - 5)".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "/home/user/project/src/main.rs".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "fn main() {}".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, cwd, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // The absolute path should NOT appear in the header
+        assert!(
+            !lines[0].contains("/home/user/project/src/main.rs"),
+            "Absolute path should be relativized in title, got: {}",
+            lines[0]
+        );
+        // The relative path should appear instead
+        assert!(
+            lines[0].contains("src/main.rs"),
+            "Relative path should appear in title, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn generic_tool_invocation_path_relativized() {
+        let cwd = PathBuf::from("/home/user/project");
+        let snapshot = ToolSnapshot {
+            call_id: "call-inv-path".into(),
+            title: "Search in /home/user/project/src".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some("/home/user/project/src".into()),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "found 3 results".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, cwd, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Invocation detail should NOT have absolute path
+        let detail_lines: Vec<_> = lines.iter().filter(|l| l.contains("Search")).collect();
+        assert!(
+            !detail_lines
+                .iter()
+                .any(|l| l.contains("/home/user/project/src")),
+            "Absolute path should be relativized in invocation detail, got: {detail_lines:?}"
+        );
+    }
+
+    #[test]
+    fn execute_tool_command_not_path_mangled() {
+        let cwd = PathBuf::from("/home/user/project");
+        let snapshot = make_execute_snapshot(
+            ToolPhase::Completed,
+            "cat /home/user/project/README.md",
+            vec![Artifact::Text {
+                text: "# Readme".into(),
+            }],
+            Some(serde_json::json!({"exit_code": 0, "stdout": "# Readme"})),
+        );
+        // Override the default cwd for this test
+        let cell = ClientToolCell::new(snapshot, cwd, false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Execute commands should keep their original command text
+        // (path normalization in the command itself is NOT desired for execute tools)
+        assert!(
+            lines[0].contains("Ran"),
+            "Execute should still show 'Ran', got: {}",
+            lines[0]
+        );
+    }
+
+    // --- Spec 07: Diff Artifact Rendering in ClientToolCell ---
+
+    #[test]
+    fn generic_tool_renders_diff_artifacts() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-diff".into(),
+            title: "Edit README.md".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: Some("# Old Title\n".into()),
+                new_text: "# New Title\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should render some diff content -- at minimum the file path
+        assert!(
+            lines.iter().any(|l| l.contains("README.md")),
+            "Diff artifact should render file path in output, got: {lines:?}"
+        );
+        // Should show some diff indicator (add/remove line counts or content)
+        let has_diff_indicator = lines.iter().any(|l| {
+            l.contains('+') || l.contains('-') || l.contains("Old Title") || l.contains("New Title")
+        });
+        assert!(
+            has_diff_indicator,
+            "Diff artifact should render diff content, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 02: Exploring Cell Grouping ---
+
+    #[test]
+    fn exploring_cell_with_single_read_shows_explored_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-read-1".into(),
+            title: "Read README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: Some(Invocation::Read {
+                path: "README.md".into(),
+            }),
+            artifacts: vec![Artifact::Text {
+                text: "# Title\nSome content".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Explored" header, not "Tool [completed]"
+        assert!(
+            lines[0].contains("Explored"),
+            "Exploring cell should show 'Explored' header, got: {}",
+            lines[0]
+        );
+
+        // Should show the read file in a sub-item
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Read") && l.contains("README.md")),
+            "Exploring cell should show Read sub-item, got: {lines:?}"
+        );
+
+        // Should NOT show the read content (output is noise in exploring)
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.contains("# Title") || l.contains("Some content")),
+            "Exploring cell should omit read output content, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn exploring_cell_groups_multiple_reads() {
+        let snap1 = ToolSnapshot {
+            call_id: "call-r1".into(),
+            title: "Read file1.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file1.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let snap2 = ToolSnapshot {
+            call_id: "call-r2".into(),
+            title: "Read file2.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file2.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+
+        let mut cell = ClientToolCell::new(snap1, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        cell.merge_exploring(snap2);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should group reads on a single line: "Read file1.rs, file2.rs"
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("file1.rs") && l.contains("file2.rs")),
+            "Exploring cell should group reads, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn exploring_cell_shows_search_sub_item() {
+        let snap = ToolSnapshot {
+            call_id: "call-search".into(),
+            title: "Search TODO".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some("/repo/src".into()),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+
+        let mut cell = ClientToolCell::new(snap, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Search") && l.contains("TODO")),
+            "Exploring cell should show Search sub-item, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn exploring_cell_in_progress_shows_exploring_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-read-active".into(),
+            title: "Read file.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Exploring" (active), not "Explored"
+        assert!(
+            lines[0].contains("Exploring"),
+            "Active exploring cell should show 'Exploring', got: {}",
+            lines[0]
+        );
+    }
+
+    // --- Spec 12: Execute Cell Completion Buffering ---
+
+    #[test]
+    fn execute_in_progress_with_description_artifact_shows_no_output() {
+        // Claude sends the tool description in the content array of in-progress
+        // execute updates. This description text should NOT be rendered as stdout.
+        let snapshot = make_execute_snapshot(
+            ToolPhase::InProgress,
+            "date --utc +\"%Y-%m-%d %H:%M:%S %Z\"",
+            vec![Artifact::Text {
+                text: "Print current UTC date/time with format flags".into(),
+            }],
+            None, // no raw_output yet (in-progress)
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Running" header with command
+        assert!(
+            lines[0].contains("Running"),
+            "In-progress execute should show 'Running', got: {}",
+            lines[0]
+        );
+        // Should NOT show the description text as output
+        assert!(
+            !lines.iter().any(|l| l.contains("Print current UTC")),
+            "Description text should not be rendered as execute output, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn list_files_title_not_duplicated_in_exploring_fallback() {
+        // When the kind maps to a label that already prefixes the title,
+        // the exploring renderer should not duplicate it.
+        let snapshot = ToolSnapshot {
+            call_id: "call-list-dup".into(),
+            title: "List /home/user/project/src".into(),
+            kind: ToolKind::Other("List".into()),
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None, // no ListFiles invocation, so hits generic fallback
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should NOT show "List List /home/..."
+        let has_double_list = lines.iter().any(|l| l.contains("List List"));
+        assert!(
+            !has_double_list,
+            "Should not duplicate 'List' label, got: {lines:?}"
+        );
+        // Should still show the path
+        assert!(
+            lines.iter().any(|l| l.contains("/home/user/project/src")),
+            "Should still show the path, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 10: Failed Edit Tool Visibility ---
+
+    fn make_edit_snapshot(
+        phase: ToolPhase,
+        path: &str,
+        artifacts: Vec<Artifact>,
+        raw_output: Option<serde_json::Value>,
+    ) -> ToolSnapshot {
+        ToolSnapshot {
+            call_id: "call-edit-1".into(),
+            title: format!("Edit {path}"),
+            kind: ToolKind::Edit,
+            phase,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from(path),
+                line: None,
+            }],
+            invocation: None,
+            artifacts,
+            raw_input: None,
+            raw_output,
+        }
+    }
+
+    #[test]
+    fn failed_edit_has_red_bullet() {
+        let snapshot = make_edit_snapshot(ToolPhase::Failed, "README.md", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = cell.display_lines(80);
+
+        let bullet_span = &lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Red),
+            "Failed edit should have red bullet, got {:?}",
+            bullet_span.style
+        );
+    }
+
+    #[test]
+    fn failed_edit_has_semantic_header() {
+        let snapshot = make_edit_snapshot(ToolPhase::Failed, "README.md", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Edit failed:"),
+            "Failed edit should show 'Edit failed:' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("README.md"),
+            "Failed edit header should include path, got: {}",
+            lines[0]
+        );
+        assert!(
+            !lines[0].contains("Tool ["),
+            "Failed edit should NOT use generic 'Tool [failed]' header, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn failed_delete_has_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-del-1".into(),
+            title: "Delete temp.txt".into(),
+            kind: ToolKind::Delete,
+            phase: ToolPhase::Failed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("temp.txt"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Delete failed:"),
+            "Failed delete should show 'Delete failed:' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("temp.txt"),
+            "Failed delete header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn in_progress_edit_has_semantic_header() {
+        let snapshot = make_edit_snapshot(ToolPhase::InProgress, "src/main.rs", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Editing"),
+            "In-progress edit should show 'Editing' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("src/main.rs"),
+            "In-progress edit header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn completed_edit_fallthrough_has_semantic_header() {
+        // Completed edit that falls through to generic rendering (no file_changes)
+        let snapshot = make_edit_snapshot(ToolPhase::Completed, "config.toml", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Edited"),
+            "Completed edit fallthrough should show 'Edited' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("config.toml"),
+            "Completed edit header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn failed_edit_with_error_in_raw_output_shows_error_text() {
+        let snapshot = make_edit_snapshot(
+            ToolPhase::Failed,
+            "README.md",
+            vec![],
+            Some(serde_json::json!({"error": "Permission denied: README.md"})),
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines.iter().any(|l| l.contains("Permission denied")),
+            "Failed edit with raw_output error should show error text, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn failed_edit_with_no_artifacts_shows_failed_fallback() {
+        let snapshot = make_edit_snapshot(ToolPhase::Failed, "README.md", vec![], None);
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines.iter().any(|l| l.contains("(failed)")),
+            "Failed edit with no artifacts should show '(failed)' fallback, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn failed_edit_with_diff_artifact_renders_diff() {
+        let snapshot = make_edit_snapshot(
+            ToolPhase::Failed,
+            "README.md",
+            vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: Some("# Old\n".into()),
+                new_text: "# New\n".into(),
+            })],
+            None,
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should have red bullet (failed)
+        let raw_lines = cell.display_lines(80);
+        let bullet_span = &raw_lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Red),
+            "Failed edit with diff should still have red bullet"
+        );
+
+        // Should render diff content — look for the changed file path
+        // and the actual content from old/new text
+        assert!(
+            lines.iter().any(|l| l.contains("README.md")),
+            "Failed edit with diff artifact should render file path, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn completed_non_edit_tool_still_has_dim_bullet() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-fetch-1".into(),
+            title: "Fetch resource".into(),
+            kind: ToolKind::Fetch,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: None,
+            artifacts: vec![Artifact::Text {
+                text: "200 OK".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = cell.display_lines(80);
+
+        let bullet_span = &lines[0].spans[0];
+        // Should NOT be red (it's completed, not failed)
+        assert!(
+            bullet_span.style.fg != Some(ratatui::style::Color::Red),
+            "Completed non-edit tool should NOT have red bullet, got {:?}",
+            bullet_span.style
+        );
+    }
+
+    #[test]
+    fn failed_move_has_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-move-1".into(),
+            title: "Move old.rs to new.rs".into(),
+            kind: ToolKind::Move,
+            phase: ToolPhase::Failed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("old.rs"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Move failed:"),
+            "Failed move should show 'Move failed:' header, got: {}",
+            lines[0]
+        );
+    }
+
+    // --- Spec 11: Delete File Operation Bridge ---
+
+    #[test]
+    fn completed_delete_has_green_bullet_and_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-del-1".into(),
+            title: "Delete temp.txt".into(),
+            kind: ToolKind::Delete,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("temp.txt"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Delete {
+                    path: PathBuf::from("temp.txt"),
+                    old_text: Some("old content\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let raw_lines = cell.display_lines(80);
+        let lines = render_lines(&raw_lines);
+
+        // Green bullet for completed delete
+        let bullet_span = &raw_lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Green),
+            "Completed delete should have green bullet, got {:?}",
+            bullet_span.style
+        );
+
+        // Semantic header
+        assert!(
+            lines[0].contains("Deleted"),
+            "Completed delete should show 'Deleted' header, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("temp.txt"),
+            "Completed delete header should include path, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn completed_move_has_green_bullet_and_semantic_header() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-move-2".into(),
+            title: "Move old.rs to new.rs".into(),
+            kind: ToolKind::Move,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("old.rs"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Move {
+                    from_path: PathBuf::from("old.rs"),
+                    to_path: PathBuf::from("new.rs"),
+                    old_text: Some("content\n".into()),
+                    new_text: Some("content\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let raw_lines = cell.display_lines(80);
+        let lines = render_lines(&raw_lines);
+
+        // Green bullet for completed move
+        let bullet_span = &raw_lines[0].spans[0];
+        assert!(
+            bullet_span.style.fg == Some(ratatui::style::Color::Green),
+            "Completed move should have green bullet, got {:?}",
+            bullet_span.style
+        );
+
+        // Semantic header
+        assert!(
+            lines[0].contains("Moved"),
+            "Completed move should show 'Moved' header, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn completed_edit_with_file_operations_invocation_renders_diff() {
+        // When a completed edit has FileOperations invocation (no Artifact::Diff),
+        // it should still render diff content from the invocation data.
+        let snapshot = ToolSnapshot {
+            call_id: "call-edit-ops".into(),
+            title: "Edit src/lib.rs".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("src/lib.rs"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Update {
+                    path: PathBuf::from("src/lib.rs"),
+                    old_text: "fn old() {}\n".into(),
+                    new_text: "fn new() {}\n".into(),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Should show "Edited" header
+        assert!(
+            lines[0].contains("Edited"),
+            "Completed edit with FileOperations should show 'Edited', got: {}",
+            lines[0]
+        );
+
+        // Should render diff content from FileOperations
+        let has_diff = lines
+            .iter()
+            .any(|l| l.contains("lib.rs") || l.contains('+') || l.contains('-'));
+        assert!(
+            has_diff,
+            "Completed edit with FileOperations should render diff content, got: {lines:?}"
+        );
+    }
+
+    // --- Spec 13: Deduplicate single-file edit header ---
+
+    #[test]
+    fn single_file_edit_shows_verb_path_counts_once() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-dedup".into(),
+            title: "Edit README.md".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: Some("# Old Title\n".into()),
+                new_text: "# New Title\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Count how many lines contain "Edited README.md" — should be exactly 1
+        let edit_header_count = lines
+            .iter()
+            .filter(|l| l.contains("Edited") && l.contains("README.md"))
+            .count();
+        assert_eq!(
+            edit_header_count, 1,
+            "Single-file edit should show 'Edited README.md' exactly once, got {edit_header_count} in: {lines:?}"
+        );
+        // The single header should include line counts
+        let header_with_counts = lines
+            .iter()
+            .find(|l| l.contains("Edited") && l.contains("README.md"))
+            .expect("should have an edit header");
+        assert!(
+            header_with_counts.contains("+1") && header_with_counts.contains("-1"),
+            "Single-file edit header should include line counts, got: {header_with_counts}"
+        );
+    }
+
+    #[test]
+    fn multi_file_edit_keeps_outer_header_separate() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-multi-edit".into(),
+            title: "Edit multiple files".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![
+                nori_protocol::ToolLocation {
+                    path: PathBuf::from("README.md"),
+                    line: None,
+                },
+                nori_protocol::ToolLocation {
+                    path: PathBuf::from("src/lib.rs"),
+                    line: None,
+                },
+            ],
+            invocation: None,
+            artifacts: vec![
+                nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("# Old\n".into()),
+                    new_text: "# New\n".into(),
+                }),
+                nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("src/lib.rs"),
+                    old_text: Some("fn old() {}\n".into()),
+                    new_text: "fn new() {}\n".into(),
+                }),
+            ],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Multi-file: outer header should say "Edited 2 files"
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Edited") && l.contains("2 files")),
+            "Multi-file edit should have outer 'Edited 2 files' header, got: {lines:?}"
+        );
     }
 }

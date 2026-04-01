@@ -75,10 +75,16 @@ pub async fn perform_oauth_login(
         println!("(Browser launch failed; please copy the URL above manually.)");
     }
 
-    let (code, csrf_state) = timeout(Duration::from_secs(300), rx)
-        .await
-        .context("timed out waiting for OAuth callback")?
-        .context("OAuth callback was cancelled")?;
+    println!("Press Enter to cancel...\n");
+
+    let cancel = async {
+        let mut buf = String::new();
+        let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
+        let _ = tokio::io::AsyncBufReadExt::read_line(&mut stdin, &mut buf).await;
+    };
+
+    let (code, csrf_state) =
+        wait_for_callback_or_cancel(rx, cancel, Duration::from_secs(300)).await?;
 
     oauth_state
         .handle_callback(&code, &csrf_state)
@@ -159,4 +165,85 @@ fn parse_oauth_callback(path: &str) -> Option<OauthCallbackResult> {
         code: code?,
         state: state?,
     })
+}
+
+/// Wait for the OAuth callback or a cancellation signal, with a timeout.
+/// Returns the (code, csrf_state) pair from the callback, or an error if
+/// cancelled or timed out.
+async fn wait_for_callback_or_cancel(
+    rx: oneshot::Receiver<(String, String)>,
+    cancel: impl std::future::Future<Output = ()>,
+    timeout_duration: Duration,
+) -> Result<(String, String)> {
+    tokio::select! {
+        // Prefer callback over cancel when both are ready simultaneously.
+        biased;
+        result = timeout(timeout_duration, rx) => {
+            result
+                .context("timed out waiting for OAuth callback")?
+                .context("OAuth callback was cancelled")
+        }
+        _ = cancel => {
+            Err(anyhow!("OAuth login cancelled by user"))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn cancel_signal_aborts_callback_wait() {
+        let (_callback_tx, callback_rx) = oneshot::channel::<(String, String)>();
+
+        // Cancel resolves immediately.
+        let cancel = std::future::ready(());
+
+        let result =
+            wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await;
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "OAuth login cancelled by user"
+        );
+    }
+
+    #[tokio::test]
+    async fn callback_returns_code_and_state() {
+        let (callback_tx, callback_rx) = oneshot::channel::<(String, String)>();
+
+        callback_tx
+            .send(("auth_code_123".to_string(), "csrf_state_abc".to_string()))
+            .unwrap();
+
+        // Cancel never resolves.
+        let cancel = std::future::pending();
+
+        let result =
+            wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await;
+
+        let (code, state) = result.unwrap();
+        assert_eq!(code, "auth_code_123");
+        assert_eq!(state, "csrf_state_abc");
+    }
+
+    #[tokio::test]
+    async fn timeout_returns_error_when_no_callback_or_cancel() {
+        let (_callback_tx, callback_rx) = oneshot::channel::<(String, String)>();
+
+        // Cancel never resolves.
+        let cancel = std::future::pending();
+
+        let result =
+            wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_millis(10)).await;
+
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("timed out waiting for OAuth callback"),
+        );
+    }
 }

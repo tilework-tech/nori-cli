@@ -55,6 +55,14 @@ pub(crate) enum ApprovalRequest {
         request_id: RequestId,
         message: String,
     },
+    /// ACP-native tool approval using protocol fields directly.
+    AcpTool {
+        call_id: String,
+        title: String,
+        kind: nori_protocol::ToolKind,
+        cwd: PathBuf,
+        snapshot: Box<nori_protocol::ToolSnapshot>,
+    },
 }
 
 /// Modal overlay asking the user to approve or deny one or more requests.
@@ -123,6 +131,13 @@ impl ApprovalOverlay {
                 elicitation_options(),
                 format!("{server_name} needs your approval."),
             ),
+            ApprovalVariant::AcpTool { title, kind, .. } => {
+                let kind_str = crate::client_event_format::format_tool_kind(kind);
+                (
+                    acp_tool_options(agent_display_name),
+                    format!("Would you like to allow {kind_str}: {title}?"),
+                )
+            }
         };
 
         let header = Box::new(ColumnRenderable::with([
@@ -183,6 +198,16 @@ impl ApprovalOverlay {
                 ) => {
                     self.handle_elicitation_decision(server_name, request_id, *decision);
                 }
+                (
+                    ApprovalVariant::AcpTool {
+                        call_id,
+                        title,
+                        kind,
+                    },
+                    ApprovalDecision::Review(decision),
+                ) => {
+                    self.handle_acp_tool_decision(call_id, title, kind, *decision);
+                }
                 _ => {}
             }
         }
@@ -196,6 +221,21 @@ impl ApprovalOverlay {
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
         self.app_event_tx.send(AppEvent::CodexOp(Op::ExecApproval {
             id: id.to_string(),
+            decision,
+        }));
+    }
+
+    fn handle_acp_tool_decision(
+        &self,
+        call_id: &str,
+        title: &str,
+        kind: &nori_protocol::ToolKind,
+        decision: ReviewDecision,
+    ) {
+        let cell = history_cell::new_acp_approval_decision_cell(title, kind, decision);
+        self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
+        self.app_event_tx.send(AppEvent::CodexOp(Op::ExecApproval {
+            id: call_id.to_string(),
             decision,
         }));
     }
@@ -295,6 +335,13 @@ impl BottomPaneView for ApprovalOverlay {
                         request_id,
                         ElicitationAction::Cancel,
                     );
+                }
+                ApprovalVariant::AcpTool {
+                    call_id,
+                    title,
+                    kind,
+                } => {
+                    self.handle_acp_tool_decision(call_id, title, kind, ReviewDecision::Abort);
                 }
             }
         }
@@ -407,6 +454,68 @@ impl From<ApprovalRequest> for ApprovalRequestState {
                     header: Box::new(header),
                 }
             }
+            ApprovalRequest::AcpTool {
+                call_id,
+                title,
+                kind,
+                cwd,
+                snapshot,
+            } => {
+                let rel_title = crate::client_event_format::relativize_paths_in_text(&title, &cwd);
+
+                let is_edit_like = matches!(
+                    kind,
+                    nori_protocol::ToolKind::Edit
+                        | nori_protocol::ToolKind::Delete
+                        | nori_protocol::ToolKind::Move
+                );
+
+                // For edit-like tools, try to render a DiffSummary from the snapshot
+                if is_edit_like {
+                    let mut changes =
+                        crate::client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts);
+                    if changes.is_empty() {
+                        changes =
+                            crate::client_tool_cell::changes_from_invocation(&snapshot.invocation);
+                    }
+                    if !changes.is_empty() {
+                        let header: Vec<Box<dyn Renderable>> =
+                            vec![DiffSummary::new(changes, cwd).into()];
+                        return Self {
+                            variant: ApprovalVariant::AcpTool {
+                                call_id,
+                                title: rel_title,
+                                kind,
+                            },
+                            header: Box::new(ColumnRenderable::with(header)),
+                        };
+                    }
+                }
+
+                // Non-edit tools or edit tools without diff data: text-only rendering
+                let mut lines: Vec<Line<'static>> = Vec::new();
+                lines.push(Line::from(rel_title.clone()));
+                if let Some(inv_text) =
+                    crate::client_event_format::format_invocation(&snapshot.invocation)
+                {
+                    let rel_inv =
+                        crate::client_event_format::relativize_paths_in_text(&inv_text, &cwd);
+                    if !crate::client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
+                        lines.push(Line::from(rel_inv));
+                    }
+                }
+                for text in crate::client_event_format::format_artifacts(&snapshot.artifacts) {
+                    lines.push(Line::from(text));
+                }
+                Self {
+                    variant: ApprovalVariant::AcpTool {
+                        call_id,
+                        title: rel_title,
+                        kind,
+                    },
+                    header: Box::new(Paragraph::new(lines).wrap(Wrap { trim: false })),
+                }
+            }
         }
     }
 }
@@ -445,6 +554,11 @@ enum ApprovalVariant {
     McpElicitation {
         server_name: String,
         request_id: RequestId,
+    },
+    AcpTool {
+        call_id: String,
+        title: String,
+        kind: nori_protocol::ToolKind,
     },
 }
 
@@ -539,6 +653,34 @@ fn elicitation_options() -> Vec<ApprovalOption> {
             decision: ApprovalDecision::McpElicitation(ElicitationAction::Cancel),
             display_shortcut: Some(key_hint::plain(KeyCode::Esc)),
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('c'))],
+        },
+    ]
+}
+
+fn acp_tool_options(agent_display_name: &str) -> Vec<ApprovalOption> {
+    let display_name = if agent_display_name.is_empty() {
+        "the agent"
+    } else {
+        agent_display_name
+    };
+    vec![
+        ApprovalOption {
+            label: "Yes, proceed".to_string(),
+            decision: ApprovalDecision::Review(ReviewDecision::Approved),
+            display_shortcut: None,
+            additional_shortcuts: vec![key_hint::plain(KeyCode::Char('y'))],
+        },
+        ApprovalOption {
+            label: "Yes, and don't ask again for this tool".to_string(),
+            decision: ApprovalDecision::Review(ReviewDecision::ApprovedForSession),
+            display_shortcut: None,
+            additional_shortcuts: vec![key_hint::plain(KeyCode::Char('a'))],
+        },
+        ApprovalOption {
+            label: format!("No, and tell {display_name} what to do differently"),
+            decision: ApprovalDecision::Review(ReviewDecision::Abort),
+            display_shortcut: Some(key_hint::plain(KeyCode::Esc)),
+            additional_shortcuts: vec![key_hint::plain(KeyCode::Char('n'))],
         },
     ]
 }
@@ -761,6 +903,393 @@ mod tests {
         assert!(
             rendered.iter().any(|line| line.contains("tell the agent")),
             "expected deny option to use fallback 'the agent' for empty model name, got {rendered:?}"
+        );
+    }
+
+    fn make_acp_tool_request() -> ApprovalRequest {
+        ApprovalRequest::AcpTool {
+            call_id: "call-1".to_string(),
+            title: "Read /src/main.rs".to_string(),
+            kind: nori_protocol::ToolKind::Read,
+            cwd: std::path::PathBuf::from("."),
+            snapshot: Box::new(nori_protocol::ToolSnapshot {
+                call_id: "call-1".to_string(),
+                title: "Read /src/main.rs".to_string(),
+                kind: nori_protocol::ToolKind::Read,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![],
+                invocation: Some(nori_protocol::Invocation::Read {
+                    path: std::path::PathBuf::from("/src/main.rs"),
+                }),
+                artifacts: vec![],
+                raw_input: None,
+                raw_output: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn acp_tool_shortcut_triggers_selection() {
+        let (tx, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut view = ApprovalOverlay::new(make_acp_tool_request(), tx, String::new());
+        assert!(!view.is_complete());
+
+        // Press 'y' to approve
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+
+        // Should emit an ExecApproval Op with Approved decision
+        let mut decision = None;
+        while let Ok(ev) = rx.try_recv() {
+            if let AppEvent::CodexOp(Op::ExecApproval { decision: d, .. }) = ev {
+                decision = Some(d);
+                break;
+            }
+        }
+        assert_eq!(
+            decision,
+            Some(ReviewDecision::Approved),
+            "expected AcpTool 'y' shortcut to emit Approved decision"
+        );
+    }
+
+    #[test]
+    fn acp_tool_ctrl_c_aborts() {
+        let (tx, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut view = ApprovalOverlay::new(make_acp_tool_request(), tx, String::new());
+        view.enqueue_request(make_acp_tool_request());
+
+        assert_eq!(CancellationEvent::Handled, view.on_ctrl_c());
+        assert!(view.is_complete());
+
+        // Should emit an ExecApproval Op with Abort decision
+        let mut decision = None;
+        while let Ok(ev) = rx.try_recv() {
+            if let AppEvent::CodexOp(Op::ExecApproval { decision: d, .. }) = ev {
+                decision = Some(d);
+                break;
+            }
+        }
+        assert_eq!(
+            decision,
+            Some(ReviewDecision::Abort),
+            "expected Ctrl+C on AcpTool to emit Abort decision"
+        );
+    }
+
+    #[test]
+    fn acp_tool_header_includes_tool_title() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let view = ApprovalOverlay::new(make_acp_tool_request(), tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Would you like to allow")),
+            "expected AcpTool header to contain 'Would you like to allow', got {rendered:?}"
+        );
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Read /src/main.rs")),
+            "expected AcpTool header to contain tool title, got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn acp_tool_approved_history_cell_text() {
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Read /src/main.rs",
+            &nori_protocol::ToolKind::Read,
+            ReviewDecision::Approved,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("approved"),
+            "expected approved text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("read"),
+            "expected tool kind in text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("Read /src/main.rs"),
+            "expected tool title in text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("this time"),
+            "expected 'this time' for single approval, got {rendered}"
+        );
+    }
+
+    #[test]
+    fn acp_tool_denied_history_cell_text() {
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Read /src/main.rs",
+            &nori_protocol::ToolKind::Read,
+            ReviewDecision::Denied,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("denied"),
+            "expected denied text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("read"),
+            "expected tool kind, got {rendered}"
+        );
+    }
+
+    fn make_acp_edit_tool_request() -> ApprovalRequest {
+        ApprovalRequest::AcpTool {
+            call_id: "call-edit-1".to_string(),
+            title: "Edit src/main.rs".to_string(),
+            kind: nori_protocol::ToolKind::Edit,
+            cwd: std::path::PathBuf::from("."),
+            snapshot: Box::new(nori_protocol::ToolSnapshot {
+                call_id: "call-edit-1".to_string(),
+                title: "Edit src/main.rs".to_string(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![nori_protocol::ToolLocation {
+                    path: std::path::PathBuf::from("src/main.rs"),
+                    line: None,
+                }],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: std::path::PathBuf::from("src/main.rs"),
+                        old_text: Some("fn main() {}\n".to_string()),
+                        new_text: "fn main() {\n    println!(\"hello\");\n}\n".to_string(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: std::path::PathBuf::from("src/main.rs"),
+                    old_text: Some("fn main() {}\n".to_string()),
+                    new_text: "fn main() {\n    println!(\"hello\");\n}\n".to_string(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn acp_edit_tool_overlay_shows_diff_content() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let view = ApprovalOverlay::new(make_acp_edit_tool_request(), tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        // The overlay should show "Would you like to allow edit: Edit src/main.rs?"
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Would you like to allow")),
+            "expected AcpTool edit header to contain approval question, got {rendered:?}"
+        );
+        // The overlay should contain diff change counts (e.g., "+3 -1") from the DiffSummary.
+        // This proves the diff artifacts were rendered, not just the title.
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("+3") || line.contains("-1")),
+            "expected AcpTool edit overlay to show diff line counts, got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn acp_edit_tool_has_always_approve_option() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let view = ApprovalOverlay::new(make_acp_edit_tool_request(), tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        // AcpTool gets "don't ask again" option (unlike ApplyPatch which only has Yes/No)
+        assert!(
+            rendered.iter().any(|line| line.contains("don't ask again")),
+            "expected AcpTool edit to have 'don't ask again' option, got {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn acp_edit_tool_approved_history_cell() {
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Edit src/main.rs",
+            &nori_protocol::ToolKind::Edit,
+            ReviewDecision::Approved,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("approved"),
+            "expected approved text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("edit"),
+            "expected 'edit' tool kind in text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("Edit src/main.rs"),
+            "expected tool title in text, got {rendered}"
+        );
+    }
+
+    // --- Spec 13: Approval title path relativization ---
+
+    #[test]
+    fn acp_tool_overlay_relativizes_absolute_path_in_title() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+
+        let request = ApprovalRequest::AcpTool {
+            call_id: "call-abs".to_string(),
+            title: "Edit /home/user/project/README.md".to_string(),
+            kind: nori_protocol::ToolKind::Edit,
+            cwd: std::path::PathBuf::from("/home/user/project"),
+            snapshot: Box::new(nori_protocol::ToolSnapshot {
+                call_id: "call-abs".to_string(),
+                title: "Edit /home/user/project/README.md".to_string(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![nori_protocol::ToolLocation {
+                    path: std::path::PathBuf::from("/home/user/project/README.md"),
+                    line: None,
+                }],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: std::path::PathBuf::from("/home/user/project/README.md"),
+                        old_text: Some("old\n".to_string()),
+                        new_text: "new\n".to_string(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: std::path::PathBuf::from("/home/user/project/README.md"),
+                    old_text: Some("old\n".to_string()),
+                    new_text: "new\n".to_string(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        };
+
+        let view = ApprovalOverlay::new(request, tx, String::new());
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, view.desired_height(80)));
+        view.render(Rect::new(0, 0, 80, view.desired_height(80)), &mut buf);
+
+        let rendered: Vec<String> = (0..buf.area.height)
+            .map(|row| {
+                (0..buf.area.width)
+                    .map(|col| buf[(col, row)].symbol().to_string())
+                    .collect()
+            })
+            .collect();
+
+        // The prompt title line should show relative path, not absolute.
+        // Find the "Would you like to allow" line and verify it uses the relative path.
+        let prompt_line = rendered
+            .iter()
+            .find(|line| line.contains("Would you like to allow"))
+            .expect("expected approval prompt line");
+        assert!(
+            !prompt_line.contains("/home/user/project/README.md"),
+            "Approval prompt should not show absolute path, got: {prompt_line}"
+        );
+        assert!(
+            prompt_line.contains("README.md"),
+            "Approval prompt should show relative path, got: {prompt_line}"
+        );
+    }
+
+    #[test]
+    fn acp_decision_cell_uses_relativized_title_from_overlay() {
+        // The overlay relativizes the title before storing it in ApprovalVariant.
+        // When the decision cell is created, it receives the already-relativized title.
+        // Verify this by constructing a cell with a pre-relativized title.
+        let cell = history_cell::new_acp_approval_decision_cell(
+            "Edit README.md",
+            &nori_protocol::ToolKind::Edit,
+            ReviewDecision::Approved,
+        );
+        let lines = cell.display_lines(80);
+        let rendered: String = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            rendered.contains("approved"),
+            "expected approved text, got {rendered}"
+        );
+        assert!(
+            rendered.contains("Edit README.md"),
+            "expected relativized title in decision cell, got {rendered}"
         );
     }
 }

@@ -118,6 +118,10 @@ impl dyn HistoryCell {
     pub(crate) fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+
+    pub(crate) fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -440,6 +444,49 @@ pub fn new_approval_decision_cell(
                 ],
             )
         }
+    };
+
+    Box::new(PrefixedWrappedHistoryCell::new(
+        Line::from(summary),
+        symbol,
+        "  ",
+    ))
+}
+
+pub fn new_acp_approval_decision_cell(
+    title: &str,
+    kind: &nori_protocol::ToolKind,
+    decision: codex_core::protocol::ReviewDecision,
+) -> Box<dyn HistoryCell> {
+    use codex_core::protocol::ReviewDecision::*;
+
+    let kind_str = crate::client_event_format::format_tool_kind(kind);
+    let tool_desc = Span::from(format!(" {kind_str}: {title}")).dim();
+
+    let (symbol, summary): (Span<'static>, Vec<Span<'static>>) = match decision {
+        Approved => (
+            "✔ ".green(),
+            vec![
+                "You ".into(),
+                "approved".bold(),
+                tool_desc,
+                " this time".bold(),
+            ],
+        ),
+        ApprovedForSession => (
+            "✔ ".green(),
+            vec![
+                "You ".into(),
+                "approved".bold(),
+                tool_desc,
+                " for this session".bold(),
+            ],
+        ),
+        Denied => ("✗ ".red(), vec!["You ".into(), "denied".bold(), tool_desc]),
+        Abort => (
+            "✗ ".red(),
+            vec!["You ".into(), "canceled".bold(), tool_desc],
+        ),
     };
 
     Box::new(PrefixedWrappedHistoryCell::new(

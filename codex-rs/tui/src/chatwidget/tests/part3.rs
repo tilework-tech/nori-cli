@@ -780,7 +780,10 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
             title: "Write README.md".into(),
             kind: nori_protocol::ToolKind::Edit,
             phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
             invocation: Some(nori_protocol::Invocation::FileChanges {
                 changes: vec![nori_protocol::FileChange {
                     path: PathBuf::from("README.md"),
@@ -799,7 +802,7 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
     ));
 
     let cells = drain_insert_history(&mut rx);
-    assert_eq!(cells.len(), 1, "expected one patch history cell");
+    assert_eq!(cells.len(), 1, "expected one edit history cell");
     let blob = lines_to_single_string(cells.first().unwrap());
     assert_snapshot!("completed_edit_tool_snapshot", blob);
 }
@@ -814,7 +817,10 @@ fn completed_delete_tool_snapshot_renders_patch_history_cell() {
             title: "Delete README.md".into(),
             kind: nori_protocol::ToolKind::Delete,
             phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
             invocation: Some(nori_protocol::Invocation::FileOperations {
                 operations: vec![nori_protocol::FileOperation::Delete {
                     path: PathBuf::from("README.md"),
@@ -849,7 +855,10 @@ fn completed_move_tool_snapshot_renders_patch_history_cell() {
             title: "Move README.md".into(),
             kind: nori_protocol::ToolKind::Move,
             phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
             invocation: Some(nori_protocol::Invocation::FileOperations {
                 operations: vec![nori_protocol::FileOperation::Move {
                     from_path: PathBuf::from("README.md"),
@@ -1185,5 +1194,604 @@ fn completed_fetch_tool_snapshot_renders_exec_history_cell() {
     assert!(
         blob.contains("ok"),
         "expected output in history cell: {blob:?}"
+    );
+}
+
+// --- Spec 05: In-Progress Edit/Delete/Move Rendering ---
+
+#[test]
+fn in_progress_edit_renders_active_client_tool_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-progress".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    // Should NOT produce any flushed history cells
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "In-progress edit should not flush to history, got {cells:?}",
+    );
+
+    // Should have an active cell (the spinner)
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Editing README.md"),
+        "Active cell should show semantic edit header, got: {blob:?}"
+    );
+}
+
+#[test]
+fn completed_edit_after_in_progress_replaces_spinner_with_patch() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // First: in-progress edit creates spinner
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-lifecycle".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    // Drain any events from in-progress
+    let _ = drain_insert_history(&mut rx);
+
+    // Then: completed edit with diff arrives
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-edit-lifecycle".into(),
+            title: "Write README.md".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::FileChanges {
+                changes: vec![nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                }],
+            }),
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: None,
+                new_text: "hello\nworld\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    // Should have exactly 1 cell (the PatchHistoryCell), NOT 2 (spinner + patch)
+    assert_eq!(
+        cells.len(),
+        1,
+        "Expected only one cell (patch), not spinner+patch, got {} cells",
+        cells.len()
+    );
+    let blob = lines_to_single_string(cells.first().unwrap());
+    assert!(
+        blob.contains("README.md"),
+        "Patch cell should show filename, got: {blob:?}"
+    );
+}
+
+#[test]
+fn in_progress_delete_renders_active_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-delete-progress".into(),
+            title: "Delete temp.txt".into(),
+            kind: nori_protocol::ToolKind::Delete,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("temp.txt"),
+                line: None,
+            }],
+            invocation: None,
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "In-progress delete should not flush to history"
+    );
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Deleting temp.txt"),
+        "Active cell should show semantic delete header, got: {blob:?}"
+    );
+}
+
+// --- Spec 02: Exploring Cell Grouping ---
+
+#[test]
+fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Send two read snapshots
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-r1".into(),
+            title: "Read file1.rs".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("file1.rs"),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-r2".into(),
+            title: "Read file2.rs".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("file2.rs"),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    // Should NOT have flushed any cells yet (exploring stays active)
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        cells.is_empty(),
+        "Exploring reads should not flush to history while still groupable, got {} cells",
+        cells.len()
+    );
+
+    // The active cell should contain both reads
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Explored") || blob.contains("Exploring"),
+        "Active cell should have Explored/Exploring header, got: {blob:?}"
+    );
+    assert!(
+        blob.contains("file1.rs") && blob.contains("file2.rs"),
+        "Active cell should contain both filenames, got: {blob:?}"
+    );
+}
+
+// --- Spec 12: Execute Cell Completion Buffering ---
+
+#[test]
+fn parallel_execute_snapshots_buffer_and_complete_correctly() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    // Simulate parallel ACP execute tool calls (date, uptime, df).
+    // The pattern is: pending(date), update(date, desc), pending(uptime)
+    // which should displace date to buffer, then update(date, completed).
+
+    // 1) Pending date
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_date".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Pending,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: None,
+        },
+    ));
+
+    // 2) In-progress date with description text
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_date".into(),
+            title: "date --utc".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "Print current UTC date/time".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: None,
+        },
+    ));
+
+    // 3) Pending uptime — this displaces date from active_cell
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_uptime".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Pending,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "uptime -p".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "uptime -p"})),
+            raw_output: None,
+        },
+    ));
+
+    // 4) Completed date arrives (should find it in buffer, not discard it)
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_date".into(),
+            title: "date --utc".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "2026-03-30 05:45:34 UTC".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "2026-03-30 05:45:34 UTC"
+            })),
+        },
+    ));
+
+    // 5) Completed uptime
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_uptime".into(),
+            title: "uptime -p".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "uptime -p".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "up 1 week, 2 days".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "uptime -p"})),
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "up 1 week, 2 days"
+            })),
+        },
+    ));
+
+    // Drain history and check that both commands rendered with correct output
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    // Date command should have real stdout, not description
+    assert!(
+        full.contains("2026-03-30 05:45:34 UTC"),
+        "Date command should show real stdout, got: {full:?}"
+    );
+    assert!(
+        !full.contains("Print current UTC date/time"),
+        "Description text should NOT appear as output, got: {full:?}"
+    );
+    // Uptime command should have real stdout
+    assert!(
+        full.contains("up 1 week, 2 days"),
+        "Uptime command should show real stdout, got: {full:?}"
+    );
+}
+
+#[test]
+fn orphan_buffered_execute_cell_discarded_on_turn_complete() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    // 1) Pending execute cell (date)
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_orphan".into(),
+            title: "date --utc".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "date --utc".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "Print current UTC date/time".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "date --utc"})),
+            raw_output: None,
+        },
+    ));
+
+    // 2) Another execute displaces the first one
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_second".into(),
+            title: "uptime -p".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "uptime -p".into(),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({"command": "uptime -p"})),
+            raw_output: Some(serde_json::json!({
+                "exit_code": 0,
+                "stdout": "up 1 week"
+            })),
+        },
+    ));
+
+    // 3) Turn completes without the first cell ever completing
+    chat.on_task_complete(None);
+
+    let cells = drain_insert_history(&mut rx);
+    let combined: Vec<String> = cells.iter().map(|c| lines_to_single_string(c)).collect();
+    let full = combined.join("");
+
+    // The orphan cell should NOT appear in history with its description text
+    assert!(
+        !full.contains("Print current UTC date/time"),
+        "Orphan buffered cell should be discarded, not show description as output: {full:?}"
+    );
+    // The completed second cell should appear
+    assert!(
+        full.contains("up 1 week"),
+        "Completed cell should appear in history: {full:?}"
+    );
+}
+
+#[test]
+fn description_text_not_shown_as_execute_output() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Send in-progress execute with description-only content (no raw_output)
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "toolu_desc".into(),
+            title: "rm /tmp/test.md".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "rm /tmp/test.md".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "Delete the temporary test file".into(),
+            }],
+            raw_input: Some(serde_json::json!({"command": "rm /tmp/test.md"})),
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    assert!(
+        blob.contains("Running"),
+        "In-progress execute should show 'Running': {blob:?}"
+    );
+    assert!(
+        !blob.contains("Delete the temporary test file"),
+        "Description text should NOT appear as output: {blob:?}"
+    );
+}
+
+#[test]
+fn single_read_snapshot_renders_as_explored() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-single-read".into(),
+            title: "Read README.md".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("README.md"),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    // Should show "Explored", not "Ran Read File" or "Tool [completed]"
+    assert!(
+        blob.contains("Explored"),
+        "Single read should render as 'Explored', got: {blob:?}"
+    );
+    assert!(
+        !blob.contains("Ran"),
+        "Single read should NOT show 'Ran', got: {blob:?}"
+    );
+    assert!(
+        !blob.contains("Tool ["),
+        "Single read should NOT use generic format, got: {blob:?}"
+    );
+    assert!(
+        blob.contains("README.md"),
+        "Should show the filename, got: {blob:?}"
+    );
+}
+
+#[test]
+fn list_files_title_not_duplicated() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Send a ListFiles snapshot with title "List src" and kind Other("List")
+    // This exercises the generic fallback path in render_exploring_lines
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-list-dup".into(),
+            title: "List /home/user/project/src".into(),
+            kind: nori_protocol::ToolKind::Other("List".into()),
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::ListFiles {
+                path: Some(PathBuf::from("/home/user/project/src")),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        },
+    ));
+
+    let blob = active_blob(&chat);
+    // Should NOT show "List List"
+    assert!(
+        !blob.contains("List List"),
+        "Should not duplicate 'List' label, got: {blob:?}"
+    );
+    // Should still show the path
+    assert!(
+        blob.contains("src"),
+        "Should still show the path, got: {blob:?}"
+    );
+}
+
+// --- ACP Edit Approval Bridge Removal ---
+
+/// ACP edit approval requests should route through AcpTool (not ApplyPatch).
+/// This gives users the "always approve" option and uses native protocol rendering.
+#[test]
+fn acp_edit_approval_routes_through_acp_tool() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // Send an ACP approval request for an Edit tool with file changes
+    chat.handle_client_event(nori_protocol::ClientEvent::ApprovalRequest(
+        nori_protocol::ApprovalRequest {
+            call_id: "call-edit-approval".into(),
+            title: "Edit src/main.rs".into(),
+            kind: nori_protocol::ToolKind::Edit,
+            options: vec![],
+            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
+                call_id: "call-edit-approval".into(),
+                title: "Edit src/main.rs".into(),
+                kind: nori_protocol::ToolKind::Edit,
+                phase: nori_protocol::ToolPhase::PendingApproval,
+                locations: vec![nori_protocol::ToolLocation {
+                    path: PathBuf::from("src/main.rs"),
+                    line: None,
+                }],
+                invocation: Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: PathBuf::from("src/main.rs"),
+                        old_text: Some("fn main() {}\n".into()),
+                        new_text: "fn main() {\n    println!(\"hello\");\n}\n".into(),
+                    }],
+                }),
+                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                    path: PathBuf::from("src/main.rs"),
+                    old_text: Some("fn main() {}\n".into()),
+                    new_text: "fn main() {\n    println!(\"hello\");\n}\n".into(),
+                })],
+                raw_input: None,
+                raw_output: None,
+            }),
+        },
+    ));
+
+    // Render the bottom pane and check the approval text
+    let width: u16 = 80;
+    let height: u16 = 30;
+    let mut buf = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, width, height));
+    chat.bottom_pane
+        .render(ratatui::layout::Rect::new(0, 0, width, height), &mut buf);
+
+    let rendered: Vec<String> = (0..height)
+        .map(|row| {
+            (0..width)
+                .map(|col| buf[(col, row)].symbol().to_string())
+                .collect()
+        })
+        .collect();
+
+    // AcpTool renders "Would you like to allow edit: ..."
+    // ApplyPatch renders "Would you like to make the following edits?"
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("Would you like to allow")),
+        "ACP edit approval should route through AcpTool ('Would you like to allow'), got: {rendered:?}"
+    );
+    assert!(
+        !rendered
+            .iter()
+            .any(|line| line.contains("Would you like to make the following edits")),
+        "ACP edit approval should NOT use ApplyPatch text, got: {rendered:?}"
+    );
+
+    // Approve with 'y' and verify it sends ExecApproval (AcpTool path), not PatchApproval
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('y'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+
+    // The approval overlay sends Op via AppEvent::CodexOp through app_event_tx
+    let mut found_exec_approval = false;
+    let mut found_patch_approval = false;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::CodexOp(op) = event {
+            match op {
+                Op::ExecApproval { .. } => found_exec_approval = true,
+                Op::PatchApproval { .. } => found_patch_approval = true,
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        found_exec_approval,
+        "ACP edit approval should emit Op::ExecApproval (AcpTool path)"
+    );
+    assert!(
+        !found_patch_approval,
+        "ACP edit approval should NOT emit Op::PatchApproval"
     );
 }

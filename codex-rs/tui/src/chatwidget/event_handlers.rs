@@ -76,6 +76,9 @@ impl ChatWidget {
         // flush to history so the viewport is freed.
         self.finalize_active_cell_as_failed();
         self.pending_exec_cells.drain_failed();
+        // Discard orphan buffered execute cells — silence is better than
+        // showing description text as command output.
+        self.pending_client_tool_cells.clear();
 
         // Close the gate BEFORE flushing: any tool events arriving after this
         // point are stale and should be silently discarded.
@@ -104,6 +107,7 @@ impl ChatWidget {
         // Step 1: Flush the streamed summary from the old session.
         self.flush_answer_stream_with_separator();
         self.turn_finished = true;
+        self.pending_client_tool_cells.clear();
 
         // Step 2: Show "Context compacted" as an info message.
         self.add_info_message("Context compacted".to_owned(), None);
@@ -213,6 +217,8 @@ impl ChatWidget {
 
         // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
         self.pending_exec_cells.drain_failed();
+        // Discard orphan buffered execute cells.
+        self.pending_client_tool_cells.clear();
 
         // Safety net: finalize any incomplete ExecCell still stuck in active_cell.
         // This can happen when tool End events are blocked by the turn_finished gate
@@ -323,6 +329,8 @@ impl ChatWidget {
         self.finalize_active_cell_as_failed();
         // Drain any incomplete ExecCells saved in pending_exec_cells.
         self.pending_exec_cells.drain_failed();
+        // Discard orphan buffered execute cells.
+        self.pending_client_tool_cells.clear();
         // Reset running state and clear streaming buffers.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
@@ -861,6 +869,39 @@ impl ChatWidget {
         }
     }
 
+    /// Observes the parent directories of file paths to update the effective CWD tracker.
+    /// If the effective CWD changes (after debounce), triggers a system info refresh.
+    pub(super) fn observe_directories_from_paths<'a>(
+        &mut self,
+        paths: impl Iterator<Item = &'a std::path::Path>,
+    ) {
+        for file_path in paths {
+            let absolute_path = if file_path.is_absolute() {
+                file_path.to_path_buf()
+            } else {
+                self.config.cwd.join(file_path)
+            };
+
+            if self.effective_cwd_tracker.observe_file_path(&absolute_path) {
+                let refresh_dir = crate::effective_cwd_tracker::find_git_root(&absolute_path)
+                    .or_else(|| {
+                        absolute_path
+                            .parent()
+                            .filter(|p| p.exists())
+                            .map(std::path::Path::to_path_buf)
+                    });
+
+                if let Some(dir) = refresh_dir {
+                    self.app_event_tx
+                        .send(AppEvent::RefreshSystemInfoForDirectory {
+                            dir,
+                            agent: Some(self.config.model.clone()),
+                        });
+                }
+            }
+        }
+    }
+
     /// Observes the parent directories of changed files to update the effective CWD tracker.
     /// If the effective CWD changes (after debounce), triggers a system info refresh.
     ///
@@ -1228,7 +1269,7 @@ impl ChatWidget {
     }
 
     fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
-        let Some(request) = approval_request_from_client_event(&self.config.cwd, approval) else {
+        let Some(request) = approval_request_from_client_event(approval, &self.config.cwd) else {
             return;
         };
 
@@ -1246,6 +1287,11 @@ impl ChatWidget {
                 self.notify(Notification::ExecApprovalRequested { command });
             }
             ApprovalRequest::McpElicitation { .. } => {}
+            ApprovalRequest::AcpTool { title, .. } => {
+                self.notify(Notification::ExecApprovalRequested {
+                    command: title.clone(),
+                });
+            }
         }
         self.bottom_pane.push_approval_request(request);
         self.request_redraw();
@@ -1253,16 +1299,11 @@ impl ChatWidget {
 
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         match tool_snapshot.kind {
-            nori_protocol::ToolKind::Edit
+            // Execute and Edit/Delete/Move use ClientToolCell for native rendering
+            nori_protocol::ToolKind::Execute
+            | nori_protocol::ToolKind::Edit
             | nori_protocol::ToolKind::Delete
-            | nori_protocol::ToolKind::Move
-                if tool_snapshot.phase == nori_protocol::ToolPhase::Completed
-                    && file_changes_from_snapshot(&tool_snapshot).is_some() =>
-            {
-                self.handle_client_edit_tool_snapshot(tool_snapshot);
-            }
-            // Execute snapshots use ClientToolCell for native rendering
-            nori_protocol::ToolKind::Execute => {
+            | nori_protocol::ToolKind::Move => {
                 self.handle_client_native_tool_snapshot(tool_snapshot);
             }
             nori_protocol::ToolKind::Read
@@ -1299,6 +1340,23 @@ impl ChatWidget {
         }
         self.flush_answer_stream_with_separator();
 
+        // For completed Edit/Delete/Move, observe directories and record stats
+        if matches!(
+            tool_snapshot.kind,
+            nori_protocol::ToolKind::Edit
+                | nori_protocol::ToolKind::Delete
+                | nori_protocol::ToolKind::Move
+        ) && tool_snapshot.phase == nori_protocol::ToolPhase::Completed
+        {
+            self.observe_directories_from_paths(
+                tool_snapshot.locations.iter().map(|l| l.path.as_path()),
+            );
+            self.session_stats
+                .record_tool_call(crate::client_event_format::format_tool_kind(
+                    &tool_snapshot.kind,
+                ));
+        }
+
         // Update existing active ClientToolCell if same call_id
         if let Some(cell) = self
             .active_cell
@@ -1322,17 +1380,78 @@ impl ChatWidget {
             return;
         }
 
-        self.flush_active_cell();
+        // Check if this snapshot is for a buffered incomplete execute cell.
+        // This allows completions to reach cells that were displaced from
+        // active_cell by subsequent tool snapshots (parallel ACP calls).
+        if let Some(mut buffered_cell) = self
+            .pending_client_tool_cells
+            .remove(&tool_snapshot.call_id)
+        {
+            buffered_cell.apply_snapshot(tool_snapshot);
+            if !buffered_cell.is_active() {
+                // Insert directly into history without flushing active_cell.
+                // The normal add_boxed_history path flushes active_cell first
+                // (to maintain chronological order), but that would incorrectly
+                // mark the current active Execute cell as completed and discard
+                // its later completion event.
+                self.completed_client_tool_calls
+                    .insert(buffered_cell.call_id().to_owned());
+                self.needs_final_message_separator = true;
+                self.app_event_tx
+                    .send(AppEvent::InsertHistoryCell(Box::new(buffered_cell)));
+            } else {
+                // Still incomplete — put it back in the buffer.
+                let call_id = buffered_cell.call_id().to_owned();
+                self.pending_client_tool_cells
+                    .insert(call_id, buffered_cell);
+            }
+            return;
+        }
+
+        // Merge into existing exploring cell when possible
+        let is_new_exploring = crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
+        if is_new_exploring
+            && let Some(cell) = self
+                .active_cell
+                .as_mut()
+                .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
+            && cell.is_exploring()
+        {
+            cell.merge_exploring(tool_snapshot);
+            return;
+        }
+
+        // Buffer incomplete Execute ClientToolCells instead of flushing
+        // them to history with wrong content (description text as output).
+        if let Some(active) = self.active_cell.take() {
+            if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>()
+                && client_cell.is_active()
+                && *client_cell.snapshot_kind() == nori_protocol::ToolKind::Execute
+            {
+                let call_id = client_cell.call_id().to_owned();
+                if let Ok(boxed) = active.into_any().downcast::<ClientToolCell>() {
+                    self.pending_client_tool_cells.insert(call_id, *boxed);
+                }
+            } else {
+                self.active_cell = Some(active);
+                self.flush_active_cell();
+            }
+        }
         let should_flush = !matches!(
             tool_snapshot.phase,
             nori_protocol::ToolPhase::Pending
                 | nori_protocol::ToolPhase::PendingApproval
                 | nori_protocol::ToolPhase::InProgress
-        ) && !crate::client_event_format::is_exploring_snapshot(&tool_snapshot);
-        self.active_cell = Some(Box::new(ClientToolCell::new(
+        ) && !is_new_exploring;
+        let mut cell = ClientToolCell::new(
             tool_snapshot,
+            self.config.cwd.clone(),
             self.config.animations,
-        )));
+        );
+        if is_new_exploring {
+            cell.mark_exploring();
+        }
+        self.active_cell = Some(Box::new(cell));
         if should_flush {
             self.flush_active_cell();
         }
@@ -1358,20 +1477,6 @@ impl ChatWidget {
         };
 
         self.on_exec_command_begin(begin_event);
-    }
-
-    fn handle_client_edit_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        let Some(changes) = file_changes_from_snapshot(&tool_snapshot) else {
-            return;
-        };
-
-        if self.turn_finished {
-            return;
-        }
-
-        self.session_stats.record_tool_call("Edit");
-        self.observe_directories_from_changes(&changes);
-        self.add_to_history(history_cell::new_patch_event(changes, &self.config.cwd));
     }
 
     fn handle_client_exec_like_tool_snapshot(
@@ -1423,36 +1528,43 @@ fn exec_begin_event_from_client_snapshot(
             )
         }
         Some(nori_protocol::Invocation::Read { path }) => {
+            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
             let name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.display().to_string());
             (
-                vec![snapshot.title.clone()],
+                vec![title.clone()],
                 vec![ParsedCommand::Read {
-                    cmd: snapshot.title.clone(),
+                    cmd: title,
                     name,
                     path: path.clone(),
                 }],
             )
         }
-        Some(nori_protocol::Invocation::Search { query, path }) => (
-            vec![snapshot.title.clone()],
-            vec![ParsedCommand::Search {
-                cmd: snapshot.title.clone(),
-                query: query.clone(),
-                path: path.as_ref().map(|value| value.display().to_string()),
-            }],
-        ),
-        Some(nori_protocol::Invocation::ListFiles { path }) => (
-            vec![snapshot.title.clone()],
-            vec![ParsedCommand::ListFiles {
-                cmd: snapshot.title.clone(),
-                path: path.as_ref().map(|value| value.display().to_string()),
-            }],
-        ),
+        Some(nori_protocol::Invocation::Search { query, path }) => {
+            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
+            (
+                vec![title.clone()],
+                vec![ParsedCommand::Search {
+                    cmd: title,
+                    query: query.clone(),
+                    path: path.as_ref().map(|value| value.display().to_string()),
+                }],
+            )
+        }
+        Some(nori_protocol::Invocation::ListFiles { path }) => {
+            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
+            (
+                vec![title.clone()],
+                vec![ParsedCommand::ListFiles {
+                    cmd: title,
+                    path: path.as_ref().map(|value| value.display().to_string()),
+                }],
+            )
+        }
         Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
-            let command_text = generic_tool_command_text(tool_name, input.as_ref(), snapshot);
+            let command_text = generic_tool_command_text(tool_name, input.as_ref(), snapshot, cwd);
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1460,7 +1572,7 @@ fn exec_begin_event_from_client_snapshot(
         }
         Some(nori_protocol::Invocation::RawJson(raw_input)) => {
             let command_text =
-                generic_tool_command_text(&snapshot.title, Some(raw_input), snapshot);
+                generic_tool_command_text(&snapshot.title, Some(raw_input), snapshot, cwd);
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1468,7 +1580,7 @@ fn exec_begin_event_from_client_snapshot(
         }
         Some(_) => return None,
         None if snapshot.kind == nori_protocol::ToolKind::Execute => {
-            let command_text = generic_execute_command_text(snapshot);
+            let command_text = generic_execute_command_text(snapshot, cwd);
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1481,8 +1593,12 @@ fn exec_begin_event_from_client_snapshot(
                 | nori_protocol::ToolKind::Other(_)
         ) =>
         {
-            let command_text =
-                generic_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), snapshot);
+            let command_text = generic_tool_command_text(
+                &snapshot.title,
+                snapshot.raw_input.as_ref(),
+                snapshot,
+                cwd,
+            );
             (
                 vec![command_text.clone()],
                 vec![ParsedCommand::Unknown { cmd: command_text }],
@@ -1503,9 +1619,12 @@ fn exec_begin_event_from_client_snapshot(
     })
 }
 
-fn generic_execute_command_text(snapshot: &nori_protocol::ToolSnapshot) -> String {
-    formatted_client_tool_command_text(&snapshot.title, snapshot.raw_input.as_ref(), None)
-        .unwrap_or_else(|| snapshot.title.clone())
+fn generic_execute_command_text(
+    snapshot: &nori_protocol::ToolSnapshot,
+    cwd: &std::path::Path,
+) -> String {
+    let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
+    formatted_client_tool_command_text(&title, snapshot.raw_input.as_ref(), None).unwrap_or(title)
 }
 
 fn compact_json(value: &serde_json::Value) -> String {
@@ -1545,15 +1664,17 @@ fn generic_tool_command_text(
     tool_name: &str,
     input: Option<&serde_json::Value>,
     snapshot: &nori_protocol::ToolSnapshot,
+    cwd: &std::path::Path,
 ) -> String {
     match input {
         Some(raw_input)
             if !raw_input.is_null()
                 && !raw_input.as_object().is_some_and(serde_json::Map::is_empty) =>
         {
-            format!("{tool_name} {}", compact_json(raw_input))
+            let sanitized = crate::client_event_format::sanitize_tool_title(tool_name, cwd);
+            format!("{sanitized} {}", compact_json(raw_input))
         }
-        _ => snapshot.title.clone(),
+        _ => crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd),
     }
 }
 
@@ -1601,62 +1722,34 @@ fn exec_end_event_from_client_snapshot(
 }
 
 fn approval_request_from_client_event(
-    cwd: &std::path::Path,
     approval: nori_protocol::ApprovalRequest,
+    cwd: &std::path::Path,
 ) -> Option<ApprovalRequest> {
     let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
 
-    if matches!(
-        snapshot.kind,
-        nori_protocol::ToolKind::Edit
-            | nori_protocol::ToolKind::Delete
-            | nori_protocol::ToolKind::Move
-    ) && let Some(changes) = file_changes_from_snapshot(&snapshot)
+    // Execute with a real shell command → Exec (bash-highlighted overlay)
+    if matches!(snapshot.kind, nori_protocol::ToolKind::Execute)
+        && matches!(
+            snapshot.invocation,
+            Some(nori_protocol::Invocation::Command { .. })
+        )
     {
-        return Some(ApprovalRequest::ApplyPatch {
+        return Some(ApprovalRequest::Exec {
             id: approval.call_id,
+            command: approval_command_from_snapshot(&snapshot),
             reason: None,
-            cwd: cwd.to_path_buf(),
-            changes,
+            risk: None,
         });
     }
 
-    Some(ApprovalRequest::Exec {
-        id: approval.call_id,
-        command: approval_command_from_snapshot(&snapshot),
-        reason: None,
-        risk: None,
+    // Everything else (including Edit/Delete/Move) → AcpTool (native protocol fields)
+    Some(ApprovalRequest::AcpTool {
+        call_id: approval.call_id,
+        title: approval.title,
+        kind: approval.kind,
+        cwd: cwd.to_path_buf(),
+        snapshot: Box::new(snapshot),
     })
-}
-
-fn file_changes_from_snapshot(
-    snapshot: &nori_protocol::ToolSnapshot,
-) -> Option<HashMap<PathBuf, codex_core::protocol::FileChange>> {
-    match &snapshot.invocation {
-        Some(nori_protocol::Invocation::FileChanges { changes }) => {
-            let file_changes = changes
-                .iter()
-                .map(|change| (change.path.clone(), file_change_from_nori_change(change)))
-                .collect::<HashMap<_, _>>();
-            if file_changes.is_empty() {
-                None
-            } else {
-                Some(file_changes)
-            }
-        }
-        Some(nori_protocol::Invocation::FileOperations { operations }) => {
-            let file_changes = operations
-                .iter()
-                .map(file_change_from_nori_operation)
-                .collect::<HashMap<_, _>>();
-            if file_changes.is_empty() {
-                None
-            } else {
-                Some(file_changes)
-            }
-        }
-        _ => None,
-    }
 }
 
 fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec<String> {
@@ -1665,10 +1758,12 @@ fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec
             vec!["bash".into(), "-lc".into(), command.clone()]
         }
         Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
+            let fallback_cwd = std::path::Path::new(".");
             vec![generic_tool_command_text(
                 tool_name,
                 input.as_ref(),
                 snapshot,
+                fallback_cwd,
             )]
         }
         Some(nori_protocol::Invocation::Read { .. })
@@ -1677,67 +1772,10 @@ fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec
         | Some(nori_protocol::Invocation::RawJson(_))
         | Some(nori_protocol::Invocation::FileChanges { .. })
         | Some(nori_protocol::Invocation::FileOperations { .. })
-        | None => vec![generic_execute_command_text(snapshot)],
-    }
-}
-
-fn file_change_from_nori_operation(
-    operation: &nori_protocol::FileOperation,
-) -> (PathBuf, codex_core::protocol::FileChange) {
-    match operation {
-        nori_protocol::FileOperation::Create { path, new_text } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Add {
-                content: new_text.clone(),
-            },
-        ),
-        nori_protocol::FileOperation::Update {
-            path,
-            old_text,
-            new_text,
-        } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Update {
-                unified_diff: diffy::create_patch(old_text, new_text).to_string(),
-                move_path: None,
-            },
-        ),
-        nori_protocol::FileOperation::Delete { path, old_text } => (
-            path.clone(),
-            codex_core::protocol::FileChange::Delete {
-                content: old_text.clone().unwrap_or_default(),
-            },
-        ),
-        nori_protocol::FileOperation::Move {
-            from_path,
-            to_path,
-            old_text,
-            new_text,
-        } => {
-            let old_text = old_text.clone().unwrap_or_default();
-            let new_text = new_text.clone().unwrap_or_else(|| old_text.clone());
-            (
-                from_path.clone(),
-                codex_core::protocol::FileChange::Update {
-                    unified_diff: diffy::create_patch(&old_text, &new_text).to_string(),
-                    move_path: Some(to_path.clone()),
-                },
-            )
+        | None => {
+            let fallback_cwd = std::path::Path::new(".");
+            vec![generic_execute_command_text(snapshot, fallback_cwd)]
         }
-    }
-}
-
-fn file_change_from_nori_change(
-    change: &nori_protocol::FileChange,
-) -> codex_core::protocol::FileChange {
-    match &change.old_text {
-        None => codex_core::protocol::FileChange::Add {
-            content: change.new_text.clone(),
-        },
-        Some(old_text) => codex_core::protocol::FileChange::Update {
-            unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
-            move_path: None,
-        },
     }
 }
 

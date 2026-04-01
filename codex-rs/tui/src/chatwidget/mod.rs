@@ -391,6 +391,9 @@ pub(crate) struct ChatWidget {
     current_rollout_path: Option<PathBuf>,
     // Tracks incomplete ExecCells that were flushed before completion.
     pending_exec_cells: PendingExecCellTracker,
+    // Buffers incomplete Execute ClientToolCells displaced from active_cell
+    // by subsequent tool snapshots. Completions check here before discarding.
+    pending_client_tool_cells: HashMap<String, ClientToolCell>,
     // Tracks the effective CWD based on tool call locations for footer updates.
     effective_cwd_tracker: EffectiveCwdTracker,
     // Pending agent selection for next prompt submission
