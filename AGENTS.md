@@ -18,7 +18,6 @@ In the codex-rs folder where the rust code lives:
 - Do not use unsigned integer even if the number cannot be negative.
 - When possible, make `match` statements exhaustive and avoid wildcard arms.
 - Do not create small helper methods that are referenced only once.
-- When writing tests, prefer comparing the equality of entire objects over fields one by one.
 - When making a change that adds or changes an API, ensure that the documentation in the `docs/` folder is up to date if applicable.
 - Avoid large modules:
   - Prefer adding new modules instead of growing existing ones.
@@ -32,8 +31,7 @@ Run `just fmt` (in `codex-rs` directory) automatically after you have finished m
 
 1. Run the test for the specific project that was changed. For example, if changes were made in `codex-rs/tui`, run `cargo test -p nori-tui`.
 2. Once those pass, if any changes were made in common, core, or protocol, run the complete test suite with `cargo test`. Avoid `--all-features` for routine local runs because it expands the build matrix and can significantly increase `target/` disk usage; use it only when you specifically need full feature coverage.
-3. If any changes were made in tui, cli, or acp, run the E2E test suite with `cargo test -p tui-pty-e2e`.
-   **Important:** The E2E tests expect a binary named `nori` (from the `cli` crate), not `nori-tui`. Before running E2E tests, build it with `cargo build --bin nori`. Building `nori-tui` alone is not sufficient — the `nori` binary is the main entry point that imports `nori-tui` as a library.
+3. If any changes were made in tui, cli, or acp, run `cargo build --bin nori && cargo test -p tui-pty-e2e`. The E2E tests require the `nori` binary (from the `cli` crate), not `nori-tui`.
 
 Before finalizing a change to `codex-rs`, run `just fix -p <project>` (in `codex-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Do not re-run tests after running `fix` or `fmt`.
 
@@ -43,24 +41,15 @@ See `codex-rs/tui/styles.md`.
 
 ## TUI code conventions
 
-- Use concise styling helpers from ratatui’s Stylize trait.
-  - Basic spans: use "text".into()
-  - Styled spans: use "text".red(), "text".green(), "text".magenta(), "text".dim(), etc.
-  - Prefer these over constructing styles with `Span::styled` and `Style` directly.
-  - Example: patch summary file lines
-    - Desired: vec!["  └ ".into(), "M".red(), " ".dim(), "tui/src/app.rs".dim()]
+### Styling (ratatui)
 
-### TUI Styling (ratatui)
-
-- Prefer Stylize helpers: use "text".dim(), .bold(), .cyan(), .italic(), .underlined() instead of manual Style where possible.
-- Prefer simple conversions: use "text".into() for spans and vec![…].into() for lines; when inference is ambiguous (e.g., Paragraph::new/Cell::from), use Line::from(spans) or Span::from(text).
-- Computed styles: if the Style is computed at runtime, using `Span::styled` is OK (`Span::from(text).set_style(style)` is also acceptable).
-- Avoid hardcoded white: do not use `.white()`; prefer the default foreground (no color).
-- Chaining: combine helpers by chaining for readability (e.g., url.cyan().underlined()).
-- Single items: prefer "text".into(); use Line::from(text) or Span::from(text) only when the target type isn’t obvious from context, or when using .into() would require extra type annotations.
-- Building lines: use vec![…].into() to construct a Line when the target type is obvious and no extra type annotations are needed; otherwise use Line::from(vec![…]).
-- Avoid churn: don’t refactor between equivalent forms (Span::styled ↔ set_style, Line::from ↔ .into()) without a clear readability or functional gain; follow file‑local conventions and do not introduce type annotations solely to satisfy .into().
-- Compactness: prefer the form that stays on one line after rustfmt; if only one of Line::from(vec![…]) or vec![…].into() avoids wrapping, choose that. If both wrap, pick the one with fewer wrapped lines.
+- Prefer Stylize helpers (`"text".dim()`, `.bold()`, `.cyan()`, `.underlined()`) over manual `Style`. Chain for readability (e.g., `url.cyan().underlined()`).
+- Basic spans: `"text".into()`. Styled: `"text".red()`. Use `Line::from(…)` / `Span::from(…)` only when target type is ambiguous.
+- `vec![…].into()` for lines when type is obvious; `Line::from(vec![…])` otherwise.
+- Computed styles: `Span::styled` or `.set_style()` are fine.
+- Avoid `.white()`; prefer default foreground.
+- Avoid churn: don't refactor between equivalent forms without a clear gain; follow file-local conventions.
+- Prefer the form that stays on one line after rustfmt.
 
 ### Text wrapping
 
@@ -77,20 +66,12 @@ This repo uses snapshot tests (via `insta`), especially in `codex-rs/tui`, to va
 
 **Requirement:** Any change that affects user-visible UI (including adding new UI) must include corresponding `insta` snapshot coverage (add a new snapshot test if one doesn't exist yet, or update the existing snapshot). Review and accept snapshot updates as part of the PR so UI impact is easy to review and future diffs stay visual.
 
-When UI or text output changes intentionally, update the snapshots as follows:
+Snapshot workflow (`cargo install cargo-insta` if missing):
 
-- Run tests to generate any updated snapshots:
-  - `cargo test -p nori-tui`
-- Check what’s pending:
-  - `cargo insta pending-snapshots -p nori-tui`
-- Review changes by reading the generated `*.snap.new` files directly in the repo, or preview a specific file:
-  - `cargo insta show -p nori-tui path/to/file.snap.new`
-- Only if you intend to accept all new snapshots in this crate, run:
-  - `cargo insta accept -p nori-tui`
-
-If you don’t have the tool:
-
-- `cargo install cargo-insta`
+1. `cargo test -p nori-tui` — generates updated `.snap.new` files
+2. `cargo insta pending-snapshots -p nori-tui` — list pending changes
+3. Review the `.snap.new` files or `cargo insta show -p nori-tui path/to/file.snap.new`
+4. `cargo insta accept -p nori-tui` — accept all new snapshots
 
 ### Test assertions
 
