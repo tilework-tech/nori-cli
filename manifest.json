@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "noriSessionName": "nori-scarlet-walleye-e687",
+  "claudeSessionId": "8816eef7-7335-4e8a-b3e3-68f998450532",
+  "timestamp": 1775003360,
+  "baseSha": "0edc0bbd11da5530998c855017a3e5521d9be1ba",
+  "baseBranch": "main",
+  "repoUrl": "https://github.com/tilework-tech/nori-cli",
+  "agentType": "claude-code",
+  "hasWorkspacePatch": false,
+  "hasUntrackedFiles": false
+}
