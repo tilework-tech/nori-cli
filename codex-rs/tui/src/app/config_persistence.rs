@@ -351,47 +351,69 @@ impl App {
         );
     }
 
-    /// Suspend the TUI, run the interactive MCP OAuth login flow, then resume.
+    /// Start an async MCP OAuth login flow (no TUI suspension).
     pub(super) async fn perform_mcp_oauth_login(
         &mut self,
-        tui: &mut crate::tui::Tui,
+        _tui: &mut crate::tui::Tui,
         server_name: String,
         server_url: String,
         http_headers: Option<std::collections::HashMap<String, String>>,
         env_http_headers: Option<std::collections::HashMap<String, String>>,
     ) {
-        // Fully restore terminal state (raw mode, keyboard enhancement,
-        // bracketed paste, focus change) so the OAuth flow can print to
-        // stdout and the user can interact with the browser callback.
-        let _ = tui.leave_alt_screen();
-        let _ = crate::tui::restore();
+        let app_event_tx = self.app_event_tx.clone();
+        let name_for_task = server_name.clone();
 
-        let result = codex_rmcp_client::perform_oauth_login(
-            &server_name,
-            &server_url,
+        match codex_rmcp_client::start_oauth_login(
+            server_name.clone(),
+            server_url,
             codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
             http_headers,
             env_http_headers,
-            &[],
+            vec![],
         )
-        .await;
-
-        // Re-enable all terminal modes and re-enter alt screen.
-        let _ = crate::tui::set_modes();
-        let _ = tui.enter_alt_screen();
-        tui.frame_requester().schedule_frame();
-
-        match result {
-            Ok(()) => {
+        .await
+        {
+            Ok(handle) => {
                 self.chat_widget.add_info_message(
-                    format!("Successfully authenticated with `{server_name}`. Restart to apply."),
-                    None,
+                    format!("Opening browser to authenticate `{server_name}`..."),
+                    Some("Press Esc in the MCP picker to cancel".to_string()),
                 );
+
+                // Store the cancel sender and spawn the task watcher.
+                self.mcp_oauth_cancel_tx = handle.cancel_tx;
+                let task = handle.task;
+
+                let tx = app_event_tx;
+                tokio::spawn(async move {
+                    let result = task.await;
+                    let (success, error) = match result {
+                        Ok(Ok(())) => (true, None),
+                        Ok(Err(e)) => (false, Some(e.to_string())),
+                        Err(e) => (false, Some(format!("OAuth task panicked: {e}"))),
+                    };
+                    tx.send(crate::app_event::AppEvent::McpOAuthLoginComplete {
+                        server_name: name_for_task,
+                        success,
+                        error,
+                    });
+                });
             }
             Err(err) => {
-                self.chat_widget
-                    .add_error_message(format!("OAuth login for `{server_name}` failed: {err}"));
+                // Send completion event — the handler will display the error
+                // and forward to the picker.
+                app_event_tx.send(crate::app_event::AppEvent::McpOAuthLoginComplete {
+                    server_name: name_for_task,
+                    success: false,
+                    error: Some(err.to_string()),
+                });
             }
+        }
+    }
+
+    /// Cancel the in-progress MCP OAuth login flow.
+    pub(super) fn cancel_mcp_oauth_login(&mut self) {
+        if let Some(tx) = self.mcp_oauth_cancel_tx.take() {
+            let _ = tx.send(());
         }
     }
 }

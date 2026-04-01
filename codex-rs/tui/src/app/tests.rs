@@ -59,6 +59,7 @@ fn make_test_app() -> App {
         worktree_warning_shown: false,
         #[cfg(feature = "nori-config")]
         deferred_spawn_pending: false,
+        mcp_oauth_cancel_tx: None,
     }
 }
 
@@ -102,6 +103,7 @@ fn make_test_app_with_channels() -> (
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
             deferred_spawn_pending: false,
+            mcp_oauth_cancel_tx: None,
         },
         rx,
         op_rx,

@@ -54,6 +54,10 @@ pub(crate) enum Mode {
     EnvInput,
     /// Typing a header in Key: Value format (http transport only).
     HeaderInput,
+    /// Typing the bearer token env var name (http transport only).
+    SecretInput,
+    /// OAuth flow in progress for a server.
+    OAuthInProgress { server_name: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +93,10 @@ pub(crate) struct McpServerPickerView {
     wizard_url: String,
     wizard_env: Vec<(String, String)>,
     wizard_headers: Vec<(String, String)>,
+    wizard_bearer_token_env_var: String,
+    /// When set, the picker will auto-trigger OAuth when auth statuses arrive
+    /// with `NotLoggedIn` for this server.
+    pending_oauth_server: Option<String>,
 }
 
 impl McpServerPickerView {
@@ -112,6 +120,8 @@ impl McpServerPickerView {
             wizard_url: String::new(),
             wizard_env: Vec::new(),
             wizard_headers: Vec::new(),
+            wizard_bearer_token_env_var: String::new(),
+            pending_oauth_server: None,
         }
     }
 
@@ -197,12 +207,14 @@ impl McpServerPickerView {
             ..
         } = &config.transport
         {
+            let server_name = name.clone();
             self.app_event_tx.send(AppEvent::McpOAuthLogin {
-                server_name: name.clone(),
+                server_name: server_name.clone(),
                 server_url: url.clone(),
                 http_headers: http_headers.clone(),
                 env_http_headers: env_http_headers.clone(),
             });
+            self.mode = Mode::OAuthInProgress { server_name };
         }
     }
 
@@ -233,6 +245,7 @@ impl McpServerPickerView {
         self.wizard_url.clear();
         self.wizard_env.clear();
         self.wizard_headers.clear();
+        self.wizard_bearer_token_env_var.clear();
     }
 
     fn handle_transport_select_enter(&mut self) {
@@ -314,8 +327,8 @@ impl McpServerPickerView {
         let input = self.input_buffer.trim().to_string();
         self.input_buffer.clear();
         if input.is_empty() {
-            // Empty input means "done with headers"
-            self.finish_wizard();
+            // Empty input means "done with headers" — move to SecretInput
+            self.mode = Mode::SecretInput;
             return;
         }
         if let Some((key, val)) = input.split_once(':') {
@@ -326,6 +339,13 @@ impl McpServerPickerView {
             }
         }
         // Stay in HeaderInput mode for more entries
+    }
+
+    fn handle_secret_submit(&mut self) {
+        let input = self.input_buffer.trim().to_string();
+        self.input_buffer.clear();
+        self.wizard_bearer_token_env_var = input;
+        self.finish_wizard();
     }
 
     fn finish_wizard(&mut self) {
@@ -364,10 +384,15 @@ impl McpServerPickerView {
                 } else {
                     Some(self.wizard_headers.iter().cloned().collect())
                 };
+                let bearer_token_env_var = if self.wizard_bearer_token_env_var.is_empty() {
+                    None
+                } else {
+                    Some(self.wizard_bearer_token_env_var.clone())
+                };
                 McpServerConfig {
                     transport: McpServerTransportConfig::StreamableHttp {
                         url: self.wizard_url.clone(),
-                        bearer_token_env_var: None,
+                        bearer_token_env_var,
                         http_headers,
                         env_http_headers: None,
                     },
@@ -392,11 +417,21 @@ impl McpServerPickerView {
             return;
         }
 
-        self.servers.push((self.wizard_name.clone(), config));
+        // For HTTP servers without bearer token, set up auto-probe for OAuth
+        let is_http_without_bearer = matches!(self.wizard_transport, TransportChoice::Http)
+            && self.wizard_bearer_token_env_var.is_empty();
+
+        let server_name = self.wizard_name.clone();
+        self.servers.push((server_name.clone(), config));
         self.save_servers();
         self.mode = Mode::List;
         // Select the newly added server (last in list, but list index = servers.len())
         self.selected_idx = self.servers.len(); // "Add new" is 0, so last server is at len
+
+        if is_http_without_bearer {
+            self.pending_oauth_server = Some(server_name);
+            self.app_event_tx.send(AppEvent::ComputeMcpAuthStatuses);
+        }
     }
 
     fn save_servers(&self) {
@@ -459,6 +494,16 @@ impl McpServerPickerView {
                 self.mode = Mode::UrlInput;
                 self.input_buffer = self.wizard_url.clone();
             }
+            Mode::SecretInput => {
+                self.mode = Mode::HeaderInput;
+                self.input_buffer.clear();
+            }
+            Mode::OAuthInProgress { server_name } => {
+                self.app_event_tx.send(AppEvent::McpOAuthLoginCancel {
+                    server_name: server_name.clone(),
+                });
+                self.mode = Mode::List;
+            }
         }
     }
 
@@ -474,6 +519,8 @@ impl McpServerPickerView {
             Mode::UrlInput => "Add MCP Server",
             Mode::EnvInput => "Add MCP Server",
             Mode::HeaderInput => "Add MCP Server",
+            Mode::SecretInput => "Add MCP Server",
+            Mode::OAuthInProgress { .. } => "MCP Servers",
         }
     }
 
@@ -489,6 +536,8 @@ impl McpServerPickerView {
             Mode::UrlInput => "Enter server URL",
             Mode::EnvInput => "Enter env var (KEY=VALUE, or empty to finish)",
             Mode::HeaderInput => "Enter header (Key: Value, or empty to finish)",
+            Mode::SecretInput => "Enter bearer token env var name (or empty to skip)",
+            Mode::OAuthInProgress { .. } => "Authenticating...",
         }
     }
 
@@ -503,7 +552,9 @@ impl McpServerPickerView {
             | Mode::ArgsInput
             | Mode::UrlInput
             | Mode::EnvInput
-            | Mode::HeaderInput => "enter submit · esc back",
+            | Mode::HeaderInput
+            | Mode::SecretInput => "enter submit · esc back",
+            Mode::OAuthInProgress { .. } => "esc cancel",
         }
     }
 
@@ -520,6 +571,11 @@ impl McpServerPickerView {
     #[cfg(test)]
     pub(crate) fn input_buffer(&self) -> &str {
         &self.input_buffer
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_oauth_server(&self) -> Option<&str> {
+        self.pending_oauth_server.as_deref()
     }
 }
 
@@ -631,6 +687,16 @@ impl BottomPaneView for McpServerPickerView {
                 KeyCode::Esc => self.go_back(),
                 _ => self.handle_text_input(key_event),
             },
+            Mode::SecretInput => match key_event.code {
+                KeyCode::Enter => self.handle_secret_submit(),
+                KeyCode::Esc => self.go_back(),
+                _ => self.handle_text_input(key_event),
+            },
+            Mode::OAuthInProgress { .. } => {
+                if key_event.code == KeyCode::Esc {
+                    self.go_back()
+                }
+            }
         }
     }
 
@@ -648,6 +714,42 @@ impl BottomPaneView for McpServerPickerView {
         statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
     ) {
         self.auth_statuses = statuses.clone();
+
+        // Auto-trigger OAuth for a just-added server that requires it
+        if let Some(pending_name) = self.pending_oauth_server.take()
+            && let Some(status) = statuses.get(&pending_name)
+            && *status == McpAuthStatus::NotLoggedIn
+        {
+            // Find the server config and trigger OAuth
+            if let Some((_, config)) = self.servers.iter().find(|(name, _)| *name == pending_name)
+                && let McpServerTransportConfig::StreamableHttp {
+                    url,
+                    http_headers,
+                    env_http_headers,
+                    ..
+                } = &config.transport
+            {
+                self.app_event_tx.send(AppEvent::McpOAuthLogin {
+                    server_name: pending_name.clone(),
+                    server_url: url.clone(),
+                    http_headers: http_headers.clone(),
+                    env_http_headers: env_http_headers.clone(),
+                });
+                self.mode = Mode::OAuthInProgress {
+                    server_name: pending_name,
+                };
+            }
+        }
+    }
+
+    fn handle_mcp_oauth_complete(&mut self, server_name: &str, _success: bool) {
+        if let Mode::OAuthInProgress {
+            server_name: ref current,
+        } = self.mode
+            && current == server_name
+        {
+            self.mode = Mode::List;
+        }
     }
 }
 
@@ -662,12 +764,17 @@ impl Renderable for McpServerPickerView {
                 // title + subtitle + blank + 2 options + blank + footer
                 3 + 2 + 2
             }
+            Mode::OAuthInProgress { .. } => {
+                // title + subtitle + blank + status line + blank + footer
+                3 + 1 + 2
+            }
             Mode::NameInput
             | Mode::CommandInput
             | Mode::ArgsInput
             | Mode::UrlInput
             | Mode::EnvInput
-            | Mode::HeaderInput => {
+            | Mode::HeaderInput
+            | Mode::SecretInput => {
                 // title + subtitle + blank + input line + blank + footer
                 // + env/header entries if any
                 let extra = match &self.mode {
@@ -723,6 +830,9 @@ impl Renderable for McpServerPickerView {
                     constraints.push(Constraint::Length(1));
                 }
                 constraints.push(Constraint::Length(1)); // input line
+            }
+            Mode::OAuthInProgress { .. } => {
+                constraints.push(Constraint::Length(1)); // status line
             }
             _ => {
                 constraints.push(Constraint::Length(1)); // input line
@@ -865,6 +975,11 @@ impl Renderable for McpServerPickerView {
                 }
                 let prompt = format!("> {}_", self.input_buffer);
                 Line::from(prompt).render(areas[row], buf);
+                row += 1;
+            }
+            Mode::OAuthInProgress { server_name } => {
+                let msg = format!("Waiting for browser authentication for `{server_name}`...");
+                Line::from(msg.dim()).render(areas[row], buf);
                 row += 1;
             }
             _ => {
@@ -1125,7 +1240,7 @@ mod tests {
     fn add_http_server_full_flow() {
         let (mut picker, mut rx) = empty_picker();
 
-        // Wizard: Add new -> HTTP -> name -> url -> headers -> done
+        // Wizard: Add new -> HTTP -> name -> url -> headers -> secret -> done
         press(&mut picker, KeyCode::Enter); // Add new -> TransportSelect
         press(&mut picker, KeyCode::Down); // Toggle to HTTP
         press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
@@ -1135,7 +1250,8 @@ mod tests {
         press(&mut picker, KeyCode::Enter); // -> HeaderInput (HTTP skips env)
         type_str(&mut picker, "Authorization: Bearer tok123");
         press(&mut picker, KeyCode::Enter); // add header
-        press(&mut picker, KeyCode::Enter); // empty -> finish
+        press(&mut picker, KeyCode::Enter); // empty headers -> SecretInput
+        press(&mut picker, KeyCode::Enter); // empty secret -> finish
 
         assert_eq!(picker.mode(), &Mode::List);
 
@@ -1596,6 +1712,306 @@ mod tests {
         assert!(
             rx.try_recv().is_err(),
             "login on already authenticated server should be a no-op"
+        );
+    }
+
+    // --- SecretInput mode tests ---
+
+    #[test]
+    fn add_http_server_with_bearer_token_env_var() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Wizard: Add new -> HTTP -> name -> url -> headers (skip) -> secret -> finish
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "slack");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://mcp.slack.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // empty -> SecretInput
+        assert_eq!(picker.mode(), &Mode::SecretInput);
+
+        type_str(&mut picker, "SLACK_BOT_TOKEN");
+        press(&mut picker, KeyCode::Enter); // finish wizard
+
+        assert_eq!(picker.mode(), &Mode::List);
+
+        let servers = last_save_event(&mut rx).expect("should have saved");
+        let server = servers.get("slack").expect("slack should exist");
+        match &server.transport {
+            McpServerTransportConfig::StreamableHttp {
+                url,
+                bearer_token_env_var,
+                ..
+            } => {
+                assert_eq!(url, "https://mcp.slack.com/mcp");
+                assert_eq!(
+                    bearer_token_env_var.as_deref(),
+                    Some("SLACK_BOT_TOKEN"),
+                    "bearer_token_env_var should be set"
+                );
+            }
+            _ => panic!("expected StreamableHttp transport"),
+        }
+    }
+
+    #[test]
+    fn add_http_server_skip_bearer_token() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Wizard: Add new -> HTTP -> name -> url -> headers (skip) -> secret (skip) -> finish
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "notion");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://mcp.notion.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // empty -> SecretInput
+        press(&mut picker, KeyCode::Enter); // empty -> finish wizard
+
+        assert_eq!(picker.mode(), &Mode::List);
+
+        let servers = last_save_event(&mut rx).expect("should have saved");
+        let server = servers.get("notion").expect("notion should exist");
+        match &server.transport {
+            McpServerTransportConfig::StreamableHttp {
+                bearer_token_env_var,
+                ..
+            } => {
+                assert_eq!(
+                    *bearer_token_env_var, None,
+                    "bearer_token_env_var should be None when skipped"
+                );
+            }
+            _ => panic!("expected StreamableHttp transport"),
+        }
+    }
+
+    #[test]
+    fn esc_from_secret_input_goes_back_to_header_input() {
+        let (mut picker, _rx) = empty_picker();
+
+        // Navigate to SecretInput
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "test");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://example.com");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // empty -> SecretInput
+        assert_eq!(picker.mode(), &Mode::SecretInput);
+
+        // Esc should go back to HeaderInput
+        press(&mut picker, KeyCode::Esc);
+        assert_eq!(picker.mode(), &Mode::HeaderInput);
+    }
+
+    // --- Auto-probe and OAuthInProgress tests ---
+
+    #[test]
+    fn auto_probe_triggers_oauth_for_not_logged_in_server() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Add HTTP server without bearer token via wizard
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "slack");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://mcp.slack.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // -> SecretInput
+        press(&mut picker, KeyCode::Enter); // empty secret -> finish
+
+        // Drain the SaveMcpServers event
+        let _ = last_save_event(&mut rx);
+
+        // pending_oauth_server should be set
+        assert_eq!(
+            picker.pending_oauth_server(),
+            Some("slack"),
+            "pending_oauth_server should be set after adding HTTP server without bearer token"
+        );
+
+        // Simulate auth statuses arriving with NotLoggedIn
+        let mut statuses = HashMap::new();
+        statuses.insert("slack".to_string(), McpAuthStatus::NotLoggedIn);
+        picker.update_mcp_auth_statuses(&statuses);
+
+        // Should have entered OAuthInProgress mode
+        assert_eq!(
+            picker.mode(),
+            &Mode::OAuthInProgress {
+                server_name: "slack".to_string()
+            },
+            "should enter OAuthInProgress mode for NotLoggedIn server"
+        );
+
+        // Should have emitted McpOAuthLogin event
+        let mut found_oauth = false;
+        while let Ok(event) = rx.try_recv() {
+            if matches!(event, AppEvent::McpOAuthLogin { .. }) {
+                found_oauth = true;
+            }
+        }
+        assert!(found_oauth, "should emit McpOAuthLogin event");
+    }
+
+    #[test]
+    fn auto_probe_skips_when_bearer_token_set() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Add HTTP server WITH bearer token via wizard
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "slack");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://mcp.slack.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // -> SecretInput
+        type_str(&mut picker, "SLACK_BOT_TOKEN");
+        press(&mut picker, KeyCode::Enter); // finish
+
+        // Drain the SaveMcpServers event
+        let _ = last_save_event(&mut rx);
+
+        // pending_oauth_server should NOT be set when bearer token was provided
+        assert_eq!(
+            picker.pending_oauth_server(),
+            None,
+            "pending_oauth_server should NOT be set when bearer token is provided"
+        );
+    }
+
+    #[test]
+    fn auto_probe_skips_on_unsupported() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Add HTTP server without bearer token
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "my-api");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://api.example.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // -> SecretInput
+        press(&mut picker, KeyCode::Enter); // empty -> finish
+
+        // Drain the SaveMcpServers event
+        let _ = last_save_event(&mut rx);
+
+        // Simulate auth status returning Unsupported
+        let mut statuses = HashMap::new();
+        statuses.insert("my-api".to_string(), McpAuthStatus::Unsupported);
+        picker.update_mcp_auth_statuses(&statuses);
+
+        // Should stay in List mode — no OAuth triggered
+        assert_eq!(
+            picker.mode(),
+            &Mode::List,
+            "should stay in List mode when server is Unsupported"
+        );
+
+        // No McpOAuthLogin event should have been emitted
+        let mut found_oauth = false;
+        while let Ok(event) = rx.try_recv() {
+            if matches!(event, AppEvent::McpOAuthLogin { .. }) {
+                found_oauth = true;
+            }
+        }
+        assert!(
+            !found_oauth,
+            "should NOT emit McpOAuthLogin for Unsupported server"
+        );
+    }
+
+    #[test]
+    fn oauth_in_progress_esc_cancels_and_returns_to_list() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Add HTTP server and trigger auto-probe -> OAuthInProgress
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "slack");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://mcp.slack.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // -> SecretInput
+        press(&mut picker, KeyCode::Enter); // empty -> finish
+
+        // Drain events
+        while rx.try_recv().is_ok() {}
+
+        // Simulate auth status NotLoggedIn -> auto-enters OAuthInProgress
+        let mut statuses = HashMap::new();
+        statuses.insert("slack".to_string(), McpAuthStatus::NotLoggedIn);
+        picker.update_mcp_auth_statuses(&statuses);
+
+        // Drain events from auto-trigger
+        while rx.try_recv().is_ok() {}
+
+        // Should be in OAuthInProgress — if not, the precondition fails (expected in RED)
+        assert_eq!(
+            picker.mode(),
+            &Mode::OAuthInProgress {
+                server_name: "slack".to_string()
+            },
+            "precondition: should be in OAuthInProgress"
+        );
+
+        // Press Esc to cancel
+        press(&mut picker, KeyCode::Esc);
+
+        // Should return to List
+        assert_eq!(picker.mode(), &Mode::List, "Esc should return to List mode");
+
+        // Should emit McpOAuthLoginCancel event
+        let mut found_cancel = false;
+        while let Ok(event) = rx.try_recv() {
+            if matches!(event, AppEvent::McpOAuthLoginCancel { .. }) {
+                found_cancel = true;
+            }
+        }
+        assert!(found_cancel, "should emit McpOAuthLoginCancel event on Esc");
+    }
+
+    #[test]
+    fn oauth_complete_success_returns_to_list() {
+        let (mut picker, mut rx) = empty_picker();
+
+        // Add HTTP server and trigger auto-probe -> OAuthInProgress
+        press(&mut picker, KeyCode::Enter); // -> TransportSelect
+        press(&mut picker, KeyCode::Down); // Toggle to HTTP
+        press(&mut picker, KeyCode::Enter); // HTTP -> NameInput
+        type_str(&mut picker, "slack");
+        press(&mut picker, KeyCode::Enter); // -> UrlInput
+        type_str(&mut picker, "https://mcp.slack.com/mcp");
+        press(&mut picker, KeyCode::Enter); // -> HeaderInput
+        press(&mut picker, KeyCode::Enter); // -> SecretInput
+        press(&mut picker, KeyCode::Enter); // empty -> finish
+
+        // Drain events
+        while rx.try_recv().is_ok() {}
+
+        // Simulate auth status NotLoggedIn -> OAuthInProgress
+        let mut statuses = HashMap::new();
+        statuses.insert("slack".to_string(), McpAuthStatus::NotLoggedIn);
+        picker.update_mcp_auth_statuses(&statuses);
+
+        // Simulate OAuth completion
+        picker.handle_mcp_oauth_complete("slack", true);
+
+        // Should return to List mode
+        assert_eq!(
+            picker.mode(),
+            &Mode::List,
+            "should return to List mode on OAuth success"
         );
     }
 }

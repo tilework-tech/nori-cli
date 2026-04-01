@@ -20,7 +20,9 @@ Used by `@/codex-rs/core/` (`mcp_connection_manager.rs`) to establish connection
 
 **OAuth Flow** (`oauth.rs`, `perform_oauth_login.rs`):
 - `StoredOAuthTokens` - Persisted token storage
-- `perform_oauth_login()` - Interactive OAuth flow that spins up a local `tiny_http` callback server, opens the browser, and waits for the OAuth redirect. The wait is cancellable: a background stdin reader thread lets the user press Enter to abort, implemented via `tokio::select!` between the callback receiver, a cancel signal, and a 5-minute timeout (`wait_for_callback_or_cancel()`).
+- Two OAuth login entry points, both backed by the same `wait_for_callback_or_cancel()` mechanism (biased `tokio::select!` between callback, cancel signal, and 5-minute timeout):
+  - `perform_oauth_login()` - Blocking/interactive flow that uses `println!` for status and `stdin` Enter for cancellation. Used by CLI contexts where TUI suspension is acceptable.
+  - `start_oauth_login()` - Non-blocking async flow that returns an `OAuthLoginHandle`. The handle exposes a `cancel_tx: Option<oneshot::Sender<()>>` for programmatic cancellation and a `task: JoinHandle<Result<()>>` for awaiting completion. Used by the TUI to run OAuth inline without suspending the terminal.
 - Token refresh handling via `OAuthPersistor`, which is called after every MCP request
 
 **Auth Status** (`auth_status.rs`):
@@ -41,6 +43,7 @@ Used by `@/codex-rs/core/` (`mcp_connection_manager.rs`) to establish connection
 - The `Elicitation` type handles server-initiated user input requests
 - Server discovery uses `~/.codex/` (or `~/.nori/cli/`) home directory
 - rmcp 0.12.0 treats OAuth dynamic client registration failure as a hard error (earlier versions silently fell back to a default `client_id`), so connection failures surface immediately rather than producing broken auth URLs
-- The OAuth login flow is cancellable by the user (Enter key) or by timeout, preventing the TUI from blocking indefinitely during authentication
+- The OAuth login flow is cancellable by the user (Enter key in CLI mode, or programmatically via `OAuthLoginHandle.cancel_tx` in TUI mode) or by timeout, preventing blocking indefinitely during authentication
+- `OAuthLoginHandle` has no `Drop` implementation; the caller is responsible for managing both the cancel sender and the task handle
 
 Created and maintained by Nori.

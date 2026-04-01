@@ -474,6 +474,18 @@ pub(crate) enum AppEvent {
         env_http_headers: Option<std::collections::HashMap<String, String>>,
     },
 
+    /// Cancel an in-progress MCP OAuth login flow.
+    McpOAuthLoginCancel {
+        server_name: String,
+    },
+
+    /// MCP OAuth login flow completed (success or failure).
+    McpOAuthLoginComplete {
+        server_name: String,
+        success: bool,
+        error: Option<String>,
+    },
+
     /// Request async computation of MCP server auth statuses.
     ComputeMcpAuthStatuses,
 

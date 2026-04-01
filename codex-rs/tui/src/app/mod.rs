@@ -260,6 +260,9 @@ pub(crate) struct App {
     /// dismissal. Guards against re-spawning the agent on later switches.
     #[cfg(feature = "nori-config")]
     deferred_spawn_pending: bool,
+
+    /// Cancel sender for an in-progress MCP OAuth login flow.
+    mcp_oauth_cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 #[derive(Clone, Debug)]
@@ -379,6 +382,7 @@ impl App {
             worktree_warning_shown: false,
             #[cfg(feature = "nori-config")]
             deferred_spawn_pending: needs_deferred_spawn,
+            mcp_oauth_cancel_tx: None,
         };
 
         // Load NoriConfig and propagate settings to the textarea.

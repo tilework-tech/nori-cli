@@ -210,6 +210,12 @@ impl ChatWidget {
         self.bottom_pane.update_mcp_auth_statuses(statuses);
     }
 
+    /// Forward MCP OAuth completion to the active bottom pane view.
+    pub(crate) fn handle_mcp_oauth_complete(&mut self, server_name: &str, success: bool) {
+        self.bottom_pane
+            .handle_mcp_oauth_complete(server_name, success);
+    }
+
     /// Get a reference to the session statistics tracker.
     pub(crate) fn session_stats(&self) -> &SessionStats {
         &self.session_stats
