@@ -1,23 +1,35 @@
 #[cfg(feature = "legacy-http-backend")]
 use crate::codex::ProcessedResponseItem;
 use crate::exec::ExecToolCallOutput;
+#[cfg(feature = "legacy-http-backend")]
 use crate::token_data::KnownPlan;
+#[cfg(feature = "legacy-http-backend")]
 use crate::token_data::PlanType;
 use crate::truncate::TruncationPolicy;
 use crate::truncate::truncate_text;
+#[cfg(feature = "legacy-http-backend")]
 use chrono::DateTime;
+#[cfg(feature = "legacy-http-backend")]
 use chrono::Datelike;
+#[cfg(feature = "legacy-http-backend")]
 use chrono::Local;
+#[cfg(feature = "legacy-http-backend")]
 use chrono::Utc;
 #[cfg(feature = "legacy-http-backend")]
 use codex_async_utils::CancelErr;
+#[cfg(feature = "legacy-http-backend")]
 use codex_protocol::ConversationId;
+#[cfg(feature = "legacy-http-backend")]
 use codex_protocol::protocol::CodexErrorInfo;
+#[cfg(feature = "legacy-http-backend")]
 use codex_protocol::protocol::ErrorEvent;
+#[cfg(feature = "legacy-http-backend")]
 use codex_protocol::protocol::RateLimitSnapshot;
+#[cfg(feature = "legacy-http-backend")]
 use reqwest::StatusCode;
 use serde_json;
 use std::io;
+#[cfg(feature = "legacy-http-backend")]
 use std::time::Duration;
 use thiserror::Error;
 use tokio::task::JoinError;
@@ -25,7 +37,7 @@ use tokio::task::JoinError;
 pub type Result<T> = std::result::Result<T, CodexErr>;
 
 /// Limit UI error messages to a reasonable size while keeping useful context.
-const ERROR_MESSAGE_UI_MAX_BYTES: usize = 2 * 1024; // 4 KiB
+const ERROR_MESSAGE_UI_MAX_BYTES: usize = 2 * 1024; // 2 KiB
 
 #[derive(Error, Debug)]
 pub enum SandboxErr {
@@ -70,71 +82,73 @@ pub enum CodexErr {
         dangling_artifacts: Vec<ProcessedResponseItem>,
     },
 
-    /// Returned by ResponsesClient when the SSE stream disconnects or errors out **after** the HTTP
-    /// handshake has succeeded but **before** it finished emitting `response.completed`.
-    ///
-    /// The Session loop treats this as a transient error and will automatically retry the turn.
-    ///
-    /// Optionally includes the requested delay before retrying the turn.
+    #[cfg(feature = "legacy-http-backend")]
     #[error("stream disconnected before completion: {0}")]
     Stream(String, Option<Duration>),
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error(
         "Codex ran out of room in the model's context window. Start a new conversation or clear earlier history before retrying."
     )]
     ContextWindowExceeded,
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("no conversation with id: {0}")]
     ConversationNotFound(ConversationId),
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("session configured event was not the first event in the stream")]
     SessionConfiguredNotFirstEvent,
 
-    /// Returned by run_command_stream when the spawned child process timed out (10s).
+    #[cfg(feature = "legacy-http-backend")]
     #[error("timeout waiting for child process to exit")]
     Timeout,
 
-    /// Returned by run_command_stream when the child could not be spawned (its stdout/stderr pipes
-    /// could not be captured). Analogous to the previous `CodexError::Spawn` variant.
+    #[cfg(feature = "legacy-http-backend")]
     #[error("spawn failed: child stdout/stderr not captured")]
     Spawn,
 
-    /// Returned by run_command_stream when the user pressed Ctrl‑C (SIGINT). Session uses this to
-    /// surface a polite FunctionCallOutput back to the model instead of crashing the CLI.
+    #[cfg(feature = "legacy-http-backend")]
     #[error(
         "interrupted (Ctrl-C). Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues"
     )]
     Interrupted,
 
-    /// Unexpected HTTP status code.
+    #[cfg(feature = "legacy-http-backend")]
     #[error("{0}")]
     UnexpectedStatus(UnexpectedResponseError),
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("{0}")]
     UsageLimitReached(UsageLimitReachedError),
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("{0}")]
     ResponseStreamFailed(ResponseStreamFailed),
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("{0}")]
     ConnectionFailed(ConnectionFailedError),
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("Quota exceeded. Check your plan and billing details.")]
     QuotaExceeded,
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error(
         "To use Codex with your ChatGPT plan, upgrade to Plus: https://openai.com/chatgpt/pricing."
     )]
     UsageNotIncluded,
 
+    #[cfg(feature = "legacy-http-backend")]
     #[error("We're currently experiencing high demand, which may cause temporary errors.")]
     InternalServerError,
 
-    /// Retry limit exceeded.
+    #[cfg(feature = "legacy-http-backend")]
     #[error("{0}")]
     RetryLimit(RetryLimitReachedError),
 
-    /// Agent loop died unexpectedly
+    #[cfg(feature = "legacy-http-backend")]
     #[error("internal error; agent loop died unexpectedly")]
     InternalAgentDied,
 
@@ -187,23 +201,27 @@ impl From<CancelErr> for CodexErr {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 #[derive(Debug)]
 pub struct ConnectionFailedError {
     pub source: reqwest::Error,
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl std::fmt::Display for ConnectionFailedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Connection failed: {}", self.source)
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 #[derive(Debug)]
 pub struct ResponseStreamFailed {
     pub source: reqwest::Error,
     pub request_id: Option<String>,
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl std::fmt::Display for ResponseStreamFailed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -242,6 +260,7 @@ pub enum RefreshTokenFailedReason {
     Other,
 }
 
+#[cfg(feature = "legacy-http-backend")]
 #[derive(Debug)]
 pub struct UnexpectedResponseError {
     pub status: StatusCode,
@@ -249,9 +268,11 @@ pub struct UnexpectedResponseError {
     pub request_id: Option<String>,
 }
 
+#[cfg(feature = "legacy-http-backend")]
 const CLOUDFLARE_BLOCKED_MESSAGE: &str =
     "Access blocked by Cloudflare. This usually happens when connecting from a restricted region";
 
+#[cfg(feature = "legacy-http-backend")]
 impl UnexpectedResponseError {
     fn friendly_message(&self) -> Option<String> {
         if self.status != StatusCode::FORBIDDEN {
@@ -271,6 +292,7 @@ impl UnexpectedResponseError {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl std::fmt::Display for UnexpectedResponseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(friendly) = self.friendly_message() {
@@ -290,13 +312,17 @@ impl std::fmt::Display for UnexpectedResponseError {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl std::error::Error for UnexpectedResponseError {}
+
+#[cfg(feature = "legacy-http-backend")]
 #[derive(Debug)]
 pub struct RetryLimitReachedError {
     pub status: StatusCode,
     pub request_id: Option<String>,
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl std::fmt::Display for RetryLimitReachedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -311,6 +337,7 @@ impl std::fmt::Display for RetryLimitReachedError {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 #[derive(Debug)]
 pub struct UsageLimitReachedError {
     pub(crate) plan_type: Option<PlanType>,
@@ -318,6 +345,7 @@ pub struct UsageLimitReachedError {
     pub(crate) rate_limits: Option<RateLimitSnapshot>,
 }
 
+#[cfg(feature = "legacy-http-backend")]
 impl std::fmt::Display for UsageLimitReachedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match self.plan_type.as_ref() {
@@ -354,6 +382,7 @@ impl std::fmt::Display for UsageLimitReachedError {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 fn retry_suffix(resets_at: Option<&DateTime<Utc>>) -> String {
     if let Some(resets_at) = resets_at {
         let formatted = format_retry_timestamp(resets_at);
@@ -363,6 +392,7 @@ fn retry_suffix(resets_at: Option<&DateTime<Utc>>) -> String {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 fn retry_suffix_after_or(resets_at: Option<&DateTime<Utc>>) -> String {
     if let Some(resets_at) = resets_at {
         let formatted = format_retry_timestamp(resets_at);
@@ -372,6 +402,7 @@ fn retry_suffix_after_or(resets_at: Option<&DateTime<Utc>>) -> String {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 fn format_retry_timestamp(resets_at: &DateTime<Utc>) -> String {
     let local_reset = resets_at.with_timezone(&Local);
     let local_now = now_for_retry().with_timezone(&Local);
@@ -385,6 +416,7 @@ fn format_retry_timestamp(resets_at: &DateTime<Utc>) -> String {
     }
 }
 
+#[cfg(feature = "legacy-http-backend")]
 fn day_suffix(day: u32) -> &'static str {
     match day {
         11..=13 => "th",
@@ -397,12 +429,13 @@ fn day_suffix(day: u32) -> &'static str {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-http-backend"))]
 thread_local! {
     static NOW_OVERRIDE: std::cell::RefCell<Option<DateTime<Utc>>> =
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(feature = "legacy-http-backend")]
 fn now_for_retry() -> DateTime<Utc> {
     #[cfg(test)]
     {
@@ -440,7 +473,10 @@ impl CodexErr {
     pub fn downcast_ref<T: std::any::Any>(&self) -> Option<&T> {
         (self as &dyn std::any::Any).downcast_ref::<T>()
     }
+}
 
+#[cfg(feature = "legacy-http-backend")]
+impl CodexErr {
     /// Translate core error to client-facing protocol error.
     pub fn to_codex_protocol_error(&self) -> CodexErrorInfo {
         match self {
@@ -533,62 +569,8 @@ pub fn get_error_message_ui(e: &CodexErr) -> String {
 mod tests {
     use super::*;
     use crate::exec::StreamOutput;
-    use chrono::DateTime;
-    use chrono::Duration as ChronoDuration;
-    use chrono::TimeZone;
-    use chrono::Utc;
-    use codex_protocol::protocol::RateLimitWindow;
     use pretty_assertions::assert_eq;
-    use reqwest::Response;
-    use reqwest::ResponseBuilderExt;
-    use reqwest::StatusCode;
-    use reqwest::Url;
-
-    fn rate_limit_snapshot() -> RateLimitSnapshot {
-        let primary_reset_at = Utc
-            .with_ymd_and_hms(2024, 1, 1, 1, 0, 0)
-            .unwrap()
-            .timestamp();
-        let secondary_reset_at = Utc
-            .with_ymd_and_hms(2024, 1, 1, 2, 0, 0)
-            .unwrap()
-            .timestamp();
-        RateLimitSnapshot {
-            primary: Some(RateLimitWindow {
-                used_percent: 50.0,
-                window_minutes: Some(60),
-                resets_at: Some(primary_reset_at),
-            }),
-            secondary: Some(RateLimitWindow {
-                used_percent: 30.0,
-                window_minutes: Some(120),
-                resets_at: Some(secondary_reset_at),
-            }),
-            credits: None,
-        }
-    }
-
-    fn with_now_override<T>(now: DateTime<Utc>, f: impl FnOnce() -> T) -> T {
-        NOW_OVERRIDE.with(|cell| {
-            *cell.borrow_mut() = Some(now);
-            let result = f();
-            *cell.borrow_mut() = None;
-            result
-        })
-    }
-
-    #[test]
-    fn usage_limit_reached_error_formats_plus_plan() {
-        let err = UsageLimitReachedError {
-            plan_type: Some(PlanType::Known(KnownPlan::Plus)),
-            resets_at: None,
-            rate_limits: Some(rate_limit_snapshot()),
-        };
-        assert_eq!(
-            err.to_string(),
-            "You've hit your usage limit. Upgrade to Pro (https://openai.com/chatgpt/pricing), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again later."
-        );
-    }
+    use std::time::Duration;
 
     #[test]
     fn sandbox_denied_uses_aggregated_output_when_stderr_empty() {
@@ -639,6 +621,88 @@ mod tests {
     }
 
     #[test]
+    fn sandbox_denied_reports_exit_code_when_no_output_available() {
+        let output = ExecToolCallOutput {
+            exit_code: 13,
+            stdout: StreamOutput::new(String::new()),
+            stderr: StreamOutput::new(String::new()),
+            aggregated_output: StreamOutput::new(String::new()),
+            duration: Duration::from_millis(5),
+            timed_out: false,
+        };
+        let err = CodexErr::Sandbox(SandboxErr::Denied {
+            output: Box::new(output),
+        });
+        assert_eq!(
+            get_error_message_ui(&err),
+            "command failed inside sandbox with exit code 13"
+        );
+    }
+}
+
+#[cfg(all(test, feature = "legacy-http-backend"))]
+mod http_tests {
+    use super::*;
+    
+    use chrono::DateTime;
+    use chrono::Duration as ChronoDuration;
+    use chrono::TimeZone;
+    use chrono::Utc;
+    use codex_protocol::protocol::RateLimitWindow;
+    use pretty_assertions::assert_eq;
+    use reqwest::Response;
+    use reqwest::ResponseBuilderExt;
+    use reqwest::StatusCode;
+    use reqwest::Url;
+    
+
+    fn rate_limit_snapshot() -> RateLimitSnapshot {
+        let primary_reset_at = Utc
+            .with_ymd_and_hms(2024, 1, 1, 1, 0, 0)
+            .unwrap()
+            .timestamp();
+        let secondary_reset_at = Utc
+            .with_ymd_and_hms(2024, 1, 1, 2, 0, 0)
+            .unwrap()
+            .timestamp();
+        RateLimitSnapshot {
+            primary: Some(RateLimitWindow {
+                used_percent: 50.0,
+                window_minutes: Some(60),
+                resets_at: Some(primary_reset_at),
+            }),
+            secondary: Some(RateLimitWindow {
+                used_percent: 30.0,
+                window_minutes: Some(120),
+                resets_at: Some(secondary_reset_at),
+            }),
+            credits: None,
+        }
+    }
+
+    fn with_now_override<T>(now: DateTime<Utc>, f: impl FnOnce() -> T) -> T {
+        NOW_OVERRIDE.with(|cell| {
+            *cell.borrow_mut() = Some(now);
+            let result = f();
+            *cell.borrow_mut() = None;
+            result
+        })
+    }
+
+    #[test]
+    fn usage_limit_reached_error_formats_plus_plan() {
+        let err = UsageLimitReachedError {
+            plan_type: Some(PlanType::Known(KnownPlan::Plus)),
+            resets_at: None,
+            rate_limits: Some(rate_limit_snapshot()),
+        };
+        assert_eq!(
+            err.to_string(),
+            "You've hit your usage limit. Upgrade to Pro (https://openai.com/chatgpt/pricing), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again later."
+        );
+    }
+
+    #[test]
     fn to_error_event_handles_response_stream_failed() {
         let response = http::Response::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
@@ -662,25 +726,6 @@ mod tests {
             Some(CodexErrorInfo::ResponseStreamConnectionFailed {
                 http_status_code: Some(429)
             })
-        );
-    }
-
-    #[test]
-    fn sandbox_denied_reports_exit_code_when_no_output_available() {
-        let output = ExecToolCallOutput {
-            exit_code: 13,
-            stdout: StreamOutput::new(String::new()),
-            stderr: StreamOutput::new(String::new()),
-            aggregated_output: StreamOutput::new(String::new()),
-            duration: Duration::from_millis(5),
-            timed_out: false,
-        };
-        let err = CodexErr::Sandbox(SandboxErr::Denied {
-            output: Box::new(output),
-        });
-        assert_eq!(
-            get_error_message_ui(&err),
-            "command failed inside sandbox with exit code 13"
         );
     }
 

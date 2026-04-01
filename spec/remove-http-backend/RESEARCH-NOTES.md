@@ -580,3 +580,64 @@ Already present in codex-api: async-trait, bytes, futures, http, serde, serde_js
 - `sse_stream` and `backoff` are public in `codex-client` but NOT used by `codex-api` — they become `pub(crate)` or dead code in the inlined module. Keep them as-is since the module is `pub(crate)`.
 - `StreamError` is exported from `codex-client` but NOT used by `codex-api` — it's used by `sse_stream` internally, so it stays in the inlined module.
 - The `eventsource-stream` dependency is used by both `codex-client/src/sse.rs` and `codex-api/src/sse/responses.rs` — already in codex-api's deps, no conflict.
+
+## Gate HTTP-specific error types behind `legacy-http-backend` (current target)
+
+### Why this component
+
+`error.rs` defines `CodexErr`, the public error enum of codex-core. It contains ~15 variants that are only constructed in HTTP-backend code (already gated behind the feature), plus ~5 supporting struct types that reference `reqwest` types. None of these are used by TUI, CLI, or ACP crates. Interns and agents reading the error type see HTTP concepts (StatusCode, reqwest::Error, "stream disconnected", "retry limit") that don't apply to ACP — a direct source of confusion.
+
+### Variants only constructed in gated (HTTP-backend) code
+
+Verified by searching all non-gated modules. Only these are constructed in non-gated code: `Io`, `Sandbox(*)`, `LandlockSandboxExecutableNotProvided`, `UnsupportedOperation`, `Fatal`, `EnvVar`, `Json` (from), `TokioJoin` (from), `LandlockRuleset` (from), `LandlockPathFd` (from).
+
+All other variants are ONLY constructed in feature-gated modules: `client.rs`, `api_bridge.rs`, `codex/`, `compact.rs` (gated functions), `codex_conversation.rs`, etc.
+
+### Methods that use HTTP-specific variants
+
+- `to_codex_protocol_error()` — matches on HTTP-specific variants to map to protocol errors
+- `to_error_event()` — calls `to_codex_protocol_error()`
+- `http_status_code_value()` — matches on `RetryLimit`, `UnexpectedStatus`, `ConnectionFailed`, `ResponseStreamFailed`
+- `get_error_message_ui()` — only matches `Sandbox` variants (shared), wildcard for rest
+
+All EXTERNAL callers of these methods are in gated modules:
+- `tools/orchestrator.rs` → `get_error_message_ui` (gated)
+- `compact.rs:143,160` → `to_error_event` (gated functions)
+- `codex/event_emission.rs:78` → `http_status_code_value` (gated)
+- `codex/turn_execution.rs:120` → `to_error_event` (gated)
+
+### Helper structs to gate
+
+1. `UnexpectedResponseError` — uses `reqwest::StatusCode`
+2. `ConnectionFailedError` — uses `reqwest::Error`
+3. `ResponseStreamFailed` — uses `reqwest::Error`
+4. `RetryLimitReachedError` — uses `reqwest::StatusCode`
+5. `UsageLimitReachedError` — uses token_data types (HTTP-specific usage limits)
+6. `RefreshTokenFailedError` / `RefreshTokenFailedReason` — HTTP auth refresh
+
+### Approach
+
+1. Gate ~15 HTTP-specific `CodexErr` variants behind `#[cfg(feature = "legacy-http-backend")]`
+2. Gate the 6 helper structs and their Display/Error impls
+3. Gate `to_codex_protocol_error()`, `to_error_event()`, `http_status_code_value()` methods entirely (all callers are in gated code)
+4. Keep `get_error_message_ui()` always available but note it already uses wildcard for non-sandbox errors
+5. Gate the `reqwest::StatusCode` import (production), `codex_protocol::ConversationId` import, and `From<CancelErr>` impl (already gated)
+6. Gate the `ProcessedResponseItem` import (already gated)
+7. Gate the HTTP-specific test functions that construct gated error types
+8. Keep the `to_error_event_handles_response_stream_failed` test and other HTTP tests gated
+
+### Backwards compatibility
+
+- `reqwest` remains a non-optional dependency (used by `default_client.rs` and `auth.rs`)
+- `CodexErr` still has all shared variants for non-HTTP builds
+- dev-dependencies enable `legacy-http-backend`, so all tests compile unchanged
+- No downstream crate (TUI, CLI, ACP) references any of the gated variants or methods
+
+### Edge cases
+
+- `get_error_message_ui` has a wildcard `_` arm, so it works regardless of how many variants exist
+- `downcast_ref` method is generic and doesn't reference specific variants — stays un-gated
+- The `CLOUDFLARE_BLOCKED_MESSAGE` const is only used by `UnexpectedResponseError::friendly_message` — gate with the struct
+- `retry_suffix`, `retry_suffix_after_or`, `format_retry_timestamp`, `day_suffix` helpers are only used by `UsageLimitReachedError::Display` — gate with the struct
+- `NOW_OVERRIDE` test thread-local is only used by gated tests — gate with tests
+- `with_now_override` test helper — gate with tests

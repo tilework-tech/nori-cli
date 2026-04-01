@@ -1,6 +1,30 @@
 # Current Progress
 
-## Status: Eleventh component removed
+## Status: Twelfth component removed
+
+### Completed: Gate HTTP-specific error types behind `legacy-http-backend`
+
+Gated the HTTP-specific error types, variants, methods, and tests in `codex-core/src/error.rs` behind the `legacy-http-backend` feature flag. This removes HTTP concepts from the public error type for non-HTTP builds.
+
+**What was gated:**
+- ~15 `CodexErr` enum variants: `Stream`, `ContextWindowExceeded`, `ConversationNotFound`, `SessionConfiguredNotFirstEvent`, `Timeout`, `Spawn`, `Interrupted`, `UnexpectedStatus`, `UsageLimitReached`, `ResponseStreamFailed`, `ConnectionFailed`, `QuotaExceeded`, `UsageNotIncluded`, `InternalServerError`, `RetryLimit`, `InternalAgentDied`
+- 5 helper structs and their impls: `UnexpectedResponseError`, `ConnectionFailedError`, `ResponseStreamFailed`, `RetryLimitReachedError`, `UsageLimitReachedError`
+- Methods on `CodexErr`: `to_codex_protocol_error()`, `to_error_event()`, `http_status_code_value()`
+- Helper functions: `retry_suffix`, `retry_suffix_after_or`, `format_retry_timestamp`, `day_suffix`, `now_for_retry`, `CLOUDFLARE_BLOCKED_MESSAGE`
+- Imports: `reqwest::StatusCode`, `codex_protocol::ConversationId`, `chrono::*`, `codex_protocol::protocol::{CodexErrorInfo, ErrorEvent, RateLimitSnapshot}`, `std::time::Duration`
+- 14 HTTP-specific tests moved to a separate `http_tests` module with `#[cfg(all(test, feature = "legacy-http-backend"))]`
+
+**What was preserved (always available):**
+- Shared error types: `SandboxErr`, `EnvVarError`, `RefreshTokenFailedError`, `RefreshTokenFailedReason`
+- Shared `CodexErr` variants: `Sandbox`, `LandlockSandboxExecutableNotProvided`, `UnsupportedOperation`, `Fatal`, `Io`, `Json`, `TokioJoin`, `EnvVar`, `RefreshTokenFailed`, `TurnAborted` (already gated)
+- Shared methods: `downcast_ref()`, `get_error_message_ui()`
+- 4 sandbox-related tests in un-gated `tests` module
+
+**Impact:** When `legacy-http-backend` is off (nori/tui/cli/acp binaries), `CodexErr` has only ~10 shared variants instead of ~25. All existing tests pass (codex-core: 537 unit, 441 integration pass, 21 pre-existing nvm environment failures; E2E: 6 tests).
+
+### Suggested next steps for future commits
+1. Gate the `codex/` module and its cascade (Session/TurnContext permeate tools/, tasks/, state/, etc. — requires separating shared infrastructure from HTTP-specific orchestration)
+2. Eventually: remove the `codex-api` crate entirely
 
 ### Completed: Remove compact_remote module
 
