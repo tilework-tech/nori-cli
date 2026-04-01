@@ -448,3 +448,46 @@ legacy-http-backend = ["dep:codex-api"]
 ```
 
 Dev-dependencies already enable `legacy-http-backend`, so all tests will continue to compile.
+
+## Fix compilation without `legacy-http-backend` (current target)
+
+### Problem
+
+After the WIP commit that gated many modules behind `legacy-http-backend`, `cargo check -p codex-core` (without features) fails with 21 errors. Two root causes:
+
+### Root cause 1: `compact.rs` stubs reference gated types
+
+The `#[cfg(not(feature = "legacy-http-backend"))]` stubs for `run_inline_auto_compact_task` and `run_compact_task` reference `Session` and `TurnContext` types from the `codex/` module, which is itself gated behind `legacy-http-backend`.
+
+**Why the stubs are unnecessary:** ALL callers are in gated modules:
+- `run_inline_auto_compact_task`: called from `codex/turn_execution.rs` (gated via `codex/` module)
+- `run_compact_task`: called from `tasks/compact.rs` (gated via `tasks/` module)
+
+When the feature is off, no code calls these functions. The stubs serve no purpose.
+
+**Fix:** Remove both stubs entirely.
+
+### Root cause 2: `tools/spec/mod.rs` imports from gated modules
+
+`tools/spec/mod.rs` is always compiled (`pub mod spec;` in `tools/mod.rs`), but it imports from:
+- `tools::handlers` (gated) — `PLAN_TOOL`, `ApplyPatchToolType`, `create_apply_patch_*_tool`
+- `tools::registry` (gated) — `ToolRegistryBuilder`
+
+These imports are used in two places:
+1. `ToolsConfig` struct — uses `ApplyPatchToolType` (available from `tool_types.rs`)
+2. `build_specs()` function — constructs `ToolRegistryBuilder`, registers handlers
+
+**Fix:**
+1. Change `ApplyPatchToolType` import from `crate::tools::handlers::apply_patch` to `crate::tool_types` (always available)
+2. Gate `build_specs()` function behind `#[cfg(feature = "legacy-http-backend")]`
+3. Gate the remaining `handlers`/`registry` imports behind the feature
+4. The `PLAN_TOOL` import (used only by `build_specs`) gets gated along with `build_specs`
+5. The `create_apply_patch_*` imports (used only by `build_specs`) get gated too
+
+### Verification
+
+After fixes:
+- `cargo check -p codex-core` (no features) should succeed
+- `cargo check -p codex-core --features legacy-http-backend` should succeed
+- `cargo test -p codex-core` (dev-deps enable the feature) should pass all tests
+- `cargo check -p nori-tui` and `cargo check -p codex-acp` should succeed

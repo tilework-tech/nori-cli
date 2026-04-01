@@ -56,8 +56,8 @@ pub mod powershell;
 mod response_processing;
 pub mod sandboxing;
 mod text_encoding;
-pub(crate) mod tool_types;
 pub mod token_data;
+pub(crate) mod tool_types;
 mod truncate;
 #[cfg(feature = "legacy-http-backend")]
 mod unified_exec;

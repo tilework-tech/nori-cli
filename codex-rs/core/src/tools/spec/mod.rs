@@ -3,16 +3,21 @@ use crate::client_common::tools::ToolSpec;
 use crate::features::Feature;
 use crate::features::Features;
 use crate::model_family::ModelFamily;
+use crate::tool_types::ApplyPatchToolType;
+#[cfg(feature = "legacy-http-backend")]
 use crate::tools::handlers::PLAN_TOOL;
-use crate::tools::handlers::apply_patch::ApplyPatchToolType;
+#[cfg(feature = "legacy-http-backend")]
 use crate::tools::handlers::apply_patch::create_apply_patch_freeform_tool;
+#[cfg(feature = "legacy-http-backend")]
 use crate::tools::handlers::apply_patch::create_apply_patch_json_tool;
+#[cfg(feature = "legacy-http-backend")]
 use crate::tools::registry::ToolRegistryBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use serde_json::json;
 use std::collections::BTreeMap;
+#[cfg(feature = "legacy-http-backend")]
 use std::collections::HashMap;
 
 pub use crate::tool_types::ConfigShellToolType;
@@ -926,6 +931,7 @@ fn sanitize_json_schema(value: &mut JsonValue) {
 }
 
 /// Builds the tool registry builder while collecting tool specs for later serialization.
+#[cfg(feature = "legacy-http-backend")]
 pub(crate) fn build_specs(
     config: &ToolsConfig,
     mcp_tools: Option<HashMap<String, mcp_types::Tool>>,

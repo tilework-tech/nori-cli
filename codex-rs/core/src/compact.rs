@@ -1,3 +1,4 @@
+#[cfg(feature = "legacy-http-backend")]
 use std::sync::Arc;
 
 #[cfg(feature = "legacy-http-backend")]
@@ -10,6 +11,7 @@ use crate::truncate::truncate_text;
 use codex_protocol::items::TurnItem;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
+#[cfg(feature = "legacy-http-backend")]
 use codex_protocol::user_input::UserInput;
 
 #[cfg(feature = "legacy-http-backend")]
@@ -60,13 +62,6 @@ pub(crate) async fn run_inline_auto_compact_task(
     run_compact_task_inner(sess, turn_context, input).await;
 }
 
-#[cfg(not(feature = "legacy-http-backend"))]
-pub(crate) async fn run_inline_auto_compact_task(
-    _sess: Arc<Session>,
-    _turn_context: Arc<TurnContext>,
-) {
-}
-
 #[cfg(feature = "legacy-http-backend")]
 pub(crate) async fn run_compact_task(
     sess: Arc<Session>,
@@ -78,14 +73,6 @@ pub(crate) async fn run_compact_task(
     });
     sess.send_event(&turn_context, start_event).await;
     run_compact_task_inner(sess.clone(), turn_context, input).await;
-}
-
-#[cfg(not(feature = "legacy-http-backend"))]
-pub(crate) async fn run_compact_task(
-    _sess: Arc<Session>,
-    _turn_context: Arc<TurnContext>,
-    _input: Vec<UserInput>,
-) {
 }
 
 #[cfg(feature = "legacy-http-backend")]
