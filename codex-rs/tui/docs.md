@@ -128,6 +128,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/login` | Log in to the current agent |
 | `/logout` | Show logout instructions |
 | `/switch-skillset` | Switch between available skillsets |
+| `/info` | Ask a question about nori (doc-augmented LLM prompt) |
 | `/quit` | Exit Nori |
 | `/exit` | Exit Nori (alias for /quit) |
 
@@ -221,6 +222,21 @@ The "Auto Worktree" item in `/config` uses a sub-picker pattern (matching Notify
 
 The `session_skillset_name` field propagates through the widget hierarchy: `ChatWidget` -> `BottomPane` -> `ChatComposer` -> `Footer`. In the footer, `session_skillset_name` takes priority over `nori_profile` from `SystemInfo` for the skillset display segment.
 
+
+**Info Command (`/info`):**
+
+The `/info <question>` slash command lets users ask questions about Nori and get answers based on embedded documentation, without leaving the TUI. It is not available during an active task.
+
+The command is intercepted in two places:
+- **Bare `/info`** (no arguments): Handled in `chatwidget/key_handling.rs`, shows a usage hint locally via `add_info_message()` -- no LLM call.
+- **`/info <question>`**: Intercepted in `chatwidget/user_input.rs::submit_user_message()` before the message reaches the agent. The question is composed into a doc-augmented prompt and resubmitted as a regular user message, following the same interception pattern used by `/login <agent>`.
+
+The prompt composition logic lives in `chatwidget/info_command.rs`. It embeds three documentation sources at compile time via `include_str!`:
+- `@/README.md`
+- `@/docs.md`
+- `@/codex-rs/cli/docs.md`
+
+These are concatenated into a single documentation block, then injected into the prompt template at `@/codex-rs/tui/prompt_for_info_command.md` (which uses `$DOCS` and `$QUESTION` placeholders). The template instructs the model to answer from the perspective of an end user, focusing on how to use and configure Nori. `compose_info_prompt()` returns `None` for empty/whitespace-only questions, causing the caller to fall back to the usage hint.
 
 **Notification Configuration:**
 

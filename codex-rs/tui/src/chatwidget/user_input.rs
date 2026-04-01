@@ -75,6 +75,27 @@ impl ChatWidget {
             return;
         }
 
+        // Special-case: "/info <question>" composes a doc-augmented prompt.
+        // We send the expanded prompt directly to the agent via Op::UserInput
+        // rather than recursing into submit_user_message, so the user sees their
+        // original question in the chat history / first-prompt / cross-session
+        // history instead of the raw documentation blob.
+        if let Some(question) = text.strip_prefix("/info ").map(str::trim) {
+            if let Some(prompt) = info_command::compose_info_prompt(question) {
+                self.codex_op_tx
+                    .send(Op::UserInput {
+                        items: vec![UserInput::Text { text: prompt }],
+                    })
+                    .unwrap_or_else(|e| {
+                        tracing::error!("failed to send /info prompt: {e}");
+                    });
+                return;
+            }
+            // Empty question — show usage hint
+            self.add_info_message(info_command::INFO_USAGE_HINT.to_string(), None);
+            return;
+        }
+
         if self.first_prompt_text.is_none() {
             self.first_prompt_text = Some(text.clone());
 
