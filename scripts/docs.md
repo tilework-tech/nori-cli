@@ -4,8 +4,9 @@ Path: @/scripts
 
 ### Overview
 
-- Utility scripts for release management, development setup, and code quality checks
+- Utility scripts for release management, development setup, code quality checks, and infrastructure validation
 - The most critical script is `create_nori_release`, which creates tagged releases via the GitHub API using synthetic commits
+- Also contains `test_justfile.sh` for validating the root justfile targets
 
 ### How it fits into the larger codebase
 
@@ -36,6 +37,12 @@ All tags use the prefix `nori-v` (e.g., `nori-v0.9.0`, `nori-v0.9.0-next.3`).
 The `N` suffix is determined by scanning all git tags (via `list_tags()`) that match the relevant prefix and taking `max(N) + 1`. The `list_tags()` function paginates through the GitHub refs/tags API and strips the `nori-v` prefix from each tag to yield bare version strings.
 
 `get_latest_release_version()` also uses `list_tags()` -- it filters to stable-only versions (no `-` in the version string) and returns the highest by semver comparison.
+
+### Shared Local Runner Layer Support
+
+**`test_justfile.sh` -- integration tests for the root justfile:**
+
+Validates the standard targets (`help`, `dev`, `test`, `doctor`) defined by the Shared Local Runner Layer spec in `@/justfile`. The test uses string-matching assertions (`assert_contains`) against command output and `just --summary` / `just --show` for structural checks. Run with `bash scripts/test_justfile.sh`.
 
 ### Things to Know
 
