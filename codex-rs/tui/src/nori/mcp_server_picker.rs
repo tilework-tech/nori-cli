@@ -577,17 +577,6 @@ impl McpServerPickerView {
     pub(crate) fn pending_oauth_server(&self) -> Option<&str> {
         self.pending_oauth_server.as_deref()
     }
-
-    /// Handle completion of an MCP OAuth login flow.
-    pub(crate) fn handle_oauth_complete(&mut self, server_name: &str, _success: bool) {
-        if let Mode::OAuthInProgress {
-            server_name: ref current,
-        } = self.mode
-            && current == server_name
-        {
-            self.mode = Mode::List;
-        }
-    }
 }
 
 impl BottomPaneView for McpServerPickerView {
@@ -750,6 +739,16 @@ impl BottomPaneView for McpServerPickerView {
                     server_name: pending_name,
                 };
             }
+        }
+    }
+
+    fn handle_mcp_oauth_complete(&mut self, server_name: &str, _success: bool) {
+        if let Mode::OAuthInProgress {
+            server_name: ref current,
+        } = self.mode
+            && current == server_name
+        {
+            self.mode = Mode::List;
         }
     }
 }
@@ -2006,7 +2005,7 @@ mod tests {
         picker.update_mcp_auth_statuses(&statuses);
 
         // Simulate OAuth completion
-        picker.handle_oauth_complete("slack", true);
+        picker.handle_mcp_oauth_complete("slack", true);
 
         // Should return to List mode
         assert_eq!(
