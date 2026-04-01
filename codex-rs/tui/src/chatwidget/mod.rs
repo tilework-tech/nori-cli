@@ -129,6 +129,7 @@ mod approvals;
 mod constructors;
 mod event_handlers;
 mod helpers;
+mod info_command;
 mod key_handling;
 mod login;
 mod pickers;

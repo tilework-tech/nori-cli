@@ -262,6 +262,9 @@ impl ChatWidget {
             SlashCommand::SwitchSkillset => {
                 self.handle_switch_skillset_command();
             }
+            SlashCommand::Info => {
+                self.add_info_message(info_command::INFO_USAGE_HINT.to_string(), None);
+            }
         }
     }
 

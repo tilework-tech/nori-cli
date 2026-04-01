@@ -35,6 +35,7 @@ pub enum SlashCommand {
     Rollout,
     TestApproval,
     SwitchSkillset,
+    Info,
 }
 
 impl SlashCommand {
@@ -63,6 +64,7 @@ impl SlashCommand {
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
             SlashCommand::SwitchSkillset => "switch between available skillsets",
+            SlashCommand::Info => "ask a question about nori",
         }
     }
 
@@ -87,7 +89,8 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Login
             | SlashCommand::Logout
-            | SlashCommand::SwitchSkillset => false,
+            | SlashCommand::SwitchSkillset
+            | SlashCommand::Info => false,
             SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
@@ -267,5 +270,32 @@ mod tests {
     fn resume_parses_from_string() {
         let cmd: SlashCommand = "resume".parse().expect("/resume should parse from string");
         assert_eq!(cmd, SlashCommand::Resume);
+    }
+
+    #[test]
+    fn info_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_info = commands.iter().any(|(_, cmd)| *cmd == SlashCommand::Info);
+        assert!(has_info, "/info should be visible in commands list");
+    }
+
+    #[test]
+    fn info_has_description() {
+        let desc = SlashCommand::Info.description();
+        assert!(!desc.is_empty(), "/info should have a description");
+    }
+
+    #[test]
+    fn info_not_available_during_task() {
+        assert!(
+            !SlashCommand::Info.available_during_task(),
+            "/info should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn info_parses_from_string() {
+        let cmd: SlashCommand = "info".parse().expect("/info should parse from string");
+        assert_eq!(cmd, SlashCommand::Info);
     }
 }
