@@ -643,7 +643,7 @@ mod tests {
 #[cfg(all(test, feature = "legacy-http-backend"))]
 mod http_tests {
     use super::*;
-    
+
     use chrono::DateTime;
     use chrono::Duration as ChronoDuration;
     use chrono::TimeZone;
@@ -654,7 +654,6 @@ mod http_tests {
     use reqwest::ResponseBuilderExt;
     use reqwest::StatusCode;
     use reqwest::Url;
-    
 
     fn rate_limit_snapshot() -> RateLimitSnapshot {
         let primary_reset_at = Utc
