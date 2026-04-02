@@ -40,6 +40,7 @@ struct MockAgent {
     client_request_tx: mpsc::UnboundedSender<MockClientRequest>,
     next_session_id: Cell<u64>,
     cancel_requested: Cell<bool>,
+    prompt_count: Cell<usize>,
 }
 
 impl MockAgent {
@@ -52,6 +53,7 @@ impl MockAgent {
             next_session_id: Cell::new(0),
             client_request_tx,
             cancel_requested: Cell::new(false),
+            prompt_count: Cell::new(0),
         }
     }
 
@@ -988,6 +990,52 @@ impl acp::Agent for MockAgent {
             } else {
                 acp::StopReason::EndTurn
             }));
+        }
+
+        // Multi-turn stream-until-cancel: first prompt streams until cancelled,
+        // subsequent prompts send a distinctive response immediately.
+        // Used to test that the TUI correctly handles submitting a new message
+        // after interrupting a streaming turn.
+        if std::env::var("MOCK_AGENT_MULTI_TURN_STREAM_UNTIL_CANCEL").is_ok() {
+            let turn = self.prompt_count.get();
+            self.prompt_count.set(turn + 1);
+            let cancel_delay_ms: u64 = std::env::var("MOCK_AGENT_CANCEL_DELAY_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
+            eprintln!(
+                "Mock agent: multi-turn-stream-until-cancel, turn {turn}, cancel_delay={cancel_delay_ms}ms"
+            );
+
+            if turn == 0 {
+                // First turn: stream indefinitely until cancel
+                let mut iterations = 0usize;
+                while !self.cancel_requested.get() && iterations < 10_000 {
+                    self.send_text_chunk(session_id.clone(), "Streaming...")
+                        .await?;
+                    iterations += 1;
+                    sleep(Duration::from_millis(10)).await;
+                }
+                // Simulate a slow agent that takes time to wind down after cancel.
+                // This widens the race window between the old task's Completed event
+                // and the new task's Started event.
+                if cancel_delay_ms > 0 {
+                    eprintln!("Mock agent: delaying {cancel_delay_ms}ms after cancel");
+                    sleep(Duration::from_millis(cancel_delay_ms)).await;
+                }
+                return Ok(acp::PromptResponse::new(if self.cancel_requested.get() {
+                    acp::StopReason::Cancelled
+                } else {
+                    acp::StopReason::EndTurn
+                }));
+            }
+
+            // Subsequent turns: delay briefly so the TUI's working state is
+            // visible to E2E tests (which poll every 50ms), then respond.
+            sleep(Duration::from_millis(500)).await;
+            self.send_text_chunk(session_id.clone(), &format!("Turn {turn} response"))
+                .await?;
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
         // Support multi-call exploring cells with out-of-order completion

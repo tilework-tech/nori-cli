@@ -1224,6 +1224,18 @@ impl ChatWidget {
         match turn_lifecycle {
             nori_protocol::TurnLifecycle::Started => self.on_task_started(),
             nori_protocol::TurnLifecycle::Completed { last_agent_message } => {
+                // Guard: ignore stale Completed events that arrive after the
+                // turn was already interrupted. Without this guard, a cancelled
+                // prompt task's late Completed would reset a newer turn's
+                // working state (is_task_running) to false.
+                // NOTE: This only covers Completed arriving while idle (between
+                // Aborted and the next Started). If Completed arrives after the
+                // next Started, the ACP backend's turn_generation counter
+                // prevents it from being emitted at all.
+                if !self.bottom_pane.is_task_running() {
+                    tracing::debug!("Ignoring stale TurnLifecycle::Completed (no task running)");
+                    return;
+                }
                 self.on_task_complete(last_agent_message)
             }
             nori_protocol::TurnLifecycle::Aborted { reason } => match reason {

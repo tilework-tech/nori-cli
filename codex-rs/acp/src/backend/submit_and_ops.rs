@@ -21,6 +21,9 @@ impl AcpBackend {
                 self.handle_user_input(items, &id).await?;
             }
             Op::Interrupt => {
+                // Increment the turn generation so the cancelled prompt task
+                // knows its Completed event is stale and should be suppressed.
+                self.turn_generation.fetch_add(1, Ordering::SeqCst);
                 self.connection
                     .cancel(&*self.session_id.read().await)
                     .await?;

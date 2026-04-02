@@ -55,6 +55,7 @@ This simulates the real-world race condition that the `InterruptManager.flush_co
 
 ### Things to Know
 
+- `MOCK_AGENT_MULTI_TURN_STREAM_UNTIL_CANCEL` mode: first prompt streams indefinitely until cancelled (with optional `MOCK_AGENT_CANCEL_DELAY_MS` delay after cancel), subsequent prompts send a distinctive "Turn N response" after a 500ms delay. Uses `prompt_count: AtomicUsize` to track turn number. Designed to reproduce escape/interrupt event ordering race conditions in E2E tests.
 - The mock is a binary crate (no lib.rs) intended only for testing
 - Uses the same ACP protocol as real agents for realistic testing
 - Simulates streaming with configurable chunk delays

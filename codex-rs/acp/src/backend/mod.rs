@@ -9,6 +9,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use anyhow::Result;
 use codex_core::config::types::McpServerConfig;
@@ -323,6 +325,11 @@ pub struct AcpBackend {
     client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
+    /// Turn generation counter. Incremented on each interrupt to detect stale
+    /// Completed events from cancelled prompt tasks. A spawned prompt task
+    /// captures the generation at spawn time and only emits
+    /// TurnLifecycle::Completed if it still matches the current generation.
+    turn_generation: Arc<AtomicU64>,
 }
 
 mod helpers;

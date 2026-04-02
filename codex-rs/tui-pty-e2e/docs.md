@@ -57,6 +57,8 @@ Tests verify the `/mcp` slash command in ACP mode:
 - Timing-sensitive tests use configurable timeouts
 - Debug styles respect color terminal detection
 - Snapshot tests use `insta` for visual verification of screen output; snapshots live in `tests/snapshots/`
+- `SessionConfig::with_sacp_tee(log_filename)` wraps the mock agent with `sacp-tee` for ACP wire logging. Creates a wrapper shell script in the temp dir that invokes `sacp-tee --log-file <path> -- <mock_acp_agent>`. Requires `sacp-tee` on PATH. `TuiSession::sacp_tee_log(filename)` reads the resulting JSONL log.
+- `escape_interrupt_ordering.rs` tests the escape-then-resubmit race condition: verifies the TUI enters working state after interrupting a streaming turn and immediately submitting a new message. Uses `MOCK_AGENT_MULTI_TURN_STREAM_UNTIL_CANCEL` with `MOCK_AGENT_CANCEL_DELAY_MS` to widen the race window.
 - `normalize_for_input_snapshot()` normalizes dynamic content before snapshot comparison: session timestamps/IDs become `[TIMESTAMP]`/`[SESSION_ID]`, and the randomly selected whimsical status indicator header becomes `[STATUS]`. It also collapses runs of consecutive blank lines into a single blank line, because PTY timing can cause the exact count of blank lines between content sections to vary between runs. Tests that check for the status indicator being active use `"esc to interrupt"` as the stable anchor text rather than any specific status message.
 
 Created and maintained by Nori.

@@ -828,6 +828,10 @@ The TUI uses Nori-specific update checking via files in `@/codex-rs/tui/src/nori
 - `updates.rs`: Version checking against GitHub releases
 - `update_prompt.rs`: User prompting for updates
 
+**Stale Turn Lifecycle Guard:**
+
+`handle_client_turn_lifecycle` in `event_handlers.rs` ignores `TurnLifecycle::Completed` when `!is_task_running()`. This prevents a cancelled prompt task's late `Completed` event from resetting a newer turn's working state. This is defense-in-depth alongside the ACP backend's `turn_generation` counter (see `@/codex-rs/acp/docs.md`).
+
 **Error Reporting:**
 
 When errors occur, users are directed to report bugs at `https://github.com/tilework-tech/nori-cli/issues`.

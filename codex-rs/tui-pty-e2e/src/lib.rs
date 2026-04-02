@@ -311,6 +311,31 @@ name = "Mock ACP provider for tests"
             }
         }
 
+        // If sacp-tee wrapping is requested, create a wrapper script that
+        // interposes sacp-tee between nori and the mock agent for wire logging.
+        if let Some(ref log_filename) = config.sacp_tee_log
+            && let Some(ref td) = temp_dir
+        {
+            let log_path = td.path().join(log_filename);
+            let mock_agent_bin = std::path::Path::new(&codex_binary_path())
+                .with_file_name("mock_acp_agent")
+                .to_string_lossy()
+                .into_owned();
+            let wrapper_path = td.path().join("sacp-tee-wrapper.sh");
+            let wrapper_script = format!(
+                "#!/bin/sh\nexec sacp-tee --log-file '{log_path}' -- '{mock_agent_bin}' \"$@\"",
+                log_path = log_path.display(),
+                mock_agent_bin = mock_agent_bin,
+            );
+            std::fs::write(&wrapper_path, &wrapper_script)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&wrapper_path, std::fs::Permissions::from_mode(0o755))?;
+            }
+            cmd.env("MOCK_ACP_AGENT_BIN", wrapper_path.to_str().unwrap());
+        }
+
         // Pass through mock agent env vars
         for (key, value) in config.mock_agent_env {
             cmd.env(&key, &value);
@@ -636,6 +661,15 @@ name = "Mock ACP provider for tests"
     pub fn nori_home_path(&self) -> Option<std::path::PathBuf> {
         self._temp_dir.as_ref().map(|d| d.path().to_path_buf())
     }
+
+    /// Read the sacp-tee JSONL log file, if it exists. Returns the raw log
+    /// content as a string. Only available when the session was started with
+    /// `SessionConfig::with_sacp_tee()`.
+    pub fn sacp_tee_log(&self, log_filename: &str) -> Option<String> {
+        self._temp_dir
+            .as_ref()
+            .and_then(|d| std::fs::read_to_string(d.path().join(log_filename)).ok())
+    }
 }
 
 /// Find the ACP log file in the given NORI_HOME directory.
@@ -685,6 +719,10 @@ pub struct SessionConfig {
     /// Binary names to exclude from PATH (filters out directories containing these binaries).
     /// Useful for testing behavior when certain commands are "not installed".
     pub exclude_binaries: Vec<String>,
+    /// When set, wraps the mock agent with sacp-tee to produce a JSONL log of
+    /// all ACP wire traffic. The value is the filename (relative to NORI_HOME)
+    /// where the log will be written. Requires `sacp-tee` to be on PATH.
+    pub sacp_tee_log: Option<String>,
 }
 
 impl Default for SessionConfig {
@@ -708,6 +746,7 @@ impl SessionConfig {
             // Exclude installers by default since it won't be in PATH on CI runners.
             // Tests that need installers should explicitly add it via with_extra_path().
             exclude_binaries: vec!["nori-ai".to_string(), "nori-skillsets".to_string()],
+            sacp_tee_log: None,
         }
     }
 
@@ -777,6 +816,14 @@ impl SessionConfig {
     /// Useful for testing behavior when certain commands are "not installed".
     pub fn with_excluded_binary(mut self, binary_name: impl Into<String>) -> Self {
         self.exclude_binaries.push(binary_name.into());
+        self
+    }
+
+    /// Wrap the mock agent with `sacp-tee` to produce a JSONL log of all ACP
+    /// wire traffic. The log filename is relative to the session's NORI_HOME.
+    /// Requires `sacp-tee` to be installed and on PATH.
+    pub fn with_sacp_tee(mut self, log_filename: impl Into<String>) -> Self {
+        self.sacp_tee_log = Some(log_filename.into());
         self
     }
 }

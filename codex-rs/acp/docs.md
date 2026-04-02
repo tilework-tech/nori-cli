@@ -966,6 +966,10 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
 - Transcript discovery for all agents requires the first user message to function correctly; without it, the discovery returns an error. This is enforced via shell-based search using `rg` or `grep`.
 
+**Turn Generation Counter:**
+
+`AcpBackend` has a `turn_generation: Arc<AtomicU64>` counter that prevents stale `TurnLifecycle::Completed` events from cancelled prompt tasks. When `Op::Interrupt` is processed (`submit_and_ops.rs`), the generation is incremented. The spawned prompt task (`user_input.rs`) captures the generation at spawn time and only emits `Completed` if the current generation still matches. Without this, a cancelled prompt task's late `Completed` would reset a newer turn's working state in the TUI.
+
 **Event Flow Tracing:**
 
 ```bash

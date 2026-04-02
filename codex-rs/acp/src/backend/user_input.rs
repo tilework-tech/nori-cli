@@ -193,6 +193,8 @@ impl AcpBackend {
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
+        let turn_generation = Arc::clone(&self.turn_generation);
+        let generation_at_spawn = turn_generation.load(Ordering::SeqCst);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -531,31 +533,44 @@ impl AcpBackend {
                 );
             }
 
-            // Send TaskComplete event (always, to end the turn)
-            emit_client_event(
-                &backend_event_tx,
-                transcript_recorder.as_ref(),
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed {
-                        last_agent_message: None,
-                    },
-                ),
-            )
-            .await;
+            // Only emit Completed if this task's generation still matches.
+            // If an Op::Interrupt incremented the generation, this turn was
+            // cancelled and a stale Completed would reset a newer turn's
+            // working state in the TUI.
+            let current_gen = turn_generation.load(Ordering::SeqCst);
+            if current_gen == generation_at_spawn {
+                emit_client_event(
+                    &backend_event_tx,
+                    transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed {
+                            last_agent_message: None,
+                        },
+                    ),
+                )
+                .await;
 
-            // Start idle timer if configured
-            if let Some(duration) = notify_after_idle.as_duration() {
-                let idle_secs = duration.as_secs();
-                let user_notifier_for_timer = Arc::clone(&user_notifier);
-                let idle_task = tokio::spawn(async move {
-                    tokio::time::sleep(duration).await;
-                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                        session_id: session_id_for_timer,
-                        idle_duration_secs: idle_secs,
+                // Start idle timer if configured (only for non-stale turns)
+                if let Some(duration) = notify_after_idle.as_duration() {
+                    let idle_secs = duration.as_secs();
+                    let user_notifier_for_timer = Arc::clone(&user_notifier);
+                    let idle_task = tokio::spawn(async move {
+                        tokio::time::sleep(duration).await;
+                        user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                            session_id: session_id_for_timer,
+                            idle_duration_secs: idle_secs,
+                        });
                     });
-                });
-                // Store the abort handle so the timer can be cancelled on new activity
-                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                    // Store the abort handle so the timer can be cancelled on new activity
+                    *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                }
+            } else {
+                debug!(
+                    target: "acp_event_flow",
+                    generation_at_spawn,
+                    current_gen,
+                    "Suppressing stale TurnLifecycle::Completed (turn was interrupted)"
+                );
             }
         });
 

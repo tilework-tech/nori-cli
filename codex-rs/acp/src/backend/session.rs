@@ -253,6 +253,7 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
+            turn_generation: Arc::new(AtomicU64::new(0)),
         };
 
         // Execute session_start hooks
