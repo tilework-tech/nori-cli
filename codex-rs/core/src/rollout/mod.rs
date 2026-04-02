@@ -8,8 +8,6 @@ pub const INTERACTIVE_SESSION_SOURCES: &[SessionSource] =
     &[SessionSource::Cli, SessionSource::VSCode];
 
 pub mod list;
-#[allow(dead_code)]
-pub(crate) mod policy;
 pub mod recorder;
 
 pub use codex_protocol::protocol::SessionMeta;

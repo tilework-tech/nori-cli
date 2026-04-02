@@ -810,3 +810,36 @@ command_safety/mod.rs
 - All existing tests pass (the removed tests were testing dead HTTP-backend behavior)
 - `is_safe_command.rs` and `windows_safe_commands.rs` are completely unaffected
 - No production behavior changes
+
+## Remove `rollout/policy.rs` (seventeenth removal)
+
+### Why this component
+
+`rollout/policy.rs` defines three filtering functions (`is_persisted_response_item`, `should_persist_response_item`, `should_persist_event_msg`) that determine which rollout items should be persisted. The entire module is declared with `#[allow(dead_code)]` in `rollout/mod.rs` (line 11-12) and has **zero callers** anywhere in the codebase.
+
+### What it contains
+
+- `is_persisted_response_item(item: &RolloutItem) -> bool` — top-level dispatcher
+- `should_persist_response_item(item: &ResponseItem) -> bool` — filters ResponseItem variants
+- `should_persist_event_msg(ev: &EventMsg) -> bool` — filters EventMsg variants (~35 variants return false)
+
+All three functions are `pub(crate)` but never imported or called.
+
+### References (non-import)
+
+1. `app-server-protocol/src/protocol/thread_history.rs:47` — doc comment: `/// See should_persist_event_msg in codex-rs/core/rollout/policy.rs.` This is a cross-reference comment, not an import. Needs updating.
+2. `protocol/docs.md` (lines 75, 111, 118, 124) — Four event types annotated "Not persisted to rollout policy." These refer to the filtering logic. Needs rewording.
+
+### Files to modify
+
+1. **Delete** `core/src/rollout/policy.rs`
+2. **Edit** `core/src/rollout/mod.rs` — remove `#[allow(dead_code)]` and `pub(crate) mod policy;` (lines 11-12)
+3. **Edit** `app-server-protocol/src/protocol/thread_history.rs:47` — update doc comment
+4. **Edit** `protocol/docs.md` — reword "rollout policy" annotations
+5. **Edit** `core/docs.md` — remove any policy.rs references if present
+
+### Verification
+
+- `cargo test -p codex-core` — all unit + integration tests pass
+- `cargo build --bin nori` — binary still compiles
+- No behavioral changes — these functions were never called

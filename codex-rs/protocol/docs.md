@@ -72,7 +72,7 @@ pub enum EventMsg {
 | `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
 | `PromptSummary` | Short summary of the first user prompt for display in the footer |
 | `HookOutput` | Output from a hook script, routed by level (Info/Warn/Error) for TUI display |
-| `SearchHistoryResponse` | Response to `SearchHistoryRequest` with deduplicated history entries (newest first). Not persisted to rollout policy. |
+| `SearchHistoryResponse` | Response to `SearchHistoryRequest` with deduplicated history entries (newest first). Not persisted to rollout files. |
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -108,20 +108,20 @@ pub enum EventMsg {
 
 | Type | Purpose |
 |------|---------|
-| `PromptSummaryEvent` | Carries a `summary: String` field with a short summary of the first user prompt. Emitted by the ACP backend and rendered in the TUI footer. Not persisted to rollout policy. |
+| `PromptSummaryEvent` | Carries a `summary: String` field with a short summary of the first user prompt. Emitted by the ACP backend and rendered in the TUI footer. Not persisted to rollout files. |
 
 **Hook Output Types:**
 
 | Type | Purpose |
 |------|---------|
 | `HookOutputLevel` | Enum with `Info`, `Warn`, `Error` variants controlling TUI display style |
-| `HookOutputEvent` | Carries a `message: String` and `level: HookOutputLevel`. Emitted by the ACP backend's hook routing. Not persisted to rollout policy. |
+| `HookOutputEvent` | Carries a `message: String` and `level: HookOutputLevel`. Emitted by the ACP backend's hook routing. Not persisted to rollout files. |
 
 **Search History Types:**
 
 | Type | Purpose |
 |------|--------|
-| `SearchHistoryResponseEvent` | Wraps `Vec<HistoryEntry>` (from `codex_protocol::message_history`). Each entry has `conversation_id`, `ts`, and `text`. Not persisted to rollout policy. |
+| `SearchHistoryResponseEvent` | Wraps `Vec<HistoryEntry>` (from `codex_protocol::message_history`). Each entry has `conversation_id`, `ts`, and `text`. Not persisted to rollout files. |
 
 **Context Compaction Types:**
 

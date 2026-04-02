@@ -1,6 +1,30 @@
 # Current Progress
 
-## Status: Sixteenth component removed
+## Status: Seventeenth component removed
+
+### Completed: Remove dead rollout persistence policy from rollout/
+
+Removed `rollout/policy.rs` from codex-core. This module defined three filtering functions (`is_persisted_response_item`, `should_persist_response_item`, `should_persist_event_msg`) that determined which rollout items should be persisted to disk. The entire module was declared with `#[allow(dead_code)]` and had zero callers anywhere in the codebase.
+
+**What was removed:**
+- `rollout/policy.rs` (~93 lines) — three `pub(crate)` functions for filtering rollout items
+- `#[allow(dead_code)]` and `pub(crate) mod policy;` from `rollout/mod.rs`
+
+**What was preserved:**
+- `rollout/list.rs` — rollout file discovery (used by ACP/TUI)
+- `rollout/recorder.rs` — rollout recording (used by ACP/TUI)
+- `rollout/tests.rs` — existing rollout tests
+
+**Documentation updated:**
+- `app-server-protocol/src/protocol/thread_history.rs` — removed stale doc comment referencing deleted `policy.rs`
+- `protocol/docs.md` — changed "Not persisted to rollout policy" to "Not persisted to rollout files" in 4 places
+
+**Impact:** ~93 lines of dead code removed. codex-core unit tests: 367 pass. Integration tests: 14 pass.
+
+### Suggested next steps for future commits
+1. Clean up test-only code in `compact.rs` — `build_compacted_history`, `collect_user_messages`, `is_summary_message` are test-only functions testing dead HTTP-backend behavior
+2. Clean up test-only code in `safety.rs` — `is_write_patch_constrained_to_writable_paths` is test-only
+3. Clean up `Cargo.toml` — remove unused dependencies: `askama`, `async-trait`, `indexmap`, `strum_macros`, `test-case`, `test-log` (all confirmed zero references in source code)
 
 ### Completed: Remove dead command danger assessment from command_safety/
 
