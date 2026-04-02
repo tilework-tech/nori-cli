@@ -4,7 +4,7 @@ Path: @/codex-rs/core
 
 ### Overview
 
-The core crate provides foundational functionality shared across Nori components: configuration management, authentication, command execution with sandboxing, tool specifications, compaction utilities, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most shared business logic.
+The core crate provides foundational functionality shared across Nori components: configuration management, authentication, command execution with sandboxing, compaction utilities, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most shared business logic.
 
 ### How it fits into the larger codebase
 
@@ -22,7 +22,7 @@ config  auth  exec/sandboxing
 ```
 
 The core crate is depended on by:
-- `@/codex-rs/tui/` - for config loading, auth management, tool specs, and shared types
+- `@/codex-rs/tui/` - for config loading, auth management, and shared types
 - `@/codex-rs/acp/` - for config types and auth helpers
 - `@/codex-rs/login/` - for auth primitives
 
@@ -69,7 +69,7 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 - macOS: Seatbelt sandbox profiles (`seatbelt.rs`)
 - Windows: Restricted process tokens (`codex-windows-sandbox`)
 
-**Execution Policy** (`exec_policy.rs`, `command_safety/`): Evaluates whether commands should be auto-approved or require user confirmation based on policy rules.
+**Command Safety** (`command_safety/`): Evaluates whether commands should be auto-approved or require user confirmation based on policy rules.
 
 **Custom Prompts** (`custom_prompts.rs`): Discovers and executes user-authored custom prompts from a directory. Two kinds of prompts are supported:
 
@@ -95,9 +95,7 @@ Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 
 ACP (Agent Context Protocol) integration is handled in `@/codex-rs/acp`, not embedded in core. The core crate provides shared infrastructure (config, auth, tool specs, sandboxing, compaction utilities) that the ACP backend consumes.
 
-**Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, `ApprovalRequirement`, `SandboxablePreference`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/codex-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
-
-**Client Common (`client_common.rs`):** Contains `Prompt` (the API request payload struct) and the `tools` submodule (`ToolSpec`, `FreeformTool`, `ResponsesApiTool`, etc.) used for tool definitions.
+**Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/codex-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
 **Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, retry/timeout settings, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
 
@@ -123,7 +121,7 @@ Core's `Config::tui_notifications` is a simple `bool` that controls whether the 
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `approval.rs`, `turn_execution.rs`, etc.), `parse_command/`, `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` and `tests/suite/client/` also use the `mod.rs` + `part*.rs` pattern.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `parse_command/`, `rollout/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` and `tests/suite/client/` also use the `mod.rs` + `part*.rs` pattern.
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt

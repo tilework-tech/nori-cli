@@ -1,6 +1,34 @@
 # Current Progress
 
-## Status: Thirteenth component removed
+## Status: Fourteenth component removed
+
+### Completed: Remove dead test-only infrastructure from codex-core
+
+Removed test-only modules that survived the HTTP backend removal as `#[cfg(test)]` code. These defined OpenAI Responses API types and tested MCP-to-OpenAI tool conversion — functionality that no longer exists in production.
+
+**What was removed:**
+- `client_common.rs` — test-only `ToolSpec`, `FreeformTool`, `ResponsesApiTool` type definitions
+- `tools/spec/mod.rs` — test-only `JsonSchema`, `AdditionalProperties`, `mcp_tool_to_openai_tool()`, `sanitize_json_schema()`, `create_shell_tool()`, `create_shell_command_tool()`
+- `tools/spec/tests.rs` — 8 tests for dead MCP-to-OpenAI conversion
+- `tools/runtimes/` — orphaned directory (never declared in `tools/mod.rs`): `apply_patch.rs`, `shell.rs`, `unified_exec.rs`, `mod.rs`
+- `tools/mod.rs` — only declared `pub mod spec;`
+- `rollout/error.rs` — empty 2-line placeholder module
+
+**What was preserved (moved):**
+- `model_family_apply_patch_instructions` test — moved from `client_common.rs` to `model_family.rs`, simplified to remove `ToolSpec` dependency. Tests that `find_family_for_model()` returns correct `needs_special_apply_patch_instructions` values.
+
+**Documentation updated:**
+- `core/docs.md` — removed `client_common.rs` description, `tools/spec/` module structure reference, stale `exec_policy.rs` reference, stale `ApprovalRequirement`/`SandboxablePreference` references
+- `execpolicy/docs.md` — updated integration reference from `exec_policy.rs` to `command_safety/`
+
+**Impact:** ~1,270 lines of dead test infrastructure removed. All existing tests pass (codex-core: 376 unit + 14 integration; 2 ignored live CLI tests).
+
+### Suggested next steps for future commits
+1. Remove orphaned `Feature` enum variants (`GhostCommit`, `ExecPolicy`, `ParallelToolCalls`, `ShellTool`) from `features.rs` — their consumers were deleted with the HTTP backend
+2. Remove or decide on `is_dangerous_command.rs` — entire file is now `#[cfg(test)]`, functions are dead production logic
+3. Clean up test-only code in `compact.rs` and `safety.rs` — functions like `build_compacted_history`, `is_write_patch_constrained_to_writable_paths` moved to `#[cfg(test)]` but test dead behavior
+4. Remove `rollout/policy.rs` or integrate it — currently `#[allow(dead_code)]`
+5. Clean up `Cargo.toml` — remove any workspace-level dependencies that are no longer used
 
 ### Completed: Remove `codex-api` crate and all `legacy-http-backend` gated code
 

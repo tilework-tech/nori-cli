@@ -261,3 +261,66 @@ pub fn derive_default_model_family(model: &str) -> ModelFamily {
         truncation_policy: TruncationPolicy::Bytes(10_000),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn model_family_apply_patch_instructions() {
+        struct Case {
+            slug: &'static str,
+            expects_apply_patch_instructions: bool,
+        }
+
+        let cases = vec![
+            Case {
+                slug: "gpt-3.5",
+                expects_apply_patch_instructions: true,
+            },
+            Case {
+                slug: "gpt-4.1",
+                expects_apply_patch_instructions: true,
+            },
+            Case {
+                slug: "gpt-4o",
+                expects_apply_patch_instructions: true,
+            },
+            Case {
+                slug: "gpt-5",
+                expects_apply_patch_instructions: true,
+            },
+            Case {
+                slug: "gpt-5.1",
+                expects_apply_patch_instructions: false,
+            },
+            Case {
+                slug: "codex-mini-latest",
+                expects_apply_patch_instructions: true,
+            },
+            Case {
+                slug: "gpt-oss:120b",
+                expects_apply_patch_instructions: false,
+            },
+            Case {
+                slug: "gpt-5.1-codex",
+                expects_apply_patch_instructions: false,
+            },
+            Case {
+                slug: "gpt-5.1-codex-max",
+                expects_apply_patch_instructions: false,
+            },
+        ];
+
+        for case in cases {
+            let family = find_family_for_model(case.slug).expect("known model slug");
+            assert_eq!(
+                family.needs_special_apply_patch_instructions,
+                case.expects_apply_patch_instructions,
+                "model {slug} apply_patch instructions mismatch",
+                slug = case.slug
+            );
+        }
+    }
+}

@@ -290,6 +290,38 @@ Several imports at the top of compact.rs are only used by the HTTP-specific func
 - `futures::prelude::*` (only in HTTP functions — gate)
 - `tracing::error` (only in HTTP functions — gate)
 
+## Remove remaining dead test infrastructure (fourteenth removal)
+
+### Why this component
+
+After removing `codex-api` and all `legacy-http-backend` gated code (~45,000 lines), several modules survive purely as `#[cfg(test)]` infrastructure for testing HTTP-backend behavior that no longer exists in production. These modules confuse anyone reading the codebase because they define OpenAI Responses API types (`ToolSpec`, `JsonSchema`, `ResponsesApiTool`) that have no production consumers.
+
+### Files to remove entirely
+
+1. **`tools/spec/tests.rs`** — 8 tests for `mcp_tool_to_openai_tool()` conversion (dead production code)
+2. **`tools/spec/mod.rs`** — 330 lines, entirely `#[cfg(test)]`: `JsonSchema`, `AdditionalProperties`, `create_shell_tool()`, `create_shell_command_tool()`, `mcp_tool_to_openai_tool()`, `sanitize_json_schema()`
+3. **`client_common.rs`** — 127 lines, entirely `#[cfg(test)]`: `ToolSpec`, `FreeformTool`, `ResponsesApiTool` types + one test
+4. **`rollout/error.rs`** — 2-line empty placeholder module
+
+### Files to edit
+
+1. **`tools/mod.rs`** — remove `pub mod spec;` (module becomes empty, remove entirely)
+2. **`lib.rs`** — remove `mod client_common;`, `mod tools;`
+3. **`rollout/mod.rs`** — remove `pub(crate) mod error;`
+4. **`core/docs.md`** — remove references to `client_common.rs`, `tools/spec/`, update module structure description
+
+### Test to preserve (move to `model_family.rs`)
+
+The test `get_full_instructions_no_user_content` in `client_common.rs` tests `find_family_for_model()` and `needs_special_apply_patch_instructions` — this is still-valuable model family behavior testing. However, it uses `ToolSpec` unnecessarily (creates an empty vec, checks it's empty). The test should be simplified and moved to `model_family.rs`.
+
+### Dependency analysis (verified)
+
+- `client_common::tools::*` is only imported by `tools/spec/mod.rs` (test-only)
+- `tools::spec::JsonSchema` is only imported by `client_common.rs` (test-only)
+- Circular test-only dependency between `client_common` and `tools/spec` — both removable together
+- `rollout/error.rs` is only referenced by `rollout/mod.rs` via `pub(crate) mod error;`
+- No downstream crates reference any of these modules
+
 ## Moving `to_api_provider()` out of `model_provider_info.rs` (Phase 2 analysis)
 
 ### Why this step

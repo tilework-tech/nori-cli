@@ -7,7 +7,6 @@
 
 pub mod auth;
 pub mod bash;
-mod client_common;
 mod command_safety;
 pub mod config;
 pub mod config_loader;
@@ -51,7 +50,6 @@ pub mod seatbelt;
 pub mod shell;
 pub mod spawn;
 pub mod terminal;
-mod tools;
 pub mod turn_diff_tracker;
 pub use rollout::ARCHIVED_SESSIONS_SUBDIR;
 pub use rollout::INTERACTIVE_SESSION_SOURCES;
