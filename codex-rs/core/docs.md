@@ -69,7 +69,7 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 - macOS: Seatbelt sandbox profiles (`seatbelt.rs`)
 - Windows: Restricted process tokens (`codex-windows-sandbox`)
 
-**Command Safety** (`command_safety/`): Evaluates whether commands should be auto-approved or require user confirmation based on policy rules.
+**Command Safety** (`command_safety/`): Determines whether shell commands are known-safe and can be auto-approved without user confirmation, based on execution policy rules from `@/codex-rs/execpolicy/`.
 
 **Custom Prompts** (`custom_prompts.rs`): Discovers and executes user-authored custom prompts from a directory. Two kinds of prompts are supported:
 

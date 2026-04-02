@@ -766,3 +766,47 @@ All EXTERNAL callers of these methods are in gated modules:
 - `retry_suffix`, `retry_suffix_after_or`, `format_retry_timestamp`, `day_suffix` helpers are only used by `UsageLimitReachedError::Display` — gate with the struct
 - `NOW_OVERRIDE` test thread-local is only used by gated tests — gate with tests
 - `with_now_override` test helper — gate with tests
+
+## `is_dangerous_command.rs` removal (next removal target)
+
+### What it is
+
+The `is_dangerous_command.rs` file and its companion `windows_dangerous_commands.rs` form the "command danger assessment" component of the HTTP backend. This was the counterpart to `is_safe_command.rs` — while `is_safe_command` determines commands that are safe to auto-approve, `is_dangerous_command` determined commands that require extra caution.
+
+### Current state
+
+- **`is_dangerous_command.rs`**: Entire file content (beyond a Windows-only path attribute at lines 1-3) is wrapped in `#[cfg(test)] mod tests`. All functions (`requires_initial_appoval`, `command_might_be_dangerous`, `is_dangerous_to_call_with_exec`) are test-only. No production code.
+- **`windows_dangerous_commands.rs`**: Contains production-level code (`is_dangerous_command_windows`, URL detection, PowerShell danger patterns) but its **only** importer is `is_dangerous_command.rs` via `#[cfg(windows)] #[path = ...]`. Since the importer is entirely `#[cfg(test)]`, this file only compiles in Windows test builds.
+- **Zero callers**: No production code anywhere calls any function from either file.
+- `is_dangerous_command` is declared `pub` in `command_safety/mod.rs` but the parent `command_safety` module is private in `lib.rs`, so it's not reachable from outside the crate.
+
+### Dependency graph
+
+```
+command_safety/mod.rs
+  ├── is_safe_command.rs   ← KEEP (production, re-exported in lib.rs)
+  │   └── windows_safe_commands.rs  ← KEEP (used by is_safe_command)
+  ├── is_dangerous_command.rs  ← REMOVE (entirely #[cfg(test)])
+  │   └── windows_dangerous_commands.rs  ← REMOVE (only imported by is_dangerous_command)
+  └── windows_safe_commands.rs  ← KEEP (declared as module, used by is_safe_command)
+```
+
+### Files to modify
+
+1. Delete `core/src/command_safety/is_dangerous_command.rs`
+2. Delete `core/src/command_safety/windows_dangerous_commands.rs`
+3. `core/src/command_safety/mod.rs` — remove `pub mod is_dangerous_command;` line
+
+### Dependencies potentially affected
+
+`windows_dangerous_commands.rs` uses `once_cell`, `regex`, and `url` crates. However:
+- These are only compiled on Windows in test builds
+- `once_cell` and `regex` may be used elsewhere in the crate
+- Even if they become unused, the compiler won't flag them on Linux builds
+- Dependency cleanup is a separate task
+
+### Verification
+
+- All existing tests pass (the removed tests were testing dead HTTP-backend behavior)
+- `is_safe_command.rs` and `windows_safe_commands.rs` are completely unaffected
+- No production behavior changes

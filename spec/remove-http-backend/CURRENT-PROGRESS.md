@@ -1,6 +1,30 @@
 # Current Progress
 
-## Status: Fifteenth component removed
+## Status: Sixteenth component removed
+
+### Completed: Remove dead command danger assessment from command_safety/
+
+Removed `is_dangerous_command.rs` and `windows_dangerous_commands.rs` from the `command_safety/` module. These files implemented the HTTP backend's "is this command dangerous?" assessment pipeline — the counterpart to `is_safe_command.rs`. All code in `is_dangerous_command.rs` was wrapped in `#[cfg(test)]` with zero production callers. `windows_dangerous_commands.rs` was only imported by `is_dangerous_command.rs` on Windows.
+
+**What was removed:**
+- `is_dangerous_command.rs` (~155 lines) — test-only functions: `requires_initial_appoval`, `command_might_be_dangerous`, `is_dangerous_to_call_with_exec`, plus 9 test cases
+- `windows_dangerous_commands.rs` (~316 lines) — `is_dangerous_command_windows`, PowerShell/cmd.exe/GUI danger detection, URL pattern matching
+- `pub mod is_dangerous_command;` declaration from `command_safety/mod.rs`
+
+**What was preserved:**
+- `is_safe_command.rs` — production code for auto-approving safe commands (used by ACP)
+- `windows_safe_commands.rs` — Windows PowerShell safety checks (used by `is_safe_command`)
+
+**Documentation updated:**
+- `core/docs.md` — refined `command_safety/` description to reflect that only safe-command auto-approval logic remains
+
+**Impact:** ~471 lines of dead code removed. codex-core unit tests: 367 (down from 376 — the 9 removed tests were dead HTTP-backend tests). Integration tests: 14 pass. E2E: 9 pass.
+
+### Suggested next steps for future commits
+1. Remove `rollout/policy.rs` — dead code with `#[allow(dead_code)]`, zero callers anywhere in the codebase
+2. Clean up test-only code in `compact.rs` — `build_compacted_history`, `collect_user_messages`, `is_summary_message` are test-only functions testing dead HTTP-backend behavior
+3. Clean up test-only code in `safety.rs` — `is_write_patch_constrained_to_writable_paths` is test-only
+4. Clean up `Cargo.toml` — remove unused dependencies: `askama`, `async-trait`, `indexmap`, `strum_macros`, `test-case`, `test-log` (all confirmed zero references in source code)
 
 ### Completed: Remove orphaned Feature enum variants from features.rs
 
