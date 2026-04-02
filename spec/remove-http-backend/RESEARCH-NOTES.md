@@ -322,6 +322,40 @@ The test `get_full_instructions_no_user_content` in `client_common.rs` tests `fi
 - `rollout/error.rs` is only referenced by `rollout/mod.rs` via `pub(crate) mod error;`
 - No downstream crates reference any of these modules
 
+## Remove orphaned Feature enum variants (fifteenth removal)
+
+### Why this component
+
+After removing the HTTP backend, four `Feature` enum variants in `features.rs` have zero consumers anywhere in the codebase. They exist only in the `FEATURES` registry array but no code ever calls `.enabled(Feature::X)` for them. They confuse readers by implying nori has capabilities (ghost commit gating, exec policy gating, parallel tool calls, shell tool gating) that are either unconditional or removed.
+
+### Variants to remove
+
+| Variant | Key | Default | Stage | Why dead |
+|---------|-----|---------|-------|----------|
+| `GhostCommit` | `"undo"` | `true` | Stable | Ghost commit functionality in `codex_git` and `acp/src/undo.rs` operates unconditionally — never consulted this flag |
+| `ExecPolicy` | `"exec_policy"` | `true` | Experimental | Exec policy enforcement runs unconditionally via `codex-execpolicy` crate |
+| `ParallelToolCalls` | `"parallel"` | `false` | Experimental | No `.enabled()` call exists; parallel tool calls were an HTTP-backend concept |
+| `ShellTool` | `"shell_tool"` | `true` | Stable | Shell tool types (`ConfigShellToolType`) exist independently; never gated by this flag |
+
+### Verification
+
+- Searched all `.rs` files for `Feature::GhostCommit`, `Feature::ExecPolicy`, `Feature::ParallelToolCalls`, `Feature::ShellTool` — only hits are in `features.rs` FEATURES array
+- Searched for feature key strings `"undo"`, `"exec_policy"`, `"parallel"`, `"shell_tool"` in config/tests — no matches
+- No legacy aliases reference these features in `legacy.rs`
+- No test fixtures or TOML files reference these keys
+- No downstream crates reference these variants
+
+### Files to modify
+
+1. **`core/src/features.rs`** — Remove 4 enum variants and their corresponding `FeatureSpec` entries from the `FEATURES` array
+2. **`core/docs.md`** — Remove any feature flag references if present (verified: none specific to these variants)
+
+### Impact
+
+- Pure dead code removal: ~30 lines
+- No behavioral changes — these flags were never read
+- Existing config files with `undo = false` or `shell_tool = false` in `[features]` will trigger "unknown feature key in config" warning instead of silently being accepted — this is the correct behavior since the flags had no effect anyway
+
 ## Moving `to_api_provider()` out of `model_provider_info.rs` (Phase 2 analysis)
 
 ### Why this step

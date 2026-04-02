@@ -1,6 +1,29 @@
 # Current Progress
 
-## Status: Fourteenth component removed
+## Status: Fifteenth component removed
+
+### Completed: Remove orphaned Feature enum variants from features.rs
+
+Removed 4 dead `Feature` enum variants whose consumers were deleted with the HTTP backend. These variants existed in the `FEATURES` registry array but no code ever called `.enabled(Feature::X)` for any of them.
+
+**What was removed:**
+- `Feature::GhostCommit` (key: `"undo"`, default: true) — ghost commit functionality operates unconditionally via `codex_git`; this flag was never checked
+- `Feature::ExecPolicy` (key: `"exec_policy"`, default: true) — exec policy enforcement runs unconditionally via `codex-execpolicy` crate
+- `Feature::ParallelToolCalls` (key: `"parallel"`, default: false) — parallel tool calls were an HTTP-backend concept with no ACP equivalent
+- `Feature::ShellTool` (key: `"shell_tool"`, default: true) — shell tool types (`ConfigShellToolType`) exist independently; never gated by this flag
+
+**What was preserved:**
+- 7 remaining `Feature` variants: `UnifiedExec`, `RmcpClient`, `ApplyPatchFreeform`, `ViewImageTool`, `WebSearchRequest`, `SandboxCommandAssessment`, `WindowsSandbox` — all have active consumers via `.enabled()` calls
+- All legacy aliases in `legacy.rs` (none referenced the removed variants)
+- All existing feature-related tests pass unchanged
+
+**Impact:** ~30 lines of dead feature flag definitions removed. The `Feature` enum is now 7 variants instead of 11. Existing config files with `undo = false` or `shell_tool = true` in `[features]` will now see "unknown feature key" warnings — correct, since these keys had no effect. All existing tests pass (codex-core: 376 unit + 14 integration; E2E: 9 tests).
+
+### Suggested next steps for future commits
+1. Remove or decide on `is_dangerous_command.rs` — entire file is now `#[cfg(test)]`, functions are dead production logic
+2. Clean up test-only code in `compact.rs` and `safety.rs` — functions like `build_compacted_history`, `is_write_patch_constrained_to_writable_paths` moved to `#[cfg(test)]` but test dead behavior
+3. Remove `rollout/policy.rs` if unused — currently `pub(crate)` functions, need to verify callers
+4. Clean up `Cargo.toml` — remove any workspace-level dependencies that are no longer used
 
 ### Completed: Remove dead test-only infrastructure from codex-core
 
