@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "noriSessionName": "nori-aqua-herring-40be",
+  "claudeSessionId": "caf7f52f-c236-4fbb-b8e6-1f00f2d5c3af",
+  "timestamp": 1775159827,
+  "baseSha": "00334b3944d3a260072ca15b8c919d494fa49510",
+  "baseBranch": "main",
+  "repoUrl": "https://github.com/tilework-tech/nori-cli",
+  "agentType": "claude-code",
+  "hasWorkspacePatch": false,
+  "hasUntrackedFiles": false
+}
