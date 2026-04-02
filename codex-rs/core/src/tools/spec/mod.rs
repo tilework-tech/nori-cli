@@ -1,72 +1,26 @@
+// Items below are only used by test code (client_common::tools and the
+// test-only create_*/mcp helpers in this module).
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
 use crate::client_common::tools::ResponsesApiTool;
+#[cfg(test)]
 use crate::client_common::tools::ToolSpec;
-use crate::features::Feature;
-use crate::features::Features;
-use crate::model_family::ModelFamily;
-use crate::tool_types::ApplyPatchToolType;
+#[cfg(test)]
 use serde::Deserialize;
+#[cfg(test)]
 use serde::Serialize;
+#[cfg(test)]
 use serde_json::Value as JsonValue;
+#[cfg(test)]
 use serde_json::json;
+#[cfg(test)]
 use std::collections::BTreeMap;
 
-pub use crate::tool_types::ConfigShellToolType;
-
-#[derive(Debug, Clone)]
-pub(crate) struct ToolsConfig {
-    pub shell_type: ConfigShellToolType,
-    pub apply_patch_tool_type: Option<ApplyPatchToolType>,
-    pub web_search_request: bool,
-    pub include_view_image_tool: bool,
-    pub experimental_supported_tools: Vec<String>,
-}
-
-pub(crate) struct ToolsConfigParams<'a> {
-    pub(crate) model_family: &'a ModelFamily,
-    pub(crate) features: &'a Features,
-}
-
-impl ToolsConfig {
-    pub fn new(params: &ToolsConfigParams) -> Self {
-        let ToolsConfigParams {
-            model_family,
-            features,
-        } = params;
-        let include_apply_patch_tool = features.enabled(Feature::ApplyPatchFreeform);
-        let include_web_search_request = features.enabled(Feature::WebSearchRequest);
-        let include_view_image_tool = features.enabled(Feature::ViewImageTool);
-
-        let shell_type = if !features.enabled(Feature::ShellTool) {
-            ConfigShellToolType::Disabled
-        } else if features.enabled(Feature::UnifiedExec) {
-            ConfigShellToolType::UnifiedExec
-        } else {
-            model_family.shell_type.clone()
-        };
-
-        let apply_patch_tool_type = match model_family.apply_patch_tool_type {
-            Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
-            Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
-            None => {
-                if include_apply_patch_tool {
-                    Some(ApplyPatchToolType::Freeform)
-                } else {
-                    None
-                }
-            }
-        };
-
-        Self {
-            shell_type,
-            apply_patch_tool_type,
-            web_search_request: include_web_search_request,
-            include_view_image_tool,
-            experimental_supported_tools: model_family.experimental_supported_tools.clone(),
-        }
-    }
-}
-
-/// Generic JSON‑Schema subset needed for our tool definitions
+/// Generic JSON-Schema subset needed for our tool definitions
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum JsonSchema {
@@ -103,6 +57,7 @@ pub(crate) enum JsonSchema {
 }
 
 /// Whether additional properties are allowed, and if so, any required schema
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub(crate) enum AdditionalProperties {
@@ -110,143 +65,21 @@ pub(crate) enum AdditionalProperties {
     Schema(Box<JsonSchema>),
 }
 
+#[cfg(test)]
 impl From<bool> for AdditionalProperties {
     fn from(b: bool) -> Self {
         Self::Boolean(b)
     }
 }
 
+#[cfg(test)]
 impl From<JsonSchema> for AdditionalProperties {
     fn from(s: JsonSchema) -> Self {
         Self::Schema(Box::new(s))
     }
 }
 
-fn create_exec_command_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "cmd".to_string(),
-        JsonSchema::String {
-            description: Some("Shell command to execute.".to_string()),
-        },
-    );
-    properties.insert(
-        "workdir".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Optional working directory to run the command in; defaults to the turn cwd."
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "shell".to_string(),
-        JsonSchema::String {
-            description: Some("Shell binary to launch. Defaults to /bin/bash.".to_string()),
-        },
-    );
-    properties.insert(
-        "login".to_string(),
-        JsonSchema::Boolean {
-            description: Some(
-                "Whether to run the shell with -l/-i semantics. Defaults to true.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "yield_time_ms".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "How long to wait (in milliseconds) for output before yielding.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "max_output_tokens".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Maximum number of tokens to return. Excess output will be truncated.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "with_escalated_permissions".to_string(),
-        JsonSchema::Boolean {
-            description: Some(
-                "Whether to request escalated permissions. Set to true if command needs to be run without sandbox restrictions"
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "justification".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Only set if with_escalated_permissions is true. 1-sentence explanation of why we want to run this command."
-                    .to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "exec_command".to_string(),
-        description:
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
-                .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["cmd".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_write_stdin_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "session_id".to_string(),
-        JsonSchema::Number {
-            description: Some("Identifier of the running unified exec session.".to_string()),
-        },
-    );
-    properties.insert(
-        "chars".to_string(),
-        JsonSchema::String {
-            description: Some("Bytes to write to stdin (may be empty to poll).".to_string()),
-        },
-    );
-    properties.insert(
-        "yield_time_ms".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "How long to wait (in milliseconds) for output before yielding.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "max_output_tokens".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Maximum number of tokens to return. Excess output will be truncated.".to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "write_stdin".to_string(),
-        description:
-            "Writes characters to an existing unified exec session and returns recent output."
-                .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["session_id".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
+#[cfg(test)]
 fn create_shell_tool() -> ToolSpec {
     let mut properties = BTreeMap::new();
     properties.insert(
@@ -284,7 +117,7 @@ fn create_shell_tool() -> ToolSpec {
 
     let description  = if cfg!(windows) {
         r#"Runs a Powershell command (Windows) and returns its output. Arguments to `shell` will be passed to CreateProcessW(). Most commands should be prefixed with ["powershell.exe", "-Command"].
-        
+
 Examples of valid command strings:
 
 - ls -a (show hidden): ["powershell.exe", "-Command", "Get-ChildItem -Force"]
@@ -311,6 +144,7 @@ Examples of valid command strings:
     })
 }
 
+#[cfg(test)]
 fn create_shell_command_tool() -> ToolSpec {
     let mut properties = BTreeMap::new();
     properties.insert(
@@ -348,7 +182,7 @@ fn create_shell_command_tool() -> ToolSpec {
 
     let description = if cfg!(windows) {
         r#"Runs a Powershell command (Windows) and returns its output.
-        
+
 Examples of valid command strings:
 
 - ls -a (show hidden): "Get-ChildItem -Force"
@@ -374,406 +208,7 @@ Examples of valid command strings:
     })
 }
 
-fn create_view_image_tool() -> ToolSpec {
-    // Support only local filesystem path.
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "path".to_string(),
-        JsonSchema::String {
-            description: Some("Local filesystem path to an image file".to_string()),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "view_image".to_string(),
-        description:
-            "Attach a local image (by filesystem path) to the conversation context for this turn."
-                .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["path".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_test_sync_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "sleep_before_ms".to_string(),
-        JsonSchema::Number {
-            description: Some("Optional delay in milliseconds before any other action".to_string()),
-        },
-    );
-    properties.insert(
-        "sleep_after_ms".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Optional delay in milliseconds after completing the barrier".to_string(),
-            ),
-        },
-    );
-
-    let mut barrier_properties = BTreeMap::new();
-    barrier_properties.insert(
-        "id".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Identifier shared by concurrent calls that should rendezvous".to_string(),
-            ),
-        },
-    );
-    barrier_properties.insert(
-        "participants".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Number of tool calls that must arrive before the barrier opens".to_string(),
-            ),
-        },
-    );
-    barrier_properties.insert(
-        "timeout_ms".to_string(),
-        JsonSchema::Number {
-            description: Some("Maximum time in milliseconds to wait at the barrier".to_string()),
-        },
-    );
-
-    properties.insert(
-        "barrier".to_string(),
-        JsonSchema::Object {
-            properties: barrier_properties,
-            required: Some(vec!["id".to_string(), "participants".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "test_sync_tool".to_string(),
-        description: "Internal synchronization helper used by Codex integration tests.".to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: None,
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_grep_files_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "pattern".to_string(),
-        JsonSchema::String {
-            description: Some("Regular expression pattern to search for.".to_string()),
-        },
-    );
-    properties.insert(
-        "include".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Optional glob that limits which files are searched (e.g. \"*.rs\" or \
-                 \"*.{ts,tsx}\")."
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "path".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Directory or file path to search. Defaults to the session's working directory."
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "limit".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Maximum number of file paths to return (defaults to 100).".to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "grep_files".to_string(),
-        description: "Finds files whose contents match the pattern and lists them by modification \
-                      time."
-            .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["pattern".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_read_file_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "file_path".to_string(),
-        JsonSchema::String {
-            description: Some("Absolute path to the file".to_string()),
-        },
-    );
-    properties.insert(
-        "offset".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "The line number to start reading from. Must be 1 or greater.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "limit".to_string(),
-        JsonSchema::Number {
-            description: Some("The maximum number of lines to return.".to_string()),
-        },
-    );
-    properties.insert(
-        "mode".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Optional mode selector: \"slice\" for simple ranges (default) or \"indentation\" \
-                 to expand around an anchor line."
-                    .to_string(),
-            ),
-        },
-    );
-
-    let mut indentation_properties = BTreeMap::new();
-    indentation_properties.insert(
-        "anchor_line".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Anchor line to center the indentation lookup on (defaults to offset).".to_string(),
-            ),
-        },
-    );
-    indentation_properties.insert(
-        "max_levels".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "How many parent indentation levels (smaller indents) to include.".to_string(),
-            ),
-        },
-    );
-    indentation_properties.insert(
-        "include_siblings".to_string(),
-        JsonSchema::Boolean {
-            description: Some(
-                "When true, include additional blocks that share the anchor indentation."
-                    .to_string(),
-            ),
-        },
-    );
-    indentation_properties.insert(
-        "include_header".to_string(),
-        JsonSchema::Boolean {
-            description: Some(
-                "Include doc comments or attributes directly above the selected block.".to_string(),
-            ),
-        },
-    );
-    indentation_properties.insert(
-        "max_lines".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "Hard cap on the number of lines returned when using indentation mode.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "indentation".to_string(),
-        JsonSchema::Object {
-            properties: indentation_properties,
-            required: None,
-            additional_properties: Some(false.into()),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "read_file".to_string(),
-        description:
-            "Reads a local file with 1-indexed line numbers, supporting slice and indentation-aware block modes."
-                .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["file_path".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_list_dir_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "dir_path".to_string(),
-        JsonSchema::String {
-            description: Some("Absolute path to the directory to list.".to_string()),
-        },
-    );
-    properties.insert(
-        "offset".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "The entry number to start listing from. Must be 1 or greater.".to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "limit".to_string(),
-        JsonSchema::Number {
-            description: Some("The maximum number of entries to return.".to_string()),
-        },
-    );
-    properties.insert(
-        "depth".to_string(),
-        JsonSchema::Number {
-            description: Some(
-                "The maximum directory depth to traverse. Must be 1 or greater.".to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "list_dir".to_string(),
-        description:
-            "Lists entries in a local directory with 1-indexed entry numbers and simple type labels."
-                .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["dir_path".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_list_mcp_resources_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "server".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Optional MCP server name. When omitted, lists resources from every configured server."
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "cursor".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Opaque cursor returned by a previous list_mcp_resources call for the same server."
-                    .to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "list_mcp_resources".to_string(),
-        description: "Lists resources provided by MCP servers. Resources allow servers to share data that provides context to language models, such as files, database schemas, or application-specific information. Prefer resources over web search when possible.".to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: None,
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_list_mcp_resource_templates_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "server".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Optional MCP server name. When omitted, lists resource templates from all configured servers."
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "cursor".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Opaque cursor returned by a previous list_mcp_resource_templates call for the same server."
-                    .to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "list_mcp_resource_templates".to_string(),
-        description: "Lists resource templates provided by MCP servers. Parameterized resource templates allow servers to share data that takes parameters and provides context to language models, such as files, database schemas, or application-specific information. Prefer resource templates over web search when possible.".to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: None,
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-
-fn create_read_mcp_resource_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "server".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "MCP server name exactly as configured. Must match the 'server' field returned by list_mcp_resources."
-                    .to_string(),
-            ),
-        },
-    );
-    properties.insert(
-        "uri".to_string(),
-        JsonSchema::String {
-            description: Some(
-                "Resource URI to read. Must be one of the URIs returned by list_mcp_resources."
-                    .to_string(),
-            ),
-        },
-    );
-
-    ToolSpec::Function(ResponsesApiTool {
-        name: "read_mcp_resource".to_string(),
-        description:
-            "Read a specific resource from an MCP server given the server name and resource URI."
-                .to_string(),
-        strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["server".to_string(), "uri".to_string()]),
-            additional_properties: Some(false.into()),
-        },
-    })
-}
-/// TODO(dylan): deprecate once we get rid of json tool
-#[derive(Serialize, Deserialize)]
-pub(crate) struct ApplyPatchToolArgs {
-    pub(crate) input: String,
-}
-
-/// Returns JSON values that are compatible with Function Calling in the
-/// Responses API:
-/// https://platform.openai.com/docs/guides/function-calling?api-mode=responses
-pub fn create_tools_json_for_responses_api(
-    tools: &[ToolSpec],
-) -> crate::error::Result<Vec<serde_json::Value>> {
-    let mut tools_json = Vec::new();
-
-    for tool in tools {
-        let json = serde_json::to_value(tool)?;
-        tools_json.push(json);
-    }
-
-    Ok(tools_json)
-}
+#[cfg(test)]
 pub(crate) fn mcp_tool_to_openai_tool(
     fully_qualified_name: String,
     tool: mcp_types::Tool,
@@ -784,19 +219,10 @@ pub(crate) fn mcp_tool_to_openai_tool(
         ..
     } = tool;
 
-    // OpenAI models mandate the "properties" field in the schema. The Agents
-    // SDK fixed this by inserting an empty object for "properties" if it is not
-    // already present https://github.com/openai/openai-agents-python/issues/449
-    // so here we do the same.
     if input_schema.properties.is_none() {
         input_schema.properties = Some(serde_json::Value::Object(serde_json::Map::new()));
     }
 
-    // Serialize to a raw JSON value so we can sanitize schemas coming from MCP
-    // servers. Some servers omit the top-level or nested `type` in JSON
-    // Schemas (e.g. using enum/anyOf), or use unsupported variants like
-    // `integer`. Our internal JsonSchema is a small subset and requires
-    // `type`, so we coerce/sanitize here for compatibility.
     let mut serialized_input_schema = serde_json::to_value(input_schema)?;
     sanitize_json_schema(&mut serialized_input_schema);
     let input_schema = serde_json::from_value::<JsonSchema>(serialized_input_schema)?;
@@ -809,17 +235,10 @@ pub(crate) fn mcp_tool_to_openai_tool(
     })
 }
 
-/// Sanitize a JSON Schema (as serde_json::Value) so it can fit our limited
-/// JsonSchema enum. This function:
-/// - Ensures every schema object has a "type". If missing, infers it from
-///   common keywords (properties => object, items => array, enum/const/format => string)
-///   and otherwise defaults to "string".
-/// - Fills required child fields (e.g. array items, object properties) with
-///   permissive defaults when absent.
+#[cfg(test)]
 fn sanitize_json_schema(value: &mut JsonValue) {
     match value {
         JsonValue::Bool(_) => {
-            // JSON Schema boolean form: true/false. Coerce to an accept-all string.
             *value = json!({ "type": "string" });
         }
         JsonValue::Array(arr) => {
@@ -828,7 +247,6 @@ fn sanitize_json_schema(value: &mut JsonValue) {
             }
         }
         JsonValue::Object(map) => {
-            // First, recursively sanitize known nested schema holders
             if let Some(props) = map.get_mut("properties")
                 && let Some(props_map) = props.as_object_mut()
             {
@@ -839,17 +257,14 @@ fn sanitize_json_schema(value: &mut JsonValue) {
             if let Some(items) = map.get_mut("items") {
                 sanitize_json_schema(items);
             }
-            // Some schemas use oneOf/anyOf/allOf - sanitize their entries
             for combiner in ["oneOf", "anyOf", "allOf", "prefixItems"] {
                 if let Some(v) = map.get_mut(combiner) {
                     sanitize_json_schema(v);
                 }
             }
 
-            // Normalize/ensure type
             let mut ty = map.get("type").and_then(|v| v.as_str()).map(str::to_string);
 
-            // If type is an array (union), pick first supported; else leave to inference
             if ty.is_none()
                 && let Some(JsonValue::Array(types)) = map.get("type")
             {
@@ -866,7 +281,6 @@ fn sanitize_json_schema(value: &mut JsonValue) {
                 }
             }
 
-            // Infer type if still missing
             if ty.is_none() {
                 if map.contains_key("properties")
                     || map.contains_key("required")
@@ -889,11 +303,9 @@ fn sanitize_json_schema(value: &mut JsonValue) {
                     ty = Some("number".to_string());
                 }
             }
-            // If we still couldn't infer, default to string
             let ty = ty.unwrap_or_else(|| "string".to_string());
             map.insert("type".to_string(), JsonValue::String(ty.to_string()));
 
-            // Ensure object schemas have properties map
             if ty == "object" {
                 if !map.contains_key("properties") {
                     map.insert(
@@ -901,8 +313,6 @@ fn sanitize_json_schema(value: &mut JsonValue) {
                         JsonValue::Object(serde_json::Map::new()),
                     );
                 }
-                // If additionalProperties is an object schema, sanitize it too.
-                // Leave booleans as-is, since JSON Schema allows boolean here.
                 if let Some(ap) = map.get_mut("additionalProperties") {
                     let is_bool = matches!(ap, JsonValue::Bool(_));
                     if !is_bool {
@@ -911,7 +321,6 @@ fn sanitize_json_schema(value: &mut JsonValue) {
                 }
             }
 
-            // Ensure array schemas have items
             if ty == "array" && !map.contains_key("items") {
                 map.insert("items".to_string(), json!({ "type": "string" }));
             }
@@ -919,6 +328,3 @@ fn sanitize_json_schema(value: &mut JsonValue) {
         _ => {}
     }
 }
-
-#[cfg(test)]
-mod tests;

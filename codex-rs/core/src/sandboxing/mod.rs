@@ -20,7 +20,6 @@ use crate::seatbelt::create_seatbelt_command_args;
 #[cfg(target_os = "macos")]
 use crate::spawn::CODEX_SANDBOX_ENV_VAR;
 use crate::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR;
-use crate::tool_types::SandboxablePreference;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -91,25 +90,6 @@ pub struct SandboxManager;
 impl SandboxManager {
     pub fn new() -> Self {
         Self
-    }
-
-    pub(crate) fn select_initial(
-        &self,
-        policy: &SandboxPolicy,
-        pref: SandboxablePreference,
-    ) -> SandboxType {
-        match pref {
-            SandboxablePreference::Forbid => SandboxType::None,
-            SandboxablePreference::Require => {
-                // Require a platform sandbox when available; on Windows this
-                // respects the enable_experimental_windows_sandbox feature.
-                crate::safety::get_platform_sandbox().unwrap_or(SandboxType::None)
-            }
-            SandboxablePreference::Auto => match policy {
-                SandboxPolicy::DangerFullAccess => SandboxType::None,
-                _ => crate::safety::get_platform_sandbox().unwrap_or(SandboxType::None),
-            },
-        }
     }
 
     pub(crate) fn transform(

@@ -9,6 +9,7 @@ pub const INTERACTIVE_SESSION_SOURCES: &[SessionSource] =
 
 pub(crate) mod error;
 pub mod list;
+#[allow(dead_code)]
 pub(crate) mod policy;
 pub mod recorder;
 

@@ -1,34 +1,7 @@
 //! Shared tool type definitions used by multiple modules.
-//!
-//! These enums are needed by `exec_policy`, `sandboxing`, `model_family`,
-//! and `tools/spec`.
 
 use serde::Deserialize;
 use serde::Serialize;
-
-/// Specifies what tool orchestrator should do with a given tool call.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ApprovalRequirement {
-    /// No approval required for this tool call.
-    Skip {
-        /// The first attempt should skip sandboxing (e.g., when explicitly
-        /// greenlit by policy).
-        bypass_sandbox: bool,
-    },
-    /// Approval required for this tool call
-    NeedsApproval { reason: Option<String> },
-    /// Execution forbidden for this tool call
-    Forbidden { reason: String },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SandboxablePreference {
-    Auto,
-    #[allow(dead_code)] // Will be used by later tools.
-    Require,
-    #[allow(dead_code)] // Will be used by later tools.
-    Forbid,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ConfigShellToolType {

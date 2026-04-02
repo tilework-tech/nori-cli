@@ -17,7 +17,6 @@ use crate::config::Config;
 use dunce::canonicalize as normalize_path;
 use std::path::PathBuf;
 use tokio::io::AsyncReadExt;
-use tracing::error;
 
 /// Default filename scanned for project-level docs.
 pub const DEFAULT_PROJECT_DOC_FILENAME: &str = "AGENTS.md";
@@ -26,11 +25,14 @@ pub const LOCAL_PROJECT_DOC_FILENAME: &str = "AGENTS.override.md";
 
 /// When both `Config::instructions` and the project doc are present, they will
 /// be concatenated with the following separator.
+#[cfg(test)]
 const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
 
 /// Combines `Config::instructions` and `AGENTS.md` (if present) into a single
 /// string of instructions.
+#[cfg(test)]
 pub(crate) async fn get_user_instructions(config: &Config) -> Option<String> {
+    use tracing::error;
     match read_project_docs(config).await {
         Ok(Some(project_doc)) => match &config.user_instructions {
             Some(original_instructions) => Some(format!(

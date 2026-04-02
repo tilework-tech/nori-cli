@@ -3,7 +3,6 @@
 //! used across the core crate.
 
 use crate::config::Config;
-use codex_protocol::models::FunctionCallOutputContentItem;
 
 const APPROX_BYTES_PER_TOKEN: usize = 4;
 
@@ -74,6 +73,7 @@ impl TruncationPolicy {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn formatted_truncate_text(content: &str, policy: TruncationPolicy) -> String {
     if content.len() <= policy.byte_budget() {
         return content.to_string();
@@ -95,10 +95,12 @@ pub(crate) fn truncate_text(content: &str, policy: TruncationPolicy) -> String {
 /// Globally truncate function output items to fit within the given
 /// truncation policy's budget, preserving as many text/image items as
 /// possible and appending a summary for any omitted text items.
+#[cfg(test)]
 pub(crate) fn truncate_function_output_items_with_policy(
-    items: &[FunctionCallOutputContentItem],
+    items: &[codex_protocol::models::FunctionCallOutputContentItem],
     policy: TruncationPolicy,
-) -> Vec<FunctionCallOutputContentItem> {
+) -> Vec<codex_protocol::models::FunctionCallOutputContentItem> {
+    use codex_protocol::models::FunctionCallOutputContentItem;
     let mut out: Vec<FunctionCallOutputContentItem> = Vec::with_capacity(items.len());
     let mut remaining_budget = match policy {
         TruncationPolicy::Bytes(_) => policy.byte_budget(),
