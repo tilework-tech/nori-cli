@@ -843,3 +843,43 @@ All three functions are `pub(crate)` but never imported or called.
 - `cargo test -p codex-core` — all unit + integration tests pass
 - `cargo build --bin nori` — binary still compiles
 - No behavioral changes — these functions were never called
+
+## Remove unused dependencies from codex-core Cargo.toml (eighteenth removal)
+
+### Why this component
+
+After 17 prior removal commits, several dependencies in `core/Cargo.toml` have zero consumers in codex-core source code. These are artifacts of the HTTP backend removal — their consumers were deleted but the dependency declarations remained. They increase build times, confuse readers about what the crate actually uses, and pollute `cargo tree` output.
+
+### Dependencies to remove from `core/Cargo.toml`
+
+| Dependency | Type | Status |
+|---|---|---|
+| `askama` | production dep (line 17) | Zero `use askama` or `#[template]` in any `.rs` file across entire workspace |
+| `async-trait` | production dep (line 19) | Zero usage in `core/src/`. Still used by `async-utils`, `utils/readiness`, `mock-acp-agent` |
+| `indexmap` | production dep (line 43) | Zero `use indexmap` in any `.rs` file across entire workspace |
+| `strum_macros` | production dep (line 57) | Zero `strum_macros` or `#[strum` usage in `core/src/`. Still used by `protocol`, `app-server-protocol`, `tui`, `otel` |
+| `test-case` | production dep (line 63) | Zero `#[test_case]` or `use test_case` in any `.rs` file across entire workspace |
+| `test-log` | production dep (line 64) | Zero `#[test_log]` or `use test_log` in any `.rs` file across entire workspace |
+
+### Dependencies to remove from workspace `Cargo.toml`
+
+| Dependency | Reason |
+|---|---|
+| `askama` | Zero usage anywhere in workspace |
+| `indexmap` | Zero usage anywhere in workspace |
+| `test-log` | Zero usage anywhere in workspace |
+
+### Dependencies to KEEP in workspace `Cargo.toml`
+
+| Dependency | Reason |
+|---|---|
+| `async-trait` | Used by `async-utils`, `utils/readiness`, `mock-acp-agent` |
+| `strum_macros` | Used by `protocol`, `app-server-protocol`, `tui`, `otel` |
+| `test-case` | Not in workspace Cargo.toml (hardcoded version in core only) |
+
+### Verification
+
+- `cargo check -p codex-core` — compiles without errors
+- `cargo test -p codex-core` — all tests pass
+- `cargo build --bin nori` — binary still compiles
+- No behavioral changes — pure dependency cleanup

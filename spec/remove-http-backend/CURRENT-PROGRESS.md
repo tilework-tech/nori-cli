@@ -1,6 +1,33 @@
 # Current Progress
 
-## Status: Seventeenth component removed
+## Status: Eighteenth component removed
+
+### Completed: Remove unused dependencies from codex-core Cargo.toml
+
+Removed 6 unused dependencies from `core/Cargo.toml` and 3 unused workspace-level declarations from `codex-rs/Cargo.toml`. These dependencies became dead after the HTTP backend removal — their consumers were deleted but the dependency declarations remained.
+
+**What was removed from `core/Cargo.toml` `[dependencies]`:**
+- `askama` — HTML template engine (zero usage anywhere in workspace)
+- `async-trait` — async trait support (zero usage in core; still used by async-utils, utils/readiness, mock-acp-agent)
+- `indexmap` — ordered hash map (zero usage anywhere in workspace)
+- `strum_macros` — enum derive macros (zero usage in core; still used by protocol, app-server-protocol, tui, otel)
+- `test-case` — parameterized test macro (zero usage anywhere; was incorrectly listed as production dep)
+- `test-log` — test logging setup (zero usage anywhere; was incorrectly listed as production dep)
+
+**What was removed from workspace `Cargo.toml` `[workspace.dependencies]`:**
+- `askama` — zero usage anywhere
+- `indexmap` — zero usage anywhere
+- `test-log` — zero usage anywhere
+
+**What was preserved in workspace `Cargo.toml`:**
+- `async-trait` — still used by `async-utils`, `utils/readiness`, `mock-acp-agent`
+- `strum_macros` — still used by `protocol`, `app-server-protocol`, `tui`, `otel`
+
+**Impact:** 6 fewer dependencies for codex-core, 3 fewer workspace declarations. Reduces build times and eliminates confusion. codex-core unit tests: 367 pass. Integration tests: 14 pass. nori binary builds successfully.
+
+### Suggested next steps for future commits
+1. Clean up test-only code in `compact.rs` — `build_compacted_history`, `collect_user_messages`, `is_summary_message` are test-only functions testing dead HTTP-backend behavior; also `content_items_to_text` is exported but has zero external consumers
+2. Clean up test-only code in `safety.rs` — `is_write_patch_constrained_to_writable_paths` is test-only, testing dead HTTP-backend patch validation logic
 
 ### Completed: Remove dead rollout persistence policy from rollout/
 

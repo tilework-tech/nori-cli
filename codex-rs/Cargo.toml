@@ -83,7 +83,6 @@ allocative = "0.3.3"
 ansi-to-tui = "7.0.0"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
-askama = "0.14"
 assert_cmd = "2"
 assert_matches = "1.5.0"
 async-channel = "2.3.1"
@@ -117,7 +116,6 @@ icu_locale_core = "2.1"
 icu_provider = { version = "2.1", features = ["sync"] }
 ignore = "0.4.23"
 image = { version = "^0.25.9", default-features = false }
-indexmap = "2.12.0"
 insta = "1.43.2"
 itertools = "0.14.0"
 keyring = { version = "3.6", default-features = false }
@@ -174,7 +172,6 @@ syntect = "5"
 supports-color = "3.0.2"
 sys-locale = "0.3.2"
 tempfile = "3.23.0"
-test-log = "0.2.18"
 textwrap = "0.16.2"
 tiktoken-rs = "0.9"
 thiserror = "2.0.17"
