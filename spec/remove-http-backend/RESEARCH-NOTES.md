@@ -581,6 +581,65 @@ Already present in codex-api: async-trait, bytes, futures, http, serde, serde_js
 - `StreamError` is exported from `codex-client` but NOT used by `codex-api` — it's used by `sse_stream` internally, so it stays in the inlined module.
 - The `eventsource-stream` dependency is used by both `codex-client/src/sse.rs` and `codex-api/src/sse/responses.rs` — already in codex-api's deps, no conflict.
 
+## Full removal of codex-api crate and all gated code (current target)
+
+### Why this step
+
+After 12 incremental commits, ALL HTTP-backend code in codex-core is properly gated behind `legacy-http-backend`. The `codex-api` crate is optional. No production binary enables the feature. The gating was preparation for this: delete everything gated.
+
+### Scope
+
+**Crate to remove:**
+- `codex-api/` — 27 files, ~2,658 lines
+
+**Gated source modules to delete (~16,245 lines):**
+- `api_bridge.rs`, `apply_patch.rs`, `client.rs`, `codex_conversation.rs`, `conversation_manager.rs`
+- `environment_context.rs`, `function_tool.rs`, `mcp_connection_manager.rs`, `mcp_tool_call.rs`
+- `message_history.rs`, `response_processing.rs`, `user_shell_command.rs`
+- `codex/` directory (10 files), `context_manager/` (4 files), `state/` (4 files)
+- `tasks/` (6 files), `unified_exec/` (4 files)
+- `sandboxing/assessment.rs`
+
+**Gated tool submodules to delete (~5,587 lines):**
+- `tools/context.rs`, `tools/events.rs`, `tools/handlers/` (12 files)
+- `tools/orchestrator.rs`, `tools/parallel.rs`, `tools/registry.rs`
+- `tools/router.rs`, `tools/runtimes.rs`, `tools/sandboxing.rs`
+
+**Integration tests to remove (~21,233 lines):**
+- 32 test modules that depend on `TestCodex`/`ConversationManager`/`CodexConversation`
+- `core_test_support` modules: `test_codex.rs`, `responses.rs`
+- Standalone: `responses_headers.rs`
+
+**Files to EDIT (remove gated blocks):**
+- `core/Cargo.toml` — remove feature, remove optional codex-api dep
+- `core/src/lib.rs` — remove all `#[cfg(feature = "legacy-http-backend")]` blocks
+- `core/src/error.rs` — remove gated variants, structs, impls, tests
+- `core/src/compact.rs` — remove gated functions and imports
+- `core/src/sandboxing/mod.rs` — remove gated module declaration
+- `core/src/tools/mod.rs` — remove gated submodule declarations
+- `core/src/tools/spec/mod.rs` — remove gated function and imports
+- `core/tests/suite/mod.rs` — remove test module declarations
+- `core/tests/common/lib.rs` — remove gated exports
+- `core/tests/common/Cargo.toml` — remove feature reference
+- Workspace `Cargo.toml` — remove codex-api member and dependency
+
+**Tests that survive (6 files):**
+- `suite/auth_refresh.rs`, `suite/exec.rs`, `suite/live_cli.rs`
+- `suite/rollout_list_find.rs`, `suite/seatbelt.rs`, `suite/text_encoding_fix.rs`
+
+### Backwards compatibility
+
+- Config files with `wire_api = "chat"` or `wire_api = "responses"` silently ignore the unknown field (serde default behavior)
+- `experimental_sandbox_command_assessment` config field remains (in codex-protocol), but the implementation is removed — effectively always disabled
+- `reqwest` dependency stays (used by `default_client.rs` and `auth.rs`)
+
+### Risk mitigation
+
+- `cargo build --bin nori` must succeed (this was already true with feature off)
+- `cargo test -p codex-core` with remaining tests must pass
+- E2E tests (`tui-pty-e2e`) must pass
+- The removed integration tests tested HTTP-backend behavior, not ACP behavior
+
 ## Gate HTTP-specific error types behind `legacy-http-backend` (current target)
 
 ### Why this component

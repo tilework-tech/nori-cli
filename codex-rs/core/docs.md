@@ -4,7 +4,7 @@ Path: @/codex-rs/core
 
 ### Overview
 
-The core crate provides foundational functionality shared across Nori components: configuration management, authentication, conversation orchestration, command execution with sandboxing, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most business logic.
+The core crate provides foundational functionality shared across Nori components: configuration management, authentication, command execution with sandboxing, tool specifications, compaction utilities, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most shared business logic.
 
 ### How it fits into the larger codebase
 
@@ -22,7 +22,7 @@ config  auth  exec/sandboxing
 ```
 
 The core crate is depended on by:
-- `@/codex-rs/tui/` - for config loading, auth management, conversation orchestration
+- `@/codex-rs/tui/` - for config loading, auth management, tool specs, and shared types
 - `@/codex-rs/acp/` - for config types and auth helpers
 - `@/codex-rs/login/` - for auth primitives
 
@@ -64,8 +64,6 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend`) and handles session creation/resumption, message history tracking, and token usage accumulation. Note: `ConversationManager` is gated behind the `legacy-http-backend` feature (see below).
-
 **Command Execution** (`exec.rs`, `sandboxing/`): Executes shell commands with optional sandboxing:
 - Linux: Landlock LSM (`landlock.rs`) + seccomp
 - macOS: Seatbelt sandbox profiles (`seatbelt.rs`)
@@ -86,7 +84,7 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 
 **MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model.
 
-**Data Flow (ACP path -- primary):**
+**Data Flow (ACP path):**
 
 ```
 User Input -> Op (UserTurn) -> AcpBackend (@/codex-rs/acp) -> Agent subprocess (JSON-RPC)
@@ -95,60 +93,15 @@ User Input -> Op (UserTurn) -> AcpBackend (@/codex-rs/acp) -> Agent subprocess (
 Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 ```
 
-**Data Flow (legacy HTTP path -- behind `legacy-http-backend` feature):**
+ACP (Agent Context Protocol) integration is handled in `@/codex-rs/acp`, not embedded in core. The core crate provides shared infrastructure (config, auth, tool specs, sandboxing, compaction utilities) that the ACP backend consumes.
 
-```
-User Input -> Op (UserTurn) -> ConversationManager -> ModelClient -> ResponseStream
-    |
-    v
-Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
-```
+**Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, `ApprovalRequirement`, `SandboxablePreference`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/codex-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
-**Model Client Architecture:**
+**Client Common (`client_common.rs`):** Contains `Prompt` (the API request payload struct) and the `tools` submodule (`ToolSpec`, `FreeformTool`, `ResponsesApiTool`, etc.) used for tool definitions.
 
-`client.rs` provides `ModelClient` for communicating with HTTP-based model providers via the OpenAI Responses API. There is no wire protocol selector -- all providers always use the Responses API. `ModelClient::stream()` delegates directly to `stream_responses_api()`. `client.rs` also hosts `ResponseEvent` and the `ResponseStream` struct (a channel-based `futures::Stream` wrapper over `ResponseEvent`). The `ModelProviderInfo` struct in `model_provider_info.rs` is a pure shared configuration type (base URL, auth, retry/timeout settings, headers) with no dependency on `codex-api`. The conversion from `ModelProviderInfo` to a `codex-api::Provider` happens via the standalone `create_api_provider()` function in `client.rs`, keeping all HTTP-backend-specific logic concentrated in the HTTP-backend module.
+**Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, retry/timeout settings, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
 
-`client_common.rs` is a shared module with no production `codex-api` dependency. It contains `Prompt` (the API request payload struct) and the `tools` submodule (`ToolSpec`, `FreeformTool`, etc.) used by both backends. Only `client.rs` and `api_bridge.rs` import from `codex-api` in production code.
-
-ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
-
-**Feature Gating -- `legacy-http-backend`:**
-
-The `legacy-http-backend` cargo feature (defined in `core/Cargo.toml`) gates the entire HTTP backend, including the `codex-api` dependency itself (`dep:codex-api`). When the feature is **disabled** (the default), entire modules are excluded from compilation:
-
-| Gated Module | What it contains |
-|---|---|
-| `client` | `ModelClient`, `ResponseEvent`, `ResponseStream` |
-| `api_bridge` | Bridges core types to `codex-api` |
-| `codex` | `Session`, turn execution, conversation orchestration |
-| `codex_conversation` | `CodexConversation` |
-| `conversation_manager` | `ConversationManager`, `NewConversation` |
-| `apply_patch` | Apply-patch tool implementation |
-| `context_manager` | Context window management |
-| `environment_context` | Environment info collection |
-| `mcp_connection_manager` | MCP server lifecycle |
-| `mcp_tool_call` | MCP tool call handling |
-| `message_history` | Message history tracking |
-| `response_processing` | Response event processing |
-| `unified_exec` | Unified command execution |
-| `function_tool` | Function tool definitions |
-| `state` | Conversation state machine |
-| `tasks` | Background task management |
-| `user_shell_command` | Shell command construction |
-
-Additionally, individual functions in the `compact` module (`run_inline_auto_compact_task`, `run_compact_task`, `run_compact_task_inner`, `drain_to_completed`) are gated, while shared utility functions and constants remain always-available for the ACP backend.
-
-The `error.rs` module uses per-variant gating rather than whole-module gating. HTTP-specific `CodexErr` variants (e.g., `Stream`, `ContextWindowExceeded`, `Timeout`, `UnexpectedStatus`, `RetryLimit`, etc.) and their associated helper structs (`UnexpectedResponseError`, `ConnectionFailedError`, `ResponseStreamFailed`, `RetryLimitReachedError`, `UsageLimitReachedError`) are gated behind `legacy-http-backend`. Shared error types (`SandboxErr`, `EnvVarError`, `RefreshTokenFailedError`) and shared methods (`get_error_message_ui()`, `downcast_ref()`) remain always-available. HTTP-specific methods on `CodexErr` (`to_codex_protocol_error`, `to_error_event`, `http_status_code_value`) and formatting helpers (`retry_suffix`, `format_retry_timestamp`, etc.) are also gated. HTTP-specific tests are isolated in a `http_tests` module with `#[cfg(all(test, feature = "legacy-http-backend"))]`.
-
-The `sandboxing/assessment` module creates a `ModelClient` and makes direct HTTP API calls to evaluate command safety. In `codex/approval.rs`, the `assess_sandbox_command()` method on `Session` has two `#[cfg]`-conditional implementations: the real one (when `legacy-http-backend` is on) delegates to `sandboxing::assessment::assess_command()`, and the stub (when the feature is off) returns `None`.
-
-The feature is enabled in `[dev-dependencies]` so that the core crate's own test suite still compiles against these types. The `core_test_support` helper crate (`@/codex-rs/core/tests/common/`) also explicitly enables `legacy-http-backend` in its `codex-core` dependency. No downstream production crate (`nori-tui`, `nori-cli`, `codex-acp`) enables this feature -- they exclusively use the ACP path.
-
-**Shared Types Module (`tool_types.rs`):** Types and constants that originated in gated modules but are needed by always-compiled code are extracted to `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, `ApprovalRequirement`, `SandboxablePreference`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` unconditionally because `codex-arg0` (`@/codex-rs/arg0/`) imports it without enabling `legacy-http-backend` (it uses the constant for argv dispatch and Windows batch scripts).
-
-**Model Provider Info (`model_provider_info.rs`):** This module is a pure configuration type with no dependency on `codex-api`. It defines `ModelProviderInfo` (base URL, auth, retry/timeout settings, headers). The `to_api_provider()` method that converted to a `codex-api::Provider` has been moved into `client.rs` (gated code). The `WireApi` enum has been removed -- all providers now implicitly use the Responses API wire protocol.
-
-Additionally, `api_bridge` and `codex` are `pub(crate)` rather than `pub` since no external crate imports them directly.
+**Compact Utilities (`compact.rs`):** Provides shared compaction helpers for conversation summarization: `content_items_to_text`, `SUMMARIZATION_PROMPT`, `SUMMARY_PREFIX`, and internal functions for building compacted histories with token-limited user message preservation.
 
 **User Notifications:**
 
@@ -170,7 +123,7 @@ Core's `Config::tui_notifications` is a simple `bool` that controls whether the 
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `session_lifecycle.rs`, `history.rs`, `approval.rs`, `event_emission.rs`, `session_ops.rs`, `submission_loop.rs`, `token_tracking.rs`, `turn_execution.rs`), `parse_command/` (with `parsing.rs`, `path_utils.rs`, `simplify.rs`, `summarize.rs`, `tests.rs`), `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/`, `tests/suite/client/`, and `tests/suite/unified_exec/` also use the `mod.rs` + `part*.rs` pattern.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `approval.rs`, `turn_execution.rs`, etc.), `parse_command/`, `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` and `tests/suite/client/` also use the `mod.rs` + `part*.rs` pattern.
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt
@@ -179,13 +132,8 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 - The conversation history is stored in `~/.codex/conversations/` (or `~/.nori/cli/conversations/`)
 - Error types are defined in `error.rs` and use `thiserror`
 
-**Test Suite Configuration:**
+**Test Suite:**
 
-The integration test suite in `@/codex-rs/core/tests/suite` includes timing-sensitive tests that are excluded from normal CI runs:
-
-- `tool_parallelism.rs`: Tests parallel tool execution with strict timing requirements (<750ms threshold). The `read_file_tools_run_in_parallel` test is marked `#[ignore]`.
-- `rmcp_client.rs`: Tests remote MCP server communication. Several tests are marked `#[ignore]` as they take >60 seconds due to cargo builds and HTTP server startup.
-
-These tests remain available via `cargo test -- --ignored` but are skipped during routine runs to prevent false failures.
+The integration test suite in `@/codex-rs/core/tests/suite` covers auth refresh, command execution, live CLI behavior, rollout listing, Seatbelt sandboxing, and text encoding. The `core_test_support` helper crate (`@/codex-rs/core/tests/common/`) provides config helpers, macros, and filesystem wait utilities for tests.
 
 Created and maintained by Nori.

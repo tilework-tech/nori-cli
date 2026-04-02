@@ -226,10 +226,6 @@ pub(crate) mod tools {
 #[cfg(test)]
 mod tests {
     use crate::model_family::find_family_for_model;
-    use codex_api::ResponsesApiRequest;
-    use codex_api::common::OpenAiVerbosity;
-    use codex_api::common::TextControls;
-    use codex_api::create_text_param_for_request;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -296,105 +292,5 @@ mod tests {
             let full = prompt.get_full_instructions(&model_family);
             assert_eq!(full, expected);
         }
-    }
-
-    #[test]
-    fn serializes_text_verbosity_when_set() {
-        let input: Vec<ResponseItem> = vec![];
-        let tools: Vec<serde_json::Value> = vec![];
-        let req = ResponsesApiRequest {
-            model: "gpt-5.1",
-            instructions: "i",
-            input: &input,
-            tools: &tools,
-            tool_choice: "auto",
-            parallel_tool_calls: true,
-            reasoning: None,
-            store: false,
-            stream: true,
-            include: vec![],
-            prompt_cache_key: None,
-            text: Some(TextControls {
-                verbosity: Some(OpenAiVerbosity::Low),
-                format: None,
-            }),
-        };
-
-        let v = serde_json::to_value(&req).expect("json");
-        assert_eq!(
-            v.get("text")
-                .and_then(|t| t.get("verbosity"))
-                .and_then(|s| s.as_str()),
-            Some("low")
-        );
-    }
-
-    #[test]
-    fn serializes_text_schema_with_strict_format() {
-        let input: Vec<ResponseItem> = vec![];
-        let tools: Vec<serde_json::Value> = vec![];
-        let schema = serde_json::json!({
-            "type": "object",
-            "properties": {
-                "answer": {"type": "string"}
-            },
-            "required": ["answer"],
-        });
-        let text_controls =
-            create_text_param_for_request(None, &Some(schema.clone())).expect("text controls");
-
-        let req = ResponsesApiRequest {
-            model: "gpt-5.1",
-            instructions: "i",
-            input: &input,
-            tools: &tools,
-            tool_choice: "auto",
-            parallel_tool_calls: true,
-            reasoning: None,
-            store: false,
-            stream: true,
-            include: vec![],
-            prompt_cache_key: None,
-            text: Some(text_controls),
-        };
-
-        let v = serde_json::to_value(&req).expect("json");
-        let text = v.get("text").expect("text field");
-        assert!(text.get("verbosity").is_none());
-        let format = text.get("format").expect("format field");
-
-        assert_eq!(
-            format.get("name"),
-            Some(&serde_json::Value::String("codex_output_schema".into()))
-        );
-        assert_eq!(
-            format.get("type"),
-            Some(&serde_json::Value::String("json_schema".into()))
-        );
-        assert_eq!(format.get("strict"), Some(&serde_json::Value::Bool(true)));
-        assert_eq!(format.get("schema"), Some(&schema));
-    }
-
-    #[test]
-    fn omits_text_when_not_set() {
-        let input: Vec<ResponseItem> = vec![];
-        let tools: Vec<serde_json::Value> = vec![];
-        let req = ResponsesApiRequest {
-            model: "gpt-5.1",
-            instructions: "i",
-            input: &input,
-            tools: &tools,
-            tool_choice: "auto",
-            parallel_tool_calls: true,
-            reasoning: None,
-            store: false,
-            stream: true,
-            include: vec![],
-            prompt_cache_key: None,
-            text: None,
-        };
-
-        let v = serde_json::to_value(&req).expect("json");
-        assert!(v.get("text").is_none());
     }
 }

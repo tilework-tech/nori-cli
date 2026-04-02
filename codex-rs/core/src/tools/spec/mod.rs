@@ -4,21 +4,11 @@ use crate::features::Feature;
 use crate::features::Features;
 use crate::model_family::ModelFamily;
 use crate::tool_types::ApplyPatchToolType;
-#[cfg(feature = "legacy-http-backend")]
-use crate::tools::handlers::PLAN_TOOL;
-#[cfg(feature = "legacy-http-backend")]
-use crate::tools::handlers::apply_patch::create_apply_patch_freeform_tool;
-#[cfg(feature = "legacy-http-backend")]
-use crate::tools::handlers::apply_patch::create_apply_patch_json_tool;
-#[cfg(feature = "legacy-http-backend")]
-use crate::tools::registry::ToolRegistryBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use serde_json::json;
 use std::collections::BTreeMap;
-#[cfg(feature = "legacy-http-backend")]
-use std::collections::HashMap;
 
 pub use crate::tool_types::ConfigShellToolType;
 
@@ -928,154 +918,6 @@ fn sanitize_json_schema(value: &mut JsonValue) {
         }
         _ => {}
     }
-}
-
-/// Builds the tool registry builder while collecting tool specs for later serialization.
-#[cfg(feature = "legacy-http-backend")]
-pub(crate) fn build_specs(
-    config: &ToolsConfig,
-    mcp_tools: Option<HashMap<String, mcp_types::Tool>>,
-) -> ToolRegistryBuilder {
-    use crate::tools::handlers::ApplyPatchHandler;
-    use crate::tools::handlers::GrepFilesHandler;
-    use crate::tools::handlers::ListDirHandler;
-    use crate::tools::handlers::McpHandler;
-    use crate::tools::handlers::McpResourceHandler;
-    use crate::tools::handlers::PlanHandler;
-    use crate::tools::handlers::ReadFileHandler;
-    use crate::tools::handlers::ShellCommandHandler;
-    use crate::tools::handlers::ShellHandler;
-    use crate::tools::handlers::TestSyncHandler;
-    use crate::tools::handlers::UnifiedExecHandler;
-    use crate::tools::handlers::ViewImageHandler;
-    use std::sync::Arc;
-
-    let mut builder = ToolRegistryBuilder::new();
-
-    let shell_handler = Arc::new(ShellHandler);
-    let unified_exec_handler = Arc::new(UnifiedExecHandler);
-    let plan_handler = Arc::new(PlanHandler);
-    let apply_patch_handler = Arc::new(ApplyPatchHandler);
-    let view_image_handler = Arc::new(ViewImageHandler);
-    let mcp_handler = Arc::new(McpHandler);
-    let mcp_resource_handler = Arc::new(McpResourceHandler);
-    let shell_command_handler = Arc::new(ShellCommandHandler);
-
-    match &config.shell_type {
-        ConfigShellToolType::Default => {
-            builder.push_spec(create_shell_tool());
-        }
-        ConfigShellToolType::Local => {
-            builder.push_spec(ToolSpec::LocalShell {});
-        }
-        ConfigShellToolType::UnifiedExec => {
-            builder.push_spec(create_exec_command_tool());
-            builder.push_spec(create_write_stdin_tool());
-            builder.register_handler("exec_command", unified_exec_handler.clone());
-            builder.register_handler("write_stdin", unified_exec_handler);
-        }
-        ConfigShellToolType::Disabled => {
-            // Do nothing.
-        }
-        ConfigShellToolType::ShellCommand => {
-            builder.push_spec(create_shell_command_tool());
-        }
-    }
-
-    if config.shell_type != ConfigShellToolType::Disabled {
-        // Always register shell aliases so older prompts remain compatible.
-        builder.register_handler("shell", shell_handler.clone());
-        builder.register_handler("container.exec", shell_handler.clone());
-        builder.register_handler("local_shell", shell_handler);
-        builder.register_handler("shell_command", shell_command_handler);
-    }
-
-    builder.push_spec_with_parallel_support(create_list_mcp_resources_tool(), true);
-    builder.push_spec_with_parallel_support(create_list_mcp_resource_templates_tool(), true);
-    builder.push_spec_with_parallel_support(create_read_mcp_resource_tool(), true);
-    builder.register_handler("list_mcp_resources", mcp_resource_handler.clone());
-    builder.register_handler("list_mcp_resource_templates", mcp_resource_handler.clone());
-    builder.register_handler("read_mcp_resource", mcp_resource_handler);
-
-    builder.push_spec(PLAN_TOOL.clone());
-    builder.register_handler("update_plan", plan_handler);
-
-    if let Some(apply_patch_tool_type) = &config.apply_patch_tool_type {
-        match apply_patch_tool_type {
-            ApplyPatchToolType::Freeform => {
-                builder.push_spec(create_apply_patch_freeform_tool());
-            }
-            ApplyPatchToolType::Function => {
-                builder.push_spec(create_apply_patch_json_tool());
-            }
-        }
-        builder.register_handler("apply_patch", apply_patch_handler);
-    }
-
-    if config
-        .experimental_supported_tools
-        .contains(&"grep_files".to_string())
-    {
-        let grep_files_handler = Arc::new(GrepFilesHandler);
-        builder.push_spec_with_parallel_support(create_grep_files_tool(), true);
-        builder.register_handler("grep_files", grep_files_handler);
-    }
-
-    if config
-        .experimental_supported_tools
-        .contains(&"read_file".to_string())
-    {
-        let read_file_handler = Arc::new(ReadFileHandler);
-        builder.push_spec_with_parallel_support(create_read_file_tool(), true);
-        builder.register_handler("read_file", read_file_handler);
-    }
-
-    if config
-        .experimental_supported_tools
-        .iter()
-        .any(|tool| tool == "list_dir")
-    {
-        let list_dir_handler = Arc::new(ListDirHandler);
-        builder.push_spec_with_parallel_support(create_list_dir_tool(), true);
-        builder.register_handler("list_dir", list_dir_handler);
-    }
-
-    if config
-        .experimental_supported_tools
-        .contains(&"test_sync_tool".to_string())
-    {
-        let test_sync_handler = Arc::new(TestSyncHandler);
-        builder.push_spec_with_parallel_support(create_test_sync_tool(), true);
-        builder.register_handler("test_sync_tool", test_sync_handler);
-    }
-
-    if config.web_search_request {
-        builder.push_spec(ToolSpec::WebSearch {});
-    }
-
-    if config.include_view_image_tool {
-        builder.push_spec_with_parallel_support(create_view_image_tool(), true);
-        builder.register_handler("view_image", view_image_handler);
-    }
-
-    if let Some(mcp_tools) = mcp_tools {
-        let mut entries: Vec<(String, mcp_types::Tool)> = mcp_tools.into_iter().collect();
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-        for (name, tool) in entries.into_iter() {
-            match mcp_tool_to_openai_tool(name.clone(), tool.clone()) {
-                Ok(converted_tool) => {
-                    builder.push_spec(ToolSpec::Function(converted_tool));
-                    builder.register_handler(name, mcp_handler.clone());
-                }
-                Err(e) => {
-                    tracing::error!("Failed to convert {name:?} MCP tool to OpenAI tool: {e:?}");
-                }
-            }
-        }
-    }
-
-    builder
 }
 
 #[cfg(test)]

@@ -1,6 +1,35 @@
 # Current Progress
 
-## Status: Twelfth component removed
+## Status: Thirteenth component removed
+
+### Completed: Remove `codex-api` crate and all `legacy-http-backend` gated code
+
+Removed the `codex-api` crate from the workspace entirely, along with the `legacy-http-backend` feature flag and all code gated behind it in codex-core. This is the culmination of 12 previous incremental commits that isolated the HTTP backend behind feature gates.
+
+**What was removed:**
+- `codex-api/` crate (27 files, ~2,658 lines) — the HTTP API client layer
+- `legacy-http-backend` feature flag from codex-core
+- 16 gated source modules from codex-core (~16,245 lines): `api_bridge`, `apply_patch`, `client`, `codex/`, `codex_conversation`, `context_manager/`, `conversation_manager`, `environment_context`, `function_tool`, `mcp_connection_manager`, `mcp_tool_call`, `message_history`, `response_processing`, `state/`, `tasks/`, `unified_exec/`, `user_shell_command`, `sandboxing/assessment`
+- 8 gated tool submodules (~5,587 lines): `tools/context`, `tools/events`, `tools/handlers/`, `tools/orchestrator`, `tools/parallel`, `tools/registry`, `tools/router`, `tools/runtimes`, `tools/sandboxing`
+- 17 HTTP-specific `CodexErr` variants and 5 helper structs from `error.rs`
+- HTTP-specific compact functions from `compact.rs`
+- `build_specs()` function from `tools/spec/mod.rs`
+- 32 integration test files + `responses_headers.rs` standalone test
+- `core_test_support` modules: `test_codex.rs`, `responses.rs`
+- `eventsource-stream` dependency from codex-core
+
+**What was preserved:**
+- All shared code: config, auth, compact utilities (SUMMARIZATION_PROMPT, SUMMARY_PREFIX, content_items_to_text), protocol re-exports, event_mapping, sandboxing (minus assessment), tools/spec, default_client
+- 6 integration tests: auth_refresh, exec, live_cli, rollout_list_find, seatbelt, text_encoding_fix
+- `core_test_support` crate (simplified — config helpers, macros, fs_wait)
+- `reqwest` dependency (used by auth and default_client)
+- MCP tool spec tests rewritten to call `mcp_tool_to_openai_tool` directly
+
+**Impact:** ~45,000 lines of HTTP backend code removed. The `codex-api` crate no longer exists in the workspace. `CodexErr` has only shared variants. All existing tests pass (codex-core: 392 unit + 14 integration; E2E: 6 tests). Many dead-code warnings remain for modules that lost their consumers (client_common, command_safety, exec_policy, tools/spec, etc.) — these should be cleaned up in future commits.
+
+### Suggested next steps for future commits
+1. Remove newly-dead code: `client_common.rs` (Prompt, ToolSpec types), `command_safety`, `exec_policy`, unused functions in `tools/spec`, `tools/mod.rs`, `util.rs`, `rollout/error.rs`, `safety.rs`
+2. Clean up `Cargo.toml` — remove any workspace-level dependencies that are no longer used (e.g., `eventsource-stream` if no other crate uses it)
 
 ### Completed: Gate HTTP-specific error types behind `legacy-http-backend`
 

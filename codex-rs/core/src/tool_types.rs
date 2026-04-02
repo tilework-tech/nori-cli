@@ -1,9 +1,7 @@
-//! Shared tool type definitions used by both HTTP-backend and shared modules.
+//! Shared tool type definitions used by multiple modules.
 //!
-//! These enums were originally defined in `tools/` submodules but are needed by
-//! always-compiled modules (`exec_policy`, `sandboxing`, `model_family`). They
-//! live here so they remain available even when `tools/` is gated behind
-//! `legacy-http-backend`.
+//! These enums are needed by `exec_policy`, `sandboxing`, `model_family`,
+//! and `tools/spec`.
 
 use serde::Deserialize;
 use serde::Serialize;

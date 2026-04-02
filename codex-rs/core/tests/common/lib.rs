@@ -2,7 +2,6 @@
 
 use tempfile::TempDir;
 
-use codex_core::CodexConversation;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::ConfigToml;
@@ -10,9 +9,6 @@ use regex_lite::Regex;
 
 #[cfg(target_os = "linux")]
 use assert_cmd::cargo::cargo_bin;
-
-pub mod responses;
-pub mod test_codex;
 
 #[track_caller]
 pub fn assert_regex_match<'s>(pattern: &str, actual: &'s str) -> regex_lite::Captures<'s> {
@@ -26,7 +22,7 @@ pub fn assert_regex_match<'s>(pattern: &str, actual: &'s str) -> regex_lite::Cap
 
 /// Returns a default `Config` whose on-disk state is confined to the provided
 /// temporary directory. Using a per-test directory keeps tests hermetic and
-/// avoids clobbering a developer’s real `~/.codex`.
+/// avoids clobbering a developer's real `~/.codex`.
 pub fn load_default_config_for_test(codex_home: &TempDir) -> Config {
     let mut config = Config::load_from_base_config_with_overrides(
         ConfigToml::default(),
@@ -36,10 +32,6 @@ pub fn load_default_config_for_test(codex_home: &TempDir) -> Config {
     .expect("defaults for test should always succeed");
 
     // Disable notifications by default in tests to prevent live desktop notifications.
-    // An empty vec means no external command will be invoked, and use_native will be
-    // bypassed because notify_command is Some (even though empty).
-    // Tests that need to verify notification behavior can override this with
-    // `.with_config(|cfg| cfg.notify = Some(vec![...]))`.
     config.notify = Some(vec![]);
 
     config
@@ -56,120 +48,6 @@ fn default_test_overrides() -> ConfigOverrides {
 #[cfg(not(target_os = "linux"))]
 fn default_test_overrides() -> ConfigOverrides {
     ConfigOverrides::default()
-}
-
-/// Builds an SSE stream body from a JSON fixture.
-///
-/// The fixture must contain an array of objects where each object represents a
-/// single SSE event with at least a `type` field matching the `event:` value.
-/// Additional fields become the JSON payload for the `data:` line. An object
-/// with only a `type` field results in an event with no `data:` section. This
-/// makes it trivial to extend the fixtures as OpenAI adds new event kinds or
-/// fields.
-pub fn load_sse_fixture(path: impl AsRef<std::path::Path>) -> String {
-    let events: Vec<serde_json::Value> =
-        serde_json::from_reader(std::fs::File::open(path).expect("read fixture"))
-            .expect("parse JSON fixture");
-    events
-        .into_iter()
-        .map(|e| {
-            let kind = e
-                .get("type")
-                .and_then(|v| v.as_str())
-                .expect("fixture event missing type");
-            if e.as_object().map(|o| o.len() == 1).unwrap_or(false) {
-                format!("event: {kind}\n\n")
-            } else {
-                format!("event: {kind}\ndata: {e}\n\n")
-            }
-        })
-        .collect()
-}
-
-pub fn load_sse_fixture_with_id_from_str(raw: &str, id: &str) -> String {
-    let replaced = raw.replace("__ID__", id);
-    let events: Vec<serde_json::Value> =
-        serde_json::from_str(&replaced).expect("parse JSON fixture");
-    events
-        .into_iter()
-        .map(|e| {
-            let kind = e
-                .get("type")
-                .and_then(|v| v.as_str())
-                .expect("fixture event missing type");
-            if e.as_object().map(|o| o.len() == 1).unwrap_or(false) {
-                format!("event: {kind}\n\n")
-            } else {
-                format!("event: {kind}\ndata: {e}\n\n")
-            }
-        })
-        .collect()
-}
-
-/// Same as [`load_sse_fixture`], but replaces the placeholder `__ID__` in the
-/// fixture template with the supplied identifier before parsing. This lets a
-/// single JSON template be reused by multiple tests that each need a unique
-/// `response_id`.
-pub fn load_sse_fixture_with_id(path: impl AsRef<std::path::Path>, id: &str) -> String {
-    let raw = std::fs::read_to_string(path).expect("read fixture template");
-    let replaced = raw.replace("__ID__", id);
-    let events: Vec<serde_json::Value> =
-        serde_json::from_str(&replaced).expect("parse JSON fixture");
-    events
-        .into_iter()
-        .map(|e| {
-            let kind = e
-                .get("type")
-                .and_then(|v| v.as_str())
-                .expect("fixture event missing type");
-            if e.as_object().map(|o| o.len() == 1).unwrap_or(false) {
-                format!("event: {kind}\n\n")
-            } else {
-                format!("event: {kind}\ndata: {e}\n\n")
-            }
-        })
-        .collect()
-}
-
-pub async fn wait_for_event<F>(
-    codex: &CodexConversation,
-    predicate: F,
-) -> codex_core::protocol::EventMsg
-where
-    F: FnMut(&codex_core::protocol::EventMsg) -> bool,
-{
-    use tokio::time::Duration;
-    wait_for_event_with_timeout(codex, predicate, Duration::from_secs(1)).await
-}
-
-pub async fn wait_for_event_match<T, F>(codex: &CodexConversation, matcher: F) -> T
-where
-    F: Fn(&codex_core::protocol::EventMsg) -> Option<T>,
-{
-    let ev = wait_for_event(codex, |ev| matcher(ev).is_some()).await;
-    matcher(&ev).unwrap()
-}
-
-pub async fn wait_for_event_with_timeout<F>(
-    codex: &CodexConversation,
-    mut predicate: F,
-    wait_time: tokio::time::Duration,
-) -> codex_core::protocol::EventMsg
-where
-    F: FnMut(&codex_core::protocol::EventMsg) -> bool,
-{
-    use tokio::time::Duration;
-    use tokio::time::timeout;
-    loop {
-        // Allow a bit more time to accommodate async startup work (e.g. config IO, tool discovery)
-        let ev = timeout(wait_time.max(Duration::from_secs(5)), codex.next_event())
-            .await
-            .expect("timeout waiting for event")
-            .expect("stream ended unexpectedly");
-        if predicate(&ev.msg) {
-            return ev.msg;
-        }
-    }
 }
 
 pub fn sandbox_env_var() -> &'static str {

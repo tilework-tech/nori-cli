@@ -1,29 +1,9 @@
-#[cfg(feature = "legacy-http-backend")]
-pub mod context;
-#[cfg(feature = "legacy-http-backend")]
-pub mod events;
-#[cfg(feature = "legacy-http-backend")]
-pub(crate) mod handlers;
-#[cfg(feature = "legacy-http-backend")]
-pub mod orchestrator;
-#[cfg(feature = "legacy-http-backend")]
-pub mod parallel;
-#[cfg(feature = "legacy-http-backend")]
-pub mod registry;
-#[cfg(feature = "legacy-http-backend")]
-pub mod router;
-#[cfg(feature = "legacy-http-backend")]
-pub mod runtimes;
-#[cfg(feature = "legacy-http-backend")]
-pub mod sandboxing;
 pub mod spec;
 
 use crate::exec::ExecToolCallOutput;
 use crate::truncate::TruncationPolicy;
 use crate::truncate::formatted_truncate_text;
 use crate::truncate::truncate_text;
-#[cfg(feature = "legacy-http-backend")]
-pub use router::ToolRouter;
 use serde::Serialize;
 
 // Telemetry preview limits: keep log events smaller than model budgets.
