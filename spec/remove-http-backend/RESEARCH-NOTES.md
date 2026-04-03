@@ -883,3 +883,43 @@ After 17 prior removal commits, several dependencies in `core/Cargo.toml` have z
 - `cargo test -p codex-core` — all tests pass
 - `cargo build --bin nori` — binary still compiles
 - No behavioral changes — pure dependency cleanup
+
+## Remove dead HTTP retry/timeout methods from ModelProviderInfo (twentieth removal)
+
+### Why this component
+
+`ModelProviderInfo` in `core/src/model_provider_info.rs` has three accessor methods and five constants that existed solely to configure the HTTP streaming client's retry/timeout behavior. The HTTP client (`ModelClient`) was removed in earlier commits, so these methods have zero callers anywhere in the workspace.
+
+### What to remove
+
+**Constants (lines 15-21):**
+- `DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000`
+- `DEFAULT_STREAM_MAX_RETRIES: u64 = 5`
+- `DEFAULT_REQUEST_MAX_RETRIES: u64 = 4`
+- `MAX_STREAM_MAX_RETRIES: u64 = 100`
+- `MAX_REQUEST_MAX_RETRIES: u64 = 100`
+
+**Methods (lines 100-119):**
+- `pub fn request_max_retries(&self) -> u64` — applied default + cap to raw field
+- `pub fn stream_max_retries(&self) -> u64` — applied default + cap to raw field
+- `pub fn stream_idle_timeout(&self) -> Duration` — converted ms field to `Duration`
+
+**Import (line 12):**
+- `use std::time::Duration;` — only used by `stream_idle_timeout()`
+
+### What to keep
+
+**Fields on `ModelProviderInfo` struct (lines 56-63):**
+- `request_max_retries: Option<u64>`
+- `stream_max_retries: Option<u64>`
+- `stream_idle_timeout_ms: Option<u64>`
+
+These fields must remain for config deserialization backwards compatibility. Existing user config TOML files may include these keys. Since `ModelProviderInfo` does NOT use `#[serde(deny_unknown_fields)]`, removing the fields would silently drop the values — but keeping them prevents any surprise. The ACP backend has its own `AcpProviderInfo` struct in `acp/src/registry.rs` with separate retry fields.
+
+### Verification
+
+- Zero external callers for all three methods (confirmed via grep)
+- All five constants are only referenced within the methods being removed
+- `Duration` import is only used by `stream_idle_timeout()`
+- Config deserialization tests pass unchanged (they test field deserialization, not methods)
+- ACP backend is unaffected (uses its own `AcpProviderInfo`)

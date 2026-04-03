@@ -97,7 +97,7 @@ ACP (Agent Context Protocol) integration is handled in `@/codex-rs/acp`, not emb
 
 **Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/codex-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
-**Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, retry/timeout settings, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
+**Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
 
 **Compact Utilities (`compact.rs`):** Provides shared compaction constants for conversation summarization: `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX`, which are loaded from prompt templates in `templates/compact/`.
 

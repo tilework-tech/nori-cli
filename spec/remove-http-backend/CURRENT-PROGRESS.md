@@ -1,6 +1,36 @@
 # Current Progress
 
-## Status: Nineteenth component removed
+## Status: Twentieth component removed
+
+### Completed: Remove dead HTTP retry/timeout methods from ModelProviderInfo
+
+Removed 3 dead accessor methods and 5 dead constants from `model_provider_info.rs` that configured the now-deleted HTTP streaming client's retry/timeout behavior. These methods had zero callers anywhere in the workspace after the HTTP backend removal.
+
+**What was removed:**
+- `request_max_retries()` method — applied default (4) and cap (100) to raw field
+- `stream_max_retries()` method — applied default (5) and cap (100) to raw field
+- `stream_idle_timeout()` method — converted ms field to `Duration` with default (300s)
+- `DEFAULT_STREAM_IDLE_TIMEOUT_MS` constant (300,000)
+- `DEFAULT_STREAM_MAX_RETRIES` constant (5)
+- `DEFAULT_REQUEST_MAX_RETRIES` constant (4)
+- `MAX_STREAM_MAX_RETRIES` constant (100)
+- `MAX_REQUEST_MAX_RETRIES` constant (100)
+- `use std::time::Duration` import
+
+**What was preserved:**
+- `ModelProviderInfo` struct fields (`request_max_retries`, `stream_max_retries`, `stream_idle_timeout_ms`) — kept for config deserialization backwards compatibility
+- `api_key()` method — still used by auth flow
+- All built-in provider definitions
+- `create_oss_provider()` and `create_oss_provider_with_base_url()` functions
+
+**Documentation updated:**
+- `core/docs.md` — removed "retry/timeout settings" from `model_provider_info.rs` description
+
+**Impact:** ~25 lines of dead HTTP retry/timeout code removed. codex-core unit tests: 360 pass. Integration tests: 14 pass. nori binary builds successfully.
+
+### Suggested next steps for future commits
+1. Investigate whether `ModelProviderInfo` fields `base_url`, `experimental_bearer_token`, `query_params`, `http_headers`, `env_http_headers` are functionally dead — they were consumed by the HTTP client but may still be read by auth or config validation
+2. Continue identifying and removing other HTTP-backend remnants in codex-core
 
 ### Completed: Remove dead test-only code from compact.rs and safety.rs
 

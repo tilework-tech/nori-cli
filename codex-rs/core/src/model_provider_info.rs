@@ -5,20 +5,11 @@
 //!   2. User-defined entries inside `~/.codex/config.toml` under the `model_providers`
 //!      key. These override or extend the defaults at runtime.
 
+use crate::error::EnvVarError;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::env::VarError;
-use std::time::Duration;
-
-use crate::error::EnvVarError;
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000;
-const DEFAULT_STREAM_MAX_RETRIES: u64 = 5;
-const DEFAULT_REQUEST_MAX_RETRIES: u64 = 4;
-/// Hard cap for user-configured `stream_max_retries`.
-const MAX_STREAM_MAX_RETRIES: u64 = 100;
-/// Hard cap for user-configured `request_max_retries`.
-const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
 /// Serializable representation of a provider definition.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -96,27 +87,6 @@ impl ModelProviderInfo {
             None => Ok(None),
         }
     }
-
-    /// Effective maximum number of request retries for this provider.
-    pub fn request_max_retries(&self) -> u64 {
-        self.request_max_retries
-            .unwrap_or(DEFAULT_REQUEST_MAX_RETRIES)
-            .min(MAX_REQUEST_MAX_RETRIES)
-    }
-
-    /// Effective maximum number of stream reconnection attempts for this provider.
-    pub fn stream_max_retries(&self) -> u64 {
-        self.stream_max_retries
-            .unwrap_or(DEFAULT_STREAM_MAX_RETRIES)
-            .min(MAX_STREAM_MAX_RETRIES)
-    }
-
-    /// Effective idle timeout for streaming responses.
-    pub fn stream_idle_timeout(&self) -> Duration {
-        self.stream_idle_timeout_ms
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_millis(DEFAULT_STREAM_IDLE_TIMEOUT_MS))
-    }
 }
 
 pub const DEFAULT_LMSTUDIO_PORT: u16 = 1234;
@@ -166,7 +136,6 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                     .into_iter()
                     .collect(),
                 ),
-                // Use global defaults for retry/timeout unless overridden in config.toml.
                 request_max_retries: None,
                 stream_max_retries: None,
                 stream_idle_timeout_ms: None,
