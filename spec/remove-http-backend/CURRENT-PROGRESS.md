@@ -1,6 +1,25 @@
 # Current Progress
 
-## Status: Twentieth component removed
+## Status: Twenty-first component removed
+
+### Completed: Delete orphaned test files from core_test_support
+
+Deleted two orphaned files from `core/tests/common/` that were left behind when the HTTP backend was removed. These files were never compiled (not declared as modules in `lib.rs`) and referenced removed types (`CodexConversation`, `ConversationManager`).
+
+**What was removed:**
+- `core/tests/common/test_codex.rs` (~360 lines) — HTTP backend test harness (`TestCodex`, `TestCodexBuilder`, `ApplyPatchModelOutput`) that created `ConversationManager` instances backed by wiremock HTTP servers
+- `core/tests/common/responses.rs` (~715 lines) — HTTP Responses API mock infrastructure (`ResponseMock`, `ResponsesRequest`, SSE event builders, request capture helpers)
+
+**What was preserved:**
+- `core/tests/common/lib.rs` — shared test utilities (`load_default_config_for_test`, `fs_wait`, `skip_if_sandbox`, `skip_if_no_network` macros)
+- `core/tests/common/Cargo.toml` — crate definition
+
+**Impact:** ~1,075 lines of dead files removed. codex-core unit tests: 360 pass. Integration tests: 14 pass. nori binary builds successfully.
+
+### Suggested next steps for future commits
+1. Remove `chatgpt_base_url` field from `Config`, `ConfigToml`, `ConfigProfile`, and ASP `Profile` — set but never read at runtime
+2. Remove dead error variants `ResponseStreamConnectionFailed` and `ResponseStreamDisconnected` from `CodexErrorInfo` in codex-protocol and app-server-protocol
+3. Clean up stale `wire_api` references in test TOML fixtures and comments
 
 ### Completed: Remove dead HTTP retry/timeout methods from ModelProviderInfo
 

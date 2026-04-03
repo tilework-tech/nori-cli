@@ -923,3 +923,20 @@ These fields must remain for config deserialization backwards compatibility. Exi
 - `Duration` import is only used by `stream_idle_timeout()`
 - Config deserialization tests pass unchanged (they test field deserialization, not methods)
 - ACP backend is unaffected (uses its own `AcpProviderInfo`)
+
+## Delete orphaned test files from core_test_support (twenty-first removal)
+
+### Why this component
+
+Two files exist on disk in `core/tests/common/` but are not declared as modules in `lib.rs`:
+- `test_codex.rs` (~360 lines) — HTTP backend test harness using removed types `CodexConversation`, `ConversationManager`
+- `responses.rs` (~715 lines) — HTTP Responses API mock infrastructure (SSE builders, request capture)
+
+These files reference each other (`crate::test_codex`, `crate::responses`) but since neither is declared in `lib.rs`, they are never compiled. They are pure dead files left over from the `codex-api` removal.
+
+### Verification
+
+- `lib.rs` has no `mod test_codex` or `mod responses` declaration
+- No external crate imports `core_test_support::test_codex` or `core_test_support::responses`
+- The files reference removed types (`CodexConversation`, `ConversationManager`) and would not compile if re-included
+- Deleting them has zero effect on compilation or tests
