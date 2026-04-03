@@ -34,7 +34,7 @@ Architecture:
 - Large modules across the workspace use a directory layout (`foo/mod.rs` + `foo/tests.rs`) instead of a single `foo.rs` file, separating test code from production code while preserving Rust module paths
 
 - The workspace uses Rust 2024 edition with strict clippy lints (no `unwrap`, `expect`, or stdout/stderr prints in library code)
-- Many crates support both the legacy Codex HTTP backend and the newer ACP backend; Nori uses ACP exclusively
+- Nori uses ACP exclusively; the legacy HTTP backend code (`codex-api`, `codex-client` crates) and all feature-gated HTTP modules in `codex-core` have been removed
 - Cross-platform sandboxing uses Landlock on Linux, Seatbelt on macOS, and restricted tokens on Windows
 - The `unstable` feature flag guards experimental ACP features like model switching
 - Snapshot testing via `insta` is used extensively in the TUI for regression testing

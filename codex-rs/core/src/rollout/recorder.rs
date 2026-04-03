@@ -22,7 +22,6 @@ use super::SESSIONS_SUBDIR;
 use super::list::ConversationsPage;
 use super::list::Cursor;
 use super::list::get_conversations;
-use super::policy::is_persisted_response_item;
 use crate::config::Config;
 use crate::default_client::originator;
 use crate::git_info::collect_git_info;
@@ -46,6 +45,7 @@ use codex_protocol::protocol::SessionSource;
 #[derive(Clone)]
 pub struct RolloutRecorder {
     tx: Sender<RolloutCmd>,
+    #[allow(dead_code)]
     pub(crate) rollout_path: PathBuf,
 }
 
@@ -62,7 +62,6 @@ pub enum RolloutRecorderParams {
 }
 
 enum RolloutCmd {
-    AddItems(Vec<RolloutItem>),
     /// Ensure all prior writes are processed; respond when flushed.
     Flush {
         ack: oneshot::Sender<()>,
@@ -175,25 +174,6 @@ impl RolloutRecorder {
         tokio::task::spawn(rollout_writer(file, rx, meta, cwd));
 
         Ok(Self { tx, rollout_path })
-    }
-
-    pub(crate) async fn record_items(&self, items: &[RolloutItem]) -> std::io::Result<()> {
-        let mut filtered = Vec::new();
-        for item in items {
-            // Note that function calls may look a bit strange if they are
-            // "fully qualified MCP tool calls," so we could consider
-            // reformatting them in that case.
-            if is_persisted_response_item(item) {
-                filtered.push(item.clone());
-            }
-        }
-        if filtered.is_empty() {
-            return Ok(());
-        }
-        self.tx
-            .send(RolloutCmd::AddItems(filtered))
-            .await
-            .map_err(|e| IoError::other(format!("failed to queue rollout items: {e}")))
     }
 
     /// Flush all queued writes and wait until they are committed by the writer task.
@@ -371,13 +351,6 @@ async fn rollout_writer(
     // Process rollout commands
     while let Some(cmd) = rx.recv().await {
         match cmd {
-            RolloutCmd::AddItems(items) => {
-                for item in items {
-                    if is_persisted_response_item(&item) {
-                        writer.write_rollout_item(item).await?;
-                    }
-                }
-            }
             RolloutCmd::Flush { ack } => {
                 // Ensure underlying file is flushed and then ack.
                 if let Err(e) = writer.file.flush().await {

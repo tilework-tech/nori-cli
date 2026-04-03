@@ -14,7 +14,14 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::user_instructions::UserInstructions;
-use crate::user_shell_command::is_user_shell_command_text;
+
+const USER_SHELL_COMMAND_OPEN: &str = "<user_shell_command>";
+
+fn is_user_shell_command_text(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    let lowered = trimmed.to_ascii_lowercase();
+    lowered.starts_with(USER_SHELL_COMMAND_OPEN)
+}
 
 fn is_session_prefix(text: &str) -> bool {
     let trimmed = text.trim_start();

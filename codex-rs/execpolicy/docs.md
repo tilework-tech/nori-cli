@@ -8,7 +8,7 @@ The execpolicy crate provides parsing and evaluation of execution policies for c
 
 ### How it fits into the larger codebase
 
-Used by `@/codex-rs/core/` (`exec_policy.rs`) to determine whether shell commands require user approval or can be auto-executed.
+Used by `@/codex-rs/core/` (`command_safety/`) to determine whether shell commands require user approval or can be auto-executed.
 
 ### Core Implementation
 

@@ -48,10 +48,6 @@ pub(crate) struct DeveloperInstructions {
 }
 
 impl DeveloperInstructions {
-    pub fn new<T: Into<String>>(text: T) -> Self {
-        Self { text: text.into() }
-    }
-
     pub fn into_text(self) -> String {
         self.text
     }

@@ -4,7 +4,7 @@ Path: @/codex-rs/core
 
 ### Overview
 
-The core crate provides foundational functionality shared across Nori components: configuration management, authentication, conversation orchestration, command execution with sandboxing, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most business logic.
+The core crate provides foundational functionality shared across Nori components: configuration management, authentication, command execution with sandboxing, compaction utilities, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most shared business logic.
 
 ### How it fits into the larger codebase
 
@@ -22,7 +22,7 @@ config  auth  exec/sandboxing
 ```
 
 The core crate is depended on by:
-- `@/codex-rs/tui/` - for config loading, auth management, conversation orchestration
+- `@/codex-rs/tui/` - for config loading, auth management, and shared types
 - `@/codex-rs/acp/` - for config types and auth helpers
 - `@/codex-rs/login/` - for auth primitives
 
@@ -64,17 +64,12 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 - ChatGPT login flow with OAuth
 - Keyring storage for persistent tokens (`codex-keyring-store`)
 
-**Conversation Management** (`conversation_manager.rs`, `codex/mod.rs`): Orchestrates conversations with AI backends. The `ConversationManager` wraps a `ConversationClient` (implemented by `AcpBackend` or the legacy HTTP backend) and handles:
-- Session creation and resumption
-- Message history tracking
-- Token usage accumulation
-
 **Command Execution** (`exec.rs`, `sandboxing/`): Executes shell commands with optional sandboxing:
 - Linux: Landlock LSM (`landlock.rs`) + seccomp
 - macOS: Seatbelt sandbox profiles (`seatbelt.rs`)
 - Windows: Restricted process tokens (`codex-windows-sandbox`)
 
-**Execution Policy** (`exec_policy.rs`, `command_safety/`): Evaluates whether commands should be auto-approved or require user confirmation based on policy rules.
+**Command Safety** (`command_safety/`): Determines whether shell commands are known-safe and can be auto-approved without user confirmation, based on execution policy rules from `@/codex-rs/execpolicy/`.
 
 **Custom Prompts** (`custom_prompts.rs`): Discovers and executes user-authored custom prompts from a directory. Two kinds of prompts are supported:
 
@@ -89,22 +84,22 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 
 **MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model.
 
-**Data Flow:**
+**Data Flow (ACP path):**
 
 ```
-User Input -> Op (UserTurn) -> ConversationManager -> ModelClient -> ResponseStream
+User Input -> Op (UserTurn) -> AcpBackend (@/codex-rs/acp) -> Agent subprocess (JSON-RPC)
     |
     v
 Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 ```
 
-**Model Client Architecture:**
+ACP (Agent Context Protocol) integration is handled in `@/codex-rs/acp`, not embedded in core. The core crate provides shared infrastructure (config, auth, tool specs, sandboxing, compaction utilities) that the ACP backend consumes.
 
-`client.rs` provides `ModelClient` for communicating with HTTP-based model providers. The `WireApi` enum defines two HTTP-based protocols:
-- `WireApi::Responses`: OpenAI Responses API (used by some internal models)
-- `WireApi::Chat`: OpenAI Chat Completions API (the default)
+**Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/codex-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
-ACP (Agent Context Protocol) integration is handled separately in `@/codex-rs/acp`, not embedded in core's model client. This decoupled architecture means codex-core only handles HTTP-based providers.
+**Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
+
+**Compact Utilities (`compact.rs`):** Provides shared compaction constants for conversation summarization: `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX`, which are loaded from prompt templates in `templates/compact/`.
 
 **User Notifications:**
 
@@ -126,7 +121,7 @@ Core's `Config::tui_notifications` is a simple `bool` that controls whether the 
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `codex/` (with `session_lifecycle.rs`, `history.rs`, `approval.rs`, `event_emission.rs`, `session_ops.rs`, `submission_loop.rs`, `token_tracking.rs`, `turn_execution.rs`), `parse_command/` (with `parsing.rs`, `path_utils.rs`, `simplify.rs`, `summarize.rs`, `tests.rs`), `tools/spec/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/`, `tests/suite/client/`, and `tests/suite/unified_exec/` also use the `mod.rs` + `part*.rs` pattern.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `parse_command/`, `rollout/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` and `tests/suite/client/` also use the `mod.rs` + `part*.rs` pattern.
 
 - The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt
@@ -135,13 +130,8 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 - The conversation history is stored in `~/.codex/conversations/` (or `~/.nori/cli/conversations/`)
 - Error types are defined in `error.rs` and use `thiserror`
 
-**Test Suite Configuration:**
+**Test Suite:**
 
-The integration test suite in `@/codex-rs/core/tests/suite` includes timing-sensitive tests that are excluded from normal CI runs:
-
-- `tool_parallelism.rs`: Tests parallel tool execution with strict timing requirements (<750ms threshold). The `read_file_tools_run_in_parallel` test is marked `#[ignore]`.
-- `rmcp_client.rs`: Tests remote MCP server communication. Several tests are marked `#[ignore]` as they take >60 seconds due to cargo builds and HTTP server startup.
-
-These tests remain available via `cargo test -- --ignored` but are skipped during routine runs to prevent false failures.
+The integration test suite in `@/codex-rs/core/tests/suite` covers auth refresh, command execution, live CLI behavior, rollout listing, Seatbelt sandboxing, and text encoding. The `core_test_support` helper crate (`@/codex-rs/core/tests/common/`) provides config helpers, macros, and filesystem wait utilities for tests.
 
 Created and maintained by Nori.

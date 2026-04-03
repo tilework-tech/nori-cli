@@ -81,7 +81,7 @@ pub enum Op {
     },
 
     /// Similar to [`Op::UserInput`], but contains additional context required
-    /// for a turn of a [`crate::codex_conversation::CodexConversation`].
+    /// for a model turn.
     UserTurn {
         /// User input items, see `InputItem`
         items: Vec<UserInput>,
