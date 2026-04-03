@@ -218,7 +218,7 @@ impl CommandPopup {
         out
     }
 
-    fn filtered_items(&self) -> Vec<CommandItem> {
+    pub(crate) fn filtered_items(&self) -> Vec<CommandItem> {
         self.filtered().into_iter().map(|(c, _, _)| c).collect()
     }
 
@@ -601,5 +601,45 @@ mod tests {
         assert_eq!(name, Some("/claude-code:loop"));
         let desc = rows.first().and_then(|r| r.description.as_deref());
         assert_eq!(desc, Some("Run a prompt on a recurring interval"));
+    }
+
+    #[test]
+    fn agent_command_without_prefix_renders_bare_name() {
+        let agent_commands = vec![AgentCommandInfo {
+            name: "loop".to_string(),
+            description: "loop desc".to_string(),
+            input_hint: None,
+        }];
+        let popup =
+            CommandPopup::new_full(Vec::new(), agent_commands, String::new(), HashMap::new());
+        let rows = popup.rows_from_matches(vec![(CommandItem::AgentCommand(0), None, 0)]);
+        let name = rows.first().map(|r| r.name.as_str());
+        assert_eq!(name, Some("/loop"));
+    }
+
+    #[test]
+    fn set_agent_commands_updates_prefix_on_existing_commands() {
+        let agent_commands = vec![AgentCommandInfo {
+            name: "loop".to_string(),
+            description: "loop desc".to_string(),
+            input_hint: None,
+        }];
+        let mut popup = CommandPopup::new_full(
+            Vec::new(),
+            agent_commands.clone(),
+            String::new(),
+            HashMap::new(),
+        );
+        // Initially no prefix
+        let rows = popup.rows_from_matches(vec![(CommandItem::AgentCommand(0), None, 0)]);
+        assert_eq!(rows.first().map(|r| r.name.as_str()), Some("/loop"));
+
+        // Update with a prefix via set_agent_commands
+        popup.set_agent_commands(agent_commands, "claude-code".to_string());
+        let rows = popup.rows_from_matches(vec![(CommandItem::AgentCommand(0), None, 0)]);
+        assert_eq!(
+            rows.first().map(|r| r.name.as_str()),
+            Some("/claude-code:loop")
+        );
     }
 }

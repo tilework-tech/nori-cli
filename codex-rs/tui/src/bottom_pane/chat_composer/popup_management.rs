@@ -244,6 +244,28 @@ impl ChatComposer {
         }
     }
 
+    /// Return the filtered command items from the active popup, if any.
+    #[cfg(test)]
+    pub(crate) fn command_popup_items(
+        &self,
+    ) -> Vec<crate::bottom_pane::command_popup::CommandItem> {
+        if let ActivePopup::Command(popup) = &self.active_popup {
+            popup.filtered_items()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Return the name of an agent command by index, if available.
+    #[cfg(test)]
+    pub(crate) fn agent_command_name(&self, idx: usize) -> Option<String> {
+        if let ActivePopup::Command(popup) = &self.active_popup {
+            popup.agent_command(idx).map(|c| c.name.clone())
+        } else {
+            None
+        }
+    }
+
     /// Synchronize `self.file_search_popup` with the current text in the textarea.
     /// Note this is only called when self.active_popup is NOT Command.
     pub(super) fn sync_file_search_popup(&mut self) {
