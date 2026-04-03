@@ -303,38 +303,23 @@ impl ClientToolCell {
             let diff_width = width.saturating_sub(4).max(1) as usize;
             let diff_lines = create_diff_summary(&changes, &self.cwd, diff_width);
 
-            // Single-file edit/delete: promote DiffSummary's first line (verb+path+counts)
-            // as the outer header to avoid duplicating "Edited README.md" / "Edited README.md (+1 -1)".
-            // Skip for Move tools — DiffSummary says "Edited" but the tool header says "Moved".
-            if changes.len() == 1 && self.snapshot.kind != nori_protocol::ToolKind::Move {
-                if let Some((first, rest)) = diff_lines.split_first() {
-                    // Replace "• " bullet from DiffSummary with our computed bullet
-                    let mut header_spans = vec![bullet, " ".into()];
-                    for span in &first.spans {
-                        let content = span.content.as_ref();
-                        // Skip the DiffSummary's own "• " prefix
-                        if content == "• " {
-                            continue;
-                        }
-                        header_spans.push(span.clone());
-                    }
-                    lines.push(Line::from(header_spans));
-                    for diff_line in rest {
-                        let mut indented = vec![Span::from("    ")];
-                        indented.extend(diff_line.spans.clone());
-                        lines.push(Line::from(indented));
-                    }
-                }
-            } else {
-                // Multi-file: keep outer header separate from per-file DiffSummary
+            if self.snapshot.kind == nori_protocol::ToolKind::Move {
+                // Move tools: DiffSummary says "Edited" but we need "Moved"
                 let header =
                     relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
                 lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
-                for diff_line in diff_lines {
-                    let mut indented = vec![Span::from("    ")];
-                    indented.extend(diff_line.spans);
-                    lines.push(Line::from(indented));
+                lines.extend(prefix_lines(diff_lines, "    ".into(), "    ".into()));
+            } else if let Some((first, rest)) = diff_lines.split_first() {
+                // Promote DiffSummary's first line (verb+path+counts) as header,
+                // replacing its "• " bullet with our phase-aware bullet.
+                let mut header_spans = vec![bullet, " ".into()];
+                for span in &first.spans {
+                    if span.content.as_ref() != "• " {
+                        header_spans.push(span.clone());
+                    }
                 }
+                lines.push(Line::from(header_spans));
+                lines.extend(prefix_lines(rest.to_vec(), "    ".into(), "    ".into()));
             }
         } else {
             // No diff data: use the format_edit_tool_header as sole header
@@ -1930,7 +1915,7 @@ mod tests {
     }
 
     #[test]
-    fn multi_file_edit_keeps_outer_header_separate() {
+    fn multi_file_edit_uses_aggregate_header() {
         let snapshot = ToolSnapshot {
             call_id: "call-multi-edit".into(),
             title: "Edit multiple files".into(),
@@ -1965,12 +1950,19 @@ mod tests {
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
-        // Multi-file: outer header should say "Edited 2 files"
+        // First line should be the aggregate header with file count
         assert!(
-            lines
-                .iter()
-                .any(|l| l.contains("Edited") && l.contains("2 files")),
-            "Multi-file edit should have outer 'Edited 2 files' header, got: {lines:?}"
+            lines[0].contains("Edited") && lines[0].contains("2 files"),
+            "Multi-file edit header should show 'Edited 2 files' as the first line, got: {:?}",
+            lines[0]
+        );
+        // No subsequent line should repeat the aggregate header
+        let has_duplicate_aggregate = lines[1..]
+            .iter()
+            .any(|l| l.contains("Edited") && l.contains("files"));
+        assert!(
+            !has_duplicate_aggregate,
+            "Should not have a duplicate aggregate header in: {lines:?}"
         );
     }
 }

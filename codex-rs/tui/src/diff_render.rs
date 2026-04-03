@@ -871,6 +871,53 @@ mod tests {
     }
 
     #[test]
+    fn diff_bg_extends_through_prefix_lines_indent() {
+        // Verifies that push_wrapped_diff_line produces lines where
+        // prefix_lines can propagate the bg to the indent prefix,
+        // giving edge-to-edge background highlighting.
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+
+        #[allow(clippy::disallowed_methods)]
+        let green_bg = Color::Rgb(33, 58, 43);
+        let total_width: u16 = 40;
+        let prefix_width: usize = 4;
+        let area = Rect::new(0, 0, total_width, 4);
+
+        #[allow(clippy::disallowed_methods)]
+        let ctx = DiffRenderStyleContext {
+            add_bg: Some(Color::Rgb(33, 58, 43)),
+            del_bg: Some(Color::Rgb(74, 34, 29)),
+        };
+
+        // Produce a diff line the same way production code does
+        let diff_lines = push_wrapped_diff_line(
+            1,
+            DiffLineType::Insert,
+            "hello",
+            (total_width as usize) - prefix_width * 2,
+            1,
+            prefix_width,
+            &ctx,
+        );
+
+        // Apply prefix_lines just like render_changes_block does
+        let lines = prefix_lines(diff_lines, "    ".into(), "    ".into());
+
+        let mut buf = Buffer::empty(area);
+        Paragraph::new(Text::from(lines)).render_ref(area, &mut buf);
+
+        // Every cell in the row should have the green background
+        for col in 0..total_width {
+            assert_eq!(
+                buf[(col, 0)].bg,
+                green_bg,
+                "col {col} should have bg — edge-to-edge fill requires all cells covered"
+            );
+        }
+    }
+
+    #[test]
     fn diff_bg_fills_full_width() {
         // With a truecolor context, each diff line's spans should cover the
         // full requested width so the background tint extends edge-to-edge.
