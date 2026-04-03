@@ -237,6 +237,13 @@ impl ChatComposer {
         }
     }
 
+    pub(crate) fn update_agent_command_prefix(&mut self, prefix: String) {
+        self.agent_command_prefix = prefix.clone();
+        if let ActivePopup::Command(popup) = &mut self.active_popup {
+            popup.set_agent_commands(self.agent_commands.clone(), prefix);
+        }
+    }
+
     /// Synchronize `self.file_search_popup` with the current text in the textarea.
     /// Note this is only called when self.active_popup is NOT Command.
     pub(super) fn sync_file_search_popup(&mut self) {

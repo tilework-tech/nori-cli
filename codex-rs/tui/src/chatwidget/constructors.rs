@@ -48,6 +48,7 @@ impl ChatWidget {
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
+                agent_slug: config.model.clone(),
             }),
             active_cell: None,
             config: config.clone(),
@@ -155,6 +156,7 @@ impl ChatWidget {
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
+                agent_slug: config.model.clone(),
             }),
             active_cell: None,
             config: config.clone(),
