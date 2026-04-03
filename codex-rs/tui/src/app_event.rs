@@ -472,6 +472,10 @@ pub(crate) enum AppEvent {
         server_url: String,
         http_headers: Option<std::collections::HashMap<String, String>>,
         env_http_headers: Option<std::collections::HashMap<String, String>>,
+        /// Pre-registered OAuth client ID (for servers without dynamic registration).
+        client_id: Option<String>,
+        /// Environment variable name holding the OAuth client secret.
+        client_secret_env_var: Option<String>,
     },
 
     /// Cancel an in-progress MCP OAuth login flow.

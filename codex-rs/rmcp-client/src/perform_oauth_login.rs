@@ -7,6 +7,7 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use reqwest::ClientBuilder;
+use rmcp::transport::auth::AuthorizationMetadata;
 use rmcp::transport::auth::OAuthState;
 use tiny_http::Response;
 use tiny_http::Server;
@@ -48,6 +49,7 @@ pub struct OAuthLoginHandle {
 ///
 /// Opens the browser for the user and waits for the callback. The returned
 /// handle can be used to cancel the flow. Call `.task` to await completion.
+#[allow(clippy::too_many_arguments)]
 pub async fn start_oauth_login(
     server_name: String,
     server_url: String,
@@ -55,6 +57,8 @@ pub async fn start_oauth_login(
     http_headers: Option<HashMap<String, String>>,
     env_http_headers: Option<HashMap<String, String>>,
     scopes: Vec<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
 ) -> Result<OAuthLoginHandle> {
     let server = Arc::new(Server::http("127.0.0.1:0").map_err(|err| anyhow!(err))?);
     let _guard = CallbackServerGuard {
@@ -78,48 +82,171 @@ pub async fn start_oauth_login(
     let default_headers = build_default_headers(http_headers, env_http_headers)?;
     let http_client = apply_default_headers(ClientBuilder::new(), &default_headers).build()?;
 
-    let mut oauth_state = OAuthState::new(&server_url, Some(http_client)).await?;
     let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
-    oauth_state
-        .start_authorization(&scope_refs, &redirect_uri, Some("Codex"))
-        .await?;
-    let auth_url = oauth_state.get_authorization_url().await?;
 
-    tracing::info!("MCP OAuth: opening browser for {server_name}: {auth_url}");
-    if webbrowser::open(&auth_url).is_err() {
+    if let Some(pre_client_id) = client_id {
+        // Pre-configured credentials path: use oauth2 crate directly to
+        // avoid rmcp's mandatory dynamic client registration.
+        start_oauth_login_preconfigured(
+            server_name,
+            server_url,
+            store_mode,
+            http_client,
+            redirect_uri,
+            callback_rx,
+            _guard,
+            scopes,
+            pre_client_id,
+            client_secret,
+        )
+        .await
+    } else {
+        // Dynamic registration path: use OAuthState from rmcp.
+        let mut oauth_state = OAuthState::new(&server_url, Some(http_client)).await?;
+        oauth_state
+            .start_authorization(&scope_refs, &redirect_uri, Some("Codex"))
+            .await?;
+        let auth_url = oauth_state.get_authorization_url().await?;
+
+        tracing::info!("MCP OAuth: opening browser for {server_name}: {auth_url}");
+        if webbrowser::open(&auth_url).is_err() {
+            tracing::warn!("MCP OAuth: browser launch failed for {server_name}");
+        }
+
+        let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+
+        let task = tokio::spawn(async move {
+            let _guard = _guard;
+
+            let cancel = async {
+                let _ = cancel_rx.await;
+            };
+
+            let (code, csrf_state) =
+                wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await?;
+
+            oauth_state
+                .handle_callback(&code, &csrf_state)
+                .await
+                .context("failed to handle OAuth callback")?;
+
+            let (client_id, credentials_opt) = oauth_state
+                .get_credentials()
+                .await
+                .context("failed to retrieve OAuth credentials")?;
+            let credentials = credentials_opt
+                .ok_or_else(|| anyhow!("OAuth provider did not return credentials"))?;
+
+            let expires_at = compute_expires_at_millis(&credentials);
+            let stored = StoredOAuthTokens {
+                server_name,
+                url: server_url,
+                client_id,
+                token_response: WrappedOAuthTokenResponse(credentials),
+                expires_at,
+            };
+            save_oauth_tokens(&stored.server_name, &stored, store_mode)?;
+
+            Ok(())
+        });
+
+        Ok(OAuthLoginHandle {
+            cancel_tx: Some(cancel_tx),
+            task,
+        })
+    }
+}
+
+/// Start OAuth login using pre-configured client credentials.
+///
+/// Uses the `oauth2` crate directly (instead of rmcp's `OAuthState`) to
+/// bypass dynamic client registration, which is not supported by all servers.
+#[allow(clippy::too_many_arguments)]
+async fn start_oauth_login_preconfigured(
+    server_name: String,
+    server_url: String,
+    store_mode: OAuthCredentialsStoreMode,
+    http_client: reqwest::Client,
+    redirect_uri: String,
+    callback_rx: oneshot::Receiver<(String, String)>,
+    _guard: CallbackServerGuard,
+    scopes: Vec<String>,
+    pre_client_id: String,
+    client_secret: Option<String>,
+) -> Result<OAuthLoginHandle> {
+    use oauth2::AuthUrl;
+    use oauth2::ClientId;
+    use oauth2::ClientSecret;
+    use oauth2::CsrfToken;
+    use oauth2::PkceCodeChallenge;
+    use oauth2::RedirectUrl;
+    use oauth2::Scope;
+    use oauth2::TokenUrl;
+    use oauth2::basic::BasicClient;
+
+    // Discover OAuth metadata from the server's well-known endpoint.
+    let metadata = discover_oauth_metadata(&http_client, &server_url).await?;
+
+    let auth_url =
+        AuthUrl::new(metadata.authorization_endpoint).context("invalid authorization endpoint")?;
+    let token_url = TokenUrl::new(metadata.token_endpoint).context("invalid token endpoint")?;
+    let redirect = RedirectUrl::new(redirect_uri).context("invalid redirect URI")?;
+
+    let mut client_builder = BasicClient::new(ClientId::new(pre_client_id.clone()))
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(redirect);
+
+    if let Some(secret) = &client_secret {
+        client_builder = client_builder.set_client_secret(ClientSecret::new(secret.clone()));
+    }
+
+    let client = client_builder;
+
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    let mut auth_request = client.authorize_url(CsrfToken::new_random);
+    for scope in &scopes {
+        auth_request = auth_request.add_scope(Scope::new(scope.clone()));
+    }
+    let (authorize_url, csrf_token) = auth_request.set_pkce_challenge(pkce_challenge).url();
+
+    let auth_url_str = authorize_url.to_string();
+    tracing::info!("MCP OAuth: opening browser for {server_name}: {auth_url_str}");
+    if webbrowser::open(&auth_url_str).is_err() {
         tracing::warn!("MCP OAuth: browser launch failed for {server_name}");
     }
 
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
 
     let task = tokio::spawn(async move {
-        let _guard = _guard; // move guard into the task to keep server alive
+        let _guard = _guard;
 
         let cancel = async {
             let _ = cancel_rx.await;
         };
 
-        let (code, csrf_state) =
+        let (code, returned_csrf) =
             wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await?;
 
-        oauth_state
-            .handle_callback(&code, &csrf_state)
-            .await
-            .context("failed to handle OAuth callback")?;
+        if returned_csrf != *csrf_token.secret() {
+            return Err(anyhow!("CSRF token mismatch"));
+        }
 
-        let (client_id, credentials_opt) = oauth_state
-            .get_credentials()
+        let http_client_for_oauth = http_client;
+        let token_response = client
+            .exchange_code(oauth2::AuthorizationCode::new(code))
+            .set_pkce_verifier(pkce_verifier)
+            .request_async(&http_client_for_oauth)
             .await
-            .context("failed to retrieve OAuth credentials")?;
-        let credentials =
-            credentials_opt.ok_or_else(|| anyhow!("OAuth provider did not return credentials"))?;
+            .context("failed to exchange code for token")?;
 
-        let expires_at = compute_expires_at_millis(&credentials);
+        let expires_at = compute_expires_at_millis(&token_response);
         let stored = StoredOAuthTokens {
             server_name,
             url: server_url,
-            client_id,
-            token_response: WrappedOAuthTokenResponse(credentials),
+            client_id: pre_client_id,
+            token_response: WrappedOAuthTokenResponse(token_response),
             expires_at,
         };
         save_oauth_tokens(&stored.server_name, &stored, store_mode)?;
@@ -131,6 +258,61 @@ pub async fn start_oauth_login(
         cancel_tx: Some(cancel_tx),
         task,
     })
+}
+
+/// Discover OAuth authorization metadata from a server's well-known endpoint.
+async fn discover_oauth_metadata(
+    client: &reqwest::Client,
+    server_url: &str,
+) -> Result<AuthorizationMetadata> {
+    let url = reqwest::Url::parse(server_url).context("invalid server URL")?;
+    let base_path = url.path().trim_end_matches('/');
+
+    // Try RFC 8414 well-known paths in order.
+    let candidates = if base_path.is_empty() || base_path == "/" {
+        vec![format!(
+            "{}://{}/.well-known/oauth-authorization-server",
+            url.scheme(),
+            url.authority()
+        )]
+    } else {
+        let trimmed = base_path.trim_start_matches('/');
+        vec![
+            format!(
+                "{}://{}/.well-known/oauth-authorization-server/{trimmed}",
+                url.scheme(),
+                url.authority()
+            ),
+            format!(
+                "{}://{}/{trimmed}/.well-known/oauth-authorization-server",
+                url.scheme(),
+                url.authority()
+            ),
+            format!(
+                "{}://{}/.well-known/oauth-authorization-server",
+                url.scheme(),
+                url.authority()
+            ),
+        ]
+    };
+
+    for candidate_url in &candidates {
+        let resp = client
+            .get(candidate_url)
+            .header("MCP-Protocol-Version", "2024-11-05")
+            .send()
+            .await;
+        if let Ok(resp) = resp
+            && resp.status().is_success()
+            && let Ok(metadata) = resp.json::<AuthorizationMetadata>().await
+        {
+            return Ok(metadata);
+        }
+    }
+
+    Err(anyhow!(
+        "could not discover OAuth metadata from {server_url}"
+    ))
 }
 
 pub async fn perform_oauth_login(
