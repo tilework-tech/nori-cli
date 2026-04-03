@@ -117,7 +117,12 @@ impl ChatComposer {
                         }
                         CommandItem::AgentCommand(idx) => {
                             if let Some(cmd) = popup.agent_command(idx) {
-                                self.textarea.set_text(&format!("/{} ", cmd.name));
+                                let display_name = if self.agent_command_prefix.is_empty() {
+                                    cmd.name.clone()
+                                } else {
+                                    format!("{}:{}", self.agent_command_prefix, cmd.name)
+                                };
+                                self.textarea.set_text(&format!("/{display_name} "));
                                 cursor_target = Some(self.textarea.text().len());
                             }
                         }
@@ -188,7 +193,11 @@ impl ChatComposer {
                         }
                         CommandItem::AgentCommand(idx) => {
                             if let Some(cmd) = popup.agent_command(idx) {
-                                let text = format!("/{}", cmd.name);
+                                let text = if self.agent_command_prefix.is_empty() {
+                                    format!("/{}", cmd.name)
+                                } else {
+                                    format!("/{}:{}", self.agent_command_prefix, cmd.name)
+                                };
                                 self.textarea.set_text("");
                                 return (InputResult::Submitted(text), true);
                             }
@@ -659,7 +668,16 @@ impl ChatComposer {
                                     .any(|prompt| prompt.name == prompt_name)
                             })
                             .unwrap_or(false);
-                        if !is_builtin && !is_known_prompt {
+                        let agent_prefix = if self.agent_command_prefix.is_empty() {
+                            String::new()
+                        } else {
+                            format!("{}:", self.agent_command_prefix)
+                        };
+                        let is_agent_command = !agent_prefix.is_empty()
+                            && name.strip_prefix(&agent_prefix).is_some_and(|cmd_name| {
+                                self.agent_commands.iter().any(|cmd| cmd.name == cmd_name)
+                            });
+                        if !is_builtin && !is_known_prompt && !is_agent_command {
                             let message = format!(
                                 r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
                             );
