@@ -99,7 +99,7 @@ ACP (Agent Context Protocol) integration is handled in `@/codex-rs/acp`, not emb
 
 **Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, retry/timeout settings, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
 
-**Compact Utilities (`compact.rs`):** Provides shared compaction helpers for conversation summarization: `content_items_to_text`, `SUMMARIZATION_PROMPT`, `SUMMARY_PREFIX`, and internal functions for building compacted histories with token-limited user message preservation.
+**Compact Utilities (`compact.rs`):** Provides shared compaction constants for conversation summarization: `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX`, which are loaded from prompt templates in `templates/compact/`.
 
 **User Notifications:**
 

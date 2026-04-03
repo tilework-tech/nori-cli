@@ -1,6 +1,38 @@
 # Current Progress
 
-## Status: Eighteenth component removed
+## Status: Nineteenth component removed
+
+### Completed: Remove dead test-only code from compact.rs and safety.rs
+
+Removed dead test-only functions from `compact.rs` and `safety.rs` that tested HTTP-backend behavior deleted in earlier commits, plus the unused `content_items_to_text` function.
+
+**What was removed from `compact.rs`:**
+- `content_items_to_text` — `pub fn` re-exported from `lib.rs` but with zero external callers
+- `collect_user_messages` — test-only helper for extracting user messages from ResponseItems
+- `is_summary_message` — test-only helper for checking summary prefix
+- `build_compacted_history` / `build_compacted_history_with_limit` — test-only helpers for building compacted histories with token budgets
+- `COMPACT_USER_MESSAGE_MAX_TOKENS` — test-only constant
+- 6 tests exercising the above functions
+
+**What was removed from `safety.rs`:**
+- `is_write_patch_constrained_to_writable_paths` — test-only function checking whether file patches were constrained to writable paths under sandbox policy
+- `test_writable_roots_constraint` — test for above function
+
+**What was removed from `lib.rs`:**
+- `pub use compact::content_items_to_text;` re-export
+
+**What was preserved:**
+- `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants in `compact.rs` (used by ACP backend)
+- `get_platform_sandbox` and `set_windows_sandbox_enabled` in `safety.rs` (used by core, tui, tests)
+
+**Documentation updated:**
+- `core/docs.md` — updated `compact.rs` description to reflect only constants remain
+
+**Impact:** ~390 lines of dead test infrastructure removed. codex-core unit tests: 360 pass (down from 367 — the 7 removed tests were dead HTTP-backend tests). Integration tests: 14 pass. nori binary builds successfully.
+
+### Suggested next steps for future commits
+1. Remove remaining dead code: investigate `event_mapping::parse_turn_item` — now that its only test consumer (`collect_user_messages` in compact.rs) is gone, verify whether it still has production callers
+2. Continue identifying and removing other HTTP-backend remnants in codex-core
 
 ### Completed: Remove unused dependencies from codex-core Cargo.toml
 
