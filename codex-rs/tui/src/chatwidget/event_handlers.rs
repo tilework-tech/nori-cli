@@ -1202,6 +1202,9 @@ impl ChatWidget {
             nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
                 self.handle_client_replay_entry(replay_entry);
             }
+            nori_protocol::ClientEvent::AgentCommandsUpdate(update) => {
+                self.bottom_pane.set_agent_commands(update.commands);
+            }
         }
     }
 

@@ -260,6 +260,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         animations_enabled: cfg.animations,
         vertical_footer: false,
         agent_display_name: String::new(),
+        agent_slug: String::new(),
     });
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test"));
     let widget = ChatWidget {

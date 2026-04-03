@@ -76,6 +76,8 @@ pub(crate) struct BottomPane {
     context_window_percent: Option<i64>,
     /// Display name of the current agent for use in approval dialogs.
     agent_display_name: String,
+    /// Agent slug (e.g., "claude-code") used as prefix for agent commands.
+    agent_slug: String,
     /// Whether vim mode is enabled, used to configure selection view behavior.
     vim_mode_enabled: bool,
 }
@@ -90,6 +92,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) animations_enabled: bool,
     pub(crate) vertical_footer: bool,
     pub(crate) agent_display_name: String,
+    pub(crate) agent_slug: String,
 }
 
 impl BottomPane {
@@ -104,6 +107,7 @@ impl BottomPane {
             animations_enabled,
             vertical_footer,
             agent_display_name,
+            agent_slug,
         } = params;
         let mut composer = ChatComposer::new(
             has_input_focus,
@@ -141,6 +145,7 @@ impl BottomPane {
             animations_enabled,
             context_window_percent: None,
             agent_display_name,
+            agent_slug,
             vim_mode_enabled: false,
         };
 
@@ -476,6 +481,20 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update agent-provided commands available for the slash popup.
+    pub(crate) fn set_agent_commands(&mut self, commands: Vec<nori_protocol::AgentCommandInfo>) {
+        let prefix = self.agent_slug.clone();
+        self.composer.set_agent_commands(commands, prefix);
+        self.request_redraw();
+    }
+
+    /// Set the agent slug used as prefix for agent commands (e.g., "claude-code").
+    /// Also refreshes the prefix on any already-stored agent commands.
+    pub(crate) fn set_agent_slug(&mut self, slug: String) {
+        self.agent_slug = slug.clone();
+        self.composer.update_agent_command_prefix(slug);
+    }
+
     /// Update system info displayed in the footer (for background refresh).
     pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
         self.composer.set_system_info(info);
@@ -743,6 +762,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
         pane.push_approval_request(exec_request());
         assert_eq!(CancellationEvent::Handled, pane.on_ctrl_c());
@@ -766,6 +786,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         // Create an approval modal (active view).
@@ -797,6 +818,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         // Start a running task so the status indicator is active above the composer.
@@ -869,6 +891,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         // Begin a task: show initial status.
@@ -899,6 +922,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         // Activate spinner (status view replaces composer) with no live ring.
@@ -932,6 +956,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         pane.set_task_running(true);
@@ -961,6 +986,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         pane.set_task_running(true);
@@ -990,6 +1016,7 @@ mod tests {
             animations_enabled: true,
             vertical_footer: false,
             agent_display_name: String::new(),
+            agent_slug: String::new(),
         });
 
         // Push the initial selection view.

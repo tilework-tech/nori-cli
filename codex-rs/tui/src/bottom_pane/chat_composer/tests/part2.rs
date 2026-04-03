@@ -136,8 +136,8 @@ fn slash_popup_model_first_for_mo_logic() {
             Some(CommandItem::Builtin(cmd)) => {
                 assert_eq!(cmd.command(), "model")
             }
-            Some(CommandItem::UserPrompt(_)) => {
-                panic!("unexpected prompt selected for '/mo'")
+            Some(CommandItem::UserPrompt(_) | CommandItem::AgentCommand(_)) => {
+                panic!("unexpected non-builtin selected for '/mo'")
             }
             None => panic!("no selected command for '/mo'"),
         },

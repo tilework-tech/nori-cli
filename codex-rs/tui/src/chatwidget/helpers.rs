@@ -10,6 +10,7 @@ impl ChatWidget {
             .map(|info| info.display_name)
             .unwrap_or_else(|| agent.to_string());
         self.bottom_pane.set_agent_display_name(display_name);
+        self.bottom_pane.set_agent_slug(agent.to_string());
     }
 
     /// Set the vertical footer layout flag for the TUI.

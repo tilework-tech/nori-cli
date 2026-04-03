@@ -14,6 +14,24 @@ pub enum ClientEvent {
     PlanSnapshot(PlanSnapshot),
     TurnLifecycle(TurnLifecycle),
     ReplayEntry(ReplayEntry),
+    AgentCommandsUpdate(AgentCommandsUpdate),
+}
+
+/// A set of commands advertised by the ACP agent.
+/// Each update fully replaces the previous set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AgentCommandsUpdate {
+    pub commands: Vec<AgentCommandInfo>,
+}
+
+/// Information about a single agent-provided slash command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AgentCommandInfo {
+    pub name: String,
+    pub description: String,
+    pub input_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -276,6 +294,26 @@ impl ClientEventNormalizer {
                 vec![ClientEvent::ToolSnapshot(tool_snapshot_from_tool_call(
                     entry, phase,
                 ))]
+            }
+            acp::SessionUpdate::AvailableCommandsUpdate(update) => {
+                let commands = update
+                    .available_commands
+                    .iter()
+                    .map(|cmd| {
+                        let input_hint = cmd.input.as_ref().map(|input| match input {
+                            acp::AvailableCommandInput::Unstructured(u) => u.hint.clone(),
+                            _ => String::new(),
+                        });
+                        AgentCommandInfo {
+                            name: cmd.name.clone(),
+                            description: cmd.description.clone(),
+                            input_hint,
+                        }
+                    })
+                    .collect();
+                vec![ClientEvent::AgentCommandsUpdate(AgentCommandsUpdate {
+                    commands,
+                })]
             }
             _ => Vec::new(),
         }
@@ -1736,5 +1774,57 @@ mod tests {
         };
 
         assert_eq!(snapshot.title, "echo (hello)");
+    }
+
+    #[test]
+    fn normalizer_converts_available_commands_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update =
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![
+                acp::AvailableCommand::new("loop", "Run a prompt on a recurring interval"),
+                acp::AvailableCommand::new("schedule", "Create scheduled remote agents").input(
+                    acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
+                        "cron expression",
+                    )),
+                ),
+            ]));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::AgentCommandsUpdate(commands_update) = &events[0] else {
+            panic!("expected AgentCommandsUpdate");
+        };
+
+        assert_eq!(commands_update.commands.len(), 2);
+        assert_eq!(commands_update.commands[0].name, "loop");
+        assert_eq!(
+            commands_update.commands[0].description,
+            "Run a prompt on a recurring interval"
+        );
+        assert_eq!(commands_update.commands[0].input_hint, None);
+        assert_eq!(commands_update.commands[1].name, "schedule");
+        assert_eq!(
+            commands_update.commands[1].input_hint,
+            Some("cron expression".to_string())
+        );
+    }
+
+    #[test]
+    fn normalizer_converts_empty_available_commands_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update =
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![]));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::AgentCommandsUpdate(commands_update) = &events[0] else {
+            panic!("expected AgentCommandsUpdate");
+        };
+
+        assert_eq!(commands_update.commands.len(), 0);
     }
 }
