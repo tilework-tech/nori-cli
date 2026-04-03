@@ -313,6 +313,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         #[cfg(feature = "nori-config")]
         loop_count_override: None,
         turn_finished: false,
+        pending_stale_completes: 0,
         plan_drawer_mode: PlanDrawerMode::Off,
         pinned_plan: None,
         terminal_title_animation_origin: std::time::Instant::now(),
@@ -339,3 +340,4 @@ mod part3;
 mod part4;
 mod part5;
 mod part6;
+mod part7;

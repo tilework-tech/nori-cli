@@ -424,6 +424,10 @@ pub(crate) struct ChatWidget {
     // Gate: set when AgentMessage is received, cleared on next TaskStarted.
     // While true, late-arriving tool events are silently discarded.
     turn_finished: bool,
+    // Number of stale TurnLifecycle::Completed events expected after
+    // interrupts. Each on_interrupted_turn increments this; each
+    // on_task_complete decrements and skips processing while > 0.
+    pending_stale_completes: i32,
     /// Whether and how plan updates are rendered in a pinned drawer instead of
     /// history cells.
     plan_drawer_mode: PlanDrawerMode,

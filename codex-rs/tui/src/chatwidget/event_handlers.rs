@@ -196,6 +196,15 @@ impl ChatWidget {
     }
 
     pub(super) fn on_task_complete(&mut self, last_agent_message: Option<String>) {
+        // If this Completed is a stale leftover from a cancelled turn, skip it.
+        // Each on_interrupted_turn increments pending_stale_completes; the
+        // matching background task will eventually emit Completed which we
+        // must ignore to avoid prematurely ending the current turn.
+        if self.pending_stale_completes > 0 {
+            self.pending_stale_completes -= 1;
+            return;
+        }
+
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
 
@@ -428,6 +437,11 @@ impl ChatWidget {
     /// When there are queued user messages, restore them into the composer
     /// separated by newlines rather than auto‑submitting the next one.
     pub(super) fn on_interrupted_turn(&mut self, _reason: TurnAbortReason) {
+        // The cancelled background task will eventually emit
+        // TurnLifecycle::Completed; record that we expect one stale
+        // Completed so on_task_complete can ignore it.
+        self.pending_stale_completes += 1;
+
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
         self.cancel_loop();

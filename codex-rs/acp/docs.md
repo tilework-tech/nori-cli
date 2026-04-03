@@ -808,6 +808,27 @@ The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, Accumula
 
 Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 
+**Turn Interrupt Guard** (`submit_and_ops.rs`, `user_input.rs`):
+
+When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` continues running after cancellation and unconditionally emits `TurnLifecycle::Completed` at the end of its event loop. If the user submits a new message before this stale `Completed` arrives, it races with the next turn's `TurnLifecycle::Started` and prematurely terminates it.
+
+The `turn_interrupted: Arc<AtomicBool>` field on `AcpBackend` prevents this:
+
+```
+Op::Interrupt:
+  1. turn_interrupted.store(true)   -- flag the current turn as interrupted
+  2. connection.cancel()            -- cancel the ACP session
+
+handle_user_input():
+  1. turn_interrupted.store(false)  -- reset for new turn
+  ...
+  spawned task epilogue:
+    if !turn_interrupted            -- only emit Completed if not interrupted
+      emit TurnLifecycle::Completed
+```
+
+Since `TurnLifecycle::Aborted` already serves as the turn-ending signal for interrupted turns, suppressing the stale `Completed` is safe. The TUI also has a defense-in-depth counter (`pending_stale_completes`) that ignores stale `Completed` events at the presentation layer (see `@/codex-rs/tui/docs.md`).
+
 **Tool Classification System:**
 
 | ACP ToolKind | ParsedCommand | TUI Rendering |

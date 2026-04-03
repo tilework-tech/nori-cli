@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use super::*;
 
 impl AcpBackend {
@@ -21,6 +23,7 @@ impl AcpBackend {
                 self.handle_user_input(items, &id).await?;
             }
             Op::Interrupt => {
+                self.turn_interrupted.store(true, Ordering::SeqCst);
                 self.connection
                     .cancel(&*self.session_id.read().await)
                     .await?;
@@ -289,6 +292,7 @@ impl AcpBackend {
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
         let transcript_recorder = self.transcript_recorder.clone();
+        let turn_interrupted = Arc::clone(&self.turn_interrupted);
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -394,17 +398,19 @@ impl AcpBackend {
                     .await;
             }
 
-            // Send TaskComplete event
-            emit_client_event(
-                &backend_event_tx,
-                transcript_recorder.as_ref(),
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed {
-                        last_agent_message: None,
-                    },
-                ),
-            )
-            .await;
+            // Send TaskComplete event, unless the turn was interrupted.
+            if !turn_interrupted.load(Ordering::SeqCst) {
+                emit_client_event(
+                    &backend_event_tx,
+                    transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed {
+                            last_agent_message: None,
+                        },
+                    ),
+                )
+                .await;
+            }
 
             // Start idle timer if configured
             if let Some(duration) = notify_after_idle.as_duration() {

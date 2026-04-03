@@ -1,8 +1,13 @@
+use std::sync::atomic::Ordering;
+
 use super::*;
 
 impl AcpBackend {
     /// Handle user input by sending a prompt to the ACP agent.
     pub(super) async fn handle_user_input(&self, items: Vec<UserInput>, id: &str) -> Result<()> {
+        // Reset the interrupt flag so this turn's Completed will be emitted.
+        self.turn_interrupted.store(false, Ordering::SeqCst);
+
         // Separate text items (needed for hooks, summary, transcript) from
         // image items (converted to ACP ContentBlock::Image).
         let mut prompt_text = String::new();
@@ -193,6 +198,7 @@ impl AcpBackend {
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
+        let turn_interrupted = Arc::clone(&self.turn_interrupted);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -531,17 +537,22 @@ impl AcpBackend {
                 );
             }
 
-            // Send TaskComplete event (always, to end the turn)
-            emit_client_event(
-                &backend_event_tx,
-                transcript_recorder.as_ref(),
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed {
-                        last_agent_message: None,
-                    },
-                ),
-            )
-            .await;
+            // Send TaskComplete event to end the turn, unless this turn was
+            // interrupted. When Op::Interrupt fires, it emits
+            // TurnLifecycle::Aborted synchronously; emitting a Completed here
+            // would race with the next turn and prematurely terminate it.
+            if !turn_interrupted.load(Ordering::SeqCst) {
+                emit_client_event(
+                    &backend_event_tx,
+                    transcript_recorder.as_ref(),
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed {
+                            last_agent_message: None,
+                        },
+                    ),
+                )
+                .await;
+            }
 
             // Start idle timer if configured
             if let Some(duration) = notify_after_idle.as_duration() {

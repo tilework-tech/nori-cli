@@ -142,6 +142,17 @@ The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, re
 
 The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
 
+**Stale Completed Guard** (`chatwidget/mod.rs`, `chatwidget/event_handlers.rs`):
+
+When a turn is interrupted (ESC), the ACP backend emits `TurnLifecycle::Aborted` synchronously, but the background task may still emit a stale `TurnLifecycle::Completed` later. If that stale `Completed` arrives after the next turn has started, `on_task_complete()` would set `turn_finished = true` and discard all subsequent tool events for the new turn. The `pending_stale_completes: i32` counter on `ChatWidget` acts as defense-in-depth against this race:
+
+| Action | Method | Effect |
+|--------|--------|--------|
+| Interrupt received | `on_interrupted_turn()` | Increments `pending_stale_completes` |
+| Stale Completed arrives | `on_task_complete()` | If counter > 0, decrements and returns early (skips turn finalization) |
+
+This is complementary to the ACP backend's `turn_interrupted` flag (`@/codex-rs/acp/docs.md`), which suppresses the stale `Completed` at the source. The TUI counter provides a safety net in case the backend guard is bypassed.
+
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 
 Because the `turn_finished` gate blocks late-arriving End events, tool cells that began but never received their End event would remain stuck in `active_cell` or `pending_exec_cells`, filling the viewport and blocking the agent's text from rendering. Both `on_agent_message()` and `on_task_complete()` now explicitly finalize incomplete cells at turn boundaries:
