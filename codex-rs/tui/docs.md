@@ -305,11 +305,11 @@ The OAuth flow is fully async and inline -- no TUI suspension. The `McpOAuthLogi
 
 Cancellation uses the oneshot channel pattern: Esc in `OAuthInProgress` mode emits `McpOAuthLoginCancel`, which calls `cancel_mcp_oauth_login()` (sends `()` on the stored cancel sender). The watcher task then resolves with the cancellation error. Completion (`McpOAuthLoginComplete`) shows a success or error info message and forwards to `McpServerPickerView::handle_oauth_complete()`, which transitions the picker from `OAuthInProgress` back to `List` mode.
 
-**Agent-Provided Slash Commands** (`command_popup.rs`, `chat_composer/popup_management.rs`, `chatwidget/event_handlers.rs`):
+**Agent-Provided Slash Commands** (`command_popup.rs`, `chat_composer/popup_management.rs`, `chat_composer/key_handling.rs`, `chatwidget/event_handlers.rs`):
 
 ACP agents can advertise slash commands via the `AvailableCommandsUpdate` session notification. These flow through `nori-protocol` as `ClientEvent::AgentCommandsUpdate` and are forwarded to `BottomPane::set_agent_commands()` -> `ChatComposer::set_agent_commands()` -> `CommandPopup::set_agent_commands()`. The agent slug (e.g., `"claude-code"`) is set separately via `BottomPane::set_agent_slug()`, called from `ChatWidget::set_agent()` and `set_pending_agent()`.
 
-Agent commands appear in the slash command popup alongside builtins and user prompts. They display with a prefixed name (e.g., `/claude-code:loop`) to disambiguate from builtins. If an agent command shares a name with a builtin command, the agent command is excluded from the popup. Fuzzy filtering operates on the prefixed display name. Tab autocompletes to `/<name> ` (the bare name, not the prefixed form). Enter submits `/<name>` as a regular text prompt to the agent. Each `AgentCommandsUpdate` fully replaces the previous set.
+Agent commands appear in the slash command popup alongside builtins and user prompts. They display with a prefixed name (e.g., `/claude-code:loop`) to disambiguate from builtins. If an agent command shares a name with a builtin command, the agent command is excluded from the popup. Fuzzy filtering operates on the prefixed display name. All three interaction paths use the fully-qualified prefixed form: Tab autocompletes to `/<prefix>:<name> ` (e.g., `/claude-code:loop `), Enter from the popup submits `/<prefix>:<name>` as a regular text prompt to the agent, and typing the prefixed form directly (e.g., `/claude-code:loop 5m hi`) is recognized as a valid agent command at the Enter submission fallback path (which checks `agent_commands` after builtins and user prompts). Each `AgentCommandsUpdate` fully replaces the previous set.
 
 **Slash Command Description Overrides:**
 
