@@ -1149,6 +1149,8 @@ impl App {
                 server_url,
                 http_headers,
                 env_http_headers,
+                client_id,
+                client_secret_env_var,
             } => {
                 self.perform_mcp_oauth_login(
                     tui,
@@ -1156,6 +1158,8 @@ impl App {
                     server_url,
                     http_headers,
                     env_http_headers,
+                    client_id,
+                    client_secret_env_var,
                 )
                 .await;
             }

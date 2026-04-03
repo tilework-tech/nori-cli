@@ -338,6 +338,8 @@ async fn replace_mcp_servers_streamable_http_serializes_bearer_token() -> anyhow
                 bearer_token_env_var: Some("MCP_TOKEN".to_string()),
                 http_headers: None,
                 env_http_headers: None,
+                client_id: None,
+                client_secret_env_var: None,
             },
             enabled: true,
             startup_timeout_sec: Some(Duration::from_secs(2)),
@@ -372,6 +374,7 @@ startup_timeout_sec = 2.0
             bearer_token_env_var,
             http_headers,
             env_http_headers,
+            ..
         } => {
             assert_eq!(url, "https://example.com/mcp");
             assert_eq!(bearer_token_env_var.as_deref(), Some("MCP_TOKEN"));
@@ -400,6 +403,8 @@ async fn replace_mcp_servers_streamable_http_serializes_custom_headers() -> anyh
                     "X-Auth".to_string(),
                     "DOCS_AUTH".to_string(),
                 )])),
+                client_id: None,
+                client_secret_env_var: None,
             },
             enabled: true,
             startup_timeout_sec: Some(Duration::from_secs(2)),

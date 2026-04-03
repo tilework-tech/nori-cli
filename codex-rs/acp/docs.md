@@ -550,7 +550,7 @@ CLI-configured MCP servers (from `config.toml`) are converted to SACP protocol t
 | `Stdio` | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment) |
 | `StreamableHttp` | `McpServer::Http` | url, headers (static headers + env-resolved headers + bearer token from env var as `Authorization: Bearer` header) |
 
-Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. All servers are included regardless of the `enabled` flag; the agent decides how to handle them. Results are sorted by server name for deterministic ordering.
+Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. The `client_id` and `client_secret_env_var` fields on `StreamableHttp` are not forwarded to the agent -- they are only used by the TUI/rmcp-client layer for OAuth login flows (see `@/codex-rs/rmcp-client/docs.md`). All servers are included regardless of the `enabled` flag; the agent decides how to handle them. Results are sorted by server name for deterministic ordering.
 
 `create_session()` accepts a `mcp_servers: Vec<McpServer>` parameter that is populated by calling `to_sacp_mcp_servers()` at each session creation site:
 - `spawn_and_relay.rs` -- initial session creation during backend spawn
