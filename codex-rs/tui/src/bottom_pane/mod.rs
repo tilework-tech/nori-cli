@@ -76,6 +76,8 @@ pub(crate) struct BottomPane {
     context_window_percent: Option<i64>,
     /// Display name of the current agent for use in approval dialogs.
     agent_display_name: String,
+    /// Agent slug (e.g., "claude-code") used as prefix for agent commands.
+    agent_slug: String,
     /// Whether vim mode is enabled, used to configure selection view behavior.
     vim_mode_enabled: bool,
 }
@@ -141,6 +143,7 @@ impl BottomPane {
             animations_enabled,
             context_window_percent: None,
             agent_display_name,
+            agent_slug: String::new(),
             vim_mode_enabled: false,
         };
 
@@ -474,6 +477,18 @@ impl BottomPane {
     pub(crate) fn set_custom_prompts(&mut self, prompts: Vec<CustomPrompt>) {
         self.composer.set_custom_prompts(prompts);
         self.request_redraw();
+    }
+
+    /// Update agent-provided commands available for the slash popup.
+    pub(crate) fn set_agent_commands(&mut self, commands: Vec<nori_protocol::AgentCommandInfo>) {
+        let prefix = self.agent_slug.clone();
+        self.composer.set_agent_commands(commands, prefix);
+        self.request_redraw();
+    }
+
+    /// Set the agent slug used as prefix for agent commands (e.g., "claude-code").
+    pub(crate) fn set_agent_slug(&mut self, slug: String) {
+        self.agent_slug = slug;
     }
 
     /// Update system info displayed in the footer (for background refresh).

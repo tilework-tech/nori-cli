@@ -221,6 +221,7 @@ impl ChatWidget {
         // Update the bottom pane's model display name for approval dialogs
         self.bottom_pane
             .set_agent_display_name(display_name.clone());
+        self.bottom_pane.set_agent_slug(agent_name.clone());
         self.pending_agent = Some(PendingAgentInfo {
             agent_name,
             display_name,

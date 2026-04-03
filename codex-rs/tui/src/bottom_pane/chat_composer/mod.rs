@@ -114,6 +114,8 @@ pub(crate) struct ChatComposer {
     // When true, disables paste-burst logic and inserts characters immediately.
     disable_paste_burst: bool,
     custom_prompts: Vec<CustomPrompt>,
+    agent_commands: Vec<nori_protocol::AgentCommandInfo>,
+    agent_command_prefix: String,
     command_description_overrides: HashMap<SlashCommand, String>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
@@ -171,6 +173,8 @@ impl ChatComposer {
             paste_burst: PasteBurst::default(),
             disable_paste_burst: false,
             custom_prompts: Vec::new(),
+            agent_commands: Vec::new(),
+            agent_command_prefix: String::new(),
             command_description_overrides: HashMap::new(),
             footer_mode: FooterMode::ShortcutSummary,
             footer_hint_override: None,

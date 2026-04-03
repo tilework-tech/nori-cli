@@ -184,7 +184,8 @@ fn replay_entry_from_client_event(
         nori_protocol::ClientEvent::ApprovalRequest(_)
         | nori_protocol::ClientEvent::MessageDelta(_)
         | nori_protocol::ClientEvent::TurnLifecycle(_)
-        | nori_protocol::ClientEvent::ReplayEntry(_) => None,
+        | nori_protocol::ClientEvent::ReplayEntry(_)
+        | nori_protocol::ClientEvent::AgentCommandsUpdate(_) => None,
     }
 }
 

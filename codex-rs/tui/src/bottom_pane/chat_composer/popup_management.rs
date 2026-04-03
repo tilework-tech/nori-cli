@@ -205,8 +205,10 @@ impl ChatComposer {
             }
             _ => {
                 if is_editing_slash_command_name {
-                    let mut command_popup = CommandPopup::new_with_overrides(
+                    let mut command_popup = CommandPopup::new_full(
                         self.custom_prompts.clone(),
+                        self.agent_commands.clone(),
+                        self.agent_command_prefix.clone(),
                         self.command_description_overrides.clone(),
                     );
                     command_popup.on_composer_text_change(first_line.to_string());
@@ -220,6 +222,18 @@ impl ChatComposer {
         self.custom_prompts = prompts.clone();
         if let ActivePopup::Command(popup) = &mut self.active_popup {
             popup.set_prompts(prompts);
+        }
+    }
+
+    pub(crate) fn set_agent_commands(
+        &mut self,
+        commands: Vec<nori_protocol::AgentCommandInfo>,
+        prefix: String,
+    ) {
+        self.agent_commands = commands.clone();
+        self.agent_command_prefix = prefix.clone();
+        if let ActivePopup::Command(popup) = &mut self.active_popup {
+            popup.set_agent_commands(commands, prefix);
         }
     }
 

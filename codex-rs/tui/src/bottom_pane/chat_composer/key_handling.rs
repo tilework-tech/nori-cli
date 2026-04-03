@@ -115,6 +115,12 @@ impl ChatComposer {
                                 }
                             }
                         }
+                        CommandItem::AgentCommand(idx) => {
+                            if let Some(cmd) = popup.agent_command(idx) {
+                                self.textarea.set_text(&format!("/{} ", cmd.name));
+                                cursor_target = Some(self.textarea.text().len());
+                            }
+                        }
                     }
                     if let Some(pos) = cursor_target {
                         self.textarea.set_cursor(pos);
@@ -177,6 +183,14 @@ impl ChatComposer {
                                         return (InputResult::None, true);
                                     }
                                 }
+                            }
+                            return (InputResult::None, true);
+                        }
+                        CommandItem::AgentCommand(idx) => {
+                            if let Some(cmd) = popup.agent_command(idx) {
+                                let text = format!("/{}", cmd.name);
+                                self.textarea.set_text("");
+                                return (InputResult::Submitted(text), true);
                             }
                             return (InputResult::None, true);
                         }
