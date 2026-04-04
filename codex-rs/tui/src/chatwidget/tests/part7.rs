@@ -1,19 +1,19 @@
 use super::*;
 
-/// When the stale Completed arrives during an active turn, tool events for the
-/// active turn should NOT be discarded.
+/// When the ACP backend suppresses the stale Completed (common case), the
+/// next turn's real Completed must not be consumed as stale.
 ///
-/// Race condition sequence:
+/// Sequence:
 ///   1. Started(A)    → task running
-///   2. Aborted(A)    → task stopped (user pressed ESC)
-///   3. Started(B)    → new task running (user submitted new message)
-///   4. Completed(A)  → stale event from cancelled background task
+///   2. Aborted(A)    → task stopped (user pressed ESC), counter = 1
+///   3. Started(B)    → counter reset to 0
+///   4. Completed(B)  → should finalize turn B normally
 ///
-/// After step 4, turn B's tool events must still be processed. Before the fix,
-/// the stale Completed prematurely gated tool events, causing them to be
-/// silently discarded.
+/// Before the fix, the counter from step 2 was never drained (because the
+/// ACP backend suppressed the stale Completed), so the real Completed in
+/// step 4 was consumed as stale, leaving the spinner running forever.
 #[test]
-fn stale_completed_should_not_block_tool_events_for_next_turn() {
+fn acp_suppressed_stale_should_not_block_next_turn_completion() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     // Start and interrupt turn A
@@ -22,27 +22,31 @@ fn stale_completed_should_not_block_tool_events_for_next_turn() {
     chat.on_interrupted_turn(TurnAbortReason::Interrupted);
     drain_insert_history(&mut rx);
 
+    // ACP backend suppresses the stale Completed → no on_task_complete call.
+
     // Start turn B
     chat.on_task_started();
     drain_insert_history(&mut rx);
 
-    // Stale Completed from turn A
+    // Real Completed from turn B should finalize the turn.
     chat.on_task_complete(None);
     drain_insert_history(&mut rx);
 
-    // Tool event for turn B should NOT be discarded
-    begin_exec(&mut chat, "turn-b-call", "echo hello from turn B");
-
+    // Task should be stopped.
     assert!(
-        chat.active_cell.is_some(),
-        "ExecCell should be created - stale Completed should not block turn B's tool events"
+        !chat.bottom_pane.is_task_running(),
+        "Task should be stopped after real Completed"
+    );
+    assert!(
+        chat.turn_finished,
+        "Turn should be marked finished after real Completed"
     );
 }
 
-/// Multiple consecutive interrupts should each produce one stale Completed
-/// that is correctly drained before the real turn's events arrive.
+/// Multiple consecutive interrupts where ACP suppresses all stale Completeds.
+/// The final real turn's Completed must still finalize normally.
 #[test]
-fn multiple_interrupts_drain_stale_completes_in_order() {
+fn multiple_interrupts_with_acp_suppression_should_not_hang() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     // Interrupt twice in a row
@@ -56,18 +60,25 @@ fn multiple_interrupts_drain_stale_completes_in_order() {
     chat.on_interrupted_turn(TurnAbortReason::Interrupted);
     drain_insert_history(&mut rx);
 
+    // ACP backend suppresses both stale Completeds.
+
     // Start the real turn
     chat.on_task_started();
     drain_insert_history(&mut rx);
 
-    // Two stale Completeds arrive
-    chat.on_task_complete(None);
-    chat.on_task_complete(None);
-
-    // Real tool events should still work
+    // Tool events for the real turn should work
     begin_exec(&mut chat, "real-call", "echo real");
     assert!(
         chat.active_cell.is_some(),
-        "ExecCell should be created after draining multiple stale Completeds"
+        "ExecCell should be created - counter was reset by on_task_started"
+    );
+
+    // Real Completed should finalize the turn
+    chat.on_task_complete(None);
+    drain_insert_history(&mut rx);
+
+    assert!(
+        !chat.bottom_pane.is_task_running(),
+        "Task should be stopped after real Completed following multiple interrupts"
     );
 }

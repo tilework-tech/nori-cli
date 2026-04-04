@@ -149,9 +149,10 @@ When a turn is interrupted (ESC), the ACP backend emits `TurnLifecycle::Aborted`
 | Action | Method | Effect |
 |--------|--------|--------|
 | Interrupt received | `on_interrupted_turn()` | Increments `pending_stale_completes` |
+| New turn starts | `on_task_started()` | Resets `pending_stale_completes` to 0 (drains orphaned counters from backend-suppressed Completeds) |
 | Stale Completed arrives | `on_task_complete()` | If counter > 0, decrements and returns early (skips turn finalization) |
 
-This is complementary to the ACP backend's `turn_interrupted` flag (`@/codex-rs/acp/docs.md`), which suppresses the stale `Completed` at the source. The TUI counter provides a safety net in case the backend guard is bypassed.
+This is complementary to the ACP backend's `turn_interrupted` flag (`@/codex-rs/acp/docs.md`), which suppresses the stale `Completed` at the source. In the common case the backend suppresses the stale event and the counter is never drained; the `on_task_started` reset ensures those orphaned counters don't consume the next turn's real Completed. The counter still provides defense-in-depth for the rare race where a stale Completed slips past the backend guard.
 
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 
