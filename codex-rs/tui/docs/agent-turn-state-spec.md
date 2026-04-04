@@ -117,10 +117,12 @@ Handling rule:
 
 - accept them only while `SessionPhase` is `Loading` or `Prompt`
 - route them to the active request owner
-- if they arrive in `Idle`, emit a user-visible warning and ignore them
+- if they arrive in `Idle`, handle them as out-of-phase updates (see
+  "Out-of-phase updates" under Design Choice 3)
 
-This is intentionally strict. It avoids fabricating attribution rules that ACP
-does not provide.
+This is intentionally strict about attribution. Content that arrives outside of
+a request is never attributed to a turn. It is rendered between turns with a
+warning, not silently absorbed into adjacent turns.
 
 ### Session-owned metadata
 
@@ -199,67 +201,82 @@ Recommended push shape:
 
 ```rust
 enum AcpSessionPhaseView {
-    Idle,
+    Idle {
+        /// Present when transitioning from `Prompt` or `Loading`.
+        /// Absent on initial idle (session created but no request yet).
+        completed: Option<TurnCompletion>,
+    },
     Loading,
     Prompt,
     Cancelling,
 }
+
+struct TurnCompletion {
+    stop_reason: StopReason,
+    /// The backend evaluates drain eligibility atomically with the phase
+    /// transition. The TUI does not re-derive this.
+    drained: Option<DrainedPrompt>,
+}
+
+struct DrainedPrompt {
+    /// The prompt that was dequeued and sent. The TUI should render it as the
+    /// next user message immediately; the session is already back in `Prompt`.
+    prompt: Vec<ContentBlock>,
+}
 ```
 
-The backend may emit `AcpSessionPhaseView` whenever `SessionPhase` changes.
+The backend emits `AcpSessionPhaseView` whenever `SessionPhase` changes.
 
 Rules:
 
-- `Idle` maps from `SessionPhase::Idle`
+- `Idle { completed: None }` maps from `SessionPhase::Idle` when no request
+  preceded it (initial state, or after explicit reset).
+- `Idle { completed: Some(..) }` maps from `SessionPhase::Idle` when a prompt
+  or load response just arrived. The `TurnCompletion` carries everything the
+  TUI needs to render the outcome and decide next steps.
 - `Loading` maps from `SessionPhase::Loading { .. }`
 - `Prompt` maps from `SessionPhase::Prompt { cancelling: false, .. }`
 - `Cancelling` maps from `SessionPhase::Prompt { cancelling: true, .. }`
 
+When `completed.drained` is `Some`, the backend has already dequeued one prompt
+and sent it as a new `session/prompt`. A second `PhaseView(Prompt)` event
+follows immediately. The TUI receives both in order and never needs to
+independently decide whether to drain.
+
 This gives the TUI a concise push-based rendering signal without introducing a
-second authority for ACP state.
+second authority for ACP state. The TUI gets everything it needs from one
+event — stop reason, drain outcome, and phase — and never re-derives drain
+policy.
 
-Recommended event envelope:
+#### Out-of-phase updates
 
-```rust
-struct AcpUiEvent {
-    exceptional: Option<AcpExceptionalContext>,
-    kind: AcpUiEventKind,
-}
-
-struct AcpExceptionalContext {
-    phase: AcpSessionPhaseView,
-    event_kind: String,
-    tool_call_id: Option<ToolCallId>,
-    note: String,
-}
-```
-
-`AcpUiEventKind` may contain the normal push payloads needed by the TUI, such
-as:
-
-- `PhaseView(AcpSessionPhaseView)`
-- `SessionUpdate(...)`
-- `PermissionRequest(...)`
-- prompt completion / load completion notifications
-
-This is preferred over a recursively nested `Exceptional(...)` variant.
-
-Reasons:
-
-- the TUI gets one uniform push shape
-- exceptional diagnostics stay attached to the original event
-- pattern matching stays flat
-- the envelope does not imply that every exceptional event is still valid to render
+Multiple ACP agents send well-formed content updates (tool calls, agent
+thought, agent message chunks) outside of an active `session/prompt` request.
+This behavior is not well-defined in the ACP spec, but it is a reality of the
+systems we integrate with. Silently dropping these updates would hide
+information the user cares about and remove the visibility needed to eventually
+harden the spec around this behavior.
 
 Handling rule:
 
-- if `exceptional` is present, the TUI shows a warning banner or warning history cell
-- after that, the event still follows the normal ownership rules in this document
-- if the event is valid under those rules, process it normally
-- if the event is invalid under those rules, discard it after warning
+- The backend tags the update as out-of-phase (a boolean flag, not an envelope
+  wrapper — the update itself is unchanged).
+- If the update is well-formed (parses as a valid `SessionUpdate` variant), the
+  backend forwards it to the TUI with the out-of-phase tag.
+- The TUI renders a short warning banner before the content, then renders the
+  content normally in the history. This content is not attributed to any turn —
+  it appears between turns as standalone output.
+- If the update is malformed or unrecognizable, the backend logs a warning and
+  drops it.
 
-This keeps diagnostics visible without turning undefined ACP behavior into
-accepted rendering behavior.
+This avoids the complexity of an envelope struct wrapping every event. The
+common path (in-phase updates) carries no extra data. Only the exceptional
+path gets a flag.
+
+The goal is observability: learn when and how often agents do this, what
+content they send, and whether patterns emerge that warrant first-class
+protocol support. Until then, the TUI shows it honestly with a warning rather
+than pretending it didn't happen.
 
 ### 4. No inter-turn attribution heuristics
 
@@ -312,23 +329,36 @@ The session does not become idle until the prompt response arrives.
 
 ### Prompt response handling
 
-When the response to the active `session/prompt` arrives:
+When the response to the active `session/prompt` arrives, the backend executes
+one atomic step:
 
-- clear prompt ownership
-- transition to `Idle`
-- update UI from the returned `stopReason`
+1. Evaluate `stopReason`.
+2. If `stopReason == end_turn` and `OutgoingQueue` is non-empty:
+   - dequeue exactly one prompt
+   - send it as a new `session/prompt`
+   - transition to `Prompt { cancelling: false }` with the new request id
+   - emit `PhaseView(Idle { completed: Some(TurnCompletion { stop_reason, drained: Some(..) }) })`
+   - immediately emit `PhaseView(Prompt)`
+3. Otherwise:
+   - transition to `Idle`
+   - emit `PhaseView(Idle { completed: Some(TurnCompletion { stop_reason, drained: None }) })`
 
-Queue draining is opinionated and simple:
+The drain decision is evaluated inside the phase transition, not after it. The
+TUI never observes an `Idle` gap where it must independently decide whether to
+drain. This is the ACP equivalent of pi-mono's outer loop, where follow-up
+drain and loop continuation are adjacent lines in the same function.
 
-- auto-drain exactly one queued prompt after `stopReason: end_turn`
+Queue drain eligibility is opinionated and simple:
+
+- auto-drain after `end_turn`
 - do not auto-drain after `cancelled`
 - do not auto-drain after `refusal`
 - do not auto-drain after `max_tokens`
 - do not auto-drain after `max_turn_requests`
 - do not auto-drain after transport or protocol errors
 
-Those non-success cases should leave the queue visible and let the user decide
-what to do next.
+Those non-success cases leave the queue visible and let the user decide what to
+do next.
 
 ### Loading a session
 
@@ -346,10 +376,13 @@ While loading:
 When the load response arrives:
 
 - transition to `Idle`
+- emit `PhaseView(Idle { completed: Some(TurnCompletion { stop_reason: end_turn, drained: None }) })`
 - do not auto-send queued prompts
 
 Default design: `session/load` is an idle-only restore operation. Finishing a
 load only restores session state. It does not implicitly start a new turn.
+The `drained` field is always `None` after a load — loads never trigger queue
+drain.
 
 ### Metadata updates
 
@@ -375,6 +408,49 @@ That means:
 - the snapshot survives after the request completes
 - a later attributed update may patch it
 - unattributed content may not attach itself to it by heuristic
+
+## Open Design Questions
+
+### Type-level enforcement of phase transitions
+
+`SessionPhase` as specified is a plain enum. Nothing prevents code from writing
+`SessionPhase::Idle` directly, bypassing drain evaluation, event emission, or
+cleanup. This is the same class of bug the spec exists to prevent — duplicated
+bookkeeping — except at the implementation level instead of the architecture
+level.
+
+The next step is to define `SessionPhase` as an opaque struct with methods that
+enforce the valid transition graph:
+
+```
+Idle  →  Prompt    (begin_prompt)
+Idle  →  Loading   (begin_load)
+Prompt → Cancelling (begin_cancel)
+Prompt → Idle      (complete_prompt — evaluates drain atomically)
+Cancelling → Idle  (complete_prompt — drain is never eligible)
+Loading → Idle     (complete_load — drain is never eligible)
+```
+
+Each method would return the `AcpSessionPhaseView` to emit and, for
+`complete_prompt`, the `TurnCompletion` including any drained prompt. Invalid
+transitions would be compile-time or runtime errors rather than silent
+corruption.
+
+This is discussed in a follow-up section and is not yet specified here.
+
+### Hook orchestration as middleware
+
+The current implementation inlines 12 hook invocations (6 lifecycle points ×
+sync + async variants) directly inside the prompt handler. This mixes turn-state
+management with cross-cutting concerns (transcript recording, ghost snapshots,
+idle timers, summary tasks) in a single 564-line function.
+
+The next step is to define a middleware layer that the phase machine calls at
+well-defined lifecycle points, analogous to pi-mono's `beforeToolCall` /
+`afterToolCall` config hooks. The phase machine handles transitions; middleware
+handles side effects.
+
+This is discussed in a follow-up section and is not yet specified here.
 
 ## Non-Goals
 
