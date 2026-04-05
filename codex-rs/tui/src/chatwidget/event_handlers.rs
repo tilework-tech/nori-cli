@@ -84,12 +84,6 @@ impl ChatWidget {
         // point are stale and should be silently discarded.
         self.turn_finished = true;
 
-        // Handle pending task_complete state.
-        if self.task_complete_pending {
-            self.bottom_pane.hide_status_indicator();
-            self.task_complete_pending = false;
-        }
-
         // Flush pending End events while discarding stale Begin events, so
         // completed tool results are rendered but new tool-call cells don't
         // appear below the agent's final message.
@@ -188,6 +182,7 @@ impl ChatWidget {
         // interrupts don't consume this turn's real Completed.
         self.pending_stale_completes = 0;
 
+        self.session_phase = nori_protocol::session_runtime::SessionPhaseView::Prompt;
         self.bottom_pane.clear_ctrl_c_quit_hint();
         self.bottom_pane.set_task_running(true);
         self.retry_status_header = None;
@@ -241,6 +236,7 @@ impl ChatWidget {
         self.finalize_active_cell_as_failed();
 
         // Mark task stopped and request redraw now that all content is in history.
+        self.session_phase = nori_protocol::session_runtime::SessionPhaseView::Idle;
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
         self.suppressed_exec_calls.clear();
@@ -347,6 +343,7 @@ impl ChatWidget {
         // Discard orphan buffered execute cells.
         self.pending_client_tool_cells.clear();
         // Reset running state and clear streaming buffers.
+        self.session_phase = nori_protocol::session_runtime::SessionPhaseView::Idle;
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
         self.suppressed_exec_calls.clear();
@@ -1268,8 +1265,7 @@ impl ChatWidget {
                 self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
             }
             nori_protocol::TurnLifecycle::Cancelling => {
-                // For now, treat as a no-op. Phase 2 will add proper
-                // cancelling state tracking in the TUI.
+                self.session_phase = nori_protocol::session_runtime::SessionPhaseView::Cancelling;
             }
         }
     }

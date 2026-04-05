@@ -281,7 +281,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         suppressed_exec_calls: HashSet::new(),
         completed_client_tool_calls: HashSet::new(),
         last_unified_wait: None,
-        task_complete_pending: false,
+        session_phase: nori_protocol::session_runtime::SessionPhaseView::Idle,
         mcp_startup_status: None,
         interrupts: InterruptManager::new(),
         reasoning_buffer: String::new(),

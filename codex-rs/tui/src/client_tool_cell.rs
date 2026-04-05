@@ -2104,6 +2104,7 @@ mod tests {
             })],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2148,6 +2149,7 @@ mod tests {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2192,6 +2194,7 @@ mod tests {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2223,6 +2226,7 @@ mod tests {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2287,6 +2291,7 @@ mod tests {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         };
         let mut cell = ClientToolCell::new(snap, PathBuf::from("/tmp/cwd"), false);
         cell.mark_exploring();

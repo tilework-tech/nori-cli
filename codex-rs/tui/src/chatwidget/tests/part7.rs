@@ -32,10 +32,15 @@ fn acp_suppressed_stale_should_not_block_next_turn_completion() {
     chat.on_task_complete(None);
     drain_insert_history(&mut rx);
 
-    // Task should be stopped.
+    // Task should be stopped, session phase should be Idle.
     assert!(
         !chat.bottom_pane.is_task_running(),
         "Task should be stopped after real Completed"
+    );
+    assert_eq!(
+        chat.session_phase,
+        nori_protocol::session_runtime::SessionPhaseView::Idle,
+        "Session phase should be Idle after real Completed"
     );
     assert!(
         chat.turn_finished,

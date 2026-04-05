@@ -360,7 +360,10 @@ pub(crate) struct ChatWidget {
     suppressed_exec_calls: HashSet<String>,
     completed_client_tool_calls: HashSet<String>,
     last_unified_wait: Option<UnifiedExecWaitState>,
-    task_complete_pending: bool,
+    /// Backend-authoritative session phase, updated from TurnLifecycle events.
+    /// Replaces the old `is_task_running` flag on BottomPane as the single
+    /// source of truth for whether a prompt is active.
+    session_phase: nori_protocol::session_runtime::SessionPhaseView,
     mcp_startup_status: Option<HashMap<String, McpStartupStatus>>,
     // Queue of interruptive UI events deferred during an active write cycle
     interrupts: InterruptManager,
