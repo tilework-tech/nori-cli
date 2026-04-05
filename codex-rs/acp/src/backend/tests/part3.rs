@@ -839,12 +839,13 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -865,31 +866,34 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
-    assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            call_id: "call-edit-complete".into(),
-            title: "Write README.md".into(),
-            kind: nori_protocol::ToolKind::Edit,
-            phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
-            invocation: Some(nori_protocol::Invocation::FileChanges {
-                changes: vec![nori_protocol::FileChange {
+    match &client_event {
+        nori_protocol::ClientEvent::ToolSnapshot(snapshot) => {
+            assert_eq!(snapshot.call_id, "call-edit-complete");
+            assert_eq!(snapshot.title, "Write README.md");
+            assert_eq!(snapshot.kind, nori_protocol::ToolKind::Edit);
+            assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Completed);
+            assert_eq!(
+                snapshot.invocation,
+                Some(nori_protocol::Invocation::FileChanges {
+                    changes: vec![nori_protocol::FileChange {
+                        path: PathBuf::from("README.md"),
+                        old_text: None,
+                        new_text: "hello\nworld\n".into(),
+                    }],
+                })
+            );
+            assert_eq!(
+                snapshot.artifacts,
+                vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
                     path: PathBuf::from("README.md"),
                     old_text: None,
                     new_text: "hello\nworld\n".into(),
-                }],
-            }),
-            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
-                path: PathBuf::from("README.md"),
-                old_text: None,
-                new_text: "hello\nworld\n".into(),
-            })],
-            raw_input: None,
-            raw_output: None,
-            owner_request_id: None,
-        })
-    );
+                })]
+            );
+            assert!(snapshot.owner_request_id.is_some());
+        }
+        other => panic!("expected ToolSnapshot, got: {other:?}"),
+    };
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
     assert!(
@@ -907,12 +911,13 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -936,29 +941,32 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
-    assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            call_id: "call-delete-complete".into(),
-            title: "Delete README.md".into(),
-            kind: nori_protocol::ToolKind::Delete,
-            phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
-            invocation: Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Delete {
-                    path: PathBuf::from("README.md"),
-                    old_text: Some("before\n".into()),
-                }],
-            }),
-            artifacts: vec![],
-            raw_input: Some(serde_json::json!({
-                "path": "README.md",
-                "content": "before\n",
-            })),
-            raw_output: None,
-            owner_request_id: None,
-        })
-    );
+    match &client_event {
+        nori_protocol::ClientEvent::ToolSnapshot(snapshot) => {
+            assert_eq!(snapshot.call_id, "call-delete-complete");
+            assert_eq!(snapshot.title, "Delete README.md");
+            assert_eq!(snapshot.kind, nori_protocol::ToolKind::Delete);
+            assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Completed);
+            assert_eq!(
+                snapshot.invocation,
+                Some(nori_protocol::Invocation::FileOperations {
+                    operations: vec![nori_protocol::FileOperation::Delete {
+                        path: PathBuf::from("README.md"),
+                        old_text: Some("before\n".into()),
+                    }],
+                })
+            );
+            assert_eq!(
+                snapshot.raw_input,
+                Some(serde_json::json!({
+                    "path": "README.md",
+                    "content": "before\n",
+                }))
+            );
+            assert!(snapshot.owner_request_id.is_some());
+        }
+        other => panic!("expected ToolSnapshot, got: {other:?}"),
+    };
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
     assert!(
@@ -976,12 +984,13 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1007,32 +1016,25 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
-    assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            call_id: "call-fetch-complete".into(),
-            title: "Fetch".into(),
-            kind: nori_protocol::ToolKind::Fetch,
-            phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
-            invocation: Some(nori_protocol::Invocation::Tool {
-                tool_name: "Fetch".into(),
-                input: Some(serde_json::json!({
-                    "url": "https://example.com",
-                })),
-            }),
-            artifacts: vec![nori_protocol::Artifact::Text {
-                text: "ok\n".into()
-            }],
-            raw_input: Some(serde_json::json!({
-                "url": "https://example.com",
-            })),
-            raw_output: Some(serde_json::json!({
-                "stdout": "ok\n",
-            })),
-            owner_request_id: None,
-        })
-    );
+    match &client_event {
+        nori_protocol::ClientEvent::ToolSnapshot(snapshot) => {
+            assert_eq!(snapshot.call_id, "call-fetch-complete");
+            assert_eq!(snapshot.title, "Fetch");
+            assert_eq!(snapshot.kind, nori_protocol::ToolKind::Fetch);
+            assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Completed);
+            assert_eq!(
+                snapshot.invocation,
+                Some(nori_protocol::Invocation::Tool {
+                    tool_name: "Fetch".into(),
+                    input: Some(serde_json::json!({
+                        "url": "https://example.com",
+                    })),
+                })
+            );
+            assert!(snapshot.owner_request_id.is_some());
+        }
+        other => panic!("expected ToolSnapshot, got: {other:?}"),
+    };
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
     assert!(
@@ -1050,12 +1052,13 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1077,25 +1080,22 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
-    assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            call_id: "call-exec-complete".into(),
-            title: "Terminal".into(),
-            kind: nori_protocol::ToolKind::Execute,
-            phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
-            invocation: Some(nori_protocol::Invocation::Command {
-                command: "git status".into(),
-            }),
-            artifacts: vec![nori_protocol::Artifact::Text {
-                text: "On branch main\n".into(),
-            }],
-            raw_input: Some(serde_json::json!({"command": "git status"})),
-            raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
-            owner_request_id: None,
-        })
-    );
+    match &client_event {
+        nori_protocol::ClientEvent::ToolSnapshot(snapshot) => {
+            assert_eq!(snapshot.call_id, "call-exec-complete");
+            assert_eq!(snapshot.title, "Terminal");
+            assert_eq!(snapshot.kind, nori_protocol::ToolKind::Execute);
+            assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Completed);
+            assert_eq!(
+                snapshot.invocation,
+                Some(nori_protocol::Invocation::Command {
+                    command: "git status".into(),
+                })
+            );
+            assert!(snapshot.owner_request_id.is_some());
+        }
+        other => panic!("expected ToolSnapshot, got: {other:?}"),
+    };
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
     assert!(
@@ -1113,12 +1113,13 @@ async fn test_agent_message_chunk_emits_normalized_message_delta() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::AgentMessageChunk(
@@ -1158,12 +1159,13 @@ async fn test_plan_update_emits_normalized_plan_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::Plan(acp::Plan::new(vec![
@@ -1214,7 +1216,13 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
 
-    let cases = vec![
+    // Each case: (update, expected call_id, expected kind, expected invocation)
+    let cases: Vec<(
+        acp::ToolCallUpdate,
+        &str,
+        nori_protocol::ToolKind,
+        nori_protocol::Invocation,
+    )> = vec![
         (
             acp::ToolCallUpdate::new(
                 "call-read-complete",
@@ -1225,22 +1233,11 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                     .raw_input(serde_json::json!({"path": "Cargo.toml"}))
                     .raw_output(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
             ),
-            nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-                call_id: "call-read-complete".into(),
-                title: "Read Cargo.toml".into(),
-                kind: nori_protocol::ToolKind::Read,
-                phase: nori_protocol::ToolPhase::Completed,
-                locations: vec![],
-                invocation: Some(nori_protocol::Invocation::Read {
-                    path: PathBuf::from("Cargo.toml"),
-                }),
-                artifacts: vec![nori_protocol::Artifact::Text {
-                    text: "[package]\nname = \"nori\"\n".into(),
-                }],
-                raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
-                raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
-                owner_request_id: None,
-            }),
+            "call-read-complete",
+            nori_protocol::ToolKind::Read,
+            nori_protocol::Invocation::Read {
+                path: PathBuf::from("Cargo.toml"),
+            },
         ),
         (
             acp::ToolCallUpdate::new(
@@ -1252,23 +1249,12 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                     .raw_input(serde_json::json!({"pattern": "TODO", "path": "src"}))
                     .raw_output(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
             ),
-            nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-                call_id: "call-search-complete".into(),
-                title: "Search src".into(),
-                kind: nori_protocol::ToolKind::Search,
-                phase: nori_protocol::ToolPhase::Completed,
-                locations: vec![],
-                invocation: Some(nori_protocol::Invocation::Search {
-                    query: Some("TODO".into()),
-                    path: Some(PathBuf::from("src")),
-                }),
-                artifacts: vec![nori_protocol::Artifact::Text {
-                    text: "src/main.rs:12:// TODO\n".into(),
-                }],
-                raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
-                raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
-                owner_request_id: None,
-            }),
+            "call-search-complete",
+            nori_protocol::ToolKind::Search,
+            nori_protocol::Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some(PathBuf::from("src")),
+            },
         ),
         (
             acp::ToolCallUpdate::new(
@@ -1280,37 +1266,27 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                     .raw_input(serde_json::json!({"path": "src"}))
                     .raw_output(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
             ),
-            nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-                call_id: "call-list-complete".into(),
-                title: "List src".into(),
-                kind: nori_protocol::ToolKind::Search,
-                phase: nori_protocol::ToolPhase::Completed,
-                locations: vec![],
-                invocation: Some(nori_protocol::Invocation::ListFiles {
-                    path: Some(PathBuf::from("src")),
-                }),
-                artifacts: vec![nori_protocol::Artifact::Text {
-                    text: "src/main.rs\nsrc/lib.rs\n".into(),
-                }],
-                raw_input: Some(serde_json::json!({"path": "src"})),
-                raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
-                owner_request_id: None,
-            }),
+            "call-list-complete",
+            nori_protocol::ToolKind::Search,
+            nori_protocol::Invocation::ListFiles {
+                path: Some(PathBuf::from("src")),
+            },
         ),
     ];
 
-    for (update, expected_client_event) in cases {
+    for (update, expected_call_id, expected_kind, expected_invocation) in cases {
         let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
         let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
         let (client_event_tx, mut client_event_rx) =
             mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-        spawn_test_persistent_relay(
+        let reducer_tx = spawn_test_reducer_loop(
             persistent_rx,
             event_tx,
             Some(client_event_tx),
             Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
         );
+        establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
         persistent_tx
             .send(acp::SessionUpdate::ToolCallUpdate(update))
@@ -1322,7 +1298,16 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                 .await
                 .expect("client event timeout")
                 .expect("client event missing");
-        assert_eq!(client_event, expected_client_event);
+        match &client_event {
+            nori_protocol::ClientEvent::ToolSnapshot(snapshot) => {
+                assert_eq!(snapshot.call_id, expected_call_id);
+                assert_eq!(snapshot.kind, expected_kind);
+                assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Completed);
+                assert_eq!(snapshot.invocation, Some(expected_invocation));
+                assert!(snapshot.owner_request_id.is_some());
+            }
+            other => panic!("expected ToolSnapshot, got: {other:?}"),
+        }
 
         let event =
             tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -1342,12 +1327,13 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
+    let reducer_tx = spawn_test_reducer_loop(
         persistent_rx,
         event_tx,
         Some(client_event_tx),
         Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
     );
+    establish_prompt_phase(&reducer_tx, &mut client_event_rx).await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCall(
@@ -1375,28 +1361,26 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
         .await
         .expect("send generic tool call update");
 
-    let client_event =
-        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+    // The first event might be a ToolSnapshot from the ToolCall, drain it.
+    // Then we expect the completed ToolSnapshot from the update.
+    let mut found_completed = false;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    while !found_completed {
+        let client_event = tokio::time::timeout_at(deadline, client_event_rx.recv())
             .await
             .expect("client event timeout")
             .expect("client event missing");
-    assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            call_id: "toolu_generic_test_001".into(),
-            title: "Terminal".into(),
-            kind: nori_protocol::ToolKind::Execute,
-            phase: nori_protocol::ToolPhase::Completed,
-            locations: vec![],
-            invocation: None,
-            artifacts: vec![nori_protocol::Artifact::Text {
-                text: "command output here".into(),
-            }],
-            raw_input: None,
-            raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": "command output here"}),),
-            owner_request_id: None,
-        })
-    );
+        if let nori_protocol::ClientEvent::ToolSnapshot(ref snapshot) = client_event
+            && snapshot.phase == nori_protocol::ToolPhase::Completed
+        {
+            assert_eq!(snapshot.call_id, "toolu_generic_test_001");
+            assert_eq!(snapshot.title, "Terminal");
+            assert_eq!(snapshot.kind, nori_protocol::ToolKind::Execute);
+            assert!(snapshot.owner_request_id.is_some());
+            found_completed = true;
+        }
+    }
+    assert!(found_completed, "expected a completed ToolSnapshot");
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
     assert!(

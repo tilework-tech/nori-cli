@@ -147,6 +147,12 @@ impl AcpBackend {
             }
         };
 
+        // Create the reducer channel (before struct so reducer_tx can be stored).
+        let (reducer_tx, reducer_rx) = mpsc::channel::<session_reducer::InboundEvent>(256);
+        let session_runtime = Arc::new(Mutex::new(
+            nori_protocol::session_runtime::SessionRuntime::new(),
+        ));
+
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -187,6 +193,7 @@ impl AcpBackend {
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             turn_interrupted: Arc::new(AtomicBool::new(false)),
+            reducer_tx: reducer_tx.clone(),
         };
 
         // Execute session_start hooks
@@ -241,14 +248,29 @@ impl AcpBackend {
             backend.transcript_recorder.clone(),
         ));
 
-        // Spawn reducer loop: processes ALL session notifications through the
-        // serialized reducer, replacing the old per-prompt update handler and
-        // persistent relay.
-        tokio::spawn(Self::run_notification_relay(
-            notification_rx,
+        // Bridge: read notifications from the ACP connection and wrap them
+        // as InboundEvent::Notification for the reducer.
+        let bridge_tx = reducer_tx.clone();
+        tokio::spawn(async move {
+            let mut notification_rx = notification_rx;
+            while let Some(update) = notification_rx.recv().await {
+                let _ = bridge_tx
+                    .send(session_reducer::InboundEvent::Notification(Box::new(
+                        update,
+                    )))
+                    .await;
+            }
+        });
+
+        // Spawn the reducer loop.
+        tokio::spawn(Self::run_reducer_loop(
+            reducer_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx,
             backend.transcript_recorder.clone(),
+            Arc::clone(&session_runtime),
+            Some(Arc::clone(&backend.connection)),
+            reducer_tx.clone(),
         ));
 
         Ok(backend)
@@ -361,31 +383,59 @@ impl AcpBackend {
         }
     }
 
-    /// Background task that processes ALL session notifications through the
-    /// normalizer and forwards them to the TUI.
+    /// Background task that processes ALL inbound events through the
+    /// serialized reducer and forwards produced `ClientEvent`s to the TUI.
     ///
-    /// With the unified notification channel, this replaces both the old
-    /// per-prompt update handler and the inter-turn persistent relay.
-    pub(super) async fn run_notification_relay(
-        mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,
+    /// This replaces the old `run_notification_relay`. It receives
+    /// `InboundEvent`s (notifications bridged from the ACP connection,
+    /// plus PromptSubmit / PromptResponse / CancelSubmit from user-facing
+    /// code paths) and drives the `SessionRuntime` state machine.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn run_reducer_loop(
+        mut reducer_rx: mpsc::Receiver<session_reducer::InboundEvent>,
         client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
         transcript_recorder: Option<Arc<TranscriptRecorder>>,
+        session_runtime: Arc<Mutex<nori_protocol::session_runtime::SessionRuntime>>,
+        _connection: Option<Arc<SacpConnection>>,
+        _reducer_tx: mpsc::Sender<session_reducer::InboundEvent>,
     ) {
-        while let Some(update) = notification_rx.recv().await {
-            let client_events = normalize_session_update(&client_event_normalizer, &update).await;
-            forward_client_events(&backend_event_tx, &client_events).await;
-            // Record to transcript in background to avoid blocking the relay.
+        while let Some(event) = reducer_rx.recv().await {
+            let output = {
+                let mut runtime = session_runtime.lock().await;
+                let mut normalizer = client_event_normalizer.lock().await;
+                session_reducer::reduce(&mut runtime, event, &mut normalizer)
+            };
+
+            // Forward produced ClientEvents to the TUI.
+            forward_client_events(&backend_event_tx, &output.events).await;
+
+            // Record to transcript in background to avoid blocking the loop.
             if let Some(ref recorder) = transcript_recorder {
                 let recorder = Arc::clone(recorder);
-                let events = client_events.clone();
+                let events = output.events.clone();
                 tokio::spawn(async move {
-                    for event in &events {
-                        if let Err(e) = recorder.record_client_event(event).await {
+                    for ev in &events {
+                        if let Err(e) = recorder.record_client_event(ev).await {
                             warn!("Failed to record client event to transcript: {e}");
                         }
                     }
                 });
+            }
+
+            // Side effects are currently handled externally:
+            // - SendPrompt: user_input.rs drives the prompt lifecycle
+            // - SendCancel: submit_and_ops.rs handles Op::Interrupt
+            // - SendLoad: session.rs drives the resume path
+            // - ResolvePermissionCancelled: approval handler resolves permissions
+            //
+            // As the reducer takes over more of the lifecycle, side effect
+            // execution will move here.
+            for side_effect in &output.side_effects {
+                debug!(
+                    target: "acp_reducer",
+                    "Reducer side effect (not yet executed here): {side_effect:?}"
+                );
             }
         }
     }

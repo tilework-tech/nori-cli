@@ -328,6 +328,8 @@ pub struct AcpBackend {
     /// before emitting `TurnLifecycle::Completed`. Prevents a stale
     /// `Completed` from a cancelled task from interfering with the next turn.
     turn_interrupted: Arc<AtomicBool>,
+    /// Channel to send events into the serialized reducer loop.
+    reducer_tx: mpsc::Sender<session_reducer::InboundEvent>,
 }
 
 mod helpers;
@@ -362,22 +364,6 @@ pub(crate) async fn normalize_permission_request(
             event_count = events.len(),
             call_id = %request.event.call_id(),
             "Normalized ACP permission request"
-        );
-    }
-    events
-}
-
-pub(crate) async fn normalize_session_update(
-    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
-    update: &acp::SessionUpdate,
-) -> Vec<ClientEvent> {
-    let mut normalizer = normalizer.lock().await;
-    let events = normalizer.push_session_update(update);
-    if !events.is_empty() {
-        debug!(
-            target: "acp_normalized_event_flow",
-            event_count = events.len(),
-            "Normalized ACP session update"
         );
     }
     events

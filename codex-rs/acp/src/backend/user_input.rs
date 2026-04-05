@@ -189,85 +189,34 @@ impl AcpBackend {
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
         let backend_event_tx = self.backend_event_tx.clone();
         let turn_interrupted = Arc::clone(&self.turn_interrupted);
+        let reducer_tx = self.reducer_tx.clone();
 
-        // Spawn task to handle the prompt and translate events
+        // Send PromptSubmit to the reducer and WAIT for acknowledgment before
+        // spawning the prompt task. This ensures the reducer is in Prompt phase
+        // before connection.prompt() sends the request to the agent, preventing
+        // a race where notifications arrive before PromptSubmit is processed.
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        let _ = reducer_tx
+            .send(crate::backend::session_reducer::InboundEvent::PromptSubmit(
+                nori_protocol::session_runtime::QueuedPrompt {
+                    text: prompt_text_for_hooks.clone(),
+                    images: Vec::new(),
+                },
+                Some(ack_tx),
+            ))
+            .await;
+        let _ = ack_rx.await;
+
+        // Spawn task to handle the prompt lifecycle
         tokio::spawn(async move {
             // Cancel any existing idle timer when a new turn starts processing.
-            // This handles the case where a new prompt arrives while a previous
-            // task's idle timer is pending but before submit() could cancel it.
             if let Some(abort_handle) = idle_timer_abort.lock().await.take() {
                 abort_handle.abort();
             }
 
-            // Send TaskStarted event
-            emit_client_event(
-                &backend_event_tx,
-                transcript_recorder.as_ref(),
-                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
-            )
-            .await;
-
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt).await;
-
-            // Placeholder: the notification relay now handles event forwarding;
-            // text accumulation will be restored when the reducer is wired.
-            let accumulated_text = String::new();
-
-            // Record assistant message to transcript if there's accumulated text
-            if !accumulated_text.is_empty()
-                && let Some(ref recorder) = transcript_recorder
-            {
-                let content = vec![ContentBlock::Text {
-                    text: accumulated_text.clone(),
-                }];
-                if let Err(e) = recorder
-                    .record_assistant_message(&id_clone, content, None)
-                    .await
-                {
-                    warn!("Failed to record assistant message to transcript: {e}");
-                }
-            }
-
-            // Execute post_agent_response hooks after the agent has finished responding
-            if !accumulated_text.is_empty() && !post_agent_response_hooks.is_empty() {
-                let env_vars = HashMap::from([
-                    (
-                        "NORI_HOOK_EVENT".to_string(),
-                        "post_agent_response".to_string(),
-                    ),
-                    (
-                        "NORI_HOOK_RESPONSE_TEXT".to_string(),
-                        accumulated_text.clone(),
-                    ),
-                ]);
-                let results = crate::hooks::execute_hooks_with_env(
-                    &post_agent_response_hooks,
-                    hook_timeout,
-                    &env_vars,
-                )
-                .await;
-                route_hook_results(&results, &event_tx, &id_clone, None).await;
-            }
-
-            if !accumulated_text.is_empty() && !async_post_agent_response_hooks.is_empty() {
-                let env_vars = HashMap::from([
-                    (
-                        "NORI_HOOK_EVENT".to_string(),
-                        "post_agent_response".to_string(),
-                    ),
-                    (
-                        "NORI_HOOK_RESPONSE_TEXT".to_string(),
-                        accumulated_text.clone(),
-                    ),
-                ]);
-                let _ = crate::hooks::execute_hooks_fire_and_forget(
-                    async_post_agent_response_hooks,
-                    hook_timeout,
-                    env_vars,
-                );
-            }
 
             // Execute post_user_prompt hooks after the turn completes
             if !post_user_prompt_hooks.is_empty() {
@@ -369,21 +318,22 @@ impl AcpBackend {
                 );
             }
 
-            // Send TaskComplete event to end the turn, unless this turn was
-            // interrupted. When Op::Interrupt fires, it emits
-            // TurnLifecycle::Aborted synchronously; emitting a Completed here
-            // would race with the next turn and prematurely terminate it.
+            // Send the prompt response through the reducer, which will finalize
+            // open messages and produce TurnLifecycle::Completed with the
+            // assembled last_agent_message. Skip if the turn was interrupted
+            // (the reducer already handled the cancel).
             if !turn_interrupted.load(Ordering::SeqCst) {
-                emit_client_event(
-                    &backend_event_tx,
-                    transcript_recorder.as_ref(),
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed {
-                            last_agent_message: None,
+                let stop_reason = match &result {
+                    Ok(sr) => *sr,
+                    Err(_) => sacp::schema::StopReason::Cancelled,
+                };
+                let _ = reducer_tx
+                    .send(
+                        crate::backend::session_reducer::InboundEvent::PromptResponse {
+                            stop_reason,
                         },
-                    ),
-                )
-                .await;
+                    )
+                    .await;
             }
 
             // Start idle timer if configured

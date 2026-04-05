@@ -88,20 +88,83 @@ fn spawn_test_approval_handler(
     ));
 }
 
-fn spawn_test_persistent_relay(
+/// Spawn a reducer loop for testing, returning the `reducer_tx` so tests
+/// can send lifecycle events (PromptSubmit, etc.) to establish proper
+/// phase before sending notifications.
+fn spawn_test_reducer_loop(
     persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
     event_tx: mpsc::Sender<Event>,
     client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
     client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
-) {
+) -> mpsc::Sender<session_reducer::InboundEvent> {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
     forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
-    tokio::spawn(AcpBackend::run_notification_relay(
-        persistent_rx,
+
+    // Create a reducer channel and bridge the notification_rx into it
+    let (reducer_tx, reducer_rx) = mpsc::channel::<session_reducer::InboundEvent>(256);
+    let session_runtime = Arc::new(Mutex::new(
+        nori_protocol::session_runtime::SessionRuntime::new(),
+    ));
+
+    // Bridge notifications
+    let bridge_tx = reducer_tx.clone();
+    tokio::spawn(async move {
+        let mut persistent_rx = persistent_rx;
+        while let Some(update) = persistent_rx.recv().await {
+            let _ = bridge_tx
+                .send(session_reducer::InboundEvent::Notification(Box::new(
+                    update,
+                )))
+                .await;
+        }
+    });
+
+    tokio::spawn(AcpBackend::run_reducer_loop(
+        reducer_rx,
         client_event_normalizer,
         backend_event_tx,
         None, // No transcript recording in tests
+        session_runtime,
+        None, // No connection in tests
+        reducer_tx.clone(),
     ));
+
+    reducer_tx
+}
+
+/// Establish prompt phase in the reducer loop by sending a PromptSubmit
+/// and draining the resulting TurnLifecycle::Started event from the
+/// client event channel. This is needed because the reducer correctly
+/// rejects request-owned notifications (tool calls, message chunks, etc.)
+/// when no prompt is active.
+async fn establish_prompt_phase(
+    reducer_tx: &mpsc::Sender<session_reducer::InboundEvent>,
+    client_event_rx: &mut mpsc::Receiver<nori_protocol::ClientEvent>,
+) {
+    use nori_protocol::session_runtime::QueuedPrompt;
+    reducer_tx
+        .send(session_reducer::InboundEvent::PromptSubmit(
+            QueuedPrompt {
+                text: "test prompt".to_string(),
+                images: Vec::new(),
+            },
+            None,
+        ))
+        .await
+        .expect("send PromptSubmit");
+
+    // Drain the TurnLifecycle::Started event.
+    let event = tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+        .await
+        .expect("timeout waiting for Started")
+        .expect("channel closed");
+    assert!(
+        matches!(
+            event,
+            nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
+        ),
+        "expected TurnLifecycle::Started, got: {event:?}"
+    );
 }
 
 /// Helper to build a minimal transcript for resume tests.
@@ -184,3 +247,4 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
 mod part2;
 mod part3;
 mod part4;
+mod reducer_loop;

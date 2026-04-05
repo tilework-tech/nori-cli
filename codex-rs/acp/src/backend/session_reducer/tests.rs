@@ -58,7 +58,7 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
 
     let out = reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
 
@@ -90,7 +90,7 @@ fn prompt_response_transitions_to_idle() {
     // First, submit a prompt to get into Prompt phase
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
@@ -127,7 +127,7 @@ fn cancel_sets_cancelling_but_does_not_end_turn() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     let out = reduce(&mut rt, InboundEvent::CancelSubmit, &mut norm);
@@ -162,7 +162,7 @@ fn double_cancel_is_noop() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     reduce(&mut rt, InboundEvent::CancelSubmit, &mut norm);
@@ -180,7 +180,7 @@ fn cancelled_prompt_response_completes_turn() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     reduce(&mut rt, InboundEvent::CancelSubmit, &mut norm);
@@ -211,7 +211,7 @@ fn open_messages_finalized_into_transcript_on_completion() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
 
@@ -274,15 +274,18 @@ fn prompt_submit_while_active_queues() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     let out = reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(QueuedPrompt {
-            text: "second".to_string(),
-            images: Vec::new(),
-        }),
+        InboundEvent::PromptSubmit(
+            QueuedPrompt {
+                text: "second".to_string(),
+                images: Vec::new(),
+            },
+            None,
+        ),
         &mut norm,
     );
 
@@ -304,15 +307,18 @@ fn end_turn_drains_queue() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(QueuedPrompt {
-            text: "second".to_string(),
-            images: Vec::new(),
-        }),
+        InboundEvent::PromptSubmit(
+            QueuedPrompt {
+                text: "second".to_string(),
+                images: Vec::new(),
+            },
+            None,
+        ),
         &mut norm,
     );
 
@@ -348,15 +354,18 @@ fn cancelled_does_not_drain_queue() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(QueuedPrompt {
-            text: "second".to_string(),
-            images: Vec::new(),
-        }),
+        InboundEvent::PromptSubmit(
+            QueuedPrompt {
+                text: "second".to_string(),
+                images: Vec::new(),
+            },
+            None,
+        ),
         &mut norm,
     );
 
@@ -385,7 +394,7 @@ fn tool_call_gets_owner_request_id() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     let request_id = match &rt.phase {
@@ -419,7 +428,7 @@ fn cancel_marks_active_tools_cancelled() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
 
@@ -459,7 +468,7 @@ fn permission_during_prompt_is_resolved_on_cancel() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     reduce(
@@ -526,7 +535,7 @@ fn multiple_chunks_assembled_into_one_transcript_entry() {
 
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
 
@@ -632,7 +641,7 @@ fn available_commands_update_accepted_in_any_phase() {
     let mut rt = new_runtime();
     reduce(
         &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
+        InboundEvent::PromptSubmit(simple_prompt(), None),
         &mut norm,
     );
     let out = reduce(&mut rt, notification(update), &mut norm);

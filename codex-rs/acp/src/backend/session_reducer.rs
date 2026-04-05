@@ -30,7 +30,10 @@ pub enum InboundEvent {
     /// A `session/request_permission` from the agent.
     PermissionRequest { request_id: String, call_id: String },
     /// The user submitted a prompt (may be queued if a request is in flight).
-    PromptSubmit(QueuedPrompt),
+    /// The optional oneshot is signaled after the reducer processes this event,
+    /// which lets the caller wait before sending the ACP prompt (ensuring
+    /// the reducer is in Prompt phase before notifications can arrive).
+    PromptSubmit(QueuedPrompt, Option<tokio::sync::oneshot::Sender<()>>),
     /// The user requested cancellation of the active prompt.
     CancelSubmit,
     /// A `session/load` was initiated.
@@ -75,8 +78,11 @@ pub fn reduce(
     };
 
     match event {
-        InboundEvent::PromptSubmit(prompt) => {
+        InboundEvent::PromptSubmit(prompt, ack) => {
             reduce_prompt_submit(runtime, prompt, &mut out);
+            if let Some(tx) = ack {
+                let _ = tx.send(());
+            }
         }
         InboundEvent::CancelSubmit => {
             reduce_cancel_submit(runtime, &mut out);

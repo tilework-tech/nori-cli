@@ -261,6 +261,12 @@ impl AcpBackend {
             }
         };
 
+        // Create the reducer channel (before struct so reducer_tx can be stored).
+        let (reducer_tx, reducer_rx) = mpsc::channel::<session_reducer::InboundEvent>(256);
+        let session_runtime = Arc::new(Mutex::new(
+            nori_protocol::session_runtime::SessionRuntime::new(),
+        ));
+
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -301,6 +307,7 @@ impl AcpBackend {
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             turn_interrupted: Arc::new(AtomicBool::new(false)),
+            reducer_tx: reducer_tx.clone(),
         };
 
         // Execute session_start hooks
@@ -369,12 +376,29 @@ impl AcpBackend {
             backend.transcript_recorder.clone(),
         ));
 
-        // Spawn notification relay for inter-turn notifications
-        tokio::spawn(Self::run_notification_relay(
-            notification_rx,
+        // Bridge: read notifications from the ACP connection and wrap them
+        // as InboundEvent::Notification for the reducer.
+        let bridge_tx = reducer_tx.clone();
+        tokio::spawn(async move {
+            let mut notification_rx = notification_rx;
+            while let Some(update) = notification_rx.recv().await {
+                let _ = bridge_tx
+                    .send(session_reducer::InboundEvent::Notification(Box::new(
+                        update,
+                    )))
+                    .await;
+            }
+        });
+
+        // Spawn the reducer loop.
+        tokio::spawn(Self::run_reducer_loop(
+            reducer_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx.clone(),
             backend.transcript_recorder.clone(),
+            Arc::clone(&session_runtime),
+            Some(Arc::clone(&backend.connection)),
+            reducer_tx.clone(),
         ));
 
         if !deferred_replay_client_events.is_empty() {
