@@ -300,26 +300,25 @@ impl ClientToolCell {
         };
 
         if !changes.is_empty() {
-            let diff_width = width.saturating_sub(4).max(1) as usize;
-            let diff_lines = create_diff_summary(&changes, &self.cwd, diff_width);
+            let diff_lines = create_diff_summary(&changes, &self.cwd, width as usize);
 
-            if self.snapshot.kind == nori_protocol::ToolKind::Move {
-                // Move tools: DiffSummary says "Edited" but we need "Moved"
-                let header =
-                    relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
-                lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
-                lines.extend(prefix_lines(diff_lines, "    ".into(), "    ".into()));
-            } else if let Some((first, rest)) = diff_lines.split_first() {
-                // Promote DiffSummary's first line (verb+path+counts) as header,
-                // replacing its "• " bullet with our phase-aware bullet.
+            if let Some((first, rest)) = diff_lines.split_first() {
+                // Replace DiffSummary's dim "• " bullet with our phase-aware
+                // bullet, and for Move tools swap the "Edited" verb with "Moved".
+                let is_move = self.snapshot.kind == nori_protocol::ToolKind::Move;
                 let mut header_spans = vec![bullet, " ".into()];
                 for span in &first.spans {
-                    if span.content.as_ref() != "• " {
+                    if span.content.as_ref() == "• " {
+                        continue;
+                    }
+                    if is_move && span.content.as_ref() == "Edited" {
+                        header_spans.push("Moved".bold());
+                    } else {
                         header_spans.push(span.clone());
                     }
                 }
                 lines.push(Line::from(header_spans));
-                lines.extend(prefix_lines(rest.to_vec(), "    ".into(), "    ".into()));
+                lines.extend(rest.to_vec());
             }
         } else {
             // No diff data: use the format_edit_tool_header as sole header
@@ -1964,5 +1963,101 @@ mod tests {
             !has_duplicate_aggregate,
             "Should not have a duplicate aggregate header in: {lines:?}"
         );
+    }
+
+    // --- Edit cell indentation should match PatchHistoryCell (4 spaces, not 8) ---
+
+    #[test]
+    fn edit_cell_diff_lines_have_single_indent() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-edit-indent".into(),
+            title: "Write README.md".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("README.md"),
+                line: None,
+            }],
+            invocation: Some(Invocation::FileChanges {
+                changes: vec![nori_protocol::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                }],
+            }),
+            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: None,
+                new_text: "hello\nworld\n".into(),
+            })],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // The diff content lines (containing "+hello", "+world") should start
+        // with exactly 4 spaces, not 8. This matches PatchHistoryCell's output.
+        let diff_content: Vec<_> = lines
+            .iter()
+            .filter(|l| l.contains("+hello") || l.contains("+world"))
+            .collect();
+        assert!(
+            !diff_content.is_empty(),
+            "expected diff content lines, got: {lines:?}"
+        );
+        for line in &diff_content {
+            assert!(
+                line.starts_with("    ") && !line.starts_with("        "),
+                "diff content should have 4-space indent (not 8): {line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn move_cell_diff_lines_have_single_indent() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-move".into(),
+            title: "Move old.rs".into(),
+            kind: ToolKind::Move,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("old.rs"),
+                line: None,
+            }],
+            invocation: Some(Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Move {
+                    from_path: PathBuf::from("old.rs"),
+                    to_path: PathBuf::from("new.rs"),
+                    old_text: None,
+                    new_text: Some("content\n".into()),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        // Header should say "Moved", not "Edited"
+        assert!(
+            lines[0].contains("Moved"),
+            "move header should say 'Moved', got: {}",
+            lines[0]
+        );
+
+        // Diff content lines should have 4-space indent, not 8
+        let diff_content: Vec<_> = lines.iter().filter(|l| l.contains("+content")).collect();
+        assert!(
+            !diff_content.is_empty(),
+            "expected diff content lines for move, got: {lines:?}"
+        );
+        for line in &diff_content {
+            assert!(
+                line.starts_with("    ") && !line.starts_with("        "),
+                "move diff content should have 4-space indent (not 8): {line:?}"
+            );
+        }
     }
 }
