@@ -68,6 +68,10 @@ impl<'de> Deserialize<'de> for McpServerConfig {
             url: Option<String>,
             bearer_token: Option<String>,
             bearer_token_env_var: Option<String>,
+            #[serde(default)]
+            client_id: Option<String>,
+            #[serde(default)]
+            client_secret_env_var: Option<String>,
 
             // shared
             #[serde(default)]
@@ -121,6 +125,12 @@ impl<'de> Deserialize<'de> for McpServerConfig {
             throw_if_set("stdio", "bearer_token", raw.bearer_token.as_ref())?;
             throw_if_set("stdio", "http_headers", raw.http_headers.as_ref())?;
             throw_if_set("stdio", "env_http_headers", raw.env_http_headers.as_ref())?;
+            throw_if_set("stdio", "client_id", raw.client_id.as_ref())?;
+            throw_if_set(
+                "stdio",
+                "client_secret_env_var",
+                raw.client_secret_env_var.as_ref(),
+            )?;
             McpServerTransportConfig::Stdio {
                 command,
                 args: raw.args.clone().unwrap_or_default(),
@@ -137,6 +147,8 @@ impl<'de> Deserialize<'de> for McpServerConfig {
                 bearer_token_env_var: raw.bearer_token_env_var.clone(),
                 http_headers: raw.http_headers.clone(),
                 env_http_headers: raw.env_http_headers.take(),
+                client_id: raw.client_id.clone(),
+                client_secret_env_var: raw.client_secret_env_var.clone(),
             }
         } else {
             return Err(SerdeError::custom("invalid transport"));
@@ -184,6 +196,15 @@ pub enum McpServerTransportConfig {
         /// HTTP headers where the value is sourced from an environment variable.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         env_http_headers: Option<HashMap<String, String>>,
+        /// Pre-registered OAuth client ID for servers that do not support
+        /// dynamic client registration (e.g., Slack).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_id: Option<String>,
+        /// Name of the environment variable holding the OAuth client secret.
+        /// Used together with `client_id` for servers that require a
+        /// confidential OAuth client.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_secret_env_var: Option<String>,
     },
 }
 
@@ -628,6 +649,8 @@ mod tests {
                 bearer_token_env_var: None,
                 http_headers: None,
                 env_http_headers: None,
+                client_id: None,
+                client_secret_env_var: None,
             }
         );
         assert!(cfg.enabled);
@@ -650,6 +673,8 @@ mod tests {
                 bearer_token_env_var: Some("GITHUB_TOKEN".to_string()),
                 http_headers: None,
                 env_http_headers: None,
+                client_id: None,
+                client_secret_env_var: None,
             }
         );
         assert!(cfg.enabled);
@@ -676,6 +701,8 @@ mod tests {
                     "X-Token".to_string(),
                     "TOKEN_ENV".to_string()
                 )])),
+                client_id: None,
+                client_secret_env_var: None,
             }
         );
     }
@@ -750,5 +777,112 @@ mod tests {
             err.to_string().contains("bearer_token is not supported"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn deserialize_streamable_http_with_client_id_and_secret_env_var() {
+        let cfg: McpServerConfig = toml::from_str(
+            r#"
+            url = "https://mcp.slack.com/mcp"
+            client_id = "12345.67890"
+            client_secret_env_var = "SLACK_CLIENT_SECRET"
+        "#,
+        )
+        .expect("should deserialize http config with client credentials");
+
+        assert_eq!(
+            cfg.transport,
+            McpServerTransportConfig::StreamableHttp {
+                url: "https://mcp.slack.com/mcp".to_string(),
+                bearer_token_env_var: None,
+                http_headers: None,
+                env_http_headers: None,
+                client_id: Some("12345.67890".to_string()),
+                client_secret_env_var: Some("SLACK_CLIENT_SECRET".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn deserialize_streamable_http_without_client_credentials_defaults_to_none() {
+        let cfg: McpServerConfig = toml::from_str(
+            r#"
+            url = "https://example.com/mcp"
+        "#,
+        )
+        .expect("should deserialize http config");
+
+        match &cfg.transport {
+            McpServerTransportConfig::StreamableHttp {
+                client_id,
+                client_secret_env_var,
+                ..
+            } => {
+                assert_eq!(*client_id, None, "client_id should default to None");
+                assert_eq!(
+                    *client_secret_env_var, None,
+                    "client_secret_env_var should default to None"
+                );
+            }
+            _ => panic!("expected StreamableHttp transport"),
+        }
+    }
+
+    #[test]
+    fn deserialize_rejects_client_id_for_stdio() {
+        let err = toml::from_str::<McpServerConfig>(
+            r#"
+            command = "echo"
+            client_id = "12345"
+        "#,
+        )
+        .expect_err("should reject client_id for stdio transport");
+
+        assert!(
+            err.to_string().contains("client_id is not supported"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn deserialize_rejects_client_secret_env_var_for_stdio() {
+        let err = toml::from_str::<McpServerConfig>(
+            r#"
+            command = "echo"
+            client_secret_env_var = "SECRET"
+        "#,
+        )
+        .expect_err("should reject client_secret_env_var for stdio transport");
+
+        assert!(
+            err.to_string()
+                .contains("client_secret_env_var is not supported"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn serialize_round_trip_with_client_credentials() {
+        let config = McpServerConfig {
+            transport: McpServerTransportConfig::StreamableHttp {
+                url: "https://mcp.slack.com/mcp".to_string(),
+                bearer_token_env_var: None,
+                http_headers: None,
+                env_http_headers: None,
+                client_id: Some("12345.67890".to_string()),
+                client_secret_env_var: Some("SLACK_CLIENT_SECRET".to_string()),
+            },
+            enabled: true,
+            startup_timeout_sec: None,
+            tool_timeout_sec: None,
+            enabled_tools: None,
+            disabled_tools: None,
+        };
+
+        let serialized = toml::to_string(&config).expect("should serialize");
+        let deserialized: McpServerConfig =
+            toml::from_str(&serialized).expect("should deserialize");
+
+        assert_eq!(config, deserialized);
     }
 }

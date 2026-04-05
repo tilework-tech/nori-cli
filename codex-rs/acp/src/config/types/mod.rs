@@ -1763,6 +1763,13 @@ pub struct McpServerConfigToml {
     #[serde(default)]
     pub env_http_headers: Option<HashMap<String, String>>,
 
+    /// Pre-registered OAuth client ID
+    #[serde(default)]
+    pub client_id: Option<String>,
+    /// Environment variable holding the OAuth client secret
+    #[serde(default)]
+    pub client_secret_env_var: Option<String>,
+
     // Shared fields
     /// Whether this server is enabled
     #[serde(default = "default_true")]
@@ -1819,6 +1826,8 @@ pub enum McpServerTransportConfig {
         bearer_token_env_var: Option<String>,
         http_headers: Option<HashMap<String, String>>,
         env_http_headers: Option<HashMap<String, String>>,
+        client_id: Option<String>,
+        client_secret_env_var: Option<String>,
     },
 }
 
@@ -1841,6 +1850,8 @@ impl McpServerConfigToml {
                 bearer_token_env_var: self.bearer_token_env_var.clone(),
                 http_headers: self.http_headers.clone(),
                 env_http_headers: self.env_http_headers.clone(),
+                client_id: self.client_id.clone(),
+                client_secret_env_var: self.client_secret_env_var.clone(),
             }
         } else {
             return Err("Must specify either 'command' or 'url'".to_string());

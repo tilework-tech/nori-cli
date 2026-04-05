@@ -22,8 +22,19 @@ Used by `@/codex-rs/core/` (`mcp_connection_manager.rs`) to establish connection
 - `StoredOAuthTokens` - Persisted token storage
 - Two OAuth login entry points, both backed by the same `wait_for_callback_or_cancel()` mechanism (biased `tokio::select!` between callback, cancel signal, and 5-minute timeout):
   - `perform_oauth_login()` - Blocking/interactive flow that uses `println!` for status and `stdin` Enter for cancellation. Used by CLI contexts where TUI suspension is acceptable.
-  - `start_oauth_login()` - Non-blocking async flow that returns an `OAuthLoginHandle`. The handle exposes a `cancel_tx: Option<oneshot::Sender<()>>` for programmatic cancellation and a `task: JoinHandle<Result<()>>` for awaiting completion. Used by the TUI to run OAuth inline without suspending the terminal.
+  - `start_oauth_login()` - Non-blocking async flow that returns an `OAuthLoginHandle`. The handle exposes a `cancel_tx: Option<oneshot::Sender<()>>` for programmatic cancellation and a `task: JoinHandle<Result<()>>` for awaiting completion. Used by the TUI to run OAuth inline without suspending the terminal. Accepts optional `client_id` and `client_secret` parameters to select between two OAuth paths (see below).
 - Token refresh handling via `OAuthPersistor`, which is called after every MCP request
+
+**Two OAuth Credential Paths** (`perform_oauth_login.rs`):
+
+`start_oauth_login()` branches based on whether a `client_id` is provided:
+
+| Path | When | Mechanism | Registration |
+|------|------|-----------|-------------|
+| Dynamic registration | `client_id` is `None` | `rmcp::OAuthState` | Server-side dynamic client registration |
+| Pre-configured credentials | `client_id` is `Some(...)` | `oauth2` crate directly via `start_oauth_login_preconfigured()` | User provides client ID (and optionally secret) from a manually-created OAuth app |
+
+The pre-configured path uses `discover_oauth_metadata()` to fetch the server's `AuthorizationMetadata` from RFC 8414 well-known endpoints (tries path-scoped URL first, then root). It builds an `oauth2::BasicClient` with the pre-configured `client_id`, optional `ClientSecret`, discovered auth/token endpoints, and a PKCE challenge. CSRF state validation is performed explicitly (unlike the `rmcp` path which handles it internally). Both paths store tokens via `save_oauth_tokens()` using the same `StoredOAuthTokens` format.
 
 **Auth Status** (`auth_status.rs`):
 - `determine_streamable_http_auth_status()` - Check authentication state

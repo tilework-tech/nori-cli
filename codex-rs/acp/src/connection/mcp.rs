@@ -80,6 +80,7 @@ fn convert_one(name: &str, config: &McpServerConfig) -> acp::McpServer {
             bearer_token_env_var,
             http_headers,
             env_http_headers,
+            ..
         } => {
             let mut headers: Vec<acp::HttpHeader> = Vec::new();
 
@@ -164,6 +165,8 @@ mod tests {
                 bearer_token_env_var,
                 http_headers,
                 env_http_headers,
+                client_id: None,
+                client_secret_env_var: None,
             },
             enabled: true,
             startup_timeout_sec: None,

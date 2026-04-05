@@ -424,6 +424,11 @@ pub(crate) struct ChatWidget {
     // Gate: set when AgentMessage is received, cleared on next TaskStarted.
     // While true, late-arriving tool events are silently discarded.
     turn_finished: bool,
+    // Defense-in-depth counter for stale TurnLifecycle::Completed events
+    // after interrupts. Incremented by on_interrupted_turn, decremented by
+    // on_task_complete, and reset to 0 by on_task_started (to drain orphaned
+    // counters when the ACP backend suppresses the stale Completed).
+    pending_stale_completes: i32,
     /// Whether and how plan updates are rendered in a pinned drawer instead of
     /// history cells.
     plan_drawer_mode: PlanDrawerMode,

@@ -18,6 +18,8 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
                     "X-Auth".to_string(),
                     "DOCS_AUTH".to_string(),
                 )])),
+                client_id: None,
+                client_secret_env_var: None,
             },
             enabled: true,
             startup_timeout_sec: Some(Duration::from_secs(2)),
@@ -45,6 +47,8 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
                 bearer_token_env_var: None,
                 http_headers: None,
                 env_http_headers: None,
+                client_id: None,
+                client_secret_env_var: None,
             },
             enabled: true,
             startup_timeout_sec: None,
@@ -75,6 +79,7 @@ url = "https://example.com/mcp"
             bearer_token_env_var,
             http_headers,
             env_http_headers,
+            ..
         } => {
             assert_eq!(url, "https://example.com/mcp");
             assert!(bearer_token_env_var.is_none());
@@ -107,6 +112,8 @@ async fn replace_mcp_servers_streamable_http_isolates_headers_between_servers() 
                         "X-Auth".to_string(),
                         "DOCS_AUTH".to_string(),
                     )])),
+                    client_id: None,
+                    client_secret_env_var: None,
                 },
                 enabled: true,
                 startup_timeout_sec: Some(Duration::from_secs(2)),

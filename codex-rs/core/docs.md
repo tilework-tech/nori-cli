@@ -82,7 +82,7 @@ The builder is used by the TUI layer (`@/codex-rs/tui/`) to persist user prefere
 
 `execute_script()` runs a `Script`-kind prompt via its interpreter (e.g. `bash script.sh arg1 arg2`), captures stdout, and enforces a configurable timeout. Returns `Ok(stdout)` on zero exit or `Err(message)` on non-zero exit, I/O error, or timeout.
 
-**MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model.
+**MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model. The `McpServerTransportConfig::StreamableHttp` variant supports two OAuth credential modes: dynamic client registration (the default, handled by `rmcp`'s `OAuthState`) and pre-configured client credentials via optional `client_id` and `client_secret_env_var` fields for servers that do not support dynamic registration (e.g., Slack). The `client_secret_env_var` field follows the same env-var-name pattern as `bearer_token_env_var` -- the actual secret is resolved from the environment at runtime. These fields are rejected during deserialization for stdio transport.
 
 **Data Flow (ACP path):**
 

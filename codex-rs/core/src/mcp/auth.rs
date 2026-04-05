@@ -57,6 +57,7 @@ async fn compute_auth_status(
             bearer_token_env_var,
             http_headers,
             env_http_headers,
+            ..
         } => {
             determine_streamable_http_auth_status(
                 server_name,

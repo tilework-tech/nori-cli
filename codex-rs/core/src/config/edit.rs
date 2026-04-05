@@ -122,6 +122,8 @@ mod document_helpers {
                 bearer_token_env_var,
                 http_headers,
                 env_http_headers,
+                client_id,
+                client_secret_env_var,
             } => {
                 entry["url"] = value(url.clone());
                 if let Some(env_var) = bearer_token_env_var {
@@ -136,6 +138,12 @@ mod document_helpers {
                     && !headers.is_empty()
                 {
                     entry["env_http_headers"] = table_from_pairs(headers.iter());
+                }
+                if let Some(id) = client_id {
+                    entry["client_id"] = value(id.clone());
+                }
+                if let Some(env_var) = client_secret_env_var {
+                    entry["client_secret_env_var"] = value(env_var.clone());
                 }
             }
         }
@@ -910,6 +918,8 @@ existing = "value"
                             .collect(),
                     ),
                     env_http_headers: None,
+                    client_id: None,
+                    client_secret_env_var: None,
                 },
                 enabled: false,
                 startup_timeout_sec: Some(std::time::Duration::from_secs(5)),

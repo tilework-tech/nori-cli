@@ -352,6 +352,7 @@ impl App {
     }
 
     /// Start an async MCP OAuth login flow (no TUI suspension).
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn perform_mcp_oauth_login(
         &mut self,
         _tui: &mut crate::tui::Tui,
@@ -359,7 +360,22 @@ impl App {
         server_url: String,
         http_headers: Option<std::collections::HashMap<String, String>>,
         env_http_headers: Option<std::collections::HashMap<String, String>>,
+        client_id: Option<String>,
+        client_secret_env_var: Option<String>,
     ) {
+        // Resolve client_secret from env var if provided.
+        let client_secret = client_secret_env_var.as_deref().and_then(|var| {
+            match std::env::var(var) {
+                Ok(val) => Some(val),
+                Err(_) => {
+                    tracing::warn!(
+                        "MCP OAuth: client_secret_env_var `{var}` is not set for `{server_name}`"
+                    );
+                    None
+                }
+            }
+        });
+
         let app_event_tx = self.app_event_tx.clone();
         let name_for_task = server_name.clone();
 
@@ -370,6 +386,8 @@ impl App {
             http_headers,
             env_http_headers,
             vec![],
+            client_id,
+            client_secret,
         )
         .await
         {

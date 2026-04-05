@@ -550,7 +550,7 @@ CLI-configured MCP servers (from `config.toml`) are converted to SACP protocol t
 | `Stdio` | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment) |
 | `StreamableHttp` | `McpServer::Http` | url, headers (static headers + env-resolved headers + bearer token from env var as `Authorization: Bearer` header) |
 
-Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. All servers are included regardless of the `enabled` flag; the agent decides how to handle them. Results are sorted by server name for deterministic ordering.
+Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. The `client_id` and `client_secret_env_var` fields on `StreamableHttp` are not forwarded to the agent -- they are only used by the TUI/rmcp-client layer for OAuth login flows (see `@/codex-rs/rmcp-client/docs.md`). All servers are included regardless of the `enabled` flag; the agent decides how to handle them. Results are sorted by server name for deterministic ordering.
 
 `create_session()` accepts a `mcp_servers: Vec<McpServer>` parameter that is populated by calling `to_sacp_mcp_servers()` at each session creation site:
 - `spawn_and_relay.rs` -- initial session creation during backend spawn
@@ -807,6 +807,27 @@ The same merged completion state is also used to decide whether a completed tool
 The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. Completed normalized snapshots consume the shared `pending_tool_calls` metadata used for title/raw-input resolution once the lifecycle reaches its terminal phase.
 
 Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
+
+**Turn Interrupt Guard** (`submit_and_ops.rs`, `user_input.rs`):
+
+When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` continues running after cancellation and unconditionally emits `TurnLifecycle::Completed` at the end of its event loop. If the user submits a new message before this stale `Completed` arrives, it races with the next turn's `TurnLifecycle::Started` and prematurely terminates it.
+
+The `turn_interrupted: Arc<AtomicBool>` field on `AcpBackend` prevents this:
+
+```
+Op::Interrupt:
+  1. turn_interrupted.store(true)   -- flag the current turn as interrupted
+  2. connection.cancel()            -- cancel the ACP session
+
+handle_user_input():
+  1. turn_interrupted.store(false)  -- reset for new turn
+  ...
+  spawned task epilogue:
+    if !turn_interrupted            -- only emit Completed if not interrupted
+      emit TurnLifecycle::Completed
+```
+
+Since `TurnLifecycle::Aborted` already serves as the turn-ending signal for interrupted turns, suppressing the stale `Completed` is safe. The TUI also has a defense-in-depth counter (`pending_stale_completes`) that ignores stale `Completed` events at the presentation layer (see `@/codex-rs/tui/docs.md`).
 
 **Tool Classification System:**
 
