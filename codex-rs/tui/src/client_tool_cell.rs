@@ -74,6 +74,15 @@ impl ClientToolCell {
         is_exploring_snapshot(&self.snapshot) || !self.exploring_snapshots.is_empty()
     }
 
+    /// Return all call_ids held by this cell's exploring group (for tracking
+    /// on flush to prevent re-merging into later cells).
+    pub(crate) fn exploring_call_ids(&self) -> Vec<String> {
+        self.exploring_snapshots
+            .iter()
+            .map(|s| s.call_id.clone())
+            .collect()
+    }
+
     /// Mark this cell as an exploring cell. The primary snapshot becomes the
     /// first item in the exploring group.
     pub(crate) fn mark_exploring(&mut self) {
@@ -106,6 +115,16 @@ impl ClientToolCell {
         }
         if !is_active_phase(&snapshot.phase) {
             self.start_time = None;
+        }
+        // Also update the corresponding entry in exploring_snapshots so that
+        // tool_call_update events (which carry the real path/query) propagate
+        // into the exploring rendering.
+        if let Some(existing) = self
+            .exploring_snapshots
+            .iter_mut()
+            .find(|s| s.call_id == snapshot.call_id)
+        {
+            *existing = snapshot.clone();
         }
         self.snapshot = snapshot;
     }

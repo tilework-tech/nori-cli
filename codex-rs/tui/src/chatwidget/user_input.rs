@@ -14,11 +14,16 @@ impl ChatWidget {
                 for id in &pending_ids {
                     self.completed_client_tool_calls.insert(id.clone());
                 }
-            } else if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>()
-                && client_cell.is_active()
-            {
-                self.completed_client_tool_calls
-                    .insert(client_cell.call_id().to_owned());
+            } else if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>() {
+                if client_cell.is_active() {
+                    self.completed_client_tool_calls
+                        .insert(client_cell.call_id().to_owned());
+                }
+                // Track all exploring group call_ids so completions arriving
+                // after flush don't get re-merged into a later exploring cell.
+                for id in client_cell.exploring_call_ids() {
+                    self.completed_client_tool_calls.insert(id);
+                }
             }
             self.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));

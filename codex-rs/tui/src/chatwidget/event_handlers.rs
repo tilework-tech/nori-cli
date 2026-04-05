@@ -1407,14 +1407,12 @@ impl ChatWidget {
                 .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
             && cell.is_exploring()
         {
-            let call_id = tool_snapshot.call_id.clone();
             cell.merge_exploring(tool_snapshot);
-            // Track all merged call_ids (including non-terminal phases) so
-            // completions arriving after this cell is flushed to history
-            // don't get re-merged into a later exploring cell. Exploring
-            // cell rendering depends on the cell's overall state, not
-            // individual snapshot phases, so skipping later updates is safe.
-            self.completed_client_tool_calls.insert(call_id);
+            // Don't track in completed_client_tool_calls here — non-terminal
+            // snapshots (Pending/InProgress) arrive first with empty invocations,
+            // and the real path/query comes in a later tool_call_update. Tracking
+            // is deferred to flush_active_cell, which marks all exploring call_ids
+            // as completed when the cell leaves active_cell.
             return;
         }
 
