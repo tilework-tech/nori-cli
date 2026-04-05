@@ -236,6 +236,12 @@ fn reduce_prompt_response(
 // ---------------------------------------------------------------------------
 
 fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mut ReduceOutput) {
+    if runtime.phase != SessionPhase::Idle {
+        out.events.push(ClientEvent::Warning(WarningInfo {
+            message: "Received load request while not idle".to_string(),
+        }));
+        return;
+    }
     runtime.phase = SessionPhase::Loading {
         request_id: request_id.clone(),
     };
@@ -243,7 +249,6 @@ fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mu
         request_id,
         ActiveRequestKind::Loading,
     ));
-    let _ = out; // no events emitted on load start
 }
 
 fn reduce_load_response(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
