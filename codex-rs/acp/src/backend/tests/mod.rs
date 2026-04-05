@@ -96,7 +96,7 @@ fn spawn_test_persistent_relay(
 ) {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
     forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
-    tokio::spawn(AcpBackend::run_persistent_relay(
+    tokio::spawn(AcpBackend::run_notification_relay(
         persistent_rx,
         client_event_normalizer,
         backend_event_tx,

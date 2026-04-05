@@ -620,17 +620,11 @@ fn available_commands_update_accepted_in_any_phase() {
 
     let cmd = acp::AvailableCommand::new("/test", "A test command");
     let update =
-        acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![
-            cmd,
-        ]));
+        acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![cmd]));
 
     // Test in Idle
     let mut rt = new_runtime();
-    let out = reduce(
-        &mut rt,
-        notification(update.clone()),
-        &mut norm,
-    );
+    let out = reduce(&mut rt, notification(update.clone()), &mut norm);
     assert_eq!(rt.persisted.available_commands.len(), 1);
     assert!(has_event(&out.events, |e| matches!(
         e,
@@ -644,11 +638,7 @@ fn available_commands_update_accepted_in_any_phase() {
         InboundEvent::PromptSubmit(simple_prompt()),
         &mut norm,
     );
-    let out = reduce(
-        &mut rt,
-        notification(update),
-        &mut norm,
-    );
+    let out = reduce(&mut rt, notification(update), &mut norm);
     assert_eq!(rt.persisted.available_commands.len(), 1);
     assert!(has_event(&out.events, |e| matches!(
         e,

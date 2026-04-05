@@ -61,31 +61,60 @@ impl AcpBackend {
             is_first_prompt_val,
             used_fallback,
             deferred_replay_client_events,
+            notification_rx,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
 
-            let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(256);
+            // Take the notification receiver so we can collect replay events
+            // during session/load. With the unified channel, load replay
+            // events flow through the same notification_tx as all other updates.
+            let notification_rx = connection.take_notification_receiver();
 
-            // Collect replay events into a buffer instead of sending them
-            // directly to event_tx. The event_tx consumer only starts after
-            // resume_session returns, so sending directly would deadlock
-            // when the number of events exceeds the channel capacity.
+            // Collect replay events into a buffer. The collector runs until
+            // load_session() finishes and signals completion via the oneshot.
+            let (load_done_tx, load_done_rx) = tokio::sync::oneshot::channel::<()>();
             let collect_handle = tokio::spawn(async move {
+                let mut notification_rx = notification_rx;
                 let mut client_event_normalizer = nori_protocol::ClientEventNormalizer::default();
                 let mut buffered_events = Vec::new();
-                while let Some(update) = update_rx.recv().await {
-                    buffered_events.extend(client_event_normalizer.push_session_update(&update));
+                let mut done = std::pin::pin!(load_done_rx);
+                loop {
+                    tokio::select! {
+                        biased;
+                        update = notification_rx.recv() => {
+                            match update {
+                                Some(update) => {
+                                    buffered_events.extend(
+                                        client_event_normalizer.push_session_update(&update),
+                                    );
+                                }
+                                None => break,
+                            }
+                        }
+                        _ = &mut done => {
+                            // Drain any remaining buffered updates after load completes
+                            while let Ok(update) = notification_rx.try_recv() {
+                                buffered_events.extend(
+                                    client_event_normalizer.push_session_update(&update),
+                                );
+                            }
+                            break;
+                        }
+                    }
                 }
-                client_events_to_replay_client_events(buffered_events)
+                (
+                    client_events_to_replay_client_events(buffered_events),
+                    notification_rx,
+                )
             });
 
-            match connection.load_session(sid, &cwd, update_tx).await {
+            match connection.load_session(sid, &cwd).await {
                 Ok(session_id) => {
-                    // Wait for all updates to be collected. This is safe
-                    // because the collect task buffers into a Vec (no
-                    // backpressure) and update_rx closes when load_session
-                    // completes (the worker thread drops update_tx).
-                    let buffered_client_events = collect_handle.await.unwrap_or_default();
+                    // Signal the collector that load is done, then collect results.
+                    let _ = load_done_tx.send(());
+                    let (buffered_client_events, recovered_rx) = collect_handle
+                        .await
+                        .expect("load session collector task panicked");
                     if !buffered_client_events.is_empty() {
                         debug!(
                             "ACP session/load produced {} replay client events (deferred until after setup)",
@@ -93,13 +122,23 @@ impl AcpBackend {
                         );
                     }
                     debug!("ACP session resumed via session/load: {sid}");
-                    (session_id, None, false, None, buffered_client_events)
+                    (
+                        session_id,
+                        None,
+                        false,
+                        None,
+                        buffered_client_events,
+                        recovered_rx,
+                    )
                 }
                 Err(e) => {
                     warn!(
                         "Server-side session/load failed, falling back to client-side replay: {e}"
                     );
-                    collect_handle.abort();
+                    let _ = load_done_tx.send(());
+                    let (_, recovered_rx) = collect_handle
+                        .await
+                        .expect("load session collector task panicked");
 
                     let mcp_servers =
                         crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
@@ -140,6 +179,7 @@ impl AcpBackend {
                         true,
                         Some(e.to_string()),
                         replay_events,
+                        recovered_rx,
                     )
                 }
             }
@@ -177,11 +217,18 @@ impl AcpBackend {
                 (Vec::new(), None)
             };
 
-            (session_id, summary, true, None, replay_events)
+            let notification_rx = connection.take_notification_receiver();
+            (
+                session_id,
+                summary,
+                true,
+                None,
+                replay_events,
+                notification_rx,
+            )
         };
 
         let approval_rx = connection.take_approval_receiver();
-        let persistent_rx = connection.take_persistent_receiver();
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
@@ -321,9 +368,9 @@ impl AcpBackend {
             backend.transcript_recorder.clone(),
         ));
 
-        // Spawn persistent listener relay for inter-turn notifications
-        tokio::spawn(Self::run_persistent_relay(
-            persistent_rx,
+        // Spawn notification relay for inter-turn notifications
+        tokio::spawn(Self::run_notification_relay(
+            notification_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx.clone(),
         ));

@@ -225,9 +225,10 @@ fn reduce_prompt_response(
 
     // Queue drain policy: only auto-send on EndTurn.
     if stop_reason == acp::StopReason::EndTurn
-        && let Some(next_prompt) = runtime.queue.pop_front() {
-            start_prompt(runtime, next_prompt, out);
-        }
+        && let Some(next_prompt) = runtime.queue.pop_front()
+    {
+        start_prompt(runtime, next_prompt, out);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -372,9 +373,10 @@ fn reduce_tool_call(runtime: &mut SessionRuntime, tool_call: &acp::ToolCall) {
     let call_id = tool_call.tool_call_id.to_string();
 
     if let Some(active) = &mut runtime.active
-        && !active.tool_call_ids.contains(&call_id) {
-            active.tool_call_ids.push(call_id);
-        }
+        && !active.tool_call_ids.contains(&call_id)
+    {
+        active.tool_call_ids.push(call_id);
+    }
 
     // The persisted tool snapshot will be set by the normalizer output +
     // owner_request_id patching in reduce_notification.
@@ -390,9 +392,10 @@ fn reduce_tool_call_update(
     // If the tool call is not already tracked, it will be added by the
     // normalizer output. We just ensure the active request tracks it.
     if let Some(active) = &mut runtime.active
-        && !active.tool_call_ids.contains(&call_id) {
-            active.tool_call_ids.push(call_id);
-        }
+        && !active.tool_call_ids.contains(&call_id)
+    {
+        active.tool_call_ids.push(call_id);
+    }
 }
 
 // ---------------------------------------------------------------------------

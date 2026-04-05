@@ -167,9 +167,6 @@ impl AcpBackend {
         }
         prompt.extend(image_blocks);
 
-        // Create channel for receiving session updates
-        let (update_tx, mut update_rx) = mpsc::channel(32);
-
         // Clone what we need for the background task
         let event_tx = self.event_tx.clone();
         let session_id = self.session_id.read().await.clone();
@@ -180,18 +177,11 @@ impl AcpBackend {
         let transcript_recorder = self.transcript_recorder.clone();
         let notify_after_idle = self.notify_after_idle;
         let post_user_prompt_hooks = self.post_user_prompt_hooks.clone();
-        let pre_tool_call_hooks = self.pre_tool_call_hooks.clone();
-        let post_tool_call_hooks = self.post_tool_call_hooks.clone();
-        let pre_agent_response_hooks = self.pre_agent_response_hooks.clone();
         let post_agent_response_hooks = self.post_agent_response_hooks.clone();
         let async_post_user_prompt_hooks = self.async_post_user_prompt_hooks.clone();
-        let async_pre_tool_call_hooks = self.async_pre_tool_call_hooks.clone();
-        let async_post_tool_call_hooks = self.async_post_tool_call_hooks.clone();
-        let async_pre_agent_response_hooks = self.async_pre_agent_response_hooks.clone();
         let async_post_agent_response_hooks = self.async_post_agent_response_hooks.clone();
         let hook_timeout = self.script_timeout;
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
-        let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
 
         // Spawn task to handle the prompt and translate events
@@ -211,171 +201,13 @@ impl AcpBackend {
             )
             .await;
 
-            // Spawn update consumer task that returns accumulated text for transcript
-            let event_tx_clone = event_tx.clone();
-            let id_for_updates = id_clone.clone();
-            let transcript_recorder_for_updates = transcript_recorder.clone();
-            let pre_tool_call_hooks_for_updates = pre_tool_call_hooks.clone();
-            let post_tool_call_hooks_for_updates = post_tool_call_hooks.clone();
-            let pre_agent_response_hooks_for_updates = pre_agent_response_hooks.clone();
-            let async_pre_tool_call_hooks_for_updates = async_pre_tool_call_hooks.clone();
-            let async_post_tool_call_hooks_for_updates = async_post_tool_call_hooks.clone();
-            let async_pre_agent_response_hooks_for_updates = async_pre_agent_response_hooks.clone();
-            let backend_event_tx_for_updates = backend_event_tx.clone();
-            let update_handler = tokio::spawn(async move {
-                // Accumulate assistant text for transcript recording
-                let mut accumulated_text = String::new();
-                // Track whether pre_agent_response hook has fired
-                let mut has_fired_pre_agent_response = false;
-                let mut has_agent_text = false;
-                let mut needs_agent_separator = false;
-                while let Some(update) = update_rx.recv().await {
-                    let client_events =
-                        normalize_session_update(&client_event_normalizer, &update).await;
-                    forward_client_events(&backend_event_tx_for_updates, &client_events).await;
-                    if has_agent_text
-                        && matches!(
-                            update,
-                            acp::SessionUpdate::ToolCall(_)
-                                | acp::SessionUpdate::ToolCallUpdate(_)
-                                | acp::SessionUpdate::Plan(_)
-                                | acp::SessionUpdate::UserMessageChunk(_)
-                                | acp::SessionUpdate::CurrentModeUpdate(_)
-                                | acp::SessionUpdate::AvailableCommandsUpdate(_)
-                        )
-                    {
-                        needs_agent_separator = true;
-                    }
-                    // Execute pre_agent_response hooks on first agent message chunk
-                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
-                        && !has_fired_pre_agent_response
-                        && let acp::ContentBlock::Text(text) = &chunk.content
-                        && !text.text.is_empty()
-                    {
-                        has_fired_pre_agent_response = true;
-                        if !pre_agent_response_hooks_for_updates.is_empty() {
-                            let env_vars = HashMap::from([(
-                                "NORI_HOOK_EVENT".to_string(),
-                                "pre_agent_response".to_string(),
-                            )]);
-                            let results = crate::hooks::execute_hooks_with_env(
-                                &pre_agent_response_hooks_for_updates,
-                                hook_timeout,
-                                &env_vars,
-                            )
-                            .await;
-                            route_hook_results(&results, &event_tx_clone, &id_for_updates, None)
-                                .await;
-                        }
-                        if !async_pre_agent_response_hooks_for_updates.is_empty() {
-                            let env = HashMap::from([(
-                                "NORI_HOOK_EVENT".to_string(),
-                                "pre_agent_response".to_string(),
-                            )]);
-                            let _ = crate::hooks::execute_hooks_fire_and_forget(
-                                async_pre_agent_response_hooks_for_updates.clone(),
-                                hook_timeout,
-                                env,
-                            );
-                        }
-                    }
-
-                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
-                        && let acp::ContentBlock::Text(text) = &chunk.content
-                    {
-                        if needs_agent_separator && has_agent_text && !text.text.starts_with('\n') {
-                            accumulated_text.push('\n');
-                            needs_agent_separator = false;
-                        }
-                        if !text.text.is_empty() {
-                            has_agent_text = true;
-                            accumulated_text.push_str(&text.text);
-                        }
-                    }
-
-                    // Execute pre_tool_call hooks when a tool call begins
-                    if let acp::SessionUpdate::ToolCall(tool_call) = &update {
-                        let env_vars = HashMap::from([
-                            ("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string()),
-                            ("NORI_HOOK_TOOL_NAME".to_string(), tool_call.title.clone()),
-                            (
-                                "NORI_HOOK_TOOL_ARGS".to_string(),
-                                tool_call
-                                    .raw_input
-                                    .as_ref()
-                                    .map_or_else(String::new, std::string::ToString::to_string),
-                            ),
-                        ]);
-                        if !pre_tool_call_hooks_for_updates.is_empty() {
-                            let results = crate::hooks::execute_hooks_with_env(
-                                &pre_tool_call_hooks_for_updates,
-                                hook_timeout,
-                                &env_vars,
-                            )
-                            .await;
-                            route_hook_results(&results, &event_tx_clone, &id_for_updates, None)
-                                .await;
-                        }
-                        if !async_pre_tool_call_hooks_for_updates.is_empty() {
-                            let _ = crate::hooks::execute_hooks_fire_and_forget(
-                                async_pre_tool_call_hooks_for_updates.clone(),
-                                hook_timeout,
-                                env_vars.clone(),
-                            );
-                        }
-                    }
-
-                    // Execute post_tool_call hooks when a tool call completes
-                    if let acp::SessionUpdate::ToolCallUpdate(tcu) = &update
-                        && tcu.fields.status == Some(acp::ToolCallStatus::Completed)
-                    {
-                        let tool_output = extract_tool_output(&tcu.fields);
-                        let env_vars = HashMap::from([
-                            ("NORI_HOOK_EVENT".to_string(), "post_tool_call".to_string()),
-                            (
-                                "NORI_HOOK_TOOL_NAME".to_string(),
-                                tcu.fields.title.clone().unwrap_or_default(),
-                            ),
-                            ("NORI_HOOK_TOOL_OUTPUT".to_string(), tool_output),
-                        ]);
-                        if !post_tool_call_hooks_for_updates.is_empty() {
-                            let results = crate::hooks::execute_hooks_with_env(
-                                &post_tool_call_hooks_for_updates,
-                                hook_timeout,
-                                &env_vars,
-                            )
-                            .await;
-                            route_hook_results(&results, &event_tx_clone, &id_for_updates, None)
-                                .await;
-                        }
-                        if !async_post_tool_call_hooks_for_updates.is_empty() {
-                            let _ = crate::hooks::execute_hooks_fire_and_forget(
-                                async_post_tool_call_hooks_for_updates.clone(),
-                                hook_timeout,
-                                env_vars.clone(),
-                            );
-                        }
-                    }
-
-                    if let Some(ref recorder) = transcript_recorder_for_updates {
-                        for client_event in &client_events {
-                            if let Err(e) = recorder.record_client_event(client_event).await {
-                                warn!(
-                                    "Failed to record normalized client event to transcript: {e}"
-                                );
-                            }
-                        }
-                    }
-                }
-                accumulated_text
-            });
-
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt, update_tx).await;
+            let result = connection.prompt(session_id, prompt).await;
 
-            // Wait for all updates to be processed and get accumulated text
-            let accumulated_text = update_handler.await.unwrap_or_default();
+            // Placeholder: the notification relay now handles event forwarding;
+            // text accumulation will be restored when the reducer is wired.
+            let accumulated_text = String::new();
 
             // Record assistant message to transcript if there's accumulated text
             if !accumulated_text.is_empty()

@@ -337,7 +337,6 @@ mod tool_display;
 #[cfg(test)]
 pub(crate) use tool_display::classify_tool_to_parsed_command;
 pub(crate) use tool_display::extract_command_from_permission_title;
-pub(crate) use tool_display::extract_tool_output;
 #[cfg(test)]
 pub(crate) use tool_display::truncate_for_log;
 mod transcript;

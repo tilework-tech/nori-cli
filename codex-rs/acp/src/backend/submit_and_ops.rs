@@ -271,10 +271,7 @@ impl AcpBackend {
         // Build the summarization prompt
         let prompt = vec![translator::text_to_content_block(SUMMARIZATION_PROMPT)];
 
-        // Create channel for receiving session updates
-        let (update_tx, mut update_rx) = mpsc::channel(32);
-
-        // Clone what we need for capturing the response
+        // Clone what we need for the background task
         let event_tx = self.event_tx.clone();
         let session_id = self.session_id.read().await.clone();
         let session_id_lock = Arc::clone(&self.session_id);
@@ -286,7 +283,6 @@ impl AcpBackend {
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
         let notify_after_idle = self.notify_after_idle;
-        let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
         let transcript_recorder = self.transcript_recorder.clone();
 
@@ -297,7 +293,7 @@ impl AcpBackend {
                 abort_handle.abort();
             }
 
-            // Send TaskStarted event (inside spawned task for consistency)
+            // Send TaskStarted event
             emit_client_event(
                 &backend_event_tx,
                 transcript_recorder.as_ref(),
@@ -305,39 +301,10 @@ impl AcpBackend {
             )
             .await;
 
-            // Spawn update consumer task to capture the agent's response
-            let pending_summary_for_capture = Arc::clone(&pending_compact_summary);
-            let client_event_normalizer = Arc::clone(&client_event_normalizer);
-            let backend_event_tx_for_updates = backend_event_tx.clone();
-
-            let update_handler = tokio::spawn(async move {
-                let mut summary_text = String::new();
-
-                while let Some(update) = update_rx.recv().await {
-                    let client_events =
-                        normalize_session_update(&client_event_normalizer, &update).await;
-                    forward_client_events(&backend_event_tx_for_updates, &client_events).await;
-
-                    // Capture text from agent message chunks
-                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
-                        && let acp::ContentBlock::Text(text) = &chunk.content
-                    {
-                        summary_text.push_str(&text.text);
-                    }
-                }
-
-                // Store the captured summary for use in the next prompt
-                if !summary_text.is_empty() {
-                    *pending_summary_for_capture.lock().await = Some(summary_text);
-                }
-            });
-
-            // Send the summarization prompt
+            // Send the summarization prompt. Notifications flow through the
+            // unified channel to the notification relay.
             let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt, update_tx).await;
-
-            // Wait for all updates to be processed
-            let _ = update_handler.await;
+            let result = connection.prompt(session_id, prompt).await;
 
             // If prompt failed, send error event and clear any partial summary
             if let Err(ref e) = result {

@@ -105,7 +105,7 @@ impl AcpBackend {
 
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
-        let persistent_rx = connection.take_persistent_receiver();
+        let notification_rx = connection.take_notification_receiver();
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
@@ -240,9 +240,11 @@ impl AcpBackend {
             backend.transcript_recorder.clone(),
         ));
 
-        // Spawn persistent listener relay for inter-turn notifications
-        tokio::spawn(Self::run_persistent_relay(
-            persistent_rx,
+        // Spawn reducer loop: processes ALL session notifications through the
+        // serialized reducer, replacing the old per-prompt update handler and
+        // persistent relay.
+        tokio::spawn(Self::run_notification_relay(
+            notification_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx,
         ));
@@ -357,18 +359,17 @@ impl AcpBackend {
         }
     }
 
-    /// Background task that relays inter-turn notifications from the persistent
-    /// listener channel to the TUI event stream.
+    /// Background task that processes ALL session notifications through the
+    /// normalizer and forwards them to the TUI.
     ///
-    /// The persistent listener receives `SessionUpdate`s that arrive after
-    /// `unregister_session` has been called (i.e. between prompt turns). Without
-    /// this relay, those updates would be silently dropped.
-    pub(super) async fn run_persistent_relay(
-        mut persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
+    /// With the unified notification channel, this replaces both the old
+    /// per-prompt update handler and the inter-turn persistent relay.
+    pub(super) async fn run_notification_relay(
+        mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,
         client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) {
-        while let Some(update) = persistent_rx.recv().await {
+        while let Some(update) = notification_rx.recv().await {
             let client_events = normalize_session_update(&client_event_normalizer, &update).await;
             forward_client_events(&backend_event_tx, &client_events).await;
         }
