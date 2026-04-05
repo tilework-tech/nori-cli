@@ -495,9 +495,6 @@ fn permission_during_prompt_is_resolved_on_cancel() {
     assert!(cancelled_ids.contains(&"perm-2"));
 }
 
-// cancel_resolves_pending_permissions is covered by
-// permission_during_prompt_is_resolved_on_cancel above.
-
 #[test]
 fn permission_request_while_idle_emits_warning() {
     let mut rt = new_runtime();
