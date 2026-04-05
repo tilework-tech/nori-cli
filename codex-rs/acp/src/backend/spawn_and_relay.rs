@@ -375,12 +375,17 @@ impl AcpBackend {
         while let Some(update) = notification_rx.recv().await {
             let client_events = normalize_session_update(&client_event_normalizer, &update).await;
             forward_client_events(&backend_event_tx, &client_events).await;
+            // Record to transcript in background to avoid blocking the relay.
             if let Some(ref recorder) = transcript_recorder {
-                for event in &client_events {
-                    if let Err(e) = recorder.record_client_event(event).await {
-                        warn!("Failed to record client event to transcript: {e}");
+                let recorder = Arc::clone(recorder);
+                let events = client_events.clone();
+                tokio::spawn(async move {
+                    for event in &events {
+                        if let Err(e) = recorder.record_client_event(event).await {
+                            warn!("Failed to record client event to transcript: {e}");
+                        }
                     }
-                }
+                });
             }
         }
     }

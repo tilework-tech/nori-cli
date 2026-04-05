@@ -174,7 +174,7 @@ impl SacpConnection {
 
         // --- Set up channels ---
         let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
-        let (notification_tx, notification_rx) = mpsc::channel::<SessionUpdate>(512);
+        let (notification_tx, notification_rx) = mpsc::channel::<SessionUpdate>(1024);
 
         // --- Build SACP connection ---
         let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
@@ -198,7 +198,9 @@ impl SacpConnection {
                     {
                         let notification_tx = notify_tx_for_notifications;
                         async move |notification: SessionNotification, _cx| {
-                            let _ = notification_tx.send(notification.update).await;
+                            if notification_tx.try_send(notification.update).is_err() {
+                                warn!("Notification channel full, dropping update");
+                            }
                             Ok(())
                         }
                     },
