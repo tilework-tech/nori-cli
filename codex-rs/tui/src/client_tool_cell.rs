@@ -27,6 +27,7 @@ use crate::render::line_utils::prefix_lines;
 use crate::render::line_utils::push_owned_lines;
 use crate::wrapping::RtOptions;
 use crate::wrapping::word_wrap_line;
+use crate::wrapping::word_wrap_lines;
 
 #[derive(Debug)]
 pub(crate) struct ClientToolCell {
@@ -73,6 +74,15 @@ impl ClientToolCell {
         is_exploring_snapshot(&self.snapshot) || !self.exploring_snapshots.is_empty()
     }
 
+    /// Return all call_ids held by this cell's exploring group (for tracking
+    /// on flush to prevent re-merging into later cells).
+    pub(crate) fn exploring_call_ids(&self) -> Vec<String> {
+        self.exploring_snapshots
+            .iter()
+            .map(|s| s.call_id.clone())
+            .collect()
+    }
+
     /// Mark this cell as an exploring cell. The primary snapshot becomes the
     /// first item in the exploring group.
     pub(crate) fn mark_exploring(&mut self) {
@@ -81,8 +91,18 @@ impl ClientToolCell {
         }
     }
 
-    /// Add another exploring snapshot to this cell's group.
+    /// Add another exploring snapshot to this cell's group, or update an
+    /// existing one if the call_id is already present.
     pub(crate) fn merge_exploring(&mut self, snapshot: nori_protocol::ToolSnapshot) {
+        // Update in place if the call_id already exists in the group
+        if let Some(existing) = self
+            .exploring_snapshots
+            .iter_mut()
+            .find(|s| s.call_id == snapshot.call_id)
+        {
+            *existing = snapshot;
+            return;
+        }
         self.exploring_snapshots.push(snapshot);
     }
 
@@ -95,6 +115,16 @@ impl ClientToolCell {
         }
         if !is_active_phase(&snapshot.phase) {
             self.start_time = None;
+        }
+        // Also update the corresponding entry in exploring_snapshots so that
+        // tool_call_update events (which carry the real path/query) propagate
+        // into the exploring rendering.
+        if let Some(existing) = self
+            .exploring_snapshots
+            .iter_mut()
+            .find(|s| s.call_id == snapshot.call_id)
+        {
+            *existing = snapshot.clone();
         }
         self.snapshot = snapshot;
     }
@@ -140,25 +170,19 @@ impl ClientToolCell {
 
             // Group consecutive reads by filename
             if snap.kind == nori_protocol::ToolKind::Read {
-                let mut paths: Vec<String> = Vec::new();
+                let mut names: Vec<String> = Vec::new();
                 if let Some(nori_protocol::Invocation::Read { path }) = &snap.invocation {
-                    paths.push(relativize_paths_in_text(
-                        &path.display().to_string(),
-                        &self.cwd,
-                    ));
+                    names.push(read_display_name(path));
                 } else {
-                    paths.push(relativize_paths_in_text(&snap.title, &self.cwd));
+                    names.push(relativize_paths_in_text(&snap.title, &self.cwd));
                 }
                 let mut j = i + 1;
                 while j < snapshots.len() && snapshots[j].kind == nori_protocol::ToolKind::Read {
                     let next = &snapshots[j];
                     if let Some(nori_protocol::Invocation::Read { path }) = &next.invocation {
-                        paths.push(relativize_paths_in_text(
-                            &path.display().to_string(),
-                            &self.cwd,
-                        ));
+                        names.push(read_display_name(path));
                     } else {
-                        paths.push(relativize_paths_in_text(&next.title, &self.cwd));
+                        names.push(relativize_paths_in_text(&next.title, &self.cwd));
                     }
                     j += 1;
                 }
@@ -166,7 +190,7 @@ impl ClientToolCell {
 
                 // Build "Read file1.rs, file2.rs" line
                 let mut spans: Vec<Span<'static>> = vec!["Read".cyan(), " ".into()];
-                for (idx, path) in paths.into_iter().enumerate() {
+                for (idx, path) in names.into_iter().enumerate() {
                     if idx > 0 {
                         spans.push(", ".dim());
                     }
@@ -513,6 +537,51 @@ impl ClientToolCell {
 
         lines
     }
+
+    /// Transcript rendering for Execute tools: `$ command` shell-style format,
+    /// matching the style used in the upstream Codex ExecCell transcript view.
+    fn render_execute_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let command = match &self.snapshot.invocation {
+            Some(nori_protocol::Invocation::Command { command }) => command.clone(),
+            _ => self.snapshot.title.clone(),
+        };
+
+        let highlighted_lines = highlight_bash_to_lines(&command);
+        let cmd_display = word_wrap_lines(
+            &highlighted_lines,
+            RtOptions::new(width as usize)
+                .initial_indent("$ ".magenta().into())
+                .subsequent_indent("    ".into()),
+        );
+        let mut lines: Vec<Line<'static>> = cmd_display;
+
+        // Output
+        if let Some(text) = execute_output_text(&self.snapshot)
+            && !text.is_empty()
+        {
+            for line_str in text.lines() {
+                lines.push(Line::from(format!("    {line_str}")).dim());
+            }
+        }
+
+        // Exit status
+        if !is_active_phase(&self.snapshot.phase) {
+            let success = exit_code_success(&self.snapshot);
+            let result: Line = match success {
+                Some(true) => Line::from("\u{2713}".green().bold()),
+                Some(false) => {
+                    let code = extract_exit_code(&self.snapshot).unwrap_or(1);
+                    Line::from(vec!["\u{2717}".red().bold(), format!(" ({code})").into()])
+                }
+                None => Line::default(),
+            };
+            if !result.spans.is_empty() {
+                lines.push(result);
+            }
+        }
+
+        lines
+    }
 }
 
 // Layout constants matching ExecCell display layout
@@ -680,7 +749,7 @@ pub(crate) fn changes_from_invocation(
 
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if !self.exploring_snapshots.is_empty() {
+        if !self.exploring_snapshots.is_empty() || is_exploring_snapshot(&self.snapshot) {
             self.render_exploring_lines(width)
         } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
             self.render_execute_lines(width)
@@ -697,10 +766,10 @@ impl HistoryCell for ClientToolCell {
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if !self.exploring_snapshots.is_empty() {
+        if !self.exploring_snapshots.is_empty() || is_exploring_snapshot(&self.snapshot) {
             self.render_exploring_lines(width)
         } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
-            self.render_execute_lines(width)
+            self.render_execute_transcript_lines(width)
         } else if matches!(
             self.snapshot.kind,
             nori_protocol::ToolKind::Edit
@@ -712,6 +781,15 @@ impl HistoryCell for ClientToolCell {
             self.render_generic_lines()
         }
     }
+}
+
+/// Extract a display name for a Read path: use the file name (basename) when
+/// available, falling back to the full path display. This matches the Codex
+/// ExecCell exploring style where Read items show just the filename.
+fn read_display_name(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 fn is_active_phase(phase: &nori_protocol::ToolPhase) -> bool {
@@ -874,17 +952,21 @@ mod tests {
     }
 
     #[test]
-    fn non_execute_tool_uses_generic_rendering() {
+    fn non_execute_non_exploring_tool_uses_generic_rendering() {
+        // Fetch is not an exploring tool kind, so it should use generic rendering
         let snapshot = ToolSnapshot {
             call_id: "call-2".into(),
-            title: "Read /repo/README.md".into(),
-            kind: ToolKind::Read,
+            title: "Fetch https://example.com".into(),
+            kind: ToolKind::Fetch,
             phase: ToolPhase::Completed,
             locations: vec![],
-            invocation: Some(Invocation::Read {
-                path: "/repo/README.md".into(),
+            invocation: Some(Invocation::Tool {
+                tool_name: "fetch".into(),
+                input: None,
             }),
-            artifacts: vec![],
+            artifacts: vec![Artifact::Text {
+                text: "200 OK".into(),
+            }],
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
@@ -895,7 +977,7 @@ mod tests {
         // Should use the generic format
         assert!(
             lines[0].contains("Tool [completed]"),
-            "Non-execute tool should use generic format, got: {}",
+            "Non-execute, non-exploring tool should use generic format, got: {}",
             lines[0]
         );
     }
@@ -1000,8 +1082,8 @@ mod tests {
     fn generic_completed_with_no_details_no_locations_still_renders_header() {
         let snapshot = ToolSnapshot {
             call_id: "call-4".into(),
-            title: "README.md".into(),
-            kind: ToolKind::Read,
+            title: "Some tool".into(),
+            kind: ToolKind::Fetch,
             phase: ToolPhase::Completed,
             locations: vec![],
             invocation: None,
@@ -1016,7 +1098,7 @@ mod tests {
         // Should still render at least a header line
         assert!(!lines.is_empty(), "Expected at least a header line");
         assert!(
-            lines[0].contains("README.md"),
+            lines[0].contains("Some tool"),
             "Header should contain the title, got: {}",
             lines[0]
         );
@@ -1028,12 +1110,13 @@ mod tests {
     fn generic_tool_strips_code_fences_from_text_artifact() {
         let snapshot = ToolSnapshot {
             call_id: "call-fence".into(),
-            title: "Read /repo/src/main.rs".into(),
-            kind: ToolKind::Read,
+            title: "Fetch https://example.com/main.rs".into(),
+            kind: ToolKind::Fetch,
             phase: ToolPhase::Completed,
             locations: vec![],
-            invocation: Some(Invocation::Read {
-                path: "/repo/src/main.rs".into(),
+            invocation: Some(Invocation::Tool {
+                tool_name: "fetch".into(),
+                input: None,
             }),
             artifacts: vec![Artifact::Text {
                 text: "```rust\nfn main() {}\n```".into(),
@@ -1092,13 +1175,13 @@ mod tests {
     fn generic_tool_multi_line_output_has_no_output_prefix() {
         let snapshot = ToolSnapshot {
             call_id: "call-multi".into(),
-            title: "Search 'pattern'".into(),
-            kind: ToolKind::Search,
+            title: "Think about pattern".into(),
+            kind: ToolKind::Think,
             phase: ToolPhase::Completed,
             locations: vec![],
-            invocation: Some(Invocation::Search {
-                query: Some("pattern".into()),
-                path: None,
+            invocation: Some(Invocation::Tool {
+                tool_name: "think".into(),
+                input: None,
             }),
             artifacts: vec![Artifact::Text {
                 text: "line one\nline two\nline three".into(),
@@ -1126,12 +1209,13 @@ mod tests {
     fn generic_tool_invocation_omitted_when_redundant_with_title() {
         let snapshot = ToolSnapshot {
             call_id: "call-dup".into(),
-            title: "Read /repo/README.md".into(),
-            kind: ToolKind::Read,
+            title: "Fetch https://example.com".into(),
+            kind: ToolKind::Fetch,
             phase: ToolPhase::Completed,
             locations: vec![],
-            invocation: Some(Invocation::Read {
-                path: "/repo/README.md".into(),
+            invocation: Some(Invocation::Tool {
+                tool_name: "Fetch https://example.com".into(),
+                input: None,
             }),
             artifacts: vec![Artifact::Text {
                 text: "# README".into(),
@@ -1143,10 +1227,10 @@ mod tests {
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
 
-        // The invocation detail line ("Read: /repo/README.md") should NOT appear
-        // because the title already contains the same information
+        // The invocation detail line should NOT appear because the title
+        // already contains the same information
         assert!(
-            !lines.iter().any(|l| l.contains("Read: /repo/README.md")),
+            !lines.iter().any(|l| l.contains("Tool: Fetch")),
             "Redundant invocation should be omitted when title contains same info, got: {lines:?}"
         );
         // But the artifact output should still appear
@@ -1163,12 +1247,13 @@ mod tests {
         let cwd = PathBuf::from("/home/user/project");
         let snapshot = ToolSnapshot {
             call_id: "call-path".into(),
-            title: "Read /home/user/project/src/main.rs (1 - 5)".into(),
-            kind: ToolKind::Read,
+            title: "Fetch /home/user/project/src/main.rs".into(),
+            kind: ToolKind::Fetch,
             phase: ToolPhase::Completed,
             locations: vec![],
-            invocation: Some(Invocation::Read {
-                path: "/home/user/project/src/main.rs".into(),
+            invocation: Some(Invocation::Tool {
+                tool_name: "fetch".into(),
+                input: None,
             }),
             artifacts: vec![Artifact::Text {
                 text: "fn main() {}".into(),
@@ -2086,5 +2171,135 @@ mod tests {
                 "move diff content should have 4-space indent (not 8): {line:?}"
             );
         }
+    }
+
+    // --- Bug fix: Read/Search should auto-detect as exploring ---
+
+    #[test]
+    fn standalone_read_renders_as_explored_not_generic() {
+        // A Read tool that is NOT explicitly mark_exploring() should still render
+        // using the exploring format ("Explored") when it's a completed Read,
+        // not the generic "Tool [completed]" format.
+        let snapshot = ToolSnapshot {
+            call_id: "call-read-auto".into(),
+            title: "Read README.md".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "README.md".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Explored"),
+            "Standalone completed Read should auto-render as 'Explored', got: {}",
+            lines[0]
+        );
+        assert!(
+            !lines[0].contains("Tool ["),
+            "Standalone Read should NOT use generic format, got: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn standalone_search_renders_as_explored_not_generic() {
+        let snapshot = ToolSnapshot {
+            call_id: "call-search-auto".into(),
+            title: "Search TODO".into(),
+            kind: ToolKind::Search,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Search {
+                query: Some("TODO".into()),
+                path: Some("/repo/src".into()),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines[0].contains("Explored"),
+            "Standalone completed Search should auto-render as 'Explored', got: {}",
+            lines[0]
+        );
+    }
+
+    // --- Bug fix: Execute transcript should use $ command format ---
+
+    #[test]
+    fn execute_transcript_uses_shell_format() {
+        // In transcript view, Execute tools should render as "$ command"
+        // (shell-style), not "• Ran command" (bullet-style).
+        let snapshot = make_execute_snapshot(
+            ToolPhase::Completed,
+            "date --utc",
+            vec![Artifact::Text {
+                text: "2026-03-30".into(),
+            }],
+            Some(serde_json::json!({"exit_code": 0, "stdout": "2026-03-30"})),
+        );
+        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
+        let lines = render_lines(&cell.transcript_lines(80));
+
+        // Should have "$ " prefix (shell-style)
+        assert!(
+            lines[0].contains("$ "),
+            "Execute transcript should use '$ ' shell format, got: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("date --utc"),
+            "Execute transcript should show command, got: {}",
+            lines[0]
+        );
+        // Should NOT have bullet-style "Ran"
+        assert!(
+            !lines.iter().any(|l| l.contains("Ran")),
+            "Execute transcript should NOT use bullet-style 'Ran', got: {lines:?}"
+        );
+    }
+
+    // --- Bug fix: Exploring transcript should use exploring format ---
+
+    #[test]
+    fn exploring_transcript_uses_explored_format_not_shell() {
+        // In transcript view, Read/Search tools should render as "Explored"
+        // with sub-items, NOT as "$ Read /path" (shell-style).
+        let snap = ToolSnapshot {
+            call_id: "call-read-t".into(),
+            title: "Read file.rs".into(),
+            kind: ToolKind::Read,
+            phase: ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(Invocation::Read {
+                path: "file.rs".into(),
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+        };
+        let mut cell = ClientToolCell::new(snap, PathBuf::from("/tmp/cwd"), false);
+        cell.mark_exploring();
+        let lines = render_lines(&cell.transcript_lines(80));
+
+        assert!(
+            lines[0].contains("Explored"),
+            "Exploring transcript should show 'Explored', got: {}",
+            lines[0]
+        );
+        assert!(
+            !lines.iter().any(|l| l.starts_with("$ ")),
+            "Exploring transcript should NOT use '$ ' shell format, got: {lines:?}"
+        );
     }
 }

@@ -1328,44 +1328,10 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// All ACP tool kinds route through ClientToolCell for native rendering.
+    /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
+    /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        match tool_snapshot.kind {
-            // Execute and Edit/Delete/Move use ClientToolCell for native rendering
-            nori_protocol::ToolKind::Execute
-            | nori_protocol::ToolKind::Edit
-            | nori_protocol::ToolKind::Delete
-            | nori_protocol::ToolKind::Move => {
-                self.handle_client_native_tool_snapshot(tool_snapshot);
-            }
-            nori_protocol::ToolKind::Read
-            | nori_protocol::ToolKind::Search
-            | nori_protocol::ToolKind::Fetch
-            | nori_protocol::ToolKind::Think
-            | nori_protocol::ToolKind::Other(_)
-                if matches!(
-                    tool_snapshot.phase,
-                    nori_protocol::ToolPhase::Pending | nori_protocol::ToolPhase::InProgress
-                ) =>
-            {
-                self.handle_client_exec_like_tool_begin_snapshot(tool_snapshot);
-            }
-            nori_protocol::ToolKind::Read
-            | nori_protocol::ToolKind::Search
-            | nori_protocol::ToolKind::Fetch
-            | nori_protocol::ToolKind::Think
-            | nori_protocol::ToolKind::Other(_)
-                if matches!(
-                    tool_snapshot.phase,
-                    nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
-                ) =>
-            {
-                self.handle_client_exec_like_tool_snapshot(tool_snapshot);
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_client_native_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         if self.turn_finished {
             return;
         }
@@ -1449,6 +1415,11 @@ impl ChatWidget {
             && cell.is_exploring()
         {
             cell.merge_exploring(tool_snapshot);
+            // Don't track in completed_client_tool_calls here — non-terminal
+            // snapshots (Pending/InProgress) arrive first with empty invocations,
+            // and the real path/query comes in a later tool_call_update. Tracking
+            // is deferred to flush_active_cell, which marks all exploring call_ids
+            // as completed when the cell leaves active_cell.
             return;
         }
 
@@ -1487,167 +1458,6 @@ impl ChatWidget {
             self.flush_active_cell();
         }
     }
-
-    fn handle_client_exec_like_tool_begin_snapshot(
-        &mut self,
-        tool_snapshot: nori_protocol::ToolSnapshot,
-    ) {
-        if self.turn_finished
-            || self
-                .completed_client_tool_calls
-                .contains(&tool_snapshot.call_id)
-            || self.running_commands.contains_key(&tool_snapshot.call_id)
-        {
-            return;
-        }
-
-        let Some(begin_event) =
-            exec_begin_event_from_client_snapshot(&self.config.cwd, &tool_snapshot)
-        else {
-            return;
-        };
-
-        self.on_exec_command_begin(begin_event);
-    }
-
-    fn handle_client_exec_like_tool_snapshot(
-        &mut self,
-        tool_snapshot: nori_protocol::ToolSnapshot,
-    ) {
-        if self.turn_finished
-            || self
-                .completed_client_tool_calls
-                .contains(&tool_snapshot.call_id)
-        {
-            return;
-        }
-
-        let Some(begin_event) =
-            exec_begin_event_from_client_snapshot(&self.config.cwd, &tool_snapshot)
-        else {
-            return;
-        };
-        let end_event =
-            exec_end_event_from_client_snapshot(&self.config.cwd, &tool_snapshot, &begin_event);
-
-        if !self.running_commands.contains_key(&tool_snapshot.call_id) {
-            self.on_exec_command_begin(begin_event);
-        }
-        self.on_exec_command_end(end_event);
-        self.completed_client_tool_calls
-            .insert(tool_snapshot.call_id);
-    }
-}
-
-fn exec_begin_event_from_client_snapshot(
-    cwd: &std::path::Path,
-    snapshot: &nori_protocol::ToolSnapshot,
-) -> Option<ExecCommandBeginEvent> {
-    let (command, parsed_cmd) = match snapshot.invocation.as_ref() {
-        Some(nori_protocol::Invocation::Command {
-            command: actual_command,
-        }) => {
-            let command_text = formatted_client_tool_command_text(
-                &snapshot.title,
-                snapshot.raw_input.as_ref(),
-                Some(actual_command),
-            )
-            .unwrap_or_else(|| actual_command.clone());
-            (
-                vec![command_text.clone()],
-                vec![ParsedCommand::Unknown { cmd: command_text }],
-            )
-        }
-        Some(nori_protocol::Invocation::Read { path }) => {
-            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
-            let name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| path.display().to_string());
-            (
-                vec![title.clone()],
-                vec![ParsedCommand::Read {
-                    cmd: title,
-                    name,
-                    path: path.clone(),
-                }],
-            )
-        }
-        Some(nori_protocol::Invocation::Search { query, path }) => {
-            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
-            (
-                vec![title.clone()],
-                vec![ParsedCommand::Search {
-                    cmd: title,
-                    query: query.clone(),
-                    path: path.as_ref().map(|value| value.display().to_string()),
-                }],
-            )
-        }
-        Some(nori_protocol::Invocation::ListFiles { path }) => {
-            let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
-            (
-                vec![title.clone()],
-                vec![ParsedCommand::ListFiles {
-                    cmd: title,
-                    path: path.as_ref().map(|value| value.display().to_string()),
-                }],
-            )
-        }
-        Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
-            let command_text = generic_tool_command_text(tool_name, input.as_ref(), snapshot, cwd);
-            (
-                vec![command_text.clone()],
-                vec![ParsedCommand::Unknown { cmd: command_text }],
-            )
-        }
-        Some(nori_protocol::Invocation::RawJson(raw_input)) => {
-            let command_text =
-                generic_tool_command_text(&snapshot.title, Some(raw_input), snapshot, cwd);
-            (
-                vec![command_text.clone()],
-                vec![ParsedCommand::Unknown { cmd: command_text }],
-            )
-        }
-        Some(_) => return None,
-        None if snapshot.kind == nori_protocol::ToolKind::Execute => {
-            let command_text = generic_execute_command_text(snapshot, cwd);
-            (
-                vec![command_text.clone()],
-                vec![ParsedCommand::Unknown { cmd: command_text }],
-            )
-        }
-        None if matches!(
-            snapshot.kind,
-            nori_protocol::ToolKind::Fetch
-                | nori_protocol::ToolKind::Think
-                | nori_protocol::ToolKind::Other(_)
-        ) =>
-        {
-            let command_text = generic_tool_command_text(
-                &snapshot.title,
-                snapshot.raw_input.as_ref(),
-                snapshot,
-                cwd,
-            );
-            (
-                vec![command_text.clone()],
-                vec![ParsedCommand::Unknown { cmd: command_text }],
-            )
-        }
-        None => return None,
-    };
-
-    Some(ExecCommandBeginEvent {
-        call_id: snapshot.call_id.clone(),
-        process_id: None,
-        turn_id: String::new(),
-        command,
-        cwd: cwd.to_path_buf(),
-        parsed_cmd,
-        source: ExecCommandSource::Agent,
-        interaction_input: None,
-    })
 }
 
 fn generic_execute_command_text(
@@ -1706,49 +1516,6 @@ fn generic_tool_command_text(
             format!("{sanitized} {}", compact_json(raw_input))
         }
         _ => crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd),
-    }
-}
-
-fn exec_end_event_from_client_snapshot(
-    cwd: &std::path::Path,
-    snapshot: &nori_protocol::ToolSnapshot,
-    begin_event: &ExecCommandBeginEvent,
-) -> ExecCommandEndEvent {
-    let output = snapshot
-        .artifacts
-        .iter()
-        .find_map(|artifact| match artifact {
-            nori_protocol::Artifact::Text { text } if !text.is_empty() => Some(text.clone()),
-            _ => None,
-        })
-        .unwrap_or_default();
-    let exit_code = if snapshot.phase == nori_protocol::ToolPhase::Failed {
-        snapshot
-            .raw_output
-            .as_ref()
-            .and_then(|raw| raw.get("exit_code"))
-            .and_then(serde_json::Value::as_i64)
-            .and_then(|code| i32::try_from(code).ok())
-            .unwrap_or(1)
-    } else {
-        0
-    };
-
-    ExecCommandEndEvent {
-        call_id: snapshot.call_id.clone(),
-        process_id: None,
-        turn_id: String::new(),
-        command: begin_event.command.clone(),
-        cwd: cwd.to_path_buf(),
-        parsed_cmd: begin_event.parsed_cmd.clone(),
-        source: ExecCommandSource::Agent,
-        interaction_input: None,
-        stdout: output.clone(),
-        stderr: String::new(),
-        aggregated_output: output.clone(),
-        exit_code,
-        duration: Duration::from_millis(0),
-        formatted_output: output,
     }
 }
 
