@@ -1330,10 +1330,11 @@ impl ChatWidget {
         }
         self.flush_answer_stream_with_separator();
 
-        // For completed Edit/Delete/Move, observe directories and record stats
+        // For completed Create/Edit/Delete/Move, observe directories and record stats
         if matches!(
             tool_snapshot.kind,
-            nori_protocol::ToolKind::Edit
+            nori_protocol::ToolKind::Create
+                | nori_protocol::ToolKind::Edit
                 | nori_protocol::ToolKind::Delete
                 | nori_protocol::ToolKind::Move
         ) && tool_snapshot.phase == nori_protocol::ToolPhase::Completed

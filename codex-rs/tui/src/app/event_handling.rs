@@ -534,7 +534,8 @@ impl App {
                     // For edit-like tools, show DiffSummary in fullscreen
                     let edit_changes = if matches!(
                         kind,
-                        nori_protocol::ToolKind::Edit
+                        nori_protocol::ToolKind::Create
+                            | nori_protocol::ToolKind::Edit
                             | nori_protocol::ToolKind::Delete
                             | nori_protocol::ToolKind::Move
                     ) {

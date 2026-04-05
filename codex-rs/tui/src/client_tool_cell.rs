@@ -755,7 +755,8 @@ impl HistoryCell for ClientToolCell {
             self.render_execute_lines(width)
         } else if matches!(
             self.snapshot.kind,
-            nori_protocol::ToolKind::Edit
+            nori_protocol::ToolKind::Create
+                | nori_protocol::ToolKind::Edit
                 | nori_protocol::ToolKind::Delete
                 | nori_protocol::ToolKind::Move
         ) {
@@ -772,7 +773,8 @@ impl HistoryCell for ClientToolCell {
             self.render_execute_transcript_lines(width)
         } else if matches!(
             self.snapshot.kind,
-            nori_protocol::ToolKind::Edit
+            nori_protocol::ToolKind::Create
+                | nori_protocol::ToolKind::Edit
                 | nori_protocol::ToolKind::Delete
                 | nori_protocol::ToolKind::Move
         ) {

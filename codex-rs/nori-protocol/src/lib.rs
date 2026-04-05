@@ -149,6 +149,7 @@ pub enum ToolKind {
     Read,
     Search,
     Execute,
+    Create,
     Edit,
     Delete,
     Move,
@@ -407,6 +408,40 @@ fn is_generic_tool_call(tool_call: &acp::ToolCall) -> bool {
         && !tool_call.title.contains('/')
 }
 
+/// Some ACP agents (e.g. Codex) send `kind: "edit"` for all file mutations.
+/// The actual operation type is in `rawInput.changes.{path}.type`:
+///   - `"add"` → file creation
+///   - `"delete"` → file deletion
+///   - `"update"` with non-null `move_path` → file rename/move
+///   - `"update"` with null/absent `move_path` → normal edit (no refinement)
+fn refine_edit_kind(kind: ToolKind, raw_input: &Option<serde_json::Value>) -> ToolKind {
+    if kind != ToolKind::Edit {
+        return kind;
+    }
+    let Some(input) = raw_input else { return kind };
+    let Some(changes) = input.get("changes").and_then(|c| c.as_object()) else {
+        return kind;
+    };
+    for (_path, change) in changes {
+        if let Some(change_type) = change.get("type").and_then(|t| t.as_str()) {
+            match change_type {
+                "add" => return ToolKind::Create,
+                "delete" => return ToolKind::Delete,
+                _ => {
+                    if change
+                        .get("move_path")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|s| !s.is_empty())
+                    {
+                        return ToolKind::Move;
+                    }
+                }
+            }
+        }
+    }
+    kind
+}
+
 fn tool_snapshot_from_tool_call(tool_call: &acp::ToolCall, phase: ToolPhase) -> ToolSnapshot {
     let artifacts = artifacts_from_tool_call(tool_call);
     let invocation = invocation_from_tool_call(tool_call, &artifacts);
@@ -414,7 +449,7 @@ fn tool_snapshot_from_tool_call(tool_call: &acp::ToolCall, phase: ToolPhase) -> 
     ToolSnapshot {
         call_id: tool_call.tool_call_id.to_string(),
         title: sanitize_title(&tool_call.title),
-        kind: ToolKind::from_acp(tool_call.kind),
+        kind: refine_edit_kind(ToolKind::from_acp(tool_call.kind), &tool_call.raw_input),
         phase,
         locations: tool_call
             .locations
@@ -1826,5 +1861,145 @@ mod tests {
         };
 
         assert_eq!(commands_update.commands.len(), 0);
+    }
+
+    // ── refine_edit_kind: Codex ACP sends kind:"edit" for create/delete/move ──
+
+    #[test]
+    fn codex_edit_with_changes_type_add_becomes_create() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-create"),
+            acp::ToolCallUpdateFields::new()
+                .title("Edit /repo/new-file.txt")
+                .kind(acp::ToolKind::Edit)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "changes": {
+                        "/repo/new-file.txt": {
+                            "type": "add",
+                            "content": "hello\n"
+                        }
+                    }
+                }))
+                .content(vec![acp::Diff::new("/repo/new-file.txt", "hello\n").into()]),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.kind, ToolKind::Create);
+    }
+
+    #[test]
+    fn codex_edit_with_changes_type_delete_becomes_delete() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-delete"),
+            acp::ToolCallUpdateFields::new()
+                .title("Edit /repo/old-file.txt")
+                .kind(acp::ToolKind::Edit)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "changes": {
+                        "/repo/old-file.txt": {
+                            "type": "delete",
+                            "content": "goodbye\n"
+                        }
+                    }
+                }))
+                .content(vec![
+                    acp::Diff::new("/repo/old-file.txt", "")
+                        .old_text("goodbye\n")
+                        .into(),
+                ]),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.kind, ToolKind::Delete);
+    }
+
+    #[test]
+    fn codex_edit_with_move_path_becomes_move() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-move"),
+            acp::ToolCallUpdateFields::new()
+                .title("Edit /repo/old-name.txt")
+                .kind(acp::ToolKind::Edit)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "changes": {
+                        "/repo/old-name.txt": {
+                            "type": "update",
+                            "unified_diff": "@@ -1 +1 @@\n old\n+new\n",
+                            "move_path": "/repo/new-name.txt"
+                        }
+                    }
+                }))
+                .content(vec![
+                    acp::Diff::new("/repo/old-name.txt", "new\n")
+                        .old_text("old\n")
+                        .into(),
+                ]),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.kind, ToolKind::Move);
+    }
+
+    #[test]
+    fn codex_edit_with_null_move_path_stays_edit() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-edit-normal"),
+            acp::ToolCallUpdateFields::new()
+                .title("Edit /repo/file.txt")
+                .kind(acp::ToolKind::Edit)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "changes": {
+                        "/repo/file.txt": {
+                            "type": "update",
+                            "unified_diff": "@@ -1 +1 @@\n-old\n+new\n",
+                            "move_path": null
+                        }
+                    }
+                }))
+                .content(vec![
+                    acp::Diff::new("/repo/file.txt", "new\n")
+                        .old_text("old\n")
+                        .into(),
+                ]),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.kind, ToolKind::Edit);
     }
 }

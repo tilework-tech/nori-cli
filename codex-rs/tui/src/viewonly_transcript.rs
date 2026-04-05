@@ -268,6 +268,7 @@ fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
         nori_protocol::ToolKind::Read => "read",
         nori_protocol::ToolKind::Search => "search",
         nori_protocol::ToolKind::Execute => "execute",
+        nori_protocol::ToolKind::Create => "create",
         nori_protocol::ToolKind::Edit => "edit",
         nori_protocol::ToolKind::Delete => "delete",
         nori_protocol::ToolKind::Move => "move",
