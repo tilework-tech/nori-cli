@@ -1224,7 +1224,13 @@ impl ChatWidget {
                 self.bottom_pane.set_agent_commands(update.commands);
             }
             nori_protocol::ClientEvent::Warning(warning) => {
-                self.on_warning(warning.message);
+                // Reducer warnings (e.g. out-of-phase content) are logged
+                // but not rendered as visible UI elements.
+                tracing::debug!(
+                    target: "acp_reducer",
+                    message = %warning.message,
+                    "Reducer warning"
+                );
             }
         }
     }

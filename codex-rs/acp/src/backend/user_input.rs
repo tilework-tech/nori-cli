@@ -179,15 +179,11 @@ impl AcpBackend {
         let id_clone = id.to_string();
         let user_notifier = Arc::clone(&self.user_notifier);
         let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
-        let transcript_recorder = self.transcript_recorder.clone();
         let notify_after_idle = self.notify_after_idle;
         let post_user_prompt_hooks = self.post_user_prompt_hooks.clone();
-        let post_agent_response_hooks = self.post_agent_response_hooks.clone();
         let async_post_user_prompt_hooks = self.async_post_user_prompt_hooks.clone();
-        let async_post_agent_response_hooks = self.async_post_agent_response_hooks.clone();
         let hook_timeout = self.script_timeout;
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
-        let backend_event_tx = self.backend_event_tx.clone();
         let turn_interrupted = Arc::clone(&self.turn_interrupted);
         let reducer_tx = self.reducer_tx.clone();
 

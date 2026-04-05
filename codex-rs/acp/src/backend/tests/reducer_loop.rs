@@ -42,6 +42,29 @@ fn simple_prompt() -> QueuedPrompt {
     }
 }
 
+/// Helper to spawn a reducer loop with default (empty) hook config for
+/// existing tests that don't need hooks.
+fn spawn_loop(
+    reducer_tx: mpsc::Sender<InboundEvent>,
+    reducer_rx: mpsc::Receiver<InboundEvent>,
+    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+    backend_event_tx: mpsc::Sender<BackendEvent>,
+    session_runtime: Arc<Mutex<SessionRuntime>>,
+) {
+    let (event_tx, _event_rx) = mpsc::channel(64);
+    tokio::spawn(AcpBackend::run_reducer_loop(
+        reducer_rx,
+        client_event_normalizer,
+        backend_event_tx,
+        None,
+        session_runtime,
+        None,
+        reducer_tx,
+        event_tx,
+        ReducerHookConfig::default(),
+    ));
+}
+
 // =========================================================================
 // 1. Notifications are bridged through the reducer and produce ClientEvents
 // =========================================================================
@@ -55,16 +78,13 @@ async fn notification_bridge_forwards_client_events() {
     let session_runtime = Arc::new(Mutex::new(SessionRuntime::new()));
     let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
 
-    // Start the reducer loop in the background
-    tokio::spawn(AcpBackend::run_reducer_loop(
+    spawn_loop(
+        reducer_tx.clone(),
         reducer_rx,
         Arc::clone(&client_event_normalizer),
         backend_event_tx,
-        None, // no transcript
         Arc::clone(&session_runtime),
-        None, // no connection
-        reducer_tx.clone(),
-    ));
+    );
 
     // First put the runtime into Prompt phase by sending PromptSubmit
     reducer_tx
@@ -117,15 +137,13 @@ async fn prompt_response_produces_completed_with_last_agent_message() {
     let session_runtime = Arc::new(Mutex::new(SessionRuntime::new()));
     let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
 
-    tokio::spawn(AcpBackend::run_reducer_loop(
+    spawn_loop(
+        reducer_tx.clone(),
         reducer_rx,
         Arc::clone(&client_event_normalizer),
         backend_event_tx,
-        None,
         Arc::clone(&session_runtime),
-        None,
-        reducer_tx.clone(),
-    ));
+    );
 
     // Submit prompt
     reducer_tx
@@ -187,15 +205,13 @@ async fn cancel_submit_produces_cancelling_event() {
     let session_runtime = Arc::new(Mutex::new(SessionRuntime::new()));
     let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
 
-    tokio::spawn(AcpBackend::run_reducer_loop(
+    spawn_loop(
+        reducer_tx.clone(),
         reducer_rx,
         Arc::clone(&client_event_normalizer),
         backend_event_tx,
-        None,
         Arc::clone(&session_runtime),
-        None,
-        reducer_tx.clone(),
-    ));
+    );
 
     // Submit prompt to enter Prompt phase
     reducer_tx
@@ -233,15 +249,13 @@ async fn reducer_loop_updates_shared_runtime_state() {
     let session_runtime = Arc::new(Mutex::new(SessionRuntime::new()));
     let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
 
-    tokio::spawn(AcpBackend::run_reducer_loop(
+    spawn_loop(
+        reducer_tx.clone(),
         reducer_rx,
         Arc::clone(&client_event_normalizer),
         backend_event_tx,
-        None,
         Arc::clone(&session_runtime),
-        None,
-        reducer_tx.clone(),
-    ));
+    );
 
     // Initially idle
     {

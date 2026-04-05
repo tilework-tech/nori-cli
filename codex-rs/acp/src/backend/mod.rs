@@ -296,28 +296,12 @@ pub struct AcpBackend {
     pre_user_prompt_hooks: Vec<PathBuf>,
     /// Scripts to run after a user prompt is sent to the agent
     post_user_prompt_hooks: Vec<PathBuf>,
-    /// Scripts to run before a tool call is executed
-    pre_tool_call_hooks: Vec<PathBuf>,
-    /// Scripts to run after a tool call completes
-    post_tool_call_hooks: Vec<PathBuf>,
-    /// Scripts to run before the agent produces a response
-    pre_agent_response_hooks: Vec<PathBuf>,
-    /// Scripts to run after the agent finishes its response
-    post_agent_response_hooks: Vec<PathBuf>,
     /// Async (fire-and-forget) scripts to run when a session ends
     async_session_end_hooks: Vec<PathBuf>,
     /// Async (fire-and-forget) scripts to run before a user prompt is sent
     async_pre_user_prompt_hooks: Vec<PathBuf>,
     /// Async (fire-and-forget) scripts to run after a user prompt is sent
     async_post_user_prompt_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run before a tool call is executed
-    async_pre_tool_call_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run after a tool call completes
-    async_post_tool_call_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run before the agent produces a response
-    async_pre_agent_response_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run after the agent finishes its response
-    async_post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
     /// ACP-native normalized event accumulator.
@@ -336,6 +320,8 @@ mod helpers;
 mod session;
 pub(crate) mod session_reducer;
 mod spawn_and_relay;
+#[cfg(test)]
+use spawn_and_relay::ReducerHookConfig;
 mod submit_and_ops;
 mod user_input;
 pub(crate) use helpers::AccumulatedToolCall;

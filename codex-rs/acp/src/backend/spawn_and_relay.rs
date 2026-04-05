@@ -1,4 +1,23 @@
+use sacp::schema as acp;
+
 use super::*;
+
+/// Hook configuration for the reducer loop.
+///
+/// Groups all lifecycle hook paths and the timeout so they can be passed
+/// as a single parameter to `run_reducer_loop`.
+#[derive(Debug, Clone, Default)]
+pub struct ReducerHookConfig {
+    pub pre_agent_response_hooks: Vec<PathBuf>,
+    pub async_pre_agent_response_hooks: Vec<PathBuf>,
+    pub pre_tool_call_hooks: Vec<PathBuf>,
+    pub async_pre_tool_call_hooks: Vec<PathBuf>,
+    pub post_tool_call_hooks: Vec<PathBuf>,
+    pub async_post_tool_call_hooks: Vec<PathBuf>,
+    pub post_agent_response_hooks: Vec<PathBuf>,
+    pub async_post_agent_response_hooks: Vec<PathBuf>,
+    pub script_timeout: std::time::Duration,
+}
 
 impl AcpBackend {
     /// Spawn an ACP backend for the given configuration.
@@ -178,17 +197,9 @@ impl AcpBackend {
             session_end_hooks: config.session_end_hooks.clone(),
             pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
             post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
-            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
-            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
-            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
-            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
             async_session_end_hooks: config.async_session_end_hooks.clone(),
             async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
             async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
-            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
-            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
-            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
-            async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
@@ -263,6 +274,17 @@ impl AcpBackend {
         });
 
         // Spawn the reducer loop.
+        let reducer_hook_config = ReducerHookConfig {
+            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
+            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
+            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
+            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
+            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
+            script_timeout: config.script_timeout,
+        };
         tokio::spawn(Self::run_reducer_loop(
             reducer_rx,
             Arc::clone(&client_event_normalizer),
@@ -271,6 +293,8 @@ impl AcpBackend {
             Arc::clone(&session_runtime),
             Some(Arc::clone(&backend.connection)),
             reducer_tx.clone(),
+            event_tx.clone(),
+            reducer_hook_config,
         ));
 
         Ok(backend)
@@ -390,6 +414,10 @@ impl AcpBackend {
     /// `InboundEvent`s (notifications bridged from the ACP connection,
     /// plus PromptSubmit / PromptResponse / CancelSubmit from user-facing
     /// code paths) and drives the `SessionRuntime` state machine.
+    ///
+    /// Lifecycle hooks (pre_agent_response, pre_tool_call, post_tool_call,
+    /// post_agent_response) are executed in the loop based on the inbound
+    /// event type, BEFORE the event is passed to the reducer.
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn run_reducer_loop(
         mut reducer_rx: mpsc::Receiver<session_reducer::InboundEvent>,
@@ -399,8 +427,23 @@ impl AcpBackend {
         session_runtime: Arc<Mutex<nori_protocol::session_runtime::SessionRuntime>>,
         _connection: Option<Arc<SacpConnection>>,
         _reducer_tx: mpsc::Sender<session_reducer::InboundEvent>,
+        event_tx: mpsc::Sender<Event>,
+        hook_config: ReducerHookConfig,
     ) {
+        // Track whether pre_agent_response has fired for the current prompt.
+        // Reset on PromptSubmit.
+        let mut has_fired_pre_agent_response = false;
+
         while let Some(event) = reducer_rx.recv().await {
+            // Fire hooks BEFORE the reducer processes the event.
+            Self::fire_hooks_for_event(
+                &event,
+                &event_tx,
+                &hook_config,
+                &mut has_fired_pre_agent_response,
+            )
+            .await;
+
             let output = {
                 let mut runtime = session_runtime.lock().await;
                 let mut normalizer = client_event_normalizer.lock().await;
@@ -409,6 +452,11 @@ impl AcpBackend {
 
             // Forward produced ClientEvents to the TUI.
             forward_client_events(&backend_event_tx, &output.events).await;
+
+            // Fire post_agent_response hooks after a Completed event.
+            // The reducer has already assembled the last_agent_message.
+            Self::fire_post_agent_response_if_completed(&output.events, &event_tx, &hook_config)
+                .await;
 
             // Record to transcript in background to avoid blocking the loop.
             if let Some(ref recorder) = transcript_recorder {
@@ -436,6 +484,241 @@ impl AcpBackend {
                     target: "acp_reducer",
                     "Reducer side effect (not yet executed here): {side_effect:?}"
                 );
+            }
+        }
+    }
+
+    /// Fire lifecycle hooks based on the inbound event type.
+    ///
+    /// This runs BEFORE the reducer processes the event so that hooks
+    /// execute at the correct point in the lifecycle.
+    async fn fire_hooks_for_event(
+        event: &session_reducer::InboundEvent,
+        event_tx: &mpsc::Sender<Event>,
+        hook_config: &ReducerHookConfig,
+        has_fired_pre_agent_response: &mut bool,
+    ) {
+        match event {
+            session_reducer::InboundEvent::PromptSubmit(..) => {
+                // Reset the per-prompt flag so pre_agent_response can fire
+                // again for the new turn.
+                *has_fired_pre_agent_response = false;
+            }
+            session_reducer::InboundEvent::Notification(update) => {
+                Self::fire_notification_hooks(
+                    update,
+                    event_tx,
+                    hook_config,
+                    has_fired_pre_agent_response,
+                )
+                .await;
+            }
+            session_reducer::InboundEvent::PromptResponse { .. } => {
+                // post_agent_response hooks are fired AFTER reduce, via
+                // fire_post_agent_response_if_completed, because the reducer
+                // needs to finalize the agent message first.
+            }
+            _ => {}
+        }
+    }
+
+    /// Fire hooks for a specific ACP session update notification.
+    async fn fire_notification_hooks(
+        update: &acp::SessionUpdate,
+        event_tx: &mpsc::Sender<Event>,
+        hook_config: &ReducerHookConfig,
+        has_fired_pre_agent_response: &mut bool,
+    ) {
+        match update {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                // Fire pre_agent_response on the first chunk with non-empty text.
+                if !*has_fired_pre_agent_response {
+                    let has_text = matches!(
+                        &chunk.content,
+                        acp::ContentBlock::Text(t) if !t.text.is_empty()
+                    );
+                    if has_text {
+                        *has_fired_pre_agent_response = true;
+
+                        if !hook_config.pre_agent_response_hooks.is_empty() {
+                            let env_vars = HashMap::from([(
+                                "NORI_HOOK_EVENT".to_string(),
+                                "pre_agent_response".to_string(),
+                            )]);
+                            let results = crate::hooks::execute_hooks_with_env(
+                                &hook_config.pre_agent_response_hooks,
+                                hook_config.script_timeout,
+                                &env_vars,
+                            )
+                            .await;
+                            route_hook_results(&results, event_tx, "", None).await;
+                        }
+
+                        if !hook_config.async_pre_agent_response_hooks.is_empty() {
+                            let env_vars = HashMap::from([(
+                                "NORI_HOOK_EVENT".to_string(),
+                                "pre_agent_response".to_string(),
+                            )]);
+                            let _ = crate::hooks::execute_hooks_fire_and_forget(
+                                hook_config.async_pre_agent_response_hooks.clone(),
+                                hook_config.script_timeout,
+                                env_vars,
+                            );
+                        }
+                    }
+                }
+            }
+            acp::SessionUpdate::ToolCall(tool_call) => {
+                if !hook_config.pre_tool_call_hooks.is_empty() {
+                    let title = tool_call.title.clone();
+                    let raw_input = tool_call
+                        .raw_input
+                        .as_ref()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_default();
+                    let env_vars = HashMap::from([
+                        ("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string()),
+                        ("NORI_HOOK_TOOL_NAME".to_string(), title.clone()),
+                        ("NORI_HOOK_TOOL_ARGS".to_string(), raw_input.clone()),
+                    ]);
+                    let results = crate::hooks::execute_hooks_with_env(
+                        &hook_config.pre_tool_call_hooks,
+                        hook_config.script_timeout,
+                        &env_vars,
+                    )
+                    .await;
+                    route_hook_results(&results, event_tx, "", None).await;
+                }
+
+                if !hook_config.async_pre_tool_call_hooks.is_empty() {
+                    let title = tool_call.title.clone();
+                    let raw_input = tool_call
+                        .raw_input
+                        .as_ref()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_default();
+                    let env_vars = HashMap::from([
+                        ("NORI_HOOK_EVENT".to_string(), "pre_tool_call".to_string()),
+                        ("NORI_HOOK_TOOL_NAME".to_string(), title),
+                        ("NORI_HOOK_TOOL_ARGS".to_string(), raw_input),
+                    ]);
+                    let _ = crate::hooks::execute_hooks_fire_and_forget(
+                        hook_config.async_pre_tool_call_hooks.clone(),
+                        hook_config.script_timeout,
+                        env_vars,
+                    );
+                }
+            }
+            acp::SessionUpdate::ToolCallUpdate(tool_update) => {
+                let is_completed = tool_update
+                    .fields
+                    .status
+                    .as_ref()
+                    .map(|s| *s == acp::ToolCallStatus::Completed)
+                    .unwrap_or(false);
+
+                if is_completed {
+                    let title = tool_update
+                        .fields
+                        .title
+                        .clone()
+                        .unwrap_or_else(|| "Tool".to_string());
+                    let output =
+                        crate::backend::tool_display::extract_tool_output(&tool_update.fields);
+
+                    if !hook_config.post_tool_call_hooks.is_empty() {
+                        let env_vars = HashMap::from([
+                            ("NORI_HOOK_EVENT".to_string(), "post_tool_call".to_string()),
+                            ("NORI_HOOK_TOOL_NAME".to_string(), title.clone()),
+                            ("NORI_HOOK_TOOL_OUTPUT".to_string(), output.clone()),
+                        ]);
+                        let results = crate::hooks::execute_hooks_with_env(
+                            &hook_config.post_tool_call_hooks,
+                            hook_config.script_timeout,
+                            &env_vars,
+                        )
+                        .await;
+                        route_hook_results(&results, event_tx, "", None).await;
+                    }
+
+                    if !hook_config.async_post_tool_call_hooks.is_empty() {
+                        let env_vars = HashMap::from([
+                            ("NORI_HOOK_EVENT".to_string(), "post_tool_call".to_string()),
+                            ("NORI_HOOK_TOOL_NAME".to_string(), title),
+                            ("NORI_HOOK_TOOL_OUTPUT".to_string(), output),
+                        ]);
+                        let _ = crate::hooks::execute_hooks_fire_and_forget(
+                            hook_config.async_post_tool_call_hooks.clone(),
+                            hook_config.script_timeout,
+                            env_vars,
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Fire post_agent_response hooks if the output contains a
+    /// `TurnLifecycle::Completed` event with a non-empty agent message.
+    ///
+    /// Called AFTER reduce so the agent message text is available.
+    async fn fire_post_agent_response_if_completed(
+        events: &[nori_protocol::ClientEvent],
+        event_tx: &mpsc::Sender<Event>,
+        hook_config: &ReducerHookConfig,
+    ) {
+        if hook_config.post_agent_response_hooks.is_empty()
+            && hook_config.async_post_agent_response_hooks.is_empty()
+        {
+            return;
+        }
+
+        for ev in events {
+            if let nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::Completed {
+                    last_agent_message, ..
+                },
+            ) = ev
+            {
+                let agent_text = last_agent_message.as_deref().unwrap_or("").to_string();
+                if agent_text.is_empty() {
+                    return;
+                }
+
+                if !hook_config.post_agent_response_hooks.is_empty() {
+                    let env_vars = HashMap::from([
+                        (
+                            "NORI_HOOK_EVENT".to_string(),
+                            "post_agent_response".to_string(),
+                        ),
+                        ("NORI_HOOK_AGENT_RESPONSE".to_string(), agent_text.clone()),
+                    ]);
+                    let results = crate::hooks::execute_hooks_with_env(
+                        &hook_config.post_agent_response_hooks,
+                        hook_config.script_timeout,
+                        &env_vars,
+                    )
+                    .await;
+                    route_hook_results(&results, event_tx, "", None).await;
+                }
+
+                if !hook_config.async_post_agent_response_hooks.is_empty() {
+                    let env_vars = HashMap::from([
+                        (
+                            "NORI_HOOK_EVENT".to_string(),
+                            "post_agent_response".to_string(),
+                        ),
+                        ("NORI_HOOK_AGENT_RESPONSE".to_string(), agent_text),
+                    ]);
+                    let _ = crate::hooks::execute_hooks_fire_and_forget(
+                        hook_config.async_post_agent_response_hooks.clone(),
+                        hook_config.script_timeout,
+                        env_vars,
+                    );
+                }
+
+                return;
             }
         }
     }

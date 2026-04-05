@@ -98,7 +98,7 @@ fn spawn_test_reducer_loop(
     client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
 ) -> mpsc::Sender<session_reducer::InboundEvent> {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
-    forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
+    forward_test_backend_events(backend_event_rx, event_tx.clone(), client_event_tx);
 
     // Create a reducer channel and bridge the notification_rx into it
     let (reducer_tx, reducer_rx) = mpsc::channel::<session_reducer::InboundEvent>(256);
@@ -127,6 +127,8 @@ fn spawn_test_reducer_loop(
         session_runtime,
         None, // No connection in tests
         reducer_tx.clone(),
+        event_tx,
+        ReducerHookConfig::default(),
     ));
 
     reducer_tx
@@ -247,4 +249,5 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
 mod part2;
 mod part3;
 mod part4;
+mod reducer_hooks;
 mod reducer_loop;

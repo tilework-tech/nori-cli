@@ -292,17 +292,9 @@ impl AcpBackend {
             session_end_hooks: config.session_end_hooks.clone(),
             pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
             post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
-            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
-            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
-            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
-            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
             async_session_end_hooks: config.async_session_end_hooks.clone(),
             async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
             async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
-            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
-            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
-            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
-            async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
@@ -391,6 +383,17 @@ impl AcpBackend {
         });
 
         // Spawn the reducer loop.
+        let reducer_hook_config = super::spawn_and_relay::ReducerHookConfig {
+            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
+            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
+            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
+            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
+            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
+            script_timeout: config.script_timeout,
+        };
         tokio::spawn(Self::run_reducer_loop(
             reducer_rx,
             Arc::clone(&client_event_normalizer),
@@ -399,6 +402,8 @@ impl AcpBackend {
             Arc::clone(&session_runtime),
             Some(Arc::clone(&backend.connection)),
             reducer_tx.clone(),
+            event_tx.clone(),
+            reducer_hook_config,
         ));
 
         if !deferred_replay_client_events.is_empty() {
