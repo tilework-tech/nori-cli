@@ -1205,6 +1205,9 @@ impl ChatWidget {
             nori_protocol::ClientEvent::AgentCommandsUpdate(update) => {
                 self.bottom_pane.set_agent_commands(update.commands);
             }
+            nori_protocol::ClientEvent::Warning(warning) => {
+                self.on_warning(warning.message);
+            }
         }
     }
 
@@ -1242,6 +1245,10 @@ impl ChatWidget {
             },
             nori_protocol::TurnLifecycle::ContextCompacted { summary } => {
                 self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
+            }
+            nori_protocol::TurnLifecycle::Cancelling => {
+                // For now, treat as a no-op. Phase 2 will add proper
+                // cancelling state tracking in the TUI.
             }
         }
     }

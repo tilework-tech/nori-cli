@@ -760,6 +760,7 @@ fn transcript_to_summary_includes_normalized_tool_snapshots() {
                 artifacts: vec![],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         })),
     ];

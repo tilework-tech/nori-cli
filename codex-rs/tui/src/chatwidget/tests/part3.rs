@@ -359,6 +359,7 @@ fn approval_modal_patch_from_client_event_snapshot() {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         },
     ));
@@ -399,6 +400,7 @@ fn approval_modal_exec_from_client_event() {
                 artifacts: vec![],
                 raw_input: Some(serde_json::json!({"command": "git status"})),
                 raw_output: None,
+                owner_request_id: None,
             }),
         },
     ));
@@ -798,6 +800,7 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
             })],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -833,6 +836,7 @@ fn completed_delete_tool_snapshot_renders_patch_history_cell() {
                 "content": "hello\nworld\n",
             })),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -873,6 +877,7 @@ fn completed_move_tool_snapshot_renders_patch_history_cell() {
                 "to": "docs/README.md",
             })),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -904,6 +909,7 @@ fn completed_execute_tool_snapshot_renders_exec_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -937,6 +943,7 @@ fn pending_execute_tool_snapshot_renders_running_exec_cell() {
             artifacts: vec![],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -981,6 +988,7 @@ fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
             }],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1034,6 +1042,7 @@ fn completed_read_tool_snapshot_renders_exploring_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
             raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1068,6 +1077,7 @@ fn completed_search_tool_snapshot_renders_exploring_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
             raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1105,6 +1115,7 @@ fn completed_list_files_tool_snapshot_renders_exploring_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"path": "src"})),
             raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1139,6 +1150,7 @@ fn completed_generic_execute_tool_snapshot_renders_exec_history_cell() {
                 "exit_code": 0,
                 "stdout": "command output here",
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1181,6 +1193,7 @@ fn completed_fetch_tool_snapshot_renders_exec_history_cell() {
             raw_output: Some(serde_json::json!({
                 "stdout": "ok\n",
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1217,6 +1230,7 @@ fn in_progress_edit_renders_active_client_tool_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1254,6 +1268,7 @@ fn completed_edit_after_in_progress_replaces_spinner_with_patch() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1282,6 +1297,7 @@ fn completed_edit_after_in_progress_replaces_spinner_with_patch() {
             })],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1318,6 +1334,7 @@ fn in_progress_delete_renders_active_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1354,6 +1371,7 @@ fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1370,6 +1388,7 @@ fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1419,6 +1438,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
             artifacts: vec![],
             raw_input: Some(serde_json::json!({"command": "date --utc"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1438,6 +1458,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
             }],
             raw_input: Some(serde_json::json!({"command": "date --utc"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1455,6 +1476,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
             artifacts: vec![],
             raw_input: Some(serde_json::json!({"command": "uptime -p"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1477,6 +1499,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
                 "exit_code": 0,
                 "stdout": "2026-03-30 05:45:34 UTC"
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1499,6 +1522,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
                 "exit_code": 0,
                 "stdout": "up 1 week, 2 days"
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1545,6 +1569,7 @@ fn orphan_buffered_execute_cell_discarded_on_turn_complete() {
             }],
             raw_input: Some(serde_json::json!({"command": "date --utc"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1565,6 +1590,7 @@ fn orphan_buffered_execute_cell_discarded_on_turn_complete() {
                 "exit_code": 0,
                 "stdout": "up 1 week"
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1607,6 +1633,7 @@ fn description_text_not_shown_as_execute_output() {
             }],
             raw_input: Some(serde_json::json!({"command": "rm /tmp/test.md"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1638,6 +1665,7 @@ fn single_read_snapshot_renders_as_explored() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1680,6 +1708,7 @@ fn list_files_title_not_duplicated() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1734,6 +1763,7 @@ fn acp_edit_approval_routes_through_acp_tool() {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         },
     ));

@@ -647,6 +647,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         })
     );
@@ -738,6 +739,7 @@ async fn test_exec_approval_emits_normalized_client_event() {
                 artifacts: vec![],
                 raw_input: Some(serde_json::json!({"command": "git status"})),
                 raw_output: None,
+                owner_request_id: None,
             }),
         })
     );
@@ -885,6 +887,7 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
             })],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         })
     );
 
@@ -953,6 +956,7 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
                 "content": "before\n",
             })),
             raw_output: None,
+            owner_request_id: None,
         })
     );
 
@@ -1026,6 +1030,7 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
             raw_output: Some(serde_json::json!({
                 "stdout": "ok\n",
             })),
+            owner_request_id: None,
         })
     );
 
@@ -1088,6 +1093,7 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
             }],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+            owner_request_id: None,
         })
     );
 
@@ -1233,6 +1239,7 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                 }],
                 raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
                 raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+                owner_request_id: None,
             }),
         ),
         (
@@ -1260,6 +1267,7 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                 }],
                 raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
                 raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+                owner_request_id: None,
             }),
         ),
         (
@@ -1286,6 +1294,7 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                 }],
                 raw_input: Some(serde_json::json!({"path": "src"})),
                 raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+                owner_request_id: None,
             }),
         ),
     ];
@@ -1385,6 +1394,7 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
             }],
             raw_input: None,
             raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": "command output here"}),),
+            owner_request_id: None,
         })
     );
 

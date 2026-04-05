@@ -5,6 +5,8 @@ use sacp::schema as acp;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub mod session_runtime;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", rename_all = "snake_case")]
 pub enum ClientEvent {
@@ -15,6 +17,14 @@ pub enum ClientEvent {
     TurnLifecycle(TurnLifecycle),
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
+    Warning(WarningInfo),
+}
+
+/// A warning emitted by the session runtime (e.g. out-of-phase content).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct WarningInfo {
+    pub message: String,
 }
 
 /// A set of commands advertised by the ACP agent.
@@ -38,9 +48,18 @@ pub struct AgentCommandInfo {
 #[serde(rename_all = "snake_case")]
 pub enum TurnLifecycle {
     Started,
-    Completed { last_agent_message: Option<String> },
-    Aborted { reason: TurnAbortReason },
-    ContextCompacted { summary: Option<String> },
+    Completed {
+        last_agent_message: Option<String>,
+    },
+    Aborted {
+        reason: TurnAbortReason,
+    },
+    ContextCompacted {
+        summary: Option<String>,
+    },
+    /// `session/cancel` has been sent but the prompt response has not yet
+    /// arrived. The turn is still active per ACP protocol.
+    Cancelling,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +127,10 @@ pub struct ToolSnapshot {
     pub artifacts: Vec<Artifact>,
     pub raw_input: Option<serde_json::Value>,
     pub raw_output: Option<serde_json::Value>,
+    /// The request that created this tool call. Used for cancellation
+    /// and request-local rendering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -428,6 +451,7 @@ fn tool_snapshot_from_tool_call(tool_call: &acp::ToolCall, phase: ToolPhase) -> 
         artifacts,
         raw_input: tool_call.raw_input.clone(),
         raw_output: tool_call.raw_output.clone(),
+        owner_request_id: None,
     }
 }
 
@@ -1028,6 +1052,7 @@ mod tests {
                     "content": "hello\n",
                 })),
                 raw_output: None,
+                owner_request_id: None,
             })
         );
         assert_eq!(approval.options.len(), 2);
@@ -1467,6 +1492,7 @@ mod tests {
             })],
             raw_input: Some(serde_json::json!({"path": "/repo/README.md"})),
             raw_output: None,
+            owner_request_id: None,
         });
 
         let json = serde_json::to_string(&event).unwrap();

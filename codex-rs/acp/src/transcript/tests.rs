@@ -119,6 +119,7 @@ mod types_tests {
                 artifacts: vec![],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         });
 
