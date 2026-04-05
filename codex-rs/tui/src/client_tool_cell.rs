@@ -518,9 +518,7 @@ impl ClientToolCell {
 
         lines
     }
-}
 
-impl ClientToolCell {
     /// Transcript rendering for Execute tools: `$ command` shell-style format,
     /// matching the style used in the upstream Codex ExecCell transcript view.
     fn render_execute_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -543,14 +541,11 @@ impl ClientToolCell {
             && !text.is_empty()
         {
             for line_str in text.lines() {
-                lines.push(
-                    Line::from(format!("    {line_str}"))
-                        .style(Style::default().add_modifier(Modifier::DIM)),
-                );
+                lines.push(Line::from(format!("    {line_str}")).dim());
             }
         }
 
-        // Exit status + duration
+        // Exit status
         if !is_active_phase(&self.snapshot.phase) {
             let success = exit_code_success(&self.snapshot);
             let result: Line = match success {

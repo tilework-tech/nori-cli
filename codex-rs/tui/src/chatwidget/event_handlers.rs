@@ -1321,14 +1321,10 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// All ACP tool kinds route through ClientToolCell for native rendering.
+    /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
+    /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        // All ACP tool kinds route through ClientToolCell for native rendering.
-        // ClientToolCell auto-detects exploring tools (Read/Search) and renders
-        // them with "Explored" format, while Execute uses shell-style transcript.
-        self.handle_client_native_tool_snapshot(tool_snapshot);
-    }
-
-    fn handle_client_native_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         if self.turn_finished {
             return;
         }
@@ -1413,8 +1409,11 @@ impl ChatWidget {
         {
             let call_id = tool_snapshot.call_id.clone();
             cell.merge_exploring(tool_snapshot);
-            // Track merged call_ids so completions arriving after this cell
-            // is flushed to history don't get re-merged into a later cell.
+            // Track all merged call_ids (including non-terminal phases) so
+            // completions arriving after this cell is flushed to history
+            // don't get re-merged into a later exploring cell. Exploring
+            // cell rendering depends on the cell's overall state, not
+            // individual snapshot phases, so skipping later updates is safe.
             self.completed_client_tool_calls.insert(call_id);
             return;
         }
