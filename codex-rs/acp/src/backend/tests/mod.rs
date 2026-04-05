@@ -100,6 +100,7 @@ fn spawn_test_persistent_relay(
         persistent_rx,
         client_event_normalizer,
         backend_event_tx,
+        None, // No transcript recording in tests
     ));
 }
 

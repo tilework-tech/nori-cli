@@ -373,6 +373,7 @@ impl AcpBackend {
             notification_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx.clone(),
+            backend.transcript_recorder.clone(),
         ));
 
         if !deferred_replay_client_events.is_empty() {

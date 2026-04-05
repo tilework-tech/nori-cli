@@ -247,6 +247,7 @@ impl AcpBackend {
             notification_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx,
+            backend.transcript_recorder.clone(),
         ));
 
         Ok(backend)
@@ -368,10 +369,18 @@ impl AcpBackend {
         mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,
         client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
+        transcript_recorder: Option<Arc<TranscriptRecorder>>,
     ) {
         while let Some(update) = notification_rx.recv().await {
             let client_events = normalize_session_update(&client_event_normalizer, &update).await;
             forward_client_events(&backend_event_tx, &client_events).await;
+            if let Some(ref recorder) = transcript_recorder {
+                for event in &client_events {
+                    if let Err(e) = recorder.record_client_event(event).await {
+                        warn!("Failed to record client event to transcript: {e}");
+                    }
+                }
+            }
         }
     }
 }
