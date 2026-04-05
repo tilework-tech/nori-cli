@@ -66,25 +66,22 @@ fn test_acp_create_new_file() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for the write operation to complete
+    // Wait for the write operation and verification to complete
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("Should successfully create new file");
+    session
+        .wait_for_text("Verified content:", Duration::from_secs(10))
+        .expect("Should verify file content was written correctly");
 
     let contents = session.screen_contents();
-
-    // Verify the file was created and content verified
     assert!(
         contents.contains("File written successfully"),
-        "Should show success message, got: {}",
-        contents
+        "Should show success message, got: {contents}",
     );
-
-    // The mock agent reads back the file to verify
     assert!(
-        contents.contains("File written successfully") && contents.contains("Verified content:"),
-        "Should verify file content was written correctly, got: {}",
-        contents
+        contents.contains("Verified content:"),
+        "Should show verified content, got: {contents}",
     );
 }
 
@@ -119,25 +116,22 @@ fn test_acp_edit_existing_file() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for write completion
+    // Wait for write completion and verification
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("Should successfully edit existing file");
+    session
+        .wait_for_text("Verified content:", Duration::from_secs(10))
+        .expect("Should verify updated content");
 
     let contents = session.screen_contents();
-
-    // Verify file was written
     assert!(
         contents.contains("File written successfully"),
-        "Should show success message, got: {}",
-        contents
+        "Should show success message, got: {contents}",
     );
-
-    // Verify new content replaced old content
     assert!(
-        contents.contains("File written successfully") && contents.contains("Verified content:"),
-        "Should verify updated content, got: {}",
-        contents
+        contents.contains("Verified content:"),
+        "Should show verified content, got: {contents}",
     );
 }
 
@@ -169,25 +163,26 @@ fn test_acp_create_file_with_parent_dirs() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for write completion
+    // Wait for write completion and verification
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("Should successfully create file with parent directories");
 
+    // Wait for the agent's verification response (it reads back the file
+    // after writing). This may arrive shortly after the write completion.
+    session
+        .wait_for_text("Verified content:", Duration::from_secs(10))
+        .expect("Should verify content in nested file");
+
     let contents = session.screen_contents();
 
-    // Verify file was created with parent directories
     assert!(
         contents.contains("File written successfully"),
-        "Should show success message, got: {}",
-        contents
+        "Should show success message, got: {contents}",
     );
-
-    // Verify file was created with parent directories
     assert!(
-        contents.contains("File written successfully") && contents.contains("Verified content:"),
-        "Should verify content in nested file, got: {}",
-        contents
+        contents.contains("Verified content:"),
+        "Should show verified content, got: {contents}",
     );
 }
 
