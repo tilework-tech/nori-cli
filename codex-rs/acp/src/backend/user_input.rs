@@ -479,11 +479,6 @@ impl AcpBackend {
                 );
             }
 
-            // Only emit tail events (error + Completed) if this is still the
-            // active turn. When the turn_id has advanced (due to an interrupt
-            // or a new user message), this task is stale — a stale ErrorEvent
-            // would call on_error/finalize_turn in the TUI and kill the new
-            // turn's stream, and a stale Completed would prematurely end it.
             if turn_id.load(Ordering::SeqCst) == my_turn_id {
                 if let Err(ref e) = result {
                     let error_string = format!("{e:?}");
