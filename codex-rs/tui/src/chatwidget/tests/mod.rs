@@ -314,6 +314,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         loop_count_override: None,
         turn_finished: false,
         pending_stale_completes: 0,
+        ignore_late_answer_deltas: false,
         plan_drawer_mode: PlanDrawerMode::Off,
         pinned_plan: None,
         terminal_title_animation_origin: std::time::Instant::now(),

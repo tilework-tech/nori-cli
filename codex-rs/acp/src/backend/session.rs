@@ -65,16 +65,13 @@ impl AcpBackend {
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
 
-            // Take the notification receiver so we can collect replay events
-            // during session/load. With the unified channel, load replay
-            // events flow through the same notification_tx as all other updates.
-            let notification_rx = connection.take_notification_receiver();
+            let (load_update_tx, load_update_rx) = mpsc::channel(1024);
 
             // Collect replay events into a buffer. The collector runs until
             // load_session() finishes and signals completion via the oneshot.
             let (load_done_tx, load_done_rx) = tokio::sync::oneshot::channel::<()>();
             let collect_handle = tokio::spawn(async move {
-                let mut notification_rx = notification_rx;
+                let mut notification_rx = load_update_rx;
                 let mut client_event_normalizer = nori_protocol::ClientEventNormalizer::default();
                 let mut buffered_events = Vec::new();
                 let mut done = std::pin::pin!(load_done_rx);
@@ -108,11 +105,11 @@ impl AcpBackend {
                 )
             });
 
-            match connection.load_session(sid, &cwd).await {
+            match connection.load_session(sid, &cwd, load_update_tx).await {
                 Ok(session_id) => {
                     // Signal the collector that load is done, then collect results.
                     let _ = load_done_tx.send(());
-                    let (buffered_client_events, recovered_rx) = collect_handle
+                    let (buffered_client_events, _) = collect_handle
                         .await
                         .expect("load session collector task panicked");
                     if !buffered_client_events.is_empty() {
@@ -128,7 +125,7 @@ impl AcpBackend {
                         false,
                         None,
                         buffered_client_events,
-                        recovered_rx,
+                        connection.take_persistent_receiver(),
                     )
                 }
                 Err(e) => {
@@ -136,7 +133,7 @@ impl AcpBackend {
                         "Server-side session/load failed, falling back to client-side replay: {e}"
                     );
                     let _ = load_done_tx.send(());
-                    let (_, recovered_rx) = collect_handle
+                    let _ = collect_handle
                         .await
                         .expect("load session collector task panicked");
 
@@ -179,7 +176,7 @@ impl AcpBackend {
                         true,
                         Some(e.to_string()),
                         replay_events,
-                        recovered_rx,
+                        connection.take_persistent_receiver(),
                     )
                 }
             }
@@ -217,7 +214,7 @@ impl AcpBackend {
                 (Vec::new(), None)
             };
 
-            let notification_rx = connection.take_notification_receiver();
+            let notification_rx = connection.take_persistent_receiver();
             (
                 session_id,
                 summary,

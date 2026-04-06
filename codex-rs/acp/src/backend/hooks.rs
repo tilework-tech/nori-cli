@@ -15,7 +15,7 @@ pub(super) async fn run_prompt_summary(
     use tokio::time::timeout;
 
     let agent_config = get_agent_config(agent_name)?;
-    let mut connection = SacpConnection::spawn(&agent_config, cwd).await?;
+    let connection = SacpConnection::spawn(&agent_config, cwd).await?;
     let session_id = connection.create_session(cwd, vec![]).await?;
 
     let summarization_prompt = format!(
@@ -24,9 +24,7 @@ pub(super) async fn run_prompt_summary(
     );
     let prompt = vec![translator::text_to_content_block(&summarization_prompt)];
 
-    // Take the notification receiver so we can collect updates from this
-    // throwaway connection. The main session uses the reducer loop instead.
-    let mut notification_rx = connection.take_notification_receiver();
+    let (update_tx, mut notification_rx) = mpsc::channel(1024);
 
     // Consume updates in a task to accumulate the agent's text response
     let collector = tokio::spawn(async move {
@@ -44,7 +42,7 @@ pub(super) async fn run_prompt_summary(
     // Send the prompt with a timeout to prevent indefinite hangs
     let prompt_result = timeout(
         Duration::from_secs(30),
-        connection.prompt(session_id, prompt),
+        connection.prompt(session_id, prompt, update_tx),
     )
     .await;
 

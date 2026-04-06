@@ -5,6 +5,7 @@ use pretty_assertions::assert_eq;
 use sacp::schema as acp;
 use serial_test::serial;
 use tempfile::tempdir;
+use tokio::sync::mpsc;
 
 /// Helper: get the mock agent config and skip if binary is not built.
 fn mock_agent_config() -> Option<crate::registry::AcpAgentConfig> {
@@ -57,11 +58,11 @@ async fn test_prompt_receives_text_updates() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
+    let conn = SacpConnection::spawn(&config, temp_dir.path())
         .await
         .expect("spawn");
 
-    let mut notification_rx = conn.take_notification_receiver();
+    let (update_tx, mut notification_rx) = mpsc::channel(1024);
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
@@ -70,7 +71,10 @@ async fn test_prompt_receives_text_updates() {
 
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))];
 
-    let stop_reason = conn.prompt(session_id, prompt).await.expect("prompt");
+    let stop_reason = conn
+        .prompt(session_id, prompt, update_tx)
+        .await
+        .expect("prompt");
 
     // Collect all text messages from the notification channel.
     let mut messages = Vec::new();
@@ -168,8 +172,10 @@ async fn test_approval_receiver_forwards_requests() {
     // The prompt will block until the approval response is sent.
     let conn = Arc::new(conn);
     let conn_for_prompt = Arc::clone(&conn);
-    let prompt_handle =
-        tokio::spawn(async move { conn_for_prompt.prompt(session_id, prompt).await });
+    let prompt_handle = tokio::spawn(async move {
+        let (update_tx, _update_rx) = mpsc::channel(1024);
+        conn_for_prompt.prompt(session_id, prompt, update_tx).await
+    });
 
     // Wait for the approval request to arrive (with timeout).
     let approval =
@@ -233,11 +239,11 @@ async fn test_codex_home_not_inherited() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
+    let conn = SacpConnection::spawn(&config, temp_dir.path())
         .await
         .expect("spawn");
 
-    let mut notification_rx = conn.take_notification_receiver();
+    let (update_tx, mut notification_rx) = mpsc::channel(1024);
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
@@ -246,7 +252,9 @@ async fn test_codex_home_not_inherited() {
 
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("check env"))];
 
-    conn.prompt(session_id, prompt).await.expect("prompt");
+    conn.prompt(session_id, prompt, update_tx)
+        .await
+        .expect("prompt");
 
     let mut messages = Vec::new();
     while let Ok(update) = notification_rx.try_recv() {
@@ -298,7 +306,8 @@ async fn test_drop_kills_subprocess() {
     let conn = Arc::new(conn);
     let conn_for_prompt = Arc::clone(&conn);
     let prompt_handle = tokio::spawn(async move {
-        let _ = conn_for_prompt.prompt(session_id, prompt).await;
+        let (update_tx, _update_rx) = mpsc::channel(1024);
+        let _ = conn_for_prompt.prompt(session_id, prompt, update_tx).await;
     });
 
     // Give the prompt time to start streaming
@@ -348,7 +357,10 @@ async fn test_cancel_during_prompt() {
     // Start the prompt in a background task
     let conn_for_prompt = Arc::clone(&conn);
     let sid = session_id.clone();
-    let prompt_task = tokio::spawn(async move { conn_for_prompt.prompt(sid, prompt).await });
+    let prompt_task = tokio::spawn(async move {
+        let (update_tx, _update_rx) = mpsc::channel(1024);
+        conn_for_prompt.prompt(sid, prompt, update_tx).await
+    });
 
     // Give the prompt time to start streaming
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;

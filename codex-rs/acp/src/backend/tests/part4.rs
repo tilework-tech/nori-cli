@@ -105,6 +105,258 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
 
 #[tokio::test]
 #[serial]
+async fn test_user_input_emits_final_answer_before_completion() {
+    use std::time::Duration;
+
+    struct EnvVarGuard {
+        key: &'static str,
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // SAFETY: Test-scoped cleanup for a process-wide env var.
+            unsafe {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_RESPONSE", "RESPONSE_ONE_UNIQUE_MARKER");
+    }
+    let _env_guard = EnvVarGuard {
+        key: "MOCK_AGENT_RESPONSE",
+    };
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Say hello".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut client_events_before_completed = Vec::new();
+    let mut completed_event = None;
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(client_event) => {
+                if matches!(
+                    client_event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                ) {
+                    completed_event = Some(client_event);
+                    break;
+                }
+                client_events_before_completed.push(client_event);
+            }
+            None => continue,
+        }
+    }
+
+    let completed_event = completed_event.expect("expected normalized completion event");
+    let completed_last_agent_message = match &completed_event {
+        nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Completed {
+            last_agent_message,
+        }) => last_agent_message.clone(),
+        _ => unreachable!("expected completion event"),
+    };
+
+    let mut client_events_after_completed = Vec::new();
+    while let Some(client_event) =
+        recv_backend_client(&mut backend_event_rx, Duration::from_millis(100)).await
+    {
+        client_events_after_completed.push(client_event);
+    }
+
+    let answer_before_completed: String = client_events_before_completed
+        .iter()
+        .filter_map(|event| match event {
+            nori_protocol::ClientEvent::MessageDelta(delta)
+                if delta.stream == nori_protocol::MessageStream::Answer =>
+            {
+                Some(delta.delta.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        answer_before_completed.contains("RESPONSE_ONE_UNIQUE_MARKER"),
+        "expected full answer delta before completion. events before completion: {client_events_before_completed:?}, completed event: {completed_event:?}, events after completion: {client_events_after_completed:?}"
+    );
+    assert_eq!(
+        completed_last_agent_message.as_deref(),
+        Some("RESPONSE_ONE_UNIQUE_MARKER")
+    );
+    assert!(
+        !client_events_after_completed.iter().any(|event| matches!(
+            event,
+            nori_protocol::ClientEvent::MessageDelta(delta)
+                if delta.stream == nori_protocol::MessageStream::Answer
+        )),
+        "answer deltas must not arrive after completion. events before completion: {client_events_before_completed:?}, completed event: {completed_event:?}, events after completion: {client_events_after_completed:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_user_input_emits_long_final_answer_before_completion() {
+    use std::time::Duration;
+
+    struct EnvVarGuard {
+        key: &'static str,
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // SAFETY: Test-scoped cleanup for a process-wide env var.
+            unsafe {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let long_response = "LINE_1_OF_LONG_RESPONSE\n\
+                         LINE_2_OF_LONG_RESPONSE\n\
+                         LINE_3_OF_LONG_RESPONSE\n\
+                         LINE_4_OF_LONG_RESPONSE\n\
+                         LINE_5_OF_LONG_RESPONSE\n\
+                         FINAL_LINE_MARKER";
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_RESPONSE", long_response);
+    }
+    let _env_guard = EnvVarGuard {
+        key: "MOCK_AGENT_RESPONSE",
+    };
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Give me a long response".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut client_events_before_completed = Vec::new();
+    let mut completed_event = None;
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(client_event) => {
+                if matches!(
+                    client_event,
+                    nori_protocol::ClientEvent::TurnLifecycle(
+                        nori_protocol::TurnLifecycle::Completed { .. }
+                    )
+                ) {
+                    completed_event = Some(client_event);
+                    break;
+                }
+                client_events_before_completed.push(client_event);
+            }
+            None => continue,
+        }
+    }
+
+    let completed_event = completed_event.expect("expected normalized completion event");
+    let completed_last_agent_message = match &completed_event {
+        nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Completed {
+            last_agent_message,
+        }) => last_agent_message.clone(),
+        _ => unreachable!("expected completion event"),
+    };
+
+    let mut client_events_after_completed = Vec::new();
+    while let Some(client_event) =
+        recv_backend_client(&mut backend_event_rx, Duration::from_millis(100)).await
+    {
+        client_events_after_completed.push(client_event);
+    }
+
+    let answer_before_completed: String = client_events_before_completed
+        .iter()
+        .filter_map(|event| match event {
+            nori_protocol::ClientEvent::MessageDelta(delta)
+                if delta.stream == nori_protocol::MessageStream::Answer =>
+            {
+                Some(delta.delta.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        answer_before_completed.contains("FINAL_LINE_MARKER"),
+        "expected full long answer before completion. events before completion: {client_events_before_completed:?}, completed event: {completed_event:?}, events after completion: {client_events_after_completed:?}"
+    );
+    assert_eq!(completed_last_agent_message.as_deref(), Some(long_response));
+    assert!(
+        !client_events_after_completed.iter().any(|event| matches!(
+            event,
+            nori_protocol::ClientEvent::MessageDelta(delta)
+                if delta.stream == nori_protocol::MessageStream::Answer
+        )),
+        "long answer deltas must not arrive after completion. events before completion: {client_events_before_completed:?}, completed event: {completed_event:?}, events after completion: {client_events_after_completed:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
     use std::time::Duration;
 

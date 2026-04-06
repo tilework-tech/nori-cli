@@ -187,6 +187,7 @@ impl ChatWidget {
         // never drained. Reset it here so leftover counters from previous
         // interrupts don't consume this turn's real Completed.
         self.pending_stale_completes = 0;
+        self.ignore_late_answer_deltas = false;
 
         self.bottom_pane.clear_ctrl_c_quit_hint();
         self.bottom_pane.set_task_running(true);
@@ -209,6 +210,15 @@ impl ChatWidget {
         if self.pending_stale_completes > 0 {
             self.pending_stale_completes -= 1;
             return;
+        }
+
+        if self.stream_controller.is_none()
+            && let Some(message) = last_agent_message.clone()
+            && !message.is_empty()
+        {
+            self.handle_streaming_delta(message);
+            self.flush_answer_stream_with_separator();
+            self.ignore_late_answer_deltas = true;
         }
 
         // If a stream is currently active, finalize it.
@@ -768,6 +778,10 @@ impl ChatWidget {
 
     #[inline]
     pub(super) fn handle_streaming_delta(&mut self, delta: String) {
+        if self.turn_finished && self.ignore_late_answer_deltas {
+            return;
+        }
+
         // Always flush the active cell before streaming agent text. This ensures
         // tool cells appear in the correct chronological position (before the text
         // that follows them), even when tool calls haven't completed yet.

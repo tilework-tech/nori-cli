@@ -2102,6 +2102,7 @@ mod tests {
                 old_text: None,
                 new_text: "hello\nworld\n".into(),
             })],
+            owner_request_id: None,
             raw_input: None,
             raw_output: None,
         };
@@ -2146,6 +2147,7 @@ mod tests {
                 }],
             }),
             artifacts: vec![],
+            owner_request_id: None,
             raw_input: None,
             raw_output: None,
         };
@@ -2190,6 +2192,7 @@ mod tests {
                 path: "README.md".into(),
             }),
             artifacts: vec![],
+            owner_request_id: None,
             raw_input: None,
             raw_output: None,
         };
@@ -2221,6 +2224,7 @@ mod tests {
                 path: Some("/repo/src".into()),
             }),
             artifacts: vec![],
+            owner_request_id: None,
             raw_input: None,
             raw_output: None,
         };
@@ -2285,6 +2289,7 @@ mod tests {
                 path: "file.rs".into(),
             }),
             artifacts: vec![],
+            owner_request_id: None,
             raw_input: None,
             raw_output: None,
         };

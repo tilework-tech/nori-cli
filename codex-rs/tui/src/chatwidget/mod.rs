@@ -429,6 +429,10 @@ pub(crate) struct ChatWidget {
     // on_task_complete, and reset to 0 by on_task_started (to drain orphaned
     // counters when the ACP backend suppresses the stale Completed).
     pending_stale_completes: i32,
+    // When true, TurnLifecycle::Completed already rendered an authoritative
+    // final assistant message, so any later answer deltas for that turn
+    // should be ignored instead of creating duplicate history cells.
+    ignore_late_answer_deltas: bool,
     /// Whether and how plan updates are rendered in a pinned drawer instead of
     /// history cells.
     plan_drawer_mode: PlanDrawerMode,

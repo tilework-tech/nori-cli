@@ -105,7 +105,7 @@ impl AcpBackend {
 
         // Take the approval receiver for handling permission requests
         let approval_rx = connection.take_approval_receiver();
-        let notification_rx = connection.take_notification_receiver();
+        let persistent_rx = connection.take_persistent_receiver();
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
@@ -242,10 +242,9 @@ impl AcpBackend {
         ));
 
         // Spawn reducer loop: processes ALL session notifications through the
-        // serialized reducer, replacing the old per-prompt update handler and
-        // persistent relay.
+        // serialized relay for inter-turn notifications.
         tokio::spawn(Self::run_notification_relay(
-            notification_rx,
+            persistent_rx,
             Arc::clone(&client_event_normalizer),
             backend_event_tx,
             backend.transcript_recorder.clone(),
@@ -361,11 +360,12 @@ impl AcpBackend {
         }
     }
 
-    /// Background task that processes ALL session notifications through the
-    /// normalizer and forwards them to the TUI.
+    /// Background task that processes inter-turn session notifications through
+    /// the normalizer and forwards them to the TUI.
     ///
-    /// With the unified notification channel, this replaces both the old
-    /// per-prompt update handler and the inter-turn persistent relay.
+    /// Prompt-scoped updates are handled by per-prompt consumers so they can
+    /// accumulate the authoritative final assistant text for
+    /// `TurnLifecycle::Completed`.
     pub(super) async fn run_notification_relay(
         mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,
         client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,

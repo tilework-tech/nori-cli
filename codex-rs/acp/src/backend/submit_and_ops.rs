@@ -288,6 +288,7 @@ impl AcpBackend {
         let notify_after_idle = self.notify_after_idle;
         let backend_event_tx = self.backend_event_tx.clone();
         let transcript_recorder = self.transcript_recorder.clone();
+        let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let turn_interrupted = Arc::clone(&self.turn_interrupted);
 
         // Spawn task to handle the prompt and capture the summary
@@ -305,10 +306,35 @@ impl AcpBackend {
             )
             .await;
 
-            // Send the summarization prompt. Notifications flow through the
-            // unified channel to the notification relay.
             let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt).await;
+            let (update_tx, mut update_rx) = mpsc::channel::<acp::SessionUpdate>(1024);
+            let backend_event_tx_for_updates = backend_event_tx.clone();
+            let transcript_recorder_for_updates = transcript_recorder.clone();
+            let update_handler = tokio::spawn(async move {
+                let mut accumulated_text = String::new();
+                while let Some(update) = update_rx.recv().await {
+                    let client_events =
+                        normalize_session_update(&client_event_normalizer, &update).await;
+                    forward_client_events(&backend_event_tx_for_updates, &client_events).await;
+                    if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+                        && let acp::ContentBlock::Text(text) = &chunk.content
+                    {
+                        accumulated_text.push_str(&text.text);
+                    }
+                    if let Some(ref recorder) = transcript_recorder_for_updates {
+                        for client_event in &client_events {
+                            if let Err(e) = recorder.record_client_event(client_event).await {
+                                warn!(
+                                    "Failed to record normalized client event to transcript: {e}"
+                                );
+                            }
+                        }
+                    }
+                }
+                accumulated_text
+            });
+            let result = connection.prompt(session_id, prompt, update_tx).await;
+            let accumulated_text = update_handler.await.unwrap_or_default();
 
             // If prompt failed, send error event and clear any partial summary
             if let Err(ref e) = result {
@@ -325,6 +351,10 @@ impl AcpBackend {
                     })
                     .await;
             } else {
+                let compact_summary = accumulated_text.trim().to_string();
+                *pending_compact_summary.lock().await =
+                    (!compact_summary.is_empty()).then_some(compact_summary.clone());
+
                 // Create a new session to clear the agent's conversation history.
                 // The summary we captured will be prepended to the next user prompt,
                 // giving the agent context about the previous conversation.
@@ -372,7 +402,8 @@ impl AcpBackend {
                     transcript_recorder.as_ref(),
                     nori_protocol::ClientEvent::TurnLifecycle(
                         nori_protocol::TurnLifecycle::Completed {
-                            last_agent_message: None,
+                            last_agent_message: (!accumulated_text.is_empty())
+                                .then_some(accumulated_text),
                         },
                     ),
                 )

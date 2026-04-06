@@ -332,7 +332,6 @@ pub struct AcpBackend {
 
 mod helpers;
 mod session;
-pub(crate) mod session_reducer;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;

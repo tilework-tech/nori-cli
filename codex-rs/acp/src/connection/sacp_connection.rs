@@ -76,7 +76,8 @@ const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 /// - A background tokio task runs the SACP connection via `run_until`.
 /// - The `JrConnectionCx` is cloned out and used for all subsequent requests.
 /// - Session notifications and approval requests are forwarded via channels.
-/// - All session updates flow through a single `notification_tx` channel.
+/// - Prompt-owned updates flow through a per-request channel while the request is active.
+/// - Inter-turn notifications flow through a persistent channel.
 pub struct SacpConnection {
     /// Connection context for sending requests to the agent.
     cx: JrConnectionCx<ClientToAgent>,
@@ -87,8 +88,11 @@ pub struct SacpConnection {
     /// Channel to receive approval requests from the agent.
     approval_rx: mpsc::Receiver<ApprovalRequest>,
 
-    /// Channel to receive all session notifications (both during and between turns).
-    notification_rx: mpsc::Receiver<SessionUpdate>,
+    /// Channel to receive inter-turn session notifications.
+    persistent_rx: mpsc::Receiver<SessionUpdate>,
+
+    /// Per-request update sink installed while a prompt or load is active.
+    active_update_tx: std::sync::Arc<Mutex<Option<mpsc::Sender<SessionUpdate>>>>,
 
     /// Thread-safe model state, updated on session creation and model switch.
     model_state: std::sync::Arc<std::sync::RwLock<AcpModelState>>,
@@ -174,14 +178,19 @@ impl SacpConnection {
 
         // --- Set up channels ---
         let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
-        let (notification_tx, notification_rx) = mpsc::channel::<SessionUpdate>(1024);
+        let (persistent_tx, persistent_rx) = mpsc::channel::<SessionUpdate>(1024);
+        let active_update_tx: std::sync::Arc<Mutex<Option<mpsc::Sender<SessionUpdate>>>> =
+            std::sync::Arc::new(Mutex::new(None));
 
         // --- Build SACP connection ---
         let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
 
-        let notify_tx_for_notifications = notification_tx.clone();
-        let notify_tx_for_write = notification_tx.clone();
-        let notify_tx_for_read = notification_tx.clone();
+        let notification_update_tx = std::sync::Arc::clone(&active_update_tx);
+        let notification_persistent_tx = persistent_tx.clone();
+        let write_update_tx = std::sync::Arc::clone(&active_update_tx);
+        let write_persistent_tx = persistent_tx.clone();
+        let read_update_tx = std::sync::Arc::clone(&active_update_tx);
+        let read_persistent_tx = persistent_tx.clone();
         let approval_cwd = cwd.to_path_buf();
         let write_cwd = cwd.to_path_buf();
         let read_cwd = cwd.to_path_buf();
@@ -196,9 +205,17 @@ impl SacpConnection {
             let result = ClientToAgent::builder()
                 .on_receive_notification(
                     {
-                        let notification_tx = notify_tx_for_notifications;
+                        let update_tx = notification_update_tx;
+                        let persistent_tx = notification_persistent_tx;
                         async move |notification: SessionNotification, _cx| {
-                            if notification_tx.try_send(notification.update).is_err() {
+                            let update = notification.update;
+                            let guard = update_tx.lock().await;
+                            let send_result = if let Some(tx) = guard.as_ref() {
+                                tx.try_send(update)
+                            } else {
+                                persistent_tx.try_send(update)
+                            };
+                            if send_result.is_err() {
                                 warn!("Notification channel full, dropping update");
                             }
                             Ok(())
@@ -309,11 +326,25 @@ impl SacpConnection {
                 )
                 .on_receive_request(
                     {
-                        let notification_tx = notify_tx_for_write;
+                        let update_tx = write_update_tx;
+                        let persistent_tx = write_persistent_tx;
                         let cwd = write_cwd;
                         async move |request: WriteTextFileRequest,
                                     request_cx: sacp::JrRequestCx<WriteTextFileResponse>,
                                     _cx: JrConnectionCx<ClientToAgent>| {
+                            let send_update = |update: SessionUpdate| {
+                                let update_tx = std::sync::Arc::clone(&update_tx);
+                                let persistent_tx = persistent_tx.clone();
+                                async move {
+                                    let guard = update_tx.lock().await;
+                                    if let Some(tx) = guard.as_ref() {
+                                        let _ = tx.try_send(update);
+                                    } else {
+                                        let _ = persistent_tx.try_send(update);
+                                    }
+                                }
+                            };
+
                             // Emit synthetic ToolCall for TUI rendering.
                             let tool_call_id = ToolCallId::from(format!(
                                 "write_text_file-{}",
@@ -324,7 +355,7 @@ impl SacpConnection {
                             let tool_call = ToolCall::new(tool_call_id, title)
                                 .kind(ToolKind::Execute)
                                 .status(ToolCallStatus::Pending);
-                            let _ = notification_tx.try_send(SessionUpdate::ToolCall(tool_call));
+                            send_update(SessionUpdate::ToolCall(tool_call)).await;
 
                             let path = &request.path;
                             let resolved_path = if path.is_relative() {
@@ -402,11 +433,25 @@ impl SacpConnection {
                 )
                 .on_receive_request(
                     {
-                        let notification_tx = notify_tx_for_read;
+                        let update_tx = read_update_tx;
+                        let persistent_tx = read_persistent_tx;
                         let cwd = read_cwd;
                         async move |request: ReadTextFileRequest,
                                     request_cx: sacp::JrRequestCx<ReadTextFileResponse>,
                                     _cx: JrConnectionCx<ClientToAgent>| {
+                            let send_update = |update: SessionUpdate| {
+                                let update_tx = std::sync::Arc::clone(&update_tx);
+                                let persistent_tx = persistent_tx.clone();
+                                async move {
+                                    let guard = update_tx.lock().await;
+                                    if let Some(tx) = guard.as_ref() {
+                                        let _ = tx.try_send(update);
+                                    } else {
+                                        let _ = persistent_tx.try_send(update);
+                                    }
+                                }
+                            };
+
                             // Emit synthetic ToolCall for TUI rendering.
                             let tool_call_id = ToolCallId::from(format!(
                                 "read_text_file-{}",
@@ -417,7 +462,7 @@ impl SacpConnection {
                             let tool_call = ToolCall::new(tool_call_id, title)
                                 .kind(ToolKind::Execute)
                                 .status(ToolCallStatus::Pending);
-                            let _ = notification_tx.try_send(SessionUpdate::ToolCall(tool_call));
+                            send_update(SessionUpdate::ToolCall(tool_call)).await;
 
                             // Resolve relative paths against cwd.
                             let resolved_path = if request.path.is_relative() {
@@ -507,7 +552,8 @@ impl SacpConnection {
             cx,
             agent_capabilities: capabilities,
             approval_rx,
-            notification_rx,
+            persistent_rx,
+            active_update_tx,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
             connection_task,
             child,
@@ -548,16 +594,33 @@ impl SacpConnection {
 
     /// Load (resume) an existing session.
     ///
-    /// The agent replays previous session history. Updates flow through the
-    /// unified notification channel. The returned `SessionId` is the same as
+    /// The agent replays previous session history, streaming updates via the
+    /// provided `update_tx` channel. The returned `SessionId` is the same as
     /// the input `session_id` (the LoadSessionResponse doesn't contain one).
-    pub async fn load_session(&self, session_id: &str, cwd: &Path) -> Result<SessionId> {
-        let response = self
+    pub async fn load_session(
+        &self,
+        session_id: &str,
+        cwd: &Path,
+        update_tx: mpsc::Sender<SessionUpdate>,
+    ) -> Result<SessionId> {
+        {
+            let mut guard = self.active_update_tx.lock().await;
+            *guard = Some(update_tx);
+        }
+
+        let result = self
             .cx
             .send_request(LoadSessionRequest::new(session_id.to_string(), cwd))
             .block_task()
             .await
-            .context("Failed to load ACP session")?;
+            .context("Failed to load ACP session");
+
+        {
+            let mut guard = self.active_update_tx.lock().await;
+            *guard = None;
+        }
+
+        let response = result?;
 
         #[cfg(feature = "unstable")]
         if let Some(ref models) = response.models
@@ -572,19 +635,30 @@ impl SacpConnection {
     }
 
     /// Send a prompt to an existing session and receive streaming updates.
-    ///
-    /// Updates flow through the unified notification channel.
     pub async fn prompt(
         &self,
         session_id: SessionId,
         prompt: Vec<ContentBlock>,
+        update_tx: mpsc::Sender<SessionUpdate>,
     ) -> Result<StopReason> {
-        self.cx
+        {
+            let mut guard = self.active_update_tx.lock().await;
+            *guard = Some(update_tx);
+        }
+
+        let result = self
+            .cx
             .send_request(PromptRequest::new(session_id, prompt))
             .block_task()
             .await
-            .context("ACP prompt failed")
-            .map(|r| r.stop_reason)
+            .context("ACP prompt failed");
+
+        {
+            let mut guard = self.active_update_tx.lock().await;
+            *guard = None;
+        }
+
+        result.map(|r| r.stop_reason)
     }
 
     /// Cancel an ongoing prompt.
@@ -604,9 +678,9 @@ impl SacpConnection {
         std::mem::replace(&mut self.approval_rx, mpsc::channel(1).1)
     }
 
-    /// Take ownership of the unified notification receiver.
-    pub fn take_notification_receiver(&mut self) -> mpsc::Receiver<SessionUpdate> {
-        std::mem::replace(&mut self.notification_rx, mpsc::channel(1).1)
+    /// Take ownership of the persistent notification receiver.
+    pub fn take_persistent_receiver(&mut self) -> mpsc::Receiver<SessionUpdate> {
+        std::mem::replace(&mut self.persistent_rx, mpsc::channel(1).1)
     }
 
     /// Get the current model state.
