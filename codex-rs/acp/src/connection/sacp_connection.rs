@@ -77,6 +77,11 @@ const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 /// - The `JrConnectionCx` is cloned out and used for all subsequent requests.
 /// - Session notifications and approval requests are forwarded via channels.
 /// - The session update channel is swapped for each prompt via an `Arc<Mutex<...>>`.
+///
+/// Shared slot for the active session update sender, paired with a generation
+/// counter to prevent stale uninstalls from wiping a newer sender.
+type ActiveUpdateSlot = std::sync::Arc<Mutex<Option<(u64, mpsc::Sender<SessionUpdate>)>>>;
+
 pub struct SacpConnection {
     /// Connection context for sending requests to the agent.
     cx: JrConnectionCx<ClientToAgent>,
@@ -95,9 +100,17 @@ pub struct SacpConnection {
 
     /// Shared session update sender. The notification handler routes updates
     /// to whoever currently holds the active sender. During a prompt, this
-    /// contains the caller's `update_tx`. Between turns, it is `None` and
-    /// notifications fall through to the persistent channel.
-    active_update_tx: std::sync::Arc<Mutex<Option<mpsc::Sender<SessionUpdate>>>>,
+    /// holds the caller's `update_tx`. It is NOT cleared when the prompt
+    /// returns because notifications may arrive after `block_task` completes.
+    /// Between turns the receiver is dropped by the `update_handler` task,
+    /// so `try_send` fails and the notification handler falls through to
+    /// `persistent_tx`. The next `prompt()` overwrites the slot.
+    active_update_tx: ActiveUpdateSlot,
+    /// Monotonic counter paired with `active_update_tx`. Each install gets
+    /// a unique generation; `close_update_channel` only clears if the
+    /// generation matches, preventing a stale task from wiping a newer
+    /// prompt's sender.
+    update_generation: std::sync::atomic::AtomicU64,
 
     /// Handle to the background task driving the SACP connection.
     connection_task: tokio::task::JoinHandle<()>,
@@ -181,8 +194,7 @@ impl SacpConnection {
         // --- Set up channels ---
         let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
         let (persistent_tx, persistent_rx) = mpsc::channel::<SessionUpdate>(64);
-        let active_update_tx: std::sync::Arc<Mutex<Option<mpsc::Sender<SessionUpdate>>>> =
-            std::sync::Arc::new(Mutex::new(None));
+        let active_update_tx: ActiveUpdateSlot = std::sync::Arc::new(Mutex::new(None));
 
         // --- Build SACP connection ---
         let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
@@ -212,9 +224,18 @@ impl SacpConnection {
                         async move |notification: SessionNotification, _cx| {
                             let update = notification.update;
                             let guard = update_tx.lock().await;
-                            if let Some(tx) = guard.as_ref() {
-                                let _ = tx.try_send(update);
+                            // Try the per-prompt channel first. If it fails
+                            // (receiver dropped between turns, or channel
+                            // full), fall through to the persistent channel.
+                            let unsent = if let Some((_, tx)) = guard.as_ref() {
+                                match tx.try_send(update) {
+                                    Ok(()) => None,
+                                    Err(e) => Some(e.into_inner()),
+                                }
                             } else {
+                                Some(update)
+                            };
+                            if let Some(update) = unsent {
                                 let _ = persistent_tx.try_send(update);
                             }
                             Ok(())
@@ -343,12 +364,16 @@ impl SacpConnection {
                                 .status(ToolCallStatus::Pending);
                             {
                                 let guard = update_tx.lock().await;
-                                if let Some(tx) = guard.as_ref() {
-                                    let _ =
-                                        tx.try_send(SessionUpdate::ToolCall(tool_call));
+                                let unsent = if let Some((_, tx)) = guard.as_ref() {
+                                    match tx.try_send(SessionUpdate::ToolCall(tool_call)) {
+                                        Ok(()) => None,
+                                        Err(e) => Some(e.into_inner()),
+                                    }
                                 } else {
-                                    let _ = persistent_tx
-                                        .try_send(SessionUpdate::ToolCall(tool_call));
+                                    Some(SessionUpdate::ToolCall(tool_call))
+                                };
+                                if let Some(update) = unsent {
+                                    let _ = persistent_tx.try_send(update);
                                 }
                             }
 
@@ -446,12 +471,16 @@ impl SacpConnection {
                                 .status(ToolCallStatus::Pending);
                             {
                                 let guard = update_tx.lock().await;
-                                if let Some(tx) = guard.as_ref() {
-                                    let _ =
-                                        tx.try_send(SessionUpdate::ToolCall(tool_call));
+                                let unsent = if let Some((_, tx)) = guard.as_ref() {
+                                    match tx.try_send(SessionUpdate::ToolCall(tool_call)) {
+                                        Ok(()) => None,
+                                        Err(e) => Some(e.into_inner()),
+                                    }
                                 } else {
-                                    let _ = persistent_tx
-                                        .try_send(SessionUpdate::ToolCall(tool_call));
+                                    Some(SessionUpdate::ToolCall(tool_call))
+                                };
+                                if let Some(update) = unsent {
+                                    let _ = persistent_tx.try_send(update);
                                 }
                             }
 
@@ -546,6 +575,7 @@ impl SacpConnection {
             persistent_rx,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
             active_update_tx,
+            update_generation: std::sync::atomic::AtomicU64::new(0),
             connection_task,
             child,
             stderr_task,
@@ -595,11 +625,7 @@ impl SacpConnection {
         cwd: &Path,
         update_tx: mpsc::Sender<SessionUpdate>,
     ) -> Result<SessionId> {
-        // Install the update channel for replay events.
-        {
-            let mut guard = self.active_update_tx.lock().await;
-            *guard = Some(update_tx);
-        }
+        let my_gen = self.install_update_channel(update_tx).await;
 
         let result = self
             .cx
@@ -608,11 +634,8 @@ impl SacpConnection {
             .await
             .context("Failed to load ACP session");
 
-        // Uninstall so replay events stop flowing to the caller's channel.
-        {
-            let mut guard = self.active_update_tx.lock().await;
-            *guard = None;
-        }
+        // Safe to clear here — load_session is never called concurrently.
+        self.close_update_channel(my_gen).await;
 
         let response = result?;
 
@@ -623,8 +646,6 @@ impl SacpConnection {
             *state = AcpModelState::from_session_model_state(models);
         }
 
-        // The session ID from the request is reused since the response
-        // doesn't contain one.
         Ok(SessionId::from(session_id.to_string()))
     }
 
@@ -635,11 +656,7 @@ impl SacpConnection {
         prompt: Vec<ContentBlock>,
         update_tx: mpsc::Sender<SessionUpdate>,
     ) -> Result<StopReason> {
-        // Install the update channel.
-        {
-            let mut guard = self.active_update_tx.lock().await;
-            *guard = Some(update_tx);
-        }
+        self.install_update_channel(update_tx).await;
 
         let result = self
             .cx
@@ -648,13 +665,37 @@ impl SacpConnection {
             .await
             .context("ACP prompt failed");
 
-        // Uninstall so inter-turn notifications go to persistent.
-        {
-            let mut guard = self.active_update_tx.lock().await;
-            *guard = None;
-        }
+        // Do NOT clear active_update_tx here. Late SessionNotification
+        // events may still arrive and should flow to the update_handler
+        // via the done_rx drain. The slot will be overwritten by the
+        // next prompt() call; between turns, try_send failure falls
+        // through to persistent_tx automatically.
 
         result.map(|r| r.stop_reason)
+    }
+
+    /// Install an update sender in the shared slot, returning the generation
+    /// counter for use with `close_update_channel`.
+    async fn install_update_channel(&self, update_tx: mpsc::Sender<SessionUpdate>) -> u64 {
+        let my_gen = self
+            .update_generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        let mut guard = self.active_update_tx.lock().await;
+        *guard = Some((my_gen, update_tx));
+        my_gen
+    }
+
+    /// Drop the active update sender if and only if the generation matches,
+    /// closing the channel so the `update_handler` task can terminate.
+    /// If a newer prompt has already installed its own sender, this is a
+    /// no-op — the newer prompt's channel is left intact.
+    async fn close_update_channel(&self, generation: u64) {
+        let mut guard = self.active_update_tx.lock().await;
+        let clearing = matches!(guard.as_ref(), Some((g, _)) if *g == generation);
+        if clearing {
+            *guard = None;
+        }
     }
 
     /// Cancel an ongoing prompt.

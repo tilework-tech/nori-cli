@@ -127,3 +127,48 @@ fn test_ctrl_c_cancels_streaming() {
     //     normalize_for_input_snapshot(session.screen_contents())
     // )
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_prompt_still_streams_after_interrupt() {
+    let config = SessionConfig::new().with_stream_until_cancel();
+    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt did not appear");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("first try").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("First prompt should become interruptible");
+
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for_text(
+            "Conversation interrupted - tell the model what to do differently",
+            TIMEOUT,
+        )
+        .expect("First prompt should report interrupt");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt should return after first interrupt");
+
+    session.send_str("second try").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("Second prompt should also become interruptible after the first cancel");
+
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for_text(
+            "Conversation interrupted - tell the model what to do differently",
+            TIMEOUT,
+        )
+        .expect("Second prompt should also be interruptible");
+}

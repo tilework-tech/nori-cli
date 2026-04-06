@@ -70,6 +70,9 @@ fn test_acp_create_new_file() {
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("Should successfully create new file");
+    session
+        .wait_for_text("Verified content:", Duration::from_secs(10))
+        .expect("Should verify the file content after writing");
 
     let contents = session.screen_contents();
 
@@ -123,6 +126,9 @@ fn test_acp_edit_existing_file() {
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("Should successfully edit existing file");
+    session
+        .wait_for_text("Verified content:", Duration::from_secs(10))
+        .expect("Should verify the updated file content after writing");
 
     let contents = session.screen_contents();
 
@@ -173,6 +179,9 @@ fn test_acp_create_file_with_parent_dirs() {
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("Should successfully create file with parent directories");
+    session
+        .wait_for_text("Verified content:", Duration::from_secs(10))
+        .expect("Should verify the nested file content after writing");
 
     let contents = session.screen_contents();
 

@@ -23,7 +23,7 @@ impl AcpBackend {
                 self.handle_user_input(items, &id).await?;
             }
             Op::Interrupt => {
-                self.turn_interrupted.store(true, Ordering::SeqCst);
+                self.turn_id.fetch_add(1, Ordering::SeqCst);
                 self.connection
                     .cancel(&*self.session_id.read().await)
                     .await?;
@@ -276,6 +276,7 @@ impl AcpBackend {
 
         // Create channel for receiving session updates
         let (update_tx, mut update_rx) = mpsc::channel(32);
+        let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Clone what we need for capturing the response
         let event_tx = self.event_tx.clone();
@@ -292,7 +293,8 @@ impl AcpBackend {
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
         let transcript_recorder = self.transcript_recorder.clone();
-        let turn_interrupted = Arc::clone(&self.turn_interrupted);
+        let turn_id = Arc::clone(&self.turn_id);
+        let my_turn_id = turn_id.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Spawn task to handle the prompt and capture the summary
         tokio::spawn(async move {
@@ -316,8 +318,31 @@ impl AcpBackend {
 
             let update_handler = tokio::spawn(async move {
                 let mut summary_text = String::new();
+                let mut done = false;
 
-                while let Some(update) = update_rx.recv().await {
+                loop {
+                    let update = if done {
+                        match tokio::time::timeout(
+                            super::POST_PROMPT_DRAIN_TIMEOUT,
+                            update_rx.recv(),
+                        )
+                        .await
+                        {
+                            Ok(Some(u)) => u,
+                            _ => break,
+                        }
+                    } else {
+                        tokio::select! {
+                            msg = update_rx.recv() => match msg {
+                                Some(u) => u,
+                                None => break,
+                            },
+                            _ = &mut done_rx => {
+                                done = true;
+                                continue;
+                            }
+                        }
+                    };
                     let client_events =
                         normalize_session_update(&client_event_normalizer, &update).await;
                     forward_client_events(&backend_event_tx_for_updates, &client_events).await;
@@ -340,66 +365,61 @@ impl AcpBackend {
             let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
+            // Signal the update_handler to drain remaining events and stop.
+            let _ = done_tx.send(());
+
             // Wait for all updates to be processed
             let _ = update_handler.await;
 
-            // If prompt failed, send error event and clear any partial summary
-            if let Err(ref e) = result {
-                warn!("Compact prompt failed: {e}");
-                // Clear any partial summary that may have been stored
-                *pending_compact_summary.lock().await = None;
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::Error(ErrorEvent {
-                            message: format!("Compact failed: {e}"),
-                            codex_error_info: None,
-                        }),
-                    })
+            // Only emit tail events if this is still the active turn. When
+            // the turn_id has advanced, this task is stale and all its late
+            // events (errors, warnings, Completed) must be suppressed.
+            if turn_id.load(Ordering::SeqCst) == my_turn_id {
+                if let Err(ref e) = result {
+                    warn!("Compact prompt failed: {e}");
+                    *pending_compact_summary.lock().await = None;
+                    let _ = event_tx
+                        .send(Event {
+                            id: id_clone.clone(),
+                            msg: EventMsg::Error(ErrorEvent {
+                                message: format!("Compact failed: {e}"),
+                                codex_error_info: None,
+                            }),
+                        })
+                        .await;
+                } else {
+                    match connection.create_session(&cwd, mcp_servers).await {
+                        Ok(new_session_id) => {
+                            debug!("Created new session after compact: {:?}", new_session_id);
+                            *session_id_lock.write().await = new_session_id;
+                        }
+                        Err(e) => {
+                            warn!("Failed to create new session after compact: {e}");
+                        }
+                    }
+
+                    let compact_summary = pending_compact_summary.lock().await.clone();
+                    emit_client_event(
+                        &backend_event_tx,
+                        transcript_recorder.as_ref(),
+                        nori_protocol::ClientEvent::TurnLifecycle(
+                            nori_protocol::TurnLifecycle::ContextCompacted {
+                                summary: compact_summary.clone(),
+                            },
+                        ),
+                    )
                     .await;
-            } else {
-                // Create a new session to clear the agent's conversation history.
-                // The summary we captured will be prepended to the next user prompt,
-                // giving the agent context about the previous conversation.
-                match connection.create_session(&cwd, mcp_servers).await {
-                    Ok(new_session_id) => {
-                        debug!("Created new session after compact: {:?}", new_session_id);
-                        *session_id_lock.write().await = new_session_id;
-                    }
-                    Err(e) => {
-                        warn!("Failed to create new session after compact: {e}");
-                        // Continue anyway - summary will still be prepended but agent
-                        // will retain its full history, which is suboptimal but functional
-                    }
+
+                    let _ = event_tx
+                        .send(Event {
+                            id: id_clone.clone(),
+                            msg: EventMsg::Warning(WarningEvent {
+                                message: "Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new conversation when possible to keep conversations small and targeted.".to_string(),
+                            }),
+                        })
+                        .await;
                 }
 
-                // Send ContextCompacted event to notify TUI, including the
-                // summary text so the TUI can reprint it under a new session header.
-                let compact_summary = pending_compact_summary.lock().await.clone();
-                emit_client_event(
-                    &backend_event_tx,
-                    transcript_recorder.as_ref(),
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::ContextCompacted {
-                            summary: compact_summary.clone(),
-                        },
-                    ),
-                )
-                .await;
-
-                // Send warning about long conversations
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::Warning(WarningEvent {
-                            message: "Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new conversation when possible to keep conversations small and targeted.".to_string(),
-                        }),
-                    })
-                    .await;
-            }
-
-            // Send TaskComplete event, unless the turn was interrupted.
-            if !turn_interrupted.load(Ordering::SeqCst) {
                 emit_client_event(
                     &backend_event_tx,
                     transcript_recorder.as_ref(),
@@ -410,21 +430,22 @@ impl AcpBackend {
                     ),
                 )
                 .await;
-            }
-
-            // Start idle timer if configured
-            if let Some(duration) = notify_after_idle.as_duration() {
-                let idle_secs = duration.as_secs();
-                let user_notifier_for_timer = Arc::clone(&user_notifier);
-                let idle_task = tokio::spawn(async move {
-                    tokio::time::sleep(duration).await;
-                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                        session_id: session_id_for_timer,
-                        idle_duration_secs: idle_secs,
+                // Start idle timer if configured
+                if let Some(duration) = notify_after_idle.as_duration() {
+                    let idle_secs = duration.as_secs();
+                    let user_notifier_for_timer = Arc::clone(&user_notifier);
+                    let idle_task = tokio::spawn(async move {
+                        tokio::time::sleep(duration).await;
+                        user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                            session_id: session_id_for_timer,
+                            idle_duration_secs: idle_secs,
+                        });
                     });
-                });
-                // Store the abort handle so the timer can be cancelled on new activity
-                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                    *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                }
+            } else if let Err(ref e) = result {
+                warn!("Compact prompt failed (stale turn, suppressed): {e}");
+                *pending_compact_summary.lock().await = None;
             }
         });
 

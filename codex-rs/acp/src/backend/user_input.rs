@@ -5,8 +5,10 @@ use super::*;
 impl AcpBackend {
     /// Handle user input by sending a prompt to the ACP agent.
     pub(super) async fn handle_user_input(&self, items: Vec<UserInput>, id: &str) -> Result<()> {
-        // Reset the interrupt flag so this turn's Completed will be emitted.
-        self.turn_interrupted.store(false, Ordering::SeqCst);
+        // Advance the turn counter. The returned value (+1) is this turn's ID.
+        // The spawned task captures it and only emits Completed if the counter
+        // still matches, which guarantees stale tasks from prior turns are silent.
+        let my_turn_id = self.turn_id.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Separate text items (needed for hooks, summary, transcript) from
         // image items (converted to ACP ContentBlock::Image).
@@ -172,8 +174,10 @@ impl AcpBackend {
         }
         prompt.extend(image_blocks);
 
-        // Create channel for receiving session updates
+        // Create channel for receiving session updates, and a oneshot to
+        // signal the update_handler to stop after prompt() returns.
         let (update_tx, mut update_rx) = mpsc::channel(32);
+        let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Clone what we need for the background task
         let event_tx = self.event_tx.clone();
@@ -198,7 +202,7 @@ impl AcpBackend {
         let pending_hook_context = Arc::clone(&self.pending_hook_context);
         let client_event_normalizer = Arc::clone(&self.client_event_normalizer);
         let backend_event_tx = self.backend_event_tx.clone();
-        let turn_interrupted = Arc::clone(&self.turn_interrupted);
+        let turn_id = Arc::clone(&self.turn_id);
 
         // Spawn task to handle the prompt and translate events
         tokio::spawn(async move {
@@ -235,7 +239,34 @@ impl AcpBackend {
                 let mut has_fired_pre_agent_response = false;
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
-                while let Some(update) = update_rx.recv().await {
+                // When prompt() returns, done_rx fires. We then drain any
+                // late-arriving notifications with a short timeout before
+                // exiting. This is needed because block_task() can return
+                // before all SessionNotification events have been delivered.
+                let mut done = false;
+                loop {
+                    let update = if done {
+                        match tokio::time::timeout(
+                            super::POST_PROMPT_DRAIN_TIMEOUT,
+                            update_rx.recv(),
+                        )
+                        .await
+                        {
+                            Ok(Some(u)) => u,
+                            _ => break,
+                        }
+                    } else {
+                        tokio::select! {
+                            msg = update_rx.recv() => match msg {
+                                Some(u) => u,
+                                None => break,
+                            },
+                            _ = &mut done_rx => {
+                                done = true;
+                                continue;
+                            }
+                        }
+                    };
                     let client_events =
                         normalize_session_update(&client_event_normalizer, &update).await;
                     forward_client_events(&backend_event_tx_for_updates, &client_events).await;
@@ -380,6 +411,12 @@ impl AcpBackend {
             let session_id_for_timer = session_id.to_string();
             let result = connection.prompt(session_id, prompt, update_tx).await;
 
+            // Signal the update_handler to drain remaining events and stop.
+            // We do NOT close the active_update_tx slot here — late
+            // notifications may still arrive and should reach the handler.
+            // The slot will be overwritten by the next prompt() call.
+            let _ = done_tx.send(());
+
             // Wait for all updates to be processed and get accumulated text
             let accumulated_text = update_handler.await.unwrap_or_default();
 
@@ -477,71 +514,53 @@ impl AcpBackend {
                 );
             }
 
-            // If prompt failed, send an error event to the TUI BEFORE TaskComplete
-            // This ensures the user sees why their request failed instead of a silent failure
-            if let Err(ref e) = result {
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e:#}");
+            if turn_id.load(Ordering::SeqCst) == my_turn_id {
+                if let Err(ref e) = result {
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+                    let display_error = format!("{e:#}");
 
-                // Generate user-friendly message based on error category
-                let user_message = match category {
-                    AcpErrorCategory::Authentication => {
-                        format!(
-                            "Authentication error: {display_error}. Please check your credentials or re-authenticate."
-                        )
-                    }
-                    AcpErrorCategory::QuotaExceeded => {
-                        format!("Rate limit or quota exceeded: {display_error}")
-                    }
-                    AcpErrorCategory::ExecutableNotFound => {
-                        format!("Agent executable not found: {display_error}")
-                    }
-                    AcpErrorCategory::Initialization => {
-                        format!("Agent initialization failed: {display_error}")
-                    }
-                    AcpErrorCategory::PromptTooLong => {
-                        "Prompt is too long. Try using /compact to reduce context size, or start a new session."
-                            .to_string()
-                    }
-                    AcpErrorCategory::ApiServerError => {
-                        "The API returned a server error. This is usually temporary — please try again."
-                            .to_string()
-                    }
-                    AcpErrorCategory::Unknown => {
-                        format!("ACP prompt failed: {display_error}")
-                    }
-                };
+                    let user_message = match category {
+                        AcpErrorCategory::Authentication => {
+                            format!(
+                                "Authentication error: {display_error}. Please check your credentials or re-authenticate."
+                            )
+                        }
+                        AcpErrorCategory::QuotaExceeded => {
+                            format!("Rate limit or quota exceeded: {display_error}")
+                        }
+                        AcpErrorCategory::ExecutableNotFound => {
+                            format!("Agent executable not found: {display_error}")
+                        }
+                        AcpErrorCategory::Initialization => {
+                            format!("Agent initialization failed: {display_error}")
+                        }
+                        AcpErrorCategory::PromptTooLong => {
+                            "Prompt is too long. Try using /compact to reduce context size, or start a new session."
+                                .to_string()
+                        }
+                        AcpErrorCategory::ApiServerError => {
+                            "The API returned a server error. This is usually temporary — please try again."
+                                .to_string()
+                        }
+                        AcpErrorCategory::Unknown => {
+                            format!("ACP prompt failed: {display_error}")
+                        }
+                    };
 
-                warn!("ACP prompt failed: {}", e);
-                debug!(
-                    target: "acp_event_flow",
-                    user_message = %user_message,
-                    "ACP prompt failure: sending ErrorEvent to TUI"
-                );
+                    warn!("ACP prompt failed: {}", e);
 
-                // Send error event to TUI so user sees the error
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::Error(ErrorEvent {
-                            message: user_message.clone(),
-                            codex_error_info: None,
-                        }),
-                    })
-                    .await;
+                    let _ = event_tx
+                        .send(Event {
+                            id: id_clone.clone(),
+                            msg: EventMsg::Error(ErrorEvent {
+                                message: user_message.clone(),
+                                codex_error_info: None,
+                            }),
+                        })
+                        .await;
+                }
 
-                debug!(
-                    target: "acp_event_flow",
-                    "ACP prompt failure: ErrorEvent sent to TUI"
-                );
-            }
-
-            // Send TaskComplete event to end the turn, unless this turn was
-            // interrupted. When Op::Interrupt fires, it emits
-            // TurnLifecycle::Aborted synchronously; emitting a Completed here
-            // would race with the next turn and prematurely terminate it.
-            if !turn_interrupted.load(Ordering::SeqCst) {
                 emit_client_event(
                     &backend_event_tx,
                     transcript_recorder.as_ref(),
@@ -552,21 +571,21 @@ impl AcpBackend {
                     ),
                 )
                 .await;
-            }
-
-            // Start idle timer if configured
-            if let Some(duration) = notify_after_idle.as_duration() {
-                let idle_secs = duration.as_secs();
-                let user_notifier_for_timer = Arc::clone(&user_notifier);
-                let idle_task = tokio::spawn(async move {
-                    tokio::time::sleep(duration).await;
-                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                        session_id: session_id_for_timer,
-                        idle_duration_secs: idle_secs,
+                // Start idle timer if configured
+                if let Some(duration) = notify_after_idle.as_duration() {
+                    let idle_secs = duration.as_secs();
+                    let user_notifier_for_timer = Arc::clone(&user_notifier);
+                    let idle_task = tokio::spawn(async move {
+                        tokio::time::sleep(duration).await;
+                        user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
+                            session_id: session_id_for_timer,
+                            idle_duration_secs: idle_secs,
+                        });
                     });
-                });
-                // Store the abort handle so the timer can be cancelled on new activity
-                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                    *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
+                }
+            } else if let Err(ref e) = result {
+                warn!("ACP prompt failed (stale turn, suppressed): {e}");
             }
         });
 

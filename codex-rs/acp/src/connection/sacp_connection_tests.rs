@@ -364,12 +364,108 @@ async fn test_cancel_during_prompt() {
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), prompt_task)
         .await
         .expect("Prompt should complete within 5s after cancel")
-        .expect("Prompt task should not panic")
-        .expect("Prompt should not error after cancel");
+        .expect("Prompt task should not panic");
+    let stop_reason = result.expect("Prompt should not error after cancel");
 
     assert_eq!(
-        result,
+        stop_reason,
         acp::StopReason::Cancelled,
         "Stop reason should be Cancelled after cancel"
     );
+}
+
+/// Test that a new prompt still receives updates after the previous prompt
+/// was cancelled. This covers the user-visible regression where the old
+/// prompt's stale cleanup could break the new prompt's update channel.
+#[tokio::test]
+#[serial]
+async fn test_sequential_prompt_after_cancel_receives_response() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config.env.insert(
+        "MOCK_AGENT_STREAM_UNTIL_CANCEL".to_string(),
+        "1".to_string(),
+    );
+
+    let temp_dir = tempdir().expect("temp dir");
+
+    let conn = SacpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("spawn");
+
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+    let conn = Arc::new(conn);
+
+    let (tx1, mut rx1) = mpsc::channel(32);
+    let prompt1 = vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))];
+    let conn_for_prompt1 = Arc::clone(&conn);
+    let session_id_for_prompt1 = session_id.clone();
+    let prompt1_task = tokio::spawn(async move {
+        conn_for_prompt1
+            .prompt(session_id_for_prompt1, prompt1, tx1)
+            .await
+    });
+
+    let first_update = tokio::time::timeout(std::time::Duration::from_secs(5), rx1.recv())
+        .await
+        .expect("Prompt 1 should start streaming within 5s")
+        .expect("Prompt 1 update channel should stay open");
+    assert!(
+        matches!(first_update, acp::SessionUpdate::AgentMessageChunk(_)),
+        "Prompt 1 should receive a streamed agent message before cancel"
+    );
+
+    conn.cancel(&session_id)
+        .await
+        .expect("prompt 1 cancel should succeed");
+
+    let stop_reason_1 = tokio::time::timeout(std::time::Duration::from_secs(5), prompt1_task)
+        .await
+        .expect("Prompt 1 should complete within 5s after cancel")
+        .expect("Prompt 1 task should not panic")
+        .expect("Prompt 1 should not error after cancel");
+    assert_eq!(stop_reason_1, acp::StopReason::Cancelled);
+
+    let (tx2, mut rx2) = mpsc::channel(32);
+    let prompt2 = vec![acp::ContentBlock::Text(acp::TextContent::new(
+        "hello again",
+    ))];
+    let conn_for_prompt2 = Arc::clone(&conn);
+    let session_id_for_prompt2 = session_id.clone();
+    let prompt2_task = tokio::spawn(async move {
+        conn_for_prompt2
+            .prompt(session_id_for_prompt2, prompt2, tx2)
+            .await
+    });
+
+    let second_update = tokio::time::timeout(std::time::Duration::from_secs(5), rx2.recv())
+        .await
+        .expect("Prompt 2 should start streaming within 5s")
+        .expect("Prompt 2 update channel should stay open");
+    let second_text = match second_update {
+        acp::SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
+            acp::ContentBlock::Text(text) => text.text,
+            other => panic!("Prompt 2 should receive text content, got: {other:?}"),
+        },
+        other => panic!("Prompt 2 should receive an agent text chunk, got: {other:?}"),
+    };
+    assert!(
+        !second_text.is_empty(),
+        "Prompt 2 should receive non-empty text updates after cancel"
+    );
+
+    conn.cancel(&session_id)
+        .await
+        .expect("prompt 2 cancel should succeed");
+
+    let stop_reason_2 = tokio::time::timeout(std::time::Duration::from_secs(5), prompt2_task)
+        .await
+        .expect("Prompt 2 should complete within 5s after cancel")
+        .expect("Prompt 2 task should not panic")
+        .expect("Prompt 2 should not error after cancel");
+    assert_eq!(stop_reason_2, acp::StopReason::Cancelled);
 }

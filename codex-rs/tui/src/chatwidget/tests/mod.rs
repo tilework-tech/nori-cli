@@ -259,6 +259,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
         vertical_footer: false,
+        footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });
@@ -313,7 +314,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         #[cfg(feature = "nori-config")]
         loop_count_override: None,
         turn_finished: false,
-        pending_stale_completes: 0,
         plan_drawer_mode: PlanDrawerMode::Off,
         pinned_plan: None,
         terminal_title_animation_origin: std::time::Instant::now(),
