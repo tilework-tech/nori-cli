@@ -259,6 +259,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
         vertical_footer: false,
+        footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });

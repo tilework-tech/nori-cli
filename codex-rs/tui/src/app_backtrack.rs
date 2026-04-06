@@ -305,8 +305,6 @@ impl App {
         nth_user_message: usize,
         prefill: String,
     ) {
-        let cfg = self.chat_widget.config_ref().clone();
-
         // Build a plain-text summary of the conversation prior to the
         // selected user message to inject as context into the new session.
         let cell_index = nth_user_position(&self.transcript_cells, nth_user_message)
@@ -318,22 +316,16 @@ impl App {
             Some(fork_summary)
         };
 
-        let init = crate::chatwidget::ChatWidgetInit {
-            config: cfg,
-            frame_requester: tui.frame_requester(),
-            app_event_tx: self.app_event_tx.clone(),
-            initial_prompt: None,
-            initial_images: Vec::new(),
-            enhanced_keys_supported: self.enhanced_keys_supported,
-            auth_manager: self.auth_manager.clone(),
-            vertical_footer: self.vertical_footer,
-            expected_agent: None,
-            deferred_spawn: false,
+        let init = self.chat_widget_init(
+            tui.frame_requester(),
+            None,
+            Vec::new(),
+            None,
+            false,
             fork_context,
-        };
+        );
         self.chat_widget = crate::chatwidget::ChatWidget::new(init);
-        self.chat_widget
-            .set_hotkey_config(self.hotkey_config.clone());
+        self.configure_new_chat_widget();
         // Trim transcript up to the selected user message and re-render it.
         self.trim_transcript_for_backtrack(nth_user_message);
         self.render_transcript_once(tui);
