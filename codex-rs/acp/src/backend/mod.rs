@@ -50,6 +50,12 @@ use crate::transcript::TranscriptRecorder;
 use crate::translator;
 use crate::undo::GhostSnapshotStack;
 
+/// Maximum time to wait for late-arriving `SessionNotification` events after
+/// `block_task()` returns.  Empirically most arrive within ~50 ms; 500 ms
+/// provides generous headroom without noticeably delaying the turn lifecycle.
+pub(super) const POST_PROMPT_DRAIN_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(500);
+
 // =============================================================================
 // Error Categorization
 // =============================================================================

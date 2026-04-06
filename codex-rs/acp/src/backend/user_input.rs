@@ -174,8 +174,10 @@ impl AcpBackend {
         }
         prompt.extend(image_blocks);
 
-        // Create channel for receiving session updates
+        // Create channel for receiving session updates, and a oneshot to
+        // signal the update_handler to stop after prompt() returns.
         let (update_tx, mut update_rx) = mpsc::channel(32);
+        let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Clone what we need for the background task
         let event_tx = self.event_tx.clone();
@@ -237,7 +239,34 @@ impl AcpBackend {
                 let mut has_fired_pre_agent_response = false;
                 let mut has_agent_text = false;
                 let mut needs_agent_separator = false;
-                while let Some(update) = update_rx.recv().await {
+                // When prompt() returns, done_rx fires. We then drain any
+                // late-arriving notifications with a short timeout before
+                // exiting. This is needed because block_task() can return
+                // before all SessionNotification events have been delivered.
+                let mut done = false;
+                loop {
+                    let update = if done {
+                        match tokio::time::timeout(
+                            super::POST_PROMPT_DRAIN_TIMEOUT,
+                            update_rx.recv(),
+                        )
+                        .await
+                        {
+                            Ok(Some(u)) => u,
+                            _ => break,
+                        }
+                    } else {
+                        tokio::select! {
+                            msg = update_rx.recv() => match msg {
+                                Some(u) => u,
+                                None => break,
+                            },
+                            _ = &mut done_rx => {
+                                done = true;
+                                continue;
+                            }
+                        }
+                    };
                     let client_events =
                         normalize_session_update(&client_event_normalizer, &update).await;
                     forward_client_events(&backend_event_tx_for_updates, &client_events).await;
@@ -380,7 +409,13 @@ impl AcpBackend {
 
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt, update_tx).await;
+            let (result, _update_gen) = connection.prompt(session_id, prompt, update_tx).await;
+
+            // Signal the update_handler to drain remaining events and stop.
+            // We do NOT close the active_update_tx slot here — late
+            // notifications may still arrive and should reach the handler.
+            // The slot will be overwritten by the next prompt() call.
+            let _ = done_tx.send(());
 
             // Wait for all updates to be processed and get accumulated text
             let accumulated_text = update_handler.await.unwrap_or_default();

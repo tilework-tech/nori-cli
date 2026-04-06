@@ -70,7 +70,8 @@ async fn test_prompt_receives_text_updates() {
     let (tx, mut rx) = mpsc::channel(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))];
 
-    let stop_reason = conn.prompt(session_id, prompt, tx).await.expect("prompt");
+    let (stop_reason_result, _gen) = conn.prompt(session_id, prompt, tx).await;
+    let stop_reason = stop_reason_result.expect("prompt");
 
     // Collect all text messages from the updates channel.
     let mut messages = Vec::new();
@@ -191,7 +192,7 @@ async fn test_approval_receiver_forwards_requests() {
         .send(codex_protocol::protocol::ReviewDecision::Approved);
 
     // The prompt should complete (either normally or error) after approval.
-    let result = tokio::time::timeout(std::time::Duration::from_secs(10), prompt_handle)
+    let (result, _gen) = tokio::time::timeout(std::time::Duration::from_secs(10), prompt_handle)
         .await
         .expect("Prompt should complete within 10s after approval")
         .expect("Prompt task should not panic");
@@ -246,7 +247,7 @@ async fn test_codex_home_not_inherited() {
     let (tx, mut rx) = mpsc::channel(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("check env"))];
 
-    conn.prompt(session_id, prompt, tx).await.expect("prompt");
+    conn.prompt(session_id, prompt, tx).await.0.expect("prompt");
 
     let mut messages = Vec::new();
     while let Ok(update) = rx.try_recv() {
@@ -361,14 +362,14 @@ async fn test_cancel_during_prompt() {
         .expect("cancel should succeed");
 
     // The prompt should complete with Cancelled stop reason
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), prompt_task)
+    let (result, _gen) = tokio::time::timeout(std::time::Duration::from_secs(5), prompt_task)
         .await
         .expect("Prompt should complete within 5s after cancel")
-        .expect("Prompt task should not panic")
-        .expect("Prompt should not error after cancel");
+        .expect("Prompt task should not panic");
+    let stop_reason = result.expect("Prompt should not error after cancel");
 
     assert_eq!(
-        result,
+        stop_reason,
         acp::StopReason::Cancelled,
         "Stop reason should be Cancelled after cancel"
     );
@@ -404,6 +405,7 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
     let prompt1 = vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))];
     conn.prompt(session_id.clone(), prompt1, tx1)
         .await
+        .0
         .expect("prompt 1");
 
     let mut msgs1 = Vec::new();
@@ -425,6 +427,7 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
     ))];
     conn.prompt(session_id.clone(), prompt2, tx2)
         .await
+        .0
         .expect("prompt 2");
 
     let mut msgs2 = Vec::new();

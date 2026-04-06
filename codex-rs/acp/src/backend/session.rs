@@ -81,10 +81,6 @@ impl AcpBackend {
 
             match connection.load_session(sid, &cwd, update_tx).await {
                 Ok(session_id) => {
-                    // Wait for all updates to be collected. This is safe
-                    // because the collect task buffers into a Vec (no
-                    // backpressure) and update_rx closes when load_session
-                    // completes (the worker thread drops update_tx).
                     let buffered_client_events = collect_handle.await.unwrap_or_default();
                     if !buffered_client_events.is_empty() {
                         debug!(
