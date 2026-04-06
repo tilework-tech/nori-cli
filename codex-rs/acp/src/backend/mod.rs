@@ -304,8 +304,6 @@ pub struct AcpBackend {
     async_post_user_prompt_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
-    /// ACP-native normalized event accumulator.
-    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
     /// Set when `Op::Interrupt` fires; checked by the spawned prompt task

@@ -201,7 +201,6 @@ impl AcpBackend {
             async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
             async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
             script_timeout: config.script_timeout,
-            client_event_normalizer: Arc::clone(&client_event_normalizer),
             mcp_servers: config.mcp_servers.clone(),
             turn_interrupted: Arc::new(AtomicBool::new(false)),
             reducer_tx: reducer_tx.clone(),
