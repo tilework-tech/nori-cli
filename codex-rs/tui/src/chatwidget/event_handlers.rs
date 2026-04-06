@@ -182,12 +182,6 @@ impl ChatWidget {
     // Raw reasoning uses the same flow as summarized reasoning
 
     pub(super) fn on_task_started(&mut self) {
-        // When the ACP backend suppresses a stale Completed (via the
-        // turn_interrupted flag), the pending_stale_completes counter is
-        // never drained. Reset it here so leftover counters from previous
-        // interrupts don't consume this turn's real Completed.
-        self.pending_stale_completes = 0;
-
         self.bottom_pane.clear_ctrl_c_quit_hint();
         self.bottom_pane.set_task_running(true);
         self.retry_status_header = None;
@@ -202,15 +196,6 @@ impl ChatWidget {
     }
 
     pub(super) fn on_task_complete(&mut self, last_agent_message: Option<String>) {
-        // If this Completed is a stale leftover from a cancelled turn, skip it.
-        // Each on_interrupted_turn increments pending_stale_completes; the
-        // matching background task will eventually emit Completed which we
-        // must ignore to avoid prematurely ending the current turn.
-        if self.pending_stale_completes > 0 {
-            self.pending_stale_completes -= 1;
-            return;
-        }
-
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
 
@@ -443,12 +428,6 @@ impl ChatWidget {
     /// When there are queued user messages, restore them into the composer
     /// separated by newlines rather than auto‑submitting the next one.
     pub(super) fn on_interrupted_turn(&mut self, _reason: TurnAbortReason) {
-        // The ACP backend usually suppresses the stale Completed via
-        // turn_interrupted, but if it races through, on_task_complete
-        // can use this counter to ignore it. The counter is reset by
-        // the next on_task_started as a safety net.
-        self.pending_stale_completes += 1;
-
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
         self.cancel_loop();
