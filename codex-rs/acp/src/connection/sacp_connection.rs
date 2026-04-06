@@ -66,6 +66,8 @@ use sacp::schema::SetSessionModelRequest;
 /// Minimum supported ACP protocol version.
 const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 
+type ActiveUpdateSlot = std::sync::Arc<Mutex<Option<(u64, mpsc::Sender<SessionUpdate>)>>>;
+
 /// A thread-safe connection to an ACP agent subprocess using SACP v10.
 ///
 /// Unlike the old `AcpConnection`, this does NOT require a dedicated worker thread.
@@ -77,10 +79,6 @@ const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 /// - The `JrConnectionCx` is cloned out and used for all subsequent requests.
 /// - Session notifications and approval requests are forwarded via channels.
 /// - The session update channel is swapped for each prompt via an `Arc<Mutex<...>>`.
-/// Shared slot for the active session update sender, paired with a generation
-/// counter to prevent stale uninstalls from wiping a newer sender.
-type ActiveUpdateSlot = std::sync::Arc<Mutex<Option<(u64, mpsc::Sender<SessionUpdate>)>>>;
-
 pub struct SacpConnection {
     /// Connection context for sending requests to the agent.
     cx: JrConnectionCx<ClientToAgent>,
