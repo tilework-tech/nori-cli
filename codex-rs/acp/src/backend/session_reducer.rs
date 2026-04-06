@@ -20,6 +20,7 @@ use sacp::schema as acp;
 
 /// Everything that can affect [`SessionRuntime`] state.
 #[derive(Debug)]
+#[allow(dead_code)] // Variants used by tests and will be used in production as reducer is wired
 pub enum InboundEvent {
     /// A `session/update` notification from the agent.
     Notification(Box<acp::SessionUpdate>),
@@ -42,6 +43,7 @@ pub enum InboundEvent {
 
 /// Side effects the caller must execute after reduction.
 #[derive(Debug, PartialEq)]
+#[allow(dead_code)] // Variants used by tests and will be used as reducer fully takes over lifecycle
 pub enum SideEffect {
     /// Send a `session/prompt` to the agent.
     SendPrompt {
