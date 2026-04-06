@@ -459,16 +459,16 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
     let conn_for_prompt1 = Arc::clone(&conn);
     let session_id_for_prompt1 = session_id.clone();
     let prompt1_task = tokio::spawn(async move {
-        conn_for_prompt1.prompt(session_id_for_prompt1, prompt1).await
+        conn_for_prompt1
+            .prompt(session_id_for_prompt1, prompt1)
+            .await
     });
 
-    let first_update = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        notification_rx.recv(),
-    )
-    .await
-    .expect("Prompt 1 should start streaming within 5s")
-    .expect("Notification channel should stay open");
+    let first_update =
+        tokio::time::timeout(std::time::Duration::from_secs(5), notification_rx.recv())
+            .await
+            .expect("Prompt 1 should start streaming within 5s")
+            .expect("Notification channel should stay open");
     assert!(
         matches!(first_update, acp::SessionUpdate::AgentMessageChunk(_)),
         "Prompt 1 should receive a streamed agent message before cancel"
@@ -485,9 +485,12 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
         .expect("Prompt 1 should not error after cancel");
     assert_eq!(stop_reason_1, acp::StopReason::Cancelled);
 
-    while tokio::time::timeout(std::time::Duration::from_millis(100), notification_rx.recv())
-        .await
-        .is_ok()
+    while tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        notification_rx.recv(),
+    )
+    .await
+    .is_ok()
     {}
 
     let prompt2 = vec![acp::ContentBlock::Text(acp::TextContent::new(
@@ -496,16 +499,16 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
     let conn_for_prompt2 = Arc::clone(&conn);
     let session_id_for_prompt2 = session_id.clone();
     let prompt2_task = tokio::spawn(async move {
-        conn_for_prompt2.prompt(session_id_for_prompt2, prompt2).await
+        conn_for_prompt2
+            .prompt(session_id_for_prompt2, prompt2)
+            .await
     });
 
-    let second_update = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        notification_rx.recv(),
-    )
-    .await
-    .expect("Prompt 2 should start streaming within 5s")
-    .expect("Notification channel should stay open");
+    let second_update =
+        tokio::time::timeout(std::time::Duration::from_secs(5), notification_rx.recv())
+            .await
+            .expect("Prompt 2 should start streaming within 5s")
+            .expect("Notification channel should stay open");
     let second_text = match second_update {
         acp::SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
             acp::ContentBlock::Text(text) => text.text,
