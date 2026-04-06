@@ -50,8 +50,8 @@ pub(super) async fn run_prompt_summary(
     drop(connection);
 
     match prompt_result {
-        Ok(Ok(_)) => {}
-        Ok(Err(e)) => return Err(e),
+        Ok((Ok(_), _gen)) => {}
+        Ok((Err(e), _gen)) => return Err(e),
         Err(_) => {
             debug!("Prompt summary timed out");
             return Ok(());
