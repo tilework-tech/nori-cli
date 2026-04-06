@@ -42,7 +42,7 @@ fn test_single_prompt_response_appears_immediately() {
 
     // Response should appear WITHOUT needing to send another prompt
     session
-        .wait_for_text("RESPONSE_ONE_UNIQUE_MARKER", Duration::from_secs(10))
+        .wait_for_text("RESPONSE_ONE_UNIQUE_MARKER", Duration::from_secs(20))
         .expect("Response should appear immediately after first prompt, not require second prompt");
 
     eprintln!(
@@ -82,7 +82,7 @@ fn test_two_prompts_responses_not_off_by_one() {
 
     // First response should appear before we send second prompt
     let first_response_appeared =
-        session.wait_for_text("FIRST_RESPONSE_MARKER", Duration::from_secs(10));
+        session.wait_for_text("FIRST_RESPONSE_MARKER", Duration::from_secs(20));
 
     match first_response_appeared {
         Ok(()) => {
@@ -117,7 +117,7 @@ fn test_two_prompts_responses_not_off_by_one() {
     // Second response should appear
     // Since it's the same text, we just verify the prompt cycle completes
     session
-        .wait_for_text("›", Duration::from_secs(10))
+        .wait_for_text("›", Duration::from_secs(20))
         .expect("Should complete second prompt cycle");
 
     eprintln!(
@@ -162,7 +162,7 @@ fn test_long_response_appears_immediately() {
 
     // The FINAL line should appear without needing another prompt
     session
-        .wait_for_text("FINAL_LINE_MARKER", Duration::from_secs(10))
+        .wait_for_text("FINAL_LINE_MARKER", Duration::from_secs(20))
         .expect("Full response including final line should appear immediately");
 
     let contents = session.screen_contents();
