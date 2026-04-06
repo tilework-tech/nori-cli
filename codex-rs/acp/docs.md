@@ -808,26 +808,27 @@ The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, Accumula
 
 Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
 
-**Turn Interrupt Guard** (`submit_and_ops.rs`, `user_input.rs`):
+**Turn Interrupt Guard — Monotonic Turn Counter** (`submit_and_ops.rs`, `user_input.rs`):
 
-When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` continues running after cancellation and unconditionally emits `TurnLifecycle::Completed` at the end of its event loop. If the user submits a new message before this stale `Completed` arrives, it races with the next turn's `TurnLifecycle::Started` and prematurely terminates it.
+When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` (and `handle_compact()`) continues running after cancellation and may emit stale `TurnLifecycle::Completed` or `ErrorEvent` at the end of its event loop. If the user submits a new message before these stale events arrive, they race with the next turn and can prematurely terminate it.
 
-The `turn_interrupted: Arc<AtomicBool>` field on `AcpBackend` prevents this:
+The `turn_id: Arc<AtomicU64>` field on `AcpBackend` is a monotonic counter that eliminates this race. It is incremented on every `Op::Interrupt` and on every new turn (`handle_user_input()`, `handle_compact()`). Each spawned task captures its own turn ID at spawn time and only emits tail events (errors, warnings, `Completed`) if the counter still matches:
 
 ```
 Op::Interrupt:
-  1. turn_interrupted.store(true)   -- flag the current turn as interrupted
+  1. turn_id.fetch_add(1)           -- advance the counter, invalidating the current task
   2. connection.cancel()            -- cancel the ACP session
 
-handle_user_input():
-  1. turn_interrupted.store(false)  -- reset for new turn
+handle_user_input() / handle_compact():
+  1. my_turn_id = turn_id.fetch_add(1) + 1  -- advance counter, capture this turn's ID
   ...
   spawned task epilogue:
-    if !turn_interrupted            -- only emit Completed if not interrupted
+    if turn_id.load() == my_turn_id          -- only emit tail events if still current
+      emit ErrorEvent (if error)
       emit TurnLifecycle::Completed
 ```
 
-Since `TurnLifecycle::Aborted` already serves as the turn-ending signal for interrupted turns, suppressing the stale `Completed` is safe. The TUI also has a defense-in-depth counter (`pending_stale_completes`) that ignores stale `Completed` events at the presentation layer (see `@/codex-rs/tui/docs.md`).
+Because the counter is monotonic and never reset, there is no TOCTOU window: an interrupt always invalidates any previously spawned task, and a new turn always gets a fresh ID that cannot collide with prior tasks. The TUI does not need any complementary guard — stale events are fully suppressed at the backend layer.
 
 **Tool Classification System:**
 

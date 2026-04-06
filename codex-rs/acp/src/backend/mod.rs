@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 
 use anyhow::Result;
 use codex_core::config::types::McpServerConfig;
@@ -324,10 +324,12 @@ pub struct AcpBackend {
     client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
-    /// Set when `Op::Interrupt` fires; checked by the spawned prompt task
-    /// before emitting `TurnLifecycle::Completed`. Prevents a stale
-    /// `Completed` from a cancelled task from interfering with the next turn.
-    turn_interrupted: Arc<AtomicBool>,
+    /// Monotonic turn counter incremented on every new turn and on every
+    /// interrupt. Each spawned prompt task captures its turn ID at spawn
+    /// time and only emits `TurnLifecycle::Completed` if the counter still
+    /// matches — guaranteeing that stale tasks from cancelled turns never
+    /// emit a Completed that could interfere with a subsequent turn.
+    turn_id: Arc<AtomicU64>,
 }
 
 mod helpers;

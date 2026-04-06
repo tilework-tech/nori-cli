@@ -142,17 +142,9 @@ The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, re
 
 The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
 
-**Stale Completed Guard** (`chatwidget/mod.rs`, `chatwidget/event_handlers.rs`):
+**Stale Event Suppression:**
 
-When a turn is interrupted (ESC), the ACP backend emits `TurnLifecycle::Aborted` synchronously, but the background task may still emit a stale `TurnLifecycle::Completed` later. If that stale `Completed` arrives after the next turn has started, `on_task_complete()` would set `turn_finished = true` and discard all subsequent tool events for the new turn. The `pending_stale_completes: i32` counter on `ChatWidget` acts as defense-in-depth against this race:
-
-| Action | Method | Effect |
-|--------|--------|--------|
-| Interrupt received | `on_interrupted_turn()` | Increments `pending_stale_completes` |
-| New turn starts | `on_task_started()` | Resets `pending_stale_completes` to 0 (drains orphaned counters from backend-suppressed Completeds) |
-| Stale Completed arrives | `on_task_complete()` | If counter > 0, decrements and returns early (skips turn finalization) |
-
-This is complementary to the ACP backend's `turn_interrupted` flag (`@/codex-rs/acp/docs.md`), which suppresses the stale `Completed` at the source. In the common case the backend suppresses the stale event and the counter is never drained; the `on_task_started` reset ensures those orphaned counters don't consume the next turn's real Completed. The counter still provides defense-in-depth for the rare race where a stale Completed slips past the backend guard.
+Stale `TurnLifecycle::Completed` and `ErrorEvent` from cancelled turns are suppressed entirely at the ACP backend layer via a monotonic turn counter (`turn_id: Arc<AtomicU64>`). Each spawned backend task captures its turn ID and only emits tail events if the counter still matches. The TUI does not need any complementary guard for this race — see `@/codex-rs/acp/docs.md` for details.
 
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 
