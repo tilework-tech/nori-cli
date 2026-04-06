@@ -12,6 +12,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
+            footer_segment_config,
             expected_agent,
             deferred_spawn,
             fork_context,
@@ -45,6 +46,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
+                footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -127,6 +129,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
+            footer_segment_config,
             expected_agent,
             deferred_spawn: _,
             fork_context: _,
@@ -154,6 +157,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
+                footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),

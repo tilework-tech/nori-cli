@@ -317,6 +317,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
+    pub(crate) footer_segment_config: codex_acp::config::FooterSegmentConfig,
     /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
@@ -481,7 +482,12 @@ fn create_initial_user_message(text: String, image_paths: Vec<PathBuf>) -> Optio
     }
 }
 
-impl ChatWidget {}
+impl ChatWidget {
+    #[cfg(test)]
+    pub(crate) fn footer_segment_config(&self) -> codex_acp::config::FooterSegmentConfig {
+        self.bottom_pane.footer_segment_config()
+    }
+}
 
 impl Drop for ChatWidget {
     fn drop(&mut self) {
