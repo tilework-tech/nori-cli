@@ -475,15 +475,12 @@ async fn test_approval_policy_dynamic_update() {
     // Send first request - should be forwarded to TUI (not auto-approved)
     approval_tx.send(request1).await.unwrap();
 
-    // Give the handler time to process
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-
-    let client_event = client_event_rx.try_recv();
-    assert!(
-        client_event.is_ok(),
-        "Should have received normalized approval request event for OnRequest policy"
-    );
-    if let Ok(nori_protocol::ClientEvent::ApprovalRequest(req)) = client_event {
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("approval request timeout")
+            .expect("approval request missing");
+    if let nori_protocol::ClientEvent::ApprovalRequest(req) = client_event {
         assert_eq!(req.call_id, "call-1");
     } else {
         panic!("Expected normalized ApprovalRequest event");
@@ -506,9 +503,6 @@ async fn test_approval_policy_dynamic_update() {
 
     // Now update the policy to Never (yolo mode)
     policy_tx.send(AskForApproval::Never).unwrap();
-
-    // Give the handler time to see the policy change
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // Send second request - should be auto-approved
     let (response_tx2, mut response_rx2) = oneshot::channel();
@@ -535,21 +529,24 @@ async fn test_approval_policy_dynamic_update() {
 
     approval_tx.send(request2).await.unwrap();
 
-    // Give the handler time to process
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-
-    // Should NOT have received another approval request event (auto-approved)
-    let event2 = event_rx.try_recv();
+    // The request should have been auto-approved
+    let decision = tokio::time::timeout(std::time::Duration::from_secs(1), &mut response_rx2)
+        .await
+        .expect("auto-approval timeout")
+        .expect("auto-approval response channel closed");
     assert!(
-        event2.is_err(),
-        "Should NOT receive approval request event when policy is Never (yolo mode)"
+        matches!(decision, ReviewDecision::Approved),
+        "Request should be auto-approved with Never policy, got: {decision:?}"
     );
 
-    // The request should have been auto-approved
-    let decision = response_rx2.try_recv();
+    let client_event = tokio::time::timeout(
+        std::time::Duration::from_millis(200),
+        client_event_rx.recv(),
+    )
+    .await;
     assert!(
-        matches!(decision, Ok(ReviewDecision::Approved)),
-        "Request should be auto-approved with Never policy, got: {decision:?}"
+        client_event.is_err(),
+        "Should NOT receive approval request event when policy is Never (yolo mode)"
     );
 }
 
