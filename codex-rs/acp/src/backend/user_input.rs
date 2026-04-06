@@ -409,7 +409,7 @@ impl AcpBackend {
 
             // Send the prompt (clone session_id before moving it since we need it for idle timer)
             let session_id_for_timer = session_id.to_string();
-            let (result, _update_gen) = connection.prompt(session_id, prompt, update_tx).await;
+            let result = connection.prompt(session_id, prompt, update_tx).await;
 
             // Signal the update_handler to drain remaining events and stop.
             // We do NOT close the active_update_tx slot here — late

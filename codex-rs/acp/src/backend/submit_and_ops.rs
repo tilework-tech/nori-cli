@@ -363,7 +363,7 @@ impl AcpBackend {
 
             // Send the summarization prompt
             let session_id_for_timer = session_id.to_string();
-            let (result, _update_gen) = connection.prompt(session_id, prompt, update_tx).await;
+            let result = connection.prompt(session_id, prompt, update_tx).await;
 
             // Signal the update_handler to drain remaining events and stop.
             let _ = done_tx.send(());

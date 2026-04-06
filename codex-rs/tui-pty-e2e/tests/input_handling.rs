@@ -98,6 +98,9 @@ fn test_history_navigation_up_down() {
 
     // Wait for response to complete
     session.wait_for_text("Mock response", TIMEOUT).unwrap();
+    session
+        .wait_for(|screen| !screen.contains("esc to interrupt"), TIMEOUT)
+        .unwrap();
 
     // Wait for prompt to be ready again
     std::thread::sleep(TIMEOUT_INPUT);
@@ -158,7 +161,9 @@ fn test_history_navigation_multiple_messages() {
 
     // Wait for response
     session.wait_for_text("Mock response", TIMEOUT).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session
+        .wait_for(|screen| !screen.contains("esc to interrupt"), TIMEOUT)
+        .unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit second message
@@ -169,7 +174,9 @@ fn test_history_navigation_multiple_messages() {
 
     // Wait for response
     session.wait_for_text("Mock response", TIMEOUT).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session
+        .wait_for(|screen| !screen.contains("esc to interrupt"), TIMEOUT)
+        .unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Press Up once - should show "› second message"

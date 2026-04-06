@@ -77,6 +77,7 @@ const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 /// - The `JrConnectionCx` is cloned out and used for all subsequent requests.
 /// - Session notifications and approval requests are forwarded via channels.
 /// - The session update channel is swapped for each prompt via an `Arc<Mutex<...>>`.
+///
 /// Shared slot for the active session update sender, paired with a generation
 /// counter to prevent stale uninstalls from wiping a newer sender.
 type ActiveUpdateSlot = std::sync::Arc<Mutex<Option<(u64, mpsc::Sender<SessionUpdate>)>>>;
@@ -654,8 +655,8 @@ impl SacpConnection {
         session_id: SessionId,
         prompt: Vec<ContentBlock>,
         update_tx: mpsc::Sender<SessionUpdate>,
-    ) -> (Result<StopReason>, u64) {
-        let my_gen = self.install_update_channel(update_tx).await;
+    ) -> Result<StopReason> {
+        self.install_update_channel(update_tx).await;
 
         let result = self
             .cx
@@ -670,7 +671,7 @@ impl SacpConnection {
         // next prompt() call; between turns, try_send failure falls
         // through to persistent_tx automatically.
 
-        (result.map(|r| r.stop_reason), my_gen)
+        result.map(|r| r.stop_reason)
     }
 
     /// Install an update sender in the shared slot, returning the generation
@@ -689,7 +690,7 @@ impl SacpConnection {
     /// closing the channel so the `update_handler` task can terminate.
     /// If a newer prompt has already installed its own sender, this is a
     /// no-op — the newer prompt's channel is left intact.
-    pub async fn close_update_channel(&self, generation: u64) {
+    async fn close_update_channel(&self, generation: u64) {
         let mut guard = self.active_update_tx.lock().await;
         let clearing = matches!(guard.as_ref(), Some((g, _)) if *g == generation);
         if clearing {
