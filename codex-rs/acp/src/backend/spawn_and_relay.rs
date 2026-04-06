@@ -110,7 +110,9 @@ impl AcpBackend {
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
-        let client_event_normalizer = Arc::new(Mutex::new(ClientEventNormalizer::default()));
+        let session_driver = Arc::new(Mutex::new(session_runtime_driver::SessionDriver::new()));
+        let (session_event_tx, mut session_event_rx) = mpsc::channel(128);
+        let (prompt_result_tx, prompt_result_rx) = mpsc::channel(128);
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
         let user_notifier = Arc::new(codex_core::UserNotifier::new(
@@ -163,6 +165,8 @@ impl AcpBackend {
             pending_compact_summary: Arc::new(Mutex::new(config.initial_context.clone())),
             pending_hook_context: Arc::new(Mutex::new(None)),
             transcript_recorder,
+            session_event_tx: session_event_tx.clone(),
+            prompt_result_tx: prompt_result_tx.clone(),
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
@@ -172,22 +176,34 @@ impl AcpBackend {
             session_end_hooks: config.session_end_hooks.clone(),
             pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
             post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
-            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
-            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
-            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
             post_agent_response_hooks: config.post_agent_response_hooks.clone(),
             async_session_end_hooks: config.async_session_end_hooks.clone(),
             async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
             async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
-            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
-            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
-            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
-            client_event_normalizer: Arc::clone(&client_event_normalizer),
+            session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
-            turn_interrupted: Arc::new(AtomicBool::new(false)),
         };
+
+        let runtime_backend = backend.clone();
+        tokio::spawn(async move {
+            while let Some(input) = session_event_rx.recv().await {
+                match input {
+                    session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
+                        runtime_backend.apply_session_event(event).await;
+                    }
+                    session_runtime_driver::SessionRuntimeInput::PermissionRequest {
+                        pending_request,
+                        current_policy,
+                    } => {
+                        runtime_backend
+                            .handle_permission_request(pending_request, current_policy)
+                            .await;
+                    }
+                }
+            }
+        });
 
         // Execute session_start hooks
         run_session_start_hooks(
@@ -230,25 +246,21 @@ impl AcpBackend {
 
         // Spawn approval handler task
         tokio::spawn(Self::run_approval_handler(
+            backend.clone(),
             approval_rx,
-            backend_event_tx.clone(),
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
-            cwd.clone(),
             approval_policy_rx,
             Arc::clone(&pending_tool_calls),
-            Arc::clone(&client_event_normalizer),
-            backend.transcript_recorder.clone(),
         ));
 
         // Spawn reducer loop: processes ALL session notifications through the
         // serialized reducer, replacing the old per-prompt update handler and
         // persistent relay.
         tokio::spawn(Self::run_notification_relay(
+            backend.clone(),
             notification_rx,
-            Arc::clone(&client_event_normalizer),
-            backend_event_tx,
-            backend.transcript_recorder.clone(),
+            prompt_result_rx,
         ));
 
         Ok(backend)
@@ -260,16 +272,14 @@ impl AcpBackend {
     /// are auto-approved without prompting the user.
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn run_approval_handler(
+        backend: AcpBackend,
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
-        backend_event_tx: mpsc::Sender<BackendEvent>,
-        pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
-        user_notifier: Arc<codex_core::UserNotifier>,
-        cwd: PathBuf,
+        _pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
+        _user_notifier: Arc<codex_core::UserNotifier>,
         approval_policy_rx: watch::Receiver<AskForApproval>,
         pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
-        client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
-        transcript_recorder: Option<Arc<TranscriptRecorder>>,
     ) {
+        let approval_policy_rx = approval_policy_rx;
         while let Some(request) = approval_rx.recv().await {
             // Store tool call metadata from the permission request so the
             // event translator can resolve proper titles when the subsequent
@@ -303,89 +313,113 @@ impl AcpBackend {
                 }
             }
 
-            // Check current approval policy (may have changed via OverrideTurnContext)
             let current_policy = *approval_policy_rx.borrow();
-
-            // If approval_policy is Never (yolo mode), auto-approve immediately
-            if current_policy == AskForApproval::Never {
-                debug!(
-                    target: "acp_event_flow",
-                    call_id = %request.event.call_id(),
-                    "Auto-approving request (approval_policy=Never)"
-                );
-                let _ = request.response_tx.send(ReviewDecision::Approved);
-                continue;
-            }
-
-            let client_events =
-                normalize_permission_request(&client_event_normalizer, &request).await;
-            forward_client_events(&backend_event_tx, &client_events).await;
-            if let Some(ref recorder) = transcript_recorder {
-                for client_event in &client_events {
-                    if let Err(e) = recorder.record_client_event(client_event).await {
-                        warn!("Failed to record normalized approval event to transcript: {e}");
-                    }
-                }
-            }
-
-            // Send the appropriate approval request event to TUI based on operation type.
-            // Use the call_id as the event wrapper ID so that the TUI can
-            // correctly route the user's decision back to this pending request.
-            let (id, command_for_notification) = match &request.event {
-                ApprovalEventType::Exec(exec_event) => {
-                    (exec_event.call_id.clone(), exec_event.command.join(" "))
-                }
-                ApprovalEventType::Patch(patch_event) => (
-                    patch_event.call_id.clone(),
-                    format!(
-                        "patch: {}",
-                        patch_event
-                            .changes
-                            .keys()
-                            .map(|p| p.display().to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ),
-            };
-
-            // Store the pending approval for later resolution
-            pending_approvals.lock().await.push(request);
-
-            // Send OS notification (non-blocking, but ordered after event delivery)
-            user_notifier.notify(&codex_core::UserNotification::AwaitingApproval {
-                call_id: id,
-                command: command_for_notification,
-                cwd: cwd.display().to_string(),
-            });
+            let _ = backend
+                .session_event_tx
+                .send(
+                    session_runtime_driver::SessionRuntimeInput::PermissionRequest {
+                        pending_request: Box::new(PendingApprovalRequest {
+                            request_id: request.request_id.clone(),
+                            request,
+                        }),
+                        current_policy,
+                    },
+                )
+                .await;
         }
     }
 
     /// Background task that processes ALL session notifications through the
-    /// normalizer and forwards them to the TUI.
-    ///
-    /// With the unified notification channel, this replaces both the old
-    /// per-prompt update handler and the inter-turn persistent relay.
+    /// serialized session reducer instead of forwarding them directly.
     pub(super) async fn run_notification_relay(
+        backend: AcpBackend,
         mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,
-        client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
-        backend_event_tx: mpsc::Sender<BackendEvent>,
-        transcript_recorder: Option<Arc<TranscriptRecorder>>,
+        mut prompt_result_rx: mpsc::Receiver<session_reducer::InboundEvent>,
     ) {
-        while let Some(update) = notification_rx.recv().await {
-            let client_events = normalize_session_update(&client_event_normalizer, &update).await;
-            forward_client_events(&backend_event_tx, &client_events).await;
-            // Record to transcript in background to avoid blocking the relay.
-            if let Some(ref recorder) = transcript_recorder {
-                let recorder = Arc::clone(recorder);
-                let events = client_events.clone();
-                tokio::spawn(async move {
-                    for event in &events {
-                        if let Err(e) = recorder.record_client_event(event).await {
-                            warn!("Failed to record client event to transcript: {e}");
+        loop {
+            tokio::select! {
+                biased;
+                maybe_update = notification_rx.recv() => {
+                    match maybe_update {
+                        Some(update) => {
+                            let _ = backend
+                                .session_event_tx
+                                .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                                    session_reducer::InboundEvent::Notification(Box::new(update)),
+                                ))
+                                .await;
+                        }
+                        None => break,
+                    }
+                }
+                maybe_result = prompt_result_rx.recv() => {
+                    match maybe_result {
+                        Some(result) => {
+                            let mut settle_window = std::time::Duration::from_millis(100);
+                            loop {
+                                let mut drained_any = false;
+                                while let Ok(update) = notification_rx.try_recv() {
+                                    drained_any = true;
+                                    if matches!(
+                                        update,
+                                        acp::SessionUpdate::ToolCall(_)
+                                            | acp::SessionUpdate::ToolCallUpdate(_)
+                                    ) {
+                                        settle_window = std::time::Duration::from_secs(5);
+                                    }
+                                    let _ = backend
+                                        .session_event_tx
+                                        .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                                            session_reducer::InboundEvent::Notification(Box::new(update)),
+                                        ))
+                                        .await;
+                                }
+                                if drained_any {
+                                    continue;
+                                }
+
+                                match tokio::time::timeout(
+                                    settle_window,
+                                    notification_rx.recv(),
+                                )
+                                .await
+                                {
+                                    Ok(Some(update)) => {
+                                        if matches!(
+                                            update,
+                                            acp::SessionUpdate::ToolCall(_)
+                                                | acp::SessionUpdate::ToolCallUpdate(_)
+                                        ) {
+                                            settle_window = std::time::Duration::from_secs(5);
+                                        }
+                                        let _ = backend
+                                            .session_event_tx
+                                            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                                                session_reducer::InboundEvent::Notification(Box::new(update)),
+                                            ))
+                                            .await;
+                                    }
+                                    Ok(None) | Err(_) => break,
+                                }
+                            }
+                            let _ = backend
+                                .session_event_tx
+                                .send(session_runtime_driver::SessionRuntimeInput::Reducer(result))
+                                .await;
+                        }
+                        None => {
+                            while let Some(update) = notification_rx.recv().await {
+                                let _ = backend
+                                    .session_event_tx
+                                    .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                                        session_reducer::InboundEvent::Notification(Box::new(update)),
+                                    ))
+                                    .await;
+                            }
+                            break;
                         }
                     }
-                });
+                }
             }
         }
     }

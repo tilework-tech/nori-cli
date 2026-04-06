@@ -1,13 +1,8 @@
-use std::sync::atomic::Ordering;
-
 use super::*;
 
 impl AcpBackend {
     /// Handle user input by sending a prompt to the ACP agent.
     pub(super) async fn handle_user_input(&self, items: Vec<UserInput>, id: &str) -> Result<()> {
-        // Reset the interrupt flag so this turn's Completed will be emitted.
-        self.turn_interrupted.store(false, Ordering::SeqCst);
-
         // Separate text items (needed for hooks, summary, transcript) from
         // image items (converted to ACP ContentBlock::Image).
         let mut prompt_text = String::new();
@@ -166,241 +161,22 @@ impl AcpBackend {
             prompt_with_context
         };
 
-        let mut prompt = Vec::new();
-        if !final_prompt_text.is_empty() {
-            prompt.push(translator::text_to_content_block(&final_prompt_text));
-        }
-        prompt.extend(image_blocks);
-
-        // Clone what we need for the background task
-        let event_tx = self.event_tx.clone();
-        let session_id = self.session_id.read().await.clone();
-        let connection = Arc::clone(&self.connection);
-        let id_clone = id.to_string();
-        let user_notifier = Arc::clone(&self.user_notifier);
-        let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
-        let transcript_recorder = self.transcript_recorder.clone();
-        let notify_after_idle = self.notify_after_idle;
-        let post_user_prompt_hooks = self.post_user_prompt_hooks.clone();
-        let post_agent_response_hooks = self.post_agent_response_hooks.clone();
-        let async_post_user_prompt_hooks = self.async_post_user_prompt_hooks.clone();
-        let async_post_agent_response_hooks = self.async_post_agent_response_hooks.clone();
-        let hook_timeout = self.script_timeout;
-        let pending_hook_context = Arc::clone(&self.pending_hook_context);
-        let backend_event_tx = self.backend_event_tx.clone();
-        let turn_interrupted = Arc::clone(&self.turn_interrupted);
-
-        // Spawn task to handle the prompt and translate events
-        tokio::spawn(async move {
-            // Cancel any existing idle timer when a new turn starts processing.
-            // This handles the case where a new prompt arrives while a previous
-            // task's idle timer is pending but before submit() could cancel it.
-            if let Some(abort_handle) = idle_timer_abort.lock().await.take() {
-                abort_handle.abort();
-            }
-
-            // Send TaskStarted event
-            emit_client_event(
-                &backend_event_tx,
-                transcript_recorder.as_ref(),
-                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
-            )
+        let _ = self
+            .session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                session_reducer::InboundEvent::PromptSubmit(
+                    nori_protocol::session_runtime::QueuedPrompt {
+                        event_id: id.to_string(),
+                        kind: nori_protocol::session_runtime::QueuedPromptKind::User,
+                        text: final_prompt_text,
+                        display_text: Some(prompt_text_for_hooks),
+                        images: image_blocks,
+                        queue_drain:
+                            nori_protocol::session_runtime::QueueDrainOutcome::SendNextPrompt,
+                    },
+                ),
+            ))
             .await;
-
-            // Send the prompt (clone session_id before moving it since we need it for idle timer)
-            let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt).await;
-
-            // Placeholder: the notification relay now handles event forwarding;
-            // text accumulation will be restored when the reducer is wired.
-            let accumulated_text = String::new();
-
-            // Record assistant message to transcript if there's accumulated text
-            if !accumulated_text.is_empty()
-                && let Some(ref recorder) = transcript_recorder
-            {
-                let content = vec![ContentBlock::Text {
-                    text: accumulated_text.clone(),
-                }];
-                if let Err(e) = recorder
-                    .record_assistant_message(&id_clone, content, None)
-                    .await
-                {
-                    warn!("Failed to record assistant message to transcript: {e}");
-                }
-            }
-
-            // Execute post_agent_response hooks after the agent has finished responding
-            if !accumulated_text.is_empty() && !post_agent_response_hooks.is_empty() {
-                let env_vars = HashMap::from([
-                    (
-                        "NORI_HOOK_EVENT".to_string(),
-                        "post_agent_response".to_string(),
-                    ),
-                    (
-                        "NORI_HOOK_RESPONSE_TEXT".to_string(),
-                        accumulated_text.clone(),
-                    ),
-                ]);
-                let results = crate::hooks::execute_hooks_with_env(
-                    &post_agent_response_hooks,
-                    hook_timeout,
-                    &env_vars,
-                )
-                .await;
-                route_hook_results(&results, &event_tx, &id_clone, None).await;
-            }
-
-            if !accumulated_text.is_empty() && !async_post_agent_response_hooks.is_empty() {
-                let env_vars = HashMap::from([
-                    (
-                        "NORI_HOOK_EVENT".to_string(),
-                        "post_agent_response".to_string(),
-                    ),
-                    (
-                        "NORI_HOOK_RESPONSE_TEXT".to_string(),
-                        accumulated_text.clone(),
-                    ),
-                ]);
-                let _ = crate::hooks::execute_hooks_fire_and_forget(
-                    async_post_agent_response_hooks,
-                    hook_timeout,
-                    env_vars,
-                );
-            }
-
-            // Execute post_user_prompt hooks after the turn completes
-            if !post_user_prompt_hooks.is_empty() {
-                let env_vars = HashMap::from([
-                    (
-                        "NORI_HOOK_EVENT".to_string(),
-                        "post_user_prompt".to_string(),
-                    ),
-                    (
-                        "NORI_HOOK_PROMPT_TEXT".to_string(),
-                        prompt_text_for_hooks.clone(),
-                    ),
-                ]);
-                let results = crate::hooks::execute_hooks_with_env(
-                    &post_user_prompt_hooks,
-                    hook_timeout,
-                    &env_vars,
-                )
-                .await;
-                route_hook_results(&results, &event_tx, &id_clone, Some(&pending_hook_context))
-                    .await;
-            }
-
-            if !async_post_user_prompt_hooks.is_empty() {
-                let env_vars = HashMap::from([
-                    (
-                        "NORI_HOOK_EVENT".to_string(),
-                        "post_user_prompt".to_string(),
-                    ),
-                    (
-                        "NORI_HOOK_PROMPT_TEXT".to_string(),
-                        prompt_text_for_hooks.clone(),
-                    ),
-                ]);
-                let _ = crate::hooks::execute_hooks_fire_and_forget(
-                    async_post_user_prompt_hooks,
-                    hook_timeout,
-                    env_vars,
-                );
-            }
-
-            // If prompt failed, send an error event to the TUI BEFORE TaskComplete
-            // This ensures the user sees why their request failed instead of a silent failure
-            if let Err(ref e) = result {
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e:#}");
-
-                // Generate user-friendly message based on error category
-                let user_message = match category {
-                    AcpErrorCategory::Authentication => {
-                        format!(
-                            "Authentication error: {display_error}. Please check your credentials or re-authenticate."
-                        )
-                    }
-                    AcpErrorCategory::QuotaExceeded => {
-                        format!("Rate limit or quota exceeded: {display_error}")
-                    }
-                    AcpErrorCategory::ExecutableNotFound => {
-                        format!("Agent executable not found: {display_error}")
-                    }
-                    AcpErrorCategory::Initialization => {
-                        format!("Agent initialization failed: {display_error}")
-                    }
-                    AcpErrorCategory::PromptTooLong => {
-                        "Prompt is too long. Try using /compact to reduce context size, or start a new session."
-                            .to_string()
-                    }
-                    AcpErrorCategory::ApiServerError => {
-                        "The API returned a server error. This is usually temporary — please try again."
-                            .to_string()
-                    }
-                    AcpErrorCategory::Unknown => {
-                        format!("ACP prompt failed: {display_error}")
-                    }
-                };
-
-                warn!("ACP prompt failed: {}", e);
-                debug!(
-                    target: "acp_event_flow",
-                    user_message = %user_message,
-                    "ACP prompt failure: sending ErrorEvent to TUI"
-                );
-
-                // Send error event to TUI so user sees the error
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::Error(ErrorEvent {
-                            message: user_message.clone(),
-                            codex_error_info: None,
-                        }),
-                    })
-                    .await;
-
-                debug!(
-                    target: "acp_event_flow",
-                    "ACP prompt failure: ErrorEvent sent to TUI"
-                );
-            }
-
-            // Send TaskComplete event to end the turn, unless this turn was
-            // interrupted. When Op::Interrupt fires, it emits
-            // TurnLifecycle::Aborted synchronously; emitting a Completed here
-            // would race with the next turn and prematurely terminate it.
-            if !turn_interrupted.load(Ordering::SeqCst) {
-                emit_client_event(
-                    &backend_event_tx,
-                    transcript_recorder.as_ref(),
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed {
-                            last_agent_message: None,
-                        },
-                    ),
-                )
-                .await;
-            }
-
-            // Start idle timer if configured
-            if let Some(duration) = notify_after_idle.as_duration() {
-                let idle_secs = duration.as_secs();
-                let user_notifier_for_timer = Arc::clone(&user_notifier);
-                let idle_task = tokio::spawn(async move {
-                    tokio::time::sleep(duration).await;
-                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                        session_id: session_id_for_timer,
-                        idle_duration_secs: idle_secs,
-                    });
-                });
-                // Store the abort handle so the timer can be cancelled on new activity
-                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
-            }
-        });
 
         Ok(())
     }
@@ -408,9 +184,12 @@ impl AcpBackend {
     /// Handle an exec approval decision by finding and resolving the pending approval.
     pub(super) async fn handle_exec_approval(&self, call_id: &str, decision: ReviewDecision) {
         let mut pending = self.pending_approvals.lock().await;
-        if let Some(pos) = pending.iter().position(|r| r.event.call_id() == call_id) {
+        if let Some(pos) = pending
+            .iter()
+            .position(|pending_request| pending_request.request.event.call_id() == call_id)
+        {
             let request = pending.remove(pos);
-            let _ = request.response_tx.send(decision);
+            let _ = request.request.response_tx.send(decision);
         } else {
             warn!("No pending approval found for call_id: {}", call_id);
         }

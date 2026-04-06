@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use super::*;
 
 impl AcpBackend {
@@ -23,10 +21,12 @@ impl AcpBackend {
                 self.handle_user_input(items, &id).await?;
             }
             Op::Interrupt => {
-                self.turn_interrupted.store(true, Ordering::SeqCst);
-                self.connection
-                    .cancel(&*self.session_id.read().await)
-                    .await?;
+                let _ = self
+                    .session_event_tx
+                    .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                        session_reducer::InboundEvent::CancelSubmit,
+                    ))
+                    .await;
                 emit_client_event(
                     &self.backend_event_tx,
                     self.transcript_recorder.as_ref(),
@@ -82,6 +82,8 @@ impl AcpBackend {
                 {
                     warn!("Failed to shutdown transcript recorder: {e}");
                 }
+
+                self.connection.shutdown().await;
 
                 let _ = self
                     .event_tx
@@ -271,129 +273,21 @@ impl AcpBackend {
     pub(super) async fn handle_compact(&self, id: &str) -> Result<()> {
         use codex_core::compact::SUMMARIZATION_PROMPT;
 
-        // Build the summarization prompt
-        let prompt = vec![translator::text_to_content_block(SUMMARIZATION_PROMPT)];
-
-        // Clone what we need for the background task
-        let event_tx = self.event_tx.clone();
-        let session_id = self.session_id.read().await.clone();
-        let session_id_lock = Arc::clone(&self.session_id);
-        let connection = Arc::clone(&self.connection);
-        let cwd = self.cwd.clone();
-        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&self.mcp_servers);
-        let id_clone = id.to_string();
-        let pending_compact_summary = Arc::clone(&self.pending_compact_summary);
-        let user_notifier = Arc::clone(&self.user_notifier);
-        let idle_timer_abort = Arc::clone(&self.idle_timer_abort);
-        let notify_after_idle = self.notify_after_idle;
-        let backend_event_tx = self.backend_event_tx.clone();
-        let transcript_recorder = self.transcript_recorder.clone();
-        let turn_interrupted = Arc::clone(&self.turn_interrupted);
-
-        // Spawn task to handle the prompt and capture the summary
-        tokio::spawn(async move {
-            // Cancel any existing idle timer when a new turn starts processing
-            if let Some(abort_handle) = idle_timer_abort.lock().await.take() {
-                abort_handle.abort();
-            }
-
-            // Send TaskStarted event
-            emit_client_event(
-                &backend_event_tx,
-                transcript_recorder.as_ref(),
-                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started),
-            )
+        let _ = self
+            .session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                session_reducer::InboundEvent::PromptSubmit(
+                    nori_protocol::session_runtime::QueuedPrompt {
+                        event_id: id.to_string(),
+                        kind: nori_protocol::session_runtime::QueuedPromptKind::Compact,
+                        text: SUMMARIZATION_PROMPT.to_string(),
+                        display_text: None,
+                        images: Vec::new(),
+                        queue_drain: nori_protocol::session_runtime::QueueDrainOutcome::LeaveQueued,
+                    },
+                ),
+            ))
             .await;
-
-            // Send the summarization prompt. Notifications flow through the
-            // unified channel to the notification relay.
-            let session_id_for_timer = session_id.to_string();
-            let result = connection.prompt(session_id, prompt).await;
-
-            // If prompt failed, send error event and clear any partial summary
-            if let Err(ref e) = result {
-                warn!("Compact prompt failed: {e}");
-                // Clear any partial summary that may have been stored
-                *pending_compact_summary.lock().await = None;
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::Error(ErrorEvent {
-                            message: format!("Compact failed: {e}"),
-                            codex_error_info: None,
-                        }),
-                    })
-                    .await;
-            } else {
-                // Create a new session to clear the agent's conversation history.
-                // The summary we captured will be prepended to the next user prompt,
-                // giving the agent context about the previous conversation.
-                match connection.create_session(&cwd, mcp_servers).await {
-                    Ok(new_session_id) => {
-                        debug!("Created new session after compact: {:?}", new_session_id);
-                        *session_id_lock.write().await = new_session_id;
-                    }
-                    Err(e) => {
-                        warn!("Failed to create new session after compact: {e}");
-                        // Continue anyway - summary will still be prepended but agent
-                        // will retain its full history, which is suboptimal but functional
-                    }
-                }
-
-                // Send ContextCompacted event to notify TUI, including the
-                // summary text so the TUI can reprint it under a new session header.
-                let compact_summary = pending_compact_summary.lock().await.clone();
-                emit_client_event(
-                    &backend_event_tx,
-                    transcript_recorder.as_ref(),
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::ContextCompacted {
-                            summary: compact_summary.clone(),
-                        },
-                    ),
-                )
-                .await;
-
-                // Send warning about long conversations
-                let _ = event_tx
-                    .send(Event {
-                        id: id_clone.clone(),
-                        msg: EventMsg::Warning(WarningEvent {
-                            message: "Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new conversation when possible to keep conversations small and targeted.".to_string(),
-                        }),
-                    })
-                    .await;
-            }
-
-            // Send TaskComplete event, unless the turn was interrupted.
-            if !turn_interrupted.load(Ordering::SeqCst) {
-                emit_client_event(
-                    &backend_event_tx,
-                    transcript_recorder.as_ref(),
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed {
-                            last_agent_message: None,
-                        },
-                    ),
-                )
-                .await;
-            }
-
-            // Start idle timer if configured
-            if let Some(duration) = notify_after_idle.as_duration() {
-                let idle_secs = duration.as_secs();
-                let user_notifier_for_timer = Arc::clone(&user_notifier);
-                let idle_task = tokio::spawn(async move {
-                    tokio::time::sleep(duration).await;
-                    user_notifier_for_timer.notify(&codex_core::UserNotification::Idle {
-                        session_id: session_id_for_timer,
-                        idle_duration_secs: idle_secs,
-                    });
-                });
-                // Store the abort handle so the timer can be cancelled on new activity
-                *idle_timer_abort.lock().await = Some(idle_task.abort_handle());
-            }
-        });
 
         Ok(())
     }

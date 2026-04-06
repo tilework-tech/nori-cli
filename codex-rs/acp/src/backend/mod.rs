@@ -9,7 +9,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 use codex_core::config::types::McpServerConfig;
@@ -31,7 +30,6 @@ use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use nori_protocol::ClientEvent;
-use nori_protocol::ClientEventNormalizer;
 use sacp::schema as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -250,6 +248,12 @@ pub enum BackendEvent {
     Client(ClientEvent),
 }
 
+pub(crate) struct PendingApprovalRequest {
+    request_id: String,
+    request: ApprovalRequest,
+}
+
+#[derive(Clone)]
 pub struct AcpBackend {
     connection: Arc<SacpConnection>,
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
@@ -259,7 +263,7 @@ pub struct AcpBackend {
     /// Working directory for the session
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
-    pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
     /// Notifier for OS-level notifications (approval waiting, idle)
     user_notifier: Arc<codex_core::UserNotifier>,
     /// Abort handle for the idle detection timer (if running)
@@ -278,6 +282,10 @@ pub struct AcpBackend {
     pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
     transcript_recorder: Option<Arc<TranscriptRecorder>>,
+    /// Internal queue for prompt result events that need reducer processing.
+    session_event_tx: mpsc::Sender<session_runtime_driver::SessionRuntimeInput>,
+    /// Prompt result channel bridged with ACP notifications to preserve ordering.
+    prompt_result_tx: mpsc::Sender<session_reducer::InboundEvent>,
     /// How long after idle before sending a notification
     notify_after_idle: crate::config::NotifyAfterIdle,
     /// Stack of ghost commit snapshots for /undo support
@@ -296,12 +304,6 @@ pub struct AcpBackend {
     pre_user_prompt_hooks: Vec<PathBuf>,
     /// Scripts to run after a user prompt is sent to the agent
     post_user_prompt_hooks: Vec<PathBuf>,
-    /// Scripts to run before a tool call is executed
-    pre_tool_call_hooks: Vec<PathBuf>,
-    /// Scripts to run after a tool call completes
-    post_tool_call_hooks: Vec<PathBuf>,
-    /// Scripts to run before the agent produces a response
-    pre_agent_response_hooks: Vec<PathBuf>,
     /// Scripts to run after the agent finishes its response
     post_agent_response_hooks: Vec<PathBuf>,
     /// Async (fire-and-forget) scripts to run when a session ends
@@ -310,29 +312,20 @@ pub struct AcpBackend {
     async_pre_user_prompt_hooks: Vec<PathBuf>,
     /// Async (fire-and-forget) scripts to run after a user prompt is sent
     async_post_user_prompt_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run before a tool call is executed
-    async_pre_tool_call_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run after a tool call completes
-    async_post_tool_call_hooks: Vec<PathBuf>,
-    /// Async (fire-and-forget) scripts to run before the agent produces a response
-    async_pre_agent_response_hooks: Vec<PathBuf>,
     /// Async (fire-and-forget) scripts to run after the agent finishes its response
     async_post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
-    /// ACP-native normalized event accumulator.
-    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
+    /// Serialized reducer-owned ACP session runtime.
+    session_driver: Arc<Mutex<session_runtime_driver::SessionDriver>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
-    /// Set when `Op::Interrupt` fires; checked by the spawned prompt task
-    /// before emitting `TurnLifecycle::Completed`. Prevents a stale
-    /// `Completed` from a cancelled task from interfering with the next turn.
-    turn_interrupted: Arc<AtomicBool>,
 }
 
 mod helpers;
 mod session;
 pub(crate) mod session_reducer;
+mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
@@ -349,50 +342,6 @@ pub use transcript::client_events_to_replay_client_events;
 pub use transcript::transcript_to_replay_client_events;
 pub use transcript::transcript_to_summary;
 mod hooks;
-
-pub(crate) async fn normalize_permission_request(
-    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
-    request: &crate::connection::ApprovalRequest,
-) -> Vec<ClientEvent> {
-    let mut normalizer = normalizer.lock().await;
-    let events = normalizer.push_permission_request(&request.acp_request);
-    if !events.is_empty() {
-        debug!(
-            target: "acp_normalized_event_flow",
-            event_count = events.len(),
-            call_id = %request.event.call_id(),
-            "Normalized ACP permission request"
-        );
-    }
-    events
-}
-
-pub(crate) async fn normalize_session_update(
-    normalizer: &Arc<Mutex<ClientEventNormalizer>>,
-    update: &acp::SessionUpdate,
-) -> Vec<ClientEvent> {
-    let mut normalizer = normalizer.lock().await;
-    let events = normalizer.push_session_update(update);
-    if !events.is_empty() {
-        debug!(
-            target: "acp_normalized_event_flow",
-            event_count = events.len(),
-            "Normalized ACP session update"
-        );
-    }
-    events
-}
-
-pub(crate) async fn forward_client_events(
-    backend_event_tx: &mpsc::Sender<BackendEvent>,
-    client_events: &[ClientEvent],
-) {
-    for client_event in client_events {
-        let _ = backend_event_tx
-            .send(BackendEvent::Client(client_event.clone()))
-            .await;
-    }
-}
 
 pub(crate) async fn emit_client_event(
     backend_event_tx: &mpsc::Sender<BackendEvent>,

@@ -198,8 +198,8 @@ impl SacpConnection {
                     {
                         let notification_tx = notify_tx_for_notifications;
                         async move |notification: SessionNotification, _cx| {
-                            if notification_tx.try_send(notification.update).is_err() {
-                                warn!("Notification channel full, dropping update");
+                            if notification_tx.send(notification.update).await.is_err() {
+                                warn!("Notification channel closed, dropping update");
                             }
                             Ok(())
                         }
@@ -253,6 +253,10 @@ impl SacpConnection {
 
                             let (response_tx, response_rx) = oneshot::channel();
                             let approval = ApprovalRequest {
+                                request_id: match request_cx.id() {
+                                    serde_json::Value::String(id) => id,
+                                    other => other.to_string(),
+                                },
                                 event,
                                 acp_request: request.clone(),
                                 options: request.options.clone(),
@@ -619,6 +623,26 @@ impl SacpConnection {
             .read()
             .expect("Model state lock poisoned")
             .clone()
+    }
+
+    /// Explicitly tear down the ACP subprocess and background tasks.
+    ///
+    /// Unlike `Drop`, this async path can wait for process termination so the
+    /// child is reaped promptly during agent switches and shutdown.
+    pub async fn shutdown(&self) {
+        self.connection_task.abort();
+        self.stderr_task.abort();
+
+        let mut child = self.child.lock().await;
+
+        #[cfg(unix)]
+        if let Err(e) = kill_child_process_group(&mut child) {
+            debug!("Failed to kill process group during shutdown: {e}");
+        }
+
+        if let Err(e) = child.kill().await {
+            debug!("Failed to kill ACP agent child process during shutdown: {e}");
+        }
     }
 
     /// Switch to a different model for the given session.

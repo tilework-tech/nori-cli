@@ -23,6 +23,7 @@ The ACP crate serves as a bridge between:
 - External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
+- `SessionRuntime` in `@/codex-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
@@ -70,6 +71,20 @@ agent_name (normalized to lowercase)
 Built-in agents use `detect_preferred_package_manager()` which checks `NORI_MANAGED_BY_BUN`/`NORI_MANAGED_BY_NPM` env vars, then falls back to checking if `bun` is in PATH, defaulting to `npx`. Custom agents bypass auto-detection entirely and use their literal `ResolvedDistribution`.
 
 `AcpAgentConfig` carries `display_name` and `install_hint` as direct `String` fields (rather than deriving them from `AgentKind` methods), so both built-in and custom agents can be handled uniformly by `session.rs` and `spawn_and_relay.rs`. The `install_hint` field contains a distribution-appropriate install command (e.g. `npm install -g @pkg` for npx, `uv tool install pkg` for uvx, `ensure '/path/to/cmd' is in your PATH` for local). The `context_window_size()` and `transcript_base_dir()` methods on `AcpAgentConfig` look up values from the registry by `provider_slug`.
+
+**Serialized ACP session runtime** (`backend/session_reducer.rs`, `backend/session_runtime_driver.rs`):
+
+ACP session-domain state now flows through a single serialized reducer. `SessionDriver` owns a `SessionRuntime` plus `ClientEventNormalizer`, accepts ordered `InboundEvent` values (`PromptSubmit`, `CancelSubmit`, `LoadSubmit`, `Notification`, `PromptResponse`, `PermissionRequest`, etc.), and returns normalized `ClientEvent` projections plus ACP side effects. This removed the old split where prompt tasks emitted lifecycle events directly while a separate notification relay normalized deltas.
+
+`SessionRuntime` is the authoritative model for:
+- whether the ACP session is idle, loading, or in a prompt turn
+- queued user prompts and compact prompts waiting behind an active request
+- request-local message assembly for assistant/reasoning streams
+- tool snapshot ownership via `owner_request_id`
+- pending permission request ownership and cancellation cleanup
+- final assistant message extraction used for `TurnLifecycle::Completed { last_agent_message }`
+
+The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.rs`, and `session.rs` all feed reducer events into the same runtime. `resume_session()` uses the same reducer during `session/load`, buffering replay `ClientEvent`s from reducer output and then carrying the resulting `SessionDriver` state into the live backend once setup completes.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 

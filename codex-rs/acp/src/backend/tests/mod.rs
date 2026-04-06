@@ -65,43 +65,103 @@ fn spawn_test_approval_handler(
     approval_rx: mpsc::Receiver<ApprovalRequest>,
     event_tx: mpsc::Sender<Event>,
     client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
-    pending_approvals: Arc<Mutex<Vec<ApprovalRequest>>>,
+    pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
     user_notifier: Arc<codex_core::UserNotifier>,
-    cwd: PathBuf,
     approval_policy_rx: watch::Receiver<AskForApproval>,
     pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
-    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
-    transcript_recorder: Option<Arc<TranscriptRecorder>>,
 ) {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
-    forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
-    tokio::spawn(AcpBackend::run_approval_handler(
-        approval_rx,
-        backend_event_tx,
-        pending_approvals,
-        user_notifier,
-        cwd,
-        approval_policy_rx,
-        pending_tool_calls,
-        client_event_normalizer,
-        transcript_recorder,
-    ));
+    tokio::spawn(async move {
+        let mut backend_event_rx = backend_event_rx;
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                BackendEvent::Control(event)
+                    if matches!(event.msg, EventMsg::SessionConfigured(_)) => {}
+                BackendEvent::Control(event) => {
+                    let _ = event_tx.send(event).await;
+                }
+                BackendEvent::Client(client_event) => {
+                    if let Some(client_event_tx) = &client_event_tx {
+                        let _ = client_event_tx.send(client_event).await;
+                    }
+                }
+            }
+        }
+    });
+    tokio::spawn(async move {
+        let config = build_test_config(std::path::Path::new("/tmp"));
+        let backend = AcpBackend::spawn(&config, backend_event_tx)
+            .await
+            .expect("spawn test backend");
+        {
+            let mut driver = backend.session_driver.lock().await;
+            let _ = driver.apply(session_reducer::InboundEvent::PromptSubmit(
+                nori_protocol::session_runtime::QueuedPrompt {
+                    event_id: "test-approval".to_string(),
+                    kind: nori_protocol::session_runtime::QueuedPromptKind::User,
+                    text: "seed".to_string(),
+                    display_text: Some("seed".to_string()),
+                    images: Vec::new(),
+                    queue_drain: nori_protocol::session_runtime::QueueDrainOutcome::SendNextPrompt,
+                },
+            ));
+        }
+        AcpBackend::run_approval_handler(
+            backend,
+            approval_rx,
+            pending_approvals,
+            user_notifier,
+            approval_policy_rx,
+            pending_tool_calls,
+        )
+        .await;
+    });
 }
 
 fn spawn_test_persistent_relay(
     persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
     event_tx: mpsc::Sender<Event>,
     client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
-    client_event_normalizer: Arc<Mutex<ClientEventNormalizer>>,
 ) {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
-    forward_test_backend_events(backend_event_rx, event_tx, client_event_tx);
-    tokio::spawn(AcpBackend::run_notification_relay(
-        persistent_rx,
-        client_event_normalizer,
-        backend_event_tx,
-        None, // No transcript recording in tests
-    ));
+    tokio::spawn(async move {
+        let mut backend_event_rx = backend_event_rx;
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                BackendEvent::Control(event)
+                    if matches!(event.msg, EventMsg::SessionConfigured(_)) => {}
+                BackendEvent::Control(event) => {
+                    let _ = event_tx.send(event).await;
+                }
+                BackendEvent::Client(client_event) => {
+                    if let Some(client_event_tx) = &client_event_tx {
+                        let _ = client_event_tx.send(client_event).await;
+                    }
+                }
+            }
+        }
+    });
+    tokio::spawn(async move {
+        let config = build_test_config(std::path::Path::new("/tmp"));
+        let backend = AcpBackend::spawn(&config, backend_event_tx)
+            .await
+            .expect("spawn test backend");
+        {
+            let mut driver = backend.session_driver.lock().await;
+            let _ = driver.apply(session_reducer::InboundEvent::PromptSubmit(
+                nori_protocol::session_runtime::QueuedPrompt {
+                    event_id: "test-relay".to_string(),
+                    kind: nori_protocol::session_runtime::QueuedPromptKind::User,
+                    text: "seed".to_string(),
+                    display_text: Some("seed".to_string()),
+                    images: Vec::new(),
+                    queue_drain: nori_protocol::session_runtime::QueueDrainOutcome::SendNextPrompt,
+                },
+            ));
+        }
+        let (_prompt_result_tx, prompt_result_rx) = mpsc::channel(1);
+        AcpBackend::run_notification_relay(backend, persistent_rx, prompt_result_rx).await;
+    });
 }
 
 /// Helper to build a minimal transcript for resume tests.

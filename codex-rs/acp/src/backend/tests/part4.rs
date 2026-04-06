@@ -105,6 +105,64 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
 
 #[tokio::test]
 #[serial]
+async fn test_user_input_completed_includes_last_agent_message() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Say hello".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut completion = None;
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::Completed { last_agent_message },
+            )) => {
+                completion = Some(last_agent_message);
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    assert_eq!(
+        completion,
+        Some(Some("Test message 1Test message 2".to_string()))
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
     use std::time::Duration;
 
@@ -202,6 +260,222 @@ async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
             )
         }),
         "legacy ACP live tool/text/lifecycle events should be suppressed when normalized client events are present: {legacy_events:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_user_input_tool_snapshots_have_owner_request_id() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SEND_TOOL_CALL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Do a tool call".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut snapshots = Vec::new();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ToolSnapshot(snapshot)) => snapshots.push(snapshot),
+            Some(nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::Completed { .. },
+            )) => break,
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SEND_TOOL_CALL");
+    }
+
+    assert!(
+        snapshots
+            .iter()
+            .any(|snapshot| snapshot.owner_request_id.is_some()),
+        "expected live tool snapshots to carry reducer-owned request IDs: {snapshots:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_user_input_tool_call_completed_includes_last_agent_message() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SEND_TOOL_CALL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Do a tool call".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut completion = None;
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::TurnLifecycle(
+                nori_protocol::TurnLifecycle::Completed { last_agent_message },
+            )) => {
+                completion = Some(last_agent_message);
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SEND_TOOL_CALL");
+    }
+
+    assert!(
+        matches!(
+            completion,
+            Some(Some(ref message)) if message.ends_with("Tool call completed successfully.")
+        ),
+        "expected completed turn to retain the final tool-call assistant text: {completion:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_interrupt_clears_pending_permission_requests() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_REQUEST_PERMISSION", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let mut config = build_test_config(temp_dir.path());
+    config.approval_policy = AskForApproval::OnRequest;
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Need approval".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut saw_approval = false;
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ApprovalRequest(_)) => {
+                saw_approval = true;
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    assert!(saw_approval, "expected approval request before interrupt");
+    assert_eq!(backend.pending_approvals.lock().await.len(), 1);
+
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to interrupt prompt");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_REQUEST_PERMISSION");
+    }
+
+    assert!(
+        backend.pending_approvals.lock().await.is_empty(),
+        "interrupt should clear reducer-owned pending permissions"
     );
 }
 

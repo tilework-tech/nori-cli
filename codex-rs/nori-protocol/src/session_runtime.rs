@@ -76,6 +76,7 @@ pub enum ActiveRequestKind {
 pub struct ActiveRequestState {
     pub request_id: String,
     pub kind: ActiveRequestKind,
+    pub prompt: Option<QueuedPrompt>,
     pub open_agent_message: Option<OpenMessage>,
     pub open_thought_message: Option<OpenMessage>,
     pub open_user_message: Option<OpenMessage>,
@@ -90,11 +91,19 @@ impl ActiveRequestState {
         Self {
             request_id,
             kind,
+            prompt: None,
             open_agent_message: None,
             open_thought_message: None,
             open_user_message: None,
             tool_call_ids: Vec::new(),
             pending_permission_requests: HashSet::new(),
+        }
+    }
+
+    pub fn new_prompt(request_id: String, prompt: QueuedPrompt) -> Self {
+        Self {
+            prompt: Some(prompt),
+            ..Self::new(request_id, ActiveRequestKind::Prompt)
         }
     }
 }
@@ -163,10 +172,21 @@ pub enum TranscriptRole {
 // ---------------------------------------------------------------------------
 
 /// A user prompt waiting to be sent to ACP.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueuedPromptKind {
+    User,
+    Compact,
+}
+
+/// A user prompt waiting to be sent to ACP.
 #[derive(Debug, Clone)]
 pub struct QueuedPrompt {
+    pub event_id: String,
+    pub kind: QueuedPromptKind,
     pub text: String,
+    pub display_text: Option<String>,
     pub images: Vec<acp::ContentBlock>,
+    pub queue_drain: QueueDrainOutcome,
 }
 
 // ---------------------------------------------------------------------------

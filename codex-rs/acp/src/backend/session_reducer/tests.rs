@@ -2,7 +2,9 @@ use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::TurnLifecycle;
 use nori_protocol::session_runtime::ActiveRequestKind;
+use nori_protocol::session_runtime::QueueDrainOutcome;
 use nori_protocol::session_runtime::QueuedPrompt;
+use nori_protocol::session_runtime::QueuedPromptKind;
 use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionPhaseView;
 use nori_protocol::session_runtime::SessionRuntime;
@@ -23,8 +25,12 @@ fn new_normalizer() -> ClientEventNormalizer {
 
 fn simple_prompt() -> QueuedPrompt {
     QueuedPrompt {
+        event_id: "evt-1".to_string(),
+        kind: QueuedPromptKind::User,
         text: "hello".to_string(),
+        display_text: Some("hello".to_string()),
         images: Vec::new(),
+        queue_drain: QueueDrainOutcome::SendNextPrompt,
     }
 }
 
@@ -280,8 +286,12 @@ fn prompt_submit_while_active_queues() {
     let out = reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            event_id: "evt-2".to_string(),
+            kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            display_text: Some("second".to_string()),
             images: Vec::new(),
+            queue_drain: QueueDrainOutcome::SendNextPrompt,
         }),
         &mut norm,
     );
@@ -310,8 +320,12 @@ fn end_turn_drains_queue() {
     reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            event_id: "evt-2".to_string(),
+            kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            display_text: Some("second".to_string()),
             images: Vec::new(),
+            queue_drain: QueueDrainOutcome::SendNextPrompt,
         }),
         &mut norm,
     );
@@ -354,8 +368,12 @@ fn cancelled_does_not_drain_queue() {
     reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            event_id: "evt-2".to_string(),
+            kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            display_text: Some("second".to_string()),
             images: Vec::new(),
+            queue_drain: QueueDrainOutcome::SendNextPrompt,
         }),
         &mut norm,
     );

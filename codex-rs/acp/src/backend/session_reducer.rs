@@ -11,6 +11,7 @@ use nori_protocol::WarningInfo;
 use nori_protocol::session_runtime::ActiveRequestKind;
 use nori_protocol::session_runtime::ActiveRequestState;
 use nori_protocol::session_runtime::OpenMessage;
+use nori_protocol::session_runtime::QueueDrainOutcome;
 use nori_protocol::session_runtime::QueuedPrompt;
 use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionRuntime;
@@ -25,6 +26,8 @@ pub enum InboundEvent {
     Notification(Box<acp::SessionUpdate>),
     /// The response to an active `session/prompt` request.
     PromptResponse { stop_reason: acp::StopReason },
+    /// A transport/protocol failure for the active `session/prompt` request.
+    PromptFailed,
     /// The response to an active `session/load` request.
     LoadResponse,
     /// A `session/request_permission` from the agent.
@@ -47,11 +50,6 @@ pub enum SideEffect {
     },
     /// Send a `session/cancel` notification to the agent.
     SendCancel,
-    /// Send a `session/load` to the agent.
-    SendLoad {
-        request_id: String,
-        session_id: String,
-    },
     /// Resolve a pending permission request as cancelled.
     ResolvePermissionCancelled { request_id: String },
 }
@@ -89,6 +87,9 @@ pub fn reduce(
         }
         InboundEvent::PromptResponse { stop_reason } => {
             reduce_prompt_response(runtime, stop_reason, &mut out);
+        }
+        InboundEvent::PromptFailed => {
+            reduce_prompt_failed(runtime, &mut out);
         }
         InboundEvent::LoadResponse => {
             reduce_load_response(runtime, &mut out);
@@ -129,22 +130,24 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
     if !prompt.text.is_empty() {
         content_blocks.push(acp::ContentBlock::Text(acp::TextContent::new(&prompt.text)));
     }
-    content_blocks.extend(prompt.images);
+    content_blocks.extend(prompt.images.clone());
 
     runtime.phase = SessionPhase::Prompt {
         request_id: request_id.clone(),
         cancelling: false,
     };
-    runtime.active = Some(ActiveRequestState::new(
+    runtime.active = Some(ActiveRequestState::new_prompt(
         request_id.clone(),
-        ActiveRequestKind::Prompt,
+        prompt.clone(),
     ));
 
     // Add user message to transcript.
-    if !prompt.text.is_empty() {
+    if let Some(display_text) = &prompt.display_text
+        && !display_text.is_empty()
+    {
         runtime.persisted.transcript.push(TranscriptMessage {
             role: TranscriptRole::User,
-            content: prompt.text,
+            content: display_text.clone(),
         });
     }
 
@@ -214,6 +217,11 @@ fn reduce_prompt_response(
         return;
     }
 
+    let queue_drain = runtime
+        .active
+        .as_ref()
+        .and_then(|active| active.prompt.as_ref().map(|prompt| prompt.queue_drain))
+        .unwrap_or(QueueDrainOutcome::SendNextPrompt);
     let last_agent_message = finalize_active(runtime);
 
     runtime.phase = SessionPhase::Idle;
@@ -225,10 +233,27 @@ fn reduce_prompt_response(
 
     // Queue drain policy: only auto-send on EndTurn.
     if stop_reason == acp::StopReason::EndTurn
+        && queue_drain == QueueDrainOutcome::SendNextPrompt
         && let Some(next_prompt) = runtime.queue.pop_front()
     {
         start_prompt(runtime, next_prompt, out);
     }
+}
+
+fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+    if !matches!(runtime.phase, SessionPhase::Prompt { .. }) {
+        out.events.push(ClientEvent::Warning(WarningInfo {
+            message: "Received prompt failure while not in Prompt phase".to_string(),
+        }));
+        return;
+    }
+
+    let last_agent_message = finalize_active(runtime);
+    runtime.phase = SessionPhase::Idle;
+    out.events
+        .push(ClientEvent::TurnLifecycle(TurnLifecycle::Completed {
+            last_agent_message,
+        }));
 }
 
 // ---------------------------------------------------------------------------

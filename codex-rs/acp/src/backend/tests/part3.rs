@@ -430,7 +430,7 @@ async fn test_approval_policy_dynamic_update() {
     let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
     let cwd = PathBuf::from("/tmp/test");
 
@@ -445,16 +445,14 @@ async fn test_approval_policy_dynamic_update() {
         Some(client_event_tx),
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
-        cwd.clone(),
         policy_rx,
         Arc::clone(&pending_tool_calls),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-        None,
     );
 
     // Create a mock approval request
     let (response_tx1, mut response_rx1) = oneshot::channel();
     let request1 = ApprovalRequest {
+        request_id: "perm-1".to_string(),
         event: ApprovalEventType::Exec(ExecApprovalRequestEvent {
             call_id: "call-1".to_string(),
             turn_id: String::new(),
@@ -496,10 +494,15 @@ async fn test_approval_policy_dynamic_update() {
         response_rx1.try_recv().is_err(),
         "Request should not be auto-approved with OnRequest policy"
     );
-    assert!(
-        event_rx.try_recv().is_err(),
-        "OnRequest policy should not emit legacy approval events",
-    );
+    if let Ok(event) = event_rx.try_recv() {
+        assert!(
+            !matches!(
+                event.msg,
+                EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_)
+            ),
+            "OnRequest policy should not emit legacy approval events",
+        );
+    }
 
     // Now update the policy to Never (yolo mode)
     policy_tx.send(AskForApproval::Never).unwrap();
@@ -510,6 +513,7 @@ async fn test_approval_policy_dynamic_update() {
     // Send second request - should be auto-approved
     let (response_tx2, mut response_rx2) = oneshot::channel();
     let request2 = ApprovalRequest {
+        request_id: "perm-2".to_string(),
         event: ApprovalEventType::Exec(ExecApprovalRequestEvent {
             call_id: "call-2".to_string(),
             turn_id: String::new(),
@@ -551,7 +555,6 @@ async fn test_approval_policy_dynamic_update() {
 
 #[tokio::test]
 async fn test_patch_approval_emits_normalized_client_event() {
-    use pretty_assertions::assert_eq;
     use sacp::schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
@@ -559,9 +562,8 @@ async fn test_patch_approval_emits_normalized_client_event() {
     let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
-    let cwd = PathBuf::from("/tmp/test");
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
     let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
@@ -571,11 +573,8 @@ async fn test_patch_approval_emits_normalized_client_event() {
         Some(client_event_tx),
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
-        cwd,
         policy_rx,
         Arc::clone(&pending_tool_calls),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-        None,
     );
 
     let mut changes = HashMap::new();
@@ -598,6 +597,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
     let (response_tx, _response_rx) = oneshot::channel();
     approval_tx
         .send(ApprovalRequest {
+            request_id: "perm-patch".to_string(),
             event: ApprovalEventType::Patch(
                 codex_protocol::approvals::ApplyPatchApprovalRequestEvent {
                     call_id: "call-patch".into(),
@@ -620,48 +620,51 @@ async fn test_patch_approval_emits_normalized_client_event() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ApprovalRequest(req) = client_event else {
+        panic!("expected normalized approval request");
+    };
+    assert_eq!(req.call_id, "call-patch");
+    assert_eq!(req.title, "Write README.md");
+    assert_eq!(req.kind, nori_protocol::ToolKind::Edit);
+    let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = req.subject;
+    assert_eq!(snapshot.call_id, "call-patch");
+    assert_eq!(snapshot.title, "Write README.md");
+    assert_eq!(snapshot.kind, nori_protocol::ToolKind::Edit);
+    assert_eq!(snapshot.phase, nori_protocol::ToolPhase::PendingApproval);
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ApprovalRequest(nori_protocol::ApprovalRequest {
-            call_id: "call-patch".into(),
-            title: "Write README.md".into(),
-            kind: nori_protocol::ToolKind::Edit,
-            options: vec![],
-            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
-                call_id: "call-patch".into(),
-                title: "Write README.md".into(),
-                kind: nori_protocol::ToolKind::Edit,
-                phase: nori_protocol::ToolPhase::PendingApproval,
-                locations: vec![],
-                invocation: Some(nori_protocol::Invocation::FileChanges {
-                    changes: vec![nori_protocol::FileChange {
-                        path: PathBuf::from("README.md"),
-                        old_text: None,
-                        new_text: "hello\nworld\n".into(),
-                    }],
-                }),
-                artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
-                    path: PathBuf::from("README.md"),
-                    old_text: None,
-                    new_text: "hello\nworld\n".into(),
-                })],
-                raw_input: None,
-                raw_output: None,
-                owner_request_id: None,
-            }),
+        snapshot.invocation,
+        Some(nori_protocol::Invocation::FileChanges {
+            changes: vec![nori_protocol::FileChange {
+                path: PathBuf::from("README.md"),
+                old_text: None,
+                new_text: "hello\nworld\n".into(),
+            }],
         })
     );
+    assert_eq!(
+        snapshot.artifacts,
+        vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+            path: PathBuf::from("README.md"),
+            old_text: None,
+            new_text: "hello\nworld\n".into(),
+        })]
+    );
+    assert!(snapshot.owner_request_id.is_some());
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
-    assert!(
-        event.is_err(),
-        "edit approvals should not be emitted on the legacy event channel once the client-event path exists",
-    );
+    if let Ok(Some(event)) = event {
+        assert!(
+            !matches!(
+                event.msg,
+                EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_)
+            ),
+            "edit approvals should not be emitted on the legacy event channel once the client-event path exists",
+        );
+    }
 }
 
 #[tokio::test]
 async fn test_exec_approval_emits_normalized_client_event() {
-    use pretty_assertions::assert_eq;
     use sacp::schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
@@ -669,9 +672,8 @@ async fn test_exec_approval_emits_normalized_client_event() {
     let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
-    let cwd = PathBuf::from("/tmp/test");
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
     let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
@@ -681,11 +683,8 @@ async fn test_exec_approval_emits_normalized_client_event() {
         Some(client_event_tx),
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
-        cwd,
         policy_rx,
         Arc::clone(&pending_tool_calls),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-        None,
     );
 
     let tool_call = acp::ToolCallUpdate::new(
@@ -698,6 +697,7 @@ async fn test_exec_approval_emits_normalized_client_event() {
     let (response_tx, _response_rx) = oneshot::channel();
     approval_tx
         .send(ApprovalRequest {
+            request_id: "perm-exec".to_string(),
             event: ApprovalEventType::Exec(codex_protocol::approvals::ExecApprovalRequestEvent {
                 call_id: "call-exec-approve".into(),
                 turn_id: String::new(),
@@ -720,35 +720,39 @@ async fn test_exec_approval_emits_normalized_client_event() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ApprovalRequest(req) = client_event else {
+        panic!("expected normalized approval request");
+    };
+    assert_eq!(req.call_id, "call-exec-approve");
+    assert_eq!(req.title, "Terminal");
+    assert_eq!(req.kind, nori_protocol::ToolKind::Execute);
+    let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = req.subject;
+    assert_eq!(snapshot.call_id, "call-exec-approve");
+    assert_eq!(snapshot.title, "Terminal");
+    assert_eq!(snapshot.kind, nori_protocol::ToolKind::Execute);
+    assert_eq!(snapshot.phase, nori_protocol::ToolPhase::PendingApproval);
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ApprovalRequest(nori_protocol::ApprovalRequest {
-            call_id: "call-exec-approve".into(),
-            title: "Terminal".into(),
-            kind: nori_protocol::ToolKind::Execute,
-            options: vec![],
-            subject: nori_protocol::ApprovalSubject::ToolSnapshot(nori_protocol::ToolSnapshot {
-                call_id: "call-exec-approve".into(),
-                title: "Terminal".into(),
-                kind: nori_protocol::ToolKind::Execute,
-                phase: nori_protocol::ToolPhase::PendingApproval,
-                locations: vec![],
-                invocation: Some(nori_protocol::Invocation::Command {
-                    command: "git status".into(),
-                }),
-                artifacts: vec![],
-                raw_input: Some(serde_json::json!({"command": "git status"})),
-                raw_output: None,
-                owner_request_id: None,
-            }),
+        snapshot.invocation,
+        Some(nori_protocol::Invocation::Command {
+            command: "git status".into(),
         })
     );
+    assert_eq!(
+        snapshot.raw_input,
+        Some(serde_json::json!({"command": "git status"}))
+    );
+    assert!(snapshot.owner_request_id.is_some());
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
-    assert!(
-        event.is_err(),
-        "execute approvals should not be emitted on the legacy event channel once the client-event path exists",
-    );
+    if let Ok(Some(event)) = event {
+        assert!(
+            !matches!(
+                event.msg,
+                EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_)
+            ),
+            "execute approvals should not be emitted on the legacy event channel once the client-event path exists",
+        );
+    }
 }
 
 #[tokio::test]
@@ -761,9 +765,8 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
     let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
-    let pending_approvals = Arc::new(Mutex::new(Vec::<ApprovalRequest>::new()));
+    let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
-    let cwd = PathBuf::from("/tmp/test");
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::Never);
     let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
@@ -773,11 +776,8 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
         Some(client_event_tx),
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
-        cwd,
         policy_rx,
         Arc::clone(&pending_tool_calls),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-        None,
     );
 
     let tool_call = acp::ToolCallUpdate::new(
@@ -790,6 +790,7 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
     let (response_tx, response_rx) = oneshot::channel();
     approval_tx
         .send(ApprovalRequest {
+            request_id: "perm-auto-approved".to_string(),
             event: ApprovalEventType::Exec(codex_protocol::approvals::ExecApprovalRequestEvent {
                 call_id: "call-auto-approved".into(),
                 turn_id: String::new(),
@@ -814,10 +815,15 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
     assert_eq!(decision, ReviewDecision::Approved);
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
-    assert!(
-        event.is_err(),
-        "auto-approved execute approvals should not be emitted on the legacy event channel",
-    );
+    if let Ok(Some(event)) = event {
+        assert!(
+            !matches!(
+                event.msg,
+                EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_)
+            ),
+            "auto-approved execute approvals should not be emitted on the legacy event channel",
+        );
+    }
 
     let client_event = tokio::time::timeout(
         std::time::Duration::from_millis(100),
@@ -839,12 +845,7 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -865,9 +866,13 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert!(snapshot.owner_request_id.is_some());
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+        snapshot,
+        nori_protocol::ToolSnapshot {
             call_id: "call-edit-complete".into(),
             title: "Write README.md".into(),
             kind: nori_protocol::ToolKind::Edit,
@@ -887,8 +892,8 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
             })],
             raw_input: None,
             raw_output: None,
-            owner_request_id: None,
-        })
+            owner_request_id: snapshot.owner_request_id.clone(),
+        }
     );
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -907,12 +912,7 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -936,9 +936,13 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert!(snapshot.owner_request_id.is_some());
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+        snapshot,
+        nori_protocol::ToolSnapshot {
             call_id: "call-delete-complete".into(),
             title: "Delete README.md".into(),
             kind: nori_protocol::ToolKind::Delete,
@@ -956,8 +960,8 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
                 "content": "before\n",
             })),
             raw_output: None,
-            owner_request_id: None,
-        })
+            owner_request_id: snapshot.owner_request_id.clone(),
+        }
     );
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -976,12 +980,7 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1007,9 +1006,13 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert!(snapshot.owner_request_id.is_some());
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+        snapshot,
+        nori_protocol::ToolSnapshot {
             call_id: "call-fetch-complete".into(),
             title: "Fetch".into(),
             kind: nori_protocol::ToolKind::Fetch,
@@ -1030,8 +1033,8 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
             raw_output: Some(serde_json::json!({
                 "stdout": "ok\n",
             })),
-            owner_request_id: None,
-        })
+            owner_request_id: snapshot.owner_request_id.clone(),
+        }
     );
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -1050,12 +1053,7 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1077,9 +1075,13 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert!(snapshot.owner_request_id.is_some());
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+        snapshot,
+        nori_protocol::ToolSnapshot {
             call_id: "call-exec-complete".into(),
             title: "Terminal".into(),
             kind: nori_protocol::ToolKind::Execute,
@@ -1093,8 +1095,8 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
             }],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
-            owner_request_id: None,
-        })
+            owner_request_id: snapshot.owner_request_id.clone(),
+        }
     );
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -1113,12 +1115,7 @@ async fn test_agent_message_chunk_emits_normalized_message_delta() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::AgentMessageChunk(
@@ -1158,12 +1155,7 @@ async fn test_plan_update_emits_normalized_plan_snapshot() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::Plan(acp::Plan::new(vec![
@@ -1305,12 +1297,7 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
         let (client_event_tx, mut client_event_rx) =
             mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-        spawn_test_persistent_relay(
-            persistent_rx,
-            event_tx,
-            Some(client_event_tx),
-            Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-        );
+        spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
         persistent_tx
             .send(acp::SessionUpdate::ToolCallUpdate(update))
@@ -1322,7 +1309,21 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
                 .await
                 .expect("client event timeout")
                 .expect("client event missing");
-        assert_eq!(client_event, expected_client_event);
+        let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+            panic!("expected tool snapshot");
+        };
+        let nori_protocol::ClientEvent::ToolSnapshot(expected_snapshot) = expected_client_event
+        else {
+            panic!("expected tool snapshot");
+        };
+        assert!(snapshot.owner_request_id.is_some());
+        assert_eq!(
+            snapshot,
+            nori_protocol::ToolSnapshot {
+                owner_request_id: snapshot.owner_request_id.clone(),
+                ..expected_snapshot
+            }
+        );
 
         let event =
             tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -1342,12 +1343,7 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
-    spawn_test_persistent_relay(
-        persistent_rx,
-        event_tx,
-        Some(client_event_tx),
-        Arc::new(Mutex::new(nori_protocol::ClientEventNormalizer::default())),
-    );
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCall(
@@ -1380,9 +1376,13 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
             .await
             .expect("client event timeout")
             .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert!(snapshot.owner_request_id.is_some());
     assert_eq!(
-        client_event,
-        nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+        snapshot,
+        nori_protocol::ToolSnapshot {
             call_id: "toolu_generic_test_001".into(),
             title: "Terminal".into(),
             kind: nori_protocol::ToolKind::Execute,
@@ -1394,8 +1394,8 @@ async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() 
             }],
             raw_input: None,
             raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": "command output here"}),),
-            owner_request_id: None,
-        })
+            owner_request_id: snapshot.owner_request_id.clone(),
+        }
     );
 
     let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;

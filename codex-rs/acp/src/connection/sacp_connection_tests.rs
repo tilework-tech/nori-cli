@@ -94,6 +94,62 @@ async fn test_prompt_receives_text_updates() {
     assert_eq!(stop_reason, acp::StopReason::EndTurn);
 }
 
+#[tokio::test]
+#[serial]
+async fn test_tool_call_prompt_delivers_final_text_update() {
+    use std::time::Duration;
+
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config
+        .env
+        .insert("MOCK_AGENT_SEND_TOOL_CALL".to_string(), "1".to_string());
+
+    let temp_dir = tempdir().expect("temp dir");
+
+    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("spawn");
+
+    let mut notification_rx = conn.take_notification_receiver();
+
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new(
+        "Do a tool call",
+    ))];
+
+    let stop_reason = conn.prompt(session_id, prompt).await.expect("prompt");
+
+    let mut saw_final_text = false;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        match tokio::time::timeout(Duration::from_millis(200), notification_rx.recv()).await {
+            Ok(Some(acp::SessionUpdate::AgentMessageChunk(chunk))) => {
+                if let acp::ContentBlock::Text(text) = chunk.content
+                    && text.text.contains("Tool call completed successfully.")
+                {
+                    saw_final_text = true;
+                    break;
+                }
+            }
+            Ok(Some(_)) => continue,
+            Ok(None) => break,
+            Err(_) => continue,
+        }
+    }
+
+    assert_eq!(stop_reason, acp::StopReason::EndTurn);
+    assert!(
+        saw_final_text,
+        "expected tool-call prompt to deliver final assistant text update"
+    );
+}
+
 /// Test that model state is populated after session creation.
 /// The mock agent always returns 3 models in its NewSessionResponse.
 #[tokio::test]

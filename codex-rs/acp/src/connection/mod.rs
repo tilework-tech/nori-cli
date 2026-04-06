@@ -45,6 +45,8 @@ impl ApprovalEventType {
 /// to the user and return their decision via the response channel.
 #[derive(Debug)]
 pub struct ApprovalRequest {
+    /// JSON-RPC request ID for the ACP permission request.
+    pub request_id: String,
     /// The translated Codex approval event (either exec or patch)
     pub event: ApprovalEventType,
     /// The original ACP permission request.
