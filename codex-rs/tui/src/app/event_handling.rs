@@ -82,27 +82,16 @@ impl App {
                     self.chat_widget.conversation_id(),
                 );
                 self.shutdown_current_conversation();
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: self.config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: self.app_event_tx.clone(),
-                    initial_prompt: None,
-                    initial_images: Vec::new(),
-                    enhanced_keys_supported: self.enhanced_keys_supported,
-                    auth_manager: self.auth_manager.clone(),
-                    vertical_footer: self.vertical_footer,
-                    expected_agent: None, // No filtering for /new command
-                    deferred_spawn: false,
-                    fork_context: None,
-                };
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    None,
+                    Vec::new(),
+                    None,
+                    false,
+                    None,
+                );
                 self.chat_widget = ChatWidget::new(init);
-                self.chat_widget
-                    .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
-                #[cfg(feature = "nori-config")]
-                self.chat_widget
-                    .set_loop_count_override(self.loop_count_override);
+                self.configure_new_chat_widget();
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
                     if let Some(command) = summary.resume_command {
@@ -636,27 +625,16 @@ impl App {
 
                 // Create the new chat widget with the new config and the message as initial prompt
                 // Set expected_agent to filter events from the OLD agent until SessionConfigured
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: self.config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: self.app_event_tx.clone(),
-                    initial_prompt: Some(message_text),
-                    initial_images: image_paths,
-                    enhanced_keys_supported: self.enhanced_keys_supported,
-                    auth_manager: self.auth_manager.clone(),
-                    vertical_footer: self.vertical_footer,
-                    expected_agent: Some(agent_name.clone()),
-                    deferred_spawn: false,
-                    fork_context: None,
-                };
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    Some(message_text),
+                    image_paths,
+                    Some(agent_name.clone()),
+                    false,
+                    None,
+                );
                 self.chat_widget = ChatWidget::new(init);
-                self.chat_widget
-                    .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
-                #[cfg(feature = "nori-config")]
-                self.chat_widget
-                    .set_loop_count_override(self.loop_count_override);
+                self.configure_new_chat_widget();
 
                 self.chat_widget.add_info_message(
                     format!("Started new conversation with agent: {display_name}"),
@@ -823,9 +801,8 @@ impl App {
             }
             #[cfg(feature = "nori-config")]
             AppEvent::OpenFooterSegmentsPicker => {
-                let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_footer_segments_picker(&nori_config.footer_segment_config);
+                    .open_footer_segments_picker(&self.footer_segment_config);
             }
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigFooterSegment(segment, enabled) => {
@@ -856,26 +833,16 @@ impl App {
 
                 self.shutdown_current_conversation();
 
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: self.config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: self.app_event_tx.clone(),
-                    initial_prompt: Some(prompt),
-                    initial_images: Vec::new(),
-                    enhanced_keys_supported: self.enhanced_keys_supported,
-                    auth_manager: self.auth_manager.clone(),
-                    vertical_footer: self.vertical_footer,
-                    expected_agent: None,
-                    deferred_spawn: false,
-                    fork_context: None,
-                };
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    Some(prompt),
+                    Vec::new(),
+                    None,
+                    false,
+                    None,
+                );
                 self.chat_widget = ChatWidget::new(init);
-                self.chat_widget
-                    .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
-                self.chat_widget
-                    .set_loop_count_override(self.loop_count_override);
+                self.configure_new_chat_widget();
                 self.chat_widget.set_loop_state(remaining, total);
 
                 self.chat_widget
@@ -1049,25 +1016,17 @@ impl App {
 
                         self.shutdown_current_conversation();
 
-                        let init = crate::chatwidget::ChatWidgetInit {
-                            config: self.config.clone(),
-                            frame_requester: tui.frame_requester(),
-                            app_event_tx: self.app_event_tx.clone(),
-                            initial_prompt: None,
-                            initial_images: Vec::new(),
-                            enhanced_keys_supported: self.enhanced_keys_supported,
-                            auth_manager: self.auth_manager.clone(),
-                            vertical_footer: self.vertical_footer,
-                            expected_agent: None,
-                            deferred_spawn: false,
-                            fork_context: None,
-                        };
+                        let init = self.chat_widget_init(
+                            tui.frame_requester(),
+                            None,
+                            Vec::new(),
+                            None,
+                            false,
+                            None,
+                        );
                         self.chat_widget =
                             ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
-                        self.chat_widget
-                            .set_hotkey_config(self.hotkey_config.clone());
-                        self.chat_widget.set_vim_mode(self.vim_mode);
-                        self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
+                        self.configure_new_chat_widget();
 
                         self.chat_widget.add_info_message(
                             format!("Resuming session with {display_name}..."),
@@ -1109,27 +1068,16 @@ impl App {
                 };
 
                 self.shutdown_current_conversation();
-                let init = crate::chatwidget::ChatWidgetInit {
-                    config: self.config.clone(),
-                    frame_requester: tui.frame_requester(),
-                    app_event_tx: self.app_event_tx.clone(),
-                    initial_prompt: None,
-                    initial_images: Vec::new(),
-                    enhanced_keys_supported: self.enhanced_keys_supported,
-                    auth_manager: self.auth_manager.clone(),
-                    vertical_footer: self.vertical_footer,
-                    expected_agent: None,
-                    deferred_spawn: false,
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    None,
+                    Vec::new(),
+                    None,
+                    false,
                     fork_context,
-                };
+                );
                 self.chat_widget = ChatWidget::new(init);
-                self.chat_widget
-                    .set_hotkey_config(self.hotkey_config.clone());
-                self.chat_widget.set_vim_mode(self.vim_mode);
-                self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
-                #[cfg(feature = "nori-config")]
-                self.chat_widget
-                    .set_loop_count_override(self.loop_count_override);
+                self.configure_new_chat_widget();
 
                 // Trim transcript to preserve history before the fork point
                 self.transcript_cells

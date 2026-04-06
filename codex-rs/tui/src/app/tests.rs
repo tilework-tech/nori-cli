@@ -54,6 +54,7 @@ fn make_test_app() -> App {
         loop_count_override: None,
         hotkey_config: codex_acp::config::HotkeyConfig::default(),
         vim_mode: codex_acp::config::VimEnterBehavior::Off,
+        footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
         plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
         system_info_tx,
         worktree_warning_shown: false,
@@ -98,6 +99,7 @@ fn make_test_app_with_channels() -> (
             loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode: codex_acp::config::VimEnterBehavior::Off,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
@@ -237,6 +239,62 @@ fn backtrack_selection_with_duplicate_history_targets_unique_turn() {
     let (_, nth, prefill) = app.backtrack.pending.clone().expect("pending backtrack");
     assert_eq!(nth, 1);
     assert_eq!(prefill, "follow-up (edited)");
+}
+
+#[cfg(feature = "nori-config")]
+#[test]
+fn chat_widget_init_carries_footer_segment_config() {
+    let mut app = make_test_app();
+    let mut footer_segment_config = codex_acp::config::FooterSegmentConfig::default();
+    footer_segment_config.set_enabled(codex_acp::config::FooterSegment::GitBranch, false);
+    footer_segment_config.set_enabled(codex_acp::config::FooterSegment::NoriVersion, false);
+    app.footer_segment_config = footer_segment_config.clone();
+
+    let init = app.chat_widget_init(
+        crate::tui::FrameRequester::test_dummy(),
+        None,
+        Vec::new(),
+        None,
+        false,
+        None,
+    );
+
+    for segment in codex_acp::config::FooterSegment::all_variants() {
+        assert_eq!(
+            init.footer_segment_config.is_enabled(*segment),
+            footer_segment_config.is_enabled(*segment),
+            "segment {segment:?}"
+        );
+    }
+}
+
+#[cfg(feature = "nori-config")]
+#[test]
+fn rebuilding_chat_widget_preserves_footer_segment_config() {
+    let mut app = make_test_app();
+    let mut footer_segment_config = codex_acp::config::FooterSegmentConfig::default();
+    footer_segment_config.set_enabled(codex_acp::config::FooterSegment::GitBranch, false);
+    footer_segment_config.set_enabled(codex_acp::config::FooterSegment::NoriVersion, false);
+    app.footer_segment_config = footer_segment_config.clone();
+
+    let init = app.chat_widget_init(
+        crate::tui::FrameRequester::test_dummy(),
+        None,
+        Vec::new(),
+        None,
+        true,
+        None,
+    );
+    app.chat_widget = ChatWidget::new(init);
+    app.configure_new_chat_widget();
+
+    for segment in codex_acp::config::FooterSegment::all_variants() {
+        assert_eq!(
+            app.chat_widget.footer_segment_config().is_enabled(*segment),
+            footer_segment_config.is_enabled(*segment),
+            "segment {segment:?}"
+        );
+    }
 }
 
 #[tokio::test]

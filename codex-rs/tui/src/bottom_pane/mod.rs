@@ -91,6 +91,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) disable_paste_burst: bool,
     pub(crate) animations_enabled: bool,
     pub(crate) vertical_footer: bool,
+    pub(crate) footer_segment_config: codex_acp::config::FooterSegmentConfig,
     pub(crate) agent_display_name: String,
     pub(crate) agent_slug: String,
 }
@@ -106,6 +107,7 @@ impl BottomPane {
             disable_paste_burst,
             animations_enabled,
             vertical_footer,
+            footer_segment_config,
             agent_display_name,
             agent_slug,
         } = params;
@@ -117,6 +119,7 @@ impl BottomPane {
             disable_paste_burst,
         );
         composer.set_vertical_footer(vertical_footer);
+        composer.set_footer_segment_config(footer_segment_config);
 
         // In debug builds, allow synchronous system info collection for E2E tests
         // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
@@ -437,6 +440,11 @@ impl BottomPane {
         enabled: bool,
     ) {
         self.composer.set_footer_segment_enabled(segment, enabled);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn footer_segment_config(&self) -> codex_acp::config::FooterSegmentConfig {
+        self.composer.footer_segment_config()
     }
 
     /// Show a generic list selection view with the provided items.
@@ -761,6 +769,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -785,6 +794,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -817,6 +827,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -890,6 +901,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -921,6 +933,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -955,6 +968,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -985,6 +999,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1015,6 +1030,7 @@ mod tests {
             disable_paste_burst: false,
             animations_enabled: true,
             vertical_footer: false,
+            footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });

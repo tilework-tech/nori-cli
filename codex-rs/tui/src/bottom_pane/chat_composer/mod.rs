@@ -206,6 +206,18 @@ impl ChatComposer {
         self.vertical_footer = vertical_footer;
     }
 
+    pub(crate) fn set_footer_segment_config(
+        &mut self,
+        config: codex_acp::config::FooterSegmentConfig,
+    ) {
+        self.footer_segment_config = config;
+    }
+
+    #[cfg(test)]
+    pub(super) fn footer_segment_config(&self) -> codex_acp::config::FooterSegmentConfig {
+        self.footer_segment_config.clone()
+    }
+
     pub(crate) fn set_hotkey_config(&mut self, config: codex_acp::config::HotkeyConfig) {
         self.textarea.set_hotkey_config(config);
     }

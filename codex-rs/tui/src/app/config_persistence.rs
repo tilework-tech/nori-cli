@@ -233,6 +233,7 @@ impl App {
         }
 
         // Update the local config and apply to the widget
+        self.footer_segment_config.set_enabled(segment, enabled);
         self.chat_widget
             .set_footer_segment_enabled(segment, enabled);
 
@@ -241,9 +242,8 @@ impl App {
             .add_info_message(format!("{} {status}.", segment.display_name()), None);
 
         // Refresh the picker to show updated state without stacking a new view.
-        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         self.chat_widget
-            .replace_footer_segments_picker(&nori_config.footer_segment_config);
+            .replace_footer_segments_picker(&self.footer_segment_config);
     }
 
     #[cfg(feature = "nori-config")]

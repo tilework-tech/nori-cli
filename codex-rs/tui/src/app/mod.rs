@@ -247,6 +247,9 @@ pub(crate) struct App {
     /// Vim mode and Enter key behavior loaded from NoriConfig.
     vim_mode: codex_acp::config::VimEnterBehavior,
 
+    /// Current footer segment visibility loaded from NoriConfig.
+    footer_segment_config: codex_acp::config::FooterSegmentConfig,
+
     /// Plan drawer visibility mode.
     plan_drawer_mode: crate::chatwidget::PlanDrawerMode,
 
@@ -322,6 +325,7 @@ impl App {
         #[cfg(not(feature = "nori-config"))]
         let needs_deferred_spawn = false;
 
+        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -332,6 +336,7 @@ impl App {
                 enhanced_keys_supported,
                 auth_manager: auth_manager.clone(),
                 vertical_footer,
+                footer_segment_config: nori_config.footer_segment_config.clone(),
                 expected_agent: None,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
@@ -377,6 +382,7 @@ impl App {
             loop_count_override: None,
             hotkey_config: codex_acp::config::HotkeyConfig::default(),
             vim_mode: codex_acp::config::VimEnterBehavior::Off,
+            footer_segment_config: nori_config.footer_segment_config.clone(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
@@ -385,8 +391,7 @@ impl App {
             mcp_oauth_cancel_tx: None,
         };
 
-        // Load NoriConfig and propagate settings to the textarea.
-        let nori_config = codex_acp::config::NoriConfig::load().unwrap_or_default();
+        // Propagate NoriConfig settings to the textarea.
         app.hotkey_config = nori_config.hotkeys;
         app.vim_mode = nori_config.vim_mode;
 
@@ -403,13 +408,6 @@ impl App {
         };
         app.plan_drawer_mode = plan_mode;
         app.chat_widget.set_plan_drawer_mode(plan_mode);
-        // Propagate initial footer segment config.
-        for segment in codex_acp::config::FooterSegment::all_variants() {
-            app.chat_widget.set_footer_segment_enabled(
-                *segment,
-                nori_config.footer_segment_config.is_enabled(*segment),
-            );
-        }
 
         // If skillset_per_session is enabled, show the skillset picker. The
         // agent spawn was deferred so that `nori-skillsets switch` can write
@@ -498,6 +496,41 @@ impl App {
             Some(ReasoningEffortConfig::XHigh) => "xhigh",
             None | Some(ReasoningEffortConfig::None) => "default",
         }
+    }
+
+    pub(super) fn chat_widget_init(
+        &self,
+        frame_requester: crate::tui::FrameRequester,
+        initial_prompt: Option<String>,
+        initial_images: Vec<PathBuf>,
+        expected_agent: Option<String>,
+        deferred_spawn: bool,
+        fork_context: Option<String>,
+    ) -> crate::chatwidget::ChatWidgetInit {
+        crate::chatwidget::ChatWidgetInit {
+            config: self.config.clone(),
+            frame_requester,
+            app_event_tx: self.app_event_tx.clone(),
+            initial_prompt,
+            initial_images,
+            enhanced_keys_supported: self.enhanced_keys_supported,
+            auth_manager: self.auth_manager.clone(),
+            vertical_footer: self.vertical_footer,
+            footer_segment_config: self.footer_segment_config.clone(),
+            expected_agent,
+            deferred_spawn,
+            fork_context,
+        }
+    }
+
+    pub(super) fn configure_new_chat_widget(&mut self) {
+        self.chat_widget
+            .set_hotkey_config(self.hotkey_config.clone());
+        self.chat_widget.set_vim_mode(self.vim_mode);
+        self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
+        #[cfg(feature = "nori-config")]
+        self.chat_widget
+            .set_loop_count_override(self.loop_count_override);
     }
 
     pub(crate) fn token_usage(&self) -> codex_core::protocol::TokenUsage {
