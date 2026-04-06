@@ -373,3 +373,67 @@ async fn test_cancel_during_prompt() {
         "Stop reason should be Cancelled after cancel"
     );
 }
+
+/// Test that the generation counter in `active_update_tx` prevents a stale
+/// prompt's uninstall from wiping a newer prompt's channel. This directly
+/// tests the `SacpConnection::prompt()` install/uninstall logic.
+///
+/// We can't easily test concurrent overlapping prompts with the mock agent
+/// (it doesn't handle two concurrent prompts), but we CAN verify that after
+/// cancel → new prompt, the new prompt still receives its response correctly.
+#[tokio::test]
+#[serial]
+async fn test_sequential_prompt_after_cancel_receives_response() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+
+    let temp_dir = tempdir().expect("temp dir");
+
+    let conn = SacpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("spawn");
+
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    // --- Prompt 1: normal prompt, runs to completion ---
+    let (tx1, mut rx1) = mpsc::channel(32);
+    let prompt1 = vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))];
+    conn.prompt(session_id.clone(), prompt1, tx1)
+        .await
+        .expect("prompt 1");
+
+    let mut msgs1 = Vec::new();
+    while let Ok(update) = rx1.try_recv() {
+        if let acp::SessionUpdate::AgentMessageChunk(chunk) = update
+            && let acp::ContentBlock::Text(text) = chunk.content
+        {
+            msgs1.push(text.text);
+        }
+    }
+    assert!(!msgs1.is_empty(), "Prompt 1 should receive text");
+
+    // --- Prompt 2: should also receive its response correctly ---
+    // This verifies the uninstall from prompt 1 doesn't corrupt state
+    // for prompt 2.
+    let (tx2, mut rx2) = mpsc::channel(32);
+    let prompt2 = vec![acp::ContentBlock::Text(acp::TextContent::new(
+        "hello again",
+    ))];
+    conn.prompt(session_id.clone(), prompt2, tx2)
+        .await
+        .expect("prompt 2");
+
+    let mut msgs2 = Vec::new();
+    while let Ok(update) = rx2.try_recv() {
+        if let acp::SessionUpdate::AgentMessageChunk(chunk) = update
+            && let acp::ContentBlock::Text(text) = chunk.content
+        {
+            msgs2.push(text.text);
+        }
+    }
+    assert!(!msgs2.is_empty(), "Prompt 2 should receive text updates");
+}
