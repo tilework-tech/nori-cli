@@ -14,6 +14,7 @@ pub(crate) fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
         nori_protocol::ToolKind::Read => "read",
         nori_protocol::ToolKind::Search => "search",
         nori_protocol::ToolKind::Execute => "execute",
+        nori_protocol::ToolKind::Create => "create",
         nori_protocol::ToolKind::Edit => "edit",
         nori_protocol::ToolKind::Delete => "delete",
         nori_protocol::ToolKind::Move => "move",
@@ -42,10 +43,11 @@ pub(crate) fn format_tool_header(snapshot: &nori_protocol::ToolSnapshot) -> Stri
     )
 }
 
-/// Semantic header for Edit/Delete/Move tool snapshots.
-/// Returns verb-based header like "Editing path", "Edit failed: path", "Deleted path".
+/// Semantic header for Create/Edit/Delete/Move tool snapshots.
+/// Returns verb-based header like "Adding path", "Edited path", "Deleted path".
 pub(crate) fn format_edit_tool_header(snapshot: &nori_protocol::ToolSnapshot) -> String {
     let (verb_active, verb_past, verb_failed, prefix) = match &snapshot.kind {
+        nori_protocol::ToolKind::Create => ("Adding", "Added", "Add failed:", "Add "),
         nori_protocol::ToolKind::Edit => ("Editing", "Edited", "Edit failed:", "Edit "),
         nori_protocol::ToolKind::Delete => ("Deleting", "Deleted", "Delete failed:", "Delete "),
         nori_protocol::ToolKind::Move => ("Moving", "Moved", "Move failed:", "Move "),
@@ -57,9 +59,13 @@ pub(crate) fn format_edit_tool_header(snapshot: &nori_protocol::ToolSnapshot) ->
         .first()
         .map(|loc| loc.path.display().to_string())
         .unwrap_or_else(|| {
+            // Try the kind-specific prefix first, then fall back to "Edit " since
+            // some agents (Codex) always send title "Edit /path" regardless of the
+            // actual operation type (which we refine via rawInput.changes).
             snapshot
                 .title
                 .strip_prefix(prefix)
+                .or_else(|| snapshot.title.strip_prefix("Edit "))
                 .unwrap_or(&snapshot.title)
                 .to_string()
         });

@@ -98,6 +98,7 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         vertical_footer: false,
+        footer_segment_config: codex_acp::config::FooterSegmentConfig::default(),
         expected_agent: None,
         deferred_spawn: false,
         fork_context: None,

@@ -12,6 +12,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
+            footer_segment_config,
             expected_agent,
             deferred_spawn,
             fork_context,
@@ -45,6 +46,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
+                footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -99,7 +101,6 @@ impl ChatWidget {
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             turn_finished: false,
-            pending_stale_completes: 0,
             plan_drawer_mode: PlanDrawerMode::Off,
             pinned_plan: None,
             terminal_title_animation_origin: std::time::Instant::now(),
@@ -127,6 +128,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             auth_manager,
             vertical_footer,
+            footer_segment_config,
             expected_agent,
             deferred_spawn: _,
             fork_context: _,
@@ -154,6 +156,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 vertical_footer,
+                footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -208,7 +211,6 @@ impl ChatWidget {
             #[cfg(feature = "nori-config")]
             loop_count_override: None,
             turn_finished: false,
-            pending_stale_completes: 0,
             plan_drawer_mode: PlanDrawerMode::Off,
             pinned_plan: None,
             terminal_title_animation_origin: std::time::Instant::now(),

@@ -465,7 +465,8 @@ impl From<ApprovalRequest> for ApprovalRequestState {
 
                 let is_edit_like = matches!(
                     kind,
-                    nori_protocol::ToolKind::Edit
+                    nori_protocol::ToolKind::Create
+                        | nori_protocol::ToolKind::Edit
                         | nori_protocol::ToolKind::Delete
                         | nori_protocol::ToolKind::Move
                 );
