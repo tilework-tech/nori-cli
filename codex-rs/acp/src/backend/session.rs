@@ -112,9 +112,13 @@ impl AcpBackend {
                 Ok(session_id) => {
                     // Signal the collector that load is done, then collect results.
                     let _ = load_done_tx.send(());
-                    let (buffered_client_events, recovered_rx) = collect_handle
-                        .await
-                        .expect("load session collector task panicked");
+                    let (buffered_client_events, recovered_rx) = match collect_handle.await {
+                        Ok(result) => result,
+                        Err(e) => {
+                            warn!("load session collector task panicked: {e}");
+                            return Err(anyhow::anyhow!("session load collector panicked"));
+                        }
+                    };
                     if !buffered_client_events.is_empty() {
                         debug!(
                             "ACP session/load produced {} replay client events (deferred until after setup)",
@@ -136,9 +140,13 @@ impl AcpBackend {
                         "Server-side session/load failed, falling back to client-side replay: {e}"
                     );
                     let _ = load_done_tx.send(());
-                    let (_, recovered_rx) = collect_handle
-                        .await
-                        .expect("load session collector task panicked");
+                    let (_, recovered_rx) = match collect_handle.await {
+                        Ok(result) => result,
+                        Err(e) => {
+                            warn!("load session collector task panicked: {e}");
+                            return Err(anyhow::anyhow!("session load collector panicked"));
+                        }
+                    };
 
                     let mcp_servers =
                         crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
