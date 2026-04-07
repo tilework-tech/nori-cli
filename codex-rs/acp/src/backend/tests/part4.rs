@@ -96,7 +96,7 @@ async fn test_interrupt_emits_cancelling_phase_before_prompt_completion() {
 
 #[tokio::test]
 #[serial]
-async fn test_user_input_emits_normalized_turn_lifecycle_events() {
+async fn test_user_input_emits_reducer_owned_phase_and_completion_events() {
     use std::time::Duration;
 
     let mock_config =
@@ -136,12 +136,7 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(client_event) => {
-                let done = matches!(
-                    client_event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                );
+                let done = matches!(client_event, nori_protocol::ClientEvent::PromptCompleted(_));
                 client_events.push(client_event);
                 if done {
                     break;
@@ -155,20 +150,17 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
         client_events.iter().any(|event| {
             matches!(
                 event,
-                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
+                nori_protocol::ClientEvent::SessionPhaseChanged(
+                    nori_protocol::session_runtime::SessionPhaseView::Prompt
+                )
             )
         }),
         "expected normalized turn started event: {client_events:?}"
     );
     assert!(
-        client_events.iter().any(|event| {
-            matches!(
-                event,
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed { .. }
-                )
-            )
-        }),
+        client_events
+            .iter()
+            .any(|event| { matches!(event, nori_protocol::ClientEvent::PromptCompleted(_)) }),
         "expected normalized turn completed event: {client_events:?}"
     );
     assert!(
@@ -238,9 +230,10 @@ async fn test_user_input_completed_includes_last_agent_message() {
     let mut completion = None;
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
-            Some(nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { last_agent_message },
-            )) => {
+            Some(nori_protocol::ClientEvent::PromptCompleted(nori_protocol::PromptCompleted {
+                last_agent_message,
+                ..
+            })) => {
                 completion = Some(last_agent_message);
                 break;
             }
@@ -302,12 +295,7 @@ async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(client_event) => {
-                let done = matches!(
-                    client_event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                );
+                let done = matches!(client_event, nori_protocol::ClientEvent::PromptCompleted(_));
                 client_events.push(client_event);
                 if done {
                     break;
@@ -404,9 +392,7 @@ async fn test_user_input_tool_snapshots_have_owner_request_id() {
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(nori_protocol::ClientEvent::ToolSnapshot(snapshot)) => snapshots.push(snapshot),
-            Some(nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { .. },
-            )) => break,
+            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => break,
             Some(_) => continue,
             None => continue,
         }
@@ -471,9 +457,10 @@ async fn test_user_input_tool_call_completed_includes_last_agent_message() {
     let mut completion = None;
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
-            Some(nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { last_agent_message },
-            )) => {
+            Some(nori_protocol::ClientEvent::PromptCompleted(nori_protocol::PromptCompleted {
+                last_agent_message,
+                ..
+            })) => {
                 completion = Some(last_agent_message);
                 break;
             }
@@ -657,12 +644,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     while start.elapsed() < timeout {
         match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
             Ok(Some(event)) => {
-                if matches!(
-                    event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                ) {
+                if matches!(event, nori_protocol::ClientEvent::PromptCompleted(_)) {
                     break;
                 }
             }
@@ -687,26 +669,17 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     while start.elapsed() < timeout {
         match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
             Ok(Some(event)) => {
-                let done = matches!(
-                    event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                );
+                let done = matches!(event, nori_protocol::ClientEvent::PromptCompleted(_));
                 client_events.push(event);
                 if done {
                     break;
                 }
             }
             _ => {
-                if client_events.iter().any(|e| {
-                    matches!(
-                        e,
-                        nori_protocol::ClientEvent::TurnLifecycle(
-                            nori_protocol::TurnLifecycle::Completed { .. }
-                        )
-                    )
-                }) {
+                if client_events
+                    .iter()
+                    .any(|e| matches!(e, nori_protocol::ClientEvent::PromptCompleted(_)))
+                {
                     break;
                 }
             }
@@ -733,12 +706,9 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     // by checking that the agent received something (the response won't be empty)
     assert!(
         !agent_messages.is_empty()
-            || client_events.iter().any(|e| matches!(
-                e,
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed { .. }
-                )
-            )),
+            || client_events
+                .iter()
+                .any(|e| matches!(e, nori_protocol::ClientEvent::PromptCompleted(_))),
         "Expected normalized agent response or task completion. Events: {client_events:?}"
     );
 
@@ -746,14 +716,9 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     // (This requires checking internal state, which we'll verify through behavior)
     // The key assertion is that the compact operation succeeded and subsequent
     // prompts can be sent without error
-    let has_task_complete = client_events.iter().any(|e| {
-        matches!(
-            e,
-            nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { .. }
-            )
-        )
-    });
+    let has_task_complete = client_events
+        .iter()
+        .any(|e| matches!(e, nori_protocol::ClientEvent::PromptCompleted(_)));
     assert!(
         has_task_complete,
         "Expected normalized completion event for follow-up prompt. Events: {client_events:?}"

@@ -69,7 +69,7 @@ impl ChatWidget {
     /// is currently running the message is submitted immediately; otherwise
     /// it is appended to the pending queue.
     pub(crate) fn queue_text_as_user_message(&mut self, text: String) {
-        self.queue_user_message(UserMessage::from(text));
+        self.submit_user_message(UserMessage::from(text));
     }
 
     /// Show "Connecting to [Agent]" status indicator during agent startup.

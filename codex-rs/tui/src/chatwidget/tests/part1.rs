@@ -285,79 +285,6 @@ fn exec_approval_decision_truncates_multiline_and_long_commands() {
 }
 
 #[test]
-fn empty_enter_during_task_does_not_queue() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Simulate running task so submissions would normally be queued.
-    chat.bottom_pane.set_task_running(true);
-
-    // Press Enter with an empty composer.
-    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    // Ensure nothing was queued.
-    assert!(chat.queued_user_messages.is_empty());
-}
-
-#[test]
-fn alt_up_edits_most_recent_queued_message() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Simulate a running task so messages would normally be queued.
-    chat.bottom_pane.set_task_running(true);
-
-    // Seed two queued messages.
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
-
-    // Press Alt+Up to edit the most recent (last) queued message.
-    chat.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
-
-    // Composer should now contain the last queued message.
-    assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "second queued".to_string()
-    );
-    // And the queue should now contain only the remaining (older) item.
-    assert_eq!(chat.queued_user_messages.len(), 1);
-    assert_eq!(
-        chat.queued_user_messages.front().unwrap().text,
-        "first queued"
-    );
-}
-
-/// Pressing Up to recall the most recent history entry and immediately queuing
-/// it while a task is running should always enqueue the same text, even when it
-/// is queued repeatedly.
-#[test]
-fn enqueueing_history_prompt_multiple_times_is_stable() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
-
-    // Submit an initial prompt to seed history.
-    chat.bottom_pane.set_composer_text("repeat me".to_string());
-    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    // Simulate an active task so further submissions are queued.
-    chat.bottom_pane.set_task_running(true);
-
-    for _ in 0..3 {
-        // Recall the prompt from history and ensure it is what we expect.
-        chat.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-        assert_eq!(chat.bottom_pane.composer_text(), "repeat me");
-
-        // Queue the prompt while the task is running.
-        chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    }
-
-    assert_eq!(chat.queued_user_messages.len(), 3);
-    for message in chat.queued_user_messages.iter() {
-        assert_eq!(message.text, "repeat me");
-    }
-}
-
-#[test]
 fn streaming_final_answer_keeps_task_running_state() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
@@ -378,12 +305,8 @@ fn streaming_final_answer_keeps_task_running_state() {
         .set_composer_text("queued submission".to_string());
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(chat.queued_user_messages.len(), 1);
-    assert_eq!(
-        chat.queued_user_messages.front().unwrap().text,
-        "queued submission"
-    );
-    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    assert!(matches!(op_rx.try_recv(), Ok(Op::UserInput { .. })));
+    assert!(matches!(op_rx.try_recv(), Ok(Op::AddToHistory { .. })));
 
     chat.handle_key_event(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
     match op_rx.try_recv() {

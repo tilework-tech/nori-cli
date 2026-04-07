@@ -292,7 +292,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         conversation_id: None,
         frame_requester: FrameRequester::test_dummy(),
         show_welcome_banner: true,
-        queued_user_messages: VecDeque::new(),
         suppress_session_configured_redraw: false,
         pending_notification: None,
         needs_final_message_separator: false,
@@ -314,8 +313,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         #[cfg(feature = "nori-config")]
         loop_count_override: None,
         acp_session_phase: None,
-        acp_cancel_pending_completion: false,
-        turn_finished: false,
         plan_drawer_mode: PlanDrawerMode::Off,
         pinned_plan: None,
         terminal_title_animation_origin: std::time::Instant::now(),

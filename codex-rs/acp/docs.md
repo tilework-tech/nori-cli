@@ -82,7 +82,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 - request-local message assembly for assistant/reasoning streams
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
-- final assistant message extraction used for `TurnLifecycle::Completed { last_agent_message }`
+- final assistant message extraction used for `PromptCompleted { last_agent_message, .. }`
 
 The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.rs`, and `session.rs` all feed reducer events into the same runtime. `resume_session()` uses the same reducer during `session/load`, buffering replay `ClientEvent`s from reducer output and then carrying the resulting `SessionDriver` state into the live backend once setup completes.
 
@@ -821,7 +821,7 @@ The same merged completion state is also used to decide whether a completed tool
 
 The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. Completed normalized snapshots consume the shared `pending_tool_calls` metadata used for title/raw-input resolution once the lifecycle reaches its terminal phase.
 
-Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
+Late-arriving tool events are now judged against reducer-owned ACP phase and known `call_id` state instead of a TUI-owned turn-finished flag (see `@/codex-rs/tui/docs.md`).
 
 **Prompt Update Channel Lifecycle** (`sacp_connection.rs`, `user_input.rs`, `submit_and_ops.rs`):
 
@@ -859,7 +859,7 @@ When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::Canc
 - `SessionPhaseChanged(Idle)` and `PromptCompleted { stop_reason, last_agent_message }` are emitted only when that prompt response is reduced
 - queued follow-up prompts remain in the reducer-owned outbound queue until an eligible drain point (`stop_reason: end_turn`)
 
-This removes the old synthetic `TurnLifecycle::Aborted` fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
+This removes the old synthetic interrupt-abort fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
 
 **Tool Classification System:**
 

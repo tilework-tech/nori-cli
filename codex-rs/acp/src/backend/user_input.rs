@@ -171,8 +171,6 @@ impl AcpBackend {
                         text: final_prompt_text,
                         display_text: Some(prompt_text_for_hooks),
                         images: image_blocks,
-                        queue_drain:
-                            nori_protocol::session_runtime::QueueDrainOutcome::SendNextPrompt,
                     },
                 ),
             ))

@@ -1,8 +1,6 @@
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
-use nori_protocol::TurnLifecycle;
 use nori_protocol::session_runtime::ActiveRequestKind;
-use nori_protocol::session_runtime::QueueDrainOutcome;
 use nori_protocol::session_runtime::QueuedPrompt;
 use nori_protocol::session_runtime::QueuedPromptKind;
 use nori_protocol::session_runtime::SessionPhase;
@@ -30,7 +28,6 @@ fn simple_prompt() -> QueuedPrompt {
         text: "hello".to_string(),
         display_text: Some("hello".to_string()),
         images: Vec::new(),
-        queue_drain: QueueDrainOutcome::SendNextPrompt,
     }
 }
 
@@ -40,13 +37,6 @@ fn notification(update: acp::SessionUpdate) -> InboundEvent {
 
 fn has_event(events: &[ClientEvent], pred: impl Fn(&ClientEvent) -> bool) -> bool {
     events.iter().any(pred)
-}
-
-fn has_turn_lifecycle(events: &[ClientEvent], expected: &TurnLifecycle) -> bool {
-    has_event(events, |e| match e {
-        ClientEvent::TurnLifecycle(tl) => tl == expected,
-        _ => false,
-    })
 }
 
 fn has_side_effect(effects: &[SideEffect], pred: impl Fn(&SideEffect) -> bool) -> bool {
@@ -78,8 +68,10 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         }
     ));
 
-    // Should emit TurnLifecycle::Started
-    assert!(has_turn_lifecycle(&out.events, &TurnLifecycle::Started));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
+    )));
 
     // Should produce a SendPrompt side effect
     assert!(has_side_effect(&out.side_effects, |e| matches!(
@@ -115,10 +107,9 @@ fn prompt_response_transitions_to_idle() {
     assert_eq!(rt.phase, SessionPhase::Idle);
     assert!(rt.active.is_none());
 
-    // Should emit TurnLifecycle::Completed
     assert!(has_event(&out.events, |e| matches!(
         e,
-        ClientEvent::TurnLifecycle(TurnLifecycle::Completed { .. })
+        ClientEvent::PromptCompleted(_)
     )));
 }
 
@@ -148,8 +139,10 @@ fn cancel_sets_cancelling_but_does_not_end_turn() {
         }
     ));
 
-    // Should emit TurnLifecycle::Cancelling
-    assert!(has_turn_lifecycle(&out.events, &TurnLifecycle::Cancelling));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionPhaseChanged(SessionPhaseView::Cancelling)
+    )));
 
     // Should produce a SendCancel side effect
     assert!(has_side_effect(&out.side_effects, |e| matches!(
@@ -202,7 +195,7 @@ fn cancelled_prompt_response_completes_turn() {
     assert!(rt.active.is_none());
     assert!(has_event(&out.events, |e| matches!(
         e,
-        ClientEvent::TurnLifecycle(TurnLifecycle::Completed { .. })
+        ClientEvent::PromptCompleted(_)
     )));
 }
 
@@ -291,7 +284,6 @@ fn prompt_submit_while_active_queues() {
             text: "second".to_string(),
             display_text: Some("second".to_string()),
             images: Vec::new(),
-            queue_drain: QueueDrainOutcome::SendNextPrompt,
         }),
         &mut norm,
     );
@@ -325,7 +317,6 @@ fn end_turn_drains_queue() {
             text: "second".to_string(),
             display_text: Some("second".to_string()),
             images: Vec::new(),
-            queue_drain: QueueDrainOutcome::SendNextPrompt,
         }),
         &mut norm,
     );
@@ -345,8 +336,10 @@ fn end_turn_drains_queue() {
     // Should have transitioned directly to a new Prompt phase
     assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
 
-    // Should have emitted Started for the new prompt
-    assert!(has_turn_lifecycle(&out.events, &TurnLifecycle::Started));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
+    )));
 
     // Should have a SendPrompt side effect for the queued prompt
     assert!(has_side_effect(&out.side_effects, |e| matches!(
@@ -373,7 +366,6 @@ fn cancelled_does_not_drain_queue() {
             text: "second".to_string(),
             display_text: Some("second".to_string()),
             images: Vec::new(),
-            queue_drain: QueueDrainOutcome::SendNextPrompt,
         }),
         &mut norm,
     );

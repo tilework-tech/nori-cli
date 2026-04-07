@@ -1509,9 +1509,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
                 if let Some(client_event) = client_event {
                     let done = matches!(
                         client_event,
-                        nori_protocol::ClientEvent::TurnLifecycle(
-                            nori_protocol::TurnLifecycle::Completed { .. }
-                        )
+                        nori_protocol::ClientEvent::PromptCompleted(_)
                     );
                     client_events.push(client_event);
                     if done {
@@ -1536,28 +1534,20 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     let has_task_started = client_events.iter().any(|e| {
         matches!(
             e,
-            nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
-        )
-    });
-    let has_context_compacted = client_events.iter().any(|e| {
-        matches!(
-            e,
-            nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::ContextCompacted { .. }
+            nori_protocol::ClientEvent::SessionPhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Prompt
             )
         )
     });
+    let has_context_compacted = client_events
+        .iter()
+        .any(|e| matches!(e, nori_protocol::ClientEvent::ContextCompacted(_)));
     let has_warning = warning_events
         .iter()
         .any(|e| matches!(e.msg, EventMsg::Warning(_)));
-    let has_task_complete = client_events.iter().any(|e| {
-        matches!(
-            e,
-            nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { .. }
-            )
-        )
-    });
+    let has_task_complete = client_events
+        .iter()
+        .any(|e| matches!(e, nori_protocol::ClientEvent::PromptCompleted(_)));
 
     assert!(
         has_task_started,

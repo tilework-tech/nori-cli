@@ -188,7 +188,6 @@ fn replay_entry_from_client_event(
         | nori_protocol::ClientEvent::LoadCompleted
         | nori_protocol::ClientEvent::QueueChanged(_)
         | nori_protocol::ClientEvent::ContextCompacted(_)
-        | nori_protocol::ClientEvent::TurnLifecycle(_)
         | nori_protocol::ClientEvent::ReplayEntry(_)
         | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
         | nori_protocol::ClientEvent::Warning(_) => None,

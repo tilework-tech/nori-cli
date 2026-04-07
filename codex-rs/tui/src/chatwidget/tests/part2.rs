@@ -236,35 +236,6 @@ fn interrupt_exec_marks_failed_snapshot() {
 }
 
 #[test]
-fn interrupted_turn_error_message_snapshot() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-
-    // Simulate an in-progress task so the widget is in a running state.
-    chat.handle_codex_event(Event {
-        id: "task-1".into(),
-        msg: EventMsg::TaskStarted(TaskStartedEvent {
-            model_context_window: None,
-        }),
-    });
-
-    // Abort the turn (like pressing Esc) and drain inserted history.
-    chat.handle_codex_event(Event {
-        id: "task-1".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
-            reason: TurnAbortReason::Interrupted,
-        }),
-    });
-
-    let cells = drain_insert_history(&mut rx);
-    assert!(
-        !cells.is_empty(),
-        "expected error message to be inserted after interruption"
-    );
-    let last = lines_to_single_string(cells.last().unwrap());
-    assert_snapshot!("interrupted_turn_error_message", last);
-}
-
-#[test]
 fn model_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 

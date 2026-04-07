@@ -21,7 +21,6 @@ pub enum ClientEvent {
     LoadCompleted,
     QueueChanged(QueueChanged),
     ContextCompacted(ContextCompacted),
-    TurnLifecycle(TurnLifecycle),
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
     Warning(WarningInfo),
@@ -68,32 +67,6 @@ pub struct AgentCommandInfo {
     pub name: String,
     pub description: String,
     pub input_hint: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TurnLifecycle {
-    Started,
-    Completed {
-        last_agent_message: Option<String>,
-    },
-    Aborted {
-        reason: TurnAbortReason,
-    },
-    ContextCompacted {
-        summary: Option<String>,
-    },
-    /// `session/cancel` has been sent but the prompt response has not yet
-    /// arrived. The turn is still active per ACP protocol.
-    Cancelling,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TurnAbortReason {
-    Interrupted,
-    Replaced,
-    Other(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1574,18 +1547,6 @@ mod tests {
             raw_input: Some(serde_json::json!({"path": "/repo/README.md"})),
             raw_output: None,
             owner_request_id: None,
-        });
-
-        let json = serde_json::to_string(&event).unwrap();
-        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(parsed, event);
-    }
-
-    #[test]
-    fn turn_lifecycle_event_round_trips_through_serde() {
-        let event = ClientEvent::TurnLifecycle(TurnLifecycle::ContextCompacted {
-            summary: Some("Compact summary".into()),
         });
 
         let json = serde_json::to_string(&event).unwrap();

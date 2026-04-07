@@ -102,7 +102,6 @@ fn spawn_test_approval_handler(
                     text: "seed".to_string(),
                     display_text: Some("seed".to_string()),
                     images: Vec::new(),
-                    queue_drain: nori_protocol::session_runtime::QueueDrainOutcome::SendNextPrompt,
                 },
             ));
         }
@@ -155,7 +154,6 @@ fn spawn_test_persistent_relay(
                     text: "seed".to_string(),
                     display_text: Some("seed".to_string()),
                     images: Vec::new(),
-                    queue_drain: nori_protocol::session_runtime::QueueDrainOutcome::SendNextPrompt,
                 },
             ));
         }

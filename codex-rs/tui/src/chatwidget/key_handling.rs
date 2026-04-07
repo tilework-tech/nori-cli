@@ -42,36 +42,18 @@ impl ChatWidget {
             _ => {}
         }
 
-        match key_event {
-            KeyEvent {
-                code: KeyCode::Up,
-                modifiers: KeyModifiers::ALT,
-                kind: KeyEventKind::Press,
-                ..
-            } if !self.queued_user_messages.is_empty() => {
-                // Prefer the most recently queued item.
-                if let Some(user_message) = self.queued_user_messages.pop_back() {
-                    self.bottom_pane.set_composer_text(user_message.text);
-                    self.refresh_queued_user_messages();
-                    self.request_redraw();
-                }
+        match self.bottom_pane.handle_key_event(key_event) {
+            InputResult::Submitted(text) => {
+                let user_message = UserMessage {
+                    text,
+                    image_paths: self.bottom_pane.take_recent_submission_images(),
+                };
+                self.submit_user_message(user_message);
             }
-            _ => {
-                match self.bottom_pane.handle_key_event(key_event) {
-                    InputResult::Submitted(text) => {
-                        // If a task is running, queue the user input to be sent after the turn completes.
-                        let user_message = UserMessage {
-                            text,
-                            image_paths: self.bottom_pane.take_recent_submission_images(),
-                        };
-                        self.queue_user_message(user_message);
-                    }
-                    InputResult::Command(cmd) => {
-                        self.dispatch_command(cmd);
-                    }
-                    InputResult::None => {}
-                }
+            InputResult::Command(cmd) => {
+                self.dispatch_command(cmd);
             }
+            InputResult::None => {}
         }
     }
 

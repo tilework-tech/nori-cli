@@ -189,22 +189,6 @@ pub struct QueuedPrompt {
     pub text: String,
     pub display_text: Option<String>,
     pub images: Vec<acp::ContentBlock>,
-    pub queue_drain: QueueDrainOutcome,
-}
-
-// ---------------------------------------------------------------------------
-// Queue drain policy
-// ---------------------------------------------------------------------------
-
-/// What to do with the next queued prompt after a turn completes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QueueDrainOutcome {
-    /// Send the next queued prompt as a new `session/prompt`.
-    SendNextPrompt,
-    /// Surface the next queued prompt for editing in the composer.
-    RestoreForEditing,
-    /// Leave all queued prompts in the queue.
-    LeaveQueued,
 }
 
 // ---------------------------------------------------------------------------

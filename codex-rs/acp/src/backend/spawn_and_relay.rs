@@ -355,53 +355,6 @@ impl AcpBackend {
                 maybe_result = prompt_result_rx.recv() => {
                     match maybe_result {
                         Some(result) => {
-                            let mut settle_window = std::time::Duration::from_millis(100);
-                            loop {
-                                let mut drained_any = false;
-                                while let Ok(update) = notification_rx.try_recv() {
-                                    drained_any = true;
-                                    if matches!(
-                                        update,
-                                        acp::SessionUpdate::ToolCall(_)
-                                            | acp::SessionUpdate::ToolCallUpdate(_)
-                                    ) {
-                                        settle_window = std::time::Duration::from_secs(5);
-                                    }
-                                    let _ = backend
-                                        .session_event_tx
-                                        .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                                            session_reducer::InboundEvent::Notification(Box::new(update)),
-                                        ))
-                                        .await;
-                                }
-                                if drained_any {
-                                    continue;
-                                }
-
-                                match tokio::time::timeout(
-                                    settle_window,
-                                    notification_rx.recv(),
-                                )
-                                .await
-                                {
-                                    Ok(Some(update)) => {
-                                        if matches!(
-                                            update,
-                                            acp::SessionUpdate::ToolCall(_)
-                                                | acp::SessionUpdate::ToolCallUpdate(_)
-                                        ) {
-                                            settle_window = std::time::Duration::from_secs(5);
-                                        }
-                                        let _ = backend
-                                            .session_event_tx
-                                            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                                                session_reducer::InboundEvent::Notification(Box::new(update)),
-                                            ))
-                                            .await;
-                                    }
-                                    Ok(None) | Err(_) => break,
-                                }
-                            }
                             let _ = backend
                                 .session_event_tx
                                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(result))

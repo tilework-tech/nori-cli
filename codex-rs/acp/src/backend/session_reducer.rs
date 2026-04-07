@@ -8,12 +8,10 @@ use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::PromptCompleted;
 use nori_protocol::QueueChanged;
-use nori_protocol::TurnLifecycle;
 use nori_protocol::WarningInfo;
 use nori_protocol::session_runtime::ActiveRequestKind;
 use nori_protocol::session_runtime::ActiveRequestState;
 use nori_protocol::session_runtime::OpenMessage;
-use nori_protocol::session_runtime::QueueDrainOutcome;
 use nori_protocol::session_runtime::QueuedPrompt;
 use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionRuntime;
@@ -158,8 +156,6 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
 
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
-    out.events
-        .push(ClientEvent::TurnLifecycle(TurnLifecycle::Started));
     out.side_effects.push(SideEffect::SendPrompt {
         request_id,
         prompt: content_blocks,
@@ -204,8 +200,6 @@ fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
 
         out.events
             .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
-        out.events
-            .push(ClientEvent::TurnLifecycle(TurnLifecycle::Cancelling));
         out.side_effects.push(SideEffect::SendCancel);
     }
 }
@@ -226,11 +220,7 @@ fn reduce_prompt_response(
         return;
     }
 
-    let queue_drain = runtime
-        .active
-        .as_ref()
-        .and_then(|active| active.prompt.as_ref().map(|prompt| prompt.queue_drain))
-        .unwrap_or(QueueDrainOutcome::SendNextPrompt);
+    let should_drain_queue = stop_reason == acp::StopReason::EndTurn;
     let last_agent_message = finalize_active(runtime);
 
     runtime.phase = SessionPhase::Idle;
@@ -240,18 +230,10 @@ fn reduce_prompt_response(
     out.events
         .push(ClientEvent::PromptCompleted(PromptCompleted {
             stop_reason,
-            last_agent_message: last_agent_message.clone(),
-        }));
-    out.events
-        .push(ClientEvent::TurnLifecycle(TurnLifecycle::Completed {
             last_agent_message,
         }));
 
-    // Queue drain policy: only auto-send on EndTurn.
-    if stop_reason == acp::StopReason::EndTurn
-        && queue_drain == QueueDrainOutcome::SendNextPrompt
-        && let Some(next_prompt) = runtime.queue.pop_front()
-    {
+    if should_drain_queue && let Some(next_prompt) = runtime.queue.pop_front() {
         out.events.push(ClientEvent::QueueChanged(QueueChanged {
             prompts: queued_prompt_texts(runtime),
         }));
@@ -274,10 +256,6 @@ fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
     out.events
         .push(ClientEvent::PromptCompleted(PromptCompleted {
             stop_reason: acp::StopReason::Cancelled,
-            last_agent_message: last_agent_message.clone(),
-        }));
-    out.events
-        .push(ClientEvent::TurnLifecycle(TurnLifecycle::Completed {
             last_agent_message,
         }));
 }

@@ -273,7 +273,6 @@ impl AcpBackend {
                         text: SUMMARIZATION_PROMPT.to_string(),
                         display_text: None,
                         images: Vec::new(),
-                        queue_drain: nori_protocol::session_runtime::QueueDrainOutcome::LeaveQueued,
                     },
                 ),
             ))
