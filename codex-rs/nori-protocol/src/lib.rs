@@ -68,6 +68,10 @@ impl PromptFinishedEvent {
     pub fn is_end_turn(&self) -> bool {
         self.stop_reason == acp::StopReason::EndTurn
     }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.stop_reason == acp::StopReason::Cancelled
+    }
 }
 
 /// A projection of the outgoing queue, emitted whenever the queue changes.

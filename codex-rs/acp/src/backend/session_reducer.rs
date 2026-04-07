@@ -453,9 +453,10 @@ fn reduce_tool_call(runtime: &mut SessionRuntime, tool_call: &acp::ToolCall) {
 /// rejected with a warning.
 fn is_known_tool_call(runtime: &SessionRuntime, call_id: &str) -> bool {
     if let Some(active) = &runtime.active
-        && active.tool_call_ids.contains(&call_id.to_string()) {
-            return true;
-        }
+        && active.tool_call_ids.contains(&call_id.to_string())
+    {
+        return true;
+    }
     runtime.persisted.tool_calls.contains_key(call_id)
 }
 

@@ -1301,7 +1301,12 @@ impl ChatWidget {
                 agent: Some(self.config.model.clone()),
             });
 
-        if finished.is_end_turn() {
+        if finished.is_cancelled() {
+            self.cancel_loop();
+            self.add_to_history(history_cell::new_error_event(
+                "Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues".to_owned(),
+            ));
+        } else if finished.is_end_turn() {
             #[cfg(feature = "nori-config")]
             if let Some(remaining) = self.loop_remaining
                 && remaining > 0

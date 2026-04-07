@@ -747,9 +747,7 @@ fn known_acp_tool_completion_after_prompt_finish_updates_existing_cell_only() {
     chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
         nori_protocol::session_runtime::SessionPhaseView::Prompt,
     ));
-    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
-        pending_snapshot,
-    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(pending_snapshot));
     assert!(
         chat.active_cell.is_some(),
         "pending ACP tool snapshot should render an active tool cell"
