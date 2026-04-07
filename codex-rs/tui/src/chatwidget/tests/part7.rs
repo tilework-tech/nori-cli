@@ -1,82 +1,71 @@
 use super::*;
 
-/// After an interrupt, the ACP backend's monotonic turn counter guarantees
-/// that the stale Completed from the cancelled task is never emitted. The
-/// TUI should handle the normal sequence without issues.
-///
-/// Sequence:
-///   1. Started(A)    → task running
-///   2. Aborted(A)    → task stopped (user pressed ESC)
-///   3. Started(B)    → new turn begins
-///   4. Completed(B)  → should finalize turn B normally
 #[test]
-fn interrupt_then_new_turn_completes_normally() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+fn cancelling_phase_keeps_ui_running_until_prompt_finished() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    // Start and interrupt turn A
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-    chat.on_interrupted_turn(TurnAbortReason::Interrupted);
-    drain_insert_history(&mut rx);
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+    assert!(chat.bottom_pane.is_task_running());
 
-    // ACP backend suppresses the stale Completed → no on_task_complete call.
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+    ));
 
-    // Start turn B
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-
-    // Real Completed from turn B should finalize the turn.
-    chat.on_task_complete(None);
-    drain_insert_history(&mut rx);
-
-    // Task should be stopped.
     assert!(
-        !chat.bottom_pane.is_task_running(),
-        "Task should be stopped after real Completed"
-    );
-    assert!(
-        chat.turn_finished,
-        "Turn should be marked finished after real Completed"
+        chat.bottom_pane.is_task_running(),
+        "Cancelling must keep the ACP UI in a running state until the prompt really finishes"
     );
 }
 
-/// Multiple consecutive interrupts followed by a real turn. The ACP backend's
-/// monotonic turn counter suppresses all stale Completeds, so the final real
-/// turn's Completed must still finalize normally.
 #[test]
-fn multiple_interrupts_then_real_turn_completes_normally() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+fn cancelled_prompt_finished_returns_to_idle_without_interrupt_restore() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
 
-    // Interrupt twice in a row
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-    chat.on_interrupted_turn(TurnAbortReason::Interrupted);
-    drain_insert_history(&mut rx);
+    chat.bottom_pane
+        .set_composer_text("keep my draft".to_string());
+    chat.handle_client_event(nori_protocol::ClientEvent::QueuedPromptsUpdate(
+        nori_protocol::QueuedPromptsUpdate {
+            prompts: vec!["queued follow up".to_string()],
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+    ));
 
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-    chat.on_interrupted_turn(TurnAbortReason::Interrupted);
-    drain_insert_history(&mut rx);
-
-    // ACP backend suppresses both stale Completeds.
-
-    // Start the real turn
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-
-    // Tool events for the real turn should work
-    begin_exec(&mut chat, "real-call", "echo real");
-    assert!(
-        chat.active_cell.is_some(),
-        "ExecCell should be created during real turn"
-    );
-
-    // Real Completed should finalize the turn
-    chat.on_task_complete(None);
-    drain_insert_history(&mut rx);
+    chat.handle_client_event(nori_protocol::ClientEvent::PromptFinished(
+        nori_protocol::PromptFinishedEvent {
+            stop_reason: serde_json::from_str("\"cancelled\"").expect("valid stop reason"),
+            last_agent_message: None,
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Idle,
+    ));
 
     assert!(
         !chat.bottom_pane.is_task_running(),
-        "Task should be stopped after real Completed following multiple interrupts"
+        "Idle should only arrive after prompt finished"
     );
+    assert_eq!(
+        chat.bottom_pane.composer_text(),
+        "keep my draft",
+        "ACP cancel should not merge backend queue entries into the composer"
+    );
+    assert!(
+        op_rx.try_recv().is_err(),
+        "ACP prompt completion should not auto-submit or restore queued prompts locally"
+    );
+
+    let rendered = render_bottom_popup(&chat, 80);
+    assert!(
+        rendered.contains("queued follow up"),
+        "backend queue projection should remain the single visible queue source: {rendered}"
+    );
+
+    let _ = drain_insert_history(&mut rx);
 }

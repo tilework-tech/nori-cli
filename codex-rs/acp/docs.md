@@ -82,7 +82,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 - request-local message assembly for assistant/reasoning streams
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
-- final assistant message extraction used for `TurnLifecycle::Completed { last_agent_message }`
+- reducer-owned completion projections via `PromptFinished { stop_reason, last_agent_message }` and `LoadFinished`
 
 The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.rs`, and `session.rs` all feed reducer events into the same runtime. `resume_session()` uses the same reducer during `session/load`, buffering replay `ClientEvent`s from reducer output and then carrying the resulting `SessionDriver` state into the live backend once setup completes.
 
@@ -821,7 +821,7 @@ The same merged completion state is also used to decide whether a completed tool
 
 The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. Completed normalized snapshots consume the shared `pending_tool_calls` metadata used for title/raw-input resolution once the lifecycle reaches its terminal phase.
 
-Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
+Late-arriving ACP tool events that race past the agent's final response are handled at the TUI layer via known-call tracking: the widget still lets already-rendered tool cells settle after `PromptFinished`, but it rejects brand-new stale tool snapshots once ACP is back in `Idle` (see `@/codex-rs/tui/docs.md`).
 
 **Prompt Update Channel Lifecycle** (`sacp_connection.rs`, `user_input.rs`, `submit_and_ops.rs`):
 
@@ -850,27 +850,13 @@ Next prompt() overwrites active_update_tx slot with a fresh sender
 
 The generation counter on `active_update_tx` prevents stale cleanup: `close_update_channel(generation)` only clears the slot if the generation matches, so it is safe for `load_session` (which is sequential) to clear its own channel without risking a concurrent prompt's channel. `prompt()` callers do not call `close_update_channel` at all — they rely on the done/drain pattern instead.
 
-**Turn Interrupt Guard — Monotonic Turn Counter** (`submit_and_ops.rs`, `user_input.rs`):
+**Reducer-Owned Interrupt Handling** (`submit_and_ops.rs`, `backend/session_reducer.rs`, `backend/session_runtime_driver.rs`):
 
-When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` (and `handle_compact()`) continues running after cancellation and may emit stale `TurnLifecycle::Completed` or `ErrorEvent` at the end of its event loop. If the user submits a new message before these stale events arrive, they race with the next turn and can prematurely terminate it.
+`Op::Interrupt` no longer emits a synthetic terminal lifecycle event. Instead it submits `CancelSubmit` into the serialized reducer, which transitions the active prompt from `PhaseChanged(Prompt)` to `PhaseChanged(Cancelling)` and only emits `PromptFinished` when the real ACP prompt response arrives. This keeps ACP faithful to the protocol rule that `session/cancel` does not end ownership by itself.
 
-The `turn_id: Arc<AtomicU64>` field on `AcpBackend` is a monotonic counter that eliminates this race. It is incremented on every `Op::Interrupt` and on every new turn (`handle_user_input()`, `handle_compact()`). Each spawned task captures its own turn ID at spawn time and only emits tail events (errors, warnings, `Completed`) if the counter still matches:
+Queued follow-up prompts are still accepted while cancelling, but they remain in `SessionRuntime.queue` until the reducer reaches a drain point. `StopReason::EndTurn` drains one queued prompt; `StopReason::Cancelled` leaves the queue intact and emits a refreshed `QueuedPromptsUpdate` projection instead of auto-sending the next prompt.
 
-```
-Op::Interrupt:
-  1. turn_id.fetch_add(1)           -- advance the counter, invalidating the current task
-  2. connection.cancel()            -- cancel the ACP session
-
-handle_user_input() / handle_compact():
-  1. my_turn_id = turn_id.fetch_add(1) + 1  -- advance counter, capture this turn's ID
-  ...
-  spawned task epilogue:
-    if turn_id.load() == my_turn_id          -- only emit tail events if still current
-      emit ErrorEvent (if error)
-      emit TurnLifecycle::Completed
-```
-
-Because the counter is monotonic and never reset, there is no TOCTOU window: an interrupt always invalidates any previously spawned task, and a new turn always gets a fresh ID that cannot collide with prior tasks. The TUI does not need any complementary guard — stale events are fully suppressed at the backend layer.
+Idle `session/request_permission` notifications are now rejected at the reducer/driver boundary. The reducer emits a warning plus `ResolvePermissionCancelled`, and `handle_permission_request()` immediately denies the request instead of forwarding it into `pending_approvals` or the TUI approval flow.
 
 **Tool Classification System:**
 
@@ -900,10 +886,10 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 1. `/compact` sends summarization prompt to agent
 2. Agent's summary response is streamed to the TUI as deltas and captured in `pending_compact_summary`
 3. A new ACP session is created (the old session's context is discarded)
-4. The `ContextCompactedEvent` is emitted with the summary text cloned from `pending_compact_summary`, enabling the TUI to render a visual session boundary
+4. `ClientEvent::ContextCompacted { summary }` is emitted with the summary text cloned from `pending_compact_summary`, enabling the TUI to render a visual session boundary
 5. Summary is prepended to the next user message (via `SUMMARY_PREFIX` framing)
 
-The `ContextCompactedEvent.summary` field is the coupling point between the ACP backend and the TUI's session boundary rendering. The TUI uses it to flush the streamed summary, show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/codex-rs/tui/docs.md`).
+The `ClientEvent::ContextCompacted { summary }` payload is the coupling point between the ACP backend and the TUI's session boundary rendering. The TUI uses it to flush the streamed summary, show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/codex-rs/tui/docs.md`).
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 

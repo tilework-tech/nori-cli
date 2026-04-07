@@ -1196,8 +1196,21 @@ impl ChatWidget {
             nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => {
                 self.handle_client_plan_snapshot(plan_snapshot);
             }
-            nori_protocol::ClientEvent::TurnLifecycle(turn_lifecycle) => {
-                self.handle_client_turn_lifecycle(turn_lifecycle);
+            nori_protocol::ClientEvent::PhaseChanged(phase) => {
+                self.handle_client_phase_changed(phase);
+            }
+            nori_protocol::ClientEvent::PromptFinished(finished) => {
+                self.handle_client_prompt_finished(finished);
+            }
+            nori_protocol::ClientEvent::QueuedPromptsUpdate(update) => {
+                self.acp_queued_prompts = update.prompts;
+                self.refresh_queued_user_messages();
+            }
+            nori_protocol::ClientEvent::LoadFinished => {
+                self.handle_client_load_finished();
+            }
+            nori_protocol::ClientEvent::ContextCompacted { summary } => {
+                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
             }
             nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
                 self.handle_client_replay_entry(replay_entry);
@@ -1226,31 +1239,94 @@ impl ChatWidget {
         self.on_plan_update(plan_snapshot_to_update_plan_args(plan_snapshot));
     }
 
-    fn handle_client_turn_lifecycle(&mut self, turn_lifecycle: nori_protocol::TurnLifecycle) {
-        match turn_lifecycle {
-            nori_protocol::TurnLifecycle::Started => self.on_task_started(),
-            nori_protocol::TurnLifecycle::Completed { last_agent_message } => {
-                self.on_task_complete(last_agent_message)
+    fn handle_client_phase_changed(
+        &mut self,
+        phase: nori_protocol::session_runtime::SessionPhaseView,
+    ) {
+        let was_active = matches!(
+            self.acp_phase,
+            Some(
+                nori_protocol::session_runtime::SessionPhaseView::Loading
+                    | nori_protocol::session_runtime::SessionPhaseView::Prompt
+                    | nori_protocol::session_runtime::SessionPhaseView::Cancelling
+            )
+        );
+        self.acp_phase = Some(phase);
+
+        match phase {
+            nori_protocol::session_runtime::SessionPhaseView::Idle => {
+                self.bottom_pane.set_task_running(false);
+                self.refresh_queued_user_messages();
+                self.request_redraw();
+                self.refresh_terminal_title();
             }
-            nori_protocol::TurnLifecycle::Aborted { reason } => match reason {
-                nori_protocol::TurnAbortReason::Interrupted => {
-                    self.on_interrupted_turn(TurnAbortReason::Interrupted)
+            nori_protocol::session_runtime::SessionPhaseView::Loading
+            | nori_protocol::session_runtime::SessionPhaseView::Prompt => {
+                if !was_active {
+                    self.on_task_started();
+                } else {
+                    self.bottom_pane.clear_ctrl_c_quit_hint();
+                    self.bottom_pane.set_task_running(true);
+                    self.bottom_pane.set_interrupt_hint_visible(true);
+                    self.request_redraw();
+                    self.refresh_terminal_title();
                 }
-                nori_protocol::TurnAbortReason::Replaced => {
-                    self.on_error("Turn aborted: replaced by a new task".to_owned())
-                }
-                nori_protocol::TurnAbortReason::Other(reason) => {
-                    self.on_error(format!("Turn aborted: {reason}"))
-                }
-            },
-            nori_protocol::TurnLifecycle::ContextCompacted { summary } => {
-                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
+                self.refresh_queued_user_messages();
             }
-            nori_protocol::TurnLifecycle::Cancelling => {
-                // For now, treat as a no-op. Phase 2 will add proper
-                // cancelling state tracking in the TUI.
+            nori_protocol::session_runtime::SessionPhaseView::Cancelling => {
+                if !was_active {
+                    self.on_task_started();
+                }
+                self.bottom_pane.set_task_running(true);
+                self.bottom_pane.set_interrupt_hint_visible(false);
+                self.refresh_queued_user_messages();
+                self.request_redraw();
+                self.refresh_terminal_title();
             }
         }
+    }
+
+    fn handle_client_prompt_finished(&mut self, finished: nori_protocol::PromptFinishedEvent) {
+        self.flush_answer_stream_with_separator();
+        self.bottom_pane.set_task_running(false);
+        self.running_commands.clear();
+        self.suppressed_exec_calls.clear();
+        self.last_unified_wait = None;
+        self.request_redraw();
+        self.refresh_terminal_title();
+
+        self.app_event_tx
+            .send(AppEvent::RefreshSystemInfoForDirectory {
+                dir: self.config.cwd.clone(),
+                agent: Some(self.config.model.clone()),
+            });
+
+        if finished.is_end_turn() {
+            #[cfg(feature = "nori-config")]
+            if let Some(remaining) = self.loop_remaining
+                && remaining > 0
+                && let Some(prompt) = self.first_prompt_text.clone()
+            {
+                let total = self.loop_total.unwrap_or(0);
+                self.app_event_tx.send(AppEvent::LoopIteration {
+                    prompt,
+                    remaining: remaining - 1,
+                    total,
+                });
+            }
+        } else {
+            self.cancel_loop();
+        }
+
+        self.notify(Notification::AgentTurnComplete {
+            response: finished.last_agent_message.unwrap_or_default(),
+        });
+    }
+
+    fn handle_client_load_finished(&mut self) {
+        self.bottom_pane.set_task_running(false);
+        self.request_redraw();
+        self.refresh_terminal_title();
     }
 
     fn handle_client_replay_entry(&mut self, replay_entry: nori_protocol::ReplayEntry) {
@@ -1311,7 +1387,11 @@ impl ChatWidget {
     /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
     /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        if self.turn_finished {
+        if matches!(
+            self.acp_phase,
+            Some(nori_protocol::session_runtime::SessionPhaseView::Idle)
+        ) && !self.knows_client_tool_call(&tool_snapshot.call_id)
+        {
             return;
         }
         self.flush_answer_stream_with_separator();
@@ -1342,7 +1422,12 @@ impl ChatWidget {
             && cell.call_id() == tool_snapshot.call_id
         {
             cell.apply_snapshot(tool_snapshot);
-            if !cell.is_active() && !cell.is_exploring() {
+            if !cell.is_active()
+                && (matches!(
+                    self.acp_phase,
+                    Some(nori_protocol::session_runtime::SessionPhaseView::Idle)
+                ) || !cell.is_exploring())
+            {
                 self.flush_active_cell();
             }
             return;
@@ -1424,7 +1509,11 @@ impl ChatWidget {
             nori_protocol::ToolPhase::Pending
                 | nori_protocol::ToolPhase::PendingApproval
                 | nori_protocol::ToolPhase::InProgress
-        ) && !is_new_exploring;
+        ) && (!is_new_exploring
+            || matches!(
+                self.acp_phase,
+                Some(nori_protocol::session_runtime::SessionPhaseView::Idle)
+            ));
         let mut cell = ClientToolCell::new(
             tool_snapshot,
             self.config.cwd.clone(),
@@ -1437,6 +1526,22 @@ impl ChatWidget {
         if should_flush {
             self.flush_active_cell();
         }
+    }
+
+    fn knows_client_tool_call(&self, call_id: &str) -> bool {
+        if self.completed_client_tool_calls.contains(call_id)
+            || self.pending_client_tool_cells.contains_key(call_id)
+        {
+            return true;
+        }
+
+        self.active_cell
+            .as_ref()
+            .and_then(|cell| cell.as_any().downcast_ref::<ClientToolCell>())
+            .is_some_and(|cell| {
+                cell.call_id() == call_id
+                    || cell.exploring_call_ids().iter().any(|id| id == call_id)
+            })
     }
 }
 

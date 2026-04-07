@@ -1,6 +1,7 @@
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
-use nori_protocol::TurnLifecycle;
+use nori_protocol::PromptFinishedEvent;
+use nori_protocol::QueuedPromptsUpdate;
 use nori_protocol::session_runtime::ActiveRequestKind;
 use nori_protocol::session_runtime::QueueDrainOutcome;
 use nori_protocol::session_runtime::QueuedPrompt;
@@ -42,10 +43,27 @@ fn has_event(events: &[ClientEvent], pred: impl Fn(&ClientEvent) -> bool) -> boo
     events.iter().any(pred)
 }
 
-fn has_turn_lifecycle(events: &[ClientEvent], expected: &TurnLifecycle) -> bool {
+fn has_phase_changed(events: &[ClientEvent], expected: SessionPhaseView) -> bool {
     has_event(events, |e| match e {
-        ClientEvent::TurnLifecycle(tl) => tl == expected,
+        ClientEvent::PhaseChanged(phase) => *phase == expected,
         _ => false,
+    })
+}
+
+fn has_prompt_finished(
+    events: &[ClientEvent],
+    pred: impl Fn(&PromptFinishedEvent) -> bool,
+) -> bool {
+    has_event(events, |event| match event {
+        ClientEvent::PromptFinished(prompt_finished) => pred(prompt_finished),
+        _ => false,
+    })
+}
+
+fn queued_prompts_update(events: &[ClientEvent]) -> Option<&QueuedPromptsUpdate> {
+    events.iter().find_map(|event| match event {
+        ClientEvent::QueuedPromptsUpdate(update) => Some(update),
+        _ => None,
     })
 }
 
@@ -78,8 +96,7 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         }
     ));
 
-    // Should emit TurnLifecycle::Started
-    assert!(has_turn_lifecycle(&out.events, &TurnLifecycle::Started));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Prompt));
 
     // Should produce a SendPrompt side effect
     assert!(has_side_effect(&out.side_effects, |e| matches!(
@@ -115,11 +132,10 @@ fn prompt_response_transitions_to_idle() {
     assert_eq!(rt.phase, SessionPhase::Idle);
     assert!(rt.active.is_none());
 
-    // Should emit TurnLifecycle::Completed
-    assert!(has_event(&out.events, |e| matches!(
-        e,
-        ClientEvent::TurnLifecycle(TurnLifecycle::Completed { .. })
-    )));
+    assert!(has_prompt_finished(&out.events, |event| {
+        event.stop_reason == acp::StopReason::EndTurn
+    }));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Idle));
 }
 
 // =========================================================================
@@ -148,8 +164,7 @@ fn cancel_sets_cancelling_but_does_not_end_turn() {
         }
     ));
 
-    // Should emit TurnLifecycle::Cancelling
-    assert!(has_turn_lifecycle(&out.events, &TurnLifecycle::Cancelling));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Cancelling));
 
     // Should produce a SendCancel side effect
     assert!(has_side_effect(&out.side_effects, |e| matches!(
@@ -200,10 +215,10 @@ fn cancelled_prompt_response_completes_turn() {
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
     assert!(rt.active.is_none());
-    assert!(has_event(&out.events, |e| matches!(
-        e,
-        ClientEvent::TurnLifecycle(TurnLifecycle::Completed { .. })
-    )));
+    assert!(has_prompt_finished(&out.events, |event| {
+        event.stop_reason == acp::StopReason::Cancelled
+    }));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Idle));
 }
 
 // =========================================================================
@@ -300,6 +315,9 @@ fn prompt_submit_while_active_queues() {
     assert_eq!(rt.queue.len(), 1);
     assert_eq!(rt.queue[0].text, "second");
 
+    let queued = queued_prompts_update(&out.events).expect("queue projection missing");
+    assert_eq!(queued.prompts, vec!["second".to_string()]);
+
     // No SendPrompt side effect for the second one
     assert!(!has_side_effect(&out.side_effects, |e| matches!(
         e,
@@ -342,11 +360,15 @@ fn end_turn_drains_queue() {
     // Queue should be drained
     assert!(rt.queue.is_empty());
 
-    // Should have transitioned directly to a new Prompt phase
     assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
+    assert!(has_prompt_finished(&out.events, |event| {
+        event.stop_reason == acp::StopReason::EndTurn
+    }));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Idle));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Prompt));
 
-    // Should have emitted Started for the new prompt
-    assert!(has_turn_lifecycle(&out.events, &TurnLifecycle::Started));
+    let queued = queued_prompts_update(&out.events).expect("queue projection missing");
+    assert!(queued.prompts.is_empty());
 
     // Should have a SendPrompt side effect for the queued prompt
     assert!(has_side_effect(&out.side_effects, |e| matches!(
@@ -379,7 +401,7 @@ fn cancelled_does_not_drain_queue() {
     );
 
     reduce(&mut rt, InboundEvent::CancelSubmit, &mut norm);
-    reduce(
+    let out = reduce(
         &mut rt,
         InboundEvent::PromptResponse {
             stop_reason: acp::StopReason::Cancelled,
@@ -390,6 +412,10 @@ fn cancelled_does_not_drain_queue() {
     // Queue should NOT be drained
     assert_eq!(rt.queue.len(), 1);
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+    assert!(!has_side_effect(&out.side_effects, |e| matches!(
+        e,
+        SideEffect::SendPrompt { .. }
+    )));
 }
 
 // =========================================================================
@@ -583,7 +609,7 @@ fn load_transitions_idle_to_loading_and_back() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
 
-    reduce(
+    let out = reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
             request_id: "load-1".to_string(),
@@ -595,12 +621,18 @@ fn load_transitions_idle_to_loading_and_back() {
     assert!(rt.active.is_some());
     let active = rt.active.as_ref().unwrap();
     assert_eq!(active.kind, ActiveRequestKind::Loading);
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Loading));
 
     // Load response
-    reduce(&mut rt, InboundEvent::LoadResponse, &mut norm);
+    let out = reduce(&mut rt, InboundEvent::LoadResponse, &mut norm);
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
     assert!(rt.active.is_none());
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::LoadFinished
+    )));
+    assert!(has_phase_changed(&out.events, SessionPhaseView::Idle));
 }
 
 #[test]
@@ -627,6 +659,87 @@ fn load_does_not_drain_queue() {
 
 // =========================================================================
 // 10. Session metadata in any phase
+// =========================================================================
+
+// =========================================================================
+// 10a. Unknown tool_call_update behavior
+// =========================================================================
+
+#[test]
+fn unknown_tool_call_update_emits_warning_and_no_snapshot() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    // Enter Prompt phase so content updates are accepted.
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+
+    // Send a ToolCallUpdate for a tool_call_id that was never created via
+    // ToolCall. The spec says: warn and ignore, do NOT create a synthetic
+    // tool snapshot.
+    let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        acp::ToolCallId::from("unknown-tc".to_string()),
+        acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed),
+    ));
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    // Should emit a warning about the unknown tool call.
+    assert!(
+        has_event(&out.events, |e| matches!(e, ClientEvent::Warning(_))),
+        "expected a warning for unknown tool_call_id"
+    );
+
+    // Should NOT create a tool snapshot in persisted state.
+    assert!(
+        !rt.persisted.tool_calls.contains_key("unknown-tc"),
+        "unknown tool_call_update must not create a persisted snapshot"
+    );
+}
+
+// =========================================================================
+// 10b. Idle permission request rejection
+// =========================================================================
+
+#[test]
+fn idle_permission_request_produces_reject_side_effect() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    // Submit a permission request while idle. The spec says: emit a
+    // warning AND produce a side effect that rejects the request through
+    // the transport path, so it never reaches the approval UI.
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PermissionRequest {
+            request_id: "perm-1".to_string(),
+            call_id: "tc-1".to_string(),
+        },
+        &mut norm,
+    );
+
+    // Should emit a warning.
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::Warning(_)
+    )));
+
+    // Should produce a rejection side effect for the idle request.
+    assert!(
+        has_side_effect(&out.side_effects, |e| matches!(
+            e,
+            SideEffect::ResolvePermissionCancelled {
+                request_id
+            } if request_id == "perm-1"
+        )),
+        "idle permission request must be rejected via side effect"
+    );
+}
+
+// =========================================================================
+// 10c. Session metadata in any phase
 // =========================================================================
 
 #[test]
@@ -659,4 +772,76 @@ fn available_commands_update_accepted_in_any_phase() {
         e,
         ClientEvent::AgentCommandsUpdate(_)
     )));
+}
+
+#[test]
+fn metadata_updates_patch_persisted_state_during_prompt_without_changing_owner() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    let request_id = match &rt.phase {
+        SessionPhase::Prompt { request_id, .. } => request_id.clone(),
+        _ => panic!("expected prompt phase"),
+    };
+
+    let current_mode = acp::CurrentModeUpdate::new("agent");
+    let current_mode_out = reduce(
+        &mut rt,
+        notification(acp::SessionUpdate::CurrentModeUpdate(current_mode.clone())),
+        &mut norm,
+    );
+    assert_eq!(rt.persisted.current_mode.as_ref(), Some(&current_mode));
+    assert!(!has_event(&current_mode_out.events, |event| matches!(
+        event,
+        ClientEvent::Warning(_)
+    )));
+    assert_eq!(
+        rt.active
+            .as_ref()
+            .expect("active request should remain")
+            .request_id,
+        request_id
+    );
+
+    let config_options = vec![
+        acp::SessionConfigOption::select(
+            "approval_policy",
+            "Approval Policy",
+            "manual",
+            vec![
+                acp::SessionConfigSelectOption::new("manual", "Manual"),
+                acp::SessionConfigSelectOption::new("never", "Never"),
+            ],
+        )
+        .description("Controls approval behavior")
+        .category(acp::SessionConfigOptionCategory::Mode),
+    ];
+    let config_out = reduce(
+        &mut rt,
+        notification(acp::SessionUpdate::ConfigOptionUpdate(
+            acp::ConfigOptionUpdate::new(config_options.clone()),
+        )),
+        &mut norm,
+    );
+    assert_eq!(rt.persisted.config_options, config_options);
+    assert!(!has_event(&config_out.events, |event| matches!(
+        event,
+        ClientEvent::Warning(_)
+    )));
+    assert_eq!(
+        rt.active
+            .as_ref()
+            .expect("active request should remain")
+            .request_id,
+        request_id
+    );
+
+    // NOTE: SessionInfoUpdate and UsageUpdate tests omitted — the types
+    // are not available in the pinned agent-client-protocol-schema 0.10.8.
+    // Add coverage when the schema crate is upgraded to 0.11.2+.
 }

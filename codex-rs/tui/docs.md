@@ -131,36 +131,38 @@ The selective flush ensures tool cells that are already visible transition from 
 
 **Begin/Completion Pairing in `flush_completions_and_clear`**: Tool begin and completion updates for the same `call_id` are still paired in the FIFO queue. When `flush_completions_and_clear` discards a deferred begin update, it records the `call_id` in a `HashSet`. Any later completion for the same `call_id` is discarded too. Without this pairing, a deferred completion can synthesize an orphan `ExecCell` from a normalized ACP tool snapshot after its begin state was already dropped.
 
-**Turn-Finished Gate** (`chatwidget/event_handlers.rs`):
+**ACP Phase Projection** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
 
-The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, replay entries, tool snapshots, and control-plane notifications are independent async streams that can race. The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard late-arriving tool activity after the agent's final response text:
+ACP input locking and queued-prompt rendering now derive from reducer-owned client events instead of a TUI-owned turn lifecycle. `ChatWidget` tracks an ACP phase projection from `ClientEvent::PhaseChanged` and a backend queue projection from `ClientEvent::QueuedPromptsUpdate`.
 
-| Transition | Trigger | Effect |
-|------------|---------|--------|
-| `turn_finished = true` | `on_agent_message()`, `on_task_complete()` | Closes the gate -- subsequent tool events are discarded |
-| `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
+| ACP projection | TUI effect |
+|----------------|------------|
+| `PhaseChanged(Loading)` / `PhaseChanged(Prompt)` | Marks the bottom pane as running and enables interrupt |
+| `PhaseChanged(Cancelling)` | Keeps the task running but disables the optimistic "idle now" assumption |
+| `PromptFinished` / `LoadFinished` | Ends the active ACP request without replaying queued prompts locally |
+| `QueuedPromptsUpdate` | Replaces the footer queue display with reducer-owned queued prompt text |
 
-The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
+Submitting text while ACP is in `Prompt` or `Cancelling` now always sends `Op::UserInput` back to the backend. The backend decides whether that prompt is sent immediately or enqueued; the TUI no longer restores queued ACP prompts into the composer on interrupt.
 
-**Stale Event Suppression:**
+**Known Tool-Call Completion After Prompt Finish** (`chatwidget/event_handlers.rs`):
 
-Stale `TurnLifecycle::Completed` and `ErrorEvent` from cancelled turns are suppressed entirely at the ACP backend layer via a monotonic turn counter (`turn_id: Arc<AtomicU64>`). Each spawned backend task captures its turn ID and only emits tail events if the counter still matches. The TUI does not need any complementary guard for this race — see `@/codex-rs/acp/docs.md` for details.
+ACP tool snapshots are no longer dropped wholesale just because the prompt finished. Once ACP returns to `Idle`, `handle_client_tool_snapshot()` only accepts completions for tool calls the widget already knows about (active cell, buffered cell, or previously flushed call id). This lets the last known tool cell settle cleanly after `PromptFinished` while still rejecting brand-new stale tool calls.
 
-**Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
+**Turn-Boundary Cleanup of Incomplete Legacy Tool Cells** (`chatwidget/event_handlers.rs`):
 
-Because the `turn_finished` gate blocks late-arriving End events, tool cells that began but never received their End event would remain stuck in `active_cell` or `pending_exec_cells`, filling the viewport and blocking the agent's text from rendering. Both `on_agent_message()` and `on_task_complete()` now explicitly finalize incomplete cells at turn boundaries:
+The legacy Codex exec/MCP path still uses `turn_finished` to suppress stale post-completion tool events. Because that gate can block late End events, tool cells that began but never received their End event would remain stuck in `active_cell` or `pending_exec_cells`, filling the viewport and blocking the agent's text from rendering. Both `on_agent_message()` and `on_task_complete()` explicitly finalize incomplete legacy cells at turn boundaries:
 
 ```
 on_agent_message():
   1. flush_answer_stream_with_separator()    -- finalize any in-progress text stream
   2. finalize_active_cell_as_failed()        -- mark stuck active_cell as failed, flush to history
   3. pending_exec_cells.drain_failed()       -- drain any queued incomplete cells
-  4. turn_finished = true                    -- close the gate
+  4. turn_finished = true                    -- close the legacy gate
   5. flush_completions_and_clear()           -- process deferred End events, discard stale Begins
 
 on_task_complete():
   1. flush_answer_stream_with_separator()
-  2. turn_finished = true                    -- close the gate (mirrors on_agent_message)
+  2. turn_finished = true                    -- close the legacy gate (mirrors on_agent_message)
   3. flush_completions_and_clear()
   4. pending_exec_cells.drain_failed()
   5. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
@@ -359,12 +361,12 @@ The `/undo` slash command sends `Op::UndoList` (not `Op::Undo`) to the ACP backe
 
 **Compact Session Boundary (`/compact`):**
 
-When the ACP backend sends a `ContextCompactedEvent` with a summary, `on_context_compacted()` renders a visual session boundary to show that a new session has begun. The sequence is:
+When the ACP backend sends `ClientEvent::ContextCompacted { summary }`, `on_context_compacted()` renders a visual session boundary to show that a new session has begun. The sequence is:
 
 1. Flush the in-progress streamed summary (old session content)
 2. Show "Context compacted" as an info message
 3. Insert a `NoriSessionHeaderCell` (the "Nori CLI" card, same as starting a fresh session) by constructing a `SessionConfiguredEvent` from the current widget config state
-4. Reprint the summary text as the first assistant message of the new session (temporarily clears `turn_finished` to allow streaming)
+4. Reprint the summary text as the first assistant message of the new session (temporarily clears the legacy gate to allow streaming)
 
 When the event has no summary (core backend path), only the "Context compacted" info message is shown. This asymmetry exists because the core backend compacts history in-place without producing a summary for the TUI.
 

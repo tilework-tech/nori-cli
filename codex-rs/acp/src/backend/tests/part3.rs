@@ -844,6 +844,15 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
+    // Register the tool_call_id so the reducer accepts the subsequent update.
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            "call-edit-complete",
+            "placeholder",
+        )))
+        .await
+        .expect("send tool call");
+
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
             acp::ToolCallUpdate::new(
@@ -910,6 +919,15 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+
+    // Register the tool_call_id so the reducer accepts the subsequent update.
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            "call-delete-complete",
+            "placeholder",
+        )))
+        .await
+        .expect("send tool call");
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -978,6 +996,15 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+
+    // Register the tool_call_id so the reducer accepts the subsequent update.
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            "call-fetch-complete",
+            "placeholder",
+        )))
+        .await
+        .expect("send tool call");
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1051,6 +1078,15 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+
+    // Register the tool_call_id so the reducer accepts the subsequent update.
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            "call-exec-complete",
+            "placeholder",
+        )))
+        .await
+        .expect("send tool call");
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1296,6 +1332,15 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
 
         spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
 
+        // Register the tool_call_id so the reducer accepts the subsequent update.
+        persistent_tx
+            .send(acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+                update.tool_call_id.clone(),
+                "placeholder",
+            )))
+            .await
+            .expect("send tool call");
+
         persistent_tx
             .send(acp::SessionUpdate::ToolCallUpdate(update))
             .await
@@ -1490,12 +1535,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         tokio::select! {
             client_event = client_event_rx.recv() => {
                 if let Some(client_event) = client_event {
-                    let done = matches!(
-                        client_event,
-                        nori_protocol::ClientEvent::TurnLifecycle(
-                            nori_protocol::TurnLifecycle::Completed { .. }
-                        )
-                    );
+                    let done = matches!(client_event, nori_protocol::ClientEvent::PromptFinished(_));
                     client_events.push(client_event);
                     if done {
                         break;
@@ -1519,28 +1559,20 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     let has_task_started = client_events.iter().any(|e| {
         matches!(
             e,
-            nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
-        )
-    });
-    let has_context_compacted = client_events.iter().any(|e| {
-        matches!(
-            e,
-            nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::ContextCompacted { .. }
+            nori_protocol::ClientEvent::PhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Prompt
             )
         )
     });
+    let has_context_compacted = client_events
+        .iter()
+        .any(|e| matches!(e, nori_protocol::ClientEvent::ContextCompacted { .. }));
     let has_warning = warning_events
         .iter()
         .any(|e| matches!(e.msg, EventMsg::Warning(_)));
-    let has_task_complete = client_events.iter().any(|e| {
-        matches!(
-            e,
-            nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { .. }
-            )
-        )
-    });
+    let has_task_complete = client_events
+        .iter()
+        .any(|e| matches!(e, nori_protocol::ClientEvent::PromptFinished(_)));
 
     assert!(
         has_task_started,

@@ -168,9 +168,13 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
         }
         nori_protocol::ClientEvent::MessageDelta(_)
         | nori_protocol::ClientEvent::ReplayEntry(_)
-        | nori_protocol::ClientEvent::TurnLifecycle(_)
         | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
-        | nori_protocol::ClientEvent::Warning(_) => None,
+        | nori_protocol::ClientEvent::Warning(_)
+        | nori_protocol::ClientEvent::PhaseChanged(_)
+        | nori_protocol::ClientEvent::PromptFinished(_)
+        | nori_protocol::ClientEvent::QueuedPromptsUpdate(_)
+        | nori_protocol::ClientEvent::LoadFinished
+        | nori_protocol::ClientEvent::ContextCompacted { .. } => None,
     }
 }
 

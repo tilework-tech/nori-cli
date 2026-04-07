@@ -21,22 +21,16 @@ impl AcpBackend {
                 self.handle_user_input(items, &id).await?;
             }
             Op::Interrupt => {
+                // Only send CancelSubmit to the reducer. The reducer will
+                // emit PhaseChanged(Cancelling) and eventually PromptFinished
+                // when the ACP prompt response arrives. No synthetic Aborted
+                // event is emitted — the reducer owns all lifecycle transitions.
                 let _ = self
                     .session_event_tx
                     .send(session_runtime_driver::SessionRuntimeInput::Reducer(
                         session_reducer::InboundEvent::CancelSubmit,
                     ))
                     .await;
-                emit_client_event(
-                    &self.backend_event_tx,
-                    self.transcript_recorder.as_ref(),
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Aborted {
-                            reason: nori_protocol::TurnAbortReason::Interrupted,
-                        },
-                    ),
-                )
-                .await;
             }
             Op::ExecApproval {
                 id: call_id,

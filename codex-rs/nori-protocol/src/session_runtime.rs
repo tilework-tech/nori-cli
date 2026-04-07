@@ -36,7 +36,8 @@ pub enum SessionPhase {
 }
 
 /// Flattened view of session phase for TUI consumption.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SessionPhaseView {
     Idle,
     Loading,
@@ -150,6 +151,12 @@ pub struct PersistedSessionState {
     pub plan: Option<PlanSnapshot>,
     pub tool_calls: HashMap<String, ToolSnapshot>,
     pub available_commands: Vec<AgentCommandInfo>,
+    pub current_mode: Option<acp::CurrentModeUpdate>,
+    pub config_options: Vec<acp::SessionConfigOption>,
+    // NOTE: session_info and usage are named in the spec but their sacp types
+    // (SessionInfoUpdate, UsageUpdate) are not available in the pinned
+    // agent-client-protocol-schema 0.10.8. Add them when the schema crate
+    // is upgraded to 0.11.2+.
 }
 
 /// A finalized message in the transcript.

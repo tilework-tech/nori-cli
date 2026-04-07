@@ -16,14 +16,14 @@ sacp::SessionUpdate ──> ClientEventNormalizer ──> Vec<ClientEvent> ─�
 ```
 
 - **Upstream dependency:** `sacp` crate provides the raw ACP schema types (`ToolCall`, `ToolCallUpdate`, `ContentChunk`, `Plan`, `RequestPermissionRequest`).
-- **Downstream consumer:** `nori-tui` (`@/codex-rs/tui/`) is the primary consumer. The TUI renders `ToolSnapshot`, `MessageDelta`, `PlanSnapshot`, `ApprovalRequest`, `TurnLifecycle`, `ReplayEntry`, and `AgentCommandsUpdate` from this crate.
+- **Downstream consumer:** `nori-tui` (`@/codex-rs/tui/`) is the primary consumer. The TUI renders `ToolSnapshot`, `MessageDelta`, `PlanSnapshot`, `ApprovalRequest`, reducer-owned phase/completion projections (`PhaseChanged`, `PromptFinished`, `LoadFinished`, `QueuedPromptsUpdate`, `ContextCompacted`), `ReplayEntry`, and `AgentCommandsUpdate` from this crate.
 - The `codex-acp` backend (`@/codex-rs/acp/`) now wraps the normalizer inside a serialized `SessionRuntime` driver. ACP prompt responses, `session/load`, `session/update`, cancellations, and permission requests are reduced in order before the backend forwards the resulting `ClientEvent` items to the TUI via `BackendEvent::Client`.
 - This crate intentionally has no TUI, rendering, or terminal dependencies. It is a pure data transformation layer.
 
 ### Core Implementation
 
-- **`ClientEventNormalizer`** maintains a `HashMap<String, acp::ToolCall>` keyed by `call_id`. This allows `ToolCallUpdate` messages to be merged onto the original `ToolCall` state before emitting a fresh `ToolSnapshot`.
-- **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `codex-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks.
+- **`ClientEventNormalizer`** maintains a `HashMap<String, acp::ToolCall>` keyed by `call_id`. This allows `ToolCallUpdate` messages to be merged onto the original `ToolCall` state before emitting a fresh `ToolSnapshot`. Reducer-owned metadata updates (`CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, `UsageUpdate`) are handled explicitly as no-op normalizer outputs because `codex-acp` persists them in `SessionRuntime` rather than translating them into TUI render events.
+- **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `codex-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. `PersistedSessionState` now carries transcript state, plan state, normalized tool snapshots, advertised commands, current mode, config options, session info, and usage so ACP metadata survives across request boundaries without becoming a second turn-state machine.
 - **`is_generic_tool_call()`** gates initial `ToolCall` emission: tool calls with no `raw_input`, no `locations`, empty `content`, and no `/` in the title are suppressed (return empty `Vec`). These are placeholder tool calls that will be refined by subsequent `ToolCallUpdate` messages. This prevents the TUI from showing bare, detail-free cells before the agent populates the real data.
 - **Invocation priority cascade** in `invocation_from_tool_call()` resolves what the tool is doing, in priority order:
 
@@ -41,6 +41,7 @@ sacp::SessionUpdate ──> ClientEventNormalizer ──> Vec<ClientEvent> ─�
 ### Things to Know
 
 - The `is_generic_tool_call()` filter means the normalizer is not 1:1 with incoming events. Initial `ToolCall` messages that are sufficiently sparse are silently dropped. The TUI will only see tool cells once a `ToolCallUpdate` adds enough detail -- or once the `ToolCall` itself has locations or `raw_input`.
+- `ToolCallUpdate` no longer synthesizes placeholder tool calls on its own. The reducer only forwards attributed updates after the `tool_call_id` is already known, and otherwise emits a warning and drops the update.
 - The location fallback (tier 4) only handles `Read` and `Search` kinds. Edit/Delete/Move with locations but no `raw_input` return `None` from the normalizer and fall through to the TUI's location-path display fallback, avoiding creation of empty-diff `FileOperations` that would route to `PatchHistoryCell`.
 - `sanitize_title()` is a two-pass operation: first strips the `[current working directory ...]` bracket, then strips trailing `(description)` parenthetical. The parenthetical strip only fires after a cwd bracket was found, because Gemini appends descriptions after the cwd metadata.
 - Shell wrapper detection (`is_shell_wrapper()`) recognizes `bash`, `sh`, `zsh`, `fish`, `pwsh`, and `powershell` with `-c` or `-lc` flags. When a 3-element command array matches this pattern, only the script portion is extracted as the command string.

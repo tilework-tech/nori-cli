@@ -3,7 +3,6 @@ use super::*;
 use nori_protocol::ApprovalSubject;
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
-use nori_protocol::TurnLifecycle;
 use nori_protocol::session_runtime::QueuedPrompt;
 use nori_protocol::session_runtime::QueuedPromptKind;
 use nori_protocol::session_runtime::SessionRuntime;
@@ -61,12 +60,10 @@ impl SessionDriver {
         let out = reduce(&mut self.runtime, event, &mut self.normalizer);
         let completed_turn = completed_prompt.and_then(|prompt| {
             out.events.iter().find_map(|event| match event {
-                ClientEvent::TurnLifecycle(TurnLifecycle::Completed { last_agent_message }) => {
-                    Some(CompletedTurn {
-                        prompt: prompt.clone(),
-                        last_agent_message: last_agent_message.clone(),
-                    })
-                }
+                ClientEvent::PromptFinished(finished) => Some(CompletedTurn {
+                    prompt: prompt.clone(),
+                    last_agent_message: finished.last_agent_message.clone(),
+                }),
                 _ => None,
             })
         });
@@ -148,6 +145,18 @@ impl AcpBackend {
         })
         .await;
 
+        let owner_request_id = {
+            let driver = self.session_driver.lock().await;
+            driver.active_request_id()
+        };
+        if owner_request_id.is_none() {
+            let _ = pending_request
+                .request
+                .response_tx
+                .send(ReviewDecision::Denied);
+            return;
+        }
+
         if current_policy == AskForApproval::Never {
             debug!(
                 target: "acp_event_flow",
@@ -161,10 +170,6 @@ impl AcpBackend {
             return;
         }
 
-        let owner_request_id = {
-            let driver = self.session_driver.lock().await;
-            driver.active_request_id()
-        };
         let client_events = {
             let mut driver = self.session_driver.lock().await;
             patch_approval_request_owner(
@@ -209,7 +214,7 @@ impl AcpBackend {
                 let mut non_completion_events = Vec::new();
                 for event in actions.events {
                     match event {
-                        ClientEvent::TurnLifecycle(TurnLifecycle::Completed { .. }) => {
+                        ClientEvent::PromptFinished(_) => {
                             completion_event = Some(event);
                         }
                         other => non_completion_events.push(other),
@@ -380,11 +385,9 @@ impl AcpBackend {
                     }
                 }
 
-                self.forward_and_record_client_event(ClientEvent::TurnLifecycle(
-                    TurnLifecycle::ContextCompacted {
-                        summary: Some(summary),
-                    },
-                ))
+                self.forward_and_record_client_event(ClientEvent::ContextCompacted {
+                    summary: Some(summary),
+                })
                 .await;
 
                 let _ = self

@@ -266,38 +266,29 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
-fn normalized_turn_started_sets_task_running() {
+fn normalized_phase_changed_prompt_sets_task_running() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
-        nori_protocol::TurnLifecycle::Started,
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
     ));
 
     assert!(chat.bottom_pane.is_task_running());
 }
 
 #[test]
-fn normalized_turn_aborted_restores_queued_messages_into_composer() {
+fn normalized_phase_changed_cancelling_keeps_task_running() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
 
-    chat.bottom_pane.set_task_running(true);
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
-
-    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
-        nori_protocol::TurnLifecycle::Aborted {
-            reason: nori_protocol::TurnAbortReason::Interrupted,
-        },
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
     ));
 
-    assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued"
-    );
-    assert!(chat.queued_user_messages.is_empty());
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+    ));
+
+    assert!(chat.bottom_pane.is_task_running());
     assert!(
         op_rx.try_recv().is_err(),
         "unexpected outbound op after interrupt"
@@ -420,35 +411,34 @@ fn approval_modal_exec_from_client_event() {
 }
 
 #[test]
-fn interrupt_restores_queued_messages_into_composer() {
+fn acp_interrupt_does_not_restore_backend_queue_into_composer() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
 
-    // Simulate a running task to enable queuing of user inputs.
-    chat.bottom_pane.set_task_running(true);
+    chat.bottom_pane
+        .set_composer_text("keep my draft".to_string());
+    chat.handle_client_event(nori_protocol::ClientEvent::QueuedPromptsUpdate(
+        nori_protocol::QueuedPromptsUpdate {
+            prompts: vec!["first queued".to_string(), "second queued".to_string()],
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
 
-    // Queue two user messages while the task is running.
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PromptFinished(
+        nori_protocol::PromptFinishedEvent {
+            stop_reason: serde_json::from_str("\"cancelled\"").expect("valid stop reason"),
+            last_agent_message: None,
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Idle,
+    ));
 
-    // Deliver a TurnAborted event with Interrupted reason (as if Esc was pressed).
-    chat.handle_codex_event(Event {
-        id: "turn-1".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
-            reason: TurnAbortReason::Interrupted,
-        }),
-    });
-
-    // Composer should now contain the queued messages joined by newlines, in order.
-    assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued"
-    );
-
-    // Queue should be cleared and no new user input should have been auto-submitted.
-    assert!(chat.queued_user_messages.is_empty());
+    assert_eq!(chat.bottom_pane.composer_text(), "keep my draft");
     assert!(
         op_rx.try_recv().is_err(),
         "unexpected outbound op after interrupt"
@@ -459,37 +449,41 @@ fn interrupt_restores_queued_messages_into_composer() {
 }
 
 #[test]
-fn interrupt_prepends_queued_messages_before_existing_composer_text() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+fn acp_prompt_submission_during_prompt_sends_user_input_to_backend() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
-    chat.bottom_pane.set_task_running(true);
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
     chat.bottom_pane
-        .set_composer_text("current draft".to_string());
+        .set_composer_text("queued by backend".to_string());
 
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    chat.handle_codex_event(Event {
-        id: "turn-1".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
-            reason: TurnAbortReason::Interrupted,
-        }),
-    });
+    match op_rx.try_recv() {
+        Ok(Op::UserInput { .. }) => {}
+        other => panic!("expected Op::UserInput while ACP prompt is active, got {other:?}"),
+    }
+}
 
-    assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued\ncurrent draft"
-    );
-    assert!(chat.queued_user_messages.is_empty());
+#[test]
+fn backend_queue_projection_is_rendered_without_local_queue_state() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::QueuedPromptsUpdate(
+        nori_protocol::QueuedPromptsUpdate {
+            prompts: vec!["Queued follow-up question".to_string()],
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+
+    let rendered = render_bottom_popup(&chat, 80);
     assert!(
-        op_rx.try_recv().is_err(),
-        "unexpected outbound op after interrupt"
+        rendered.contains("Queued follow-up question"),
+        "expected backend-owned queue projection to render: {rendered}"
     );
-
-    let _ = drain_insert_history(&mut rx);
 }
 
 #[test]

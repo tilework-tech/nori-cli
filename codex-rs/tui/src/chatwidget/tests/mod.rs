@@ -293,6 +293,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         frame_requester: FrameRequester::test_dummy(),
         show_welcome_banner: true,
         queued_user_messages: VecDeque::new(),
+        acp_phase: None,
+        acp_queued_prompts: Vec::new(),
         suppress_session_configured_redraw: false,
         pending_notification: None,
         needs_final_message_separator: false,

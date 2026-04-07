@@ -721,70 +721,82 @@ fn late_exec_events_after_agent_message_are_discarded() {
 }
 
 #[test]
-fn turn_finished_gate_resets_on_new_task_started() {
+fn known_acp_tool_completion_after_prompt_finish_updates_existing_cell_only() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    // === Turn 1: agent message sets the gate ===
-    chat.handle_codex_event(Event {
-        id: "t1".into(),
-        msg: EventMsg::TaskStarted(TaskStartedEvent {
-            model_context_window: None,
+    let pending_snapshot = nori_protocol::ToolSnapshot {
+        call_id: "acp-tool-1".into(),
+        title: "Read /tmp/file.rs".into(),
+        kind: nori_protocol::ToolKind::Read,
+        phase: nori_protocol::ToolPhase::InProgress,
+        locations: vec![nori_protocol::ToolLocation {
+            path: PathBuf::from("/tmp/file.rs"),
+            line: None,
+        }],
+        invocation: Some(nori_protocol::Invocation::Read {
+            path: PathBuf::from("/tmp/file.rs"),
         }),
-    });
-    chat.handle_codex_event(Event {
-        id: "t1".into(),
-        msg: EventMsg::AgentMessage(AgentMessageEvent {
-            message: "Turn 1 response".into(),
-        }),
-    });
-    chat.handle_codex_event(Event {
-        id: "t1".into(),
-        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+        artifacts: vec![],
+        raw_input: None,
+        raw_output: None,
+        owner_request_id: Some("req-1".into()),
+    };
+    let mut completed_snapshot = pending_snapshot.clone();
+    completed_snapshot.phase = nori_protocol::ToolPhase::Completed;
+
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        pending_snapshot,
+    ));
+    assert!(
+        chat.active_cell.is_some(),
+        "pending ACP tool snapshot should render an active tool cell"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::PromptFinished(
+        nori_protocol::PromptFinishedEvent {
+            stop_reason: serde_json::from_str("\"end_turn\"").expect("valid stop reason"),
             last_agent_message: None,
-        }),
-    });
-    // Drain turn 1 output
-    drain_insert_history(&mut rx);
-
-    // === Turn 2: gate should be cleared, tool calls should work again ===
-    chat.handle_codex_event(Event {
-        id: "t2".into(),
-        msg: EventMsg::TaskStarted(TaskStartedEvent {
-            model_context_window: None,
-        }),
-    });
-
-    // This tool call in turn 2 should NOT be discarded
-    let begin_t2 = begin_exec(&mut chat, "call-t2", "ls -la");
-    end_exec(&mut chat, begin_t2, "total 42", "", 0);
-
-    chat.handle_codex_event(Event {
-        id: "t2".into(),
-        msg: EventMsg::AgentMessage(AgentMessageEvent {
-            message: "Turn 2 response".into(),
-        }),
-    });
-    chat.handle_codex_event(Event {
-        id: "t2".into(),
-        msg: EventMsg::TaskComplete(TaskCompleteEvent {
-            last_agent_message: None,
-        }),
-    });
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Idle,
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(completed_snapshot));
 
     let cells = drain_insert_history(&mut rx);
     let combined: String = cells
         .iter()
         .map(|lines| lines_to_single_string(lines))
         .collect();
-
-    // Turn 2 tool call should appear (gate was reset)
     assert!(
-        combined.contains("ls -la"),
-        "turn 2 tool call should appear after gate reset: {combined:?}"
+        combined.contains("Read file.rs"),
+        "known ACP tool completion should still render after prompt finish: {combined:?}"
     );
+
+    let unknown_snapshot = nori_protocol::ToolSnapshot {
+        call_id: "acp-tool-unknown".into(),
+        title: "Read /tmp/unknown.rs".into(),
+        kind: nori_protocol::ToolKind::Read,
+        phase: nori_protocol::ToolPhase::Completed,
+        locations: vec![nori_protocol::ToolLocation {
+            path: PathBuf::from("/tmp/unknown.rs"),
+            line: None,
+        }],
+        invocation: Some(nori_protocol::Invocation::Read {
+            path: PathBuf::from("/tmp/unknown.rs"),
+        }),
+        artifacts: vec![],
+        raw_input: None,
+        raw_output: None,
+        owner_request_id: Some("req-1".into()),
+    };
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(unknown_snapshot));
     assert!(
-        combined.contains("Turn 2 response"),
-        "turn 2 agent message should appear: {combined:?}"
+        drain_insert_history(&mut rx).is_empty(),
+        "a stale unknown ACP tool completion must not create a new cell after prompt finish"
     );
 }
 

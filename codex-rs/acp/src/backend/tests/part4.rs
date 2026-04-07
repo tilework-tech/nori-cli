@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 #[serial]
-async fn test_user_input_emits_normalized_turn_lifecycle_events() {
+async fn test_user_input_emits_reducer_owned_phase_and_prompt_events() {
     use std::time::Duration;
 
     let mock_config =
@@ -42,12 +42,7 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(client_event) => {
-                let done = matches!(
-                    client_event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                );
+                let done = matches!(client_event, nori_protocol::ClientEvent::PromptFinished(_));
                 client_events.push(client_event);
                 if done {
                     break;
@@ -61,21 +56,18 @@ async fn test_user_input_emits_normalized_turn_lifecycle_events() {
         client_events.iter().any(|event| {
             matches!(
                 event,
-                nori_protocol::ClientEvent::TurnLifecycle(nori_protocol::TurnLifecycle::Started)
-            )
-        }),
-        "expected normalized turn started event: {client_events:?}"
-    );
-    assert!(
-        client_events.iter().any(|event| {
-            matches!(
-                event,
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed { .. }
+                nori_protocol::ClientEvent::PhaseChanged(
+                    nori_protocol::session_runtime::SessionPhaseView::Prompt
                 )
             )
         }),
-        "expected normalized turn completed event: {client_events:?}"
+        "expected normalized prompt phase event: {client_events:?}"
+    );
+    assert!(
+        client_events
+            .iter()
+            .any(|event| { matches!(event, nori_protocol::ClientEvent::PromptFinished(_)) }),
+        "expected normalized prompt finished event: {client_events:?}"
     );
     assert!(
         client_events.iter().any(|event| {
@@ -144,8 +136,10 @@ async fn test_user_input_completed_includes_last_agent_message() {
     let mut completion = None;
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
-            Some(nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { last_agent_message },
+            Some(nori_protocol::ClientEvent::PromptFinished(
+                nori_protocol::PromptFinishedEvent {
+                    last_agent_message, ..
+                },
             )) => {
                 completion = Some(last_agent_message);
                 break;
@@ -208,12 +202,7 @@ async fn test_user_input_with_tool_call_suppresses_legacy_exec_events() {
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(client_event) => {
-                let done = matches!(
-                    client_event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                );
+                let done = matches!(client_event, nori_protocol::ClientEvent::PromptFinished(_));
                 client_events.push(client_event);
                 if done {
                     break;
@@ -310,9 +299,7 @@ async fn test_user_input_tool_snapshots_have_owner_request_id() {
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(nori_protocol::ClientEvent::ToolSnapshot(snapshot)) => snapshots.push(snapshot),
-            Some(nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { .. },
-            )) => break,
+            Some(nori_protocol::ClientEvent::PromptFinished(_)) => break,
             Some(_) => continue,
             None => continue,
         }
@@ -377,8 +364,10 @@ async fn test_user_input_tool_call_completed_includes_last_agent_message() {
     let mut completion = None;
     while start.elapsed() < timeout {
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
-            Some(nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { last_agent_message },
+            Some(nori_protocol::ClientEvent::PromptFinished(
+                nori_protocol::PromptFinishedEvent {
+                    last_agent_message, ..
+                },
             )) => {
                 completion = Some(last_agent_message);
                 break;
@@ -479,6 +468,221 @@ async fn test_interrupt_clears_pending_permission_requests() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn test_interrupt_then_follow_up_prompt_stays_backend_queued_until_finish() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "first prompt".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit first prompt");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::PhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Prompt,
+            )) => break,
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to interrupt");
+
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::PhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+            )) => break,
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "second prompt".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit follow-up prompt");
+
+    let mut client_events = Vec::new();
+    let collect_start = std::time::Instant::now();
+    while collect_start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(event) => {
+                let done = matches!(
+                    event,
+                    nori_protocol::ClientEvent::PhaseChanged(
+                        nori_protocol::session_runtime::SessionPhaseView::Prompt
+                    )
+                ) && client_events
+                    .iter()
+                    .any(|seen| matches!(seen, nori_protocol::ClientEvent::PromptFinished(_)));
+                client_events.push(event);
+                if done {
+                    break;
+                }
+            }
+            None => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_STREAM_UNTIL_CANCEL");
+    }
+
+    assert!(
+        client_events.iter().any(|event| matches!(
+            event,
+            nori_protocol::ClientEvent::QueuedPromptsUpdate(update)
+                if update.prompts == vec!["second prompt".to_string()]
+        )),
+        "expected backend queue projection for the follow-up prompt: {client_events:?}"
+    );
+
+    let finished_idx = client_events
+        .iter()
+        .position(|event| matches!(event, nori_protocol::ClientEvent::PromptFinished(_)))
+        .expect("expected cancelled prompt to finish");
+
+    assert!(
+        client_events[..finished_idx].iter().all(|event| {
+            !matches!(
+                event,
+                nori_protocol::ClientEvent::PhaseChanged(
+                    nori_protocol::session_runtime::SessionPhaseView::Prompt
+                )
+            )
+        }),
+        "queued follow-up prompt must not restart before the cancelled prompt finishes: {client_events:?}"
+    );
+    assert!(
+        client_events[finished_idx + 1..].iter().all(|event| {
+            !matches!(
+                event,
+                nori_protocol::ClientEvent::PhaseChanged(
+                    nori_protocol::session_runtime::SessionPhaseView::Prompt
+                )
+            )
+        }),
+        "cancelled prompts must leave follow-up prompts queued instead of auto-draining them: {client_events:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_idle_permission_request_is_rejected_without_approval_ui() {
+    use std::time::Duration;
+    use tokio::sync::oneshot;
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let (response_tx, response_rx) = oneshot::channel();
+    let pending_request = PendingApprovalRequest {
+        request_id: "perm-idle".to_string(),
+        request: ApprovalRequest {
+            request_id: "perm-idle".to_string(),
+            event: ApprovalEventType::Exec(codex_protocol::approvals::ExecApprovalRequestEvent {
+                call_id: "call-idle".to_string(),
+                turn_id: String::new(),
+                command: vec![
+                    "bash".to_string(),
+                    "-lc".to_string(),
+                    "git status".to_string(),
+                ],
+                cwd: temp_dir.path().to_path_buf(),
+                reason: Some("Execute: git status".to_string()),
+                risk: None,
+                parsed_cmd: vec![],
+            }),
+            acp_request: acp::RequestPermissionRequest::new(
+                "session-1",
+                acp::ToolCallUpdate::new("call-idle", acp::ToolCallUpdateFields::new()),
+                vec![],
+            ),
+            options: vec![],
+            response_tx,
+            tool_call_metadata: None,
+        },
+    };
+
+    backend
+        .handle_permission_request(Box::new(pending_request), AskForApproval::OnRequest)
+        .await;
+
+    let decision = response_rx
+        .await
+        .expect("idle permission request should be resolved immediately");
+    assert_eq!(decision, ReviewDecision::Denied);
+
+    let warning = recv_backend_client(&mut backend_event_rx, Duration::from_secs(1))
+        .await
+        .expect("expected reducer warning for idle permission request");
+    assert!(matches!(warning, nori_protocol::ClientEvent::Warning(_)));
+
+    let maybe_client_event =
+        recv_backend_client(&mut backend_event_rx, Duration::from_millis(200)).await;
+    assert!(
+        !matches!(
+            maybe_client_event,
+            Some(nori_protocol::ClientEvent::ApprovalRequest(_))
+        ),
+        "idle permission requests must not surface approval UI"
+    );
+}
+
 /// Test that after Op::Compact, subsequent Op::UserInput prompts have the
 /// summary prefix prepended to the user's message.
 ///
@@ -563,12 +767,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     while start.elapsed() < timeout {
         match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
             Ok(Some(event)) => {
-                if matches!(
-                    event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                ) {
+                if matches!(event, nori_protocol::ClientEvent::PromptFinished(_)) {
                     break;
                 }
             }
@@ -593,26 +792,17 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     while start.elapsed() < timeout {
         match tokio::time::timeout(Duration::from_millis(500), client_event_rx.recv()).await {
             Ok(Some(event)) => {
-                let done = matches!(
-                    event,
-                    nori_protocol::ClientEvent::TurnLifecycle(
-                        nori_protocol::TurnLifecycle::Completed { .. }
-                    )
-                );
+                let done = matches!(event, nori_protocol::ClientEvent::PromptFinished(_));
                 client_events.push(event);
                 if done {
                     break;
                 }
             }
             _ => {
-                if client_events.iter().any(|e| {
-                    matches!(
-                        e,
-                        nori_protocol::ClientEvent::TurnLifecycle(
-                            nori_protocol::TurnLifecycle::Completed { .. }
-                        )
-                    )
-                }) {
+                if client_events
+                    .iter()
+                    .any(|event| matches!(event, nori_protocol::ClientEvent::PromptFinished(_)))
+                {
                     break;
                 }
             }
@@ -639,12 +829,9 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     // by checking that the agent received something (the response won't be empty)
     assert!(
         !agent_messages.is_empty()
-            || client_events.iter().any(|e| matches!(
-                e,
-                nori_protocol::ClientEvent::TurnLifecycle(
-                    nori_protocol::TurnLifecycle::Completed { .. }
-                )
-            )),
+            || client_events
+                .iter()
+                .any(|e| matches!(e, nori_protocol::ClientEvent::PromptFinished(_))),
         "Expected normalized agent response or task completion. Events: {client_events:?}"
     );
 
@@ -652,17 +839,117 @@ async fn test_compact_prepends_summary_to_next_prompt() {
     // (This requires checking internal state, which we'll verify through behavior)
     // The key assertion is that the compact operation succeeded and subsequent
     // prompts can be sent without error
-    let has_task_complete = client_events.iter().any(|e| {
-        matches!(
-            e,
-            nori_protocol::ClientEvent::TurnLifecycle(
-                nori_protocol::TurnLifecycle::Completed { .. }
-            )
-        )
-    });
+    let has_task_complete = client_events
+        .iter()
+        .any(|e| matches!(e, nori_protocol::ClientEvent::PromptFinished(_)));
     assert!(
         has_task_complete,
         "Expected normalized completion event for follow-up prompt. Events: {client_events:?}"
+    );
+}
+
+/// Op::Interrupt should only send CancelSubmit to the reducer.
+/// The reducer must emit a Cancelling phase projection first and must not
+/// invent a synthetic prompt-finished event before the real ACP response.
+#[tokio::test]
+#[serial]
+async fn interrupt_emits_cancelling_phase_before_prompt_finished() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    // Drain SessionConfigured
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    // Submit a prompt so the reducer enters the Prompt phase
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "Say hello".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    // Wait for the Prompt phase projection so we know the turn is active.
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    let mut saw_prompt_phase = false;
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::PhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Prompt,
+            )) => {
+                saw_prompt_phase = true;
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+    assert!(saw_prompt_phase, "expected prompt phase before interrupt");
+
+    // Now interrupt the active turn
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to interrupt");
+
+    // Collect the first relevant client events after the interrupt.
+    let mut client_events = Vec::new();
+    let collect_start = std::time::Instant::now();
+    let collect_timeout = Duration::from_secs(5);
+    while collect_start.elapsed() < collect_timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(300)).await {
+            Some(event) => {
+                let done = matches!(event, nori_protocol::ClientEvent::PromptFinished(_));
+                client_events.push(event);
+                if done {
+                    break;
+                }
+            }
+            None => {
+                if client_events.iter().any(|e| {
+                    matches!(
+                        e,
+                        nori_protocol::ClientEvent::PhaseChanged(
+                            nori_protocol::session_runtime::SessionPhaseView::Cancelling
+                        )
+                    )
+                }) {
+                    break;
+                }
+            }
+        }
+    }
+
+    // The reducer should have emitted Cancelling first.
+    assert!(
+        matches!(
+            client_events.first(),
+            Some(nori_protocol::ClientEvent::PhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Cancelling
+            ))
+        ),
+        "expected first post-interrupt event to be Cancelling, got: {client_events:?}"
     );
 }
 

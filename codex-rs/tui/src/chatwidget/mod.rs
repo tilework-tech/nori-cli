@@ -382,6 +382,11 @@ pub(crate) struct ChatWidget {
     suppress_session_configured_redraw: bool,
     // User messages queued while a turn is in progress
     queued_user_messages: VecDeque<UserMessage>,
+    // Reducer-owned ACP phase projection. When present, ACP backend state
+    // controls input locking and running status for client events.
+    acp_phase: Option<nori_protocol::session_runtime::SessionPhaseView>,
+    // Reducer-owned ACP queued prompt projection shown above the composer.
+    acp_queued_prompts: Vec<String>,
     // Pending notification to show when unfocused on next Draw
     pending_notification: Option<Notification>,
     // Whether to add a final message separator after the last message

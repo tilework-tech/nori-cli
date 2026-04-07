@@ -14,10 +14,21 @@ pub enum ClientEvent {
     ApprovalRequest(ApprovalRequest),
     MessageDelta(MessageDelta),
     PlanSnapshot(PlanSnapshot),
-    TurnLifecycle(TurnLifecycle),
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
     Warning(WarningInfo),
+    /// Reducer-owned phase projection. Emitted whenever `SessionPhase` changes.
+    PhaseChanged(session_runtime::SessionPhaseView),
+    /// The active `session/prompt` request completed.
+    PromptFinished(PromptFinishedEvent),
+    /// The current outgoing queue state changed.
+    QueuedPromptsUpdate(QueuedPromptsUpdate),
+    /// The active `session/load` request completed.
+    LoadFinished,
+    /// Context was compacted with a summary.
+    ContextCompacted {
+        summary: Option<String>,
+    },
 }
 
 /// A warning emitted by the session runtime (e.g. out-of-phase content).
@@ -44,30 +55,26 @@ pub struct AgentCommandInfo {
     pub input_hint: Option<String>,
 }
 
+/// A prompt completion event carrying the stop reason and optional final
+/// agent message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TurnLifecycle {
-    Started,
-    Completed {
-        last_agent_message: Option<String>,
-    },
-    Aborted {
-        reason: TurnAbortReason,
-    },
-    ContextCompacted {
-        summary: Option<String>,
-    },
-    /// `session/cancel` has been sent but the prompt response has not yet
-    /// arrived. The turn is still active per ACP protocol.
-    Cancelling,
+pub struct PromptFinishedEvent {
+    pub stop_reason: acp::StopReason,
+    pub last_agent_message: Option<String>,
 }
 
+impl PromptFinishedEvent {
+    pub fn is_end_turn(&self) -> bool {
+        self.stop_reason == acp::StopReason::EndTurn
+    }
+}
+
+/// A projection of the outgoing queue, emitted whenever the queue changes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TurnAbortReason {
-    Interrupted,
-    Replaced,
-    Other(String),
+pub struct QueuedPromptsUpdate {
+    pub prompts: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -339,6 +346,8 @@ impl ClientEventNormalizer {
                     commands,
                 })]
             }
+            acp::SessionUpdate::CurrentModeUpdate(_)
+            | acp::SessionUpdate::ConfigOptionUpdate(_) => Vec::new(),
             _ => Vec::new(),
         }
     }
@@ -1537,10 +1546,10 @@ mod tests {
     }
 
     #[test]
-    fn turn_lifecycle_event_round_trips_through_serde() {
-        let event = ClientEvent::TurnLifecycle(TurnLifecycle::ContextCompacted {
+    fn context_compacted_event_round_trips_through_serde() {
+        let event = ClientEvent::ContextCompacted {
             summary: Some("Compact summary".into()),
-        });
+        };
 
         let json = serde_json::to_string(&event).unwrap();
         let parsed: ClientEvent = serde_json::from_str(&json).unwrap();

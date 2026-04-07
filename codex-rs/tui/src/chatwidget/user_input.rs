@@ -1,6 +1,10 @@
 use super::*;
 
 impl ChatWidget {
+    fn uses_acp_queue_projection(&self) -> bool {
+        self.acp_phase.is_some() || !self.acp_queued_prompts.is_empty()
+    }
+
     pub(super) fn flush_active_cell(&mut self) {
         if let Some(active) = self.active_cell.take() {
             // Always flush to history to preserve chronological ordering.
@@ -45,6 +49,11 @@ impl ChatWidget {
     }
 
     pub(super) fn queue_user_message(&mut self, user_message: UserMessage) {
+        if self.uses_acp_queue_projection() && self.bottom_pane.is_task_running() {
+            self.submit_user_message(user_message);
+            return;
+        }
+
         if self.bottom_pane.is_task_running() {
             self.queued_user_messages.push_back(user_message);
             self.refresh_queued_user_messages();
@@ -425,6 +434,10 @@ impl ChatWidget {
 
     // If idle and there are queued inputs, submit exactly one to start the next turn.
     pub(super) fn maybe_send_next_queued_input(&mut self) {
+        if self.uses_acp_queue_projection() {
+            self.refresh_queued_user_messages();
+            return;
+        }
         if self.bottom_pane.is_task_running() {
             return;
         }
@@ -437,11 +450,14 @@ impl ChatWidget {
 
     /// Rebuild and update the queued user messages from the current queue.
     pub(super) fn refresh_queued_user_messages(&mut self) {
-        let messages: Vec<String> = self
-            .queued_user_messages
-            .iter()
-            .map(|m| m.text.clone())
-            .collect();
+        let messages = if self.uses_acp_queue_projection() {
+            self.acp_queued_prompts.clone()
+        } else {
+            self.queued_user_messages
+                .iter()
+                .map(|m| m.text.clone())
+                .collect()
+        };
         self.bottom_pane.set_queued_user_messages(messages);
     }
 
