@@ -329,12 +329,10 @@ mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
-pub(crate) use helpers::AccumulatedToolCall;
 use helpers::get_op_name;
 mod tool_display;
 #[cfg(test)]
 pub(crate) use tool_display::classify_tool_to_parsed_command;
-pub(crate) use tool_display::extract_command_from_permission_title;
 #[cfg(test)]
 pub(crate) use tool_display::truncate_for_log;
 mod transcript;

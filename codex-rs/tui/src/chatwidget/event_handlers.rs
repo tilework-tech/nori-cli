@@ -1289,24 +1289,6 @@ impl ChatWidget {
     /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
     /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        let known_tool_update = self
-            .active_cell
-            .as_ref()
-            .and_then(|cell| cell.as_any().downcast_ref::<ClientToolCell>())
-            .is_some_and(|cell| cell.call_id() == tool_snapshot.call_id)
-            || self
-                .pending_client_tool_cells
-                .contains_key(&tool_snapshot.call_id)
-            || self
-                .completed_client_tool_calls
-                .contains(&tool_snapshot.call_id);
-        if matches!(
-            self.acp_session_phase,
-            Some(nori_protocol::session_runtime::SessionPhaseView::Idle)
-        ) && !known_tool_update
-        {
-            return;
-        }
         self.flush_answer_stream_with_separator();
 
         // For completed Create/Edit/Delete/Move, observe directories and record stats

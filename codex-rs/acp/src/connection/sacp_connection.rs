@@ -52,7 +52,6 @@ use tracing::warn;
 use super::AcpModelState;
 use super::ApprovalEventType;
 use super::ApprovalRequest;
-use super::ToolCallMetadata;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
@@ -228,29 +227,6 @@ impl SacpConnection {
                                 ApprovalEventType::Exec(exec_event)
                             };
 
-                            // Extract tool call metadata for event translation.
-                            // When the subsequent ToolCallUpdate(completed) arrives
-                            // (often with empty title/kind from Gemini agents), this
-                            // metadata allows the event translator to resolve a proper
-                            // command name instead of falling back to "Tool".
-                            let tool_call_metadata =
-                                if request.tool_call.fields.title.is_some()
-                                    || request.tool_call.fields.kind.is_some()
-                                    || request.tool_call.fields.raw_input.is_some()
-                                {
-                                    Some(ToolCallMetadata {
-                                        title: request.tool_call.fields.title.clone(),
-                                        kind: request.tool_call.fields.kind,
-                                        raw_input: request
-                                            .tool_call
-                                            .fields
-                                            .raw_input
-                                            .clone(),
-                                    })
-                                } else {
-                                    None
-                                };
-
                             let (response_tx, response_rx) = oneshot::channel();
                             let approval = ApprovalRequest {
                                 request_id: match request_cx.id() {
@@ -261,7 +237,6 @@ impl SacpConnection {
                                 acp_request: request.clone(),
                                 options: request.options.clone(),
                                 response_tx,
-                                tool_call_metadata,
                             };
 
                             if approval_tx.send(approval).await.is_err() {

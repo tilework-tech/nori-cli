@@ -303,9 +303,9 @@ impl ClientEventNormalizer {
             }
             acp::SessionUpdate::ToolCallUpdate(update) => {
                 let call_id = update.tool_call_id.to_string();
-                let Some(entry) = self.tool_calls.get_mut(&call_id) else {
-                    return Vec::new();
-                };
+                let entry = self.tool_calls.entry(call_id).or_insert_with(|| {
+                    acp::ToolCall::new(update.tool_call_id.clone(), String::new())
+                });
                 entry.update(update.fields.clone());
 
                 let phase = update
@@ -340,10 +340,6 @@ impl ClientEventNormalizer {
             }
             _ => Vec::new(),
         }
-    }
-
-    pub fn contains_tool_call(&self, call_id: &str) -> bool {
-        self.tool_calls.contains_key(call_id)
     }
 
     pub fn push_permission_request(
@@ -1139,6 +1135,49 @@ mod tests {
             snapshot.artifacts,
             vec![Artifact::Text {
                 text: "all green\n".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn normalizer_emits_snapshot_for_unknown_tool_call_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+            acp::ToolCallId::new("tool-exec-orphan"),
+            acp::ToolCallUpdateFields::new()
+                .title("Terminal")
+                .kind(acp::ToolKind::Execute)
+                .status(acp::ToolCallStatus::Completed)
+                .raw_input(serde_json::json!({
+                    "command": "git status",
+                }))
+                .raw_output(serde_json::json!({
+                    "stdout": "On branch spec\n",
+                })),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::ToolSnapshot(snapshot) = &events[0] else {
+            panic!("expected tool snapshot");
+        };
+
+        assert_eq!(snapshot.call_id, "tool-exec-orphan");
+        assert_eq!(snapshot.title, "Terminal");
+        assert_eq!(snapshot.kind, ToolKind::Execute);
+        assert_eq!(snapshot.phase, ToolPhase::Completed);
+        assert_eq!(
+            snapshot.invocation,
+            Some(Invocation::Command {
+                command: "git status".into(),
+            })
+        );
+        assert_eq!(
+            snapshot.artifacts,
+            vec![Artifact::Text {
+                text: "On branch spec\n".into(),
             }]
         );
     }

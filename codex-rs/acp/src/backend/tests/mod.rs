@@ -68,7 +68,6 @@ fn spawn_test_approval_handler(
     pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
     user_notifier: Arc<codex_core::UserNotifier>,
     approval_policy_rx: watch::Receiver<AskForApproval>,
-    pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
 ) {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
     tokio::spawn(async move {
@@ -111,7 +110,6 @@ fn spawn_test_approval_handler(
             pending_approvals,
             user_notifier,
             approval_policy_rx,
-            pending_tool_calls,
         )
         .await;
     });
@@ -157,6 +155,39 @@ fn spawn_test_persistent_relay(
                 },
             ));
         }
+        let (_prompt_result_tx, prompt_result_rx) = mpsc::channel(1);
+        AcpBackend::run_notification_relay(backend, persistent_rx, prompt_result_rx).await;
+    });
+}
+
+fn spawn_test_idle_persistent_relay(
+    persistent_rx: mpsc::Receiver<acp::SessionUpdate>,
+    event_tx: mpsc::Sender<Event>,
+    client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
+) {
+    let (backend_event_tx, backend_event_rx) = mpsc::channel(64);
+    tokio::spawn(async move {
+        let mut backend_event_rx = backend_event_rx;
+        while let Some(event) = backend_event_rx.recv().await {
+            match event {
+                BackendEvent::Control(event)
+                    if matches!(event.msg, EventMsg::SessionConfigured(_)) => {}
+                BackendEvent::Control(event) => {
+                    let _ = event_tx.send(event).await;
+                }
+                BackendEvent::Client(client_event) => {
+                    if let Some(client_event_tx) = &client_event_tx {
+                        let _ = client_event_tx.send(client_event).await;
+                    }
+                }
+            }
+        }
+    });
+    tokio::spawn(async move {
+        let config = build_test_config(std::path::Path::new("/tmp"));
+        let backend = AcpBackend::spawn(&config, backend_event_tx)
+            .await
+            .expect("spawn test backend");
         let (_prompt_result_tx, prompt_result_rx) = mpsc::channel(1);
         AcpBackend::run_notification_relay(backend, persistent_rx, prompt_result_rx).await;
     });

@@ -145,6 +145,8 @@ For ACP sessions, pressing Enter while the phase is `Prompt` or `Cancelling` sti
 
 ACP cancel no longer makes the TUI idle on its own. The UI stays in `Cancelling` until the backend reduces the matching prompt response and emits `PromptCompleted`. See `@/codex-rs/acp/docs.md` for the backend-side reducer rules.
 
+For ACP tool rendering, phase is no longer used as a visibility gate. Once the backend emits a normalized `ClientEvent::ToolSnapshot`, the chat widget renders it even if the ACP phase is already `Idle`, so late or update-only provider events remain visible instead of disappearing.
+
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 
 At ACP turn boundaries, `on_agent_message()` and `on_task_complete()` still explicitly finalize incomplete cells so the viewport is freed for the agent text and completed tool output can settle cleanly:

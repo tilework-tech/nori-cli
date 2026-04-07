@@ -22,7 +22,7 @@ sacp::SessionUpdate ──> ClientEventNormalizer ──> Vec<ClientEvent> ─�
 
 ### Core Implementation
 
-- **`ClientEventNormalizer`** maintains a `HashMap<String, acp::ToolCall>` keyed by `call_id`. `ToolCallUpdate` messages only patch entries that were already introduced by a prior `ToolCall` or `RequestPermissionRequest`; unknown `toolCallId` values are ignored by the reducer with a warning instead of synthesizing a placeholder tool call.
+- **`ClientEventNormalizer`** maintains a `HashMap<String, acp::ToolCall>` keyed by `call_id`. `ToolCallUpdate` messages always upsert into that map: if the ACP agent never sent an initial `ToolCall`, the normalizer synthesizes a placeholder `ToolCall`, applies the update fields, and still emits a visible `ToolSnapshot`.
 - **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `codex-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks.
 - **`is_generic_tool_call()`** gates initial `ToolCall` emission: tool calls with no `raw_input`, no `locations`, empty `content`, and no `/` in the title are suppressed (return empty `Vec`). The normalizer still records them internally so that later attributed `ToolCallUpdate` messages can refine the existing call without forcing the TUI to render a placeholder cell first.
 - **Invocation priority cascade** in `invocation_from_tool_call()` resolves what the tool is doing, in priority order:
@@ -40,7 +40,7 @@ sacp::SessionUpdate ──> ClientEventNormalizer ──> Vec<ClientEvent> ─�
 
 ### Things to Know
 
-- The `is_generic_tool_call()` filter means the normalizer is not 1:1 with incoming events. Initial `ToolCall` messages that are sufficiently sparse are silently dropped. The TUI will only see tool cells once a later attributed `ToolCallUpdate` adds enough detail -- or once the original `ToolCall` itself has locations or `raw_input`.
+- The `is_generic_tool_call()` filter means the normalizer is not 1:1 with incoming events. Initial `ToolCall` messages that are sufficiently sparse are silently dropped, but later `ToolCallUpdate` messages still become visible `ToolSnapshot`s even if no initial `ToolCall` ever arrived.
 - The location fallback (tier 4) only handles `Read` and `Search` kinds. Edit/Delete/Move with locations but no `raw_input` return `None` from the normalizer and fall through to the TUI's location-path display fallback, avoiding creation of empty-diff `FileOperations` that would route to `PatchHistoryCell`.
 - `sanitize_title()` is a two-pass operation: first strips the `[current working directory ...]` bracket, then strips trailing `(description)` parenthetical. The parenthetical strip only fires after a cwd bracket was found, because Gemini appends descriptions after the cwd metadata.
 - Shell wrapper detection (`is_shell_wrapper()`) recognizes `bash`, `sh`, `zsh`, `fish`, `pwsh`, and `powershell` with `-c` or `-lc` flags. When a 3-element command array matches this pattern, only the script portion is extracted as the command string.

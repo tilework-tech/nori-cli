@@ -449,7 +449,6 @@ async fn test_approval_policy_dynamic_update() {
 
     // Create watch channel starting with OnRequest policy (requires approval)
     let (policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     // Spawn the approval handler with the watch receiver
     spawn_test_approval_handler(
@@ -459,7 +458,6 @@ async fn test_approval_policy_dynamic_update() {
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
         policy_rx,
-        Arc::clone(&pending_tool_calls),
     );
 
     // Create a mock approval request
@@ -482,7 +480,6 @@ async fn test_approval_policy_dynamic_update() {
         ),
         options: vec![],
         response_tx: response_tx1,
-        tool_call_metadata: None,
     };
 
     // Send first request - should be forwarded to TUI (not auto-approved)
@@ -537,7 +534,6 @@ async fn test_approval_policy_dynamic_update() {
         ),
         options: vec![],
         response_tx: response_tx2,
-        tool_call_metadata: None,
     };
 
     approval_tx.send(request2).await.unwrap();
@@ -576,7 +572,6 @@ async fn test_patch_approval_emits_normalized_client_event() {
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     spawn_test_approval_handler(
         approval_rx,
@@ -585,7 +580,6 @@ async fn test_patch_approval_emits_normalized_client_event() {
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
         policy_rx,
-        Arc::clone(&pending_tool_calls),
     );
 
     let mut changes = HashMap::new();
@@ -621,7 +615,6 @@ async fn test_patch_approval_emits_normalized_client_event() {
             acp_request: acp::RequestPermissionRequest::new("session-1", tool_call, vec![]),
             options: vec![],
             response_tx,
-            tool_call_metadata: None,
         })
         .await
         .expect("send approval request");
@@ -687,7 +680,6 @@ async fn test_exec_approval_emits_normalized_client_event() {
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     spawn_test_approval_handler(
         approval_rx,
@@ -696,7 +688,6 @@ async fn test_exec_approval_emits_normalized_client_event() {
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
         policy_rx,
-        Arc::clone(&pending_tool_calls),
     );
 
     let tool_call = acp::ToolCallUpdate::new(
@@ -722,7 +713,6 @@ async fn test_exec_approval_emits_normalized_client_event() {
             acp_request: acp::RequestPermissionRequest::new("session-1", tool_call, vec![]),
             options: vec![],
             response_tx,
-            tool_call_metadata: None,
         })
         .await
         .expect("send approval request");
@@ -781,7 +771,6 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
     let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::Never);
-    let pending_tool_calls = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     spawn_test_approval_handler(
         approval_rx,
@@ -790,7 +779,6 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
         Arc::clone(&pending_approvals),
         Arc::clone(&user_notifier),
         policy_rx,
-        Arc::clone(&pending_tool_calls),
     );
 
     let tool_call = acp::ToolCallUpdate::new(
@@ -816,7 +804,6 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
             acp_request: acp::RequestPermissionRequest::new("session-1", tool_call, vec![]),
             options: vec![],
             response_tx,
-            tool_call_metadata: None,
         })
         .await
         .expect("send approval request");
@@ -915,6 +902,150 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     assert!(
         event.is_err(),
         "completed edit snapshots should not emit the legacy patch event once the client-event path exists",
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_unknown_tool_call_update_still_emits_normalized_tool_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+
+    spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCallUpdate(
+            acp::ToolCallUpdate::new(
+                "call-exec-orphan",
+                acp::ToolCallUpdateFields::new()
+                    .title("Terminal")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({
+                        "command": "git status",
+                    }))
+                    .raw_output(serde_json::json!({
+                        "stdout": "On branch spec\n",
+                    })),
+            ),
+        ))
+        .await
+        .expect("send tool call update");
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert!(snapshot.owner_request_id.is_some());
+    assert_eq!(
+        snapshot,
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-orphan".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch spec\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({
+                "command": "git status",
+            })),
+            raw_output: Some(serde_json::json!({
+                "stdout": "On branch spec\n",
+            })),
+            owner_request_id: snapshot.owner_request_id.clone(),
+        }
+    );
+
+    let warnings =
+        tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv()).await;
+    assert!(
+        warnings.is_err(),
+        "unknown tool updates during an active request should stay visible without falling back to control-plane warnings",
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_out_of_phase_tool_call_update_still_emits_normalized_tool_snapshot() {
+    use pretty_assertions::assert_eq;
+    use sacp::schema as acp;
+
+    let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
+    let (event_tx, _event_rx) = mpsc::channel::<Event>(16);
+    let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
+
+    spawn_test_idle_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+
+    persistent_tx
+        .send(acp::SessionUpdate::ToolCallUpdate(
+            acp::ToolCallUpdate::new(
+                "call-read-orphan",
+                acp::ToolCallUpdateFields::new()
+                    .title("Read Cargo.toml")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({
+                        "path": "Cargo.toml",
+                    })),
+            ),
+        ))
+        .await
+        .expect("send tool call update");
+
+    let warning_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("warning timeout")
+            .expect("warning missing");
+    let nori_protocol::ClientEvent::Warning(warning) = warning_event else {
+        panic!("expected warning");
+    };
+    assert!(
+        warning
+            .message
+            .contains("Received request-owned content update while no request is active"),
+        "unexpected warning: {warning:?}"
+    );
+
+    let client_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), client_event_rx.recv())
+            .await
+            .expect("client event timeout")
+            .expect("client event missing");
+    let nori_protocol::ClientEvent::ToolSnapshot(snapshot) = client_event else {
+        panic!("expected tool snapshot");
+    };
+    assert_eq!(
+        snapshot,
+        nori_protocol::ToolSnapshot {
+            call_id: "call-read-orphan".into(),
+            title: "Read Cargo.toml".into(),
+            kind: nori_protocol::ToolKind::Read,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Read {
+                path: PathBuf::from("Cargo.toml"),
+            }),
+            artifacts: vec![],
+            raw_input: Some(serde_json::json!({
+                "path": "Cargo.toml",
+            })),
+            raw_output: None,
+            owner_request_id: None,
+        }
     );
 }
 

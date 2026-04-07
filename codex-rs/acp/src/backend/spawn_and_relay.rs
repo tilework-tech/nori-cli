@@ -109,7 +109,6 @@ impl AcpBackend {
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
-        let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
         let session_driver = Arc::new(Mutex::new(session_runtime_driver::SessionDriver::new()));
         let (session_event_tx, mut session_event_rx) = mpsc::channel(128);
         let (prompt_result_tx, prompt_result_rx) = mpsc::channel(128);
@@ -251,7 +250,6 @@ impl AcpBackend {
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             approval_policy_rx,
-            Arc::clone(&pending_tool_calls),
         ));
 
         // Spawn reducer loop: processes ALL session notifications through the
@@ -277,42 +275,9 @@ impl AcpBackend {
         _pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
         _user_notifier: Arc<codex_core::UserNotifier>,
         approval_policy_rx: watch::Receiver<AskForApproval>,
-        pending_tool_calls: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
     ) {
         let approval_policy_rx = approval_policy_rx;
         while let Some(request) = approval_rx.recv().await {
-            // Store tool call metadata from the permission request so the
-            // event translator can resolve proper titles when the subsequent
-            // ToolCallUpdate(completed) arrives (often with empty fields from
-            // Gemini agents).
-            if let Some(ref metadata) = request.tool_call_metadata {
-                let call_id = request.event.call_id().to_string();
-                let cleaned_title = metadata
-                    .title
-                    .as_ref()
-                    .map(|t| extract_command_from_permission_title(t));
-                let new_entry = AccumulatedToolCall {
-                    title: cleaned_title,
-                    kind: metadata.kind,
-                    raw_input: metadata.raw_input.clone(),
-                };
-                let mut map = pending_tool_calls.lock().await;
-                let entry = map.entry(call_id).or_insert_with(|| AccumulatedToolCall {
-                    title: None,
-                    kind: None,
-                    raw_input: None,
-                });
-                if new_entry.title.is_some() {
-                    entry.title = new_entry.title;
-                }
-                if new_entry.kind.is_some() {
-                    entry.kind = new_entry.kind;
-                }
-                if new_entry.raw_input.is_some() {
-                    entry.raw_input = new_entry.raw_input;
-                }
-            }
-
             let current_policy = *approval_policy_rx.borrow();
             let _ = backend
                 .session_event_tx

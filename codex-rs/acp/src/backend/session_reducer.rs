@@ -319,10 +319,10 @@ fn reduce_notification(
         out.events.push(ClientEvent::Warning(WarningInfo {
             message: "Received request-owned content update while no request is active".to_string(),
         }));
+        let client_events = normalizer.push_session_update(&update);
+        out.events.extend(client_events);
         return;
     }
-
-    let mut forward_to_normalizer = true;
 
     // Route to specific handlers.
     match &update {
@@ -342,13 +342,9 @@ fn reduce_notification(
             reduce_tool_call(runtime, tool_call);
         }
         acp::SessionUpdate::ToolCallUpdate(tool_update) => {
-            forward_to_normalizer = reduce_tool_call_update(runtime, tool_update, normalizer, out);
+            reduce_tool_call_update(runtime, tool_update);
         }
         _ => {}
-    }
-
-    if !forward_to_normalizer {
-        return;
     }
 
     // Always forward to normalizer for ClientEvent production.
@@ -433,28 +429,14 @@ fn reduce_tool_call(runtime: &mut SessionRuntime, tool_call: &acp::ToolCall) {
     // owner_request_id patching in reduce_notification.
 }
 
-fn reduce_tool_call_update(
-    runtime: &mut SessionRuntime,
-    tool_update: &acp::ToolCallUpdate,
-    normalizer: &mut ClientEventNormalizer,
-    out: &mut ReduceOutput,
-) -> bool {
+fn reduce_tool_call_update(runtime: &mut SessionRuntime, tool_update: &acp::ToolCallUpdate) {
     let call_id = tool_update.tool_call_id.to_string();
-
-    if !normalizer.contains_tool_call(&call_id) {
-        out.events.push(ClientEvent::Warning(WarningInfo {
-            message: format!("Received tool_call_update for unknown toolCallId: {call_id}"),
-        }));
-        return false;
-    }
 
     if let Some(active) = &mut runtime.active
         && !active.tool_call_ids.contains(&call_id)
     {
         active.tool_call_ids.push(call_id);
     }
-
-    true
 }
 
 // ---------------------------------------------------------------------------

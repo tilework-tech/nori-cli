@@ -23,12 +23,3 @@ pub(crate) fn get_op_name(op: &Op) -> &'static str {
         _ => "Unknown",
     }
 }
-
-/// Accumulated tool metadata captured from ACP permission requests before the
-/// eventual `ToolCallUpdate(completed)` arrives.
-#[derive(Default)]
-pub(crate) struct AccumulatedToolCall {
-    pub title: Option<String>,
-    pub kind: Option<acp::ToolKind>,
-    pub raw_input: Option<serde_json::Value>,
-}

@@ -249,7 +249,6 @@ impl AcpBackend {
         let approval_rx = connection.take_approval_receiver();
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
-        let pending_tool_calls = Arc::new(Mutex::new(HashMap::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));
         let (session_event_tx, mut session_event_rx) = mpsc::channel(128);
         let (prompt_result_tx, prompt_result_rx) = mpsc::channel(128);
@@ -397,7 +396,6 @@ impl AcpBackend {
             Arc::clone(&pending_approvals),
             Arc::clone(&user_notifier),
             approval_policy_rx,
-            Arc::clone(&pending_tool_calls),
         ));
 
         // Spawn notification relay for inter-turn notifications

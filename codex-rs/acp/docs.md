@@ -770,8 +770,6 @@ Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` comm
 
 `run_approval_handler()` in `backend/mod.rs` enforces a strict ordering invariant: the normalized approval event is forwarded to the TUI via `BackendEvent::Client`, and the request is pushed into `pending_approvals`, **before** the OS notification fires (`user_notifier.notify()`). This ordering is critical because `notify-rust`'s `notif.show()` blocks synchronously on some platforms (macOS), so if the notification were sent first, the TUI would never receive the approval overlay.
 
-The `ApprovalRequest` struct (`connection/mod.rs`) carries an optional `tool_call_metadata: Option<ToolCallMetadata>` field. `ToolCallMetadata` holds the title, kind, and raw_input extracted from the ACP permission request's tool call fields. This metadata is populated in `ClientDelegate::request_permission()` (`connection/client_delegate.rs`) and consumed by the approval handler to seed the shared `pending_tool_calls` map, bridging the gap between the permission request path and the normalized tool snapshot path.
-
 **Normalized File Mutations:**
 
 For Edit/Write/Delete operations, the ACP backend normalizes file mutations into `nori_protocol::ClientEvent` snapshots that carry file-operation details for the TUI and transcript recorder. The same normalized snapshot drives approval prompts, live rendering, and persistence so the UI does not need to infer edits from Codex-shaped tool events.
@@ -787,41 +785,13 @@ The transcript recorder uses the same normalized snapshot data when deciding how
 
 For Codex specifically, the normalized tool snapshot path now understands the provider's `rawInput.command` shell-wrapper arrays (for example `["/usr/bin/zsh", "-lc", "df -h ."]`) and `rawInput.parsed_cmd` objects. This means execute tools normalize to `Invocation::Command`, read tools can recover paths from `parsed_cmd[0].path`, and search/list-files tools can recover query/path semantics from Codex's parsed command metadata instead of falling back to raw JSON in the TUI.
 
-**Tool Call Event Filtering and Title Accumulation:**
+**Tool Call Normalization and Visibility:**
 
-The ACP backend accumulates display metadata across multiple `ToolCall` and `ToolCallUpdate` messages so the normalized tool snapshot keeps a stable title, kind, and raw input. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
+The ACP backend no longer tries to hide undefined provider behavior. `ToolCall` events with generic titles may still be filtered at the protocol layer, but later `ToolCallUpdate` events always normalize into visible `ToolSnapshot`s by upserting a placeholder `ToolCall` when necessary.
 
-1. `ToolCall` with a generic title and empty `raw_input` (skipped, but data stored in `pending_tool_calls`)
-2. `ToolCallUpdate` with the real title/kind/raw_input but not yet completed (accumulated into `pending_tool_calls`)
-3. `ToolCallUpdate` with `status: Completed` but typically no title/kind/raw_input
+That means update-only provider flows, including Gemini-style shell calls that skip the initial declaration, are surfaced directly in history instead of being dropped behind an “unknown toolCallId” warning path.
 
-Some agents (notably Gemini) route shell commands through the `request_permission` ACP path (`client_delegate.rs`) instead of emitting standard `ToolCall` events with populated fields. In this path, the permission request carries full metadata (title, kind, raw_input) via `ToolCallMetadata` on the `ApprovalRequest`. The approval handler in `run_approval_handler()` extracts this metadata and populates `pending_tool_calls` before processing the approval, so that when the subsequent `ToolCallUpdate(completed)` arrives with empty fields, the normalized snapshot can still resolve the actual command name. Gemini's permission request titles follow a compound format (`command [current working directory path] (description)`), which is stripped by `extract_command_from_permission_title()` in `tool_display.rs` to extract just the command portion.
-
-The `pending_tool_calls` HashMap (keyed by `call_id`) accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2 (and from permission request metadata for the Gemini path). On the completion event (step 3), the normalizer resolves the best available title using a fallback chain:
-
-```
-Title from completion update fields (if non-empty and not a raw ID)
-    |
-    v (fallback)
-Accumulated title from intermediate updates
-    |
-    v (fallback)
-_meta.claudeCode.toolName from the ACP adapter
-    |
-    v (fallback)
-kind_to_display_name() mapping (e.g., Read -> "Read", Execute -> "Terminal")
-    |
-    v (fallback)
-Hardcoded "Tool"
-```
-
-Raw Anthropic `tool_use` IDs (e.g., `toolu_015Xtg1GzAd6aPH6oiirx5us`) are detected by `title_is_raw_id()` in `tool_display.rs` and treated as empty titles, triggering the fallback chain. The `kind_to_display_name()` function maps `ToolKind` variants to human-readable strings (e.g., `Execute` -> `"Terminal"`, `SwitchMode` -> `"Switch Mode"`).
-
-The same merged completion state is also used to decide whether a completed tool update should be treated as a file mutation or a generic tool snapshot. In practice this means a generic `ToolCall("Edit")` or a completion that arrives without earlier metadata can still resolve to a normalized file-operation snapshot if the resolved `kind`/`raw_input` identifies a file edit.
-
-The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. Completed normalized snapshots consume the shared `pending_tool_calls` metadata used for title/raw-input resolution once the lifecycle reaches its terminal phase.
-
-Late-arriving tool events are now judged against reducer-owned ACP phase and known `call_id` state instead of a TUI-owned turn-finished flag (see `@/codex-rs/tui/docs.md`).
+Out-of-phase request-owned updates are treated the same way: the reducer still emits a warning when no request is active, but it forwards the raw ACP update to the normalizer so the user sees both the malformed session state and the underlying tool snapshot.
 
 **Prompt Update Channel Lifecycle** (`sacp_connection.rs`, `user_input.rs`, `submit_and_ops.rs`):
 
