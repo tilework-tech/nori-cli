@@ -49,8 +49,8 @@ impl ChatWidget {
         }
         // Ask codex-core to enumerate custom prompts for this session.
         self.submit_op(Op::ListCustomPrompts);
-        if let Some(user_message) = self.initial_user_message.take() {
-            self.submit_user_message(user_message);
+        if let Some((text, image_paths)) = self.initial_user_message.take() {
+            self.submit_user_message(text, image_paths);
         }
         if !self.suppress_session_configured_redraw {
             self.request_redraw();
@@ -436,28 +436,6 @@ impl ChatWidget {
             "Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues".to_owned(),
         ));
 
-        // If any messages were queued during the task, restore them into the composer.
-        if !self.queued_user_messages.is_empty() {
-            let queued_text = self
-                .queued_user_messages
-                .iter()
-                .map(|m| m.text.clone())
-                .collect::<Vec<_>>()
-                .join("\n");
-            let existing_text = self.bottom_pane.composer_text();
-            let combined = if existing_text.is_empty() {
-                queued_text
-            } else if queued_text.is_empty() {
-                existing_text
-            } else {
-                format!("{queued_text}\n{existing_text}")
-            };
-            self.bottom_pane.set_composer_text(combined);
-            // Clear the queue and update the status indicator list.
-            self.queued_user_messages.clear();
-            self.refresh_queued_user_messages();
-        }
-
         self.request_redraw();
     }
 
@@ -490,10 +468,9 @@ impl ChatWidget {
     }
 
     pub(super) fn on_elicitation_request(&mut self, ev: ElicitationRequestEvent) {
-        let ev2 = ev.clone();
         self.defer_or_handle(
-            |q| q.push_elicitation(ev),
-            |s| s.handle_elicitation_request_now(ev2),
+            InterruptManager::push_elicitation,
+            |s| s.handle_elicitation_request_now(ev),
         );
     }
 

@@ -315,9 +315,9 @@ impl ClientEventNormalizer {
             }
             acp::SessionUpdate::ToolCallUpdate(update) => {
                 let call_id = update.tool_call_id.to_string();
-                let entry = self.tool_calls.entry(call_id).or_insert_with(|| {
-                    acp::ToolCall::new(update.tool_call_id.clone(), String::new())
-                });
+                let Some(entry) = self.tool_calls.get_mut(&call_id) else {
+                    return Vec::new();
+                };
                 entry.update(update.fields.clone());
 
                 let phase = update
@@ -1109,6 +1109,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_execute_invocation_and_output_text() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-exec"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-exec"),
@@ -1148,6 +1152,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_read_invocation_path() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-read"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-read"),
@@ -1178,6 +1186,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_codex_execute_command_from_command_array() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-exec-codex"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-exec-codex"),
@@ -1213,6 +1225,10 @@ mod tests {
     #[test]
     fn normalizer_preserves_non_shell_command_arrays() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-exec-array"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-exec-array"),
@@ -1243,6 +1259,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_codex_read_path_from_parsed_command() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-read-codex"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-read-codex"),
@@ -1280,6 +1300,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_codex_read_path_from_later_parsed_command_entry() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-read-codex-later"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-read-codex-later"),
@@ -1322,6 +1346,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_codex_list_files_from_parsed_command() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-list-codex"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-list-codex"),
@@ -1358,6 +1386,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_codex_search_from_later_parsed_command_entry() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-search-codex-later"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-search-codex-later"),
@@ -1401,6 +1433,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_codex_search_from_parsed_command() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-search-codex"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-search-codex"),
@@ -1576,6 +1612,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_delete_file_operation() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-delete"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-delete"),
@@ -1611,6 +1651,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_move_file_operation() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-move"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-move"),
@@ -1649,6 +1693,10 @@ mod tests {
     #[test]
     fn normalizer_extracts_generic_tool_invocation_for_fetch() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-fetch"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-fetch"),
@@ -1907,6 +1955,11 @@ mod tests {
     #[test]
     fn codex_edit_with_changes_type_add_becomes_create() {
         let mut normalizer = ClientEventNormalizer::default();
+        // Register the tool_call_id first.
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-create"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-create"),
@@ -1938,6 +1991,10 @@ mod tests {
     #[test]
     fn codex_edit_with_changes_type_delete_becomes_delete() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-delete"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-delete"),
@@ -1973,6 +2030,10 @@ mod tests {
     #[test]
     fn codex_edit_with_move_path_becomes_move() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-move"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-move"),
@@ -2009,6 +2070,10 @@ mod tests {
     #[test]
     fn codex_edit_with_null_move_path_stays_edit() {
         let mut normalizer = ClientEventNormalizer::default();
+        normalizer.push_session_update(&acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+            acp::ToolCallId::new("tool-edit-normal"),
+            "placeholder",
+        )));
 
         let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
             acp::ToolCallId::new("tool-edit-normal"),

@@ -341,7 +341,7 @@ async fn switch_skillset_with_name_intercepts_user_message() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
     // Submit "/switch-skillset foobar" as a user message.
-    chat.submit_user_message("/switch-skillset foobar".to_string().into());
+    chat.submit_user_message("/switch-skillset foobar".to_string(), Vec::new());
 
     // The message should NOT be sent to the model as a user input.
     // This proves the interception worked — the text was routed to the
@@ -354,7 +354,7 @@ fn switch_skillset_without_name_is_not_intercepted() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
     // Submit "/switch-skillset " (trailing space, no actual name) as a user message.
-    chat.submit_user_message("/switch-skillset ".to_string().into());
+    chat.submit_user_message("/switch-skillset ".to_string(), Vec::new());
 
     // This should NOT be intercepted — it should be sent to the model as text.
     assert_matches!(op_rx.try_recv(), Ok(Op::UserInput { .. }));

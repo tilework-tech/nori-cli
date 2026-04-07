@@ -205,8 +205,6 @@ pub struct QueuedPrompt {
 pub enum QueueDrainOutcome {
     /// Send the next queued prompt as a new `session/prompt`.
     SendNextPrompt,
-    /// Surface the next queued prompt for editing in the composer.
-    RestoreForEditing,
     /// Leave all queued prompts in the queue.
     LeaveQueued,
 }

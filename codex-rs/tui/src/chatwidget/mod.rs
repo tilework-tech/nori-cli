@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 #[allow(unused_imports)]
@@ -350,7 +349,7 @@ pub(crate) struct ChatWidget {
     config: Config,
     auth_manager: Arc<AuthManager>,
     session_header: SessionHeader,
-    initial_user_message: Option<UserMessage>,
+    initial_user_message: Option<(String, Vec<PathBuf>)>,
     token_info: Option<TokenUsageInfo>,
     rate_limit_snapshot: Option<RateLimitSnapshotDisplay>,
     rate_limit_warnings: RateLimitWarningState,
@@ -380,8 +379,6 @@ pub(crate) struct ChatWidget {
     // When resuming an existing session (selected via resume picker), avoid an
     // immediate redraw on SessionConfigured to prevent a gratuitous UI flicker.
     suppress_session_configured_redraw: bool,
-    // User messages queued while a turn is in progress
-    queued_user_messages: VecDeque<UserMessage>,
     // Reducer-owned ACP phase projection. When present, ACP backend state
     // controls input locking and running status for client events.
     acp_phase: Option<nori_protocol::session_runtime::SessionPhaseView>,
@@ -451,34 +448,14 @@ pub(crate) struct PendingAgentInfo {
     pub display_name: String,
 }
 
-struct UserMessage {
+fn create_initial_user_message(
     text: String,
     image_paths: Vec<PathBuf>,
-}
-
-impl From<String> for UserMessage {
-    fn from(text: String) -> Self {
-        Self {
-            text,
-            image_paths: Vec::new(),
-        }
-    }
-}
-
-impl From<&str> for UserMessage {
-    fn from(text: &str) -> Self {
-        Self {
-            text: text.to_string(),
-            image_paths: Vec::new(),
-        }
-    }
-}
-
-fn create_initial_user_message(text: String, image_paths: Vec<PathBuf>) -> Option<UserMessage> {
+) -> Option<(String, Vec<PathBuf>)> {
     if text.is_empty() && image_paths.is_empty() {
         None
     } else {
-        Some(UserMessage { text, image_paths })
+        Some((text, image_paths))
     }
 }
 
